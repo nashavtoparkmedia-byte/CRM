@@ -1,0 +1,6 @@
+﻿--- INVESTIGATING CHAT chat_1773610553234 ---
+Chat ID: chat_1773610553234
+Channel: max
+External ID: max:79222155750
+Driver: ╨а╨╡╨╝╨╡╨╖╨╛╨▓ ╨Р╨╗╨╡╨║╤Б╨░╨╜╨┤╤А (ID: cmmn7mq4h0003vpz8dxibq1dy)
+Metadata: {}

@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DATABASE_URL=file:./dev.db
+      - STORAGESTATE_ENC_KEY=${STORAGESTATE_ENC_KEY}
+    depends_on:
+      - redis
+    volumes:
+      # Mount DB to persist SQLite (or use Postgres in prod)
+      - ./prisma:/app/prisma
+    command: npm run start:api
+
+  worker:
+    build: .
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DATABASE_URL=file:./dev.db
+      - STORAGESTATE_ENC_KEY=${STORAGESTATE_ENC_KEY}
+      - PLAYWRIGHT_HEADLESS=true
+      - ARTIFACT_RETENTION_DAYS=7
+    depends_on:
+      - redis
+      - api
+    volumes:
+      - ./prisma:/app/prisma
+      - ./.artifacts:/app/.artifacts
+    command: npm run start:worker
+
+  # Optional: Prometheus for metrics scraping
+  prometheus:
+    image: prom/prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+volumes:
+  redis_data:

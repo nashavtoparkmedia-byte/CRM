@@ -1,0 +1,3 @@
+--- TG STATUS CHECK START ---
+Found 0 Telegram messages in the last 30 min
+--- TG STATUS CHECK END ---

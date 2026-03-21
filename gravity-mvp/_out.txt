@@ -1,0 +1,49 @@
+=== GRAVITY-MVP GIT LOG ===
+1e511f0 Initial commit from Create Next App
+
+MAX-SCRAPER GIT: Command failed: git log --oneline -15
+fatal: not a git repository (or any of the parent directories): .git
+
+=== BRANCHES ===
+* master
+
+=== TAGS ===
+(none)
+=== STASH ===
+(none)
+=== MAX DEBUG.LOG (last 30 lines) ===
+[2026-03-20T18:30:48.858Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T18:30:48.859Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="3"
+[2026-03-20T18:30:48.861Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="4"
+[2026-03-20T18:30:48.862Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="5"
+[2026-03-20T18:30:48.863Z] [PID:7052] [DEDUPE] Echo suppressed: channel=max phone=Александр text="Дом..."
+[2026-03-20T18:30:48.865Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T18:30:48.867Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T18:30:48.869Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="3"
+[2026-03-20T18:30:48.870Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="4"
+[2026-03-20T18:30:48.871Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="5"
+[2026-03-20T18:30:50.853Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="4"
+[2026-03-20T18:30:50.854Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="5"
+[2026-03-20T18:30:50.856Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Слон"
+[2026-03-20T18:30:50.857Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T18:30:50.858Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T18:30:50.859Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="3"
+[2026-03-20T18:30:50.860Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="4"
+[2026-03-20T18:30:50.862Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="5"
+[2026-03-20T18:30:50.863Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Якорь"
+[2026-03-20T18:30:50.864Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T18:30:50.865Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T18:30:50.865Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="3"
+[2026-03-20T18:30:50.866Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="4"
+[2026-03-20T18:30:50.867Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="5"
+[2026-03-20T18:30:50.868Z] [PID:7052] [DEDUPE] Echo suppressed: channel=max phone=Александр text="Дом..."
+[2026-03-20T18:30:50.868Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T18:30:50.869Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T18:30:50.870Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="3"
+[2026-03-20T18:30:50.872Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="4"
+[2026-03-20T18:30:50.873Z] [PID:7052] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="5"
+
+SNAPSHOTS: none found
+=== KNOWLEDGE FILES ===
+max_chat_merging.md
+messenger_reference_snapshot.md

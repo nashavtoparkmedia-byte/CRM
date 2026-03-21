@@ -1,0 +1,2 @@
+Final message count: 1
+TEST PASSED: Only one message exists.

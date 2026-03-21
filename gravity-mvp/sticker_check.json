@@ -1,0 +1,97 @@
+[
+  {
+    "id": "max_in_max_name:Сяйфи_1774040539004_f153f03d",
+    "chatId": "cmmwpf7uh000cvpv4sd2xp85c",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Стикер",
+    "status": "delivered",
+    "channel": "max",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-20T21:02:19.004Z",
+    "createdAt": "2026-03-20T21:02:19.049Z",
+    "updatedAt": "2026-03-20T21:02:19.049Z",
+    "chat": {
+      "name": "Сяйфи",
+      "externalChatId": "max:max_name:Сяйфи",
+      "driverId": null
+    }
+  },
+  {
+    "id": "max_in_79122131422_1774040538960_f153f03d",
+    "chatId": "cmmwrafc50001vpd4l01aa5j1",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Стикер",
+    "status": "delivered",
+    "channel": "max",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-20T21:02:18.960Z",
+    "createdAt": "2026-03-20T21:02:18.998Z",
+    "updatedAt": "2026-03-20T21:02:18.998Z",
+    "chat": {
+      "name": "Константин",
+      "externalChatId": "max:79122131422",
+      "driverId": "cmmn7mq8h0010vpz8397ion1q"
+    }
+  },
+  {
+    "id": "max_in_79222155750_1774040538869_f153f03d",
+    "chatId": "chat_1773959418980",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Стикер",
+    "status": "delivered",
+    "channel": "max",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-20T21:02:18.869Z",
+    "createdAt": "2026-03-20T21:02:18.908Z",
+    "updatedAt": "2026-03-20T21:02:18.908Z",
+    "chat": {
+      "name": "Ремезов Александр",
+      "externalChatId": "max:79222155750",
+      "driverId": "cmmn7mq4h0003vpz8dxibq1dy"
+    }
+  },
+  {
+    "id": "max_in_79285007402_1774040538677_f153f03d",
+    "chatId": "cmmyl54s20000vpt0rwljuhkl",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Стикер",
+    "status": "delivered",
+    "channel": "max",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-20T21:02:18.677Z",
+    "createdAt": "2026-03-20T21:02:18.708Z",
+    "updatedAt": "2026-03-20T21:02:18.708Z",
+    "chat": {
+      "name": "Казбек",
+      "externalChatId": "max:79285007402",
+      "driverId": "cmmnxwhbz047vvptogmmkqprt"
+    }
+  },
+  {
+    "id": "max_in_max_name:Сяйфи_1774039608373_f153f03d",
+    "chatId": "cmmwpf7uh000cvpv4sd2xp85c",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Стикер",
+    "status": "delivered",
+    "channel": "max",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-20T20:46:48.373Z",
+    "createdAt": "2026-03-20T20:46:48.423Z",
+    "updatedAt": "2026-03-20T20:46:48.423Z",
+    "chat": {
+      "name": "Сяйфи",
+      "externalChatId": "max:max_name:Сяйфи",
+      "driverId": null
+    }
+  }
+]

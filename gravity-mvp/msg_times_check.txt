@@ -1,0 +1,6 @@
+﻿Content: ╨в╨╡╤Б╤В2
+SentAt: 2026-03-19T08:35:42.516Z
+CreatedAt: 2026-03-19T08:35:42.658Z
+Now: 2026-03-19T09:08:04.938Z
+Status: delivered
+ChatID: chat_1773610553234

@@ -1,0 +1,60 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Account {
+  id                    String   @id @default(uuid())
+  name                  String
+  state                 String   @default("ACTIVE") // ACTIVE, NEED_REAUTH, CAPTCHA, LOCKED, DISABLED
+  proxyConfig           String?  // JSON
+  storageStateEncrypted String?  // Encrypted Playwright storage state (cookies/localStorage)
+  storageStateUpdatedAt DateTime?
+  lastSuccessAt         DateTime?
+  lastFailureAt         DateTime?
+  failureStreak         Int      @default(0)
+  healthScore           Int      @default(100) // 0..100
+  lastKnownChecksLeft   Int?
+
+  checks Check[]
+}
+
+model Check {
+  id             String    @id @default(uuid())
+  accountId      String
+  account        Account   @relation(fields: [accountId], references: [id])
+  license        String
+  idempotencyKey String    @unique
+  status         String    @default("QUEUED") // QUEUED, RUNNING, SUCCESS, FAILED, CANCELLED
+  priority       String    @default("NORMAL") // LOW, NORMAL, HIGH
+  createdAt      DateTime  @default(now())
+  startedAt      DateTime?
+  finishedAt     DateTime?
+  errorCode      String?
+  errorMessage   String?
+  correlationId  String?
+  metadata       String?  // JSON
+
+  result CheckResult?
+}
+
+model CheckResult {
+  checkId        String   @id
+  check          Check    @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  resultJson     String?  // JSON
+  rawExtractJson String?  // JSON
+  artifactRefs   String?  // JSON
+  createdAt      DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actor     String
+  action    String
+  payload   String?  // JSON
+  createdAt DateTime @default(now())
+}

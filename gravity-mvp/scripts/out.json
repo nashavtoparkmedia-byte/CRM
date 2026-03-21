@@ -1,0 +1,302 @@
+[
+  {
+    "id": "cmmwkg1fx01j3vph4q5e86h68",
+    "chatId": "cmmwkg0jw01ipvph4db2non1l",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Привет 228",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_165193082482905@lid_A5465C5340A0A9F1FCC759AD47D89DA9",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:28:22.000Z",
+    "createdAt": "2026-03-18T21:41:19.821Z",
+    "updatedAt": "2026-03-18T21:41:19.821Z",
+    "chat": {
+      "id": "cmmwkg0jw01ipvph4db2non1l",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "165193082482905@lid",
+      "name": "+7 922 215-57-50",
+      "lastMessageAt": "2026-03-18T21:28:22.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T21:41:18.668Z",
+      "updatedAt": "2026-03-18T21:41:19.832Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwkg1fh01j1vph4mcc0afil",
+    "chatId": "cmmwkg0jw01ipvph4db2non1l",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Привет 227",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_165193082482905@lid_A5096DF34DB5666B38172869BD83F2BE",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:27:38.000Z",
+    "createdAt": "2026-03-18T21:41:19.805Z",
+    "updatedAt": "2026-03-18T21:41:19.805Z",
+    "chat": {
+      "id": "cmmwkg0jw01ipvph4db2non1l",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "165193082482905@lid",
+      "name": "+7 922 215-57-50",
+      "lastMessageAt": "2026-03-18T21:28:22.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T21:41:18.668Z",
+      "updatedAt": "2026-03-18T21:41:19.832Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwkg1f201izvph416eij02q",
+    "chatId": "cmmwkg0jw01ipvph4db2non1l",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Привет 226",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_165193082482905@lid_A5C3F0FA1236F77167DC41D97E1F899A",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:27:11.000Z",
+    "createdAt": "2026-03-18T21:41:19.790Z",
+    "updatedAt": "2026-03-18T21:41:19.790Z",
+    "chat": {
+      "id": "cmmwkg0jw01ipvph4db2non1l",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "165193082482905@lid",
+      "name": "+7 922 215-57-50",
+      "lastMessageAt": "2026-03-18T21:28:22.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T21:41:18.668Z",
+      "updatedAt": "2026-03-18T21:41:19.832Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwj8ltd02ycvp649hw2fn34",
+    "chatId": "cmmtq7mot00ylvpoklll5ei4s",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Привет 206",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_165193082482905@lid_A5621505E50F8F0FB1DA2BB1DBF1B5DE",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:07:34.000Z",
+    "createdAt": "2026-03-18T21:07:33.362Z",
+    "updatedAt": "2026-03-18T21:07:33.362Z",
+    "chat": {
+      "id": "cmmtq7mot00ylvpoklll5ei4s",
+      "driverId": "cmmn7mq4h0003vpz8dxibq1dy",
+      "channel": "whatsapp",
+      "externalChatId": "whatsapp:165193082482905",
+      "name": "+7 922 215-57-50",
+      "lastMessageAt": "2026-03-18T21:41:17.956Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-16T21:59:26.621Z",
+      "updatedAt": "2026-03-18T21:41:17.958Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwjx1dk000svph4se9x6me1",
+    "chatId": "cmmtqpjgd00ypvpokow35e0q1",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Привет 205",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_79221853150@c.us_3EB0594640A82D42F94939",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:06:25.000Z",
+    "createdAt": "2026-03-18T21:26:33.272Z",
+    "updatedAt": "2026-03-18T21:26:33.272Z",
+    "chat": {
+      "id": "cmmtqpjgd00ypvpokow35e0q1",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "79221853150@c.us",
+      "name": "Наш Единый телефон Автопарк",
+      "lastMessageAt": "2026-03-18T21:07:34.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+      },
+      "createdAt": "2026-03-16T22:13:22.237Z",
+      "updatedAt": "2026-03-18T21:26:33.287Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwj72m001iqvp6414lw4xoh",
+    "chatId": "cmmwj72lm01imvp64d2moi5y2",
+    "direction": "inbound",
+    "type": "text",
+    "content": "",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_113417637605576@lid_3EB0AD272545477125BF",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:06:22.000Z",
+    "createdAt": "2026-03-18T21:06:21.817Z",
+    "updatedAt": "2026-03-18T21:06:21.817Z",
+    "chat": {
+      "id": "cmmwj72lm01imvp64d2moi5y2",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "whatsapp:113417637605576",
+      "name": null,
+      "lastMessageAt": "2026-03-18T16:05:42.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T21:06:21.803Z",
+      "updatedAt": "2026-03-18T21:06:21.883Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwj72n801j4vp640f44gxn2",
+    "chatId": "cmmwj72lm01imvp64d2moi5y2",
+    "direction": "inbound",
+    "type": "text",
+    "content": "",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_113417637605576@lid_3EB072D3097DE7C28574",
+    "metadata": {},
+    "sentAt": "2026-03-18T21:06:22.000Z",
+    "createdAt": "2026-03-18T21:06:21.860Z",
+    "updatedAt": "2026-03-18T21:06:21.860Z",
+    "chat": {
+      "id": "cmmwj72lm01imvp64d2moi5y2",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "whatsapp:113417637605576",
+      "name": null,
+      "lastMessageAt": "2026-03-18T16:05:42.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T21:06:21.803Z",
+      "updatedAt": "2026-03-18T21:06:21.883Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwj742e01klvp64vjswykqx",
+    "chatId": "cmmva1twd0000vpb46rxvq6xr",
+    "direction": "inbound",
+    "type": "video",
+    "content": "",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_status@broadcast_ACC1BFDDEFB9F2F9E83EC35EEFB05368_204217188909059@lid",
+    "metadata": {},
+    "sentAt": "2026-03-18T19:33:15.000Z",
+    "createdAt": "2026-03-18T21:06:23.702Z",
+    "updatedAt": "2026-03-18T21:06:23.702Z",
+    "chat": {
+      "id": "cmmva1twd0000vpb46rxvq6xr",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "whatsapp:status",
+      "name": null,
+      "lastMessageAt": "2026-03-18T19:33:15.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T00:02:34.525Z",
+      "updatedAt": "2026-03-18T21:06:23.684Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwj740o01kjvp64f5wnow4i",
+    "chatId": "cmmva1twd0000vpb46rxvq6xr",
+    "direction": "inbound",
+    "type": "video",
+    "content": "18 марта тебе бы было 77. Мы скучаем по тебе.",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_status@broadcast_AC0AB842457216150183B6EA42AA11EA_124360945844415@lid",
+    "metadata": {},
+    "sentAt": "2026-03-18T19:19:16.000Z",
+    "createdAt": "2026-03-18T21:06:23.640Z",
+    "updatedAt": "2026-03-18T21:06:23.640Z",
+    "chat": {
+      "id": "cmmva1twd0000vpb46rxvq6xr",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "whatsapp:status",
+      "name": null,
+      "lastMessageAt": "2026-03-18T19:33:15.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T00:02:34.525Z",
+      "updatedAt": "2026-03-18T21:06:23.684Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "cmmwkg25h01k4vph43ho485yu",
+    "chatId": "cmmw1gt8c010jvpl0giwnx4ev",
+    "direction": "inbound",
+    "type": "text",
+    "content": "14 марта",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "false_225167989076090@lid_AC59C26523DF4A1BFF3C25E210BF9694",
+    "metadata": {},
+    "sentAt": "2026-03-18T17:46:22.000Z",
+    "createdAt": "2026-03-18T21:41:20.741Z",
+    "updatedAt": "2026-03-18T21:41:20.741Z",
+    "chat": {
+      "id": "cmmw1gt8c010jvpl0giwnx4ev",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "225167989076090@lid",
+      "name": "+7 919 383-29-92",
+      "lastMessageAt": "2026-03-18T17:46:22.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T12:50:03.133Z",
+      "updatedAt": "2026-03-18T21:41:20.753Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  }
+]

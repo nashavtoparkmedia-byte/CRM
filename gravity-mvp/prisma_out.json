@@ -1,0 +1,52 @@
+[
+  {
+    "id": "max_in_79222155750_1774036567828_8d37082c",
+    "chatId": "chat_1773959418980",
+    "direction": "inbound",
+    "type": "text",
+    "content": "Новое слово",
+    "status": "delivered",
+    "channel": "max",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-20T19:56:07.828Z",
+    "createdAt": "2026-03-20T19:56:07.880Z",
+    "updatedAt": "2026-03-20T19:56:07.880Z",
+    "chat": {
+      "id": "chat_1773959418980",
+      "driverId": "cmmn7mq4h0003vpz8dxibq1dy",
+      "channel": "max",
+      "externalChatId": "max:79222155750",
+      "name": "Ремезов Александр",
+      "lastMessageAt": "2026-03-20T20:06:46.210Z",
+      "unreadCount": 0,
+      "metadata": {},
+      "createdAt": "2026-03-19T22:30:18.989Z",
+      "updatedAt": "2026-03-20T20:06:46.232Z",
+      "requiresResponse": false,
+      "status": "active",
+      "driver": {
+        "id": "cmmn7mq4h0003vpz8dxibq1dy",
+        "yandexDriverId": "f55fbc217bc8db76e06e6fa79894c607",
+        "fullName": "Ремезов Александр",
+        "phone": "+79222155750",
+        "licenseNumber": "9923715223",
+        "lastExternalPark": null,
+        "lastFleetCheckAt": null,
+        "lastFleetCheckStatus": null,
+        "lastFleetCheckId": null,
+        "segment": "small",
+        "segmentOverride": null,
+        "statusOverride": null,
+        "createdAt": "2026-03-12T08:32:41.153Z",
+        "updatedAt": "2026-03-15T09:58:58.334Z",
+        "score": 12,
+        "dismissedAt": null,
+        "hiredAt": "2021-10-07T06:20:25.533Z",
+        "lastOrderAt": null,
+        "customFields": {},
+        "primaryYandexId": null
+      }
+    }
+  }
+]

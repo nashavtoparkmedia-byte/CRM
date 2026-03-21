@@ -1,0 +1,4 @@
+[master 8fa6195] v2
+ 2 files changed, 648 insertions(+)
+ create mode 100644 add_output_7.txt
+ create mode 100644 git_final_commit.txt

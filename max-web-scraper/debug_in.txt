@@ -1,0 +1,30 @@
+[2026-03-20T20:20:35.621Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Денис name="Денис" msgId=none text="Красавчики ашпэ)) хорошего вечера!"
+[2026-03-20T20:20:35.659Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz57uxv0002vpq8s8zkatlc"}
+[2026-03-20T20:20:35.661Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Бек name="Бек" msgId=none text="Стикер"
+[2026-03-20T20:20:35.688Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmyl54s20000vpt0rwljuhkl"}
+[2026-03-20T20:20:35.689Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Казбек name="Казбек" msgId=none text="*Отлично*!  _Регистрация прошла успешно_! Теперь в"
+[2026-03-20T20:20:35.722Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmyl54s20000vpt0rwljuhkl"}
+[2026-03-20T20:20:35.723Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Дмитрий name="Дмитрий" msgId=none text="Добрый день!"
+[2026-03-20T20:20:35.755Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz766l60001vpksrlaqswto"}
+[2026-03-20T20:20:35.757Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Лёша Патрушев name="Лёша Патрушев" msgId=none text="Голосовое сообщение"
+[2026-03-20T20:20:35.816Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz766o10002vpksx2we0mtk"}
+[2026-03-20T20:20:35.817Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Н name="Н" msgId=none text="Стикер"
+[2026-03-20T20:20:35.868Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:20:35.870Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=MAX name="MAX" msgId=none text="Новый вход в MAX Обнаружили вход в профиль с вашим"
+[2026-03-20T20:20:35.964Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpnbyt000fvpv4fvyqkghr"}
+[2026-03-20T20:20:35.969Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Маха name="Маха" msgId=none text="Выводить можно на любую карту, и также на картк 3-"
+[2026-03-20T20:20:36.061Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz766vw0003vpksqmufw1ys"}
+[2026-03-20T20:20:36.063Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Константин name="Константин" msgId=none text="Стикер"
+[2026-03-20T20:20:36.124Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwrafc50001vpd4l01aa5j1"}
+[2026-03-20T20:20:36.126Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Сяйфи name="Сяйфи" msgId=none text="Стикер"
+[2026-03-20T20:20:36.182Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpf7uh000cvpv4sd2xp85c"}
+[2026-03-20T20:20:36.183Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Амелия name="Амелия" msgId=none text="Я Амелия из Таиланда"
+[2026-03-20T20:20:36.230Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpf7vw000dvpv4x0qnan85"}
+[2026-03-20T20:20:36.231Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Избранное name="Избранное" msgId=none text="Сохраните что-нибудь"
+[2026-03-20T20:20:36.280Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpf7x6000evpv4zkjh6009"}
+[2026-03-20T20:28:21.540Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="тест7"
+[2026-03-20T20:28:21.575Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:30:46.167Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="тест9"
+[2026-03-20T20:30:46.204Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:31:02.219Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="тест8"
+[2026-03-20T20:31:02.253Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}

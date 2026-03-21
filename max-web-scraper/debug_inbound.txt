@@ -1,0 +1,10 @@
+[2026-03-20T20:04:15.647Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="4"
+[2026-03-20T20:04:15.676Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:04:31.665Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="тест5"
+[2026-03-20T20:04:31.694Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:04:31.698Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="5"
+[2026-03-20T20:04:31.728Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:05:37.913Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="тест6"
+[2026-03-20T20:05:37.976Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T20:06:46.209Z] [PID:2072] [INBOUND] NEW channel=max source=active_chat phone=Александр name="Александр" msgId=none text="Тест 6"
+[2026-03-20T20:06:46.242Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}

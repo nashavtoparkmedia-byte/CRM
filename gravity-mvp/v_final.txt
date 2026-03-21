@@ -1,0 +1,42 @@
+prisma:config:loadConfigFromFile Config file loaded in 368.10ms +2240ms
+prisma:config:loadConfigFromFile No config file found in the current working directory C:\Users\mixx\Documents\Github\CRM\gravity-mvp +2ms
+prisma:getSchema prismaConfig null +2702ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +1ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +2ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getConfig Using getConfig Wasm +3ms
+prisma:cli Failed to read schema information. Using default values: '{\n  "name": "GetConfigError"\n}' +50ms
+prisma:engines binaries to download schema-engine, libquery-engine +2721ms
+prisma:loadEnv project root found at C:\Users\mixx\Documents\Github\CRM\gravity-mvp\package.json +275ms
+prisma:getSchema prismaConfig null +2ms
+prisma:tryLoadEnv Environment variables loaded from C:\Users\mixx\Documents\Github\CRM\gravity-mvp\.env +2ms
+Environment variables loaded from .env
+prisma:getSchema prismaConfig null +5ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +1ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getConfig Using getConfig Wasm +2ms
+prisma:getConfig config data retrieved without errors in getConfig Wasm +9ms
+prisma:getSchema prismaConfig null +3014ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +16ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+Prisma schema loaded from prisma\schema.prisma
+prisma:getConfig Using getConfig Wasm +18ms
+prisma:getConfig config data retrieved without errors in getConfig Wasm +9ms
+prisma:cli:bin Execution time for executing "await cli.parse(commandArray)": 3413.2928999999995 ms +1ms
+prisma                  : 6.19.2
+@prisma/client          : 6.19.2
+Computed binaryTarget   : windows
+Operating System        : win32
+Architecture            : x64
+Node.js                 : v24.13.1
+TypeScript              : 5.9.3
+Query Engine (Node-API) : libquery-engine c2990dca591cba766e3b7ef5d9e8a84796e47ab7 (at node_modules\@prisma\engines\query_engine-windows.dll.node)
+PSL                     : @prisma/prisma-schema-wasm 7.1.1-3.c2990dca591cba766e3b7ef5d9e8a84796e47ab7
+Schema Engine           : schema-engine-cli c2990dca591cba766e3b7ef5d9e8a84796e47ab7 (at node_modules\@prisma\engines\schema-engine-windows.exe)
+Default Engines Hash    : c2990dca591cba766e3b7ef5d9e8a84796e47ab7
+Studio                  : 0.511.0

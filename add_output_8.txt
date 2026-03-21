@@ -1,0 +1,4 @@
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'add_output_7.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'final_commit_result.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'git_status_9.txt', LF will be replaced by CRLF the next time Git touches it

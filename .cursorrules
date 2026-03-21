@@ -1,0 +1,82 @@
+# Project Rules: CRM Automation
+
+## General AI Instructions
+You are an agent working on the CRM project. To ensure a smooth development experience, follow these rules:
+
+### 1. Automation & Auto-Run
+- **SafeToAutoRun**: Always set `SafeToAutoRun: true` for routine development commands, including:
+    - Restarting dev servers or workers.
+    - Running database migrations or `prisma generate`.
+    - Executing local test scripts.
+    - Standard build or lint commands.
+- **Safe Process Termination & Monitoring**: **NEVER** use `taskkill`, `wmic`, `powershell Get-CimInstance`, or `Stop-Process` if you can avoid it. These directly trigger manual confirmation. Instead:
+    - Use `send_command_input` with `Terminate: true` (equivalent to `Ctrl+C`) to stop processes.
+    - Use standard Node.js/shell methods (e.g., `ps -ef` or `Get-Process`) or existing terminal logs to find process information.
+    - Use Node.js scripts (e.g., `fs.unlinkSync`) for file deletion instead of shell commands.
+    - **NEVER** use shell commands like `echo >> ...`, `cat > ...`, or output redirection (`command > file.txt`, `2>&1`) to create or modify files. These **ALWAYS** trigger manual confirmation (the "RUN" button). 
+    - **NEVER** use chained commands (`&&`, `||`, `;`) or pipes (`|`) in a single `run_command` call. These are flagged as potentially unsafe. Execute commands sequentially in separate tool calls.
+    - **NEVER** use shell utilities like `cat`, `grep`, `tail`, `head`, `ls`, or `dir` if an agent tool exists (e.g., `view_file`, `grep_search`, `list_dir`). Shell utilities trigger the "RUN" button more often.
+    - **PREFERRED PATTERN**: Run the command as-is (e.g., `node script.js`), capture the output from the tool result or `command_status`, and then use `write_to_file` if you need to save that output to a file.
+    - Use built-in agent tools (e.g., `list_dir`, `view_file`) instead of shell commands (e.g., `dir`, `Get-Item`) to check file existence, size, or metadata.
+    - **NEVER** pass sensitive information (secrets, passwords, `DATABASE_URL`) directly in the command line (e.g., `set VAR=password && command`). This triggers manual confirmation for security. Use `.env` files or tool-based environment variables instead.
+    - **NEVER** use inline script evaluation like `node -e "..."` or `python -c "..."`. These **ALWAYS** trigger manual confirmation (the "RUN" button). 
+    - **PREFERRED PATTERN**: Create a temporary file (e.g., `scripts/temp_query.js`), write your logic there using `write_to_file`, and then run it with `node scripts/temp_query.js`. This pattern is covered by **SafeToAutoRun** and will not prompt the user.
+    - Use project-specific scripts if available.
+- **Confirmation**: Only ask for manual "Run" confirmation for potentially destructive operations (e.g., `rm -rf`, modifying sensitive config files, or external system mutations).
+
+### 2. Workspace Terminals
+The project relies on 6 core terminals. Use `send_command_input` to interact with them whenever possible:
+1. **CRM (gravity-mvp)**: `npm run dev` in `./gravity-mvp`
+2. **Scraper API**: `npm run start:api` in `./yandex-fleet-scraper`
+3. **Scraper Worker**: `npm run start:worker` in `./yandex-fleet-scraper`
+4. **Max-web-scraper**: `node index.js` in `./max-web-scraper`
+5. **TG Bot Backend**: `npm start` in `./tg-bot`
+6. **TG Bot Frontend**: `npm run dev` in `./tg-bot/tg-bot-frontend`
+
+### 3. Workflows
+- Always check `.agents/workflows/` for available automated tasks.
+- If a workflow exists (like `/start-all`), prefer using it.
+- Respect the `// turbo-all` annotation in workflows.
+
+### 4. Mandatory Testing Policy (CRITICAL)
+- **Task-Appropriate Testing**: Conduct tests that are directly relevant to your changes. 
+    - **UI/UX changes**: Use `browser_subagent` to verify visuals and core interactions.
+    - **Backend/Logic changes**: Use `run_command` with local test scripts or temporary JS files.
+    - **Trivial changes**: For simple text fixes, typos, or minor styling, a visual check or tool-based verification is enough.
+- **Independent Verification**: **DO NOT** call the USER to verify until you are confident in your solution based on your own tests.
+- **The "Can I Do This Myself?" Rule**: Before prompting the user for manual verification, ask yourself: *"Could I have tested this specific change myself?"* If YES, do it.
+- **User Authorization**: The USER has explicitly authorized:
+    - **SafeToAutoRun: true** for all dev commands.
+    - **Independent Browser Testing** for all UI/UX verification.
+
+### 5. Interaction Patterns
+- **Rule Acknowledgement**: If the user provides a prompt about rules, permissions, or system state (like "SafeToAutoRun enabled"), simply acknowledge it briefly (e.g., "Rules acknowledged. SafeToAutoRun is ON. Ready for the task.") and **WAIT** for the specific task description.
+- **Do Not Pre-emptively Test**: Unless the task is explicitly a "System Health Check" or "Diagnostic", **DO NOT** start running tests, browser sessions, or scrapers until you have implemented a change or reached the verification phase of a specific task.
+- **Audio Signals (Windows)**:
+    - **SIGNAL-1 (NEED USER INPUT)**: Use this when you are blocked or need clarification. Before calling the user, run: `powershell [Console]::Beep(1500, 500)`
+    - **SIGNAL-2 (TASK COMPLETED)**: Use this only when finished and verified. Before reporting to the user, run: `powershell "[Console]::Beep(440,200); [Console]::Beep(660,200); [Console]::Beep(880,200); [Console]::Beep(1100,500)"`
+- **Task completion**: Only when you are ready to report "Done", perform the mandatory independent verification and trigger SIGNAL-2.
+
+### 6. Mode: Full Auto (CRM)
+When the user uses the keyword **"Full Auto"**, the following protocol is active:
+1. **Initial Phase**: Zero testing/diagnostics unless the task itself IS a diagnostic. Jump straight into research/implementation.
+2. **Execution Phase**: Use `SafeToAutoRun: true` for all routine commands. Work with maximum independence.
+3. **Verification Phase (The "Self-Check")**: When you reach the point where you would normally ask the user "Please check this", **STOP**. 
+   - Ask yourself: *"Can I verify this myself using a browser or a script?"*
+   - If YES, go and do it.
+   - Only call the user if it's a manual-only verification (e.g., "Check your physical phone" or "Deploy to production").
+4. **Report**: Give a concise summary of what was done and what was tested.
+
+### 7. Performance & Visibility
+- **No Silent Hanging**: When running custom scripts (like `node scripts/test.js`), ensure the script includes progress logging (e.g., `console.log('Connecting to DB...', 'Querying...', 'Done')`). 
+- **Timeouts & Autonomous Recovery**: If a command or tool call takes > 20 seconds without output, assume it is stuck or deadlocked. 
+  - **ACTION**: Immediately terminate the command (use `send_command_input` with `Terminate: true`). 
+  - **PIVOT**: Do not ask the user for permission. Find an alternative approach (e.g., more logging, breaking the task into smaller steps, or checking for file/DB locks) and **CONTINUE** working. 
+- **Database Access**: Before running complex Prisma queries, verify the DB is reachable with a simple `prisma.$queryRaw` or similar check.
+
+---
+**Note to Agent**: The USER wants maximum automation. Conduct all tests independently before calling the user. If a test is possible via browser/script — DO IT YOURSELF.
+
+# База знаний агентов
+Изучай папку `.agents/knowledge/` перед работой с интеграциями, чтобы избежать поломок. 
+Пример: `.agents/knowledge/max_chat_merging.md` хранит логику Anti-Ghost чатов для MAX Web Scraper.

@@ -1,0 +1,17 @@
+﻿--- DEBUGGING MISSING MAX MESSAGE ---
+Found Chat: ID=cmms4a8py0001vpnsde1ex208, channel=whatsapp, externalChatId=79222155750
+Driver: ╨а╨╡╨╝╨╡╨╖╨╛╨▓ ╨Р╨╗╨╡╨║╤Б╨░╨╜╨┤╤А
+Messages found: 10
+[2026-03-18T21:56:59.747Z] outbound | content="╨Я╤А╨╕╨▓╨╡╤В256" | status=delivered | channel=whatsapp
+[2026-03-18T21:28:45.131Z] outbound | content="╨Я╤А╨╕╨▓╨╡╤В 228" | status=delivered | channel=whatsapp
+[2026-03-18T21:26:21.067Z] outbound | content="╨Я╤А╨╕╨▓╨╡╤В 226" | status=delivered | channel=whatsapp
+[2026-03-18T21:06:11.722Z] outbound | content="╨Я╤А╨╕╨▓╨╡╤В 205" | status=delivered | channel=whatsapp
+[2026-03-18T20:54:38.249Z] outbound | content="╨Я╤А╨╕╨▓╨╡╤В 154" | status=delivered | channel=whatsapp
+[2026-03-18T14:34:41.340Z] outbound | content="╨в╨╡╤Б╤В 1934" | status=delivered | channel=whatsapp
+[2026-03-18T13:37:32.814Z] outbound | content="╨в╨╡╤Б╤В 1837" | status=delivered | channel=whatsapp
+[2026-03-17T03:22:02.788Z] outbound | content="╨┐╤А╨╕╨▓╨╡╤В" | status=sent | channel=whatsapp
+[2026-03-17T03:19:43.089Z] outbound | content="╨┐╤А╨╕╨▓╨╡╤В" | status=sent | channel=whatsapp
+[2026-03-17T03:19:32.973Z] outbound | content="╨┐╤А╨╕╨▓╨╡╤В" | status=sent | channel=whatsapp
+
+Global Search for "╨в╨╡╤Б╤В2" found 1 results:
+ID=max_in_79222155750_1773909342516_f52b86e4, chatId=chat_1773610553234, content="╨в╨╡╤Б╤В2", status=delivered

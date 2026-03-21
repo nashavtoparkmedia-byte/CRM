@@ -1,0 +1,506 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ApiConnection {
+  id        String   @id @default(cuid())
+  clid      String
+  apiKey    String
+  parkId    String
+  createdAt DateTime @default(now())
+  logs      ApiLog[]
+}
+
+model ApiLog {
+  id           String        @id @default(cuid())
+  connectionId String
+  method       String
+  requestUrl   String
+  requestBody  String?
+  responseBody String?
+  statusCode   Int
+  error        String?
+  durationMs   Int
+  createdAt    DateTime      @default(now())
+  connection   ApiConnection @relation(fields: [connectionId], references: [id])
+}
+
+model TelegramConnection {
+  id            String   @id @default(cuid())
+  apiId         Int
+  apiHash       String
+  sessionString String?
+  isActive      Boolean  @default(false)
+  phoneNumber   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  isDefault     Boolean  @default(false)
+  name          String?
+}
+
+model MaxConnection {
+  id        String   @id
+  name      String?
+  botToken  String
+  isActive  Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WhatsAppConnection {
+  id          String                   @id @default(cuid())
+  name        String?
+  status      WhatsAppConnectionStatus @default(idle)
+  phoneNumber String?
+  sessionData String?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  chats       WhatsAppChat[]
+}
+
+model WhatsAppChat {
+  id            String             @id
+  connectionId  String
+  name          String?
+  lastMessageAt DateTime?
+  connection    WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  messages      WhatsAppMessage[]
+
+  @@unique([id, connectionId])
+}
+
+model WhatsAppMessage {
+  id            String              @id
+  chatId        String
+  body          String
+  fromMe        Boolean
+  timestamp     DateTime
+  type          WhatsAppMessageType @default(chat)
+  mediaPath     String?
+  isMediaLoaded Boolean             @default(false)
+  mediaSize     Int?
+  chat          WhatsAppChat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([id, chatId])
+}
+
+model DriverTelegram {
+  id            String   @id @default(cuid())
+  driverId      String   @unique
+  telegramId    BigInt   @unique
+  username      String?
+  phoneVerified Boolean  @default(false)
+  botState      String   @default("IDLE")
+  carId         String?
+  carLabel      String?
+  createdAt     DateTime @default(now())
+}
+
+model BotChatMessage {
+  id         String   @id @default(cuid())
+  telegramId BigInt
+  driverId   String?
+  direction  String
+  text       String
+  createdAt  DateTime @default(now())
+}
+
+model Bot {
+  id              String           @id @default(uuid())
+  token           String           @unique
+  name            String
+  username        String?
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  analyticsEvents AnalyticsEvent[]
+  broadcasts      Broadcast[]
+  surveys         Survey[]
+  users           User[]
+
+  @@map("bots")
+}
+
+model Survey {
+  id            String     @id @default(uuid())
+  botId         String     @map("bot_id")
+  title         String     @default("Новый опрос")
+  triggerButton String     @default("📊 Опрос качества") @map("trigger_button")
+  isActive      Boolean    @default(true) @map("is_active")
+  isLinear      Boolean    @default(true) @map("is_linear")
+  googleSheetId String?    @map("google_sheet_id")
+  syncMode      String     @default("ON_COMPLETE") @map("sync_mode")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  archivedAt    DateTime?  @map("archived_at")
+  questions     Question[]
+  bot           Bot        @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@map("surveys")
+}
+
+model Question {
+  id           String   @id @default(uuid())
+  surveyId     String   @map("survey_id")
+  order        Int      @default(0)
+  type         String
+  text         String
+  options      Json?
+  isRequired   Boolean  @default(true) @map("is_required")
+  isConversion Boolean  @default(false) @map("is_conversion")
+  routingRules Json?    @map("routing_rules")
+  answers      Answer[]
+  survey       Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  @@map("questions")
+}
+
+model User {
+  id                String           @id @default(uuid())
+  botId             String           @map("bot_id")
+  telegramId        BigInt           @map("telegram_id")
+  username          String?
+  firstName         String?          @map("first_name")
+  currentQuestionId String?          @map("current_question_id")
+  status            String           @default("ACTIVE")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  analyticsEvents   AnalyticsEvent[]
+  answers           Answer[]
+  bot               Bot              @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@unique([botId, telegramId])
+  @@map("users")
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  questionId String   @map("question_id")
+  value      String
+  createdAt  DateTime @default(now()) @map("created_at")
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("answers")
+}
+
+model AnalyticsEvent {
+  id        String             @id @default(uuid())
+  botId     String             @map("bot_id")
+  userId    String?            @map("user_id")
+  eventType AnalyticsEventType @map("event_type")
+  sourceId  String?            @map("source_id")
+  metadata  Json?
+  createdAt DateTime           @default(now()) @map("created_at")
+  bot       Bot                @relation(fields: [botId], references: [id], onDelete: Cascade)
+  user      User?              @relation(fields: [userId], references: [id])
+
+  @@index([botId, createdAt])
+  @@index([botId, eventType, createdAt])
+  @@map("analytics_events")
+}
+
+model Broadcast {
+  id            String         @id @default(uuid())
+  botId         String         @map("bot_id")
+  text          String
+  status        String         @default("PENDING")
+  totalTargeted Int            @default(0) @map("total_targeted")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  completedAt   DateTime?      @map("completed_at")
+  stats         BroadcastStat?
+  bot           Bot            @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@map("broadcasts")
+}
+
+model BroadcastStat {
+  id           String    @id @default(uuid())
+  broadcastId  String    @unique @map("broadcast_id")
+  successCount Int       @default(0) @map("success_count")
+  failedCount  Int       @default(0) @map("failed_count")
+  broadcast    Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@map("broadcast_stats")
+}
+
+model Driver {
+  id                   String               @id @default(cuid())
+  yandexDriverId       String               @unique
+  fullName             String
+  phone                String?
+  licenseNumber        String?
+  lastExternalPark     String?
+  lastFleetCheckAt     DateTime?
+  lastFleetCheckStatus String?
+  lastFleetCheckId     String?
+  segment              String               @default("unknown")
+  segmentOverride      String?
+  statusOverride       String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  score                Float?
+  dismissedAt          DateTime?
+  hiredAt              DateTime?
+  lastOrderAt          DateTime?
+  customFields         Json?                @default("{}")
+  primaryYandexId      String?              @unique
+  chats                Chat[]
+  communicationEvents  CommunicationEvent[]
+  attentions           DriverAttention[]
+  daySummaries         DriverDaySummary[]
+  events               DriverEvent[]
+  managerTasks         ManagerTask[]
+
+  @@index([fullName])
+  @@index([segment])
+  @@index([primaryYandexId])
+}
+
+model Chat {
+  id               String      @id @default(cuid())
+  driverId         String?
+  channel          ChatChannel
+  externalChatId   String      @unique
+  name             String?
+  lastMessageAt    DateTime?
+  unreadCount      Int         @default(0)
+  metadata         Json?       @default("{}")
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  requiresResponse Boolean     @default(false)
+  status           String      @default("new")
+  driver           Driver?     @relation(fields: [driverId], references: [id])
+  messages         Message[]
+
+  @@index([driverId])
+  @@index([lastMessageAt(sort: Desc)])
+  @@index([status])
+}
+
+model Message {
+  id          String              @id @default(cuid())
+  chatId      String
+  direction   MessageDirection
+  type        MessageType         @default(text)
+  content     String
+  status      MessageStatus       @default(sent)
+  channel     ChatChannel?        @default(whatsapp)
+  externalId  String?             @unique
+  metadata    Json?               @default("{}")
+  sentAt      DateTime            @default(now())
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  chat        Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
+  eventLogs   MessageEventLog[]
+
+  @@index([chatId, sentAt(sort: Desc)])
+  @@index([externalId])
+}
+
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  type      String
+  url       String
+  fileName  String?
+  fileSize  Int?
+  mimeType  String?
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model MessageEventLog {
+  id        String   @id @default(cuid())
+  messageId String
+  eventType String
+  metadata  Json?
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+model DriverEvent {
+  id        String   @id @default(cuid())
+  driverId  String
+  eventType String
+  payload   Json?
+  createdBy String?
+  createdAt DateTime @default(now())
+  driver    Driver   @relation(fields: [driverId], references: [id])
+
+  @@index([driverId, createdAt])
+  @@index([eventType])
+}
+
+model DriverAttention {
+  id         String    @id @default(cuid())
+  driverId   String
+  reason     String
+  riskLevel  String    @default("medium")
+  status     String    @default("open")
+  meta       Json?
+  createdBy  String?
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  driver     Driver    @relation(fields: [driverId], references: [id])
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([driverId])
+}
+
+model DriverDaySummary {
+  id                String   @id @default(cuid())
+  driverId          String
+  date              DateTime @db.Date
+  tripCount         Int      @default(0)
+  hadManagerMessage Boolean  @default(false)
+  hadManagerCall    Boolean  @default(false)
+  hadAutoMessage    Boolean  @default(false)
+  hadPromotion      Boolean  @default(false)
+  hadAiAction       Boolean  @default(false)
+  hadGoalAchieved   Boolean  @default(false)
+  driver            Driver   @relation(fields: [driverId], references: [id])
+
+  @@unique([driverId, date])
+  @@index([date])
+  @@index([driverId, date])
+}
+
+model ScoringThreshold {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Int
+  updatedAt DateTime @updatedAt
+}
+
+model CommunicationEvent {
+  id        String   @id @default(cuid())
+  driverId  String
+  channel   String
+  direction String
+  eventType String
+  content   String?
+  metadata  Json?
+  createdBy String?
+  createdAt DateTime @default(now())
+  driver    Driver   @relation(fields: [driverId], references: [id])
+
+  @@index([driverId, createdAt(sort: Desc)])
+  @@index([eventType])
+}
+
+model CommunicationTrigger {
+  id              String   @id @default(cuid())
+  name            String
+  condition       String
+  threshold       Int
+  action          String
+  messageTemplate String?
+  channel         String   @default("telegram")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+model ManagerTask {
+  id         String    @id @default(cuid())
+  driverId   String
+  type       String
+  title      String
+  priority   String    @default("medium")
+  status     String    @default("open")
+  triggerId  String?
+  metadata   Json?
+  createdBy  String?
+  resolvedBy String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  driver     Driver    @relation(fields: [driverId], references: [id])
+
+  @@index([status, priority, createdAt(sort: Desc)])
+  @@index([driverId])
+}
+
+model DailyParkStats {
+  id                 String   @id @default(cuid())
+  date               DateTime @unique @db.Date
+  activeDrivers      Int      @default(0)
+  totalTrips         Int      @default(0)
+  driversAtRisk      Int      @default(0)
+  sleepingDrivers    Int      @default(0)
+  promotionsActive   Int      @default(0)
+  profitableCount    Int      @default(0)
+  mediumCount        Int      @default(0)
+  smallCount         Int      @default(0)
+  reactivatedDrivers Int      @default(0)
+  createdAt          DateTime @default(now())
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum ChatChannel {
+  telegram
+  whatsapp
+  max
+  yandex_pro
+}
+
+enum MessageStatus {
+  queued
+  sent
+  delivered
+  read
+  failed
+}
+
+enum MessageType {
+  text
+  image
+  audio
+  video
+  sticker
+  voice
+  document
+  system
+}
+
+enum WhatsAppMessageType {
+  chat
+  image
+  audio
+  video
+  sticker
+  voice
+  document
+}
+
+enum WhatsAppConnectionStatus {
+  idle
+  qr
+  qr_expired
+  authenticated
+  ready
+  disconnected
+  error
+}
+
+enum AnalyticsEventType {
+  USER_CREATED
+  BOT_STARTED
+  SURVEY_STARTED
+  SURVEY_COMPLETED
+  BROADCAST_SENT
+  BROADCAST_FAILED
+}

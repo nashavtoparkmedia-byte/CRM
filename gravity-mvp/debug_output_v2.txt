@@ -1,0 +1,14 @@
+Searching for "Петухова Анна Павловна"...
+Found 1 drivers matching "Петухова":
+- ID: cmmnxwcbz02qvvptonkb2t23l, Name: Петухова Анна, YandexId: 010a68a1d4f34209921781e1d525ee64
+Found 11 summaries for Петухова Анна
+  Date: 2026-03-09, Trips: 2
+  Date: 2026-03-08, Trips: 3
+  Date: 2026-02-20, Trips: 6
+  Date: 2026-02-17, Trips: 1
+  Date: 2026-02-16, Trips: 1
+  Date: 2026-02-15, Trips: 5
+  Date: 2026-02-14, Trips: 9
+  Date: 2026-02-13, Trips: 6
+Total Summaries in DB: 6853
+Total Trips in DB: 61163

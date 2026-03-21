@@ -1,0 +1,62 @@
+{
+  "updated_at": "2026-03-12T20:58:28.003162+00:00",
+  "accounts": [
+    {
+      "balance": "0.0068",
+      "balance_limit": "300.0000",
+      "currency": "RUB",
+      "id": "f55fbc217bc8db76e06e6fa79894c607",
+      "type": "current",
+      "last_transaction_date": "2025-05-17T13:00:00+00:00"
+    }
+  ],
+  "car": {
+    "amenities": [],
+    "brand": "Citroen",
+    "callsign": "Е352КО196",
+    "category": [
+      "econom",
+      "express",
+      "premium_suv"
+    ],
+    "color": "Серый",
+    "id": "7cd82926bd61cf3c1984ded987e17b3f",
+    "model": "C4",
+    "normalized_number": "E352K0196",
+    "number": "Е352КО196",
+    "registration_cert": "6641176047",
+    "status": "working",
+    "vin": "Z8TNC5FS0BM500026",
+    "year": 2011
+  },
+  "driver_profile": {
+    "created_date": "2021-10-07T06:20:25.533+00:00",
+    "first_name": "Александр",
+    "hire_date": "2021-10-07T00:00:00+00:00",
+    "id": "f55fbc217bc8db76e06e6fa79894c607",
+    "is_selfemployed": false,
+    "employment_type": "park_employee",
+    "has_contract_issue": false,
+    "last_name": "Ремезов",
+    "driver_license": {
+      "birth_date": "1983-07-19T00:00:00+00:00",
+      "country": "rus",
+      "expiration_date": "2031-07-07T00:00:00+00:00",
+      "issue_date": "2021-07-07T00:00:00+00:00",
+      "normalized_number": "9923715223",
+      "number": "9923715223"
+    },
+    "middle_name": "Юрьевич",
+    "modified_date": "2026-03-12T20:58:27.754+00:00",
+    "park_id": "3a23295d8d714c03b61a17a6fc86601b",
+    "phones": [
+      "+79222155750"
+    ],
+    "work_rule_id": "c73d7c3e7288425b88002924d792ee16",
+    "work_status": "working"
+  },
+  "current_status": {
+    "status": "offline",
+    "status_updated_at": "2025-10-31T05:01:56.851+00:00"
+  }
+}

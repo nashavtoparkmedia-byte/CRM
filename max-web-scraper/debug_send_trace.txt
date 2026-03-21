@@ -1,0 +1,74 @@
+[2026-03-20T19:56:31.879Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Четыре"
+[2026-03-20T19:56:31.881Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Пять"
+[2026-03-20T19:56:31.882Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Шесть"
+[2026-03-20T19:56:31.884Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Семь"
+[2026-03-20T19:56:31.885Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Один"
+[2026-03-20T19:56:31.887Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="тест4..."
+[2026-03-20T19:56:31.888Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="тест5..."
+[2026-03-20T19:56:31.889Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T19:56:31.891Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Азбука"
+[2026-03-20T19:56:31.892Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T19:56:31.894Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T19:56:31.896Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="3..."
+[2026-03-20T19:56:31.898Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="4..."
+[2026-03-20T19:56:31.900Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="5..."
+[2026-03-20T19:56:31.902Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="тест6..."
+[2026-03-20T19:56:31.903Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T19:56:31.905Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T19:56:31.906Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="3..."
+[2026-03-20T19:56:31.908Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Новое слово"
+[2026-03-20T19:56:31.909Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Авто"
+[2026-03-20T19:56:32.491Z] [PID:2072] [API] Получен запрос на отправку: phone=79222155750, name="Ремезов Александр"
+[2026-03-20T19:56:32.493Z] [PID:2072] [STEP 0] Старт отправки на 79222155750 (Name: "Ремезов Александр")
+[2026-03-20T19:56:33.958Z] [PID:2072] [POLL DOM] Header: "none", ActiveInbound: 0, UnreadChats: 13
+[2026-03-20T19:56:33.961Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Александр name="Александр" msgId=none text="Авто"
+[2026-03-20T19:56:33.974Z] [PID:2072] Пробую формат поиска: +79222155750
+[2026-03-20T19:56:34.018Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T19:56:34.020Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Денис name="Денис" msgId=none text="Красавчики ашпэ)) хорошего вечера!"
+[2026-03-20T19:56:34.096Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz57uxv0002vpq8s8zkatlc"}
+[2026-03-20T19:56:34.099Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Бек name="Бек" msgId=none text="Стикер"
+[2026-03-20T19:56:34.156Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmyl54s20000vpt0rwljuhkl"}
+[2026-03-20T19:56:34.159Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Казбек name="Казбек" msgId=none text="*Отлично*!  _Регистрация прошла успешно_! Теперь в"
+[2026-03-20T19:56:34.232Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmyl54s20000vpt0rwljuhkl"}
+[2026-03-20T19:56:34.234Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Дмитрий name="Дмитрий" msgId=none text="Добрый день!"
+[2026-03-20T19:56:34.304Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz766l60001vpksrlaqswto"}
+[2026-03-20T19:56:34.306Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Лёша Патрушев name="Лёша Патрушев" msgId=none text="Голосовое сообщение"
+[2026-03-20T19:56:34.424Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz766o10002vpksx2we0mtk"}
+[2026-03-20T19:56:34.426Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Н name="Н" msgId=none text="Стикер"
+[2026-03-20T19:56:34.531Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"chat_1773959418980"}
+[2026-03-20T19:56:34.533Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=MAX name="MAX" msgId=none text="Новый вход в MAX Обнаружили вход в профиль с вашим"
+[2026-03-20T19:56:34.627Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpnbyt000fvpv4fvyqkghr"}
+[2026-03-20T19:56:34.630Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Маха name="Маха" msgId=none text="Выводить можно на любую карту, и также на картк 3-"
+[2026-03-20T19:56:34.715Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmz766vw0003vpksqmufw1ys"}
+[2026-03-20T19:56:34.718Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Константин name="Константин" msgId=none text="Стикер"
+[2026-03-20T19:56:34.785Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwrafc50001vpd4l01aa5j1"}
+[2026-03-20T19:56:34.788Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Сяйфи name="Сяйфи" msgId=none text="Стикер"
+[2026-03-20T19:56:34.955Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpf7uh000cvpv4sd2xp85c"}
+[2026-03-20T19:56:34.959Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Амелия name="Амелия" msgId=none text="Я Амелия из Таиланда"
+[2026-03-20T19:56:35.154Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpf7vw000dvpv4x0qnan85"}
+[2026-03-20T19:56:35.158Z] [PID:2072] [INBOUND] NEW channel=max source=sidebar phone=Избранное name="Избранное" msgId=none text="Сохраните что-нибудь"
+[2026-03-20T19:56:35.328Z] [PID:2072] [INBOUND RESP] Status: 200, Body: {"success":true,"chatId":"cmmwpf7x6000evpv4zkjh6009"}
+[2026-03-20T19:56:35.881Z] [PID:2072] [POLL DOM] Header: "none", ActiveInbound: 0, UnreadChats: 0
+[2026-03-20T19:56:38.648Z] [PID:2072] Найдена кнопка "Найти по номеру". Нажимаю и сразу перехожу к проверке чата...
+[2026-03-20T19:56:38.677Z] [PID:2072] Жду открытия чата (был: "")
+[2026-03-20T19:56:39.908Z] [PID:2072] [POLL DOM] Header: "Александр", ActiveInbound: 20, UnreadChats: 0
+[2026-03-20T19:56:39.910Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Четыре"
+[2026-03-20T19:56:39.911Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Пять"
+[2026-03-20T19:56:39.912Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Шесть"
+[2026-03-20T19:56:39.913Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Семь"
+[2026-03-20T19:56:39.914Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Один"
+[2026-03-20T19:56:39.917Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="тест4..."
+[2026-03-20T19:56:39.919Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="тест5..."
+[2026-03-20T19:56:39.922Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T19:56:39.923Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Азбука"
+[2026-03-20T19:56:39.925Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T19:56:39.926Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T19:56:39.927Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="3..."
+[2026-03-20T19:56:39.928Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="4..."
+[2026-03-20T19:56:39.933Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="5..."
+[2026-03-20T19:56:39.935Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="тест6..."
+[2026-03-20T19:56:39.936Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="1"
+[2026-03-20T19:56:39.937Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="2"
+[2026-03-20T19:56:39.938Z] [PID:2072] [DEDUPE] Echo suppressed: channel=max phone=Александр text="3..."
+[2026-03-20T19:56:39.940Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Новое слово"
+[2026-03-20T19:56:39.941Z] [PID:2072] [DEDUPE] Skipped (already seen): channel=max source=active_chat phone=Александр text="Авто"

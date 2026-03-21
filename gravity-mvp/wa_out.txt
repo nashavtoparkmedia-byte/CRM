@@ -1,0 +1,1193 @@
+--- Checking Chats ---
+[
+  {
+    "id": "cmms4a8py0001vpnsde1ex208",
+    "driverId": "cmmn7mq4h0003vpz8dxibq1dy",
+    "channel": "whatsapp",
+    "externalChatId": "79222155750",
+    "name": "Ремезов Александр",
+    "lastMessageAt": "2026-03-19T16:41:31.178Z",
+    "unreadCount": 0,
+    "metadata": {},
+    "createdAt": "2026-03-15T18:57:50.756Z",
+    "updatedAt": "2026-03-19T16:41:31.179Z",
+    "requiresResponse": false,
+    "status": "active",
+    "driver": {
+      "id": "cmmn7mq4h0003vpz8dxibq1dy",
+      "yandexDriverId": "f55fbc217bc8db76e06e6fa79894c607",
+      "fullName": "Ремезов Александр",
+      "phone": "+79222155750",
+      "licenseNumber": "9923715223",
+      "lastExternalPark": null,
+      "lastFleetCheckAt": null,
+      "lastFleetCheckStatus": null,
+      "lastFleetCheckId": null,
+      "segment": "small",
+      "segmentOverride": null,
+      "statusOverride": null,
+      "createdAt": "2026-03-12T08:32:41.153Z",
+      "updatedAt": "2026-03-15T09:58:58.334Z",
+      "score": 12,
+      "dismissedAt": null,
+      "hiredAt": "2021-10-07T06:20:25.533Z",
+      "lastOrderAt": null,
+      "customFields": {},
+      "primaryYandexId": null
+    },
+    "messages": [
+      {
+        "id": "msg_1773938478120",
+        "chatId": "cmms4a8py0001vpnsde1ex208",
+        "direction": "outbound",
+        "type": "text",
+        "content": "2141",
+        "status": "delivered",
+        "channel": "whatsapp",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T16:41:18.120Z",
+        "createdAt": "2026-03-19T16:41:18.122Z",
+        "updatedAt": "2026-03-19T16:41:31.176Z"
+      },
+      {
+        "id": "msg_1773916986745",
+        "chatId": "cmms4a8py0001vpnsde1ex208",
+        "direction": "outbound",
+        "type": "text",
+        "content": "1555",
+        "status": "delivered",
+        "channel": "whatsapp",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T10:43:06.745Z",
+        "createdAt": "2026-03-19T10:43:06.748Z",
+        "updatedAt": "2026-03-19T10:43:06.818Z"
+      },
+      {
+        "id": "msg_1773916944829",
+        "chatId": "cmms4a8py0001vpnsde1ex208",
+        "direction": "outbound",
+        "type": "text",
+        "content": "1543",
+        "status": "delivered",
+        "channel": "whatsapp",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T10:42:24.829Z",
+        "createdAt": "2026-03-19T10:42:24.830Z",
+        "updatedAt": "2026-03-19T10:42:36.366Z"
+      },
+      {
+        "id": "msg_1773871019744",
+        "chatId": "cmms4a8py0001vpnsde1ex208",
+        "direction": "outbound",
+        "type": "text",
+        "content": "Привет256",
+        "status": "delivered",
+        "channel": "whatsapp",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-18T21:56:59.744Z",
+        "createdAt": "2026-03-18T21:56:59.747Z",
+        "updatedAt": "2026-03-18T21:57:00.180Z"
+      },
+      {
+        "id": "msg_1773869325129",
+        "chatId": "cmms4a8py0001vpnsde1ex208",
+        "direction": "outbound",
+        "type": "text",
+        "content": "Привет 228",
+        "status": "delivered",
+        "channel": "whatsapp",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-18T21:28:45.129Z",
+        "createdAt": "2026-03-18T21:28:45.131Z",
+        "updatedAt": "2026-03-18T21:28:45.178Z"
+      }
+    ]
+  },
+  {
+    "id": "chat_1773610553234",
+    "driverId": "cmmn7mq4h0003vpz8dxibq1dy",
+    "channel": "max",
+    "externalChatId": "max:79222155750",
+    "name": "Ремезов Александр",
+    "lastMessageAt": "2026-03-19T18:36:47.338Z",
+    "unreadCount": 0,
+    "metadata": {},
+    "createdAt": "2026-03-15T21:35:53.237Z",
+    "updatedAt": "2026-03-19T18:36:47.400Z",
+    "requiresResponse": false,
+    "status": "active",
+    "driver": {
+      "id": "cmmn7mq4h0003vpz8dxibq1dy",
+      "yandexDriverId": "f55fbc217bc8db76e06e6fa79894c607",
+      "fullName": "Ремезов Александр",
+      "phone": "+79222155750",
+      "licenseNumber": "9923715223",
+      "lastExternalPark": null,
+      "lastFleetCheckAt": null,
+      "lastFleetCheckStatus": null,
+      "lastFleetCheckId": null,
+      "segment": "small",
+      "segmentOverride": null,
+      "statusOverride": null,
+      "createdAt": "2026-03-12T08:32:41.153Z",
+      "updatedAt": "2026-03-15T09:58:58.334Z",
+      "score": 12,
+      "dismissedAt": null,
+      "hiredAt": "2021-10-07T06:20:25.533Z",
+      "lastOrderAt": null,
+      "customFields": {},
+      "primaryYandexId": null
+    },
+    "messages": [
+      {
+        "id": "max_in_79222155750_1773945407338_b2397517",
+        "chatId": "chat_1773610553234",
+        "direction": "inbound",
+        "type": "text",
+        "content": "2347",
+        "status": "delivered",
+        "channel": "max",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T18:36:47.338Z",
+        "createdAt": "2026-03-19T18:36:47.405Z",
+        "updatedAt": "2026-03-19T18:36:47.405Z"
+      },
+      {
+        "id": "msg_1773945384050",
+        "chatId": "chat_1773610553234",
+        "direction": "outbound",
+        "type": "text",
+        "content": "2346",
+        "status": "delivered",
+        "channel": "max",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T18:36:24.050Z",
+        "createdAt": "2026-03-19T18:36:24.053Z",
+        "updatedAt": "2026-03-19T18:36:39.052Z"
+      },
+      {
+        "id": "max_in_79222155750_1773944827464_76601a98",
+        "chatId": "chat_1773610553234",
+        "direction": "inbound",
+        "type": "text",
+        "content": "Auto webhook link test - 22:45",
+        "status": "delivered",
+        "channel": "max",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T18:27:07.464Z",
+        "createdAt": "2026-03-19T18:27:07.742Z",
+        "updatedAt": "2026-03-19T18:27:07.742Z"
+      },
+      {
+        "id": "msg_1773939959800",
+        "chatId": "chat_1773610553234",
+        "direction": "outbound",
+        "type": "text",
+        "content": "2206",
+        "status": "delivered",
+        "channel": "max",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T17:05:59.800Z",
+        "createdAt": "2026-03-19T17:05:59.802Z",
+        "updatedAt": "2026-03-19T17:06:14.348Z"
+      },
+      {
+        "id": "msg_1773938466686",
+        "chatId": "chat_1773610553234",
+        "direction": "outbound",
+        "type": "text",
+        "content": "2141",
+        "status": "delivered",
+        "channel": "max",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T16:41:06.686Z",
+        "createdAt": "2026-03-19T16:41:06.687Z",
+        "updatedAt": "2026-03-19T16:41:21.236Z"
+      }
+    ]
+  },
+  {
+    "id": "chat_1773610559207",
+    "driverId": "cmmn7mq4h0003vpz8dxibq1dy",
+    "channel": "telegram",
+    "externalChatId": "telegram:79222155750",
+    "name": "Ремезов Александр",
+    "lastMessageAt": "2026-03-19T16:41:24.637Z",
+    "unreadCount": 0,
+    "metadata": {},
+    "createdAt": "2026-03-15T21:35:59.209Z",
+    "updatedAt": "2026-03-19T16:41:24.639Z",
+    "requiresResponse": false,
+    "status": "active",
+    "driver": {
+      "id": "cmmn7mq4h0003vpz8dxibq1dy",
+      "yandexDriverId": "f55fbc217bc8db76e06e6fa79894c607",
+      "fullName": "Ремезов Александр",
+      "phone": "+79222155750",
+      "licenseNumber": "9923715223",
+      "lastExternalPark": null,
+      "lastFleetCheckAt": null,
+      "lastFleetCheckStatus": null,
+      "lastFleetCheckId": null,
+      "segment": "small",
+      "segmentOverride": null,
+      "statusOverride": null,
+      "createdAt": "2026-03-12T08:32:41.153Z",
+      "updatedAt": "2026-03-15T09:58:58.334Z",
+      "score": 12,
+      "dismissedAt": null,
+      "hiredAt": "2021-10-07T06:20:25.533Z",
+      "lastOrderAt": null,
+      "customFields": {},
+      "primaryYandexId": null
+    },
+    "messages": [
+      {
+        "id": "msg_1773938472969",
+        "chatId": "chat_1773610559207",
+        "direction": "outbound",
+        "type": "text",
+        "content": "2141",
+        "status": "delivered",
+        "channel": "telegram",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T16:41:12.969Z",
+        "createdAt": "2026-03-19T16:41:12.970Z",
+        "updatedAt": "2026-03-19T16:41:24.636Z"
+      },
+      {
+        "id": "msg_1773936583355",
+        "chatId": "chat_1773610559207",
+        "direction": "outbound",
+        "type": "text",
+        "content": "1903",
+        "status": "delivered",
+        "channel": "telegram",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T16:09:43.355Z",
+        "createdAt": "2026-03-19T16:09:43.356Z",
+        "updatedAt": "2026-03-19T16:09:50.075Z"
+      },
+      {
+        "id": "msg_1773916868893",
+        "chatId": "chat_1773610559207",
+        "direction": "outbound",
+        "type": "text",
+        "content": "1541",
+        "status": "delivered",
+        "channel": "telegram",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-19T10:41:08.893Z",
+        "createdAt": "2026-03-19T10:41:08.895Z",
+        "updatedAt": "2026-03-19T10:41:15.597Z"
+      },
+      {
+        "id": "msg_1773871015466",
+        "chatId": "chat_1773610559207",
+        "direction": "outbound",
+        "type": "text",
+        "content": "Привет256",
+        "status": "delivered",
+        "channel": "telegram",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-18T21:56:55.466Z",
+        "createdAt": "2026-03-18T21:56:55.468Z",
+        "updatedAt": "2026-03-18T21:57:17.848Z"
+      },
+      {
+        "id": "msg_1773870059741",
+        "chatId": "chat_1773610559207",
+        "direction": "outbound",
+        "type": "text",
+        "content": "Привет 240",
+        "status": "delivered",
+        "channel": "telegram",
+        "externalId": null,
+        "metadata": {},
+        "sentAt": "2026-03-18T21:40:59.741Z",
+        "createdAt": "2026-03-18T21:40:59.743Z",
+        "updatedAt": "2026-03-18T21:41:14.050Z"
+      }
+    ]
+  },
+  {
+    "id": "cmmtnhhrl00vivpgk6s1r3jhe",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1636007509@g.us",
+    "name": "Yoko.Разговоры",
+    "lastMessageAt": "2026-02-09T10:05:28.000Z",
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T20:43:07.953Z",
+    "updatedAt": "2026-03-19T16:42:07.643Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": [
+      {
+        "id": "cmmtnhhs100vmvpgkel8f3kxd",
+        "chatId": "cmmtnhhrl00vivpgk6s1r3jhe",
+        "direction": "inbound",
+        "type": "text",
+        "content": "",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "false_79222155750-1636007509@g.us_3EB0573806A62FE4A417",
+        "metadata": {},
+        "sentAt": "2026-03-16T20:42:48.000Z",
+        "createdAt": "2026-03-16T20:43:07.970Z",
+        "updatedAt": "2026-03-16T20:43:07.970Z"
+      },
+      {
+        "id": "cmmtnhhrw00vkvpgkcoz7ujbh",
+        "chatId": "cmmtnhhrl00vivpgk6s1r3jhe",
+        "direction": "outbound",
+        "type": "text",
+        "content": "",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750-1636007509@g.us_A5EDC8DDFC3347DAF118DCA2FCDF5673_79221853150@c.us",
+        "metadata": {},
+        "sentAt": "2026-02-09T10:28:27.000Z",
+        "createdAt": "2026-03-16T20:43:07.964Z",
+        "updatedAt": "2026-03-16T20:43:07.964Z"
+      },
+      {
+        "id": "cmmw1gvmu012fvpl0z5b5ld02",
+        "chatId": "cmmtnhhrl00vivpgk6s1r3jhe",
+        "direction": "outbound",
+        "type": "text",
+        "content": "200643876749408@lid",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750-1636007509@g.us_A54F3E09C886BA5D16C10017A10FB6C6_79222155750@c.us",
+        "metadata": {},
+        "sentAt": "2026-02-09T10:05:28.000Z",
+        "createdAt": "2026-03-18T12:50:06.246Z",
+        "updatedAt": "2026-03-18T12:50:06.246Z"
+      },
+      {
+        "id": "cmmw1gvmn012dvpl083sgdvyp",
+        "chatId": "cmmtnhhrl00vivpgk6s1r3jhe",
+        "direction": "outbound",
+        "type": "text",
+        "content": "227504501571802@lid",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750-1636007509@g.us_A53E78AA3B8089891D7F2A4B725C8443_79222155750@c.us",
+        "metadata": {},
+        "sentAt": "2026-02-08T18:32:08.000Z",
+        "createdAt": "2026-03-18T12:50:06.239Z",
+        "updatedAt": "2026-03-18T12:50:06.239Z"
+      },
+      {
+        "id": "cmmw1gvmg012bvpl089zr3e1z",
+        "chatId": "cmmtnhhrl00vivpgk6s1r3jhe",
+        "direction": "outbound",
+        "type": "text",
+        "content": "162861032673307@lid",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750-1636007509@g.us_A5B5FA684AF807132524C65B9860CCD1_79222155750@c.us",
+        "metadata": {},
+        "sentAt": "2026-01-11T18:14:49.000Z",
+        "createdAt": "2026-03-18T12:50:06.233Z",
+        "updatedAt": "2026-03-18T12:50:06.233Z"
+      }
+    ]
+  },
+  {
+    "id": "cmmtpjbf200ydvp1owe29ug7h",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1608882960@g.us",
+    "name": "Абонементы AutoCoworking",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.270Z",
+    "updatedAt": "2026-03-19T16:42:43.868Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbgc00yevp1oq94nl8t5",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1623493738@g.us",
+    "name": "Заявки с сайта",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.316Z",
+    "updatedAt": "2026-03-19T16:42:43.879Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbgo00yfvp1okxhxkc5b",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1631517354@g.us",
+    "name": "Глобальный CRM",
+    "lastMessageAt": "2026-02-09T10:05:28.000Z",
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.328Z",
+    "updatedAt": "2026-03-19T16:42:41.575Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": [
+      {
+        "id": "cmmw1htc602rhvpl0n35ogv81",
+        "chatId": "cmmtpjbgo00yfvp1okxhxkc5b",
+        "direction": "outbound",
+        "type": "text",
+        "content": "200643876749408@lid",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750-1631517354@g.us_A57914793D29DA06E59923D822373512_79222155750@c.us",
+        "metadata": {},
+        "sentAt": "2026-02-09T10:05:28.000Z",
+        "createdAt": "2026-03-18T12:50:49.926Z",
+        "updatedAt": "2026-03-18T12:50:49.926Z"
+      }
+    ]
+  },
+  {
+    "id": "cmmtpjb9d00y3vp1oodo9jzil",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1530454248@g.us",
+    "name": "Новости \"Наш Автопарк\"(3)",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.065Z",
+    "updatedAt": "2026-03-19T16:42:43.759Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjba000y5vp1ovyn6j10p",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1545039006@g.us",
+    "name": "Я! Менеджер Наш Автопарк",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.088Z",
+    "updatedAt": "2026-03-19T16:42:43.778Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjb8d00y0vp1ohnyg3xc7",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1493451455@g.us",
+    "name": "На подключение",
+    "lastMessageAt": "2026-02-09T10:05:28.000Z",
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.029Z",
+    "updatedAt": "2026-03-19T16:42:42.405Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": [
+      {
+        "id": "cmmw1hu3g02snvpl0t1vd69sz",
+        "chatId": "cmmtpjb8d00y0vp1ohnyg3xc7",
+        "direction": "outbound",
+        "type": "text",
+        "content": "200643876749408@lid",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750-1493451455@g.us_A54B22165C483FEBCF1D142A65EC89FD_79222155750@c.us",
+        "metadata": {},
+        "sentAt": "2026-02-09T10:05:28.000Z",
+        "createdAt": "2026-03-18T12:50:50.909Z",
+        "updatedAt": "2026-03-18T12:50:50.909Z"
+      }
+    ]
+  },
+  {
+    "id": "cmmtpjb9o00y4vp1op2vgf2qr",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1530455251@g.us",
+    "name": "Новости \"Наш Автопарк\"(4)",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.077Z",
+    "updatedAt": "2026-03-19T16:42:43.765Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbbs00yavp1osh7mxx2z",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1560252343@g.us",
+    "name": "Подключение к Яндекс",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.152Z",
+    "updatedAt": "2026-03-19T16:42:43.811Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbao00y7vp1ooiuwsh84",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1552898216@g.us",
+    "name": "Новости \"Наш Автопарк\"(5)",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.112Z",
+    "updatedAt": "2026-03-19T16:42:43.792Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjb8p00y1vp1omq0mptnd",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1515673595@g.us",
+    "name": "Менеджеры AutoCoworking",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.041Z",
+    "updatedAt": "2026-03-19T16:42:43.745Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbb000y8vp1o632vhloi",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1554719934@g.us",
+    "name": "Новости Наш Авто - Whelly",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.124Z",
+    "updatedAt": "2026-03-19T16:42:43.797Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbc600ybvp1omd5wkctm",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1602057791@g.us",
+    "name": "Наш Автопарк управление",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.166Z",
+    "updatedAt": "2026-03-19T16:42:43.836Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbcj00ycvp1o5qciil2y",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1606398379@g.us",
+    "name": "Наброски по рекламе",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.179Z",
+    "updatedAt": "2026-03-19T16:42:43.861Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbbc00y9vp1o264gsxbu",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1554720817@g.us",
+    "name": "ОбщениеБизнес НашАвтопарк",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.136Z",
+    "updatedAt": "2026-03-19T16:42:43.805Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbac00y6vp1oew2m1xik",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1549526597@g.us",
+    "name": "Такси-скрины",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.100Z",
+    "updatedAt": "2026-03-19T16:42:43.785Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjb9100y2vp1ozlr63cl1",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1530452189@g.us",
+    "name": "Новости \"Наш Автопарк\"(2)",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.053Z",
+    "updatedAt": "2026-03-19T16:42:43.752Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmvbr9vj017wvpb4qtya83ti",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750@c.us",
+    "name": "Ремезов Саша",
+    "lastMessageAt": "2026-03-19T16:41:30.000Z",
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T00:50:21.247Z",
+    "updatedAt": "2026-03-19T16:41:37.546Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": [
+      {
+        "id": "cmmxp6bz001k8vpgslv7i7j0k",
+        "chatId": "cmmvbr9vj017wvpb4qtya83ti",
+        "direction": "outbound",
+        "type": "text",
+        "content": "2141",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750@c.us_3EB0F693098BA8FC2AC98B_out",
+        "metadata": {},
+        "sentAt": "2026-03-19T16:41:30.000Z",
+        "createdAt": "2026-03-19T16:41:31.164Z",
+        "updatedAt": "2026-03-19T16:41:31.164Z"
+      },
+      {
+        "id": "cmmxcdf3s02fhvpvskkbqkjr3",
+        "chatId": "cmmvbr9vj017wvpb4qtya83ti",
+        "direction": "outbound",
+        "type": "text",
+        "content": "1555",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_165193082482905@lid_3EB07EC72CD55FBDEAA994",
+        "metadata": {},
+        "sentAt": "2026-03-19T10:43:06.000Z",
+        "createdAt": "2026-03-19T10:43:06.808Z",
+        "updatedAt": "2026-03-19T10:43:06.808Z"
+      },
+      {
+        "id": "cmmxccrm101hnvpvs7vckm06s",
+        "chatId": "cmmvbr9vj017wvpb4qtya83ti",
+        "direction": "outbound",
+        "type": "text",
+        "content": "1543",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750@c.us_3EB02D8A218E709FB257BD_out",
+        "metadata": {},
+        "sentAt": "2026-03-19T10:42:36.000Z",
+        "createdAt": "2026-03-19T10:42:36.362Z",
+        "updatedAt": "2026-03-19T10:42:36.362Z"
+      },
+      {
+        "id": "cmmwl070l02ykvph41huvf35f",
+        "chatId": "cmmvbr9vj017wvpb4qtya83ti",
+        "direction": "outbound",
+        "type": "text",
+        "content": "Привет256",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750@c.us_3EB09483430FB91ABC5CC3_out",
+        "metadata": {},
+        "sentAt": "2026-03-18T21:57:00.000Z",
+        "createdAt": "2026-03-18T21:57:00.166Z",
+        "updatedAt": "2026-03-18T21:57:00.166Z"
+      },
+      {
+        "id": "cmmwjzv5g01iovph40rrkhx1k",
+        "chatId": "cmmvbr9vj017wvpb4qtya83ti",
+        "direction": "outbound",
+        "type": "text",
+        "content": "Привет 228",
+        "status": "sent",
+        "channel": "whatsapp",
+        "externalId": "true_79222155750@c.us_3EB0113EA9701F3C64774B_out",
+        "metadata": {},
+        "sentAt": "2026-03-18T21:28:45.000Z",
+        "createdAt": "2026-03-18T21:28:45.172Z",
+        "updatedAt": "2026-03-18T21:28:45.172Z"
+      }
+    ]
+  },
+  {
+    "id": "cmmw1h38g01scvpl0i8wqjnkn",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1485790841@g.us",
+    "name": "Братья",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:16.097Z",
+    "updatedAt": "2026-03-19T16:42:13.320Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1h14w01n5vpl0aobhv8lv",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1606040011@g.us",
+    "name": "Отдых подальше от дома",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:13.376Z",
+    "updatedAt": "2026-03-19T16:42:11.929Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1h2y801rmvpl0cva6mzl1",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1627379388@g.us",
+    "name": "ИП Ремезова А.А.",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:15.728Z",
+    "updatedAt": "2026-03-19T16:42:13.100Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmtpjbhp00ygvp1orpvyh640",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1631767098@g.us",
+    "name": "Сайт",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+    },
+    "createdAt": "2026-03-16T21:40:32.365Z",
+    "updatedAt": "2026-03-19T16:42:43.887Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv3z02wmvpl0tkpxht0l",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1486319485@g.us",
+    "name": "Семья",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.223Z",
+    "updatedAt": "2026-03-19T16:42:43.721Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv4402wnvpl0iyrbla47",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1491738544@g.us",
+    "name": "Аренда Наш Автопарк",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.228Z",
+    "updatedAt": "2026-03-19T16:42:43.727Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv4a02wovpl0s76084n4",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1492497664@g.us",
+    "name": "Полезные скрины",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.235Z",
+    "updatedAt": "2026-03-19T16:42:43.733Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv4g02wpvpl0w042w0p8",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1510784852@g.us",
+    "name": "Карта,екб",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.240Z",
+    "updatedAt": "2026-03-19T16:42:43.740Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv5802wuvpl0kc2pq7yi",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1534506140@g.us",
+    "name": "? по работе колл центра",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.269Z",
+    "updatedAt": "2026-03-19T16:42:43.772Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv6b02x1vpl0jd3f8gft",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1570119098@g.us",
+    "name": "Учёт корп питания",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.307Z",
+    "updatedAt": "2026-03-19T16:42:43.817Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv6g02x2vpl01s77v914",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1590581954@g.us",
+    "name": "Химчистка autocoworking",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.312Z",
+    "updatedAt": "2026-03-19T16:42:43.824Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv6m02x3vpl0x8zqy9mt",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1590673180@g.us",
+    "name": "База администраторов",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.319Z",
+    "updatedAt": "2026-03-19T16:42:43.829Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv6w02x5vpl0g9im83ak",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1602485715@g.us",
+    "name": "Аренда Москва",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.329Z",
+    "updatedAt": "2026-03-19T16:42:43.842Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv7302x6vpl0x3wci677",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1604746052@g.us",
+    "name": "Посудомоечная машина",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.335Z",
+    "updatedAt": "2026-03-19T16:42:43.848Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv7802x7vpl0odj9tu4f",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1605518311@g.us",
+    "name": "Альпари",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.340Z",
+    "updatedAt": "2026-03-19T16:42:43.855Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv7o02xavpl0pypxedrn",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1623393841@g.us",
+    "name": "Книги к покупке",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.356Z",
+    "updatedAt": "2026-03-19T16:42:43.874Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  },
+  {
+    "id": "cmmw1hv8402xdvpl02ukjbsbc",
+    "driverId": null,
+    "channel": "whatsapp",
+    "externalChatId": "79222155750-1633418012@g.us",
+    "name": "ИП документооборот",
+    "lastMessageAt": null,
+    "unreadCount": 0,
+    "metadata": {
+      "connectionId": "cmmtqlxnz00yovpokkf70aogv"
+    },
+    "createdAt": "2026-03-18T12:50:52.372Z",
+    "updatedAt": "2026-03-19T16:42:43.893Z",
+    "requiresResponse": false,
+    "status": "new",
+    "driver": null,
+    "messages": []
+  }
+]
+
+--- Checking Raw Message Records for 2342 and 2343 ---
+[
+  {
+    "id": "cmmxthn53033ivpgszuiuyajv",
+    "chatId": "cmmwkg0jw01ipvph4db2non1l",
+    "direction": "outbound",
+    "type": "text",
+    "content": "2342",
+    "status": "sent",
+    "channel": "whatsapp",
+    "externalId": "true_165193082482905@lid_3EB0CF3F7A2789BBF1490B",
+    "metadata": {},
+    "sentAt": "2026-03-19T18:42:17.000Z",
+    "createdAt": "2026-03-19T18:42:17.320Z",
+    "updatedAt": "2026-03-19T18:42:17.320Z",
+    "chat": {
+      "id": "cmmwkg0jw01ipvph4db2non1l",
+      "driverId": null,
+      "channel": "whatsapp",
+      "externalChatId": "165193082482905@lid",
+      "name": "+7 922 215-57-50",
+      "lastMessageAt": "2026-03-19T18:42:17.000Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-18T21:41:18.668Z",
+      "updatedAt": "2026-03-19T18:42:17.323Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  },
+  {
+    "id": "msg_1773945736756",
+    "chatId": "cmmtq7mot00ylvpoklll5ei4s",
+    "direction": "outbound",
+    "type": "text",
+    "content": "2342",
+    "status": "delivered",
+    "channel": "whatsapp",
+    "externalId": null,
+    "metadata": {},
+    "sentAt": "2026-03-19T18:42:16.756Z",
+    "createdAt": "2026-03-19T18:42:16.759Z",
+    "updatedAt": "2026-03-19T18:42:17.327Z",
+    "chat": {
+      "id": "cmmtq7mot00ylvpoklll5ei4s",
+      "driverId": "cmmn7mq4h0003vpz8dxibq1dy",
+      "channel": "whatsapp",
+      "externalChatId": "whatsapp:165193082482905",
+      "name": "+7 922 215-57-50",
+      "lastMessageAt": "2026-03-19T18:42:17.329Z",
+      "unreadCount": 0,
+      "metadata": {
+        "connectionId": "cmmtng9x50001vpgk5dsxf3dt"
+      },
+      "createdAt": "2026-03-16T21:59:26.621Z",
+      "updatedAt": "2026-03-19T18:42:17.330Z",
+      "requiresResponse": false,
+      "status": "new"
+    }
+  }
+]

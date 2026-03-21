@@ -1,0 +1,24 @@
+
+> yandex-fleet-scraper@1.0.0 start:worker
+> tsx src/worker.ts
+
+
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error [TransformError]: Transform failed with 3 errors:
+C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\src\lib\parser.ts:122:34: ERROR: The symbol "economy" has already been declared
+C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\src\lib\parser.ts:125:34: ERROR: The symbol "other" has already been declared
+C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\src\lib\parser.ts:126:34: ERROR: The symbol "total" has already been declared
+    at failureErrorWithLog (C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\node_modules\esbuild\lib\main.js:1467:15)
+    at C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\node_modules\esbuild\lib\main.js:736:50
+    at responseCallbacks.<computed> (C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\node_modules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\node_modules\esbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (C:\Users\mixx\Documents\Github\CRM\yandex-fleet-scraper\node_modules\esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:508:28)
+    at addChunk (node:internal/streams/readable:559:12)
+    at readableAddChunkPushByteMode (node:internal/streams/readable:510:3)
+    at Readable.push (node:internal/streams/readable:390:5)
+    at Pipe.onStreamRead (node:internal/stream_base_commons:189:23)
+
+Node.js v24.13.1

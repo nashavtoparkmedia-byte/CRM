@@ -1,0 +1,62 @@
+{
+  "id": "751987ee2b87b37cacef38f4de6eaa52",
+  "short_id": 3498331,
+  "status": "cancelled",
+  "created_at": "2026-03-13T21:16:50.967+00:00",
+  "booked_at": "2026-03-13T21:25:39.358+00:00",
+  "provider": "platform",
+  "category": "econom",
+  "amenities": [
+    "creditcard"
+  ],
+  "address_from": {
+    "address": "Советская улица, 103В",
+    "lat": 57.759895770307686,
+    "lon": 40.96060777413759
+  },
+  "route_points": [
+    {
+      "address": "улица Наты Бабушкиной, 4, подъезд 2",
+      "lat": 57.769521330165276,
+      "lon": 40.948399669426415
+    }
+  ],
+  "events": [
+    {
+      "event_at": "2026-03-13T21:16:56.276+00:00",
+      "order_status": "driving"
+    },
+    {
+      "event_at": "2026-03-13T21:21:31+00:00",
+      "order_status": "cancelled"
+    }
+  ],
+  "ended_at": "2026-03-13T21:21:31+00:00",
+  "payment_method": "cashless",
+  "driver_profile": {
+    "id": "9adeda38ef9745e39bd260314cc0142f",
+    "name": "Соколов Александр Владимирович"
+  },
+  "car": {
+    "id": "11c0c7df4d794b3ab371d5952a0762f2",
+    "brand_model": "Skoda Octavia",
+    "license": {
+      "number": "О501СЕ44"
+    },
+    "callsign": "О501СЕ44"
+  },
+  "type": {
+    "id": "4964b852670045b196e526d59915b777",
+    "name": "Яндекс.Безналичный"
+  },
+  "price": "0.0000",
+  "cancellation_description": "user",
+  "order_time_interval": {
+    "from": "2026-03-13T21:16:56.276+00:00",
+    "to": "2026-03-13T21:25:39.358+00:00"
+  },
+  "driving_at": "2026-03-13T21:16:56.276+00:00",
+  "flags": [
+    "driver_freightage"
+  ]
+}

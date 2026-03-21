@@ -1,0 +1,2 @@
+origin	https://github.com/nashavtoparkmedia-byte/CRM (fetch)
+origin	https://github.com/nashavtoparkmedia-byte/CRM (push)

@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Bot {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  name      String
+  username  String?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  surveys         Survey[]
+  users           User[]
+  analyticsEvents AnalyticsEvent[]
+  broadcasts      Broadcast[]
+
+  @@map("bots")
+}
+
+model Survey {
+  id            String    @id @default(uuid())
+  botId         String    @map("bot_id") // Removed @unique to allow 1:N
+  title         String    @default("Новый опрос")
+  triggerButton String    @default("📊 Опрос качества") @map("trigger_button")
+  isActive      Boolean   @default(true) @map("is_active")
+  isLinear      Boolean   @default(true) @map("is_linear")
+  googleSheetId String?   @map("google_sheet_id")
+  syncMode      String    @default("ON_COMPLETE") @map("sync_mode") // ON_COMPLETE or ON_ANSWER
+  createdAt     DateTime  @default(now()) @map("created_at")
+  archivedAt    DateTime? @map("archived_at")
+
+  bot       Bot        @relation(fields: [botId], references: [id], onDelete: Cascade)
+  questions Question[]
+
+  @@map("surveys")
+}
+
+model Question {
+  id           String  @id @default(uuid())
+  surveyId     String  @map("survey_id")
+  order        Int     @default(0)
+  type         String // TEXT, BUTTONS, NUMBER, SELECT
+  text         String
+  options      Json? // For BUTTONS or SELECT
+  isRequired   Boolean @default(true) @map("is_required")
+  isConversion Boolean @default(false) @map("is_conversion") // Track as conversion step
+  routingRules Json?   @map("routing_rules") // [{"if_answer": "...", "next_question_id": "..."}]
+
+  survey  Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  answers Answer[]
+
+  @@map("questions")
+}
+
+model User {
+  id                String   @id @default(uuid())
+  botId             String   @map("bot_id")
+  telegramId        BigInt   @map("telegram_id")
+  username          String?
+  firstName         String?  @map("first_name")
+  currentQuestionId String?  @map("current_question_id")
+  status            String   @default("ACTIVE") // ACTIVE, COMPLETED
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  bot             Bot              @relation(fields: [botId], references: [id], onDelete: Cascade)
+  answers         Answer[]
+  analyticsEvents AnalyticsEvent[]
+
+  @@unique([botId, telegramId])
+  @@map("users")
+}
+
+model Answer {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  questionId String   @map("question_id")
+  value      String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("answers")
+}
+
+enum AnalyticsEventType {
+  USER_CREATED
+  BOT_STARTED
+  SURVEY_STARTED
+  SURVEY_COMPLETED
+  BROADCAST_SENT
+  BROADCAST_FAILED
+}
+
+model AnalyticsEvent {
+  id        String             @id @default(uuid())
+  botId     String             @map("bot_id")
+  userId    String?            @map("user_id")
+  eventType AnalyticsEventType @map("event_type")
+  sourceId  String?            @map("source_id") // e.g., surveyId
+  metadata  Json?              // Snapshot of responses at the time of event
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  bot  Bot   @relation(fields: [botId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([botId, createdAt])
+  @@index([botId, eventType, createdAt])
+  @@map("analytics_events")
+}
+
+model Broadcast {
+  id            String    @id @default(uuid())
+  botId         String    @map("bot_id")
+  text          String
+  status        String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  totalTargeted Int       @default(0) @map("total_targeted")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  completedAt   DateTime? @map("completed_at")
+
+  bot   Bot            @relation(fields: [botId], references: [id], onDelete: Cascade)
+  stats BroadcastStat?
+
+  @@map("broadcasts")
+}
+
+model BroadcastStat {
+  id           String @id @default(uuid())
+  broadcastId  String @unique @map("broadcast_id")
+  successCount Int    @default(0) @map("success_count")
+  failedCount  Int    @default(0) @map("failed_count")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@map("broadcast_stats")
+}

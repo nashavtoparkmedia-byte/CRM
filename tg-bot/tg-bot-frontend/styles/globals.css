@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #353941;
+  /* neu-base */
+  --foreground: #e2e8f0;
+  /* slate-200 */
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Neumorphism Base Utilities */
+  .neu-panel {
+    @apply bg-neu-base shadow-neu rounded-2xl border border-white/[0.02];
+  }
+
+  .neu-panel-inner {
+    @apply bg-neu-base shadow-neu-inner rounded-2xl border border-black/10;
+  }
+
+  .neu-input {
+    @apply neu-panel-inner px-4 py-3 bg-neu-base text-foreground outline-none focus:ring-1 focus:ring-neu-accent focus:shadow-neu-glow transition-all duration-300;
+  }
+
+  .neu-button {
+    @apply bg-neu-base shadow-neu text-foreground px-6 py-3 rounded-xl font-medium flex items-center justify-center gap-2 border border-white/[0.02] active:shadow-neu-inner active:text-neu-accent transition-all duration-200;
+  }
+
+  .neu-button-primary {
+    @apply neu-button text-neu-accent active:shadow-neu-inner active:text-cyan-300 transition-shadow duration-300;
+    box-shadow: 4px 4px 8px #191b1f, -4px -4px 8px #2b2f35, inset 0 0 0 transparent;
+  }
+
+  .neu-button-primary:hover {
+    box-shadow: 4px 4px 8px #191b1f, -4px -4px 8px #2b2f35, 0 0 15px rgba(0, 240, 255, 0.4);
+  }
+}

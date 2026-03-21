@@ -1,0 +1,697 @@
+const { chromium } = require('playwright');
+const path = require('path');
+const fs = require('fs');
+
+function logToFile(msg) {
+    try {
+        const timestamp = new Date().toISOString();
+        const formattedMsg = `[${timestamp}] [PID:${process.pid}] ${msg}\n`;
+        fs.appendFileSync(path.join(__dirname, 'debug.log'), formattedMsg);
+    } catch (e) {}
+    console.log(`[PID:${process.pid}] ${msg}`);
+}
+
+class MaxBrowser {
+    constructor() {
+        this.context = null;
+        this.page = null;
+        this.userDataDir = path.join(__dirname, 'user_data');
+        this.isLoggedIn = false;
+        this.isSendingMessage = false;
+        this.pollInterval = null;
+        this.lastProcessedMessageText = ''; // Track latest to avoid duplicate
+    }
+
+    async restart() {
+        logToFile('Начало restart()...');
+        try {
+            if (this.pollInterval) {
+                clearInterval(this.pollInterval);
+                this.pollInterval = null;
+            }
+
+            if (this.context) {
+                logToFile('Закрываю контекст...');
+                await this.context.close().catch(() => {});
+            }
+        } catch(e) {
+            logToFile('Ошибка при закрытии: ' + e.message);
+        }
+
+        this.context = null;
+        this.page = null;
+        this.isLoggedIn = false;
+        this.isSendingMessage = false;
+        
+        // Даем время ОС освободить файлы в user_data
+        await new Promise(r => setTimeout(r, 2000));
+
+        try {
+             if (fs.existsSync(this.userDataDir)) {
+                 fs.rmSync(this.userDataDir, { recursive: true, force: true });
+                 logToFile('Папка user_data очищена.');
+             }
+        } catch(e) {
+            logToFile('Не удалось очистить user_data (возможно, файлы заняты): ' + e.message);
+        }
+        
+        // Запускаем инициализацию
+        await this.init().catch(e => logToFile('Ошибка при инициализации после restart: ' + e.message));
+    }
+
+    async init() {
+        if (this.context) return; // Уже запущен
+        logToFile('Начало init()...');
+        
+        try {
+            if (!fs.existsSync(this.userDataDir)) {
+                fs.mkdirSync(this.userDataDir, { recursive: true });
+            }
+
+            logToFile('Запуск chromium.launchPersistentContext()...');
+            this.context = await chromium.launchPersistentContext(this.userDataDir, {
+                headless: false,
+                viewport: { width: 1280, height: 720 },
+                acceptDownloads: false,
+                args: [
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--disable-gpu'
+                ]
+            });
+            
+            this.page = this.context.pages()[0] || await this.context.newPage();
+            
+            // Скрытие признаков автоматизации
+            await this.page.addInitScript(() => {
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            });
+            
+            this.page.on('console', msg => {
+                const text = msg.text();
+                if (text.includes('user logged in')) {
+                    logToFile('БРАУЗЕР (Console): Подтвержден логин.');
+                }
+            });
+
+            logToFile('Переход на https://web.max.ru/ ...');
+            await this.page.goto('https://web.max.ru/', { 
+                waitUntil: 'domcontentloaded', 
+                timeout: 60000 
+            });
+            
+            // Ждем немного и запускаем проверку авторизации
+            await this.page.waitForTimeout(3000);
+            await this.checkAuth();
+        } catch (error) {
+            logToFile('КРИТИЧЕСКАЯ ОШИБКА в init(): ' + error.message);
+            this.context = null;
+            throw error;
+        }
+    }
+
+    async checkAuth() {
+        logToFile('Запуск цикла проверки авторизации...');
+        try {
+            let attempts = 0;
+            const maxAttempts = 50; 
+
+            while (attempts < maxAttempts) {
+                if (!this.page) return;
+                
+                const url = this.page.url();
+                
+                // Строгие маркеры входа
+                const loggedInMarkers = [
+                    '.chat-list .chat-item', 
+                    '.sidebar .chat-item', 
+                    '.message-input',
+                    '.composer-input'
+                ];
+                
+                let foundMarker = false;
+                for (const selector of loggedInMarkers) {
+                    if (await this.page.$(selector)) {
+                        foundMarker = true;
+                        break;
+                    }
+                }
+
+                // Условие успешного входа
+                const isAuthUrl = url.includes('/chat/') || url.includes('/messaging/') || url.match(/\/\d+$/);
+                
+                if (foundMarker && isAuthUrl) {
+                    logToFile(`АВТОРИЗАЦИЯ УСПЕШНА (URL: ${url}).`);
+                    this.isLoggedIn = true;
+                    this.startPolling();
+                    return;
+                }
+
+                // Каждые 10 секунд (через раз) проверяем QR
+                if (attempts % 2 === 0) {
+                    const qrElement = await this.findQrElement();
+                    if (qrElement) {
+                        try {
+                            await qrElement.screenshot({ path: 'last_qr.png' });
+                            logToFile(`QR-код обновлен в last_qr.png (Попытка ${attempts+1})`);
+                        } catch(e) {}
+                    }
+                }
+
+                await this.page.waitForTimeout(5000);
+                attempts++;
+            }
+            logToFile('checkAuth: Превышено время ожидания входа.');
+        } catch (error) {
+            logToFile(`ОШИБКА в checkAuth: ${error.message}`);
+        }
+    }
+
+    async findQrElement() {
+        const canvas = await this.page.$('canvas');
+        if (canvas) return this.page.locator('canvas').first();
+        
+        const svg = await this.page.$('svg:has(image)');
+        if (svg) return this.page.locator('svg:has(image)').first();
+
+        return null;
+    }
+
+    startPolling() {
+        if (this.pollInterval) clearInterval(this.pollInterval);
+        logToFile('Запуск поллинга для входящих сообщений (каждые 20 сек)...');
+        
+        this.pollInterval = setInterval(async () => {
+            if (!this.isLoggedIn || this.isSendingMessage || !this.page) return;
+
+            try {
+                // 1. Ищем чаты с непрочитанными сообщениями (по жирному шрифту или бейджу)
+                // Пример: класс unread, или элемент с счетчиком
+                // Так как точная структура неизвестна, попробуем искать счетчики "unread"
+                // Если нет специфичных селекторов, мы можем просто периодически чекать первый чат
+                
+                // Для MVP: ищем элементы с текстом чисел в кружочках или классы unread
+                // .unread, .badge, [aria-label*="непрочитан"]
+                let unreadChatLocators = [
+                    '.chat-list .unread',
+                    '.chat-item:has(.badge)',
+                    '.chat-item[data-unread="true"]',
+                    '.contact-item.unread'
+                ];
+                
+                let foundUnread = null;
+                for (const selector of unreadChatLocators) {
+                    const el = this.page.locator(selector).first();
+                    if (await el.count() > 0 && await el.isVisible()) {
+                        foundUnread = el;
+                        break;
+                    }
+                }
+
+                if (foundUnread) {
+                    logToFile('[POLLING] Найдено непрочитанное сообщение! Кликаю...');
+                    this.isSendingMessage = true; // Блокируем другие действия
+                    
+                    try {
+                        await foundUnread.click();
+                        await this.page.waitForTimeout(2000);
+                        
+                        // Читаем заголовок чата (имя/телефон)
+                        let phone = "unknown";
+                        let driverName = "";
+                        const headerLocator = this.page.locator('.chat-header, .top-bar, .user-name, .header-title').first();
+                        if (await headerLocator.count() > 0) {
+                            const headerText = await headerLocator.textContent() || "";
+                            driverName = headerText.trim();
+                            // Пытаемся вытащить телефон, если он там есть
+                            const match = driverName.match(/[\+\d\s\-\(\)]{10,}/);
+                            if (match) phone = match[0].replace(/\D/g, '');
+                            else phone = driverName; // Fallback
+                        }
+
+                        // Читаем последнее сообщение
+                        const lastMsg = this.page.locator('.message-item, .chat-bubble, .message, .bubble').last();
+                        if (await lastMsg.count() > 0) {
+                            const text = await lastMsg.textContent();
+                            const cleanText = text.trim();
+                            
+                            if (cleanText && cleanText !== this.lastProcessedMessageText) {
+                                logToFile(`[POLLING] Новое сообщение от ${driverName}: ${cleanText.substring(0,30)}...`);
+                                this.lastProcessedMessageText = cleanText;
+                                
+                                // Отправляем в CRM
+                                try {
+                                    await fetch('http://localhost:3001/api/webhook/max', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            phone: phone,
+                                            driverName: driverName,
+                                            text: cleanText,
+                                            timestamp: new Date().toISOString()
+                                        })
+                                    });
+                                    logToFile(`[POLLING] Успешно отправлено в CRM Webhook`);
+                                } catch(err) {
+                                    logToFile(`[POLLING] Ошибка отправки в Webhook: ${err.message}`);
+                                }
+                            }
+                        }
+                    } finally {
+                        // Возвращаемся в список или скидываем фокус, если нужно, но пока просто освобождаем лок
+                        this.isSendingMessage = false;
+                    }
+                }
+            } catch (error) {
+                logToFile(`[POLLING ERROR]: ${error.message}`);
+                this.isSendingMessage = false;
+            }
+        }, 20000); // 20 секунд
+    }
+
+    async sendMessage(phone, text, name = "") {
+        if (!this.isLoggedIn) {
+            logToFile('Сессия не активна, проверяю маркеры...');
+            const loggedInMarkers = [
+                '.chat-list .chat-item', 
+                '.sidebar .chat-item', 
+                '.message-input',
+                '.composer-input'
+            ];
+            let found = false;
+            for (const m of loggedInMarkers) {
+                if (await this.page.$(m)) { found = true; break; }
+            }
+            
+            const url = this.page.url();
+            const isAuthUrl = url.includes('/chat/') || url.includes('/messaging/') || url.match(/\/\d+$/);
+
+            if (found && isAuthUrl) {
+                this.isLoggedIn = true;
+                this.startPolling();
+            } else {
+                logToFile('Авторизация не подтверждена, запускаю checkAuth...');
+                await this.checkAuth(); 
+            }
+            
+            if (!this.isLoggedIn) throw new Error('Не авторизован в MAX (требуется вход)');
+        }
+        
+        logToFile(`[STEP 0] Старт отправки на ${phone} (Name: "${name || 'N/A'}")`);
+        
+        // Ожидание завершения других операций
+        let waitAttempts = 0;
+        while (this.isSendingMessage && waitAttempts < 15) {
+            logToFile(`Ожидаем освобождения браузера... (${waitAttempts + 1}/15)`);
+            await new Promise(r => setTimeout(r, 2000));
+            waitAttempts++;
+        }
+        
+        this.isSendingMessage = true;
+        
+        // 0. ОЧИСТКА - Закрываем все открытые модалки через JS для надежности
+        try {
+            const closedCount = await this.page.evaluate(() => {
+                const dialogs = document.querySelectorAll('dialog[open]');
+                dialogs.forEach(d => {
+                    try { d.close(); } catch(e) {}
+                });
+                return dialogs.length;
+            });
+            if (closedCount > 0) {
+                logToFile(`ОЧИСТКА: Закрыто ${closedCount} диалоговых окон через JS.`);
+            }
+            await this.page.waitForTimeout(500);
+            await this.page.keyboard.press('Escape');
+            await this.page.waitForTimeout(500);
+        } catch(e) {
+            logToFile('Ошибка при очистке модалок: ' + e.message);
+        }
+
+        // Запоминаем текущий заголовок ДО начала поиска, чтобы убедиться в его смене
+        const headerLocator = this.page.locator('.chat-header, .top-bar, .user-name, .header-title').first();
+        let prevChatTitle = "";
+        if (await headerLocator.count() > 0) {
+            prevChatTitle = (await headerLocator.textContent() || "").trim();
+            logToFile(`Текущий заголовок до поиска: "${prevChatTitle}"`);
+        }
+
+        await this.page.screenshot({ path: 'send_0_start.png' });
+        
+        try {
+            // 1. ПоИСК КОНТАКТА
+            const searchInputSelectors = [
+                'input[placeholder*="Найти"]',
+                'input[placeholder*="Поиск"]',
+                '.search-input input',
+                '.search-bar input',
+                '[aria-label*="Найти"]'
+            ];
+            
+            let searchInput = null;
+            for (const selector of searchInputSelectors) {
+                const element = this.page.locator(selector).first();
+                if (await element.count() > 0) {
+                    searchInput = element;
+                    break;
+                }
+            }
+
+            if (!searchInput) {
+                this.isLoggedIn = false; // Force re-auth check next time
+                throw new Error('ОШИБКА АВТОРИЗАЦИИ: Интерфейс MAX недоступен (возможно, требуется сканирование QR-кода). Проверьте last_qr.png');
+            }
+
+            const digitsOnly = phone.replace(/\D/g, '');
+            const phoneSuffix = digitsOnly.slice(-4); 
+            
+            // Расширенные форматы для поиска
+            const formats = [
+                phone.startsWith('+') ? phone : '+' + phone, // +7...
+                digitsOnly, // 7...
+                digitsOnly.startsWith('7') ? '8' + digitsOnly.slice(1) : '8' + digitsOnly, // 8...
+                digitsOnly.slice(-10), // 922... (без 7 или 8)
+            ];
+            
+            const searchFormats = [...new Set(formats.filter(f => f))];
+            let found = false;
+            const ignoreList = ['Все', 'Сферум', 'Нове', 'Контакт', 'Звонки', 'Профиль', 'Чаты'];
+
+            for (const searchStr of searchFormats) {
+                logToFile(`Пробую формат поиска: ${searchStr}`);
+                
+                await searchInput.click({ force: true });
+                await this.page.keyboard.press('Control+A');
+                await this.page.keyboard.press('Backspace');
+                await searchInput.type(searchStr, { delay: 30 });
+                await this.page.waitForTimeout(4000); // Даем больше времени на подгрузку
+                
+                // 1. СНАЧАЛА ИЩЕМ В СПИСКЕ РЕЗУЛЬТАТОВ
+                const resultSelectors = [
+                    '.chat-list .chat-item', 
+                    '.search-results .item', 
+                    '.found-item', 
+                    '.item',
+                    '.contact-item'
+                ];
+                
+                for (const selector of resultSelectors) {
+                    const elements = this.page.locator(selector);
+                    const count = await elements.count();
+                    for (let i = 0; i < count; i++) {
+                        const element = elements.nth(i);
+                        if (await element.isVisible()) {
+                            const content = (await element.textContent() || "").trim();
+                            if (!content) continue;
+                            
+                            const isIgnored = ignoreList.some(ignore => content.includes(ignore));
+                            if (isIgnored) continue;
+
+                            const elementDigits = content.replace(/\D/g, '');
+                            const nameMatch = name && content.toLowerCase().includes(name.toLowerCase());
+                            const phoneMatch = elementDigits.includes(phoneSuffix);
+
+                            if (phoneMatch || nameMatch) {
+                                logToFile(`Результат подходит: "${content}" (Phone: ${phoneMatch}, Name: ${nameMatch}). Кликаю...`);
+                                await element.click();
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (found) break;
+                }
+                if (found) break;
+
+                // 2. ПРОБУЕМ "Найти по номеру" в результатах поиска
+                const findByNumberSelectors = [
+                    'text="Найти по номеру"',
+                    '.find-by-number',
+                    '[aria-label*="номер"]',
+                    '.search-results >> text="Найти по номерu"',
+                    '.sidebar >> text="Найти по номеру"'
+                ];
+                
+                let findByNumberBtn = null;
+                for (const sel of findByNumberSelectors) {
+                    const el = this.page.locator(sel).first();
+                    if (await el.count() > 0 && await el.isVisible()) {
+                        findByNumberBtn = el;
+                        break;
+                    }
+                }
+
+                if (findByNumberBtn) {
+                    logToFile(`Найдена кнопка "Найти по номеру". Нажимаю и сразу перехожу к проверке чата...`);
+                    await findByNumberBtn.click({ force: true });
+                    found = true;
+                }
+
+                if (found) break; // Сразу выходим из цикла searchFormats, если нашли контакт напрямую или нажали "Найти по номеру"
+
+                // 3. ПРОБУЕМ "Новый чат" (+) ЕСЛИ ВСЁ ЕЩЕ НЕ НАШЛИ
+                const nothingFound = this.page.locator('text="Ничего не нашли", text="Ничего не найдено", .nothing-found').first();
+                if (await nothingFound.isVisible() || !found) { 
+                    logToFile(`Для "${searchStr}" чат не найден напрямую или через "Найти по номеру" в сайдбаре. Пробую через "+" ...`);
+                    
+                    const plusBtn = this.page.locator('.sidebar-header button, .chats-header button, .plus-button, [aria-label*="чат"], [aria-label*="сообщение"]').first();
+                    if (await plusBtn.count() > 0) {
+                        await plusBtn.click({ force: true });
+                        await this.page.waitForTimeout(1000);
+                        
+                        // ПРОВЕРЯЕМ ПОПОВЕР МЕНЮ ПОСЛЕ "+"
+                        const menuFindByNumber = this.page.locator('.popover >> text="Найти по номеру", .menu >> text="Найти по номеру", .dropdown >> text="Найти по номеру"').first();
+                        if (await menuFindByNumber.count() > 0 && await menuFindByNumber.isVisible()) {
+                            logToFile('Найдена иконка/текст "Найти по номеру" в меню после "+". Кликаю...');
+                            await menuFindByNumber.click({ force: true });
+                            await this.page.waitForTimeout(1500);
+                        }
+
+                        // В окне нового чата / поиска
+                        const modalInput = this.page.locator('dialog[open] input, dialog[open] [placeholder*="имени"], dialog[open] [placeholder*="имя"], .modal input').first();
+                        if (await modalInput.count() > 0 && await modalInput.isVisible()) {
+                            logToFile('Найден инпут в модальном окне, кликаю для фокуса...');
+                            await modalInput.click({ force: true });
+                            await this.page.waitForTimeout(500);
+                        }
+                        
+                        await this.page.keyboard.type(searchStr, { delay: 50 });
+                        await this.page.waitForTimeout(2000); 
+                        await this.page.keyboard.press('Enter');
+                        await this.page.waitForTimeout(3000);
+                        
+                        const startChatBtn = this.page.locator('dialog[open] button:has-text("Написать"), dialog[open] button:has-text("Начать"), button:has-text("Начать")').first();
+                        if (await startChatBtn.count() > 0 && await startChatBtn.isVisible()) {
+                            logToFile('Найдена кнопка "Начать/Написать" в модалке. Кликаю...');
+                            await startChatBtn.click({ force: true });
+                            found = true;
+                            break;
+                        }
+                        
+                        const newResults = this.page.locator('dialog[open] .contact-item, dialog[open] .item');
+                        const newResultsCount = await newResults.count();
+                        if (newResultsCount > 0) {
+                            logToFile(`Найдено ${newResultsCount} результатов в модальном окне. Ищу совпадение...`);
+                            let selectedInModal = false;
+                            
+                            for (let j = 0; j < newResultsCount; j++) {
+                                const res = newResults.nth(j);
+                                const txt = (await res.textContent() || "").toLowerCase();
+                                const hasPhone = txt.includes(phoneSuffix);
+                                const hasName = name && txt.includes(name.toLowerCase());
+                                
+                                if (hasPhone || hasName) {
+                                    logToFile(`Найдено совпадение в модалке: "${txt.trim()}". Кликаю...`);
+                                    await res.click({ force: true });
+                                    selectedInModal = true;
+                                    break;
+                                }
+                            }
+                            
+                            if (!selectedInModal && newResultsCount > 0) {
+                                logToFile('Совпадение не найдено, но есть результаты. Возможно, это единственный результат. Кликаю первый...');
+                                await newResults.first().click({ force: true });
+                                selectedInModal = true;
+                            }
+
+                            if (selectedInModal) {
+                                await this.page.waitForTimeout(1000);
+                                
+                                // Шаг 2: Нажать "Далее" (Next)
+                                const nextBtn = this.page.locator('dialog[open] button:has-text("Далее"), button:has-text("Далее"), dialog[open] button.next').first();
+                                if (await nextBtn.count() > 0) {
+                                    logToFile('Найдена кнопка "Далее" в модальном окне. Кликаю...');
+                                    await nextBtn.click({ force: true });
+                                    await this.page.waitForTimeout(2000);
+                                }
+
+                                // Шаг 3: Нажать "Написать" если появилось
+                                const finalBtn = this.page.locator('dialog[open] button:has-text("Написать"), button:has-text("Написать")').first();
+                                if (await finalBtn.count() > 0 && await finalBtn.isVisible()) {
+                                    logToFile('Найдена финальная кнопка ("Написать") после "Далее". Кликаю...');
+                                    await finalBtn.click({ force: true });
+                                    await this.page.waitForTimeout(1000);
+                                } else {
+                                    logToFile('Финальная кнопка не найдена. Пробую кликнуть по первому результату в сайдбаре (куда он добавился)...');
+                                    // Пытаемся кликнуть по первому найденному контакту в левой панели
+                                    const firstSidebarItem = this.page.locator('.sidebar .contact-item, .sidebar .item, .search-results .item, .sidebar .chat-item, [class*="search"] [class*="item"], .chat-list > div').first();
+                                    if (await firstSidebarItem.count() > 0 && await firstSidebarItem.isVisible()) {
+                                        logToFile('Найден элемент в сайдбаре, кликаю...');
+                                        try { await firstSidebarItem.click({ force: true, timeout: 2000 }); } catch(e) {}
+                                    }
+                                }
+
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        logToFile('В модальном окне ничего не выбрано или не найдено. Закрываем...');
+                        await this.page.keyboard.press('Escape'); 
+                        await this.page.waitForTimeout(1000);
+                    }
+                }
+            }
+
+            if (!found) {
+                await this.page.screenshot({ path: 'not_found_error.png' });
+                throw new Error(`Контакт ${phone} ${name ? '('+name+') ' : ''}не найден в MAX после всех попыток. Отмена отправки.`);
+            }
+            
+            // ПРОВЕРКА ОТКРЫТИЯ ЧАТА
+            logToFile(`Жду открытия чата (был: "${prevChatTitle}")`);
+            await this.page.waitForTimeout(2000);
+            
+            let opened = false;
+            for (let i = 0; i < 10; i++) {
+                await this.page.waitForTimeout(1500);
+                
+                const header = await this.page.locator('.chat-header, .top-bar, .user-name, .header-title, h2, .title').first();
+                const composer = await this.page.locator('.message-input, [contenteditable="true"], textarea, [placeholder*="Сообщение"], [placeholder*="Напишите"]').first();
+                const url = this.page.url();
+                
+                let currentTitle = "";
+                if (await header.count() > 0) {
+                    currentTitle = (await header.textContent() || "").trim();
+                }
+                
+                const composerVisible = await composer.count() > 0 && await composer.isVisible();
+                const urlIndicatesChat = url.includes('/chat/') || url.includes('/messaging/') || url.match(/\/\d+$/);
+                
+                logToFile(`Попытка ${i+1}: Заголовок = "${currentTitle}", Инпут = ${composerVisible}, URL = ${url}`);
+
+                if (composerVisible || urlIndicatesChat) {
+                    logToFile('Чат успешно открыт (верификация по инпуту или URL)!');
+                    await this.page.screenshot({ path: 'send_2_chat_opened.png' });
+                    opened = true;
+                    break;
+                }
+                
+                if (i % 3 === 0 && i > 0) {
+                    logToFile('Чат всё еще не открыт, пробую Enter и клик по самому первому результату в сайдбаре...');
+                    await this.page.keyboard.press('Enter');
+                    const firstSidebarItem = this.page.locator('.sidebar .contact-item, .sidebar .item, .search-results .item, .sidebar .chat-item, [class*="search"] [class*="item"], .chat-list > div').first();
+                    if (await firstSidebarItem.count() > 0 && await firstSidebarItem.isVisible()) {
+                        logToFile('Найден элемент в сайдбаре, кликаю...');
+                        try { await firstSidebarItem.click({ force: true, timeout: 2000 }); } catch(e) {}
+                    }
+                    await this.page.screenshot({ path: `verification_retry_${i}.png` });
+                }
+            }
+            
+            await this.page.screenshot({ path: 'send_2_after_click_contact.png' });
+            
+            if (!opened) {
+               throw new Error(`Не удалось переключить чат с "${prevChatTitle}" на контакт ${phone}`);
+            }
+
+            // 2. ВВОД ТЕКСТА
+            const messageInputSelectors = [
+                '.message-input',
+                '[contenteditable="true"]',
+                'textarea',
+                '.composer-input',
+                '[placeholder*="Сообщение"]',
+                '[placeholder*="Напишите"]',
+                'div[role="textbox"]'
+            ];
+
+            let messageInput = null;
+            for (const selector of messageInputSelectors) {
+                const element = this.page.locator(selector).first();
+                if (await element.count() > 0 && await element.isVisible()) {
+                    messageInput = element;
+                    logToFile(`Поле сообщения найдено: ${selector}`);
+                    break;
+                }
+            }
+
+            if (!messageInput) {
+                logToFile('ВНИМАНИЕ: Поле ввода не найдено селектором. Клик в область и ввод...');
+                await this.page.mouse.click(800, 600); 
+                await this.page.waitForTimeout(500);
+                await this.page.keyboard.type(text);
+                await this.page.keyboard.press('Enter');
+            } else {
+                await messageInput.click();
+                await this.page.waitForTimeout(500);
+                await this.page.keyboard.press('Control+A');
+                await this.page.keyboard.press('Backspace');
+                await messageInput.fill(text);
+                await this.page.waitForTimeout(1000);
+                
+                const sendBtnSelectors = [
+                    'button[aria-label*="Отправить"]',
+                    'button[aria-label*="Send"]',
+                    '.send-button',
+                    '.btn-send',
+                    'button.send',
+                    '.message-input-buttons button.send',
+                    '.message-input-wrapper + button'
+                ];
+                
+                let sent = false;
+                for (const sel of sendBtnSelectors) {
+                    const btn = this.page.locator(sel).first();
+                    if (await btn.count() > 0 && await btn.isVisible()) {
+                        logToFile(`Найдена кнопка отправки: ${sel}. Кликаю...`);
+                        await btn.click();
+                        sent = true;
+                        break;
+                    }
+                }
+                
+                if (!sent) {
+                    logToFile('Кнопка отправки не найдена. Жму Enter...');
+                    await this.page.keyboard.press('Enter');
+                }
+            }
+            
+            await this.page.waitForTimeout(3000);
+            await this.page.screenshot({ path: 'send_3_final.png' });
+
+            const lastMsg = await this.page.locator('.message-item, .chat-bubble, .message, .bubble').last();
+            if (await lastMsg.count() > 0) {
+                const txt = await lastMsg.textContent();
+                logToFile(`Факт в чате: "${txt.trim().substring(0, 40).replace(/\n/g, ' ')}..."`);
+            }
+            
+            logToFile(`Завершено для ${phone}`);
+        } catch (e) {
+            logToFile(`Ошибка при отправке: ${e.message}`);
+            await this.page.screenshot({ path: 'send_error.png' });
+            throw e;
+        } finally {
+            this.isSendingMessage = false;
+        }
+    }
+}
+
+module.exports = { 
+    maxBrowser: new MaxBrowser(),
+    logToFile
+};
+

@@ -1,0 +1,85 @@
+﻿node.exe : prisma:cli:bin Failed to initialize the command state: Error: ENOENT: no such file or directory, open 'C:\Users\mixx\AppData\Roaming\prisma-nodejs\Conf
+ig\commands.json' +831ms
+строка:1 знак:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (prisma:cli:bin ...ds.json' +831ms:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+prisma:config:loadConfigFromFile Config file loaded in 75.95ms +768ms
+prisma:config:loadConfigFromFile No config file found in the current working directory C:\Users\mixx\Documents\Github\CRM\gravity-mvp +0ms
+prisma:getSchema prismaConfig null +79ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +1ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getConfig Using getConfig Wasm +1ms
+prisma:cli Failed to read schema information. Using default values: '{\n  "name": "GetConfigError"\n}' +16ms
+prisma:engines binaries to download schema-engine, libquery-engine +925ms
+prisma:getSchema prismaConfig null +7ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema prismaConfig null +0ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +1ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getConfig Using getConfig Wasm +4ms
+prisma:getConfig config data retrieved without errors in getConfig Wasm +4ms
+prisma:cli:checkpoint runCheckpointClientCheck(): Execution time for getting info: 14.87889999999993 ms +1ms
+prisma:cli:checkpoint runCheckpointClientCheck(): Execution time for "await checkpoint.check(data)": 61.159799999999905 ms +62ms
+prisma:loadEnv project root found at C:\Users\mixx\Documents\Github\CRM\gravity-mvp\package.json +137ms
+prisma:getSchema prismaConfig null +1ms
+prisma:tryLoadEnv Environment variables loaded from C:\Users\mixx\Documents\Github\CRM\gravity-mvp\.env +1ms
+Environment variables loaded from .env
+prisma:getSchema prismaConfig null +4ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +1ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\schema.prisma +0ms
+prisma:getSchema Checking existence of C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +1ms
+prisma:getSchema Reading schema from single file C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma\schema.prisma +0ms
+prisma:getConfig Using getConfig Wasm +9ms
+prisma:getConfig config data retrieved without errors in getConfig Wasm +7ms
+prisma:getDMMF Using getDmmf Wasm +6ms
+prisma:getDMMF dmmf data retrieved without errors in getDmmf Wasm +139ms
+prisma:client:generator requiresEngines [
+  "libqueryEngine"
+] +1ms
+prisma:generator prismaCliDir C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\prisma +4ms
+prisma:generator prismaClientDir C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\@prisma\client +0ms
+prisma:generator baseDir C:\Users\mixx\Documents\Github\CRM\gravity-mvp\prisma +0ms
+prisma:mergeSchemas Using mergeSchemas Wasm +0ms
+prisma:loadEnv project root found at C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\@prisma\client\package.json +8ms
+prisma:getSchema prismaConfig null +1ms
+prisma:getGenerators neededVersions {
+  "c2990dca591cba766e3b7ef5d9e8a84796e47ab7": {
+    "engines": [
+      "libqueryEngine"
+    ],
+    "binaryTargets": [
+      {
+        "fromEnvVar": null,
+        "value": "windows",
+        "native": true
+      }
+    ]
+  }
+} +1ms
+prisma:getGenerators {
+  "generatorBinaryPaths": {
+    "libqueryEngine": {
+      "windows": "C:\\Users\\mixx\\Documents\\Github\\CRM\\gravity-mvp\\node_modules\\prisma\\query_engine-windows.dll.node"
+    }
+  }
+} +72ms
+prisma:tryLoadEnv Environment variables not found at null +7ms
+prisma:tryLoadEnv Environment variables loaded from C:\Users\mixx\Documents\Github\CRM\gravity-mvp\.env +0ms
+Error: Error: 
+EPERM: operation not permitted, rename 'C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\.prisma\client\query_engine-windows.dll.node.tmp14168' -> 'C:\
+Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\.prisma\client\query_engine-windows.dll.node'
+
+
+    at e.parse (C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\prisma\build\index.js:4352:71)
+    at async e.parse (C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\prisma\build\index.js:4084:1867)
+    at async D4t (C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\prisma\build\index.js:4910:132)

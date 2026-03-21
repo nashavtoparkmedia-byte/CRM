@@ -1,0 +1,9 @@
+--- TG CONNECTION CHECK ---
+Found 2 active connections
+ID: default | Name: +79222155750 | Phone: null
+  Session length: 369
+  IsDefault: false
+ID: 8505573537 | Name: Yoko3467 | Phone: 79226083467
+  Session length: 369
+  IsDefault: true
+--- TG CONNECTION CHECK END ---
