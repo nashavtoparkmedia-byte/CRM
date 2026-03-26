@@ -1,0 +1,19 @@
+﻿node.exe : Environment variables loaded from .env
+строка:1 знак:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Environment variables loaded from .env:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "tg_bot_db", schema "public" at "localhost:5432"
+
+Error: P3006
+
+Migration `0_init` failed to apply cleanly to the shadow database. 
+Error code: P1001
+Error:
+Can't reach database server at `localhost:5432`
+
+Please make sure your database server is running at `localhost:5432`.
+

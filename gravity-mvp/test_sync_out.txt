@@ -1,0 +1,25 @@
+﻿Syncing trips for last 7 day(s)...
+Iter 1, cursor=undefined
+Fetched 500 in iter 1
+Iter 2, cursor=eyJkYXRlIjoiMjAyNi0wMy0yM1QxNjowNjozMS43MiswMDowMCIsImlkIjoiMTRiMzRjOWYyYjhlZDVlN2E0MTIyZGI1ZmU2YWY3NjQifQ
+Fetched 500 in iter 2
+Iter 3, cursor=eyJkYXRlIjoiMjAyNi0wMy0yM1QxMjo0Nzo0NC42MjErMDA6MDAiLCJpZCI6ImVmZmRmMzcwNWYxNDNjOWY5YWIwODdhYzQ5ZmY2MDdmIn0
+Fetched 500 in iter 3
+Iter 4, cursor=eyJkYXRlIjoiMjAyNi0wMy0yM1QwOToyMjo1NC4yOTcrMDA6MDAiLCJpZCI6ImVkMWU4ZjQzZmZhNzM5MTU5MDE5MTMxYzkxYjA0NmMwIn0
+Fetched 500 in iter 4
+Iter 5, cursor=eyJkYXRlIjoiMjAyNi0wMy0yM1QwNTo1MjoyOC40MDUrMDA6MDAiLCJpZCI6Ijc0MmY4NDg5OTZiMzhhN2I5MmRkZWQ2ZGI0NzRmYzUzIn0
+Fetched 500 in iter 5
+Iter 6, cursor=eyJkYXRlIjoiMjAyNi0wMy0yM1QwMjowODoyNS4yNDQrMDA6MDAiLCJpZCI6IjBmZGVkYmZlMDgwODJmODI4MWU4MWYxOGMzZTdmMjc1In0
+Fetched 500 in iter 6
+Iter 7, cursor=eyJkYXRlIjoiMjAyNi0wMy0yMlQxODowMzoyMy42MzcrMDA6MDAiLCJpZCI6ImUwZTg1MGJiMTY4NzMxODlhOWUxYWZlNzAzMjhlOTE4In0
+Fetched 500 in iter 7
+Iter 8, cursor=eyJkYXRlIjoiMjAyNi0wMy0yMlQxNDoxOTo1MC45NjYrMDA6MDAiLCJpZCI6ImM0NDQ5MmY3MDZhMGI3YWRhNGRmNDc0YjIyODFlOWYzIn0
+Fetched 500 in iter 8
+Iter 9, cursor=eyJkYXRlIjoiMjAyNi0wMy0yMlQwOTozNDoxOC43NTkrMDA6MDAiLCJpZCI6IjQyMWFkNzQ3YjVjZTI5OWRiMmM2ZjUzNmY4OTYyZWNjIn0
+Fetched 500 in iter 9
+Iter 10, cursor=eyJkYXRlIjoiMjAyNi0wMy0yMlQwNDo1MTo0MS4yMTUrMDA6MDAiLCJpZCI6IjBmNDhmNTExMzNiMjgxNmNiMjc3ZjYwMDhhZGQ2NmNmIn0
+Fetched 500 in iter 10
+Iter 11, cursor=eyJkYXRlIjoiMjAyNi0wMy0yMVQyMDozNDoyNS4yODgrMDA6MDAiLCJpZCI6ImYwYTc1NTYyYjNiMWI0ZThiYmI5NjBjZmM2NDEwYmIzIn0
+Fetched 500 in iter 11
+Too many iterations, breaking
+Fetched 5500 orders total

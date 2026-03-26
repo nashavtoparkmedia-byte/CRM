@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "Мессенджер | Gravity",
+    title: "Мессенджер | Yoko",
     description: "Нативный агрегатор сообщений для операторов",
 };
 

@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
-import Header from "@/components/Header";
+import TopBar from "@/components/layout/TopBar";
+import { QueryProvider } from "@/providers/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gravity CRM",
+  title: "Yoko CRM",
   description: "Yandex Dispatch API Testing Tool",
 };
 
@@ -29,15 +30,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="flex min-h-screen bg-background text-foreground">
-          <Sidebar />
-          <div className="flex w-full flex-col">
-            <Header />
-            <main className="flex-1 p-6">
+        <QueryProvider>
+          <div className="flex min-h-screen bg-background text-foreground">
+            <Sidebar />
+            <TopBar />
+            <div className="flex w-full flex-col ml-0 lg:ml-[72px] pt-[64px] min-h-screen transition-all duration-300">
               {children}
-            </main>
+            </div>
           </div>
-        </div>
+        </QueryProvider>
       </body>
     </html>
   );

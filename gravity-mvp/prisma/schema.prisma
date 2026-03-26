@@ -255,6 +255,7 @@ model Driver {
   daySummaries         DriverDaySummary[]
   events               DriverEvent[]
   managerTasks         ManagerTask[]
+  tasks                Task[]
 
   @@index([fullName])
   @@index([segment])
@@ -503,4 +504,106 @@ enum AnalyticsEventType {
   SURVEY_COMPLETED
   BROADCAST_SENT
   BROADCAST_FAILED
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TASKS MODULE
+// ═══════════════════════════════════════════════════════════════════
+
+enum TaskSource {
+  auto
+  manual
+  chat
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  waiting_reply
+  overdue
+  snoozed
+  done
+  cancelled
+  archived
+}
+
+enum TaskPriority {
+  critical
+  high
+  medium
+  low
+}
+
+model Task {
+  id                    String       @id @default(cuid())
+  driverId              String
+  source                TaskSource   @default(manual)
+  type                  String                          // e.g. "call_back", "check_docs", "inactive_followup"
+  title                 String
+  description           String?
+  status                TaskStatus   @default(todo)
+  priority              TaskPriority @default(medium)
+  isActive              Boolean      @default(true)     // used in partial unique index
+
+  // Trigger / Dedupe (for auto-tasks)
+  triggerType           String?                          // business semantics: "driver_inactive"
+  triggerKey            String?                          // specific computation: "inactive_3d_since_..."
+  dedupeKey             String?                          // technical consolidation key
+
+  // Scheduling
+  dueAt                 DateTime?
+
+  // Assignment
+  assigneeId            String?
+  createdBy             String?
+  resolvedBy            String?
+
+  // Chat linkage
+  chatId                String?
+  originMessageId       String?
+  originExcerpt         String?
+  originCreatedAt       DateTime?
+
+  // Reactive sync flags
+  hasNewReply           Boolean      @default(false)
+  lastInboundMessageAt  DateTime?
+  lastOutboundMessageAt DateTime?
+
+  // Metadata
+  metadata              Json?        @default("{}")
+
+  // Timestamps
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  resolvedAt            DateTime?
+
+  // Relations
+  driver                Driver       @relation(fields: [driverId], references: [id])
+  events                TaskEvent[]
+
+  // Indexes
+  @@index([driverId])
+  @@index([status, priority, dueAt])
+  @@index([isActive, source])
+  @@index([chatId])
+  @@index([assigneeId])
+
+  @@map("tasks")
+}
+
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  eventType String                          // e.g. "created", "status_changed", "message_sent", "reply_received"
+  payload   Json?    @default("{}")
+  actorType String?  @default("system")     // "system" | "user" | "auto"
+  actorId   String?
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt(sort: Desc)])
+  @@index([eventType])
+
+  @@map("task_events")
 }

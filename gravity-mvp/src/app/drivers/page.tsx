@@ -1,8 +1,11 @@
 import { getDriversWithCells } from './actions'
 import { getTelegramConnections } from '../tg-actions'
 import DriversClient from './DriversClient'
+import { SectionDescription } from '@/components/ui/SectionDescription'
 
 export const dynamic = 'force-dynamic'
+
+import { PageContainer } from '@/components/ui/PageContainer'
 
 export default async function DriversPage({
     searchParams,
@@ -44,22 +47,25 @@ export default async function DriversPage({
     const telegramConnections = await getTelegramConnections()
 
     return (
-        <div className="flex flex-col gap-8">
-            <DriversClient
-                initialDrivers={result.drivers}
-                total={result.total}
-                currentPage={page}
-                segmentCounts={result.segmentCounts}
-                initialSearch={search}
-                initialSegment={segment}
-                initialStatus={status}
-                initialDateRange={dateRange}
-                fromDate={fromDate}
-                toDate={toDate}
-                initialPageSize={pageSize}
-                initialExcludeInactive={excludeInactive}
-                telegramConnections={telegramConnections}
-            />
-        </div>
+        <PageContainer>
+            <div className="flex flex-col gap-6">
+                <SectionDescription sectionKey="drivers" />
+                <DriversClient
+                    initialDrivers={result.drivers}
+                    total={result.total}
+                    currentPage={page}
+                    segmentCounts={result.segmentCounts}
+                    initialSearch={search}
+                    initialSegment={segment}
+                    initialStatus={status}
+                    initialDateRange={dateRange}
+                    fromDate={fromDate}
+                    toDate={toDate}
+                    initialPageSize={pageSize}
+                    initialExcludeInactive={excludeInactive}
+                    telegramConnections={telegramConnections}
+                />
+            </div>
+        </PageContainer>
     )
 }

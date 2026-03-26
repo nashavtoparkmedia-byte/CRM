@@ -3,21 +3,23 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import { Search, LayoutGrid, AlertCircle, MessageSquare, Plus, Bot, Zap, Users, BarChart3, Truck, Settings } from "lucide-react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useDebounce } from "use-debounce"
 import { Virtuoso } from "react-virtuoso"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, Conversation } from "../hooks/useConversations"
 import NewChatPopover from "./NewChatPopover"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string }) {
     const { conversations, setConversations, isLoading } = useConversations()
     const { setChatId, setListTab, setChannel } = useChatNavigation()
 
+    const router = useRouter()
+
     const [searchQuery, setSearchQuery] = useState("")
     const [debouncedSearch] = useDebounce(searchQuery, 200)
-    const [showCrmPanel, setShowCrmPanel] = useState(false)
     const [showNewChat, setShowNewChat] = useState(false)
-    const crmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
     const currentChannelTab = activeChannelTab || 'all'
 
@@ -215,20 +217,25 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         <div className="w-[400px] bg-[#FAFAFA] border-r border-[#E8E8E8] shrink-0 h-full flex flex-col relative">
             {/* Header */}
             <div className="h-[48px] px-3.5 flex items-center justify-between shrink-0 bg-white border-b border-[#E8E8E8]">
-                <div
-                    onMouseEnter={() => { crmTimerRef.current && clearTimeout(crmTimerRef.current); setShowCrmPanel(true) }}
-                    onMouseLeave={() => { crmTimerRef.current = setTimeout(() => setShowCrmPanel(false), 200) }}
-                    className="relative"
-                >
-                    <button
-                        className={`w-[28px] h-[28px] rounded-lg flex items-center justify-center transition-colors ${
-                            showCrmPanel ? 'bg-[#3390EC]/10 text-[#3390EC]' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-700'
-                        }`}
-                        title="CRM"
-                    >
-                        <LayoutGrid size={16} />
-                    </button>
-                </div>
+                <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <button
+                                onClick={() => {
+                                    const lastRoute = localStorage.getItem('last_crm_route');
+                                    router.push(lastRoute || '/dashboard');
+                                }}
+                                className="w-[36px] h-[36px] rounded-[8px] flex items-center justify-center transition-colors text-gray-400 hover:bg-[#f3f4f6] hover:text-gray-700 active:bg-[#eef2ff] active:text-[#4f46e5]"
+                            >
+                                <LayoutGrid size={18} />
+                            </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                            <span className="font-medium">Вернуться в CRM</span>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+
                 <h2 className="text-[15px] font-semibold text-[#111] tracking-tight">Чаты</h2>
                 <div className="relative">
                     <button 
@@ -243,44 +250,6 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                     {showNewChat && <NewChatPopover onClose={() => setShowNewChat(false)} />}
                 </div>
             </div>
-
-            {/* CRM Slide-in Sidebar */}
-            {showCrmPanel && (
-                <div 
-                    className="absolute top-[48px] left-0 bottom-0 w-[280px] bg-white border-r border-[#E0E0E0] shadow-xl z-50 animate-in slide-in-from-left duration-200 flex flex-col"
-                    onMouseEnter={() => { crmTimerRef.current && clearTimeout(crmTimerRef.current); setShowCrmPanel(true) }}
-                    onMouseLeave={() => { crmTimerRef.current = setTimeout(() => setShowCrmPanel(false), 200) }}
-                >
-                    <div className="px-4 pt-4 pb-3">
-                        <h3 className="text-[16px] font-bold text-[#111]">Gravity CRM</h3>
-                        <p className="text-[12px] text-gray-500 mt-0.5">Перейти в модуль</p>
-                    </div>
-                    <div className="flex-1 py-1">
-                        <Link href="/" className="flex items-center gap-3 px-4 h-[44px] text-[14px] text-[#111] hover:bg-gray-50 transition-colors font-medium">
-                            <BarChart3 size={18} className="text-gray-400" />
-                            Дашборд
-                        </Link>
-                        <Link href="/drivers" className="flex items-center gap-3 px-4 h-[44px] text-[14px] text-[#111] hover:bg-gray-50 transition-colors font-medium">
-                            <Truck size={18} className="text-gray-400" />
-                            Водители
-                        </Link>
-                        <Link href="/users" className="flex items-center gap-3 px-4 h-[44px] text-[14px] text-[#111] hover:bg-gray-50 transition-colors font-medium">
-                            <Users size={18} className="text-gray-400" />
-                            Пользователи
-                        </Link>
-                        <Link href="/messages" className="flex items-center gap-3 px-4 h-[44px] text-[14px] text-[#3390EC] bg-[#3390EC]/5 transition-colors font-medium">
-                            <MessageSquare size={18} className="text-[#3390EC]" />
-                            Чаты
-                        </Link>
-                        <div className="h-px bg-[#E8E8E8] mx-4 my-1" />
-                        <Link href="/settings" className="flex items-center gap-3 px-4 h-[44px] text-[14px] text-gray-500 hover:bg-gray-50 transition-colors">
-                            <Settings size={18} className="text-gray-400" />
-                            Настройки
-                        </Link>
-                    </div>
-                </div>
-            )}
-            
             {/* Search */}
             <div className="px-3.5 pt-2 pb-1.5 shrink-0">
                 <div className="relative group">

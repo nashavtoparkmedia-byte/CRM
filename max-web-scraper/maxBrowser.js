@@ -18,7 +18,7 @@ class MaxBrowser {
         this.page = null;
         this.userDataDir = path.join(__dirname, 'user_data');
         this.isLoggedIn = false;
-        this.isSendingMessage = false;
+        this.sendQueue = Promise.resolve();
         this.pollInterval = null;
         this.lastSeenUnreadPath = path.join(__dirname, 'last_seen_dedupe.json');
         this.DEDUP_TTL_MS = 300000; // 300 seconds (5 min) — after this, same text is allowed again
@@ -490,7 +490,24 @@ class MaxBrowser {
             }
         }, 2000); 
     }
+    // Очередь отправки для предотвращения потери сообщений при быстрой печати 11,12,13...
     async sendMessage(phone, text, name = "") {
+        return new Promise((resolve, reject) => {
+            this.sendQueue = this.sendQueue.then(async () => {
+                try {
+                    await this._doSendMessage(phone, text, name);
+                    resolve();
+                } catch (e) {
+                    reject(e);
+                }
+            }).catch(e => {
+                logToFile(`[QUEUE ERROR] Unhandled queue error: ${e.message}`);
+                // Продолжаем цепочку
+            });
+        });
+    }
+
+    async _doSendMessage(phone, text, name = "") {
         if (!this.isLoggedIn) {
             logToFile('Сессия не активна, быстрый чек...');
             const markers = ['.avatar', '.chat-list', '.search-input'];
@@ -508,16 +525,6 @@ class MaxBrowser {
         }
         
         logToFile(`[STEP 0] Старт отправки на ${phone} (Name: "${name || 'N/A'}")`);
-        
-        // Ожидание завершения других операций
-        let waitAttempts = 0;
-        while (this.isSendingMessage && waitAttempts < 15) {
-            logToFile(`Ожидаем освобождения браузера... (${waitAttempts + 1}/15)`);
-            await new Promise(r => setTimeout(r, 2000));
-            waitAttempts++;
-        }
-        
-        this.isSendingMessage = true;
         
         // 0. ОЧИСТКА - Закрываем все открытые модалки через JS для надежности
         try {
@@ -573,7 +580,7 @@ class MaxBrowser {
             }
 
             let digitsOnly = phone.replace(/\D/g, '');
-            const phoneSuffix = digitsOnly.slice(-4); 
+            const phoneSuffix = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly.slice(-7); // Demand at least 7-10 digits match!
             
             // Расширенные форматы для поиска
             const formats = [

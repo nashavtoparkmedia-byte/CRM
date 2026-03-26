@@ -1,0 +1,6 @@
+From https://github.com/nashavtoparkmedia-byte/CRM
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main
+Auto-merging .gitignore
+CONFLICT (add/add): Merge conflict in .gitignore
+Automatic merge failed; fix conflicts and then commit the result.

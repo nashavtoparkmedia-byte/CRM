@@ -1,0 +1,62 @@
+﻿Recent trips: [
+  {
+    id: 'cmmpg3goh080bvp0ckrrtcp5l',
+    driverId: 'cmmnxwkw7051bvptox5vwou9n',
+    date: 2026-03-14T00:00:00.000Z,
+    tripCount: 2,
+    hadManagerMessage: false,
+    hadManagerCall: false,
+    hadAutoMessage: false,
+    hadPromotion: false,
+    hadAiAction: false,
+    hadGoalAchieved: false
+  },
+  {
+    id: 'cmmpg3fnl07nlvp0cs6x2v4ed',
+    driverId: 'cmmnxwfx703r3vptomz7psrte',
+    date: 2026-03-14T00:00:00.000Z,
+    tripCount: 2,
+    hadManagerMessage: false,
+    hadManagerCall: false,
+    hadAutoMessage: false,
+    hadPromotion: false,
+    hadAiAction: false,
+    hadGoalAchieved: false
+  },
+  {
+    id: 'cmmpg3fde07i9vp0cqs7ruq5x',
+    driverId: 'cmmnxwdr1037uvpto93aq4kli',
+    date: 2026-03-14T00:00:00.000Z,
+    tripCount: 4,
+    hadManagerMessage: false,
+    hadManagerCall: false,
+    hadAutoMessage: false,
+    hadPromotion: false,
+    hadAiAction: false,
+    hadGoalAchieved: false
+  },
+  {
+    id: 'cmmpg3f6x07fdvp0chk5it7pu',
+    driverId: 'cmmnxwb8e02mzvpto2kg0vn67',
+    date: 2026-03-14T00:00:00.000Z,
+    tripCount: 4,
+    hadManagerMessage: false,
+    hadManagerCall: false,
+    hadAutoMessage: false,
+    hadPromotion: false,
+    hadAiAction: false,
+    hadGoalAchieved: false
+  },
+  {
+    id: 'cmmpg3f5q07f7vp0cckhxi92a',
+    driverId: 'cmmnxwkyb0521vptogkjdf5vg',
+    date: 2026-03-14T00:00:00.000Z,
+    tripCount: 5,
+    hadManagerMessage: false,
+    hadManagerCall: false,
+    hadAutoMessage: false,
+    hadPromotion: false,
+    hadAiAction: false,
+    hadGoalAchieved: false
+  }
+]

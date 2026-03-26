@@ -35,13 +35,7 @@ export default function ApiListClient({
 
     return (
         <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500">
-            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end p-2 border-b pb-6">
-                <div>
-                    <h1 className="mb-2 text-3xl font-bold text-foreground">API Конфигурации</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Управление подключениями к API Яндекс Про для вашего парка.
-                    </p>
-                </div>
+            <div className="flex w-full justify-end pb-2">
                 <Button onClick={() => setIsAdding(!isAdding)} className="h-11 px-6">
                     <Plus size={18} className="mr-2" /> Добавить API
                 </Button>

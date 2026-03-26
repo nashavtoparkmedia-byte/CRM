@@ -1,0 +1,4 @@
+﻿Profitable: 122
+Medium: 36
+Small: 3722
+Dropped: 159

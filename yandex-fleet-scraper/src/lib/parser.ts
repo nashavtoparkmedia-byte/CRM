@@ -101,7 +101,7 @@ export async function parseDriverHistory(page: Page): Promise<ParsedHistory> {
                 // Only hover reasonably sized visible bars that are likely part of the chart
                 if (box && box.width > 5 && box.height > 5) {
                     await bar.hover({ force: true, timeout: 1000 }).catch(() => { });
-                    await page.waitForTimeout(50); // Give tooltip time to render
+                    await page.waitForTimeout(400); // Give tooltip ample time to render in DOM
 
                     const tooltip = page.locator('[class*="tooltip"], [class*="Popup"]');
                     if (await tooltip.count() > 0 && await tooltip.first().isVisible()) {

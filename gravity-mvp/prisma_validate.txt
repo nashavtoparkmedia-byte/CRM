@@ -1,0 +1,9 @@
+﻿node.exe : Environment variables loaded from .env
+строка:1 знак:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Environment variables loaded from .env:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Prisma schema loaded from prisma\schema.prisma
+The schema at prisma\schema.prisma is valid ЁЯЪА

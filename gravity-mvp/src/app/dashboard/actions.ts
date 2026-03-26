@@ -105,14 +105,21 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     // Count at-risk: drivers with 3+ days without trips
     const allDrivers = await prisma.driver.findMany({ select: { id: true } })
+    const recentSummaries = await prisma.driverDaySummary.findMany({
+        where: { date: { gte: sevenDaysAgo } },
+        orderBy: { date: 'desc' },
+        select: { driverId: true, tripCount: true }
+    })
+    
+    const summariesByDriver = new Map<string, {tripCount: number}[]>()
+    for (const s of recentSummaries) {
+        if (!summariesByDriver.has(s.driverId)) summariesByDriver.set(s.driverId, [])
+        summariesByDriver.get(s.driverId)!.push(s)
+    }
+
     let atRisk = 0
     for (const driver of allDrivers) {
-        const recent = await prisma.driverDaySummary.findMany({
-            where: { driverId: driver.id, date: { gte: sevenDaysAgo } },
-            orderBy: { date: 'desc' },
-            take: 7,
-            select: { tripCount: true },
-        })
+        const recent = summariesByDriver.get(driver.id) || []
         let consecutive = 0
         for (const r of recent) {
             if (r.tripCount > 0) break
@@ -197,9 +204,9 @@ export async function getDashboardCharts() {
 }
 
 export async function getRiskDrivers(): Promise<RiskDriver[]> {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    sevenDaysAgo.setHours(0, 0, 0, 0)
+    const fourteenDaysAgo = new Date()
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14)
+    fourteenDaysAgo.setHours(0, 0, 0, 0)
 
     const drivers = await prisma.driver.findMany({
         select: {
@@ -211,18 +218,27 @@ export async function getRiskDrivers(): Promise<RiskDriver[]> {
         },
     })
 
+    const summaries = await prisma.driverDaySummary.findMany({
+        where: { date: { gte: fourteenDaysAgo } },
+        orderBy: { date: 'desc' },
+        select: { driverId: true, tripCount: true },
+    })
+
+    const summariesByDriver = new Map<string, {tripCount: number}[]>()
+    for (const s of summaries) {
+        if (!summariesByDriver.has(s.driverId)) {
+            summariesByDriver.set(s.driverId, [])
+        }
+        summariesByDriver.get(s.driverId)!.push(s)
+    }
+
     const riskDrivers: RiskDriver[] = []
 
     for (const driver of drivers) {
-        const summaries = await prisma.driverDaySummary.findMany({
-            where: { driverId: driver.id },
-            orderBy: { date: 'desc' },
-            take: 14,
-            select: { tripCount: true },
-        })
+        const driverSummaries = summariesByDriver.get(driver.id) || []
 
         let daysInactive = 0
-        for (const s of summaries) {
+        for (const s of driverSummaries) {
             if (s.tripCount > 0) break
             daysInactive++
         }

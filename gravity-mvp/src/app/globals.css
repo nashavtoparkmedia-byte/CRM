@@ -2,8 +2,69 @@
 
 @import "tailwindcss";
 
+@theme {
+  --color-primary-main: var(--color-primary);
+  --color-bg-main: var(--color-bg);
+  --color-surface: var(--color-surface);
+  --color-text-main: var(--color-text);
+  
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  
+  --shadow-surface: var(--shadow-surface);
+  --shadow-hover: var(--shadow-hover);
+  
+  --spacing-2: var(--space-2);
+  --spacing-4: var(--space-4);
+  --spacing-8: var(--space-8);
+  --spacing-12: var(--space-12);
+  --spacing-16: var(--space-16);
+  --spacing-24: var(--space-24);
+  --spacing-32: var(--space-32);
+
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+}
+
 @layer base {
   :root {
+    /* Foundation Colors */
+    --color-primary: #3390ec;
+    --color-bg: #f7f8fa;
+    --color-surface: #ffffff;
+    --color-text: #111827;
+    --color-muted: #6b7280;
+
+    /* Foundation Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+
+    /* Foundation Shadows */
+    --shadow-surface: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.06);
+
+    /* Foundation Spacing */
+    --space-2: 2px;
+    --space-4: 4px;
+    --space-8: 8px;
+    --space-12: 12px;
+    --space-16: 16px;
+    --space-24: 24px;
+    --space-32: 32px;
+
+    /* Existing variables maintained for backward compatibility */
     --background: #f5f5f5;
     --foreground: #222222;
     --card: #ffffff;
@@ -65,5 +126,39 @@
       radial-gradient(ellipse at 85% 15%, rgba(255,255,255,0.18) 0%, transparent 40%),
       radial-gradient(ellipse at 50% 90%, rgba(0,0,0,0.03) 0%, transparent 50%),
       radial-gradient(ellipse at 70% 50%, rgba(51,144,236,0.02) 0%, transparent 40%);
+  }
+
+  /* ── Task Card Typography Tokens ── */
+  .text-card-title {
+    font-size: 16px;
+    line-height: 22px;
+    font-weight: 600;
+    color: #111827;
+  }
+  .text-section-label {
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94A3B8;
+  }
+  .text-primary-value {
+    font-size: 15px;
+    line-height: 20px;
+    font-weight: 500;
+    color: #111827;
+  }
+  .text-secondary-value {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 400;
+    color: #64748B;
+  }
+  .text-meta {
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 500;
+    color: #475569;
   }
 }

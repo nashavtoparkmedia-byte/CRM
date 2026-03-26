@@ -1,0 +1,13 @@
+﻿node.exe : Environment variables loaded from .env
+строка:1 знак:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Environment variables loaded from .env:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Prisma schema loaded from prisma\schema.prisma
+Error: 
+EPERM: operation not permitted, rename 'C:\Users\mixx\Documents\Github\CRM\gravity-mvp\node_modules\.prisma\client\query_engine-windows.dll.node.tmp10664' -> 'C:\Users\mixx\Documents\Github\CRM\g
+ravity-mvp\node_modules\.prisma\client\query_engine-windows.dll.node'
+
+

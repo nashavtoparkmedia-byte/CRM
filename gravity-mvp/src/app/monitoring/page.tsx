@@ -3,6 +3,7 @@ import { MonitoringClient } from './MonitoringClient';
 import { RECENT_EVENTS_MAX, RECENT_EVENTS_DAYS, SCRAPER_BASE_URL } from './lib/constants';
 import type { MonitoringDriver, MonitoringStats, AttentionItem } from './lib/types';
 import type { EventType } from './lib/constants';
+import { SectionDescription } from '@/components/ui/SectionDescription';
 
 // Fetch scraper stats with graceful degradation
 async function getScraperStats(): Promise<{ checksUsedToday: number | null; checksLimitToday: number }> {
@@ -24,8 +25,9 @@ async function getScraperStats(): Promise<{ checksUsedToday: number | null; chec
     }
 }
 
+import { PageContainer } from '@/components/ui/PageContainer';
+
 export default async function MonitoringPage() {
-    // SSR: read directly from Prisma
     const [driversRaw, total, attentionRaw, attentionTotal, scraperStats] = await Promise.all([
         prisma.driver.findMany({
             orderBy: { fullName: 'asc' },
@@ -93,12 +95,17 @@ export default async function MonitoringPage() {
     };
 
     return (
-        <MonitoringClient
-            initialDrivers={drivers}
-            initialTotal={total}
-            initialStats={stats}
-            initialAttention={attention}
-            initialAttentionTotal={attentionTotal}
-        />
+        <PageContainer>
+            <div className="flex flex-col gap-6">
+                <SectionDescription sectionKey="monitoring" />
+                <MonitoringClient
+                    initialDrivers={drivers}
+                    initialTotal={total}
+                    initialStats={stats}
+                    initialAttention={attention}
+                    initialAttentionTotal={attentionTotal}
+                />
+            </div>
+        </PageContainer>
     );
 }

@@ -1,0 +1,221 @@
+{
+  "scenarios": [
+    {
+      "id": "contact",
+      "label": "Контакт",
+      "isActive": true
+    },
+    {
+      "id": "connection",
+      "label": "Подключение",
+      "isActive": true
+    },
+    {
+      "id": "churn",
+      "label": "Отток",
+      "isActive": true
+    },
+    {
+      "id": "promo",
+      "label": "Акция",
+      "isActive": true
+    }
+  ],
+  "events": [
+    {
+      "id": "call_back",
+      "label": "Перезвонить",
+      "isActive": true,
+      "metadata": {
+        "scenario": "contact"
+      }
+    },
+    {
+      "id": "write",
+      "label": "Написать",
+      "isActive": true,
+      "metadata": {
+        "scenario": "contact"
+      }
+    },
+    {
+      "id": "inactive_followup",
+      "label": "Повторный контакт",
+      "isActive": true,
+      "metadata": {
+        "scenario": "contact"
+      }
+    },
+    {
+      "id": "payment_issue",
+      "label": "Проблема с выплатой",
+      "isActive": true,
+      "metadata": {
+        "scenario": "contact"
+      }
+    },
+    {
+      "id": "check_docs",
+      "label": "Проверить документы",
+      "isActive": true,
+      "metadata": {
+        "scenario": "connection"
+      }
+    },
+    {
+      "id": "first_order",
+      "label": "Проверить первый заказ",
+      "isActive": true,
+      "metadata": {
+        "scenario": "connection"
+      }
+    },
+    {
+      "id": "clarify",
+      "label": "Уточнить причину",
+      "isActive": true,
+      "metadata": {
+        "scenario": "churn"
+      }
+    },
+    {
+      "id": "promo_remove",
+      "label": "Снять акцию",
+      "isActive": true,
+      "metadata": {
+        "scenario": "promo"
+      }
+    }
+  ],
+  "statuses": [
+    {
+      "id": "todo",
+      "label": "К выполнению",
+      "isActive": true
+    },
+    {
+      "id": "in_progress",
+      "label": "В работе",
+      "isActive": true
+    },
+    {
+      "id": "waiting_reply",
+      "label": "Ждет ответа",
+      "isActive": true
+    },
+    {
+      "id": "overdue",
+      "label": "Просрочено",
+      "isActive": true
+    },
+    {
+      "id": "snoozed",
+      "label": "Отложена",
+      "isActive": true
+    },
+    {
+      "id": "done",
+      "label": "Выполнено",
+      "isActive": true
+    },
+    {
+      "id": "cancelled",
+      "label": "Отменена",
+      "isActive": true
+    }
+  ],
+  "priorities": [
+    {
+      "id": "high",
+      "label": "Высокий",
+      "isActive": true,
+      "metadata": {
+        "color": "text-orange-600 bg-orange-50"
+      }
+    },
+    {
+      "id": "normal",
+      "label": "Обычный",
+      "isActive": true,
+      "metadata": {
+        "color": "text-gray-500 bg-gray-50"
+      }
+    }
+  ],
+  "sources": [
+    {
+      "id": "auto",
+      "label": "Автоматическая",
+      "isActive": true
+    },
+    {
+      "id": "manual",
+      "label": "Ручная",
+      "isActive": true
+    },
+    {
+      "id": "chat",
+      "label": "Из чата",
+      "isActive": true
+    }
+  ],
+  "history_actions": [
+    {
+      "id": "created",
+      "label": "Создана",
+      "isActive": true
+    },
+    {
+      "id": "called",
+      "label": "Позвонил",
+      "isActive": true
+    },
+    {
+      "id": "wrote",
+      "label": "Написал",
+      "isActive": true
+    },
+    {
+      "id": "postponed",
+      "label": "Перенес срок",
+      "isActive": true
+    },
+    {
+      "id": "status_changed",
+      "label": "Изменил статус",
+      "isActive": true
+    },
+    {
+      "id": "assigned",
+      "label": "Назначил задачу",
+      "isActive": true
+    },
+    {
+      "id": "done",
+      "label": "Выполнено",
+      "isActive": true
+    },
+    {
+      "id": "cancelled",
+      "label": "Отменена",
+      "isActive": true
+    }
+  ],
+  "contact_results": [
+    { "id": "docs_waiting", "label": "Ждёт документы", "isActive": true },
+    { "id": "no_answer", "label": "Не отвечает", "isActive": true },
+    { "id": "call_later", "label": "Перезвонить позже", "isActive": true },
+    { "id": "docs_sent", "label": "Отправил документы", "isActive": true },
+    { "id": "problem_solved", "label": "Проблема решена", "isActive": true },
+    { "id": "rejected", "label": "Отказался", "isActive": true },
+    { "id": "wrong_number", "label": "Неверный номер", "isActive": true }
+  ],
+  "next_actions": [
+    { "id": "call", "label": "Перезвонить", "isActive": true },
+    { "id": "write", "label": "Написать", "isActive": true },
+    { "id": "check_docs", "label": "Проверить документы", "isActive": true },
+    { "id": "wait_reply", "label": "Дождаться ответа", "isActive": true },
+    { "id": "meeting", "label": "Назначить встречу", "isActive": true },
+    { "id": "close", "label": "Закрыть задачу", "isActive": true }
+  ]
+}

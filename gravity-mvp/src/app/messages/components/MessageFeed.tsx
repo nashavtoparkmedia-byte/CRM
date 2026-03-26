@@ -7,8 +7,6 @@ import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-uti
 import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, X, Bot, Zap, Check } from "lucide-react"
 
 // In-memory task storage (would be backend in production)
-const tasksByMessage = new Map<string, { id: string, title: string, status: string }>()
-
 export default function MessageFeed({ 
     chatId, 
     channelTab, 
@@ -17,6 +15,7 @@ export default function MessageFeed({
     hasMoreHistory,
     onLoadMore,
     onReply,
+    onCreateTask,
     activeSearchMessageId,
     onFocusComposer,
     lastSentAt
@@ -28,6 +27,7 @@ export default function MessageFeed({
     hasMoreHistory: boolean
     onLoadMore: () => void
     onReply?: (msg: Message) => void
+    onCreateTask?: (msg: Message) => void
     activeSearchMessageId?: string | null
     onFocusComposer?: () => void
     lastSentAt?: number
@@ -35,8 +35,6 @@ export default function MessageFeed({
     const virtuoso = useRef<VirtuosoHandle>(null)
     const [atBottom, setAtBottom] = useState(true)
     const [showNewMessagesBadge, setShowNewMessagesBadge] = useState(false)
-    const [taskFormMsgId, setTaskFormMsgId] = useState<string | null>(null)
-    const [taskFormTitle, setTaskFormTitle] = useState("")
     const seenMessageIds = useRef<Set<string>>(new Set())
     const scrollTimeout = useRef<NodeJS.Timeout | null>(null)
     const previousSentAt = useRef<number>(0)
@@ -64,12 +62,14 @@ export default function MessageFeed({
             if (isNew) {
                 seenMessageIds.current.add(msgId);
                 const isOwn = lastItem.message.direction === 'outbound';
-                
                 if (isOwn) {
                     // 📜 Outbound: Frame-precise snap — sole scroll mechanism
-                    const snap = () => {
+                     const snap = () => {
                         const scroller = document.querySelector('.message-scroller') as HTMLDivElement;
-                        if (scroller) scroller.scrollTop = scroller.scrollHeight;
+                        if (scroller) {
+                            // Slight padding fix if needed, but keeping original logic
+                            scroller.scrollTop = scroller.scrollHeight;
+                        }
                     };
                     snap();                              // 0ms: immediate
                     requestAnimationFrame(() => {         // ~16ms
@@ -80,7 +80,7 @@ export default function MessageFeed({
                         });
                     });
                 } else {
-                    // ** 📜 Inbound: Conditional **
+                    // Inbound: Conditional
                     if (atBottom) {
                         virtuoso.current?.scrollToIndex({ index: uiItems.length - 1, align: 'end', behavior: 'auto' });
                     } else {
@@ -114,22 +114,7 @@ export default function MessageFeed({
         navigator.clipboard.writeText(text)
     }
 
-    const handleCreateTask = (msgId: string, content: string) => {
-        setTaskFormMsgId(msgId)
-        setTaskFormTitle(content.substring(0, 80))
-    }
-
-    const handleSaveTask = () => {
-        if (!taskFormMsgId || !taskFormTitle.trim()) return
-        const task = {
-            id: `task-${Date.now()}`,
-            title: taskFormTitle.trim(),
-            status: 'В работе'
-        }
-        tasksByMessage.set(taskFormMsgId, task)
-        setTaskFormMsgId(null)
-        setTaskFormTitle("")
-    }
+    // Mock functions removed. Tasks creation is now handled by onCreateTask prop.
 
     if (isLoading && uiItems.length === 0) {
         return <div className="flex-1 flex items-center justify-center messenger-bg text-[#8A9099] text-[13px] font-medium">Загрузка сообщений...</div>
@@ -160,7 +145,6 @@ export default function MessageFeed({
         const isOutbound = msg.direction === 'outbound'
         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         const isSearchMatch = activeSearchMessageId === msg.id
-        const task = tasksByMessage.get(msg.id)
 
         // Adaptive radii logic
         const radius = {
@@ -272,17 +256,9 @@ export default function MessageFeed({
                         <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-20 ${isOutbound ? 'right-full mr-2' : 'left-full ml-2'}`}>
                            <button onClick={() => onReply && onReply(msg)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><Reply size={14} /></button>
                            <button onClick={() => handleCopyMessage(msg.content)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><Copy size={13} /></button>
-                           <button onClick={() => handleCreateTask(msg.id, msg.content)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><ClipboardList size={14} /></button>
+                           <button onClick={() => onCreateTask?.(msg)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><ClipboardList size={14} /></button>
                         </div>
                     </div>
-
-                    {/* Task badge */}
-                    {task && (
-                        <div className="mt-1 inline-flex items-center gap-1.5 self-start bg-[#3390EC]/10 text-[#3390EC] text-[11px] font-semibold px-2.5 py-1 rounded-lg cursor-pointer hover:bg-[#3390EC]/20 transition-colors">
-                            <ClipboardList size={11} />
-                            {task.title.substring(0, 30)}{task.title.length > 30 ? '…' : ''} · {task.status}
-                        </div>
-                    )}
                 </div>
             </div>
         )

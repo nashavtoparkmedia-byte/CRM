@@ -45,11 +45,24 @@ export async function getSegmentationPreview(settings: Thresholds): Promise<Reco
     }
 }
 
+import { YandexFleetService } from '@/lib/YandexFleetService'
+
 /**
  * Trigger bulk recalculation
  */
 export async function triggerRecalculation(): Promise<{ count: number }> {
+    const thresholds = await getThresholds()
+    
+    // 1. First sync recent data from Yandex based on analysis period (e.g. 45 days)
+    try {
+        await YandexFleetService.syncTrips(thresholds.analysis_period)
+    } catch (e) {
+        console.error('[triggerRecalculation] Sync failed, continuing with local data:', e)
+    }
+
+    // 2. Then recalculate all segments in DB
     const result = await recalculateAllSegments()
     revalidatePath('/drivers')
     return result
 }
+

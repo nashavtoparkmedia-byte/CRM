@@ -4,6 +4,8 @@ import { useState } from "react"
 import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Bot, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations } from "../hooks/useConversations"
+import DriverTasksWidget from "./DriverTasksWidget"
+import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 
 // Custom field types
 interface CustomField {
@@ -37,6 +39,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [newFieldLabel, setNewFieldLabel] = useState("")
     const [newFieldType, setNewFieldType] = useState<'text' | 'select' | 'date'>('text')
     const [aiStatus, setAiStatus] = useState<'active' | 'paused' | 'inactive'>('inactive')
+    const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
 
     if (!chat) return null
 
@@ -127,7 +130,15 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
                 {/* Quick Actions */}
                 <div className="px-3 pb-2 flex gap-1.5">
-                    <button className="flex-1 h-[30px] bg-[#3390EC] text-white text-[11px] font-semibold rounded-lg hover:bg-[#2B7FD4] transition-colors flex items-center justify-center gap-1">
+                    <button
+                        onClick={() => {
+                            if (chat.driver?.id) setIsTaskModalOpen(true)
+                        }}
+                        className={`flex-1 h-[30px] text-white text-[11px] font-semibold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                            chat.driver?.id ? 'bg-[#3390EC] hover:bg-[#2B7FD4]' : 'bg-gray-300 cursor-not-allowed'
+                        }`}
+                        title={!chat.driver?.id ? 'Водитель не привязан к чату' : ''}
+                    >
                         <ClipboardList size={11} /> Задача
                     </button>
                     <button className="flex-1 h-[30px] bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1">
@@ -304,16 +315,20 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
                 <div className="h-px bg-[#E8E8E8] mx-3" />
 
-                {/* Tasks (compact) */}
-                <div className="px-4 py-2.5">
-                    <div className="flex items-center justify-between mb-1.5">
-                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Задачи</h4>
+                {/* Tasks Widget */}
+                {chat.driver?.id ? (
+                    <DriverTasksWidget driverId={chat.driver.id} />
+                ) : (
+                    <div className="px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2 text-[#9ca3af]">
+                            <ClipboardList className="w-4 h-4" />
+                            <span className="text-[14px] font-semibold">Задачи</span>
+                        </div>
+                        <div className="text-[12px] text-[#9ca3af] italic">
+                            Водитель не привязан к чату
+                        </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                        <span className="text-[12px] text-[#111] font-medium">• {activeTaskCount} активных</span>
-                        <button className="text-[11px] text-[#3390EC] font-medium hover:underline">Открыть</button>
-                    </div>
-                </div>
+                )}
 
                 <div className="h-px bg-[#E8E8E8] mx-3" />
 
@@ -377,6 +392,17 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     </div>
                 </div>
             </div>
+
+            {/* Task Create Modal */}
+            {isTaskModalOpen && chat.driver?.id && (
+                <TaskCreateModal
+                    driverId={chat.driver.id}
+                    driverName={chat.name || 'Водитель'}
+                    source="chat"
+                    chatContext={{ chatId: chat.id }}
+                    onClose={() => setIsTaskModalOpen(false)}
+                />
+            )}
         </div>
     )
 }

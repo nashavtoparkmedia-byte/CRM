@@ -1,0 +1,7 @@
+﻿Loading modules...
+Fetching from Yandex API from 2026-02-06T19:00:00.000Z to 2026-03-24T18:59:59.999Z
+Breaking early for dates check...
+Fetched 2500 orders total in 5 iterations
+Dates distribution (sample):
+  2026-03-23: 1568 complete trips
+  2026-03-24: 84 complete trips

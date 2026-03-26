@@ -18,7 +18,7 @@ export default function Header() {
             case "/map": return "Карта";
             default:
                 if (pathname.startsWith("/drivers/")) return "Исполнители / Детали";
-                return "Gravity CRM";
+                return "Yoko CRM";
         }
     };
 

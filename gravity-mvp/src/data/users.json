@@ -1,0 +1,32 @@
+[
+  {
+    "id": "u1",
+    "firstName": "Мария",
+    "lastName": "Иванова",
+    "email": "m.ivanova@example.com",
+    "phone": "+79991234567",
+    "role": "Менеджер",
+    "status": "Активен",
+    "createdAt": "2026-03-24T00:00:00Z"
+  },
+  {
+    "id": "u2",
+    "firstName": "Александр",
+    "lastName": "Сидоров",
+    "email": "a.sidorov@example.com",
+    "phone": "+79997654321",
+    "role": "Администратор",
+    "status": "Активен",
+    "createdAt": "2026-03-24T00:00:00Z"
+  },
+  {
+    "id": "u3",
+    "firstName": "Александр",
+    "lastName": "Ремезов",
+    "email": "a.rem@example.com",
+    "phone": "+79991111111",
+    "role": "Руководитель",
+    "status": "Активен",
+    "createdAt": "2026-03-24T00:00:00Z"
+  }
+]

@@ -1,0 +1,3 @@
+﻿Testing Yandex API connection for parkId: 3a23295d8d714c03b61a17a6fc86601b
+Success! Fetched 10 orders.
+First order status: cancelled

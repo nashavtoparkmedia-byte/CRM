@@ -35,7 +35,7 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
         >
             {children}
             {show && (
-                <div className="absolute z-40 left-0 top-full mt-1 w-72 rounded-lg bg-card shadow-lg border p-4">
+                <div className="absolute z-[100] left-0 top-full mt-1 w-72 rounded-lg bg-white shadow-xl border border-gray-200 p-4 dark:bg-zinc-900 dark:border-zinc-800">
                     <div className="font-semibold text-sm mb-1">{driverName}</div>
                     {phone && <div className="text-sm text-muted-foreground mb-2">📞 {phone}</div>}
                     <div className="border-t pt-2">
@@ -86,19 +86,42 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
                                                 {act.monthlyStats && Array.isArray(act.monthlyStats) && act.monthlyStats.length > 0 ? (
                                                     <div className="mt-2 text-gray-600">
                                                         <div className="font-medium mb-1">Активность (мес):</div>
-                                                        <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
-                                                            {act.monthlyStats.filter((st: any) => typeof st === 'object' && st !== null && st.month).map((st: any, i: number) => (
-                                                                <div key={i} className="flex justify-between items-center text-[10px] bg-slate-50 px-1 py-0.5 rounded">
-                                                                    <span>{st.month}</span>
-                                                                    <div className="flex gap-1.5 opacity-80">
-                                                                        {st.comfort > 0 && <span className="text-yellow-600" title="Комфорт">К:{st.comfort}</span>}
-                                                                        {st.economy > 0 && <span className="text-blue-500" title="Эконом">Э:{st.economy}</span>}
-                                                                        {st.kids > 0 && <span className="text-rose-500" title="Детский">Д:{st.kids}</span>}
-                                                                        {st.other > 0 && <span className="text-cyan-600" title="Остальные">О:{st.other}</span>}
-                                                                        <span className="font-medium text-gray-700">Всего: {st.total || 0}</span>
+                                                        <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                                                            {act.monthlyStats.filter((st: any) => typeof st === 'object' && st !== null && st.month).map((st: any, i: number) => {
+                                                                const comf = parseInt(st.comfort) || 0;
+                                                                const econ = parseInt(st.economy) || 0;
+                                                                const kid = parseInt(st.kids) || 0;
+                                                                const oth = parseInt(st.other) || 0;
+                                                                const calcTotal = comf + econ + kid + oth;
+                                                                const total = st.total ? Math.max(parseInt(st.total), calcTotal) : calcTotal;
+
+                                                                let monthLabel = st.month;
+                                                                if (typeof monthLabel === 'string') {
+                                                                    const parts = monthLabel.split('.');
+                                                                    if (parts.length === 3) {
+                                                                        const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}T12:00:00Z`);
+                                                                        if (!isNaN(d.getTime())) {
+                                                                            const m = d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+                                                                            monthLabel = m.charAt(0).toUpperCase() + m.slice(1).replace(' г.', '');
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                return (
+                                                                <div key={i} className="flex flex-col text-[10px] bg-slate-50 border px-1.5 py-1 rounded">
+                                                                    <div className="flex justify-between font-medium border-b border-slate-200 pb-0.5 mb-0.5">
+                                                                        <span className="text-gray-800 capitalize">{monthLabel}</span>
+                                                                        <span className="text-gray-900">Всего: {total}</span>
+                                                                    </div>
+                                                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 opacity-90 leading-tight">
+                                                                        {comf > 0 && <span className="text-yellow-600 font-medium">К: {comf}</span>}
+                                                                        {econ > 0 && <span className="text-blue-500 font-medium">Э: {econ}</span>}
+                                                                        {kid > 0 && <span className="text-rose-500 font-medium">Д: {kid}</span>}
+                                                                        {oth > 0 && <span className="text-cyan-600 font-medium">Ост: {oth}</span>}
                                                                     </div>
                                                                 </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                         </div>
                                                     </div>
                                                 ) : null}

@@ -1,0 +1,7 @@
+﻿Top trips: [
+  { _sum: { tripCount: 842 }, driverId: 'cmmnxwj5004m7vptoce4u5s53' },
+  { _sum: { tripCount: 744 }, driverId: 'cmmnxwjzc04wovptoosw74fys' },
+  { _sum: { tripCount: 656 }, driverId: 'cmmnxwjai04o9vptokiowcdal' },
+  { _sum: { tripCount: 655 }, driverId: 'cmmnxwean03eivpto1m6aj0cd' },
+  { _sum: { tripCount: 653 }, driverId: 'cmmnxwi5g049svpto30jwg33w' }
+]

@@ -6,12 +6,9 @@ import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, Che
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
 
-// Mock tasks for demo — in production this would be fetched from API
-const mockTasks = [
-    { id: '1', title: 'Позвонить клиенту', dueLabel: 'Сегодня', status: 'active' },
-    { id: '2', title: 'Проверить документы', dueLabel: 'Завтра', status: 'active' },
-    { id: '3', title: 'Назначить смену', dueLabel: 'Просрочено', status: 'overdue' },
-]
+import { getDriverActiveTasks } from '@/app/tasks/actions'
+import type { TaskDTO } from '@/lib/tasks/types'
+import Link from 'next/link'
 
 interface ChatHeaderProps {
     chat: Conversation
@@ -23,6 +20,7 @@ interface ChatHeaderProps {
     searchResultsCount: number
     activeSearchIndex: number
     onSearchNavigate: (direction: 'up' | 'down') => void
+    onOpenCreateTask?: () => void
 }
 
 export default function ChatHeader({ 
@@ -34,12 +32,40 @@ export default function ChatHeader({
     setSearchQuery,
     searchResultsCount,
     activeSearchIndex,
-    onSearchNavigate
+    onSearchNavigate,
+    onOpenCreateTask
 }: ChatHeaderProps) {
     const { toggleProfileDrawer } = useChatNavigation()
     const searchInputRef = useRef<HTMLInputElement>(null)
     const [showTasksPopover, setShowTasksPopover] = useState(false)
     const tasksPopoverRef = useRef<HTMLDivElement>(null)
+
+    // Real tasks state
+    const [tasks, setTasks] = useState<TaskDTO[]>([])
+    const [counts, setCounts] = useState({ active: 0, overdue: 0 })
+    const [isLoadingTasks, setIsLoadingTasks] = useState(false)
+
+    // Fetch tasks only if we have a driver
+    useEffect(() => {
+        if (!chat.driver?.id) return
+        let isMounted = true
+        async function fetchTasks() {
+            try {
+                setIsLoadingTasks(true)
+                const res = await getDriverActiveTasks(chat.driver!.id)
+                if (isMounted) {
+                    setTasks(res.tasks)
+                    setCounts(res.counts)
+                }
+            } catch (err) {
+                console.error('Failed to load tasks for chat header', err)
+            } finally {
+                if (isMounted) setIsLoadingTasks(false)
+            }
+        }
+        fetchTasks()
+        return () => { isMounted = false }
+    }, [chat.driver?.id])
 
     const getStatusLabel = (status: string) => {
         switch (status) {
@@ -94,8 +120,7 @@ export default function ChatHeader({
         }
     }
 
-    const activeTasks = mockTasks.filter(t => t.status === 'active' || t.status === 'overdue')
-    const taskCount = activeTasks.length
+    const taskCount = counts.active
 
     const searchParams = useSearchParams()
     const isProfileOpenFromUrl = searchParams.get('profile') === '1'
@@ -145,24 +170,45 @@ export default function ChatHeader({
                                             <span className="text-[11px] text-gray-400 font-medium">{taskCount} активных</span>
                                         </div>
                                         <div className="py-1 max-h-[240px] overflow-y-auto custom-scrollbar">
-                                            {activeTasks.length === 0 ? (
+                                            {isLoadingTasks ? (
+                                                <div className="px-3.5 py-6 text-center text-[12px] text-gray-400">Загрузка...</div>
+                                            ) : tasks.length === 0 ? (
                                                 <div className="px-3.5 py-6 text-center text-[12px] text-gray-400">Нет активных задач</div>
                                             ) : (
-                                                activeTasks.map(task => (
-                                                    <button
-                                                        key={task.id}
-                                                        className="w-full px-3.5 py-2 flex items-start gap-2.5 hover:bg-gray-50 transition-colors text-left"
-                                                    >
-                                                        <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${task.status === 'overdue' ? 'bg-red-500' : 'bg-[#3390EC]'}`} />
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="text-[13px] text-[#111] font-medium truncate">{task.title}</div>
-                                                            <div className={`text-[11px] mt-0.5 ${task.status === 'overdue' ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
-                                                                {task.dueLabel}
+                                                tasks.map(task => {
+                                                    const isOverdue = task.dueAt && new Date(task.dueAt) < new Date()
+                                                    let dueLabel = '—'
+                                                    if (task.dueAt) {
+                                                        dueLabel = new Date(task.dueAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+                                                    }
+                                                    return (
+                                                        <Link
+                                                            key={task.id}
+                                                            href={`/tasks?driverId=${chat.driver?.id}`}
+                                                            className="w-full px-3.5 py-2 flex items-start gap-2.5 hover:bg-gray-50 transition-colors text-left block"
+                                                        >
+                                                            <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isOverdue ? 'bg-red-500' : 'bg-[#3390EC]'}`} />
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-[13px] text-[#111] font-medium truncate">{task.title}</div>
+                                                                <div className={`text-[11px] mt-0.5 ${isOverdue ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
+                                                                    Срок: {dueLabel}
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </button>
-                                                ))
+                                                        </Link>
+                                                    )
+                                                })
                                             )}
+                                        </div>
+                                        <div className="px-3.5 py-2.5 border-t border-[#E8E8E8] bg-[#f9fafb]">
+                                            <button
+                                                onClick={() => {
+                                                    setShowTasksPopover(false)
+                                                    onOpenCreateTask?.()
+                                                }}
+                                                className="w-full py-1.5 rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] transition-colors"
+                                            >
+                                                Создать задачу
+                                            </button>
                                         </div>
                                     </div>
                                 )}

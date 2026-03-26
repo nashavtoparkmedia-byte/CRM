@@ -8,15 +8,18 @@ import MessageFeed from "./MessageFeed"
 import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
 import { useConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
+import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 
 export default function ChatWorkspace({ 
     chatId, 
     activeChannelTab, 
-    isProfileOpen 
+    isProfileOpen,
+    initialMessageId 
 }: { 
     chatId: string | null
     activeChannelTab: string
     isProfileOpen: boolean
+    initialMessageId?: string | null
 }) {
     const { conversations } = useConversations()
     
@@ -56,6 +59,8 @@ export default function ChatWorkspace({
     const [searchResults, setSearchResults] = useState<string[]>([]) // Array of message IDs
     const [activeSearchIndex, setActiveSearchIndex] = useState(-1) // 0-based index
     const [lastSentAt, setLastSentAt] = useState<number>(0)
+    const [taskModalContext, setTaskModalContext] = useState<Message | null>(null)
+    const [isTaskModalOpenForChat, setIsTaskModalOpenForChat] = useState(false)
 
     // Reset ephemeral state when chat changes
     useEffect(() => {
@@ -140,6 +145,7 @@ export default function ChatWorkspace({
                 searchResultsCount={searchResults.length}
                 activeSearchIndex={activeSearchIndex}
                 onSearchNavigate={handleSearchNavigate}
+                onOpenCreateTask={() => setIsTaskModalOpenForChat(true)}
             />
             
             {/* Context/Channel Tabs */}
@@ -154,7 +160,8 @@ export default function ChatWorkspace({
                 hasMoreHistory={hasMoreHistory}
                 onLoadMore={loadMoreHistory}
                 onReply={handleReply}
-                activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : null}
+                onCreateTask={setTaskModalContext}
+                activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
                 onFocusComposer={() => document.getElementById('message-composer')?.focus()}
                 lastSentAt={lastSentAt}
             />
@@ -169,6 +176,27 @@ export default function ChatWorkspace({
                 setManualSendChannelMode={setManualSendChannelMode}
                 onSendMessage={handleSendMessage}
             />
+
+            {/* Task Create Modal */}
+            {(taskModalContext || isTaskModalOpenForChat) && chat.driver?.id && (
+                <TaskCreateModal
+                    driverId={chat.driver.id}
+                    driverName={chat.name || 'Водитель'}
+                    source="chat"
+                    chatContext={{
+                        chatId,
+                        ...(taskModalContext ? {
+                            messageId: taskModalContext.id,
+                            excerpt: taskModalContext.content.substring(0, 150),
+                            createdAt: taskModalContext.sentAt
+                        } : {})
+                    }}
+                    onClose={() => {
+                        setTaskModalContext(null)
+                        setIsTaskModalOpenForChat(false)
+                    }}
+                />
+            )}
         </div>
     )
 }

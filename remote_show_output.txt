@@ -1,0 +1,8 @@
+* remote origin
+  Fetch URL: https://github.com/nashavtoparkmedia-byte/CRM
+  Push  URL: https://github.com/nashavtoparkmedia-byte/CRM
+  HEAD branch: main
+  Remote branch:
+    main tracked
+  Local ref configured for 'git push':
+    main pushes to main (up to date)

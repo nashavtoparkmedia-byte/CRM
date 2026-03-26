@@ -1,5 +1,6 @@
 import { getManagerTasks } from './actions'
 import InboxClient from './InboxClient'
+import { SectionDescription } from '@/components/ui/SectionDescription'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,14 +30,17 @@ export default async function InboxPage({
     )
 
     return (
-        <InboxClient
-            tasks={result.tasks}
-            total={result.total}
-            counts={result.counts}
-            currentPage={page}
-            initialStatus={status}
-            initialPriority={priority}
-            initialSearch={search}
-        />
+        <div className="flex flex-col gap-6 h-full">
+            <SectionDescription sectionKey="tasks" />
+            <InboxClient
+                tasks={result.tasks}
+                total={result.total}
+                counts={result.counts}
+                currentPage={page}
+                initialStatus={status}
+                initialPriority={priority}
+                initialSearch={search}
+            />
+        </div>
     )
 }
