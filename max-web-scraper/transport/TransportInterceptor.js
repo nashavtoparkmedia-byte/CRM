@@ -53,6 +53,7 @@ class TransportInterceptor {
     this._pendingReqs     = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq        = 500        // наши seq начинаются с 500 (браузер использует 0–499)
     this._myUserId        = null       // userId нашего аккаунта (из opcode 19)
+    this._wsAuthHandlers  = []
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -117,6 +118,7 @@ class TransportInterceptor {
       if (id) {
         this._myUserId = String(id)
         console.log('[Transport] My userId:', this._myUserId)
+        for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
       }
     }
 
@@ -216,6 +218,15 @@ class TransportInterceptor {
   }
 
   // ─── Публичный API ───────────────────────────────────────────────────────
+
+  /** Срабатывает когда WS-авторизация прошла (opcode 19) */
+  onWsAuth(handler) {
+    this._wsAuthHandlers.push(handler)
+  }
+
+  isAuthenticated() {
+    return !!this._myUserId
+  }
 
   onMessage(handler) {
     this._messageHandlers.push(handler)

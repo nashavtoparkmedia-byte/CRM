@@ -227,7 +227,7 @@ async function init() {
   })
 
   // 5. Авторизация
-  session.attach(page, context)
+  session.attach(page, context, transport)
 
   session.onAuth(async () => {
     console.log('[App] Авторизован — запускаем initial sync')

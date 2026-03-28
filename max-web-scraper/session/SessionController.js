@@ -16,9 +16,10 @@ class SessionController {
 
   // ─── Привязка к внешней странице (создаётся в index.js) ─────────────────
 
-  attach(page, context) {
-    this.page    = page
-    this.context = context
+  attach(page, context, transport = null) {
+    this.page       = page
+    this.context    = context
+    this._transport = transport
   }
 
   // ─── Запуск после навигации ──────────────────────────────────────────────
@@ -49,6 +50,11 @@ class SessionController {
   // ─── Проверка состояния сессии ──────────────────────────────────────────
 
   async _checkLoginState() {
+    // Приоритет 0: WS-авторизация уже прошла (opcode 19 получен)
+    if (this._transport && this._transport.isAuthenticated()) {
+      return true
+    }
+
     // Приоритет 1: cookie / localStorage token
     try {
       const hasToken = await this.page.evaluate(() => {
