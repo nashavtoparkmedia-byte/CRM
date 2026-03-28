@@ -1,226 +1,226 @@
 'use strict'
 
-// ─── Константы из FINDINGS.md ────────────────────────────────────────────────
-// ЗАПОЛНИТЬ после Фазы 0 discovery
-// Все значения null — сервис запустится, но отправка будет выдавать ошибку
+// ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
+// Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
+// и добавляет window.__maxWsSend(rawString) для отправки фреймов из Node.js
+const WS_INIT_SCRIPT = `(function () {
+  var _OrigWS = window.WebSocket;
+  function PatchedWS(url, protocols) {
+    var ws = protocols != null ? new _OrigWS(url, protocols) : new _OrigWS(url);
+    if (url && url.indexOf('ws-api.oneme.ru') !== -1) {
+      window.__maxWs = ws;
+    }
+    return ws;
+  }
+  PatchedWS.prototype  = _OrigWS.prototype;
+  PatchedWS.CONNECTING = _OrigWS.CONNECTING;
+  PatchedWS.OPEN       = _OrigWS.OPEN;
+  PatchedWS.CLOSING    = _OrigWS.CLOSING;
+  PatchedWS.CLOSED     = _OrigWS.CLOSED;
+  window.WebSocket = PatchedWS;
 
-const ENDPOINTS = {
-  sendText:    null,  // 'POST /api/v1/...'
-  uploadFile:  null,  // 'POST /api/v1/...'
-  sendMedia:   null,  // 'POST /api/v1/...'
-  getHistory:  null,  // 'GET /api/v1/...'
-  getChats:    null,  // 'GET /api/v1/...'
+  window.__maxWsSend = function (data) {
+    var ws = window.__maxWs;
+    if (!ws || ws.readyState !== 1) {
+      return { ok: false, error: 'WS not ready (state ' + (ws ? ws.readyState : 'null') + ')' };
+    }
+    ws.send(data);
+    return { ok: true };
+  };
+})();`
+
+// ─── Опкоды MAX протокола ────────────────────────────────────────────────────
+const OP = {
+  HANDSHAKE:       6,
+  AUTH:            19,
+  SEND_MESSAGE:    64,
+  TYPING:          65,
+  GET_UPLOAD_URL:  80,
+  GET_CHATS:       48,
+  GET_HISTORY:     49,
+  SUBSCRIBE_CHAT:  75,
+  INCOMING_MSG:    128,
+  PRESENCE:        132,
+  CONTACTS:        32,
 }
-
-// Тип WS-события для входящего сообщения (из FINDINGS.md)
-// Примеры: 'new_message', 'msg', 'update', 4 (число для VK-style updates)
-const WS_INCOMING_TYPE = null
-
-// Поле в event payload, содержащее тип события
-// Пример: 'type', 'event', 'action'
-const WS_TYPE_FIELD = 'type'
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 class TransportInterceptor {
   constructor() {
     this._messageHandlers = []
+    this._rawHandlers     = []  // для перехвата опкодов (32, 48 и т.д.)
     this._page            = null
-    this._context         = null
     this._cdpClient       = null
-    this._wsRequestIds    = new Set()
+    this._pendingReqs     = new Map()  // seq → {resolve, reject, timeout}
+    this._localSeq        = 500        // наши seq начинаются с 500 (браузер использует 0–499)
   }
 
-  // ─── Подключение перехватчика ────────────────────────────────────────────
+  // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
 
-  async attach(page, context) {
-    this._page    = page
-    this._context = context
+  async injectHooks(page) {
+    this._page = page
+    await page.addInitScript(WS_INIT_SCRIPT)
+    console.log('[Transport] WS-хук инжектирован')
+  }
 
-    // Метод 1: CDP — основной, работает независимо от момента подключения listener
+  // ─── Шаг 2: Прикрепляем CDP ПОСЛЕ page.goto ─────────────────────────────
+
+  async attachCdp(page, context) {
+    this._page = page
+
     this._cdpClient = await context.newCDPSession(page)
     await this._cdpClient.send('Network.enable')
 
-    this._cdpClient.on('Network.webSocketCreated', ({ requestId, url }) => {
-      this._wsRequestIds.add(requestId)
+    this._cdpClient.on('Network.webSocketCreated', ({ url }) => {
       console.log('[Transport] WS создан:', url)
     })
 
-    this._cdpClient.on('Network.webSocketFrameReceived', ({ requestId, response }) => {
+    this._cdpClient.on('Network.webSocketFrameReceived', ({ response }) => {
       if (!response.payloadData) return
-      // opcode 2 = binary frame
-      if (response.opcode === 2) return
+      if (response.opcode === 2) return  // binary frame — пропускаем
       this._handleFrame(response.payloadData)
     })
 
-    this._cdpClient.on('Network.webSocketClosed', ({ requestId }) => {
-      this._wsRequestIds.delete(requestId)
+    this._cdpClient.on('Network.webSocketClosed', () => {
       console.log('[Transport] WS закрыт')
     })
 
-    // Метод 2: SSE (если discovery показал SSE вместо WS)
-    this._cdpClient.on('Network.eventSourceMessageReceived', (e) => {
-      this._handleSseEvent(e)
-    })
-
-    // Метод 3: page.on('websocket') — дополнительно для новых соединений
+    // Дополнительно — page.on('websocket') для fallback
     page.on('websocket', (ws) => {
-      console.log('[Transport] WS (page):', ws.url())
-
       ws.on('framereceived', ({ payload }) => {
-        if (Buffer.isBuffer(payload)) return  // binary — пропускаем
+        if (Buffer.isBuffer(payload)) return
         this._handleFrame(String(payload))
       })
-
-      ws.on('close', () => {
-        console.log('[Transport] WS (page) закрыт')
-      })
     })
 
-    console.log('[Transport] Перехват активен (CDP + page.on websocket)')
+    console.log('[Transport] CDP активен')
   }
 
-  // ─── Обработка WS фрейма ────────────────────────────────────────────────
+  // ─── Обработка входящих WS фреймов ──────────────────────────────────────
 
   _handleFrame(raw) {
     let data
-    try {
-      data = JSON.parse(raw)
-    } catch {
-      return  // не JSON — пропускаем
+    try { data = JSON.parse(raw) } catch { return }
+
+    // Ответы на наши запросы (cmd:1, seq наш)
+    if (data.cmd === 1 && this._pendingReqs.has(data.seq)) {
+      const { resolve, timeout } = this._pendingReqs.get(data.seq)
+      clearTimeout(timeout)
+      this._pendingReqs.delete(data.seq)
+      resolve(data.payload)
+      return
     }
 
-    // ── Вариант А: { type: 'new_message', data: {...} }
-    if (WS_INCOMING_TYPE && data[WS_TYPE_FIELD] === WS_INCOMING_TYPE) {
-      const msg = this._normalize(data.data || data)
+    // Raw-хэндлеры (contacts, chats, и т.д.)
+    for (const h of this._rawHandlers) {
+      try { h(data) } catch {}
+    }
+
+    // Presence updates — пропускаем
+    if (data.opcode === OP.PRESENCE) return
+
+    // Входящее сообщение — server push, opcode 128
+    if (data.opcode === OP.INCOMING_MSG && data.payload?.message) {
+      const msg = this._normalizeMaxMsg(data.payload)
       if (msg) this._emit(msg)
-      return
     }
-
-    // ── Вариант Б: VK-style updates: { updates: [[type, ...fields]] }
-    if (Array.isArray(data.updates)) {
-      for (const update of data.updates) {
-        const msg = this._parseVkStyleUpdate(update)
-        if (msg) this._emit(msg)
-      }
-      return
-    }
-
-    // ── Вариант В: { event: 'message.received', payload: {...} }
-    if (data.event && data.payload) {
-      const msg = this._normalize(data.payload)
-      if (msg) this._emit(msg)
-      return
-    }
-
-    // ── Вариант Г: массив событий [{ type, ... }, ...]
-    if (Array.isArray(data)) {
-      for (const item of data) {
-        if (WS_INCOMING_TYPE && item[WS_TYPE_FIELD] === WS_INCOMING_TYPE) {
-          const msg = this._normalize(item.data || item)
-          if (msg) this._emit(msg)
-        }
-      }
-    }
-
-    // Если ни один вариант не подошёл — данные из discovery покажут правильный
   }
 
-  // ─── Обработка SSE события ──────────────────────────────────────────────
+  // ─── Нормализация входящего MAX сообщения ────────────────────────────────
 
-  _handleSseEvent(e) {
-    // Заполнить после discovery если транспорт SSE, а не WS
-    // console.log('[Transport] SSE:', e.eventName, e.data)
-  }
+  _normalizeMaxMsg(payload) {
+    const m = payload.message
+    if (!m) return null
 
-  // ─── Нормализация сообщения ─────────────────────────────────────────────
-
-  _normalize(raw) {
-    if (!raw) return null
-
-    // Маппинг полей — точные имена из FINDINGS.md
-    // Заглушки охватывают наиболее распространённые варианты
-    const id        = raw.id         || raw.message_id  || raw.msgId   || null
-    const from      = raw.from       || raw.sender      || raw.user_id ||
-                      raw.peer_id    || raw.contact      || null
-    const text      = raw.text       || raw.body        || raw.message || raw.content || ''
-    const timestamp = raw.ts         || raw.timestamp   || raw.date    ||
-                      raw.created_at || Date.now()
-    const isOutgoing = (
-      raw.out === 1       || raw.out === true   ||
-      raw.is_out === 1    || raw.is_out === true ||
-      raw.fromMe === true || raw.outgoing === true
-    )
+    const hasAttaches = Array.isArray(m.attaches) && m.attaches.length > 0
 
     return {
-      id,
-      from,
-      text,
-      // Нормализуем timestamp: unix seconds → ms
-      timestamp: (typeof timestamp === 'number' && timestamp < 1e12)
-        ? timestamp * 1000
-        : Number(timestamp),
-      type:        this._detectType(raw),
-      attachments: this._extractAttachments(raw),
-      isOutgoing,
-      raw          // сохраняем оригинал для отладки
+      id:          m.id    || null,
+      chatId:      payload.chatId || null,
+      from:        String(m.sender || ''),
+      text:        m.text  || '',
+      timestamp:   m.time  || Date.now(),
+      type:        hasAttaches ? this._detectMaxType(m.attaches) : 'text',
+      attachments: this._extractMaxAttachments(m.attaches || []),
+      isOutgoing:  false,
+      raw:         payload,
     }
   }
 
-  // ─── Парсинг VK-style update массива ────────────────────────────────────
-
-  _parseVkStyleUpdate(update) {
-    // Структура VK updates зависит от версии — заполнить после discovery
-    // Пример: update[0] = тип события, остальные поля — данные
-    // if (update[0] === 4) { ... }
-    return null
+  _detectMaxType(attaches) {
+    if (!attaches || !attaches.length) return 'text'
+    const t = (attaches[0]._type || '').toUpperCase()
+    if (t === 'PHOTO')                  return 'image'
+    if (t === 'VIDEO')                  return 'video'
+    if (t === 'AUDIO' || t === 'VOICE') return 'voice'
+    return 'document'
   }
 
-  // ─── Определение типа сообщения ─────────────────────────────────────────
-
-  _detectType(raw) {
-    const atts = raw.attachments || raw.attach || raw.files || []
-    if (!atts.length) return 'text'
-
-    const first = atts[0]
-    const t = (first.type || first.attach_type || first.kind || '').toLowerCase()
-
-    if (['photo', 'image', 'img'].includes(t))           return 'image'
-    if (['doc', 'file', 'document'].includes(t))         return 'document'
-    if (['sticker'].includes(t))                         return 'sticker'
-    if (['audio_message', 'voice', 'voicemsg'].includes(t)) return 'voice'
-    if (['video'].includes(t))                           return 'video'
-    return 'text'
-  }
-
-  // ─── Извлечение вложений ────────────────────────────────────────────────
-
-  _extractAttachments(raw) {
-    const atts = raw.attachments || raw.attach || raw.files || []
-    if (!atts.length) return []
-
-    return atts.map(a => ({
-      type:       a.type       || a.attach_type || a.kind || 'file',
-      // Пробуем разные варианты URL из разных API
-      url:        a.url        || a.download_url ||
-                  a.photo?.orig_photo?.url || a.photo?.sizes?.slice(-1)[0]?.url ||
-                  a.doc?.url   || a.file?.url   || null,
-      previewUrl: a.preview    || a.thumbnail   ||
-                  a.photo?.sizes?.[0]?.url      || null,
-      name:       a.name       || a.title       || a.filename || null,
-      size:       a.size       || a.file_size   || null,
-      mimeType:   a.mime_type  || a.content_type || null,
+  _extractMaxAttachments(attaches) {
+    return attaches.map(a => ({
+      type: (a._type || 'file').toLowerCase(),
+      url:  a.url    || null,
+      name: a.filename || null,
+      size: a.size   || null,
     }))
   }
 
-  // ─── Публичный API ──────────────────────────────────────────────────────
+  // ─── Отправка WS фрейма ──────────────────────────────────────────────────
+
+  /**
+   * @param {number} opcode
+   * @param {object} payload
+   * @param {{ waitResponse?: boolean }} opts
+   * @returns {Promise<object|void>}
+   */
+  async sendFrame(opcode, payload, { waitResponse = false } = {}) {
+    const seq  = ++this._localSeq
+    const data = JSON.stringify({ ver: 11, cmd: 0, seq, opcode, payload })
+
+    if (waitResponse) {
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          this._pendingReqs.delete(seq)
+          reject(new Error(`Timeout: opcode ${opcode} seq ${seq}`))
+        }, 10_000)
+
+        this._pendingReqs.set(seq, { resolve, reject, timeout })
+
+        this._page.evaluate(d => window.__maxWsSend(d), data)
+          .then(r => {
+            if (!r || !r.ok) {
+              clearTimeout(timeout)
+              this._pendingReqs.delete(seq)
+              reject(new Error(`WS send failed: ${r?.error}`))
+            }
+          })
+          .catch(e => {
+            clearTimeout(timeout)
+            this._pendingReqs.delete(seq)
+            reject(e)
+          })
+      })
+    } else {
+      const r = await this._page.evaluate(d => window.__maxWsSend(d), data)
+      if (!r || !r.ok) throw new Error(`WS send failed: ${r?.error}`)
+    }
+  }
+
+  // ─── Публичный API ───────────────────────────────────────────────────────
 
   onMessage(handler) {
     this._messageHandlers.push(handler)
   }
 
+  /** Перехват любых входящих фреймов (contacts, chats, etc.) */
+  onRawFrame(handler) {
+    this._rawHandlers.push(handler)
+  }
+
   detach() {
     this._messageHandlers = []
+    this._rawHandlers     = []
+    for (const { timeout } of this._pendingReqs.values()) clearTimeout(timeout)
+    this._pendingReqs.clear()
     if (this._cdpClient) {
       this._cdpClient.detach().catch(() => {})
       this._cdpClient = null
@@ -231,12 +231,12 @@ class TransportInterceptor {
   // ─── Внутренние ─────────────────────────────────────────────────────────
 
   _emit(msg) {
-    for (const handler of this._messageHandlers) {
-      try { handler(msg) } catch (e) {
+    for (const h of this._messageHandlers) {
+      try { h(msg) } catch (e) {
         console.error('[Transport] Handler error:', e.message)
       }
     }
   }
 }
 
-module.exports = { TransportInterceptor, ENDPOINTS }
+module.exports = { TransportInterceptor, OP }

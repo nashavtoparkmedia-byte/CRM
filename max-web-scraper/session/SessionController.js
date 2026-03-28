@@ -1,52 +1,31 @@
 'use strict'
 
-const { chromium } = require('playwright')
-const path         = require('path')
-const fs           = require('fs')
+const path = require('path')
+const fs   = require('fs')
 
 class SessionController {
   constructor() {
     this.context     = null
     this.page        = null
     this.isLoggedIn  = false
-    this.userDataDir = path.join(__dirname, '..', 'user_data')
 
     this._onAuthCallbacks   = []
     this._onLogoutCallbacks = []
     this._keepaliveTimer    = null
   }
 
-  // ─── Запуск ─────────────────────────────────────────────────────────────
+  // ─── Привязка к внешней странице (создаётся в index.js) ─────────────────
 
-  async start() {
-    fs.mkdirSync(this.userDataDir, { recursive: true })
+  attach(page, context) {
+    this.page    = page
+    this.context = context
+  }
 
-    this.context = await chromium.launchPersistentContext(this.userDataDir, {
-      headless: true,
-      viewport: { width: 1280, height: 720 },
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage'
-      ]
-    })
+  // ─── Запуск после навигации ──────────────────────────────────────────────
 
-    this.page = this.context.pages()[0] || await this.context.newPage()
-
-    // Скрываем признаки автоматизации
-    await this.page.evaluate(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => undefined })
-    })
-
-    // Обработчики ошибок страницы
+  async checkAndWaitForLogin() {
     this.page.on('pageerror', (err) => {
       console.error('[Session] Page error:', err.message)
-    })
-
-    await this.page.goto('https://web.max.ru/', {
-      waitUntil: 'networkidle',
-      timeout:   60000
     })
 
     const loggedIn = await this._checkLoginState()
@@ -60,6 +39,11 @@ class SessionController {
     }
 
     this._startKeepalive()
+  }
+
+  // Обратная совместимость — не используется в новом index.js
+  async start() {
+    return this.checkAndWaitForLogin()
   }
 
   // ─── Проверка состояния сессии ──────────────────────────────────────────

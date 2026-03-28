@@ -3,7 +3,7 @@
 const fs   = require('fs')
 const path = require('path')
 
-const { ENDPOINTS } = require('../transport/TransportInterceptor')
+const { OP }           = require('../transport/TransportInterceptor')
 const { MessageParser } = require('../parser/MessageParser')
 
 const DEDUP_PATH         = path.join(__dirname, '..', 'last_seen_dedupe.json')
@@ -34,48 +34,54 @@ class MessageSync {
       return `id:${msg.id || msg.externalId}`
     }
 
-    // ВРЕМЕННЫЙ FALLBACK — заменить после discovery когда известен stable ID
-    // composite: from + text (первые 50 символов) + timestamp (с точностью до секунды)
-    const text = (msg.text || '').slice(0, 50)
-    const from = msg.from || msg.phone || ''
-    const ts   = Math.floor(
+    // Composite fallback: chatId + text + timestamp (до секунды)
+    const text   = (msg.text || '').slice(0, 50)
+    const chatId = msg.chatId || msg.from || ''
+    const ts     = Math.floor(
       (typeof msg.timestamp === 'string'
         ? new Date(msg.timestamp).getTime()
         : (msg.timestamp || Date.now())
       ) / 1000
     )
-    return `composite:${from}:${text}:${ts}`
+    return `composite:${chatId}:${text}:${ts}`
   }
 
   // ─── Catch-up при рестарте ───────────────────────────────────────────────
 
-  async fetchMissedMessages(page, sinceTimestamp) {
-    if (!ENDPOINTS.getHistory) {
-      console.log('[Sync] History endpoint не определён (FINDINGS.md), пропускаем catch-up')
+  /**
+   * Запрашивает пропущенные сообщения через WS opcode 49.
+   * Для MAX нужен chatId — без него catch-up невозможен.
+   * Используется для конкретного чата при реконнекте.
+   *
+   * @param {object} transport - TransportInterceptor
+   * @param {number} chatId
+   * @param {number} sinceTimestamp - мс
+   */
+  async fetchMissedForChat(transport, chatId, sinceTimestamp) {
+    if (!chatId) return []
+
+    try {
+      const result = await transport.sendFrame(
+        OP.GET_HISTORY,
+        {
+          chatId,
+          from:        Date.now(),
+          forward:     0,
+          backward:    50,
+          getMessages: true,
+        },
+        { waitResponse: true }
+      )
+
+      const messages = result?.messages || []
+
+      return messages
+        .filter(m => (m.time || 0) >= sinceTimestamp)
+        .map(raw => MessageParser.normalizeHistoryMessage(raw))
+    } catch (e) {
+      console.error('[Sync] Catch-up failed for chat', chatId, e.message)
       return []
     }
-
-    const result = await page.evaluate(
-      async ({ endpoint, since }) => {
-        try {
-          const url  = `${endpoint}?since=${since}`
-          const resp = await fetch(url, { credentials: 'include' })
-          if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` }
-          return { ok: true, data: await resp.json() }
-        } catch (e) {
-          return { ok: false, error: e.message }
-        }
-      },
-      { endpoint: ENDPOINTS.getHistory, since: sinceTimestamp }
-    )
-
-    if (!result.ok) {
-      console.error('[Sync] Catch-up failed:', result.error)
-      return []
-    }
-
-    const messages = result.data?.messages || result.data || []
-    return messages.map(raw => MessageParser.normalizeHistoryMessage(raw))
   }
 
   // ─── Персистентность ────────────────────────────────────────────────────

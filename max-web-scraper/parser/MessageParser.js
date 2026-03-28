@@ -4,9 +4,15 @@ class MessageParser {
   /**
    * Нормализует сырое сообщение из TransportInterceptor в формат для CRM webhook
    */
-  static toCrmPayload(msg) {
+  /**
+   * @param {object} msg - нормализованное сообщение
+   * @param {number|null} [chatId] - явный chatId (опционально, перекрывает msg.chatId)
+   */
+  static toCrmPayload(msg, chatId) {
     return {
       externalId:  msg.id || null,
+      chatId:      chatId || msg.chatId || null,  // chatId для ответа из CRM
+      senderId:    msg.from || null,              // userId отправителя в MAX
       phone:       MessageParser.normalizePhone(msg.from),
       text:        msg.text || '',
       timestamp:   MessageParser.normalizeTimestamp(msg.timestamp),
