@@ -1,0 +1,7 @@
+node_modules/
+user_data/
+discovery/traces/
+last_seen_dedupe.json
+*.png
+*.log
+debug*.txt
