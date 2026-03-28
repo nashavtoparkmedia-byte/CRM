@@ -52,6 +52,7 @@ class TransportInterceptor {
     this._cdpClient       = null
     this._pendingReqs     = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq        = 500        // наши seq начинаются с 500 (браузер использует 0–499)
+    this._myUserId        = null       // userId нашего аккаунта (из opcode 19)
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -110,6 +111,15 @@ class TransportInterceptor {
       return
     }
 
+    // Авторизация (opcode 19) — запоминаем свой userId
+    if (data.cmd === 1 && data.opcode === OP.AUTH) {
+      const id = data.payload?.profile?.contact?.id
+      if (id) {
+        this._myUserId = String(id)
+        console.log('[Transport] My userId:', this._myUserId)
+      }
+    }
+
     // Raw-хэндлеры (contacts, chats, и т.д.)
     for (const h of this._rawHandlers) {
       try { h(data) } catch {}
@@ -141,7 +151,7 @@ class TransportInterceptor {
       timestamp:   m.time  || Date.now(),
       type:        hasAttaches ? this._detectMaxType(m.attaches) : 'text',
       attachments: this._extractMaxAttachments(m.attaches || []),
-      isOutgoing:  false,
+      isOutgoing:  this._myUserId ? String(m.sender) === this._myUserId : false,
       raw:         payload,
     }
   }
