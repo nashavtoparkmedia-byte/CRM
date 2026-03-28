@@ -113,39 +113,28 @@ class SessionController {
   // ─── Ожидание QR-авторизации ────────────────────────────────────────────
 
   async _waitForQrLogin() {
+    // Если onWsAuth уже сработал раньше — ничего не делаем
+    if (this.isLoggedIn) return
+
     console.log('[Session] Ожидание QR-авторизации...')
 
-    // Ищем QR-код на странице
-    const qrEl = await this.page.waitForSelector('canvas, svg:has(image)', {
-      timeout: 30000
-    }).catch(() => null)
+    // Скриншот страницы (QR или то что есть)
+    const qrPath = path.join(__dirname, '..', 'last_qr.png')
+    await this.page.screenshot({ path: qrPath }).catch(() => {})
+    console.log('[Session] QR сохранён:', qrPath)
 
-    if (qrEl) {
-      const qrPath = path.join(__dirname, '..', 'last_qr.png')
-      await this.page.screenshot({ path: qrPath })
-      console.log('[Session] QR сохранён:', qrPath)
-    } else {
-      console.log('[Session] QR элемент не найден, делаем скриншот страницы...')
-      await this.page.screenshot({ path: path.join(__dirname, '..', 'last_qr.png') })
+    // Ждём пока isLoggedIn станет true (от transport.onWsAuth → index.js)
+    // или до 5 минут
+    const deadline = Date.now() + 5 * 60 * 1000
+    while (Date.now() < deadline) {
+      if (this.isLoggedIn) {
+        console.log('[Session] QR-авторизация выполнена (WS auth detected)')
+        return
+      }
+      await new Promise(r => setTimeout(r, 1000))
     }
 
-    // Ждём успешного входа (до 5 минут)
-    await this.page.waitForSelector(
-      '.chat-list, .chat-item, [aria-label*="Написать"]',
-      { timeout: 300000 }
-    )
-
-    this.isLoggedIn = true
-
-    // Сохраняем состояние сессии
-    try {
-      await this.context.storageState({
-        path: path.join(this.userDataDir, 'state.json')
-      })
-    } catch {}
-
-    console.log('[Session] QR-авторизация выполнена')
-    this._notifyAuth()
+    console.log('[Session] Таймаут QR-авторизации (5 мин)')
   }
 
   // ─── Keepalive ──────────────────────────────────────────────────────────
