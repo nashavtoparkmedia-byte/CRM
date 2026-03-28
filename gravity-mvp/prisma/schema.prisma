@@ -53,6 +53,68 @@ model MaxConnection {
   updatedAt DateTime @updatedAt
 }
 
+// Channel profile для водителя в MAX — не identity-модель, не замена Contact
+// maxExternalUserId / maxExternalChatId без @unique до завершения discovery
+model DriverMax {
+  id                  String   @id @default(cuid())
+  driverId            String   @unique
+  maxExternalUserId   String?  // stable user id — заполнится после Фазы 0
+  maxExternalChatId   String?  // chat/dialog id — может отличаться от user id
+  phone               String?
+  name                String?
+  createdAt           DateTime @default(now())
+
+  driver              Driver   @relation(fields: [driverId], references: [id])
+
+  @@index([maxExternalUserId])
+  @@index([maxExternalChatId])
+}
+
+// Настройки личной сессии MAX (QR-авторизация)
+// Одна запись = одна активная сессия
+model MaxPersonalSession {
+  id                      String                   @id @default(cuid())
+
+  // Что выбрал пользователь при подключении
+  historyImportMode       MaxHistoryImportMode     @default(from_connection_time)
+
+  // Когда была выполнена QR-авторизация
+  connectedAt             DateTime?
+
+  // Что реально смог транспорт (заполняется после Фазы 0.1)
+  historySyncModeResolved MaxHistorySyncMode?
+
+  // Состояние процесса синхронизации
+  historySyncStatus       MaxHistorySyncStatus     @default(not_started)
+
+  // Когда завершилась начальная синхронизация
+  initialSyncCompletedAt  DateTime?
+
+  isActive                Boolean                  @default(true)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+}
+
+enum MaxHistoryImportMode {
+  none                  // Не импортировать историю
+  from_connection_time  // Только новые сообщения с момента подключения
+  available_history     // Импортировать доступную историю
+}
+
+enum MaxHistorySyncMode {
+  live_only         // Mode C — только live events
+  partial_backfill  // Mode B — частичная история
+  full_backfill     // Mode A — полная доступная история
+}
+
+enum MaxHistorySyncStatus {
+  not_started
+  running
+  completed
+  partial   // завершён, но история была ограничена транспортом
+  failed
+}
+
 model WhatsAppConnection {
   id          String                   @id @default(cuid())
   name        String?
@@ -256,6 +318,7 @@ model Driver {
   events               DriverEvent[]
   managerTasks         ManagerTask[]
   tasks                Task[]
+  maxProfile           DriverMax?
 
   @@index([fullName])
   @@index([segment])
@@ -449,6 +512,7 @@ model DailyParkStats {
 enum MessageDirection {
   inbound
   outbound
+  system
 }
 
 enum ChatChannel {
