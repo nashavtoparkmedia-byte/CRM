@@ -29,6 +29,9 @@ class SessionController {
       console.error('[Session] Page error:', err.message)
     })
 
+    // Даём WS время на handshake и opcode 19 (до 3 секунд)
+    await this._waitForWsAuth(3000)
+
     const loggedIn = await this._checkLoginState()
 
     if (loggedIn) {
@@ -40,6 +43,16 @@ class SessionController {
     }
 
     this._startKeepalive()
+  }
+
+  // Ждём WS-авторизацию максимум msLimit мс
+  async _waitForWsAuth(msLimit) {
+    if (!this._transport) return
+    const deadline = Date.now() + msLimit
+    while (Date.now() < deadline) {
+      if (this._transport.isAuthenticated()) return
+      await new Promise(r => setTimeout(r, 200))
+    }
   }
 
   // Обратная совместимость — не используется в новом index.js
