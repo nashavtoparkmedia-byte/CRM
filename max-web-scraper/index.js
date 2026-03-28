@@ -229,12 +229,17 @@ async function init() {
   // 5. Авторизация
   session.attach(page, context, transport)
 
-  session.onAuth(async () => {
-    console.log('[App] Авторизован — запускаем initial sync')
+  // WS-авторизация (opcode 19) — первичный и надёжный триггер
+  transport.onWsAuth(async (userId) => {
+    if (isReady) return  // не повторяем при reconnect
+    console.log('[App] WS auth OK, userId:', userId)
     isReady = true
 
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
     console.log('[App] Initial sync:', syncResult)
+
+    // Уведомляем session (для keepalive)
+    session.isLoggedIn = true
   })
 
   session.onLogout(() => {
@@ -242,6 +247,7 @@ async function init() {
     console.log('[App] Сессия завершена')
   })
 
+  // Ждём авторизацию: если WS auth не пришёл — покажем QR
   await session.checkAndWaitForLogin()
 }
 

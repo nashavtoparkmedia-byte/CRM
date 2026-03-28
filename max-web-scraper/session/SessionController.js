@@ -38,7 +38,8 @@ class SessionController {
       console.log('[Session] Сессия активна, авторизация не требуется')
       this.isLoggedIn = true
       this._notifyAuth()
-    } else {
+    } else if (!this.isLoggedIn) {
+      // isLoggedIn может быть уже true если onWsAuth сработал раньше
       await this._waitForQrLogin()
     }
 
