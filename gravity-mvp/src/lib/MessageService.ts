@@ -130,7 +130,8 @@ export class MessageService {
         const messages = await prisma.message.findMany({
             where: { chatId: { in: ids } },
             orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
-            take: limit
+            take: limit,
+            include: { attachments: true }
         })
         // Return in ASC order for UI display
         return serialize(messages.reverse())
@@ -252,13 +253,14 @@ export class MessageService {
         })
 
         // 1. Save message to DB first (Optimistic)
+        // Всегда сохраняем в исходный chatId чтобы UI мог найти сообщение
         const messageId = `msg_${Date.now()}`
         const now = new Date()
-        
+
         await (prisma.message as any).create({
             data: {
                 id: messageId,
-                chatId: currentChatId,
+                chatId: chatId,
                 content,
                 direction: 'outbound',
                 status: 'sent',
@@ -371,8 +373,8 @@ export class MessageService {
                 }
             })
             await (prisma.chat as any).update({
-                where: { id: currentChatId },
-                data: { lastMessageAt: new Date(), channel }
+                where: { id: chatId },
+                data: { lastMessageAt: new Date() }
             })
         } catch (updErr) {
             console.error(`Final Update FAILED`, updErr)

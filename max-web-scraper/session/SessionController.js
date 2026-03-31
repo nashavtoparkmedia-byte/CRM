@@ -118,19 +118,19 @@ class SessionController {
 
     console.log('[Session] Ожидание QR-авторизации...')
 
-    // Скриншот страницы (QR или то что есть)
-    const qrPath = path.join(__dirname, '..', 'last_qr.png')
-    await this.page.screenshot({ path: qrPath }).catch(() => {})
-    console.log('[Session] QR сохранён:', qrPath)
+    // QR генерируется из opcode 288 (qrLink) в index.js — здесь скриншот не нужен
+    console.log('[Session] Ожидание QR-авторизации (QR генерируется из WS opcode 288)...')
 
     // Ждём пока isLoggedIn станет true (от transport.onWsAuth → index.js)
-    // или до 5 минут
+    // или до 5 минут, каждые 3с обновляем скриншот QR
     const deadline = Date.now() + 5 * 60 * 1000
+    let tick = 0
     while (Date.now() < deadline) {
       if (this.isLoggedIn) {
         console.log('[Session] QR-авторизация выполнена (WS auth detected)')
         return
       }
+      tick++
       await new Promise(r => setTimeout(r, 1000))
     }
 

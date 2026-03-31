@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import fetch from 'node-fetch'
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { emitMessageReceived } from '@/lib/messageEvents'
 
 const MAX_MEDIA_SIZE_BYTES = 10 * 1024 * 1024 // 10MB per file
 const HISTORY_MONTHS = 3
@@ -405,7 +406,7 @@ export async function initializeClient(connectionId: string): Promise<void> {
                     })
                 }
             } else {
-                await prisma.message.create({
+                const savedMsg = await prisma.message.create({
                     data: {
                         chatId: unifiedChat.id,
                         direction: 'inbound',
@@ -416,6 +417,9 @@ export async function initializeClient(connectionId: string): Promise<void> {
                     }
                 })
                 console.log(`[WA-SERVICE] SAVED inbound msgId=${msg.id._serialized} to chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
+                emitMessageReceived(savedMsg).catch(e =>
+                    console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
+                )
             }
         } catch (err) {
             console.error(`[WA-SERVICE] Message event error for ${connectionId}:`, err)

@@ -120,11 +120,11 @@ export async function sendMaxPersonalMessage(phone: string, message: string, nam
     if (!cleanPhone) throw new Error("Invalid phone number")
 
     try {
-        console.log(`[CRM] Sending MAX message: phone=${cleanPhone}, name=${name || 'N/A'}`)
+        console.log(`[CRM] Sending MAX message: chatId=${cleanPhone}, name=${name || 'N/A'}`)
         const response = await fetch("http://localhost:3005/send-message", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone: cleanPhone, message, name })
+            body: JSON.stringify({ chatId: cleanPhone, message })
         })
 
         if (!response.ok) {

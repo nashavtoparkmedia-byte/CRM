@@ -48,12 +48,14 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
             const res = await fetch("http://localhost:3005/status")
             if (!res.ok) throw new Error("Scraper returned error")
             const data = await res.json()
-            setIsPersonalLoggedIn(data.isLoggedIn)
+            const loggedIn = data.isLoggedIn ?? data.isReady ?? false
+            setIsPersonalLoggedIn(loggedIn)
             setIsScraperOnline(true)
-            
-            if (!data.isLoggedIn) {
-                // If not logged in, ensure we have the latest QR URL to force image reload
-                setQrUrl(`http://localhost:3005/qr?t=${Date.now()}`)
+
+            if (!loggedIn) {
+                // Используем qrUpdatedAt как cache-buster — QR обновится автоматически
+                const ts = data.qrUpdatedAt || Date.now()
+                setQrUrl(`http://localhost:3005/qr?t=${ts}`)
             } else {
                 setQrUrl(null)
             }
@@ -67,7 +69,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
     useEffect(() => {
         if (activeTab === "personal") {
             checkPersonalStatus()
-            const interval = setInterval(checkPersonalStatus, 5000)
+            const interval = setInterval(checkPersonalStatus, 2000)
             setPollInterval(interval)
             
             return () => clearInterval(interval)
@@ -412,7 +414,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                         <p>{error}</p>
                                     </div>
                                 )}
-                                <div className="mb-6 select-none bg-white p-4 rounded-xl shadow-sm border inline-block relative min-h-[256px] min-w-[256px] flex items-center justify-center">
+                                <div className="mb-6 select-none bg-white p-3 rounded-xl shadow-sm border inline-flex items-center justify-center" style={{ width: 320, height: 320 }}>
                                     {qrLoading ? (
                                         <div className="flex flex-col items-center text-muted-foreground">
                                             <RefreshCw className="h-8 w-8 animate-spin mb-4" />
@@ -428,7 +430,8 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                         <img 
                                             src={qrUrl} 
                                             alt="MAX QR Code" 
-                                            className="w-48 xl:w-64 max-w-full object-contain mix-blend-multiply" 
+                                            style={{ width: 294, height: 294 }}
+                                            className="object-contain mix-blend-multiply" 
                                             onError={() => setQrUrl(null)} // fallback if not generated yet
                                         />
                                     ) : (

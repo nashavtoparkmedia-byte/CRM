@@ -241,6 +241,7 @@ const initializedListeners = new Set<string>()
 let _initPromise: Promise<void> | null = null
 
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { emitMessageReceived } from '@/lib/messageEvents'
 
 async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
     if (message && !message.out) {
@@ -309,7 +310,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         if (existing) {
             console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
         } else {
-            await (prisma.message as any).create({
+            const savedMsg = await (prisma.message as any).create({
                 data: {
                     chatId: unifiedChat.id,
                     direction: 'inbound',
@@ -322,6 +323,9 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 }
             })
             console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
+            emitMessageReceived(savedMsg).catch(e =>
+                console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
+            )
         }
     }
 }

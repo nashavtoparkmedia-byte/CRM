@@ -86,13 +86,14 @@ class TransportInterceptor {
       console.log('[Transport] WS закрыт')
     })
 
-    // Дополнительно — page.on('websocket') для fallback
-    page.on('websocket', (ws) => {
-      ws.on('framereceived', ({ payload }) => {
-        if (Buffer.isBuffer(payload)) return
-        this._handleFrame(String(payload))
-      })
-    })
+    // page.on('websocket') — fallback только если CDP не перехватывает
+    // (CDP уже активен выше, поэтому этот блок не нужен — закомментирован во избежание дублей)
+    // page.on('websocket', (ws) => {
+    //   ws.on('framereceived', ({ payload }) => {
+    //     if (Buffer.isBuffer(payload)) return
+    //     this._handleFrame(String(payload))
+    //   })
+    // })
 
     console.log('[Transport] CDP активен')
   }
@@ -102,6 +103,16 @@ class TransportInterceptor {
   _handleFrame(raw) {
     let data
     try { data = JSON.parse(raw) } catch { return }
+
+    // DEBUG: log all non-presence frames
+    if (data.opcode !== OP.PRESENCE) {
+      const preview = data.payload ? JSON.stringify(data.payload).slice(0, 200) : ''
+      console.log('[Transport DEBUG] opcode:', data.opcode, 'cmd:', data.cmd, 'seq:', data.seq, preview)
+    }
+    // DEBUG: log full attachment data for incoming messages
+    if (data.opcode === OP.INCOMING_MSG && data.payload?.message?.attaches?.length > 0) {
+      console.log('[Transport ATTACH]', JSON.stringify(data.payload.message.attaches))
+    }
 
     // Ответы на наши запросы (cmd:1, seq наш)
     if (data.cmd === 1 && this._pendingReqs.has(data.seq)) {
@@ -113,8 +124,10 @@ class TransportInterceptor {
     }
 
     // Авторизация (opcode 19) — запоминаем свой userId
-    if (data.cmd === 1 && data.opcode === OP.AUTH) {
+    // Проверяем opcode 19 независимо от cmd (MAX может слать как cmd:0, так и cmd:1)
+    if (data.opcode === OP.AUTH) {
       const id = data.payload?.profile?.contact?.id
+      console.log(`[Auth] Opcode 19: cmd=${data.cmd}, has_profile=${!!data.payload?.profile}, userId=${id || 'none'}`)
       if (id) {
         this._myUserId = String(id)
         console.log('[Transport] My userId:', this._myUserId)
@@ -169,10 +182,12 @@ class TransportInterceptor {
 
   _extractMaxAttachments(attaches) {
     return attaches.map(a => ({
-      type: (a._type || 'file').toLowerCase(),
-      url:  a.url    || null,
-      name: a.filename || null,
-      size: a.size   || null,
+      type:        (a._type || 'file').toLowerCase(),
+      url:         a.baseUrl || a.url || null,  // MAX uses baseUrl for photos
+      name:        a.filename || null,
+      size:        a.size || null,
+      previewData: a.previewData || null,       // base64 webp thumbnail, ready to use
+      photoId:     a.photoId || null,
     }))
   }
 

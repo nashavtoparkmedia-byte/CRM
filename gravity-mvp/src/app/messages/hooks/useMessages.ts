@@ -2,16 +2,26 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { prepareMessagesForUI, UIItem } from "../utils/message-utils"
 import { patchConversation } from "./useConversations"
 
+export interface MessageAttachment {
+    id: string
+    type: string
+    url: string
+    fileName?: string | null
+    fileSize?: number | null
+    mimeType?: string | null
+}
+
 export interface Message {
     id: string
     direction: 'inbound' | 'outbound'
-    type: 'text' | 'image' | 'system'
+    type: 'text' | 'image' | 'video' | 'voice' | 'audio' | 'document' | 'system'
     content: string
     sentAt: string
     status: 'sent' | 'delivered' | 'read' | 'error'
     channel: string
-    origin?: 'operator' | 'ai' | 'auto' | 'system' // Who sent this message
-    account?: string // Which account was used
+    origin?: 'operator' | 'ai' | 'auto' | 'system'
+    account?: string
+    attachments?: MessageAttachment[]
 }
 
 const messageCache = new Map<string, Message[]>()

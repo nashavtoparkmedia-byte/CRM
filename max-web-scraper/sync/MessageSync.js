@@ -117,6 +117,13 @@ class MessageSync {
       console.error('[Sync] Ошибка сохранения dedup cache:', e.message)
     }
   }
+
+  // Полный сброс кэша (используется перед full-history reimport)
+  clear() {
+    this.seen.clear()
+    try { fs.unlinkSync(DEDUP_PATH) } catch {}
+    console.log('[Sync] Dedup cache сброшен')
+  }
 }
 
 module.exports = { MessageSync }

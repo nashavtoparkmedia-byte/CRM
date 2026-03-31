@@ -21,10 +21,12 @@ class InitialHistorySync {
    * @param {object} messageSync - MessageSync instance
    * @param {Function} forwardFn - async (payload) => void
    */
-  constructor(transport, messageSync, forwardFn) {
-    this._transport = transport
-    this._sync      = messageSync
-    this._forward   = forwardFn
+  constructor(transport, messageSync, forwardFn, mediaPipeline = null, chatCache = null) {
+    this._transport    = transport
+    this._sync         = messageSync
+    this._forward      = forwardFn
+    this._mediaPipeline = mediaPipeline
+    this._chatCache    = chatCache  // Map of chatId → chat (из opcode 48 автозагрузки)
   }
 
   // ─── Запуск ─────────────────────────────────────────────────────────────
@@ -38,8 +40,10 @@ class InitialHistorySync {
 
     if (historyImportMode === 'from_connection_time') {
       console.log('[InitialSync] Режим: from_connection_time — только новые сообщения')
+      // Catch-up: подтянуть пропущенные за время даунтайма
+      const caught = await this._catchUpIfNeeded()
       this._markDone('from_connection_time')
-      return { mode: 'from_connection_time', status: 'skipped' }
+      return { mode: 'from_connection_time', status: caught ? 'caught_up' : 'skipped' }
     }
 
     if (fs.existsSync(DONE_FLAG)) {
@@ -70,21 +74,43 @@ class InitialHistorySync {
     return { mode: 'available_history', status }
   }
 
-  // ─── Получить список всех чатов через WS opcode 48 ──────────────────────
+  // ─── Получить список всех чатов ─────────────────────────────────────────
 
   async _fetchAllChats() {
-    try {
-      // chatIds: [0] = вернуть все чаты
-      const result = await this._transport.sendFrame(
-        OP.GET_CHATS,
-        { chatIds: [0] },
-        { waitResponse: true }
-      )
-      return (result && result.chats) ? result.chats : []
-    } catch (e) {
-      console.error('[InitialSync] Ошибка получения чатов:', e.message)
-      return []
+    // Сначала используем кэш из автоматических opcode 48 фреймов при старте
+    if (this._chatCache && this._chatCache.size > 0) {
+      const chats = Array.from(this._chatCache.values())
+      console.log(`[InitialSync] Чаты из кэша: ${chats.length}`)
+      return chats
     }
+
+    // Фолбэк: перехватить чаты из page reload — сделать GET_CHATS с разными параметрами
+    console.log('[InitialSync] Кэш пустой — запрашиваем чаты через WS (несколько попыток)...')
+    const allChats = new Map()
+
+    // Пробуем несколько разных payload-ов чтобы получить все чаты
+    const payloads = [
+      { chatIds: [] },
+      {},
+      { count: 100 },
+      { count: 100, offset: 0 },
+    ]
+    for (const payload of payloads) {
+      try {
+        const result = await this._transport.sendFrame(OP.GET_CHATS, payload, { waitResponse: true })
+        const chats = (result && result.chats) ? result.chats : []
+        for (const c of chats) {
+          const id = c.id ?? c.chatId
+          if (id && id !== 0) allChats.set(String(id), c)
+        }
+        console.log(`[InitialSync] payload=${JSON.stringify(payload)} → ${chats.length} чатов`)
+      } catch (e) {
+        console.log(`[InitialSync] payload=${JSON.stringify(payload)} → ошибка: ${e.message}`)
+      }
+    }
+
+    console.log(`[InitialSync] Итого уникальных чатов: ${allChats.size}`)
+    return Array.from(allChats.values())
   }
 
   // ─── Синхронизация истории чата через WS opcode 49 ──────────────────────
@@ -111,14 +137,17 @@ class InitialHistorySync {
       if (messages.length === 0) break
 
       for (const raw of messages) {
-        const msg = MessageParser.normalizeHistoryMessage(raw)
-
-        if (msg.isOutgoing) continue
-
-        if (!this._sync.isDuplicate(msg)) {
-          await this._forward(MessageParser.toCrmPayload(msg, chatId))
-          this._sync.markSeen(msg)
-          total++
+        try {
+          const msg = MessageParser.normalizeHistoryMessage(raw)
+          if (msg.isOutgoing) continue
+          if (!this._sync.isDuplicate(msg)) {
+            await this._forward(MessageParser.toCrmPayload(msg, chatId))
+            this._sync.markSeen(msg)
+            total++
+          }
+        } catch (e) {
+          console.error(`[InitialSync] Пропускаем сообщение из-за ошибки:`, e.message,
+            '| raw.id:', raw?.id, '| chatId:', chatId)
         }
       }
 
@@ -139,6 +168,96 @@ class InitialHistorySync {
     if (total > 0) {
       console.log(`[InitialSync] Чат ${chatId}: импортировано ${total} сообщений`)
     }
+  }
+
+  // ─── Catch-up при рестарте ───────────────────────────────────────────────
+
+  async _catchUpIfNeeded() {
+    const LAST_ACTIVITY_PATH = path.join(__dirname, '..', 'last_activity.json')
+    const CATCH_UP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000  // до 7 дней назад
+
+    let sinceTs
+    try {
+      const data = JSON.parse(fs.readFileSync(LAST_ACTIVITY_PATH, 'utf8'))
+      sinceTs = data.ts
+    } catch {
+      return false  // файла нет — первый запуск
+    }
+
+    const ago = Date.now() - sinceTs
+    if (ago > CATCH_UP_WINDOW_MS) {
+      console.log(`[InitialSync] Catch-up: последняя активность ${Math.round(ago / 60000)} мин назад — пропускаем`)
+      return false
+    }
+
+    console.log(`[InitialSync] Catch-up: подтягиваем сообщения с ${new Date(sinceTs).toISOString()}`)
+
+    let total = 0
+    try {
+      // Используем сохранённые chatId из реальных входящих сообщений
+      const KNOWN_CHATS_PATH = path.join(__dirname, '..', 'known_chats.json')
+      let chatIds = []
+      try { chatIds = JSON.parse(fs.readFileSync(KNOWN_CHATS_PATH, 'utf8')) } catch {}
+      console.log(`[InitialSync] Catch-up: scanning ${chatIds.length} known chats: ${chatIds.join(', ')}`)
+      for (const chatId of chatIds) {
+        if (!chatId || chatId === 0) continue
+        total += await this._syncChatSince(chatId, sinceTs)
+      }
+    } catch (e) {
+      console.error('[InitialSync] Catch-up error:', e.message)
+    }
+
+    console.log(`[InitialSync] Catch-up завершён: ${total} новых сообщений`)
+    return true
+  }
+
+  async _syncChatSince(chatId, sinceTs) {
+    let total = 0
+    try {
+      const result = await this._transport.sendFrame(
+        OP.GET_HISTORY,
+        { chatId, from: sinceTs, forward: 50, backward: 0, getMessages: true },
+        { waitResponse: true }
+      )
+      const messages = (result && result.messages) ? result.messages : []
+      console.log(`[InitialSync] Chat ${chatId}: got ${messages.length} msgs after sinceTs=${sinceTs}`)
+      for (const raw of messages) {
+        try {
+          if ((raw.time || 0) < sinceTs) continue
+          const msg = MessageParser.normalizeHistoryMessage(raw)
+          if (msg.isOutgoing) continue
+          if (!this._sync.isDuplicate(msg)) {
+            let payload = MessageParser.toCrmPayload(msg, chatId)
+
+            // Скачиваем вложения (фото, голосовые) если есть mediaPipeline
+            if (this._mediaPipeline && msg.attachments && msg.attachments.length > 0) {
+              const downloaded = []
+              for (const att of msg.attachments) {
+                if (!att.url) { downloaded.push(att); continue }
+                try {
+                  const file = await this._mediaPipeline.downloadAttachment(att.url, att.mimeType)
+                  downloaded.push({ ...att, localPath: file.localPath, size: file.size })
+                } catch (e) {
+                  console.error(`[InitialSync] Ошибка скачивания вложения в catch-up:`, e.message)
+                  downloaded.push(att)
+                }
+              }
+              payload = { ...payload, attachments: downloaded }
+            }
+
+            await this._forward(payload)
+            this._sync.markSeen(msg)
+            total++
+          }
+        } catch (e) {
+          console.error(`[InitialSync] Пропускаем catch-up сообщение:`, e.message,
+            '| raw.id:', raw?.id, '| chatId:', chatId)
+        }
+      }
+    } catch (e) {
+      console.error(`[InitialSync] Catch-up chat ${chatId}:`, e.message)
+    }
+    return total
   }
 
   // ─── Служебные ──────────────────────────────────────────────────────────

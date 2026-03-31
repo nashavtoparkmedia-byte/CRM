@@ -1,10 +1,10 @@
-import { 
-    LayoutDashboard, Users, UserPlus, ShieldAlert, MessageSquare, UserCog, ToggleRight, ListRestart, 
+import {
+    LayoutDashboard, Users, UserPlus, ShieldAlert, MessageSquare, UserCog, ToggleRight, ListRestart,
     Gift, CheckSquare, Database, BarChart3, Settings,
     IdCard, Activity, Archive, Clock, UserCheck, AlertCircle,
     TrendingDown, Ban, Eye, MessageCircle, Bot, FileText,
     Timer, History, BarChart2, Phone, Key, CarFront, Link2,
-    Megaphone, Filter, PieChart, LucideIcon 
+    Megaphone, Filter, PieChart, LucideIcon, Cpu
 } from "lucide-react";
 
 export type NavigationItem = {
@@ -131,7 +131,8 @@ export const DOMAINS: NavigationDomain[] = [
         items: [
             { label: 'Общие настройки', href: '/settings', icon: Settings, sectionKey: 'settings' },
             { label: 'Справочники', href: '/settings/dictionaries', icon: ListRestart, sectionKey: 'dictionaries' },
-            { label: 'Пользователи', href: '/users', icon: UserCog, sectionKey: 'users' }
+            { label: 'Пользователи', href: '/users', icon: UserCog, sectionKey: 'users' },
+            { label: 'AI Control Center', href: '/settings/ai', icon: Cpu, sectionKey: 'ai_control' },
         ],
         groups: [
             {

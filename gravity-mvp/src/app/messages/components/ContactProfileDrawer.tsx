@@ -389,6 +389,24 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             <span className="text-gray-500">Ответственный</span>
                             <span className="text-[#3390EC] font-medium cursor-pointer hover:underline">Назначить</span>
                         </div>
+                        {chat.channel === 'max' && (
+                            <>
+                                {((chat.metadata as any)?.phone || chat.driver?.phone) && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500">Телефон</span>
+                                        <span className="text-[#111] font-medium font-mono text-[11px]">
+                                            {(chat.metadata as any)?.phone || chat.driver?.phone}
+                                        </span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center">
+                                    <span className="text-gray-500">MAX ID</span>
+                                    <span className="text-[#111] font-medium font-mono text-[11px] select-all cursor-text">
+                                        {(chat.metadata as any)?.senderId || chat.externalChatId}
+                                    </span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

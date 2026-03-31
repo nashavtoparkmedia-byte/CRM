@@ -353,6 +353,7 @@ model Message {
   type        MessageType         @default(text)
   content     String
   status      MessageStatus       @default(sent)
+  aiStatus    AiStatus?
   channel     ChatChannel?        @default(whatsapp)
   externalId  String?             @unique
   metadata    Json?               @default("{}")
@@ -365,6 +366,7 @@ model Message {
 
   @@index([chatId, sentAt(sort: Desc)])
   @@index([externalId])
+  @@index([aiStatus])
 }
 
 model MessageAttachment {
@@ -385,11 +387,15 @@ model MessageEventLog {
   id        String   @id @default(cuid())
   messageId String
   eventType String
+  status    String   @default("pending")  // pending | processing | processed | failed
   metadata  Json?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   @@index([messageId])
+  @@index([status])
+  @@index([status, eventType])
 }
 
 model DriverEvent {
@@ -513,6 +519,14 @@ enum MessageDirection {
   inbound
   outbound
   system
+}
+
+enum AiStatus {
+  pending    // входящее — ожидает обработки AI
+  processing // AI обрабатывает
+  done       // AI ответил или передал оператору
+  skipped    // не требует обработки AI
+  failed     // ошибка AI
 }
 
 enum ChatChannel {
@@ -670,4 +684,126 @@ model TaskEvent {
   @@index([eventType])
 
   @@map("task_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AI CONTROL CENTER — Block 3.5
+// ═══════════════════════════════════════════════════════════════════
+
+enum AiAgentMode {
+  off
+  suggest_only
+  auto_reply
+  operator_locked
+}
+
+enum AiProviderType {
+  anthropic
+  openai
+}
+
+enum AiImportMode {
+  from_connection_time
+  available_history
+  last_n_days
+}
+
+enum AiImportStatus {
+  queued
+  running
+  completed
+  partial
+  failed
+}
+
+/// Единственная запись — настройки AI агента (upsert by id="singleton")
+model AiAgentConfig {
+  id                   String         @id @default("singleton")
+  enabled              Boolean        @default(false)
+  mode                 AiAgentMode    @default(off)
+  provider             AiProviderType @default(anthropic)
+  apiKeyEncrypted      String?
+  classificationModel  String         @default("claude-haiku-4-5")
+  responseModel        String         @default("claude-sonnet-4-5")
+  language             String         @default("ru")
+  confidenceThreshold  Float          @default(0.75)
+  maxAutoRepliesPerChat Int           @default(5)
+  activeChannels       String[]
+  escalationPolicy     Json?          /// { alwaysEscalate: string[], neverAutoReply: string[] }
+  workingHours         Json?          /// { enabled: bool, from: "09:00", to: "21:00", timezone: "Europe/Moscow" }
+  routingRules         Json?          /// [{ condition, model }]
+  promptRole           String?
+  promptTone           String?
+  promptAllowed        String?
+  promptForbidden      String?
+  connectionStatus     String?        /// "ok" | "error" | "unchecked"
+  lastConnectionCheckAt DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+}
+
+/// FAQ / База знаний агента
+model KnowledgeBaseEntry {
+  id              String    @id @default(cuid())
+  title           String
+  category        String    @default("general")
+  sampleQuestions Json      @default("[]")
+  answer          String
+  tags            String[]
+  channels        String[]
+  active          Boolean   @default(true)
+  priority        Int       @default(0)
+  lastReviewedAt  DateTime?
+  updatedBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([active, priority(sort: Desc)])
+  @@index([category])
+}
+
+/// Журнал решений AI агента
+model AiDecisionLog {
+  id                   String   @id @default(cuid())
+  messageId            String?
+  chatId               String?
+  channel              String?
+  detectedIntent       String?
+  confidence           Float?
+  decision             String?  /// "auto_reply" | "escalate" | "skip"
+  selectedModel        String?
+  usedKnowledgeEntries Json?
+  generatedReply       String?
+  replySent            Boolean  @default(false)
+  escalated            Boolean  @default(false)
+  error                String?
+  reviewedByOperator   Boolean  @default(false)
+  operatorVerdict      String?  /// "good" | "bad" | "fixed"
+  createdAt            DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([channel])
+  @@index([detectedIntent])
+  @@index([decision])
+}
+
+/// Задания на импорт истории из мессенджеров
+model HistoryImportJob {
+  id                String         @id @default(cuid())
+  channels          String[]
+  mode              AiImportMode
+  daysBack          Int?
+  status            AiImportStatus @default(queued)
+  resultType        String?        /// "full" | "partial" | "live_only"
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  chatsScanned      Int            @default(0)
+  contactsFound     Int            @default(0)
+  messagesImported  Int            @default(0)
+  coveredPeriodFrom DateTime?
+  coveredPeriodTo   DateTime?
+  detailsJson       Json?
+  createdAt         DateTime       @default(now())
+
+  @@index([status, createdAt(sort: Desc)])
 }

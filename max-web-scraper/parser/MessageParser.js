@@ -65,21 +65,43 @@ class MessageParser {
    * что и из TransportInterceptor._normalize()
    */
   static normalizeHistoryMessage(raw) {
+    const attaches = raw.attaches || raw.attachments || []
+    const hasAttaches = attaches.length > 0
     return {
       id:          raw.id         || raw.message_id  || raw.msgId     || null,
       from:        raw.from       || raw.sender      || raw.user_id   ||
                    raw.peer_id   || raw.contact      || null,
       text:        raw.text       || raw.body        || raw.message   || raw.content || '',
-      timestamp:   raw.ts         || raw.timestamp   || raw.date      ||
+      timestamp:   raw.time       || raw.ts          || raw.timestamp || raw.date    ||
                    raw.created_at || Date.now(),
-      type:        'text',  // уточнится если есть attachments
-      attachments: [],
+      type:        hasAttaches ? MessageParser._detectMaxType(attaches) : 'text',
+      attachments: MessageParser._extractMaxAttachments(attaches),
       isOutgoing:  (
         raw.out === 1       || raw.out === true   ||
         raw.is_out === 1    || raw.is_out === true ||
         raw.fromMe === true || raw.outgoing === true
       )
     }
+  }
+
+  static _detectMaxType(attaches) {
+    if (!attaches || !attaches.length) return 'text'
+    const t = (attaches[0]._type || '').toUpperCase()
+    if (t === 'PHOTO')                  return 'image'
+    if (t === 'VIDEO')                  return 'video'
+    if (t === 'AUDIO' || t === 'VOICE') return 'voice'
+    return 'document'
+  }
+
+  static _extractMaxAttachments(attaches) {
+    return attaches.map(a => ({
+      type:        (a._type || 'file').toLowerCase(),
+      url:         a.baseUrl || a.url || null,
+      name:        a.filename || null,
+      size:        a.size || null,
+      previewData: a.previewData || null,
+      photoId:     a.photoId || null,
+    }))
   }
 
   static isIncoming(msg) {

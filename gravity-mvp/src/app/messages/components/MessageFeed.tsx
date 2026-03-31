@@ -40,6 +40,16 @@ export default function MessageFeed({
     const previousSentAt = useRef<number>(0)
     const prevItemCount = useRef(uiItems.length)
     const forceFollowAtBottomOnce = useRef(false)
+    const isInitialLoad = useRef(true)
+
+    // Сброс при смене чата
+    useEffect(() => {
+        seenMessageIds.current = new Set()
+        setAtBottom(true)
+        setShowNewMessagesBadge(false)
+        prevItemCount.current = 0
+        isInitialLoad.current = true
+    }, [chatId])
 
     // 1. Render-Phase: Badge suppression + counter update for Outbound
     if (uiItems.length > prevItemCount.current) {
@@ -54,11 +64,21 @@ export default function MessageFeed({
     useEffect(() => {
         if (uiItems.length === 0) return;
 
+        // Первая загрузка — пометить все как просмотренные и прокрутить вниз
+        if (isInitialLoad.current) {
+            isInitialLoad.current = false
+            uiItems.forEach(item => {
+                if (item.type === 'message') seenMessageIds.current.add(item.message.id)
+            })
+            virtuoso.current?.scrollToIndex({ index: uiItems.length - 1, align: 'end', behavior: 'auto' })
+            return
+        }
+
         const lastItem = uiItems[uiItems.length - 1];
         if (lastItem.type === 'message') {
             const msgId = lastItem.message.id;
             const isNew = !seenMessageIds.current.has(msgId);
-            
+
             if (isNew) {
                 seenMessageIds.current.add(msgId);
                 const isOwn = lastItem.message.direction === 'outbound';
@@ -67,25 +87,21 @@ export default function MessageFeed({
                      const snap = () => {
                         const scroller = document.querySelector('.message-scroller') as HTMLDivElement;
                         if (scroller) {
-                            // Slight padding fix if needed, but keeping original logic
                             scroller.scrollTop = scroller.scrollHeight;
                         }
                     };
-                    snap();                              // 0ms: immediate
-                    requestAnimationFrame(() => {         // ~16ms
+                    snap();
+                    requestAnimationFrame(() => {
                         snap();
-                        requestAnimationFrame(() => {     // ~32ms
+                        requestAnimationFrame(() => {
                             snap();
-                            requestAnimationFrame(snap);  // ~48ms: final safety
+                            requestAnimationFrame(snap);
                         });
                     });
                 } else {
-                    // Inbound: Conditional
-                    if (atBottom) {
-                        virtuoso.current?.scrollToIndex({ index: uiItems.length - 1, align: 'end', behavior: 'auto' });
-                    } else {
-                        setShowNewMessagesBadge(true);
-                    }
+                    // Inbound: всегда прилипать к новому сообщению
+                    virtuoso.current?.scrollToIndex({ index: uiItems.length - 1, align: 'end', behavior: 'smooth' })
+                    setShowNewMessagesBadge(false)
                 }
             }
         }
@@ -217,8 +233,35 @@ export default function MessageFeed({
                             </div>
                         )}
                         
+                        {/* Image attachments */}
+                        {msg.type === 'image' && msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mb-1">
+                                {msg.attachments.filter(a => a.url).map(att => (
+                                    <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer">
+                                        <img
+                                            src={att.url}
+                                            alt="фото"
+                                            className="max-w-[280px] max-h-[320px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                        />
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Voice/Audio attachments */}
+                        {(msg.type === 'voice' || msg.type === 'audio') && msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mb-1">
+                                {msg.attachments.filter(a => a.url).map(att => (
+                                    <audio key={att.id} controls className="max-w-[260px] h-10" style={{ minWidth: 200 }}>
+                                        <source src={att.url} />
+                                    </audio>
+                                ))}
+                            </div>
+                        )}
+
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
-                            {msg.content}
+                            {msg.type !== 'image' && msg.content}
                             {/* Robust Ghost Spacer to reserve space for absolute status in the corner */}
                             <span className="inline-block w-[52px] h-[10px]" />
                         </div>

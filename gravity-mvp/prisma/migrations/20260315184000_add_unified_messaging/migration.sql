@@ -1,4 +1,4 @@
-﻿-- CreateEnum
+-- CreateEnum
 CREATE TYPE "MessageDirection" AS ENUM ('inbound', 'outbound');
 
 -- CreateEnum

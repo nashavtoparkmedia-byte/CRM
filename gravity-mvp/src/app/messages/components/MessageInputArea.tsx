@@ -62,6 +62,9 @@ export default function MessageInputArea({
     const [templates, setTemplates] = useState<QuickReplyTemplate[]>(DEFAULT_TEMPLATES)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const dropdownRef = useRef<HTMLDivElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [isSendingImage, setIsSendingImage] = useState(false)
+    const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
 
     // Restore draft on chat/channel change
     useEffect(() => {
@@ -193,10 +196,78 @@ export default function MessageInputArea({
         }
     }
 
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!fileInputRef.current) return
+        fileInputRef.current.value = ''
+        if (!file) return
+
+        const reader = new FileReader()
+        reader.onload = () => {
+            setImagePreview({ dataUrl: reader.result as string, file })
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const handleSendImage = async () => {
+        if (!imagePreview) return
+        const { dataUrl, file } = imagePreview
+        setImagePreview(null)
+        setIsSendingImage(true)
+        try {
+            const base64 = dataUrl.split(',')[1]
+            const res = await fetch('/api/messages/send-image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chatId,
+                    base64,
+                    filename: file.name,
+                    mimeType: file.type,
+                    caption: text.trim() || '',
+                }),
+            })
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                console.error('[send-image] failed:', err)
+            } else {
+                setText('')
+                draftCache.delete(cacheKey)
+            }
+        } catch (err) {
+            console.error('[send-image] error:', err)
+        } finally {
+            setIsSendingImage(false)
+        }
+    }
+
     const isChannelLocked = activeChannelTab !== 'all' || !!replyContext
     const hasText = text.trim().length > 0
 
     return (
+        <>
+        {/* Image preview modal */}
+        {imagePreview && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setImagePreview(null)}>
+                <div className="bg-white rounded-2xl shadow-2xl p-4 max-w-sm w-full mx-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between">
+                        <span className="font-semibold text-[15px] text-gray-800">Отправить фото</span>
+                        <button onClick={() => setImagePreview(null)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                            <X size={16} />
+                        </button>
+                    </div>
+                    <img src={imagePreview.dataUrl} alt="preview" className="w-full max-h-[320px] object-contain rounded-lg bg-gray-50" />
+                    <div className="flex gap-2">
+                        <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
+                            Отмена
+                        </button>
+                        <button onClick={handleSendImage} className="flex-1 h-10 rounded-xl bg-[#3390EC] text-white text-[14px] font-medium hover:bg-[#2B7FD4] transition-colors">
+                            Отправить
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
         <div className="shrink-0 bg-white z-10 flex flex-col relative">
             
             {/* Quick Reply Suggestions (auto-suggest above input) */}
@@ -241,7 +312,18 @@ export default function MessageInputArea({
             )}
 
             <div className={`flex items-end gap-1.5 px-2 py-1.5 ${!replyContext ? 'border-t border-[#E8E8E8]' : ''}`}>
-                <button className="h-[36px] w-[36px] rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors shrink-0">
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                />
+                <button
+                    className={`h-[36px] w-[36px] rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Прикрепить изображение"
+                >
                     <Paperclip size={17} />
                 </button>
 
@@ -336,5 +418,6 @@ export default function MessageInputArea({
                 </button>
             </div>
         </div>
+        </>
     )
 }

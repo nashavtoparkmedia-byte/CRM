@@ -47,3 +47,14 @@ Thumbs.db
 **/user_data/
 **/.bot_profile/
 **/.chrome-auth-profile/
+
+# Claude Code worktrees
+.claude/.claude/
+.claude/worktrees/
+
+# MAX scraper runtime state
+max-web-scraper/.initial_sync_done
+max-web-scraper/known_chats.json
+max-web-scraper/last_activity.json
+max-web-scraper/last_seen_dedupe.json
+max-web-scraper/last_qr*.png
