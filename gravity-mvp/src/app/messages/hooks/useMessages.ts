@@ -17,17 +17,23 @@ export interface Message {
     type: 'text' | 'image' | 'video' | 'voice' | 'audio' | 'document' | 'system'
     content: string
     sentAt: string
-    status: 'sent' | 'delivered' | 'read' | 'error'
+    status: 'queued' | 'sent' | 'delivered' | 'read' | 'failed'
     channel: string
     origin?: 'operator' | 'ai' | 'auto' | 'system'
     account?: string
+    metadata?: Record<string, any>
     attachments?: MessageAttachment[]
 }
 
 const messageCache = new Map<string, Message[]>()
 
 export function useMessages(chatId: string | null) {
-    const [messages, setMessages] = useState<Message[]>([])
+    // Sync cache: при remount (key change) сразу инициализируем из кэша.
+    // Без этого первый рендер = messages=[] → пустой DOM → anchor restore невозможен.
+    const [messages, setMessages] = useState<Message[]>(() => {
+        if (!chatId || chatId.startsWith('empty:')) return []
+        return messageCache.get(chatId) || []
+    })
     const [isLoading, setIsLoading] = useState(false)
     const [hasMoreHistory, setHasMoreHistory] = useState(true)
 
@@ -37,9 +43,14 @@ export function useMessages(chatId: string | null) {
     const uiItems = useMemo(() => prepareMessagesForUI(messages), [messages]);
 
     useEffect(() => {
-        if (!chatId) {
+        if (!chatId || chatId.startsWith('empty:')) {
             setMessages([])
             return
+        }
+
+        const cached = messageCache.get(chatId)
+        if (cached) {
+            setMessages(cached)
         }
 
         let isMounted = true
@@ -162,9 +173,10 @@ export function useMessages(chatId: string | null) {
                 const err = await res.json().catch(() => ({ error: 'Unknown error' }))
                 console.error('[SEND] API Error:', err)
                 // Mark as failed
+                const errorText = err.error || err.message || 'Ошибка отправки'
                 const failedMsgs = (messageCache.get(chatId) || []).map(m =>
-                    m.id === optimisticId 
-                        ? { ...m, status: 'error' as any }
+                    m.id === optimisticId
+                        ? { ...m, status: 'failed' as const, metadata: { error: errorText } }
                         : m
                 )
                 messageCache.set(chatId, failedMsgs)
@@ -173,9 +185,10 @@ export function useMessages(chatId: string | null) {
         } catch (err) {
             console.error('[SEND] Network Error:', err)
             // Mark as failed
+            const errorText = err instanceof Error ? err.message : 'Ошибка сети'
             const failedMsgs = (messageCache.get(chatId) || []).map(m =>
-                m.id === optimisticId 
-                    ? { ...m, status: 'error' as any }
+                m.id === optimisticId
+                    ? { ...m, status: 'failed' as const, metadata: { error: errorText } }
                     : m
             )
             messageCache.set(chatId, failedMsgs)

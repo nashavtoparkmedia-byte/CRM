@@ -10,111 +10,40 @@ import { useConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 
-export default function ChatWorkspace({ 
-    chatId, 
-    activeChannelTab, 
+export default function ChatWorkspace({
+    chatId,
+    activeChannelTab,
     isProfileOpen,
-    initialMessageId 
-}: { 
+    initialMessageId
+}: {
     chatId: string | null
     activeChannelTab: string
     isProfileOpen: boolean
     initialMessageId?: string | null
 }) {
     const { conversations } = useConversations()
-    
-    // Find chat — search both by primary id AND within allChatIds (for merged multi-channel conversations)
+
     const chat = conversations.find(c => c.id === chatId || c.allChatIds?.includes(chatId!))
-    
-    // Compute effective chatId(s) for message fetching:
-    // - "All" tab → pass ALL driver's chatIds (comma-separated)
-    // - Specific channel tab → pass that channel's chatId from channelMap
+
+    // Compute effective chatId — determines the remount boundary.
+    // When effectiveChatId changes, ChatWorkspaceInner is fully remounted
+    // via key={effectiveChatId}, ensuring clean state (no stale refs/data).
     const effectiveChatId = useMemo(() => {
         if (!chatId || !chat) return chatId
-        
+
         if (activeChannelTab === 'all' && chat.allChatIds && chat.allChatIds.length > 1) {
-            // Fetch messages from ALL driver's channel-specific conversations
             return chat.allChatIds.join(',')
         }
-        
-        // Specific channel tab: if the driver has a chat for that channel, use that chatId
+
         if (activeChannelTab !== 'all' && chat.channelMap) {
             const normalizedChannel = activeChannelTab === 'wa' ? 'whatsapp' : activeChannelTab === 'tg' ? 'telegram' : activeChannelTab === 'ypro' ? 'yandex_pro' : activeChannelTab
             const channelChatId = chat.channelMap[normalizedChannel]
             if (channelChatId) return channelChatId
+            return `empty:${normalizedChannel}`
         }
-        
+
         return chatId
     }, [chatId, chat, activeChannelTab])
-    
-    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
-    
-    // Phase 5 States 
-    const [replyContext, setReplyContext] = useState<ReplyContextType | null>(null)
-    const [manualSendChannelMode, setManualSendChannelMode] = useState<string>('whatsapp')
-
-    // Phase 6 States (In-Chat Search)
-    const [isSearchActive, setIsSearchActive] = useState(false)
-    const [searchQuery, setSearchQuery] = useState("")
-    const [searchResults, setSearchResults] = useState<string[]>([]) // Array of message IDs
-    const [activeSearchIndex, setActiveSearchIndex] = useState(-1) // 0-based index
-    const [lastSentAt, setLastSentAt] = useState<number>(0)
-    const [taskModalContext, setTaskModalContext] = useState<Message | null>(null)
-    const [isTaskModalOpenForChat, setIsTaskModalOpenForChat] = useState(false)
-
-    // Reset ephemeral state when chat changes
-    useEffect(() => {
-        setReplyContext(null)
-        setManualSendChannelMode('whatsapp') // Or fallback
-        setIsSearchActive(false)
-        setSearchQuery("")
-        setSearchResults([])
-        setActiveSearchIndex(-1)
-    }, [chatId])
-
-    // Mock Search Logic (Phase 6)
-    useEffect(() => {
-        if (!isSearchActive || !searchQuery.trim()) {
-            setSearchResults([])
-            setActiveSearchIndex(-1)
-            return
-        }
-
-        const query = searchQuery.toLowerCase()
-        // In real app: server-side search fetch(`/api/search?q=${query}&chatId=${chatId}&channel=${activeChannelTab}`)
-        const matches = messages
-            .filter(m => (activeChannelTab === 'all' || m.channel === activeChannelTab) && m.content.toLowerCase().includes(query))
-            .map(m => m.id)
-            .reverse() // Telegram usually searches newest to oldest
-
-        setSearchResults(matches)
-        setActiveSearchIndex(matches.length > 0 ? 0 : -1)
-    }, [searchQuery, isSearchActive, messages, activeChannelTab])
-
-    const handleSearchNavigate = (direction: 'up' | 'down') => {
-        if (searchResults.length === 0) return
-        if (direction === 'up') {
-            setActiveSearchIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev)) // Older
-        } else {
-            setActiveSearchIndex(prev => (prev > 0 ? prev - 1 : prev)) // Newer
-        }
-    }
-
-    const handleSendMessage = (content: string, effectiveChannel: string) => {
-        setLastSentAt(Date.now())
-        sendMessage(content, effectiveChannel)
-    }
-
-    const handleReply = (msg: Message) => {
-        setReplyContext({
-            messageId: msg.id,
-            channel: msg.channel,
-            authorLabel: msg.direction === 'outbound' ? 'Вы' : (conversations.find(c => c.id === chatId)?.name || 'Водитель'),
-            snippet: msg.content.substring(0, 60),
-            timestamp: new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        })
-    }
-
 
     if (!chatId || !chat) {
         return (
@@ -132,12 +61,102 @@ export default function ChatWorkspace({
         )
     }
 
+    // key={effectiveChatId} — remount boundary.
+    // Full unmount/mount on chat switch → clean useMessages state, clean refs, clean DOM.
+    return (
+        <ChatWorkspaceInner
+            key={effectiveChatId}
+            chatId={chatId}
+            effectiveChatId={effectiveChatId}
+            activeChannelTab={activeChannelTab}
+            isProfileOpen={isProfileOpen}
+            initialMessageId={initialMessageId}
+            chat={chat}
+            conversations={conversations}
+        />
+    )
+}
+
+// ── Inner component: remounted on every effectiveChatId change ──────────────
+function ChatWorkspaceInner({
+    chatId,
+    effectiveChatId,
+    activeChannelTab,
+    isProfileOpen,
+    initialMessageId,
+    chat,
+    conversations,
+}: {
+    chatId: string
+    effectiveChatId: string | null
+    activeChannelTab: string
+    isProfileOpen: boolean
+    initialMessageId?: string | null
+    chat: any
+    conversations: any[]
+}) {
+    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
+
+    const [replyContext, setReplyContext] = useState<ReplyContextType | null>(null)
+    const [manualSendChannelMode, setManualSendChannelMode] = useState<string>('whatsapp')
+    const [isSearchActive, setIsSearchActive] = useState(false)
+    const [searchQuery, setSearchQuery] = useState("")
+    const [searchResults, setSearchResults] = useState<string[]>([])
+    const [activeSearchIndex, setActiveSearchIndex] = useState(-1)
+    const [lastSentAt, setLastSentAt] = useState<number>(0)
+    const [taskModalContext, setTaskModalContext] = useState<Message | null>(null)
+    const [isTaskModalOpenForChat, setIsTaskModalOpenForChat] = useState(false)
+
+    // No need for chatId-based reset useEffect — remount handles it
+
+    useEffect(() => {
+        if (!isSearchActive || !searchQuery.trim()) {
+            setSearchResults([])
+            setActiveSearchIndex(-1)
+            return
+        }
+
+        const query = searchQuery.toLowerCase()
+        const matches = messages
+            .filter(m => (activeChannelTab === 'all' || m.channel === activeChannelTab) && m.content.toLowerCase().includes(query))
+            .map(m => m.id)
+            .reverse()
+
+        setSearchResults(matches)
+        setActiveSearchIndex(matches.length > 0 ? 0 : -1)
+    }, [searchQuery, isSearchActive, messages, activeChannelTab])
+
+    const handleSearchNavigate = (direction: 'up' | 'down') => {
+        if (searchResults.length === 0) return
+        if (direction === 'up') {
+            setActiveSearchIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev))
+        } else {
+            setActiveSearchIndex(prev => (prev > 0 ? prev - 1 : prev))
+        }
+    }
+
+    const handleSendMessage = (content: string, effectiveChannel: string) => {
+        setLastSentAt(Date.now())
+        sendMessage(content, effectiveChannel)
+    }
+
+    const handleReply = (msg: Message) => {
+        setReplyContext({
+            messageId: msg.id,
+            channel: msg.channel,
+            authorLabel: msg.direction === 'outbound' ? 'Вы' : (conversations.find((c: any) => c.id === chatId)?.name || 'Водитель'),
+            snippet: msg.content.substring(0, 60),
+            timestamp: new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        })
+    }
+
+    const isEmptyChannel = effectiveChatId?.startsWith('empty:')
+
     return (
         <div className="flex-1 flex flex-col overflow-hidden z-10">
-            {/* Header Area */}
-            <ChatHeader 
-                chat={chat} 
-                isProfileOpen={isProfileOpen} 
+            <ChatHeader
+                chat={chat}
+                isProfileOpen={isProfileOpen}
                 isSearchActive={isSearchActive}
                 setIsSearchActive={setIsSearchActive}
                 searchQuery={searchQuery}
@@ -147,27 +166,40 @@ export default function ChatWorkspace({
                 onSearchNavigate={handleSearchNavigate}
                 onOpenCreateTask={() => setIsTaskModalOpenForChat(true)}
             />
-            
-            {/* Context/Channel Tabs */}
+
             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} />
 
-            {/* Core Message Feed */}
-            <MessageFeed 
-                chatId={chatId}
-                channelTab={activeChannelTab}
-                uiItems={uiItems}
-                isLoading={isLoading}
-                hasMoreHistory={hasMoreHistory}
-                onLoadMore={loadMoreHistory}
-                onReply={handleReply}
-                onCreateTask={setTaskModalContext}
-                activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
-                onFocusComposer={() => document.getElementById('message-composer')?.focus()}
-                lastSentAt={lastSentAt}
-            />
+            {isEmptyChannel ? (
+                <div className="flex-1 flex flex-col items-center justify-center messenger-bg">
+                    <div className="flex flex-col items-center">
+                        <div className="w-12 h-12 rounded-full bg-white/60 flex items-center justify-center mb-3 text-[#B0B5BA]">
+                            <MessageSquare size={22} />
+                        </div>
+                        <p className="text-[13px] text-[#8A9099] text-center">
+                            Нет переписки в этом канале
+                        </p>
+                        <p className="text-[11px] text-[#B0B5BA] mt-1">
+                            Используйте кнопку «Написать» в карточке контакта
+                        </p>
+                    </div>
+                </div>
+            ) : (
+                <MessageFeed
+                    chatId={chatId}
+                    channelTab={activeChannelTab}
+                    uiItems={uiItems}
+                    isLoading={isLoading}
+                    hasMoreHistory={hasMoreHistory}
+                    onLoadMore={loadMoreHistory}
+                    onReply={handleReply}
+                    onCreateTask={setTaskModalContext}
+                    activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
+                    onFocusComposer={() => document.getElementById('message-composer')?.focus()}
+                    lastSentAt={lastSentAt}
+                />
+            )}
 
-            {/* Input Area */}
-            <MessageInputArea 
+            <MessageInputArea
                 chatId={chatId}
                 activeChannelTab={activeChannelTab}
                 replyContext={replyContext}
@@ -177,7 +209,6 @@ export default function ChatWorkspace({
                 onSendMessage={handleSendMessage}
             />
 
-            {/* Task Create Modal */}
             {(taskModalContext || isTaskModalOpenForChat) && chat.driver?.id && (
                 <TaskCreateModal
                     driverId={chat.driver.id}
