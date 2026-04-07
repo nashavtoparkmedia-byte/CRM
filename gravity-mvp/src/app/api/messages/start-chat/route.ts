@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { ContactService } from '@/lib/ContactService'
+import { normalizePhoneE164 } from '@/lib/phoneUtils'
 
 export async function POST(request: Request) {
     try {
@@ -62,6 +64,29 @@ export async function POST(request: Request) {
                 status: 'active'
             }
         })
+
+        // ── Contact Model dual write ──────────────────────────────
+        try {
+            const phone = isUnsaved
+                ? normalizePhoneE164(finalExternalId)
+                : normalizePhoneE164(driver?.phone)
+            const displayName = chatName || null
+
+            const contactResult = await ContactService.resolveContact(
+                channel,
+                finalExternalId,
+                phone,
+                displayName,
+            )
+            await ContactService.ensureChatLinked(
+                chat.id,
+                contactResult.contact.id,
+                contactResult.identity.id,
+            )
+        } catch (contactErr: any) {
+            console.error(`[API-START-CHAT] ContactService error (non-blocking): ${contactErr.message}`)
+        }
+        // ──────────────────────────────────────────────────────────
 
         return NextResponse.json(chat)
     } catch (error) {

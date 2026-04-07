@@ -5,6 +5,7 @@ import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
+import { useContact } from "../hooks/useContact"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
@@ -39,6 +40,9 @@ export default function ChatHeader({
     const searchInputRef = useRef<HTMLInputElement>(null)
     const [showTasksPopover, setShowTasksPopover] = useState(false)
     const tasksPopoverRef = useRef<HTMLDivElement>(null)
+
+    // Contact metadata for 2nd line
+    const { contact } = useContact(chat.contactId)
 
     // Real tasks state
     const [tasks, setTasks] = useState<TaskDTO[]>([])
@@ -125,12 +129,35 @@ export default function ChatHeader({
     const searchParams = useSearchParams()
     const isProfileOpenFromUrl = searchParams.get('profile') === '1'
 
+    // Build 2nd line metadata
+    const segment = contact?.driver?.segment || chat.driver?.segment
+    const masterSource = contact?.masterSource
+    const channelCount = contact?.identities?.length ?? chat.allChannels?.length ?? 0
+
+    const SOURCE_LABEL: Record<string, string> = {
+        yandex: 'Яндекс',
+        chat: 'Чат',
+        manual: 'Ручной',
+    }
+
+    const SEGMENT_STYLE: Record<string, string> = {
+        vip: 'bg-amber-50 text-amber-700',
+        active: 'bg-emerald-50 text-emerald-700',
+        new: 'bg-blue-50 text-blue-700',
+        inactive: 'bg-gray-100 text-gray-500',
+        churned: 'bg-red-50 text-red-600',
+    }
+
+    const hasMetadata = !!(segment || masterSource || channelCount > 0)
+
     return (
-        <div className="h-[48px] border-b border-[#E8E8E8] shrink-0 flex justify-center bg-white z-20 relative">
-            <div className="w-full max-w-[720px] flex items-center justify-between px-4">
+        <div className="border-b border-[#E8E8E8] shrink-0 flex justify-center bg-white z-20 relative">
+            <div className="w-full max-w-[720px] px-4">
                 {/* Standard Header View */}
                 {!isSearchActive ? (
                     <>
+                        {/* Line 1: name, phone, status, action buttons */}
+                        <div className="h-[48px] flex items-center justify-between">
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
                                 <h3 className="font-semibold text-[15px] text-[#111] leading-none shrink-0">{chat.name || "Водитель"}</h3>
@@ -221,20 +248,48 @@ export default function ChatHeader({
                             >
                                 <Search size={15} />
                             </button>
-                            <button 
+                            <button
                                 onClick={() => toggleProfileDrawer(!isProfileOpenFromUrl)}
                                 className={`h-[28px] w-[28px] rounded-md flex items-center justify-center transition-colors ${
                                     isProfileOpenFromUrl ? 'bg-[#3390EC]/10 text-[#3390EC]' : 'hover:bg-gray-100 text-gray-400'
-                                }`} 
+                                }`}
                                 title="Профиль контакта"
                             >
                                 {isProfileOpenFromUrl ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
                             </button>
                         </div>
+                        </div>
+
+                        {/* Line 2: contact metadata */}
+                        {hasMetadata && (
+                            <div className="h-[24px] flex items-center gap-2 pb-1">
+                                {segment && (
+                                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${SEGMENT_STYLE[segment] || 'bg-gray-100 text-gray-500'}`}>
+                                        {segment === 'vip' ? 'VIP' : segment === 'active' ? 'Активный' : segment === 'new' ? 'Новый' : segment === 'inactive' ? 'Неактивный' : segment === 'churned' ? 'Ушёл' : segment}
+                                    </span>
+                                )}
+                                {masterSource && (
+                                    <>
+                                        <span className="text-[10px] text-gray-300">·</span>
+                                        <span className="text-[10px] text-gray-400">
+                                            Источник: <span className="font-medium text-gray-500">{SOURCE_LABEL[masterSource] || masterSource}</span>
+                                        </span>
+                                    </>
+                                )}
+                                {channelCount > 0 && (
+                                    <>
+                                        <span className="text-[10px] text-gray-300">·</span>
+                                        <span className="text-[10px] text-gray-400">
+                                            {channelCount} {channelCount === 1 ? 'канал' : channelCount < 5 ? 'канала' : 'каналов'}
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                        )}
                     </>
                 ) : (
                 /* Search Bar View (In-Place Transformation) */
-                <div className="flex-1 flex items-center justify-end w-full animate-in fade-in zoom-in-95 duration-200 origin-right">
+                <div className="h-[48px] flex-1 flex items-center justify-end w-full animate-in fade-in zoom-in-95 duration-200 origin-right">
                     <div className="flex items-center bg-[#F6F7F8] rounded-[18px] h-[36px] px-3 w-full max-w-[400px]">
                         <Search size={14} className="text-gray-400 shrink-0" />
                         <input 

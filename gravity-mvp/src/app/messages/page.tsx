@@ -1,8 +1,6 @@
 import { Metadata } from "next"
 import ChatsLayout from "./components/ChatsLayout"
-import ChatList from "./components/ChatList"
-import ChatWorkspace from "./components/ChatWorkspace"
-import ContactProfileDrawer from "./components/ContactProfileDrawer"
+import MessagesShell from "./components/MessagesShell"
 import { SectionDescription } from "@/components/ui/SectionDescription"
 
 export default async function MessagesPage({
@@ -30,7 +28,7 @@ export default async function MessagesPage({
     // Normalize message deep link
     const initialMessageId = typeof resolvedParams.msg === 'string' ? resolvedParams.msg : null
 
-    // Normalize profile boolean 
+    // Normalize profile boolean
     const isProfileOpen = resolvedParams.profile === '1'
 
     return (
@@ -40,27 +38,13 @@ export default async function MessagesPage({
             </div>
             <div className="flex-1 overflow-hidden relative border-t">
                 <ChatsLayout>
-                    {/* NO MiniSidebar. CRM is accessed via the floating trigger inside ChatList header. */}
-
-                    {/* 1. Chat List (320px) */}
-                    <ChatList 
-                        selectedChatId={chatId} 
+                    <MessagesShell
+                        initialChatId={chatId}
                         activeListTab={activeListTab}
                         activeChannelTab={activeChannelTab}
-                    />
-
-                    {/* 2. Chat Workspace (1fr, Core Messaging Area) */}
-                    <ChatWorkspace 
-                        chatId={chatId} 
-                        activeChannelTab={activeChannelTab} 
                         isProfileOpen={isProfileOpen}
                         initialMessageId={initialMessageId}
                     />
-
-                    {/* 3. Contact Profile Drawer (Right-most, 320px, conditionally rendered) */}
-                    {isProfileOpen && chatId && (
-                        <ContactProfileDrawer chatId={chatId} />
-                    )}
                 </ChatsLayout>
             </div>
         </div>

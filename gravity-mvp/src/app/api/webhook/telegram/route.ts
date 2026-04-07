@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
 import { changeDriverLimit } from '@/app/actions'
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { ContactService } from '@/lib/ContactService'
 
 export async function POST(req: NextRequest) {
     try {
@@ -69,6 +70,24 @@ export async function POST(req: NextRequest) {
                 }
                 console.log(`[WEBHOOK-TG] RELINK chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} linked=${linked}`)
             }
+
+            // ── Contact Model dual write ──────────────────────────────
+            try {
+                const contactResult = await ContactService.resolveContact(
+                    'telegram',
+                    telegramId.toString(),
+                    null,  // Bot webhook не передаёт номер телефона
+                    username ? `@${username}` : null,
+                )
+                await ContactService.ensureChatLinked(
+                    unifiedChat.id,
+                    contactResult.contact.id,
+                    contactResult.identity.id,
+                )
+            } catch (contactErr: any) {
+                console.error(`[WEBHOOK-TG] ContactService error (non-blocking): ${contactErr.message}`)
+            }
+            // ──────────────────────────────────────────────────────────
 
             // DE-DUPLICATION: check if we already have this message (echo from bot)
             // Increased window for burst protection

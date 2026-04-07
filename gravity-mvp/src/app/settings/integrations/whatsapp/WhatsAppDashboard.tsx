@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, X, Check } from 'lucide-react'
-import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR } from './whatsapp-actions'
+import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut } from 'lucide-react'
+import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages } from './whatsapp-actions'
+import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 type WaConnection = {
     id: string
@@ -16,34 +17,35 @@ type WaConnection = {
     sessionData: string | null
 }
 
-function StatusBadge({ status }: { status: string }) {
-    const map: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" }> = {
-        idle: { label: 'Ожидание', variant: 'outline' },
-        qr: { label: 'Сканируйте QR', variant: 'warning' },
-        qr_expired: { label: 'QR Истек', variant: 'destructive' },
-        authenticated: { label: 'Подключение...', variant: 'default' },
-        ready: { label: 'Подключено', variant: 'success' },
-        disconnected: { label: 'Отключено', variant: 'destructive' },
-        error: { label: 'Ошибка', variant: 'destructive' },
+function StatusDot({ status }: { status: string }) {
+    const map: Record<string, { label: string; dot: string; text: string }> = {
+        idle:          { label: 'Ожидание',       dot: 'bg-gray-400',    text: 'text-muted-foreground' },
+        qr:            { label: 'Сканируйте QR',  dot: 'bg-amber-400',   text: 'text-amber-600' },
+        qr_expired:    { label: 'QR Истек',       dot: 'bg-red-500',     text: 'text-destructive' },
+        authenticated: { label: 'Подключение...', dot: 'bg-blue-400',    text: 'text-blue-600' },
+        ready:         { label: 'Подключено',     dot: 'bg-emerald-500', text: 'text-emerald-600' },
+        disconnected:  { label: 'Отключено',      dot: 'bg-red-500',     text: 'text-destructive' },
+        error:         { label: 'Ошибка',         dot: 'bg-red-500',     text: 'text-destructive' },
     }
-    const s = map[status] || { label: status, variant: 'outline' }
-
-    // Fallback classes if custom variants aren't added to badge yet
-    let className = "uppercase text-[10px] "
-    if (s.variant === 'warning') className += "bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border-none"
-    else if (s.variant === 'success') className += "bg-green-100 text-green-800 hover:bg-green-200 border-none"
-    else if (s.variant === 'destructive') className += "bg-red-100 text-red-800 hover:bg-red-200 border-none"
-
-    return <Badge variant={s.variant as any} className={className}>{s.label}</Badge>
+    const s = map[status] || { label: status, dot: 'bg-gray-400', text: 'text-muted-foreground' }
+    return (
+        <span className={`flex items-center gap-1 text-[11px] ${s.text}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
+            {s.label}
+        </span>
+    )
 }
 
 function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: () => void }) {
     const [isClient, setIsClient] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [showConfirm, setShowConfirm] = useState(false)
     const [liveStatus, setLiveStatus] = useState(conn.status)
+    const [livePaused, setLivePaused] = useState((conn as any).isPaused ?? false)
     const [liveQr, setLiveQr] = useState<string | null>(null)
     const pollingRef = useRef<NodeJS.Timeout | null>(null)
+    const [pauseDialog, setPauseDialog] = useState(false)
+    const [resumeDialog, setResumeDialog] = useState(false)
+    const [disconnectDialog, setDisconnectDialog] = useState(false)
 
     useEffect(() => {
         setIsClient(true)
@@ -78,51 +80,55 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
     }, [liveStatus, conn.id, onRefresh, isClient])
 
-    const handleDisconnect = async () => {
-        if (!confirm('Отключить этот аккаунт WhatsApp?')) return
+    const handlePauseConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
-        await disconnectWhatsApp(conn.id)
-        setLiveStatus('idle')
-        onRefresh()
+        await pauseWhatsAppConnection(conn.id, deleteMessages)
+        setLivePaused(true)
+        setPauseDialog(false)
         setLoading(false)
+        onRefresh()
     }
 
-    const handleDelete = async () => {
+    const handleResumeConfirm = async (catchUp: boolean) => {
         setLoading(true)
-        try {
-            const resp = await fetch('/api/whatsapp/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: conn.id })
-            })
+        await resumeWhatsAppConnection(conn.id, catchUp)
+        setLivePaused(false)
+        setResumeDialog(false)
+        setLoading(false)
+        onRefresh()
+    }
 
-            if (!resp.ok) {
-                const data = await resp.json()
-                throw new Error(data.error || 'Server error')
-            }
-
-            onRefresh()
-        } catch (err: any) {
-            console.error('Delete failed:', err)
-            alert(`Delete failed: ${err.message}`)
-        } finally {
-            setLoading(false)
-            setShowConfirm(false)
+    const handleDisconnectConfirm = async (deleteMessages: boolean) => {
+        setLoading(true)
+        if (deleteMessages) {
+            await deleteWhatsAppMessages(conn.id)
         }
+        await disconnectWhatsApp(conn.id)
+        setLiveStatus('idle')
+        setDisconnectDialog(false)
+        setLoading(false)
+        onRefresh()
     }
 
     if (!isClient) {
-        return <div className="h-[250px] animate-pulse rounded-xl border bg-muted/50 p-6" />
+        return <div className="h-[220px] animate-pulse rounded-2xl border bg-muted/50 p-5" />
     }
 
     return (
-        <div className="flex flex-col gap-4 rounded-xl border bg-card p-6 shadow-sm transition-all hover:shadow-md">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-lg font-bold text-foreground">{conn.name || 'WhatsApp Аккаунт'}</h3>
-                    {conn.phoneNumber && <p className="mt-0.5 text-sm font-medium text-muted-foreground">+{conn.phoneNumber}</p>}
+        <div className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm transition-all">
+            <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600">
+                        <MessageCircle size={18} />
+                    </div>
+                    <div>
+                        <div className="font-semibold text-sm text-foreground">{conn.name || 'WhatsApp Аккаунт'}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            {conn.phoneNumber && <span className="text-xs text-muted-foreground">+{conn.phoneNumber}</span>}
+                            <StatusDot status={liveStatus} />
+                        </div>
+                    </div>
                 </div>
-                <StatusBadge status={liveStatus} />
             </div>
 
             {/* QR Display */}
@@ -184,68 +190,117 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
             {/* Warning */}
             {liveStatus === 'ready' && (
-                <div className="flex gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-3">
-                    <AlertTriangle size={16} className="mt-0.5 shrink-0 text-yellow-600" />
-                    <p className="text-xs text-yellow-800">
-                        <b>Используйте ответственно.</b> Массовые рассылки могут привести к блокировке аккаунта WhatsApp. Избегайте спама.
-                    </p>
-                </div>
+                <p className="text-[11px] text-muted-foreground">
+                    Массовые рассылки могут привести к блокировке аккаунта WhatsApp.
+                </p>
+            )}
+
+            {/* История сообщений */}
+            {liveStatus === 'ready' && (
+                <ChannelSyncBlock channel="whatsapp" connectionId={conn.id} />
             )}
 
             {/* Actions */}
-            <div className="mt-auto flex gap-2 pt-4">
-                {!showConfirm ? (
-                    <>
-                        {liveStatus === 'ready' && (
-                            <Button
-                                variant="destructive"
-                                onClick={handleDisconnect}
-                                disabled={loading}
-                                className="flex-1 bg-red-100 text-red-700 hover:bg-red-200"
-                            >
-                                <WifiOff size={16} className="mr-2" /> Отключить
-                            </Button>
-                        )}
-                        {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
-                            <Button
-                                onClick={async () => { setLoading(true); await createWhatsAppConnection(conn.name || undefined); onRefresh(); setLoading(false) }}
-                                disabled={loading}
-                                className="flex-1"
-                            >
-                                {loading ? <Loader2 size={16} className="animate-spin" /> : <><Wifi size={16} className="mr-2" /> Переподключить</>}
-                            </Button>
-                        )}
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setShowConfirm(true)}
-                            disabled={loading}
-                            className="text-muted-foreground hover:text-destructive"
-                        >
-                            <Trash2 size={16} />
+            {liveStatus === 'ready' && (
+                <div className="flex items-center justify-end gap-1 pt-3 mt-auto border-t border-dashed">
+                    {livePaused ? (
+                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog(true)} disabled={loading}>
+                            <PlayCircle size={13} className="mr-1.5" /> Включить
                         </Button>
-                    </>
-                ) : (
-                    <div className="flex flex-1 animate-in slide-in-from-right-2 gap-2">
-                        <Button
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={loading}
-                            className="flex-1"
-                        >
-                            {loading ? <Loader2 size={16} className="animate-spin" /> : <><Check size={16} className="mr-2" /> Подтвердить</>}
+                    ) : (
+                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog(true)} disabled={loading}>
+                            <PauseCircle size={13} className="mr-1.5" /> Пауза
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setShowConfirm(false)}
-                            disabled={loading}
-                        >
-                            <X size={16} />
+                    )}
+                    <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog(true)} disabled={loading}>
+                        <LogOut size={13} className="mr-1.5" /> Отключить
+                    </Button>
+                </div>
+            )}
+            {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
+                <div className="flex items-center justify-end pt-3 mt-auto border-t border-dashed">
+                    <Button size="sm" onClick={async () => { setLoading(true); await createWhatsAppConnection(conn.name || undefined); onRefresh(); setLoading(false) }} disabled={loading} className="h-8 px-3 text-xs">
+                        {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
+                    </Button>
+                </div>
+            )}
+
+            {/* PAUSE DIALOG */}
+            <Dialog open={pauseDialog} onOpenChange={setPauseDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Поставить аккаунт на паузу</DialogTitle>
+                        <DialogDescription>Аккаунт временно остановит обработку сообщений. Подключение останется активным.</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-3 py-2">
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handlePauseConfirm(false)}>
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-medium">Поставить на паузу</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">Сообщения сохраняются, обработка остановлена.</span>
+                            </div>
+                        </Button>
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4 border-destructive/30 hover:bg-destructive/5" disabled={loading} onClick={() => handlePauseConfirm(true)}>
+                            {loading ? <Loader2 size={14} className="mr-2 animate-spin flex-shrink-0" /> : null}
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-medium text-destructive">Пауза и удалить сообщения</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">Все сообщения этого аккаунта будут удалены из CRM.</span>
+                            </div>
                         </Button>
                     </div>
-                )}
-            </div>
+                    <DialogFooter><Button variant="ghost" size="sm" onClick={() => setPauseDialog(false)}>Отмена</Button></DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* RESUME DIALOG */}
+            <Dialog open={resumeDialog} onOpenChange={setResumeDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Включить аккаунт</DialogTitle>
+                        <DialogDescription>Аккаунт был на паузе. Что делать с накопленными сообщениями?</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-3 py-2">
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4 border-green-300 hover:bg-green-50" disabled={loading} onClick={() => handleResumeConfirm(true)}>
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-medium text-green-700">Пробросить в CRM</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">Все накопленные сообщения появятся в /messages.</span>
+                            </div>
+                        </Button>
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handleResumeConfirm(false)}>
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-medium">Начать с этого места</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">Буфер удаляется, новые сообщения идут в CRM как обычно.</span>
+                            </div>
+                        </Button>
+                    </div>
+                    <DialogFooter><Button variant="ghost" size="sm" onClick={() => setResumeDialog(false)}>Отмена</Button></DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* DISCONNECT DIALOG */}
+            <Dialog open={disconnectDialog} onOpenChange={setDisconnectDialog}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Отключить аккаунт</DialogTitle>
+                        <DialogDescription>Аккаунт будет полностью отключён. Для повторного подключения потребуется снова отсканировать QR-код.</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-3 py-2">
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handleDisconnectConfirm(false)}>
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-medium">Просто отключить</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">Аккаунт отключится, сообщения останутся.</span>
+                            </div>
+                        </Button>
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4 border-destructive/30 hover:bg-destructive/5" disabled={loading} onClick={() => handleDisconnectConfirm(true)}>
+                            {loading ? <Loader2 size={14} className="mr-2 animate-spin flex-shrink-0" /> : null}
+                            <div className="flex flex-col items-start text-left">
+                                <span className="font-medium text-destructive">Отключить и удалить сообщения</span>
+                                <span className="text-xs text-muted-foreground mt-0.5">Аккаунт отключится, все сообщения будут удалены из CRM.</span>
+                            </div>
+                        </Button>
+                    </div>
+                    <DialogFooter><Button variant="ghost" size="sm" onClick={() => setDisconnectDialog(false)}>Отмена</Button></DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
@@ -285,34 +340,29 @@ export function WhatsAppDashboard({ initialConnections }: { initialConnections: 
 
     return (
         <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500">
-            <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end p-2">
-                <div>
-                    <h1 className="mb-2 text-3xl font-bold text-foreground">Интеграция WhatsApp</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Подключите ваши личные аккаунты WhatsApp для отправки сообщений водителям прямо из CRM.
-                    </p>
-                </div>
-                <Button onClick={handleAdd} disabled={adding} className="h-11 px-6">
-                    {adding ? <Loader2 size={18} className="mr-2 animate-spin" /> : <MessageCircle size={18} className="mr-2" />}
-                    Добавить Аккаунт
+            <div className="flex items-center justify-between">
+                <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты ({connections.length})</h2>
+                <Button onClick={handleAdd} disabled={adding} size="sm" variant="outline">
+                    {adding ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <MessageCircle size={14} className="mr-1.5" />}
+                    Добавить аккаунт
                 </Button>
             </div>
 
             {connections.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed p-12 text-center bg-card">
-                    <div className="rounded-full bg-secondary p-4 mb-4">
-                        <MessageCircle size={32} className="text-muted-foreground" />
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-10 text-center bg-card">
+                    <div className="rounded-full bg-secondary p-3 mb-3">
+                        <MessageCircle size={24} className="text-muted-foreground" />
                     </div>
-                    <h3 className="mb-2 text-xl font-bold text-foreground">Нет подключенных аккаунтов</h3>
-                    <p className="mb-6 max-w-sm text-sm text-muted-foreground">
-                        Добавьте ваш первый аккаунт WhatsApp, отсканировав QR-код в приложении телефона.
+                    <h3 className="mb-1 text-base font-semibold text-foreground">Нет подключенных аккаунтов</h3>
+                    <p className="mb-5 max-w-sm text-sm text-muted-foreground">
+                        Добавьте первый аккаунт WhatsApp, отсканировав QR-код в приложении телефона.
                     </p>
-                    <Button onClick={handleAdd} disabled={adding} size="lg">
-                        {adding ? <Loader2 size={18} className="mr-2 animate-spin" /> : 'Добавить Аккаунт'}
+                    <Button onClick={handleAdd} disabled={adding} size="sm">
+                        {adding ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : 'Добавить аккаунт'}
                     </Button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {connections.map(conn => (
                         <ConnectionCard key={conn.id} conn={conn} onRefresh={refresh} />
                     ))}

@@ -5,7 +5,7 @@ import {
     Bot, Database, Settings, BookOpen, ClipboardList,
     Play, Pause, CheckCircle2, XCircle, AlertCircle,
     Plus, Trash2, Save, RefreshCw, ChevronDown, ChevronUp,
-    Zap, MessageSquare, Phone, Send, Square, X
+    Zap, MessageSquare, Phone, Send, Square, X, HelpCircle
 } from 'lucide-react'
 import {
     saveAiConfig, testAiConnection,
@@ -102,6 +102,36 @@ interface Props {
 // ─── Утилиты ──────────────────────────────────────────────────────
 
 const CHANNEL_LABELS: Record<string, string> = { max: 'MAX', telegram: 'TG', whatsapp: 'WA' }
+function StatHint({ label }: { label: string }) {
+    if (label === 'Сообщений') return (
+        <div className="text-left space-y-1">
+            <p className="text-white leading-[1.5]">Это количество всех сообщений, которые были импортированы из мессенджера.</p>
+            <p className="text-gray-300 leading-[1.5]">Сюда входят:</p>
+            <p className="text-gray-300 leading-[1.5]">— входящие сообщения от пользователей</p>
+            <p className="text-gray-300 leading-[1.5]">— исходящие сообщения из CRM</p>
+            <p className="text-gray-300 leading-[1.5]">— текст, фото, файлы и голосовые сообщения</p>
+            <p className="text-gray-400 leading-[1.5] mt-1">Количество зависит от выбранного периода импорта.</p>
+        </div>
+    )
+    if (label === 'Чатов') return (
+        <div className="text-left space-y-1">
+            <p className="text-white leading-[1.5]">Это количество всех чатов, которые были импортированы из мессенджера.</p>
+            <p className="text-gray-300 leading-[1.5]">Сюда входят:</p>
+            <p className="text-gray-300 leading-[1.5]">— входящие сообщения от пользователей</p>
+            <p className="text-gray-300 leading-[1.5]">— исходящие сообщения из CRM</p>
+            <p className="text-gray-300 leading-[1.5]">— текст, фото, файлы и голосовые сообщения</p>
+            <p className="text-gray-400 leading-[1.5] mt-1">Количество зависит от выбранного периода импорта.</p>
+        </div>
+    )
+    if (label === 'Контактов') return (
+        <div className="text-left space-y-1">
+            <p className="text-white leading-[1.5]">Это количество уникальных пользователей (контактов), с которыми есть переписка.</p>
+            <p className="text-gray-300 leading-[1.5]">Контакт — это человек или аккаунт в мессенджере.</p>
+            <p className="text-gray-300 leading-[1.5]">У одного контакта может быть несколько чатов: например, личный чат и групповой чат.</p>
+        </div>
+    )
+    return null
+}
 const MODE_LABELS: Record<string, string> = {
     off:             'Выключен',
     suggest_only:    'Советует',
@@ -210,28 +240,78 @@ export default function AiControlCenterClient({
     const [preflightState, setPreflightState] = useState<PreflightState>('idle')
     const [preflightError, setPreflightError] = useState<string | null>(null)
 
-    // Polling: обновляем статус заданий + live-счётчики пока есть queued/running
+    // Transport health: отслеживаем доступность скрапера во время активного задания
+    type TransportStatus = 'unknown' | 'online' | 'offline' | 'initializing'
+    const [transportStatus, setTransportStatus] = useState<TransportStatus>('unknown')
+    const transportFailCount = useRef(0)
+
+    // При загрузке: если есть активное задание, сразу проверяем транспорт
+    useEffect(() => {
+        const hasActive = importJobs.some(j => j.status === 'queued' || j.status === 'running')
+        if (hasActive && transportStatus === 'unknown') {
+            checkScraperHealth(['max']).then(health => {
+                if (health.max?.ok) {
+                    setTransportStatus('online')
+                    transportFailCount.current = 0
+                } else if (health.max?.status === 'initializing') {
+                    setTransportStatus('initializing')
+                } else {
+                    setTransportStatus('offline')
+                }
+            })
+        }
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Polling: обновляем статус заданий + live-счётчики + проверяем здоровье транспорта
     useEffect(() => {
         const hasActive = importJobs.some(j => j.status === 'queued' || j.status === 'running')
         if (hasActive && !pollRef.current) {
             pollRef.current = setInterval(async () => {
                 try {
-                    // Опрашиваем БД (статус задания) и скрапер (живые счётчики) параллельно
-                    const [fresh, progressRes] = await Promise.all([
+                    // Опрашиваем БД, скрапер (счётчики) и здоровье транспорта параллельно
+                    const [fresh, progressRes, health] = await Promise.all([
                         getAllImportJobs(10),
                         fetch('http://localhost:3005/import-progress').then(r => r.json()).catch(() => null),
+                        checkScraperHealth(['max']),
                     ])
                     setImportJobs(fresh)
+
+                    // Обновляем статус транспорта
+                    if (health.max?.ok) {
+                        setTransportStatus('online')
+                        transportFailCount.current = 0
+                    } else if (health.max?.status === 'initializing') {
+                        setTransportStatus('initializing')
+                        transportFailCount.current = 0
+                    } else {
+                        transportFailCount.current++
+                        // Считаем offline после 2 последовательных неудач (4 сек)
+                        if (transportFailCount.current >= 2) {
+                            setTransportStatus('offline')
+                        }
+                    }
+
                     if (progressRes?.active) {
                         setLiveProgress(progressRes)
+                    } else if (transportStatus === 'offline') {
+                        setLiveProgress(null)
                     }
+
                     // Если больше нет активных — стоп
                     if (!fresh.some((j: ImportJob) => j.status === 'queued' || j.status === 'running')) {
                         if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
                         setLiveProgress(null)
+                        setTransportStatus('unknown')
+                        transportFailCount.current = 0
                     }
                 } catch {}
             }, 2000)
+        }
+        if (!hasActive && pollRef.current) {
+            clearInterval(pollRef.current)
+            pollRef.current = null
+            setTransportStatus('unknown')
+            transportFailCount.current = 0
         }
         return () => {
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
@@ -268,6 +348,8 @@ export default function AiControlCenterClient({
 
             // 2. Всё ок — запускаем джобу
             setPreflightState('idle')
+            setTransportStatus('online')
+            transportFailCount.current = 0
             setImportLoading(true)
             const job = await createImportJob({
                 channels: importChannels,
@@ -295,7 +377,9 @@ export default function AiControlCenterClient({
             <div className={`border rounded-xl p-4 transition-colors ${
                 preflightState === 'unavailable' || preflightState === 'needs_auth'
                     ? 'bg-red-50/40 border-red-200'
-                    : preflightState === 'checking'
+                    : (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline'
+                    ? 'bg-red-50/40 border-red-200'
+                    : preflightState === 'checking' || transportStatus === 'unknown' || transportStatus === 'initializing'
                     ? 'bg-blue-50/30 border-blue-200'
                     : importStatus === 'queued' || importStatus === 'running'
                     ? 'bg-yellow-50/50 border-yellow-200'
@@ -306,23 +390,30 @@ export default function AiControlCenterClient({
                         preflightState === 'unavailable' ? 'error' :
                         preflightState === 'needs_auth' ? 'error' :
                         preflightState === 'checking' ? 'queued' :
+                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'error' :
+                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'queued' :
                         importStatus
                     } />
                     <span className="text-[13px] font-semibold text-[#111]">Синхронизация истории</span>
-                    {(preflightState === 'checking' || importStatus === 'queued' || importStatus === 'running') && (
-                        <RefreshCw size={13} className="animate-spin text-yellow-600" />
+                    {(preflightState === 'checking' || ((importStatus === 'queued' || importStatus === 'running') && transportStatus !== 'offline')) && (
+                        <RefreshCw size={13} className={`animate-spin ${transportStatus === 'offline' ? 'text-red-500' : 'text-yellow-600'}`} />
                     )}
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto ${
                         preflightState === 'unavailable' || preflightState === 'needs_auth' ? 'bg-red-50 text-red-700' :
                         preflightState === 'checking' ? 'bg-blue-50 text-blue-700' :
+                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'bg-red-50 text-red-700' :
+                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'bg-blue-50 text-blue-700' :
                         importStatus === 'completed' ? 'bg-green-50 text-green-700' :
                         importStatus === 'running' || importStatus === 'queued' ? 'bg-yellow-50 text-yellow-700' :
                         importStatus === 'partial' ? 'bg-orange-50 text-orange-700' :
                         importStatus === 'failed' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
                     }`}>
-                        {preflightState === 'checking' ? 'Проверка...' :
+                        {preflightState === 'checking' ? 'Проверка…' :
                          preflightState === 'unavailable' ? 'Транспорт недоступен' :
                          preflightState === 'needs_auth' ? 'Требуется авторизация' :
+                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'Транспорт недоступен' :
+                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'Запускается…' :
+                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'unknown' ? 'Проверка…' :
                          importStatus === 'completed' ? 'Актуально' :
                          importStatus === 'running' ? 'Идёт импорт' :
                          importStatus === 'queued' ? 'В очереди' :
@@ -370,50 +461,127 @@ export default function AiControlCenterClient({
                     </div>
                 )}
 
-                {/* Live-прогресс во время импорта — только когда транспорт подтверждён */}
+                {/* Live-прогресс / статус транспорта — только при активном задании */}
                 {preflightState === 'idle' && lastJob && (lastJob.status === 'queued' || lastJob.status === 'running') && (
                     <div className="mt-3">
-                        {/* Анимированная полоса */}
-                        <div className="w-full h-1.5 bg-yellow-100 rounded-full overflow-hidden mb-3">
-                            <div className="h-full bg-yellow-400 rounded-full animate-pulse" style={{
-                                width: '100%',
-                                animation: 'progress-indeterminate 2s ease-in-out infinite',
-                            }} />
-                        </div>
-                        <style>{`
-                            @keyframes progress-indeterminate {
-                                0% { transform: translateX(-100%); width: 40%; }
-                                50% { transform: translateX(50%); width: 60%; }
-                                100% { transform: translateX(200%); width: 40%; }
-                            }
-                        `}</style>
-                        <div className="flex items-center gap-4 text-[12px]">
-                            <span className="text-yellow-700 font-semibold flex items-center gap-1.5">
-                                <RefreshCw size={12} className="animate-spin" />
-                                Импорт выполняется...
-                            </span>
-                            <span className="text-gray-500">
-                                {lastJob.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}
-                            </span>
-                            {elapsedSec !== null && (
-                                <span className="text-gray-400 text-[11px] ml-auto font-mono">
-                                    {Math.floor(elapsedSec / 60)}:{String(elapsedSec % 60).padStart(2, '0')}
-                                </span>
-                            )}
-                        </div>
-                        {/* Живые счётчики от скрапера */}
-                        <div className="grid grid-cols-3 gap-3 mt-3">
-                            {[
-                                { label: 'Сообщений', value: liveProgress?.messagesImported ?? lastJob.messagesImported },
-                                { label: 'Чатов',     value: liveProgress?.chatsScanned ?? lastJob.chatsScanned },
-                                { label: 'Контактов', value: liveProgress?.contactsFound ?? lastJob.contactsFound },
-                            ].map(s => (
-                                <div key={s.label} className="bg-white/70 rounded-lg p-2.5 text-center">
-                                    <div className="text-[18px] font-bold text-yellow-700 tabular-nums">{s.value.toLocaleString()}</div>
-                                    <div className="text-[10px] text-gray-500">{s.label}</div>
+                        {/* Состояние: транспорт офлайн */}
+                        {transportStatus === 'offline' && (
+                            <div className="space-y-2">
+                                <div className="flex items-start gap-2 text-[12px] text-red-700">
+                                    <XCircle size={14} className="shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="font-semibold">MAX transport не отвечает — импорт приостановлен</p>
+                                        <p className="text-gray-500 text-[11px] mt-1">
+                                            Скрапер не запущен или потерял соединение. Запустите сервис — импорт продолжится автоматически.
+                                        </p>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={async () => {
+                                            setTransportStatus('unknown')
+                                            transportFailCount.current = 0
+                                            const health = await checkScraperHealth(['max'])
+                                            if (health.max?.ok) {
+                                                setTransportStatus('online')
+                                            } else if (health.max?.status === 'initializing') {
+                                                setTransportStatus('initializing')
+                                            } else {
+                                                setTransportStatus('offline')
+                                            }
+                                        }}
+                                        className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-gray-700 bg-white border border-[#E0E0E0] rounded-lg hover:border-[#3390EC] hover:text-[#3390EC] transition-colors"
+                                    >
+                                        <RefreshCw size={11} />
+                                        Проверить снова
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            await cancelImportJob(lastJob.id)
+                                            const fresh = await getAllImportJobs(10)
+                                            setImportJobs(fresh)
+                                            setTransportStatus('unknown')
+                                        }}
+                                        className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                                    >
+                                        <Square size={11} />
+                                        Отменить импорт
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Состояние: транспорт инициализируется */}
+                        {transportStatus === 'initializing' && (
+                            <div className="flex items-center gap-2 text-[12px] text-yellow-700">
+                                <RefreshCw size={12} className="animate-spin shrink-0" />
+                                <div>
+                                    <p className="font-semibold">Скрапер запускается, ожидаем готовности…</p>
+                                    <p className="text-gray-500 text-[11px] mt-0.5">Обычно это занимает 10–30 секунд</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Состояние: проверяем транспорт (первая загрузка) */}
+                        {transportStatus === 'unknown' && (
+                            <div className="flex items-center gap-2 text-[12px] text-blue-700">
+                                <RefreshCw size={12} className="animate-spin shrink-0" />
+                                <span>Проверяем подключение к {lastJob.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}…</span>
+                            </div>
+                        )}
+
+                        {/* Состояние: транспорт онлайн — показываем реальный прогресс */}
+                        {transportStatus === 'online' && (
+                            <>
+                                {/* Анимированная полоса */}
+                                <div className="w-full h-1.5 bg-yellow-100 rounded-full overflow-hidden mb-3">
+                                    <div className="h-full bg-yellow-400 rounded-full animate-pulse" style={{
+                                        width: '100%',
+                                        animation: 'progress-indeterminate 2s ease-in-out infinite',
+                                    }} />
+                                </div>
+                                <style>{`
+                                    @keyframes progress-indeterminate {
+                                        0% { transform: translateX(-100%); width: 40%; }
+                                        50% { transform: translateX(50%); width: 60%; }
+                                        100% { transform: translateX(200%); width: 40%; }
+                                    }
+                                `}</style>
+                                <div className="flex items-center gap-4 text-[12px]">
+                                    <span className="text-yellow-700 font-semibold flex items-center gap-1.5">
+                                        <RefreshCw size={12} className="animate-spin" />
+                                        Импорт выполняется…
+                                    </span>
+                                    <span className="text-gray-500">
+                                        {lastJob.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}
+                                    </span>
+                                    {elapsedSec !== null && (
+                                        <span className="text-gray-400 text-[11px] ml-auto font-mono">
+                                            {Math.floor(elapsedSec / 60)}:{String(elapsedSec % 60).padStart(2, '0')}
+                                        </span>
+                                    )}
+                                </div>
+                                {/* Живые счётчики от скрапера */}
+                                <div className="grid grid-cols-3 gap-3 mt-3">
+                                    {[
+                                        { label: 'Сообщений', value: liveProgress?.messagesImported ?? lastJob.messagesImported },
+                                        { label: 'Чатов',     value: liveProgress?.chatsScanned ?? lastJob.chatsScanned },
+                                        { label: 'Контактов', value: liveProgress?.contactsFound ?? lastJob.contactsFound },
+                                    ].map(s => (
+                                        <div key={s.label} className="bg-white/70 rounded-lg p-2.5 text-center relative group">
+                                            <div className="text-[18px] font-bold text-yellow-700 tabular-nums">{s.value.toLocaleString()}</div>
+                                            <div className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
+                                                {s.label}
+                                                <HelpCircle size={10} className="text-gray-300 group-hover:text-gray-500 transition-colors cursor-help" />
+                                            </div>
+                                            <div style={{width: '220px'}} className="absolute top-full left-0 mt-2 px-3 py-2 bg-[#222] text-[11px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                                <StatHint label={s.label} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
 
@@ -426,9 +594,15 @@ export default function AiControlCenterClient({
                                 { label: 'Чатов',     value: lastJob.chatsScanned },
                                 { label: 'Контактов', value: lastJob.contactsFound },
                             ].map(s => (
-                                <div key={s.label} className="bg-white rounded-lg p-2.5 text-center">
+                                <div key={s.label} className="bg-white rounded-lg p-2.5 text-center relative group">
                                     <div className="text-[18px] font-bold text-[#111]">{s.value.toLocaleString()}</div>
-                                    <div className="text-[10px] text-gray-500">{s.label}</div>
+                                    <div className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
+                                        {s.label}
+                                        <HelpCircle size={10} className="text-gray-300 group-hover:text-gray-500 transition-colors cursor-help" />
+                                    </div>
+                                    <div style={{width: '220px'}} className="absolute top-full left-0 mt-2 px-3 py-2 bg-[#222] text-[11px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                        <StatHint label={s.label} />
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -439,7 +613,7 @@ export default function AiControlCenterClient({
                                     lastJob.resultType === 'full' ? 'bg-blue-50 text-blue-700' :
                                     lastJob.resultType === 'partial' ? 'bg-yellow-50 text-yellow-700' :
                                     lastJob.resultType === 'failed'  ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
-                                }`}>{lastJob.resultType === 'full' ? 'Полный' : lastJob.resultType === 'partial' ? 'Частичный' : lastJob.resultType}</span>
+                                }`}>{lastJob.resultType === 'full' ? 'Вся доступная история' : lastJob.resultType === 'partial' ? 'Частичный' : lastJob.resultType}</span>
                             )}
                             {lastJob.coveredPeriodFrom && lastJob.coveredPeriodTo && (
                                 <span>Период: <b className="text-gray-700">{new Date(lastJob.coveredPeriodFrom).toLocaleDateString('ru')} — {new Date(lastJob.coveredPeriodTo).toLocaleDateString('ru')}</b></span>
@@ -529,9 +703,14 @@ export default function AiControlCenterClient({
                     </div>
                     <div className="divide-y divide-[#F5F5F5]">
                         {importJobs.slice(0, 5).map(job => {
-                            const RESULT_LABELS: Record<string, string> = { full: 'Полный', partial: 'Частичный', 'live only': 'Только live', failed: 'Ошибка' }
+                            const RESULT_LABELS: Record<string, string> = { full: 'Вся доступная история', partial: 'Частичный', 'live only': 'Только live', failed: 'Ошибка' }
                             const STATUS_LABELS: Record<string, string> = { queued: 'В очереди', running: 'Выполняется', completed: 'Завершён', failed: 'Ошибка' }
                             const hasStats = job.status === 'completed' || job.status === 'failed' || job.messagesImported > 0
+                            const channelKey = [...job.channels].sort().join(',')
+                            const olderSameChannel = importJobs.filter(j => j.id !== job.id && [...j.channels].sort().join(',') === channelKey && new Date(j.createdAt) < new Date(job.createdAt))
+                            const isRepeat = olderSameChannel.length > 0
+                            const prevSameJob = isRepeat ? olderSameChannel.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] : null
+                            const newMsgs = isRepeat && prevSameJob ? Math.max(0, job.messagesImported - prevSameJob.messagesImported) : null
                             return (
                             <div key={job.id} className="px-4 py-3">
                                 {/* Верхняя строка: каналы, режим, статус, дата */}
@@ -541,7 +720,8 @@ export default function AiControlCenterClient({
                                         : <StatusDot status={job.status} />
                                     }
                                     <span className="font-medium text-gray-700">{job.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}</span>
-                                    <span className="text-gray-400">{job.mode === 'available_history' ? 'Вся история' : job.mode === 'from_connection_time' ? 'С подключения' : job.mode === 'last_n_days' ? `${(job as any).daysBack ?? 'N'} дней` : job.mode}</span>
+                                    <span className="text-gray-400">{job.mode === 'available_history' ? 'Вся доступная история' : job.mode === 'from_connection_time' ? 'С подключения' : job.mode === 'last_n_days' ? `${(job as any).daysBack ?? 'N'} дней` : job.mode}</span>
+                                    {isRepeat && <span className="text-[10px] text-gray-400 italic">Повторная синхронизация</span>}
                                     <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                         job.status === 'completed' ? 'bg-green-50 text-green-700' :
                                         job.status === 'running'   ? 'bg-yellow-50 text-yellow-700' :
@@ -578,7 +758,10 @@ export default function AiControlCenterClient({
                                         <span className="text-gray-500"><span className="font-semibold text-gray-700">{job.messagesImported}</span> сообщ.</span>
                                         <span className="text-gray-500"><span className="font-semibold text-gray-700">{job.chatsScanned}</span> чатов</span>
                                         <span className="text-gray-500"><span className="font-semibold text-gray-700">{job.contactsFound}</span> контактов</span>
-                                        {job.resultType && (
+                                        {isRepeat && newMsgs !== null && (
+                                            <span className="text-gray-400">Новых: <span className={`font-semibold ${newMsgs === 0 ? 'text-gray-400' : 'text-green-600'}`}>{newMsgs}</span></span>
+                                        )}
+                                        {job.resultType && !isRepeat && (
                                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                                 job.resultType === 'full' ? 'bg-blue-50 text-blue-700' :
                                                 job.resultType === 'partial' ? 'bg-yellow-50 text-yellow-700' :

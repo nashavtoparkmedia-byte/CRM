@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { ContactService } from '@/lib/ContactService'
+import { normalizePhoneE164 } from '@/lib/phoneUtils'
 
 export async function POST(request: Request) {
   try {
@@ -117,6 +119,30 @@ export async function POST(request: Request) {
         console.error('[MAX Webhook] linkChatToDriver error:', e.message)
       )
     }
+
+    // ── Contact Model dual write ──────────────────────────────
+    if (!isOutgoing) {
+      try {
+        // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
+        const maxExternalId = senderId ? String(senderId) : externalChatId
+        const maxPhone = senderPhone ? normalizePhoneE164(senderPhone) : null
+
+        const contactResult = await ContactService.resolveContact(
+          'max',
+          maxExternalId,
+          maxPhone,
+          senderName || null,
+        )
+        await ContactService.ensureChatLinked(
+          chat.id,
+          contactResult.contact.id,
+          contactResult.identity.id,
+        )
+      } catch (contactErr: any) {
+        console.error(`[MAX Webhook] ContactService error (non-blocking): ${contactErr.message}`)
+      }
+    }
+    // ──────────────────────────────────────────────────────────
 
     // Запускаем AI pipeline для входящих сообщений (не дожидаемся)
     if (!isOutgoing) {

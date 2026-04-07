@@ -136,10 +136,13 @@ class InitialHistorySync {
       const messages = (result && result.messages) ? result.messages : []
       if (messages.length === 0) break
 
+      const myId = this._transport._myUserId
       for (const raw of messages) {
         try {
+          // Detect outgoing by sender === myUserId (MAX protocol uses sender field, not out/is_out)
+          const isOutgoing = myId && String(raw.sender) === String(myId)
+          if (isOutgoing) continue
           const msg = MessageParser.normalizeHistoryMessage(raw)
-          if (msg.isOutgoing) continue
           if (!this._sync.isDuplicate(msg)) {
             await this._forward(MessageParser.toCrmPayload(msg, chatId))
             this._sync.markSeen(msg)
@@ -221,11 +224,14 @@ class InitialHistorySync {
       )
       const messages = (result && result.messages) ? result.messages : []
       console.log(`[InitialSync] Chat ${chatId}: got ${messages.length} msgs after sinceTs=${sinceTs}`)
+      const myId = this._transport._myUserId
       for (const raw of messages) {
         try {
           if ((raw.time || 0) < sinceTs) continue
+          // Detect outgoing by sender === myUserId (MAX protocol uses sender field, not out/is_out)
+          const isOutgoing = myId && String(raw.sender) === String(myId)
+          if (isOutgoing) continue
           const msg = MessageParser.normalizeHistoryMessage(raw)
-          if (msg.isOutgoing) continue
           if (!this._sync.isDuplicate(msg)) {
             let payload = MessageParser.toCrmPayload(msg, chatId)
 

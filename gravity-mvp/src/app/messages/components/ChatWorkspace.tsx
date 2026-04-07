@@ -97,6 +97,17 @@ function ChatWorkspaceInner({
 }) {
     const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
 
+    // A3: Compute channels that have failed outbound messages
+    const failedChannels = useMemo(() => {
+        const failed = new Set<string>()
+        for (const msg of messages) {
+            if (msg.direction === 'outbound' && msg.status === 'failed') {
+                failed.add(msg.channel)
+            }
+        }
+        return failed
+    }, [messages])
+
     const [replyContext, setReplyContext] = useState<ReplyContextType | null>(null)
     const [manualSendChannelMode, setManualSendChannelMode] = useState<string>('whatsapp')
     const [isSearchActive, setIsSearchActive] = useState(false)
@@ -140,6 +151,10 @@ function ChatWorkspaceInner({
         sendMessage(content, effectiveChannel)
     }
 
+    const handleRetry = (msg: Message) => {
+        sendMessage(msg.content, msg.channel)
+    }
+
     const handleReply = (msg: Message) => {
         setReplyContext({
             messageId: msg.id,
@@ -167,7 +182,7 @@ function ChatWorkspaceInner({
                 onOpenCreateTask={() => setIsTaskModalOpenForChat(true)}
             />
 
-            <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} />
+            <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />
 
             {isEmptyChannel ? (
                 <div className="flex-1 flex flex-col items-center justify-center messenger-bg">
@@ -192,6 +207,7 @@ function ChatWorkspaceInner({
                     hasMoreHistory={hasMoreHistory}
                     onLoadMore={loadMoreHistory}
                     onReply={handleReply}
+                    onRetry={handleRetry}
                     onCreateTask={setTaskModalContext}
                     activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
                     onFocusComposer={() => document.getElementById('message-composer')?.focus()}

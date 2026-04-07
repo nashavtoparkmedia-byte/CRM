@@ -12,21 +12,17 @@ export default async function MaxSettingsPage() {
 
     return (
         <PageContainer>
-            <div className="flex h-full flex-col p-8 mt-4">
-                <div className="mb-8">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100/50 text-blue-600 border shadow-sm">
-                            <MessageSquare size={24} />
-                        </div>
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                                MAX Интеграция
-                            </h1>
-                            <p className="text-sm text-muted-foreground mt-1 mb-4">
-                                Подключение и управление ботами мессенджера MAX
-                            </p>
-                            <SectionDescription sectionKey="settings_max" />
-                        </div>
+            <div className="flex flex-col gap-8 animate-in fade-in duration-500 pb-12">
+                <div className="flex items-start gap-3 border-b pb-6">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 mt-0.5">
+                        <MessageSquare size={18} />
+                    </div>
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">MAX</h1>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Подключение и управление ботами мессенджера MAX
+                        </p>
+                        <SectionDescription sectionKey="settings_max" />
                     </div>
                 </div>
 

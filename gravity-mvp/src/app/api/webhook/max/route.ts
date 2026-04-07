@@ -6,14 +6,17 @@ import crypto from 'crypto'
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { phone, text, timestamp, driverName } = body
+        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId } = body
 
-        if (!phone || !text) {
-            return NextResponse.json({ error: 'Missing required fields: phone, text' }, { status: 400 })
+        if (!text) {
+            return NextResponse.json({ error: 'Missing required field: text' }, { status: 400 })
+        }
+        if (!phone && !maxChatId) {
+            return NextResponse.json({ error: 'Missing required fields: phone or chatId' }, { status: 400 })
         }
 
         // Normalize phone. MAX might send just a name (e.g. "Все 2" -> "2" or "Александр" -> "")
-        let phoneDigits = phone.replace(/\D/g, '')
+        let phoneDigits = (phone || '').replace(/\D/g, '')
 
         // If we didn't get a valid 10+ digit phone number, try to fuzzy-match by name
         if (phoneDigits.length < 10) {
@@ -71,16 +74,38 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Final fallback if we STILL don't have a phone (we'll just use the name as ID to prevent collision)
-        let externalChatId = `max:${phoneDigits}`
-        if (!phoneDigits) {
+        // Use MAX internal chatId as primary identifier (most reliable)
+        // Fall back to phone-based ID, then name-based ID
+        let externalChatId: string
+        if (maxChatId) {
+            externalChatId = String(maxChatId)
+        } else if (phoneDigits) {
+            externalChatId = `max:${phoneDigits}`
+        } else {
             const safeName = (driverName || phone).replace(/[^a-zA-Zа-яА-Я0-9]/g, '_');
             externalChatId = `max_name:${safeName}`;
-            console.log(`[WEBHOOK-MAX] No phone digits found. Using named externalChatId: ${externalChatId}`);
+            console.log(`[WEBHOOK-MAX] No chatId or phone. Using named externalChatId: ${externalChatId}`);
         }
         const sentAt = timestamp ? new Date(timestamp) : new Date()
 
-        console.log(`[WEBHOOK-MAX] Received message from ${phoneDigits}: ${text.substring(0, 50)}...`)
+        console.log(`[WEBHOOK-MAX] Received: externalChatId=${externalChatId} phone=${phoneDigits} chatId=${maxChatId || 'none'} text="${text.substring(0, 50)}"`)
+
+        // Migrate old phone-based chats to new chatId-based format
+        if (maxChatId && phoneDigits) {
+            const oldExternalId = `max:${phoneDigits}`
+            const oldChat = await (prisma.chat as any).findUnique({ where: { externalChatId: oldExternalId } })
+            if (oldChat) {
+                const newChat = await (prisma.chat as any).findUnique({ where: { externalChatId: String(maxChatId) } })
+                if (!newChat) {
+                    // Migrate: rename old chat's externalChatId to new format
+                    await (prisma.chat as any).update({
+                        where: { id: oldChat.id },
+                        data: { externalChatId: String(maxChatId) }
+                    })
+                    console.log(`[WEBHOOK-MAX] MIGRATED chat ${oldChat.id}: ${oldExternalId} → ${maxChatId}`)
+                }
+            }
+        }
 
         // 1. Upsert unified Chat
         let unifiedChat = await (prisma.chat as any).findUnique({

@@ -8,12 +8,17 @@ import { useDebounce } from "use-debounce"
 import { Virtuoso } from "react-virtuoso"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, Conversation } from "../hooks/useConversations"
+import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
+import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-export default function ChatList({ selectedChatId, activeListTab, activeChannelTab }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string }) {
+export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string) => void }) {
     const { conversations, setConversations, isLoading } = useConversations()
     const { setChatId, setListTab, setChannel } = useChatNavigation()
+    // If onSelectChat is provided (from MessagesShell), use it for instant client-side switching.
+    // Otherwise fall back to setChatId (URL-based, used when ChatList is rendered standalone).
+    const handleChatSelect = onSelectChat ?? setChatId
 
     const router = useRouter()
 
@@ -22,6 +27,9 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
     const [showNewChat, setShowNewChat] = useState(false)
 
     const currentChannelTab = activeChannelTab || 'all'
+
+    // FC-10: Contact Search API for broader results
+    const { results: contactResults, loading: contactSearchLoading } = useContactSearch(searchQuery)
 
     // Filter Logic
     const filteredConversations = useMemo(() => {
@@ -59,6 +67,25 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         return list
     }, [conversations, debouncedSearch, activeListTab, currentChannelTab])
 
+    // FC-10: Extra contacts from API that aren't already shown as conversations
+    const extraContacts = useMemo(() => {
+        if (!debouncedSearch || debouncedSearch.length < 2 || contactResults.length === 0) return []
+
+        // Collect all chatIds visible in filteredConversations
+        const visibleChatIds = new Set<string>()
+        for (const c of filteredConversations) {
+            visibleChatIds.add(c.id)
+            c.allChatIds?.forEach(id => visibleChatIds.add(id))
+        }
+
+        // Filter out contacts whose chats are already visible
+        return contactResults.filter(contact => {
+            const chatIds = Object.values(contact.hasChat)
+            if (chatIds.length === 0) return true // no chat at all — show
+            return !chatIds.some(id => visibleChatIds.has(id))
+        })
+    }, [debouncedSearch, contactResults, filteredConversations])
+
     // Keyboard Navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -86,7 +113,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                 }
                 
                 const nextChatId = filteredConversations[nextIndex].id
-                setChatId(nextChatId)
+                handleChatSelect(nextChatId)
                 
                 setTimeout(() => {
                     const btn = document.getElementById(`chat-row-${nextChatId}`)
@@ -119,6 +146,30 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             return c
         }))
     }, [selectedChatId, setConversations])
+
+    // FC-10: Navigate to a contact from API search results
+    const handleContactSelect = (contact: ContactSearchResult) => {
+        // If contact has any chat, navigate to the most recent one
+        const chatEntries = Object.entries(contact.hasChat)
+        if (chatEntries.length > 0) {
+            const chatId = chatEntries[0][1] // first chat id
+            handleChatSelect(chatId)
+            return
+        }
+        // No chat exists — open NewChatPopover pre-filled would be complex,
+        // so trigger start-conversation directly via API
+        const channel = currentChannelTab !== 'all' ? currentChannelTab : 'tg'
+        startContactConversation(contact.id, channel)
+    }
+
+    // Start conversation for contact without existing chat
+    const { startByContact, loading: startingConversation } = useStartConversation()
+    const startContactConversation = async (contactId: string, urlChannel: string) => {
+        const result = await startByContact(contactId, urlChannel)
+        if (result) {
+            handleChatSelect(result.chatId)
+        }
+    }
 
     const getChannelBadge = (channel: string) => {
         switch (channel) {
@@ -155,8 +206,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             <div id={`chat-row-${chat.id}`} className="px-2 py-0.5">
                 <button
                     onClick={() => {
-                        setChatId(chat.id)
-                        // Local update triggered by useEffect as well, but this is for instant feedback
+                        handleChatSelect(chat.id)
                         if (setConversations) {
                              setConversations((prev: Conversation[]) => prev.map((c: Conversation) => c.id === chat.id ? { ...c, unreadCount: 0 } : c))
                         }
@@ -247,7 +297,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                     >
                         <Plus size={18} />
                     </button>
-                    {showNewChat && <NewChatPopover onClose={() => setShowNewChat(false)} />}
+                    {showNewChat && <NewChatPopover onClose={() => setShowNewChat(false)} onSelectChat={handleChatSelect} />}
                 </div>
             </div>
             {/* Search */}
@@ -322,7 +372,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                             </div>
                         ))}
                     </div>
-                ) : filteredConversations.length === 0 ? (
+                ) : filteredConversations.length === 0 && extraContacts.length === 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pb-20">
                         {activeListTab === 'auto' ? (
                             <>
@@ -340,16 +390,72 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                             <>
                                 <MessageSquare size={32} className="opacity-20 mb-3" />
                                 <span className="text-[13px] font-medium">{debouncedSearch ? "Ничего не найдено" : "Нет чатов"}</span>
+                                {contactSearchLoading && debouncedSearch && (
+                                    <span className="text-[11px] text-gray-400 mt-1">Поиск контактов...</span>
+                                )}
                             </>
                         )}
                     </div>
                 ) : (
-                    <Virtuoso
-                        style={{ height: '100%', width: '100%' }}
-                        data={filteredConversations}
-                        itemContent={renderChatItem}
-                        className="custom-scrollbar"
-                    />
+                    <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
+                        {/* Local conversation results */}
+                        {filteredConversations.length > 0 && (
+                            <Virtuoso
+                                style={{ height: extraContacts.length > 0 ? `${Math.min(filteredConversations.length * 73, 400)}px` : '100%', width: '100%' }}
+                                data={filteredConversations}
+                                itemContent={renderChatItem}
+                            />
+                        )}
+
+                        {/* FC-10: Extra contacts from API */}
+                        {extraContacts.length > 0 && (
+                            <div className="border-t border-[#E8E8E8]">
+                                <div className="px-4 py-2 flex items-center gap-2">
+                                    <Users size={12} className="text-gray-400" />
+                                    <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Контакты</span>
+                                    {contactSearchLoading && (
+                                        <div className="w-3 h-3 border border-gray-300 border-t-transparent rounded-full animate-spin" />
+                                    )}
+                                </div>
+                                {extraContacts.map(contact => {
+                                    const phone = contact.phones.find(p => p.isPrimary)?.phone || contact.phones[0]?.phone
+                                    const chatCount = Object.keys(contact.hasChat).length
+                                    return (
+                                        <div key={contact.id} className="px-2 py-0.5">
+                                            <button
+                                                onClick={() => handleContactSelect(contact)}
+                                                className="w-full text-left flex items-center gap-3 px-3 h-[64px] rounded-xl hover:bg-[#F0F2F5] transition-all"
+                                            >
+                                                <div className="h-[44px] w-[44px] rounded-full bg-[#E3E8ED] text-[#6B7A8D] flex items-center justify-center font-bold text-[14px] shrink-0">
+                                                    {(contact.displayName || "?").substring(0, 1).toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-semibold text-[13px] text-[#111] truncate">
+                                                            {contact.displayName || "Без имени"}
+                                                        </span>
+                                                        {chatCount === 0 && (
+                                                            <span className="text-[9px] font-semibold text-orange-500 bg-orange-50 px-1 py-px rounded">новый</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        {phone && (
+                                                            <span className="text-[11px] text-gray-400 font-mono">{phone}</span>
+                                                        )}
+                                                        {contact.channels.length > 0 && (
+                                                            <div className="flex gap-0.5">
+                                                                {contact.channels.map(ch => <span key={ch}>{getChannelBadge(ch)}</span>)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
         </div>

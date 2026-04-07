@@ -7,7 +7,7 @@ import { useConversations, Conversation } from "../hooks/useConversations"
 // Initial defaults (overwritten by dynamic fetch)
 const SELECTED_ACCOUNTS_KEY = 'chat-selected-accounts-v1'
 
-export default function ChatChannelTabs({ activeChannelTab, chat }: { activeChannelTab: string, chat: Conversation }) {
+export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels }: { activeChannelTab: string, chat: Conversation, failedChannels?: Set<string> }) {
     const { conversations } = useConversations()
     const { updateQuery } = useChatNavigation()
     const [expandedChannel, setExpandedChannel] = useState<string | null>(null)
@@ -106,13 +106,18 @@ export default function ChatChannelTabs({ activeChannelTab, chat }: { activeChan
                         {idx > 0 && <span className="text-gray-300 text-[10px] mx-1.5">·</span>}
                         <button
                             onClick={() => handleChannelClick(ch.id)}
-                            className={`text-[12px] transition-all whitespace-nowrap px-0.5 ${
-                                isActive 
-                                ? 'text-[#111] font-bold' 
+                            className={`text-[12px] transition-all whitespace-nowrap px-0.5 relative ${
+                                isActive
+                                ? 'text-[#111] font-bold'
                                 : 'text-gray-400 hover:text-gray-600 font-medium'
                             }`}
                         >
                             {ch.short || ch.label}
+                            {ch.id !== 'all' && failedChannels?.has(
+                                ch.id === 'wa' ? 'whatsapp' : ch.id === 'tg' ? 'telegram' : ch.id === 'ypro' ? 'yandex_pro' : ch.id
+                            ) && (
+                                <span className="absolute -top-0.5 -right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
+                            )}
                         </button>
 
                         {/* Account dropdown */}

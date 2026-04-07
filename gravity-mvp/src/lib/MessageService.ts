@@ -28,6 +28,8 @@ export class MessageService {
                     requiresResponse: true,
                     status: true,
                     driverId: true,
+                    contactId: true,
+                    contactIdentityId: true,
                     metadata: true,
                     driver: {
                         select: {
@@ -45,15 +47,17 @@ export class MessageService {
                 orderBy: { lastMessageAt: 'desc' }
             })
 
-            // 2. Group chats by driverId (chats without driverId are kept as individual entries)
-            const driverGroups = new Map<string, any[]>()
+            // 2. Group chats by contactId (priority) or driverId (fallback)
+            // This ensures chats created via Contact API (with contactId but no driverId)
+            // are grouped together with chats linked via Driver.
+            const groups = new Map<string, any[]>()
             const ungroupedChats: any[] = []
 
             for (const chat of chats) {
-                if (chat.driverId) {
-                    const key = chat.driverId
-                    if (!driverGroups.has(key)) driverGroups.set(key, [])
-                    driverGroups.get(key)!.push(chat)
+                const key = chat.contactId || chat.driverId
+                if (key) {
+                    if (!groups.has(key)) groups.set(key, [])
+                    groups.get(key)!.push(chat)
                 } else {
                     ungroupedChats.push(chat)
                 }
@@ -62,7 +66,7 @@ export class MessageService {
             // 3. For each driver group, create a merged entry
             const mergedEntries: any[] = []
 
-            for (const [, driverChats] of driverGroups) {
+            for (const [, driverChats] of groups) {
                 // Sort by last message, most recent first
                 driverChats.sort((a: any, b: any) => {
                     const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
@@ -138,10 +142,35 @@ export class MessageService {
     }
 
     /**
+     * Clean up outbound messages stuck in 'sent' status for longer than maxAgeMinutes.
+     * These are messages where delivery was attempted but status was never updated
+     * (e.g., server crash mid-delivery).
+     * Marks them as 'failed' with metadata.error explaining the reason.
+     */
+    static async recoverStuckMessages(maxAgeMinutes = 5): Promise<number> {
+        const cutoff = new Date(Date.now() - maxAgeMinutes * 60_000)
+        const result = await (prisma.message as any).updateMany({
+            where: {
+                direction: 'outbound',
+                status: 'sent',
+                sentAt: { lt: cutoff },
+            },
+            data: {
+                status: 'failed',
+                metadata: { error: `Message stuck in 'sent' for >${maxAgeMinutes}min — marked failed by recovery` },
+            },
+        })
+        if (result.count > 0) {
+            console.log(`[MessageService] RECOVERY: marked ${result.count} stuck messages as failed`)
+        }
+        return result.count
+    }
+
+    /**
      * Sends a message through the appropriate channel.
      */
-    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string) {
-        console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, profileId=${profileId}`)
+    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string) {
+        console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}`)
 
         const chat = await (prisma.chat as any).findUnique({
             where: { id: chatId },
@@ -252,14 +281,26 @@ export class MessageService {
             profileId
         })
 
-        // 1. Save message to DB first (Optimistic)
-        // Всегда сохраняем в исходный chatId чтобы UI мог найти сообщение
+        // 1. Idempotency check: if clientMessageId provided, check for existing message
+        if (clientMessageId) {
+            const existing = await (prisma.message as any).findUnique({
+                where: { clientMessageId },
+                select: { id: true, status: true, chatId: true },
+            })
+            if (existing) {
+                console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
+                return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, error: null, duplicate: true }
+            }
+        }
+
+        // 2. Save message to DB first (Optimistic)
         const messageId = `msg_${Date.now()}`
         const now = new Date()
 
         await (prisma.message as any).create({
             data: {
                 id: messageId,
+                clientMessageId: clientMessageId || null,
                 chatId: chatId,
                 content,
                 direction: 'outbound',
@@ -278,7 +319,7 @@ export class MessageService {
         try {
             switch (channel) {
                 case 'whatsapp':
-                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/whatsapp/whatsapp-actions')
+                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
                     const connId = profileId || (targetChat.metadata as any)?.connectionId
                     console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
                     if (connId) {
@@ -362,6 +403,11 @@ export class MessageService {
             errorMessage = provErr.message
         }
 
+        // Guarantee metadata.error is always set for failed messages
+        if (deliveryStatus === 'failed' && !errorMessage) {
+            errorMessage = 'Ошибка доставки'
+        }
+
         // 3. Update status
         try {
             await (prisma.message as any).update({
@@ -378,6 +424,19 @@ export class MessageService {
             })
         } catch (updErr) {
             console.error(`Final Update FAILED`, updErr)
+        }
+
+        // 4. Update reachability status based on delivery outcome
+        try {
+            const { updateReachabilityByChatId } = await import('@/lib/ReachabilityService')
+            if (deliveryStatus === 'failed') {
+                await updateReachabilityByChatId(chatId, 'unreachable')
+            } else if (deliveryStatus === 'delivered' || deliveryStatus === 'sent') {
+                await updateReachabilityByChatId(chatId, 'confirmed')
+            }
+        } catch (reachErr: any) {
+            // Non-critical — don't break send flow
+            console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
         }
 
         return { success: deliveryStatus !== 'failed', chatId: currentChatId, id: messageId, error: errorMessage }

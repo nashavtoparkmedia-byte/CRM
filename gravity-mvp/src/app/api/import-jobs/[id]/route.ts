@@ -37,6 +37,21 @@ export async function PATCH(
         const validStatuses = ['queued', 'running', 'completed', 'partial', 'failed']
         if (!validStatuses.includes(status)) throw new Error(`Invalid status: ${status}`)
 
+        // Пересчитываем период из реальных sentAt в БД (MAX history API не возвращает timestamps)
+        let realFrom: Date | null = coveredPeriodFrom ? new Date(coveredPeriodFrom) : null
+        let realTo:   Date | null = coveredPeriodTo   ? new Date(coveredPeriodTo)   : null
+
+        try {
+            const dateRange = await prisma.$queryRaw<{ min_date: Date | null, max_date: Date | null }[]>`
+                SELECT MIN("sentAt") AS min_date, MAX("sentAt") AS max_date
+                FROM "Message"
+                WHERE channel = 'max'
+                  AND "sentAt" < NOW() - INTERVAL '10 minutes'
+            `
+            if (dateRange[0]?.min_date) realFrom = dateRange[0].min_date
+            if (dateRange[0]?.max_date) realTo   = dateRange[0].max_date
+        } catch {}
+
         await prisma.$executeRawUnsafe(
             `UPDATE "HistoryImportJob"
             SET
@@ -56,8 +71,8 @@ export async function PATCH(
             contactsFound ?? 0,
             startedAt ? new Date(startedAt) : null,
             finishedAt ? new Date(finishedAt) : null,
-            coveredPeriodFrom ? new Date(coveredPeriodFrom) : null,
-            coveredPeriodTo   ? new Date(coveredPeriodTo)   : null,
+            realFrom,
+            realTo,
             id
         )
 

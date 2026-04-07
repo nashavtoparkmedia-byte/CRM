@@ -17,6 +17,9 @@ export interface Conversation {
     }
     messages?: { content: string }[]
     metadata?: Record<string, any> | null
+    // Contact Model (MVP)
+    contactId?: string | null
+    contactIdentityId?: string | null
     // Multi-channel aggregation fields (from merged driver chats)
     allChatIds?: string[]
     channelMap?: Record<string, string> // { whatsapp: chatId, telegram: chatId, max: chatId }

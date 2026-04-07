@@ -82,6 +82,56 @@ export async function disconnectMax(id: string) {
     }
 }
 
+export async function pauseMaxConnection(id: string, deleteMessages: boolean) {
+    console.log(`[MAX-ACTIONS] pauseMaxConnection id=${id} deleteMessages=${deleteMessages}`)
+    await prisma.maxConnection.update({
+        where: { id },
+        data: { isActive: false } as any
+    })
+    if (deleteMessages) {
+        await deleteMaxMessages(id)
+    }
+    revalidatePath('/settings/integrations/max')
+}
+
+export async function resumeMaxConnection(id: string, catchUp: boolean) {
+    console.log(`[MAX-ACTIONS] resumeMaxConnection id=${id} catchUp=${catchUp}`)
+    if (catchUp) {
+        // Flush buffered MAX messages from unified table
+        const buffered = await (prisma as any).message.findMany({
+            where: { status: 'queued', channel: 'max', direction: 'inbound', metadata: { path: ['connectionId'], equals: id } },
+            include: { chat: true }
+        })
+        if (buffered.length > 0) {
+            const ids = buffered.map((m: any) => m.id)
+            await (prisma as any).message.updateMany({ where: { id: { in: ids } }, data: { status: 'delivered', metadata: { connectionId: id, buffered: false } } })
+            const chatIds = [...new Set(buffered.map((m: any) => m.chatId))] as string[]
+            for (const chatId of chatIds) {
+                const latest = buffered.filter((m: any) => m.chatId === chatId).sort((a: any, b: any) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())[0]
+                await (prisma.chat as any).update({ where: { id: chatId }, data: { lastMessageAt: latest.sentAt } })
+            }
+        }
+    } else {
+        await (prisma as any).message.deleteMany({ where: { status: 'queued', channel: 'max', metadata: { path: ['connectionId'], equals: id } } }).catch(() => {})
+    }
+    await prisma.maxConnection.update({ where: { id }, data: { isActive: true } as any })
+    revalidatePath('/settings/integrations/max')
+}
+
+export async function deleteMaxMessages(id: string) {
+    console.log(`[MAX-ACTIONS] deleteMaxMessages connectionId=${id}`)
+    const chats = await (prisma.chat as any).findMany({
+        where: { channel: 'max' },
+        select: { id: true }
+    })
+    if (chats.length > 0) {
+        const chatIds = chats.map((c: any) => c.id)
+        await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
+        await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+    }
+    revalidatePath('/messages')
+}
+
 // Update settings (name, default status)
 export async function updateMaxConnectionSettings(id: string, name: string, isDefault: boolean) {
     try {
@@ -110,21 +160,21 @@ export async function updateMaxConnectionSettings(id: string, name: string, isDe
 }
 
 // Send a message via MAX Personal Account (Web Scraper)
-export async function sendMaxPersonalMessage(phone: string, message: string, name?: string) {
-    if (!phone || !message) {
-        throw new Error("Phone and message are required")
+// target can be a MAX internal chatId (e.g. "201482140") or a phone number (e.g. "79222155750")
+export async function sendMaxPersonalMessage(target: string, message: string, name?: string) {
+    if (!target || !message) {
+        throw new Error("Target (chatId or phone) and message are required")
     }
 
-    // Normalize phone to clean digits
-    const cleanPhone = phone.replace(/\D/g, '')
-    if (!cleanPhone) throw new Error("Invalid phone number")
+    const cleanTarget = target.replace(/\D/g, '')
+    if (!cleanTarget) throw new Error("Invalid target")
 
     try {
-        console.log(`[CRM] Sending MAX message: chatId=${cleanPhone}, name=${name || 'N/A'}`)
+        console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}`)
         const response = await fetch("http://localhost:3005/send-message", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chatId: cleanPhone, message })
+            body: JSON.stringify({ chatId: cleanTarget, message })
         })
 
         if (!response.ok) {

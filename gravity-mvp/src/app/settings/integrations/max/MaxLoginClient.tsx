@@ -1,18 +1,23 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { 
+import {
     MessageSquare, CheckCircle2, ShieldAlert,
-    Trash2, Plus, LogOut, Check, RefreshCw, Smartphone
+    Trash2, Plus, LogOut, Check, RefreshCw, Smartphone, PauseCircle, PlayCircle, Loader2
 } from "lucide-react"
+import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { 
-    addMaxConnection, 
-    disconnectMax, 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import {
+    addMaxConnection,
+    disconnectMax,
     updateMaxConnectionSettings,
-    sendMaxMessage
+    sendMaxMessage,
+    pauseMaxConnection,
+    resumeMaxConnection,
+    deleteMaxMessages
 } from "../../../max-actions"
 
 export default function MaxLoginClient({ initialConnections = [] }: { initialConnections: any[] }) {
@@ -28,6 +33,13 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
     // Inline edit state
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editName, setEditName] = useState('')
+
+    // Dialog state for pause/disconnect
+    const [pauseDialog, setPauseDialog] = useState<string | null>(null)
+    const [resumeDialog, setResumeDialog] = useState<string | null>(null)
+    const [disconnectDialog, setDisconnectDialog] = useState<{ id: string; isPersonal?: boolean } | null>(null)
+    const [actionLoading, setActionLoading] = useState(false)
+    const [isPersonalPaused, setIsPersonalPaused] = useState(false)
 
     // Personal Account (QR) State
     const [qrUrl, setQrUrl] = useState<string | null>(null)
@@ -114,24 +126,55 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
         }
     }
 
-    const handleDisconnect = async (id: string, isPersonal = false) => {
-        if (!isPersonal && !confirm('Вы уверены, что хотите удалить это подключение?')) return
-        
+    const handleDisconnectConfirm = async (deleteMessages: boolean) => {
+        if (!disconnectDialog) return
+        setActionLoading(true)
         try {
-            if (isPersonal) {
-                // Чтобы отключить личный аккаунт, мы просто перезапускаем скрапер
-                // который очистит папку сессии (см. maxBrowser.js restart)
+            if (disconnectDialog.isPersonal) {
                 await handleRestartScraper()
                 setIsPersonalLoggedIn(false)
-                return;
-            }
-
-            await disconnectMax(id)
-            if (initialConnections.length <= 1) {
-                setIsAddingNew(true)
+            } else {
+                if (deleteMessages) await deleteMaxMessages(disconnectDialog.id)
+                await disconnectMax(disconnectDialog.id)
+                if (initialConnections.length <= 1) setIsAddingNew(true)
             }
         } catch (err: any) {
             console.error("Failed to disconnect", err)
+        } finally {
+            setActionLoading(false)
+            setDisconnectDialog(null)
+        }
+    }
+
+    const handlePauseConfirm = async (deleteMessages: boolean) => {
+        if (!pauseDialog) return
+        setActionLoading(true)
+        try {
+            if (pauseDialog === 'personal') {
+                setIsPersonalPaused(true)
+            } else {
+                await pauseMaxConnection(pauseDialog, deleteMessages)
+                window.location.reload()
+            }
+        } finally {
+            setActionLoading(false)
+            setPauseDialog(null)
+        }
+    }
+
+    const handleResumeConfirm = async (catchUp: boolean) => {
+        if (!resumeDialog) return
+        setActionLoading(true)
+        try {
+            if (resumeDialog === 'personal') {
+                setIsPersonalPaused(false)
+            } else {
+                await resumeMaxConnection(resumeDialog, catchUp)
+                window.location.reload()
+            }
+        } finally {
+            setActionLoading(false)
+            setResumeDialog(null)
         }
     }
 
@@ -179,24 +222,22 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
     }
 
     return (
+        <>
         <div className="flex w-full flex-col gap-8 lg:flex-row animate-in fade-in duration-500">
             <div className="flex flex-1 flex-col gap-6">
                 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <TabsList className="mb-6 grid w-full max-w-md grid-cols-2">
-                        <TabsTrigger value="bots" className="gap-2"><MessageSquare size={16}/> Боты (API)</TabsTrigger>
-                        <TabsTrigger value="personal" className="gap-2"><Smartphone size={16}/> Личный Аккаунт</TabsTrigger>
+                    <TabsList className="mb-6 inline-flex h-10 rounded-xl border bg-muted/40 p-1 w-full max-w-sm">
+                        <TabsTrigger value="bots" className="gap-2 flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"><MessageSquare size={15}/> Боты (API)</TabsTrigger>
+                        <TabsTrigger value="personal" className="gap-2 flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"><Smartphone size={15}/> Личный аккаунт</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="bots" className="space-y-6">
+                    <TabsContent value="bots" className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="text-xl font-bold text-foreground">Подключенные боты</h2>
-                                <p className="text-sm text-muted-foreground">Управляйте вашими аккаунтами MAX</p>
-                            </div>
+                            <h2 className="text-base font-semibold text-foreground">Подключенные боты ({initialConnections.length})</h2>
                             {initialConnections.length > 0 && !isAddingNew && (
-                                <Button onClick={() => setIsAddingNew(true)} className="gap-2">
-                                    <Plus size={16} /> Добавить бота
+                                <Button onClick={() => setIsAddingNew(true)} variant="outline" size="sm" className="gap-1.5">
+                                    <Plus size={14} /> Добавить бота
                                 </Button>
                             )}
                         </div>
@@ -210,104 +251,74 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         ) : (
                             <div className="grid gap-4">
                                 {initialConnections.map((conn) => (
-                                    <div 
-                                        key={conn.id} 
-                                        className={`relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm transition-all ${
-                                            conn.isDefault ? 'border-primary/50 ring-1 ring-primary/20' : 'hover:border-border/80'
-                                        }`}
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex gap-4">
-                                                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-blue-100/50">
-                                                    <MessageSquare size={24} className="text-blue-600" />
-                                                </div>
-                                                <div className="flex flex-col">
-                                                    {editingId === conn.id ? (
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <Input 
-                                                                value={editName}
-                                                                onChange={(e) => setEditName(e.target.value)}
-                                                                className="h-8 w-40 text-sm"
-                                                                autoFocus
-                                                            />
-                                                            <Button size="icon" variant="ghost" className="h-8 w-8 text-green-600" onClick={() => saveEdit(conn)}>
-                                                                <Check size={14} />
-                                                            </Button>
-                                                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingId(null)}>
-                                                                <X size={14} />
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <h3 className="font-bold text-foreground">{conn.name || 'MAX Bot'}</h3>
-                                                            <button 
-                                                                onClick={() => startEditing(conn)}
-                                                                className="text-xs text-muted-foreground hover:text-foreground underline decoration-dashed"
-                                                            >
-                                                                изм.
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                    
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="flex items-center gap-1.5 rounded-full bg-emerald-100/50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                                            Бот активен
-                                                        </span>
+                                    <div key={conn.id} className="rounded-2xl border bg-card p-5 shadow-sm transition-all">
+                                        <div className="flex items-start gap-3 mb-3">
+                                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                                                <MessageSquare size={18} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                {editingId === conn.id ? (
+                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                        <Input
+                                                            value={editName}
+                                                            onChange={(e) => setEditName(e.target.value)}
+                                                            className="h-7 w-36 text-sm"
+                                                            autoFocus
+                                                        />
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-green-600" onClick={() => saveEdit(conn)}>
+                                                            <Check size={13} />
+                                                        </Button>
+                                                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingId(null)}>
+                                                            <X size={13} />
+                                                        </Button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                                                        <span className="font-semibold text-sm text-foreground">{conn.name || 'MAX Bot'}</span>
+                                                        <button
+                                                            onClick={() => startEditing(conn)}
+                                                            className="text-[10px] text-muted-foreground hover:text-foreground underline decoration-dashed"
+                                                        >
+                                                            изм.
+                                                        </button>
                                                         {conn.isDefault && (
-                                                            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary-foreground">
-                                                                Основной
-                                                            </span>
+                                                            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-foreground/70">основной</span>
                                                         )}
                                                     </div>
-                                                    <div className="mt-3 text-xs text-muted-foreground font-mono">
-                                                        Token: {conn.botToken.substring(0, 10)}...
-                                                    </div>
+                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    {conn.isPaused ? (
+                                                        <span className="flex items-center gap-1 text-[11px] text-amber-600">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> На паузе
+                                                        </span>
+                                                    ) : (
+                                                        <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+                                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Активен
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[11px] text-muted-foreground font-mono">{conn.botToken.substring(0, 10)}...</span>
                                                 </div>
                                             </div>
-
-                                            <div className="flex flex-col items-end gap-2">
-                                                {!conn.isDefault && (
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        className="text-xs h-8"
-                                                        onClick={() => handleSetDefault(conn)}
-                                                    >
-                                                        Сделать основным
-                                                    </Button>
-                                                )}
-                                                <Button 
-                                                    variant="ghost" 
-                                                    size="sm" 
-                                                    className="text-xs h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                                    onClick={() => handleDisconnect(conn.id)}
-                                                >
-                                                    <LogOut size={14} className="mr-1.5" /> Отключить
-                                                </Button>
-                                            </div>
                                         </div>
-                                        
-                                        {/* Test Message Section for Bot */}
-                                        <div className="mt-4 flex flex-col gap-3 rounded-xl bg-secondary/30 p-4 border border-dashed">
-                                            <p className="text-[11px] font-semibold text-muted-foreground uppercase">Тест отправки (Bot API)</p>
-                                            <div className="flex gap-3">
-                                                <Input 
-                                                    placeholder="Номер телефона (79...)"
-                                                    value={testPhone}
-                                                    onChange={(e) => setTestPhone(e.target.value)}
-                                                    className="h-9 text-xs"
-                                                />
-                                                <Button 
-                                                    size="sm" 
-                                                    onClick={() => handleSendTest(false, conn.id)}
-                                                    disabled={testLoading}
-                                                    className="gap-2 shrink-0"
-                                                >
-                                                    {testLoading ? <RefreshCw size={14} className="animate-spin"/> : <MessageSquare size={14} />}
-                                                    Проверить бота
+
+                                        <div className="flex items-center justify-end gap-1 pt-3 border-t border-dashed">
+                                            {!conn.isDefault && (
+                                                <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
+                                                    Основным
                                                 </Button>
-                                            </div>
+                                            )}
+                                            {conn.isPaused ? (
+                                                <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog(conn.id)}>
+                                                    <PlayCircle size={13} className="mr-1.5" /> Включить
+                                                </Button>
+                                            ) : (
+                                                <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog(conn.id)}>
+                                                    <PauseCircle size={13} className="mr-1.5" /> Пауза
+                                                </Button>
+                                            )}
+                                            <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ id: conn.id })}>
+                                                <LogOut size={13} className="mr-1.5" /> Отключить
+                                            </Button>
                                         </div>
                                     </div>
                                 ))}
@@ -315,95 +326,54 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         )}
                     </TabsContent>
 
-                    <TabsContent value="personal" className="space-y-6">
-                         <div className="flex items-center justify-between">
-                            <div>
-                                <h2 className="text-xl font-bold text-foreground">Личный аккаунт MAX</h2>
-                                <p className="text-sm text-muted-foreground">Используйте для отправки сообщений от своего имени</p>
-                            </div>
+                    <TabsContent value="personal" className="space-y-4">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-base font-semibold text-foreground">Личный аккаунт MAX</h2>
                             {!isScraperOnline && (
-                                 <span className="flex items-center gap-1.5 rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 border border-red-200">
-                                    <ShieldAlert size={14} /> Скрейпер MAX не запущен
+                                <span className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Скрейпер не запущен
                                 </span>
                             )}
                         </div>
 
                         {isPersonalLoggedIn ? (
-                             <div className="relative overflow-hidden rounded-2xl border bg-card p-6 shadow-sm border-primary/50 ring-1 ring-primary/20">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex gap-4">
-                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-100/50">
-                                            <Smartphone size={24} className="text-emerald-600" />
-                                        </div>
-                                        <div className="flex flex-col">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <h3 className="font-bold text-foreground">Ваш MAX Аккаунт</h3>
-                                            </div>
-                                            
-                                            <div className="flex items-center gap-3">
-                                                <span className="flex items-center gap-1.5 rounded-full bg-emerald-100/50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                    Подключен (Web Scraper)
-                                                </span>
-                                            </div>
-                                            <div className="mt-3 text-xs text-muted-foreground">
-                                                Вы можете отправлять сообщения напрямую водителям через веб-интерфейс.
-                                            </div>
-                                        </div>
+                            <div className="rounded-2xl border bg-card p-5 shadow-sm transition-all">
+                                <div className="flex items-start gap-3 mb-3">
+                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isPersonalPaused ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                        <Smartphone size={18} />
                                     </div>
-
-                                    <div className="flex flex-col items-end gap-2">
-                                         <Button 
-                                            variant="ghost" 
-                                            size="sm" 
-                                            className="text-xs h-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                            onClick={() => handleDisconnect('personal', true)}
-                                        >
-                                            <LogOut size={14} className="mr-1.5" /> Выйти
-                                        </Button>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="font-semibold text-sm text-foreground mb-0.5">Личный аккаунт MAX</div>
+                                        <div className="flex items-center gap-2">
+                                            {isPersonalPaused ? (
+                                                <span className="flex items-center gap-1 text-[11px] text-amber-600">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> На паузе
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Подключен через браузер
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Test Message Section for Personal */}
-                                <div className="mt-6 flex flex-col gap-4 rounded-xl bg-primary/5 p-6 border border-primary/20">
-                                    <div className="flex items-center justify-between">
-                                        <h4 className="text-sm font-bold">Проверить отправку через браузер</h4>
-                                        <span className="text-[10px] text-muted-foreground uppercase bg-background px-2 py-1 rounded-md border">Web Scraper Mode</span>
-                                    </div>
-                                    <div className="grid gap-3">
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div>
-                                                <label className="text-[10px] text-muted-foreground uppercase mb-1 block">Номер получателя</label>
-                                                <Input 
-                                                    placeholder="Напр. 79991234567"
-                                                    value={testPhone}
-                                                    onChange={(e) => setTestPhone(e.target.value)}
-                                                    className="h-10"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] text-muted-foreground uppercase mb-1 block">Текст сообщения</label>
-                                                <Input 
-                                                    placeholder="Текст для теста..."
-                                                    value={testMessage}
-                                                    onChange={(e) => setTestMessage(e.target.value)}
-                                                    className="h-10"
-                                                />
-                                            </div>
-                                        </div>
-                                        <Button 
-                                            onClick={() => handleSendTest(true)}
-                                            disabled={testLoading || !testPhone}
-                                            className="w-full gap-2 py-6 text-base"
-                                        >
-                                            {testLoading ? <RefreshCw size={20} className="animate-spin"/> : <MessageSquare size={20} />}
-                                            Отправить тестовое сообщение
+                                {/* История сообщений */}
+                                <ChannelSyncBlock channel="max" scraperUrl="http://localhost:3005" />
+
+                                <div className="flex items-center justify-end gap-1 pt-3 mt-3 border-t border-dashed">
+                                    {isPersonalPaused ? (
+                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog('personal')}>
+                                            <PlayCircle size={13} className="mr-1.5" /> Включить
                                         </Button>
-                                        <p className="text-[10px] text-center text-muted-foreground">
-                                            Внимание: при отправке через браузер скрейпер имитирует действия человека. 
-                                            Вы увидите результат в логах скрейпера.
-                                        </p>
-                                    </div>
+                                    ) : (
+                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog('personal')}>
+                                            <PauseCircle size={13} className="mr-1.5" /> Пауза
+                                        </Button>
+                                    )}
+                                    <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ id: 'personal', isPersonal: true })}>
+                                        <LogOut size={13} className="mr-1.5" /> Выйти
+                                    </Button>
                                 </div>
                             </div>
                         ) : (
@@ -464,74 +434,137 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
             {/* Right side - Add Form for Bots only */}
             {isAddingNew && activeTab === "bots" && (
-                <div className="flex w-full flex-col max-w-md">
-                    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-                        <div className="border-b bg-muted/20 px-6 py-4">
-                            <h2 className="font-semibold text-foreground">Подключение MAX Бота</h2>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                                Введите токен вашего официального MAX бота
-                            </p>
-                        </div>
-                        
-                        <div className="p-6">
-                            {error && (
-                                <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
-                                    <ShieldAlert size={18} className="shrink-0" />
-                                    <p>{error}</p>
-                                </div>
+                <div className="flex w-full flex-col max-w-sm">
+                    <div className="rounded-2xl border bg-card shadow-sm p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base font-semibold text-foreground">Подключение бота</h2>
+                            {initialConnections.length > 0 && (
+                                <Button type="button" variant="ghost" size="sm" onClick={() => setIsAddingNew(false)}>Отмена</Button>
                             )}
-
-                            <form onSubmit={handleAddBot} className="flex flex-col gap-5">
-                                <div>
-                                    <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
-                                        Название в CRM
-                                    </label>
-                                    <Input
-                                        placeholder="Напр. Бот поддержки 1"
-                                        value={name}
-                                        onChange={(e) => setName(e.target.value)}
-                                        className="bg-secondary/50"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
-                                        Bot Token
-                                    </label>
-                                    <Input
-                                        placeholder="Введите токен из настроек MAX"
-                                        value={botToken}
-                                        onChange={(e) => setBotToken(e.target.value)}
-                                        required
-                                        className="bg-secondary/50 font-mono text-xs"
-                                    />
-                                </div>
-                                
-                                <div className="mt-2 flex gap-3">
-                                    <Button
-                                        type="submit"
-                                        disabled={loading || !botToken}
-                                        className="flex-1 py-6 text-base shadow-sm"
-                                    >
-                                        {loading ? 'Подключение...' : 'Подключить бота'}
-                                    </Button>
-                                    
-                                    {initialConnections.length > 0 && (
-                                        <Button 
-                                            type="button" 
-                                            variant="outline"
-                                            onClick={() => setIsAddingNew(false)}
-                                            className="px-6 py-6"
-                                        >
-                                            Отмена
-                                        </Button>
-                                    )}
-                                </div>
-                            </form>
                         </div>
+
+                        {error && (
+                            <div className="mb-4 flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                                <ShieldAlert size={16} className="shrink-0" />
+                                <p>{error}</p>
+                            </div>
+                        )}
+
+                        <form onSubmit={handleAddBot} className="flex flex-col gap-4">
+                            <div>
+                                <label className="mb-1.5 block text-xs font-medium text-muted-foreground uppercase">
+                                    Название в CRM
+                                </label>
+                                <Input
+                                    placeholder="Напр. Бот поддержки 1"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    className="bg-secondary/50"
+                                />
+                            </div>
+                            <div>
+                                <label className="mb-1.5 block text-xs font-medium text-muted-foreground uppercase">
+                                    Bot Token
+                                </label>
+                                <Input
+                                    placeholder="Введите токен из настроек MAX"
+                                    value={botToken}
+                                    onChange={(e) => setBotToken(e.target.value)}
+                                    required
+                                    className="bg-secondary/50 font-mono text-xs"
+                                />
+                            </div>
+
+                            <Button
+                                type="submit"
+                                disabled={loading || !botToken}
+                                className="w-full"
+                            >
+                                {loading ? 'Подключение...' : 'Подключить бота'}
+                            </Button>
+                        </form>
                     </div>
                 </div>
             )}
         </div>
+
+        {/* PAUSE DIALOG */}
+        <Dialog open={!!pauseDialog} onOpenChange={(o) => !o && setPauseDialog(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Поставить на паузу</DialogTitle>
+                    <DialogDescription>
+                        Подключение останется активным. Новые сообщения будут накапливаться и не отображаться в CRM.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-2">
+                    <p className="text-sm text-muted-foreground">Что сделать с текущими сообщениями?</p>
+                </div>
+                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                    <Button variant="outline" onClick={() => handlePauseConfirm(false)} disabled={actionLoading} className="w-full">
+                        {actionLoading && <Loader2 size={14} className="mr-2 animate-spin" />}
+                        Сохранить сообщения
+                    </Button>
+                    <Button variant="destructive" onClick={() => handlePauseConfirm(true)} disabled={actionLoading} className="w-full">
+                        Удалить сообщения и поставить на паузу
+                    </Button>
+                    <Button variant="ghost" onClick={() => setPauseDialog(null)} className="w-full">Отмена</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        {/* RESUME DIALOG */}
+        <Dialog open={!!resumeDialog} onOpenChange={(o) => !o && setResumeDialog(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Возобновить</DialogTitle>
+                    <DialogDescription>
+                        Канал снова будет активен и сообщения начнут поступать в CRM.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-2">
+                    <p className="text-sm text-muted-foreground">Что сделать с накопленными сообщениями?</p>
+                </div>
+                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                    <Button onClick={() => handleResumeConfirm(true)} disabled={actionLoading} className="w-full">
+                        {actionLoading && <Loader2 size={14} className="mr-2 animate-spin" />}
+                        Загрузить накопленные сообщения
+                    </Button>
+                    <Button variant="outline" onClick={() => handleResumeConfirm(false)} disabled={actionLoading} className="w-full">
+                        Удалить накопленные и возобновить
+                    </Button>
+                    <Button variant="ghost" onClick={() => setResumeDialog(null)} className="w-full">Отмена</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        {/* DISCONNECT DIALOG */}
+        <Dialog open={!!disconnectDialog} onOpenChange={(o) => !o && setDisconnectDialog(null)}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Отключить аккаунт</DialogTitle>
+                    <DialogDescription>
+                        {disconnectDialog?.isPersonal
+                            ? 'Выйти из личного аккаунта MAX? Для повторного подключения потребуется QR-код.'
+                            : 'Бот будет отключён от CRM. Вы сможете подключить его снова позже.'}
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                    <Button variant="destructive" onClick={() => handleDisconnectConfirm(true)} disabled={actionLoading} className="w-full">
+                        {actionLoading && <Loader2 size={14} className="mr-2 animate-spin" />}
+                        Отключить и удалить сообщения
+                    </Button>
+                    {!disconnectDialog?.isPersonal && (
+                        <Button variant="outline" onClick={() => handleDisconnectConfirm(false)} disabled={actionLoading} className="w-full">
+                            Отключить, сохранить сообщения
+                        </Button>
+                    )}
+                    <Button variant="ghost" onClick={() => setDisconnectDialog(null)} className="w-full">Отмена</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        </>
     )
 }
 

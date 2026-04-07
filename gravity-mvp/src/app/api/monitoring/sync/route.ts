@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { normalizePhoneE164 } from '@/lib/phoneUtils';
 
 // In-memory mutex to prevent parallel sync runs
 let syncRunning = false;
@@ -33,6 +34,182 @@ function normalizePhone(phone: string | null | undefined): string | null {
     return cleaned; // return as-is if can't normalize
 }
 
+/**
+ * Sync Contact for a Yandex driver.
+ * Spec: unified-contact-spec.md v1.1 §6.2 (Yandex sync decision table)
+ *
+ * Scenario 1: Contact(yandexDriverId) exists → update displayName if source=yandex
+ * Scenario 2: Contact not found by yandexDriverId, but phone matches → link to yandex
+ * Scenario 3: No match → create new Contact(masterSource=yandex)
+ *
+ * Returns counters delta for the caller to aggregate.
+ */
+async function syncContactForDriver(
+    yandexDriverId: string,
+    fullName: string,
+    phone: string | null,
+): Promise<{ action: 'created' | 'linked' | 'updated' | 'noop'; phonesDeactivated: number; phonesCreated: number }> {
+    const normalizedE164 = phone ? normalizePhoneE164(phone) : null;
+
+    // ── Scenario 1: Contact already linked to this yandexDriverId ─────
+    const existing = await prisma.contact.findUnique({
+        where: { yandexDriverId },
+        include: {
+            phones: { where: { isActive: true, source: 'yandex' }, orderBy: { isPrimary: 'desc' } },
+        },
+    });
+
+    if (existing) {
+        const updates: any = {};
+
+        // Update displayName if source is yandex (not manual override)
+        if (existing.displayNameSource === 'yandex' && existing.displayName !== fullName) {
+            updates.displayName = fullName;
+        }
+
+        // Check phone change
+        let deactivated = 0;
+        let created = 0;
+        const currentYandexPhone = existing.phones[0];
+
+        if (normalizedE164 && currentYandexPhone && currentYandexPhone.phone !== normalizedE164) {
+            // Phone changed in Yandex → deactivate old, create new
+            await prisma.contactPhone.update({
+                where: { id: currentYandexPhone.id },
+                data: { isActive: false },
+            });
+            deactivated++;
+
+            const newPhone = await prisma.contactPhone.create({
+                data: {
+                    contactId: existing.id,
+                    phone: normalizedE164,
+                    source: 'yandex',
+                    isPrimary: true,
+                },
+            });
+            created++;
+
+            // Unset old primary, set new
+            if (existing.primaryPhoneId === currentYandexPhone.id) {
+                updates.primaryPhoneId = newPhone.id;
+            }
+        } else if (normalizedE164 && !currentYandexPhone) {
+            // No yandex phone yet → create
+            const newPhone = await prisma.contactPhone.create({
+                data: {
+                    contactId: existing.id,
+                    phone: normalizedE164,
+                    source: 'yandex',
+                    isPrimary: !existing.primaryPhoneId,
+                },
+            });
+            created++;
+            if (!existing.primaryPhoneId) {
+                updates.primaryPhoneId = newPhone.id;
+            }
+        }
+
+        if (Object.keys(updates).length > 0) {
+            await prisma.contact.update({ where: { id: existing.id }, data: updates });
+        }
+
+        return { action: (Object.keys(updates).length > 0 || deactivated > 0) ? 'updated' : 'noop', phonesDeactivated: deactivated, phonesCreated: created };
+    }
+
+    // ── Scenario 2: No Contact by yandexDriverId, but phone matches ───
+    if (normalizedE164) {
+        const phoneRecord = await prisma.contactPhone.findFirst({
+            where: { phone: normalizedE164, isActive: true },
+            include: { contact: true },
+        });
+
+        if (phoneRecord && !phoneRecord.contact.yandexDriverId) {
+            // Link existing Contact to Yandex
+            const nameUpdate = phoneRecord.contact.displayNameSource !== 'manual'
+                ? { displayName: fullName, displayNameSource: 'yandex' as const }
+                : {};
+
+            await prisma.contact.update({
+                where: { id: phoneRecord.contactId },
+                data: {
+                    yandexDriverId,
+                    masterSource: 'yandex',
+                    ...nameUpdate,
+                },
+            });
+
+            // Create yandex_pro identity if not exists
+            await prisma.contactIdentity.upsert({
+                where: { channel_externalId: { channel: 'yandex_pro', externalId: yandexDriverId } },
+                create: {
+                    contactId: phoneRecord.contactId,
+                    channel: 'yandex_pro',
+                    externalId: yandexDriverId,
+                    phoneId: phoneRecord.id,
+                    source: 'yandex',
+                    confidence: 1.0,
+                },
+                update: {},
+            });
+
+            console.log(`[sync] Linked Contact ${phoneRecord.contactId} to Yandex ${yandexDriverId} via phone ${normalizedE164}`);
+            return { action: 'linked', phonesDeactivated: 0, phonesCreated: 0 };
+        }
+    }
+
+    // ── Scenario 3: No match → create new Contact ─────────────────────
+    const contact = await prisma.contact.create({
+        data: {
+            displayName: fullName,
+            displayNameSource: 'yandex',
+            masterSource: 'yandex',
+            yandexDriverId,
+        },
+    });
+
+    let newPhoneId: string | null = null;
+    if (normalizedE164) {
+        // Check if phone already belongs to another contact (edge case: phone conflict)
+        const existingPhone = await prisma.contactPhone.findFirst({
+            where: { phone: normalizedE164, isActive: true },
+        });
+
+        if (!existingPhone) {
+            const newPhone = await prisma.contactPhone.create({
+                data: {
+                    contactId: contact.id,
+                    phone: normalizedE164,
+                    source: 'yandex',
+                    isPrimary: true,
+                },
+            });
+            newPhoneId = newPhone.id;
+
+            await prisma.contact.update({
+                where: { id: contact.id },
+                data: { primaryPhoneId: newPhone.id },
+            });
+        } else {
+            console.log(`[sync] Phone ${normalizedE164} already belongs to contact ${existingPhone.contactId}, skipping phone creation for new contact ${contact.id}`);
+        }
+    }
+
+    // Create yandex_pro identity
+    await prisma.contactIdentity.create({
+        data: {
+            contactId: contact.id,
+            channel: 'yandex_pro',
+            externalId: yandexDriverId,
+            phoneId: newPhoneId,
+            source: 'yandex',
+            confidence: 1.0,
+        },
+    });
+
+    return { action: 'created', phonesDeactivated: 0, phonesCreated: normalizedE164 ? 1 : 0 };
+}
+
 export async function POST(req: NextRequest) {
     // Auth: validate X-CRON-KEY
     const cronKey = req.headers.get('x-cron-key');
@@ -61,6 +238,14 @@ export async function POST(req: NextRequest) {
         let offset = 0;
         let totalFetched = 0;
         let upsertedCount = 0;
+
+        // Contact sync counters
+        let contactsCreated = 0;
+        let contactsLinkedByPhone = 0;
+        let contactsUpdated = 0;
+        let phonesDeactivated = 0;
+        let phonesCreated = 0;
+        let contactSyncErrors = 0;
 
         while (true) {
             const res = await fetch(`https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list`, {
@@ -102,23 +287,38 @@ export async function POST(req: NextRequest) {
                 const lastOrderAt = lastOrderAtRaw ? new Date(lastOrderAtRaw) : null;
 
                 const phone = normalizePhone(dp.phones?.[0]);
+                const fullName = `${dp.last_name || ''} ${dp.first_name || ''}`.trim() || 'No Name';
 
                 await prisma.driver.upsert({
                     where: { yandexDriverId: id },
                     create: {
                         yandexDriverId: id,
-                        fullName: `${dp.last_name || ''} ${dp.first_name || ''}`.trim() || 'No Name',
+                        fullName,
                         phone,
                         lastOrderAt,
                         segment: 'unknown',
                     },
                     update: {
-                        fullName: `${dp.last_name || ''} ${dp.first_name || ''}`.trim() || 'No Name',
+                        fullName,
                         phone,
                         lastOrderAt,
                     },
                 });
                 upsertedCount++;
+
+                // ── Contact Model sync ────────────────────────────
+                try {
+                    const result = await syncContactForDriver(id, fullName, phone);
+                    if (result.action === 'created') contactsCreated++;
+                    else if (result.action === 'linked') contactsLinkedByPhone++;
+                    else if (result.action === 'updated') contactsUpdated++;
+                    phonesDeactivated += result.phonesDeactivated;
+                    phonesCreated += result.phonesCreated;
+                } catch (contactErr: any) {
+                    contactSyncErrors++;
+                    console.error(`[sync] Contact sync error for yandexDriverId=${id}: ${contactErr.message}`);
+                }
+                // ──────────────────────────────────────────────────
             }
 
             totalFetched += profiles.length;
@@ -131,6 +331,14 @@ export async function POST(req: NextRequest) {
             ok: true,
             totalFetched,
             upsertedCount,
+            contactSync: {
+                created: contactsCreated,
+                linkedByPhone: contactsLinkedByPhone,
+                updated: contactsUpdated,
+                phonesDeactivated,
+                phonesCreated,
+                errors: contactSyncErrors,
+            },
         });
     } catch (err: any) {
         console.error('[sync] Fatal Error:', err.message);

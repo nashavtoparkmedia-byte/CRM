@@ -4,7 +4,9 @@ import path from 'path'
 import fs from 'fs'
 import fetch from 'node-fetch'
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
+import * as registry from '@/lib/TransportRegistry'
 
 const MAX_MEDIA_SIZE_BYTES = 10 * 1024 * 1024 // 10MB per file
 const HISTORY_MONTHS = 3
@@ -13,6 +15,11 @@ const HISTORY_MONTHS = 3
 const globalForWA = global as unknown as { waClients: Map<string, Client> }
 const clients = globalForWA.waClients || new Map<string, Client>()
 if (process.env.NODE_ENV !== 'production') globalForWA.waClients = clients
+
+// instanceId per connection — links client to registry entry (survive hot reload)
+const globalForWAIds = global as unknown as { _waInstanceIds?: Map<string, string> }
+const instanceIds = globalForWAIds._waInstanceIds || new Map<string, string>()
+if (process.env.NODE_ENV !== 'production') globalForWAIds._waInstanceIds = instanceIds
 
 if (typeof global.fetch === 'undefined') {
     // @ts-ignore
@@ -211,13 +218,27 @@ export function getClient(connectionId: string): Client | undefined {
     return clients.get(connectionId)
 }
 
+/** Get runtime status — delegates to TransportRegistry. */
+export function getRuntimeStatus() {
+    return registry.getAllEntries().filter(e => e.channel === 'whatsapp')
+}
+
 export async function initializeClient(connectionId: string): Promise<void> {
-    if (clients.has(connectionId)) {
-        console.log(`[WA-SERVICE] Client already exists for ${connectionId}`)
+    // Always ensure registry entry exists
+    registry.ensureEntry(connectionId, 'whatsapp')
+
+    if (clients.has(connectionId) && clients.get(connectionId)!.info) {
+        // Client already alive — just ensure registry reflects ready state
+        if (!instanceIds.has(connectionId)) {
+            const iid = registry.beginNewInstance(connectionId)
+            instanceIds.set(connectionId, iid)
+            registry.setReady(connectionId, iid)
+        }
         return
     }
 
-    console.log(`[WA-SERVICE] Initializing client for ${connectionId}`)
+    const instanceId = registry.beginNewInstance(connectionId)
+    instanceIds.set(connectionId, instanceId)
 
     const client = new Client({
         authStrategy: new LocalAuth({
@@ -259,13 +280,13 @@ export async function initializeClient(connectionId: string): Promise<void> {
 
     client.on('ready', async () => {
         try {
-            console.log(`[WA-SERVICE] Client ready for ${connectionId}`)
+            if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            registry.setReady(connectionId, instanceId)
             const info = client.info
             await safeUpdateConnection(connectionId, {
                 status: 'ready',
                 phoneNumber: info?.wid?.user || null
             })
-            // Start history sync in background
             syncHistory(connectionId, client).catch(err =>
                 console.error(`[WA-SERVICE] Background sync error:`, err)
             )
@@ -365,6 +386,24 @@ export async function initializeClient(connectionId: string): Promise<void> {
                 console.log(`[WA-SERVICE] RELINK chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} linked=${matched}`)
             }
 
+            // ── Contact Model dual write ──────────────────────────────
+            try {
+                const contactResult = await ContactService.resolveContact(
+                    'whatsapp',
+                    normalizedPhone,
+                    phoneDigits,
+                    (msg as any).notifyName || unifiedChat.name || null,
+                )
+                await ContactService.ensureChatLinked(
+                    unifiedChat.id,
+                    contactResult.contact.id,
+                    contactResult.identity.id,
+                )
+            } catch (contactErr: any) {
+                console.error(`[WA-SERVICE] ContactService error (non-blocking): ${contactErr.message}`)
+            }
+            // ──────────────────────────────────────────────────────────
+
             // Legacy WhatsAppMessage
             await prisma.whatsAppMessage.upsert({
                 where: { id_chatId: { id: msg.id._serialized, chatId: rawChatId } },
@@ -428,7 +467,9 @@ export async function initializeClient(connectionId: string): Promise<void> {
 
     client.on('auth_failure', async (msg) => {
         try {
-            console.error(`[WA-SERVICE] Auth failure for ${connectionId}:`, msg)
+            if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            // Unrecoverable — no auto-reconnect
+            registry.setFailed(connectionId, instanceId, `auth_failure: ${msg}`)
             await safeUpdateConnection(connectionId, { status: 'error' })
             clients.delete(connectionId)
         } catch (err) {
@@ -438,9 +479,18 @@ export async function initializeClient(connectionId: string): Promise<void> {
 
     client.on('disconnected', async (reason) => {
         try {
-            console.log(`[WA-SERVICE] Disconnected for ${connectionId}: ${reason}`)
+            if (!registry.isCurrentInstance(connectionId, instanceId)) return
             await safeUpdateConnection(connectionId, { status: 'disconnected' })
             clients.delete(connectionId)
+
+            if (reason === 'LOGOUT') {
+                // Intentional logout — no reconnect
+                registry.setFailed(connectionId, instanceId, `disconnected: ${reason}`)
+            } else {
+                // Recoverable — schedule reconnect with backoff
+                registry.setReconnecting(connectionId, instanceId)
+                registry.scheduleReconnect(connectionId, instanceId, () => initializeClient(connectionId))
+            }
         } catch (err) {
             console.error(`[WA-SERVICE] Disconnect handler error:`, err)
         }
@@ -458,9 +508,9 @@ export async function initializeClient(connectionId: string): Promise<void> {
 export async function destroyClient(connectionId: string): Promise<void> {
     const client = clients.get(connectionId)
     if (!client) return
-    console.log(`[WA-SERVICE] Destroying client for ${connectionId}`)
+    console.log(`[WA-TRANSPORT] client_destroying connId=${connectionId}`)
+    registry.setStopped(connectionId)
 
-    // Use a race to avoid hanging if the browser process is stuck
     try {
         await Promise.race([
             client.destroy(),
@@ -471,12 +521,25 @@ export async function destroyClient(connectionId: string): Promise<void> {
     }
 
     clients.delete(connectionId)
+    instanceIds.delete(connectionId)
     await safeUpdateConnection(connectionId, { status: 'idle', sessionData: null, phoneNumber: null })
 }
 
 export async function sendMessage(connectionId: string, chatId: string, text: string): Promise<{ externalId: string }> {
     let client = clients.get(connectionId)
-    
+
+    // Lightweight runtime validation: detect stale client (puppeteer dead but object in map)
+    // Registry is source of truth for state, but this catches puppeteer crashes between health checks.
+    if (client && !client.info) {
+        console.warn(`[WA-TRANSPORT] stale_client_detected connId=${connectionId}`)
+        const curInstanceId = instanceIds.get(connectionId)
+        if (curInstanceId) {
+            registry.setFailed(connectionId, curInstanceId, 'stale client detected in sendMessage')
+        }
+        clients.delete(connectionId)
+        client = undefined
+    }
+
     // Lazy-load client if missing (e.g. after Next.js hot reload)
     if (!client) {
         const conn = await prisma.whatsAppConnection.findUnique({ where: { id: connectionId } })
@@ -517,13 +580,35 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
 
     if (!client) throw new Error('Client not connected')
 
-    // Ensure chatId has the proper WhatsApp suffix (e.g. @c.us for personal chats, @lid for business linked users)
+    // Ensure chatId has the proper WhatsApp suffix
     const digits = chatId.replace(/\D/g, '')
     const defaultSuffix = digits.length >= 14 ? '@lid' : '@c.us'
     const targetChatId = chatId.includes('@') ? chatId : `${digits}${defaultSuffix}`
-    
-    // The library throws "t: t" if the chat ID format is invalid
-    const msg = await client.sendMessage(targetChatId, text)
+
+    let msg
+    try {
+        msg = await client.sendMessage(targetChatId, text)
+    } catch (sendErr: any) {
+        // Detect puppeteer crash: "detached Frame", "Protocol error", "Target closed"
+        const errMsg = sendErr.message || ''
+        const isPuppeteerDead = errMsg.includes('detached Frame') ||
+            errMsg.includes('Protocol error') ||
+            errMsg.includes('Target closed') ||
+            errMsg.includes('Session closed')
+        if (isPuppeteerDead) {
+            console.warn(`[WA-TRANSPORT] puppeteer_crash_detected connId=${connectionId} error=${errMsg}`)
+            const curInstanceId = instanceIds.get(connectionId)
+            if (curInstanceId) {
+                registry.setFailed(connectionId, curInstanceId, `puppeteer crash: ${errMsg}`)
+            }
+            clients.delete(connectionId)
+        }
+        throw sendErr
+    }
+
+    // Touch registry on successful send
+    const sendInstanceId = instanceIds.get(connectionId)
+    if (sendInstanceId) registry.touch(connectionId, sendInstanceId)
 
     const ts = new Date(msg.timestamp * 1000)
     
@@ -640,4 +725,68 @@ export async function downloadMedia(messageId: string, chatId: string): Promise<
     // This is a limitation of the library; we'd need to fetch by ID
     // For now, return null as placeholder for lazy load endpoint
     return null
+}
+
+// Stub: function was removed but is still imported in settings/ai/actions.ts
+export async function importWhatsAppHistory(
+    jobId: string, mode: string, daysBack?: number, connectionId?: string
+) {
+    console.warn('[WA] importWhatsAppHistory is not implemented')
+}
+
+/**
+ * Check if a phone number is registered on WhatsApp.
+ * Uses client.isRegisteredUser() from whatsapp-web.js.
+ *
+ * On timeout, missing client, or internal error returns { reachable: true } as a soft fallback —
+ * this means "don't show a warning", NOT "confirmed reachable".
+ */
+export async function checkReachability(
+    phone: string,
+    connectionId?: string
+): Promise<{ reachable: boolean; error?: string }> {
+    const TIMEOUT_MS = 8_000
+
+    try {
+        // Find a ready connection
+        let connId = connectionId
+        if (!connId) {
+            const conn = await prisma.whatsAppConnection.findFirst({
+                where: { status: 'ready' },
+                select: { id: true },
+            })
+            if (!conn) return { reachable: true } // No ready connection — soft fallback
+            connId = conn.id
+        }
+
+        const client = clients.get(connId)
+        if (!client || !client.info) {
+            // Client not initialized or stale — soft fallback, don't warn
+            return { reachable: true }
+        }
+
+        // Normalize: strip '+' and non-digits
+        const digits = phone.replace(/\D/g, '')
+        if (digits.length < 10) {
+            return { reachable: true } // Too short to check — soft fallback
+        }
+
+        const result = await Promise.race([
+            client.isRegisteredUser(`${digits}@c.us`),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), TIMEOUT_MS)),
+        ])
+
+        // Timeout → soft fallback
+        if (result === null) return { reachable: true }
+
+        if (result) {
+            return { reachable: true }
+        } else {
+            return { reachable: false, error: 'Номер не зарегистрирован в WhatsApp' }
+        }
+    } catch (err: any) {
+        // Any error — soft fallback
+        console.error(`[WA-CHECK] Error checking ${phone}: ${err.message}`)
+        return { reachable: true }
+    }
 }

@@ -46,6 +46,26 @@ class ContactStore {
   }
 
   /**
+   * Найти userId по номеру телефона
+   * @param {string} phone — номер в любом формате (нормализуем до последних 10 цифр)
+   * @returns {string|null} userId или null
+   */
+  findByPhone(phone) {
+    if (!phone) return null
+    const digits = phone.replace(/\D/g, '')
+    const tail = digits.length > 10 ? digits.slice(-10) : digits
+    if (tail.length < 10) return null
+
+    for (const [userId, c] of this._map.entries()) {
+      if (!c.phone) continue
+      const cDigits = c.phone.replace(/\D/g, '')
+      const cTail = cDigits.length > 10 ? cDigits.slice(-10) : cDigits
+      if (cTail === tail) return userId
+    }
+    return null
+  }
+
+  /**
    * Есть ли контакт
    */
   has(userId) {

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ 
             success: true, 
             count: chats.length,
-            chats: chats.map(c => ({
+            chats: chats.map((c: any) => ({
                 id: c.id,
                 name: c.name,
                 channel: c.channel,

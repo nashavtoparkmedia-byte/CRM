@@ -11,7 +11,7 @@ export const TASK_TYPES = [
     { value: 'other', label: 'Другое' },
 ]
 export type TaskStatus = 'todo' | 'in_progress' | 'waiting_reply' | 'overdue' | 'snoozed' | 'done' | 'cancelled' | 'archived'
-export type TaskPriority = 'high' | 'medium'
+export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
 
 // ─── Base Task DTO (used for all views: list, board, timeline) ─────────────
 

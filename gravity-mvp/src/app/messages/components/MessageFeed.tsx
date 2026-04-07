@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
-import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle } from "lucide-react"
+import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw } from "lucide-react"
 
 // ── Anchor-based scroll memory (module-level, survives remounts) ──
 // Primary: anchor msgId + offset from viewport top
@@ -24,6 +24,7 @@ export default function MessageFeed({
     hasMoreHistory,
     onLoadMore,
     onReply,
+    onRetry,
     onCreateTask,
     activeSearchMessageId,
     onFocusComposer,
@@ -36,6 +37,7 @@ export default function MessageFeed({
     hasMoreHistory: boolean
     onLoadMore: () => void
     onReply?: (msg: Message) => void
+    onRetry?: (msg: Message) => void
     onCreateTask?: (msg: Message) => void
     activeSearchMessageId?: string | null
     onFocusComposer?: () => void
@@ -423,7 +425,7 @@ export default function MessageFeed({
 
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
                             {msg.type !== 'image' && msg.content}
-                            <span className="inline-block w-[52px] h-[10px]" />
+                            <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]'}`} />
                         </div>
 
                         {/* Статус (время + галочки) */}
@@ -438,14 +440,24 @@ export default function MessageFeed({
                             </span>
                             {isOutbound && (
                                 msg.status === 'failed' ? (
-                                    <div className="group/fail relative translate-y-[1px]">
-                                        <AlertCircle size={14} strokeWidth={2.5} className="text-red-500" />
-                                        {msg.metadata?.error && (
-                                            <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/fail:block z-50 pointer-events-none">
-                                                <div className="bg-[#333] text-white text-[10px] leading-tight rounded-lg px-2.5 py-1.5 max-w-[220px] whitespace-pre-wrap shadow-lg">
-                                                    {msg.metadata.error.length > 120 ? msg.metadata.error.substring(0, 120) + '…' : msg.metadata.error}
+                                    <div className="flex items-center gap-1 translate-y-[1px]">
+                                        <div className="group/fail relative">
+                                            <AlertCircle size={14} strokeWidth={2.5} className="text-red-500" />
+                                            {msg.metadata?.error && (
+                                                <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/fail:block z-50 pointer-events-none">
+                                                    <div className="bg-[#333] text-white text-[10px] leading-tight rounded-lg px-2.5 py-1.5 max-w-[220px] whitespace-pre-wrap shadow-lg">
+                                                        {msg.metadata.error.length > 120 ? msg.metadata.error.substring(0, 120) + '…' : msg.metadata.error}
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
+                                        </div>
+                                        {onRetry && (
+                                            <button
+                                                onClick={() => onRetry(msg)}
+                                                className="text-[10px] text-red-500 hover:text-red-700 font-medium transition-colors leading-none"
+                                            >
+                                                Повторить
+                                            </button>
                                         )}
                                     </div>
                                 ) : (

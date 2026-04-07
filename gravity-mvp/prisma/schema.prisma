@@ -319,6 +319,7 @@ model Driver {
   managerTasks         ManagerTask[]
   tasks                Task[]
   maxProfile           DriverMax?
+  contactProfile       Contact?             // inverse of Contact.yandexDriverId → Driver.yandexDriverId
 
   @@index([fullName])
   @@index([segment])
@@ -326,43 +327,53 @@ model Driver {
 }
 
 model Chat {
-  id               String      @id @default(cuid())
-  driverId         String?
-  channel          ChatChannel
-  externalChatId   String      @unique
-  name             String?
-  lastMessageAt    DateTime?
-  unreadCount      Int         @default(0)
-  metadata         Json?       @default("{}")
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
-  requiresResponse Boolean     @default(false)
-  status           String      @default("new")
-  driver           Driver?     @relation(fields: [driverId], references: [id])
-  messages         Message[]
+  id                 String           @id @default(cuid())
+  driverId           String?
+  channel            ChatChannel
+  externalChatId     String           @unique
+  name               String?
+  lastMessageAt      DateTime?
+  unreadCount        Int              @default(0)
+  metadata           Json?            @default("{}")
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  requiresResponse   Boolean          @default(false)
+  status             String           @default("new")
+
+  // Contact Model (Phase 0) — nullable for backward compatibility
+  contactId          String?
+  contactIdentityId  String?
+
+  driver             Driver?          @relation(fields: [driverId], references: [id])
+  contact            Contact?         @relation(fields: [contactId], references: [id])
+  contactIdentity    ContactIdentity? @relation(fields: [contactIdentityId], references: [id])
+  messages           Message[]
 
   @@index([driverId])
+  @@index([contactId])
+  @@index([contactIdentityId])
   @@index([lastMessageAt(sort: Desc)])
   @@index([status])
 }
 
 model Message {
-  id          String              @id @default(cuid())
-  chatId      String
-  direction   MessageDirection
-  type        MessageType         @default(text)
-  content     String
-  status      MessageStatus       @default(sent)
-  aiStatus    AiStatus?
-  channel     ChatChannel?        @default(whatsapp)
-  externalId  String?             @unique
-  metadata    Json?               @default("{}")
-  sentAt      DateTime            @default(now())
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  chat        Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  attachments MessageAttachment[]
-  eventLogs   MessageEventLog[]
+  id              String              @id @default(cuid())
+  clientMessageId String?             @unique    // Idempotency key from frontend
+  chatId          String
+  direction       MessageDirection
+  type            MessageType         @default(text)
+  content         String
+  status          MessageStatus       @default(sent)
+  aiStatus        AiStatus?
+  channel         ChatChannel?        @default(whatsapp)
+  externalId      String?             @unique
+  metadata        Json?               @default("{}")
+  sentAt          DateTime            @default(now())
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  chat            Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  attachments     MessageAttachment[]
+  eventLogs       MessageEventLog[]
 
   @@index([chatId, sentAt(sort: Desc)])
   @@index([externalId])
@@ -585,6 +596,147 @@ enum AnalyticsEventType {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// UNIFIED CONTACT MODEL — spec v1.1
+// ═══════════════════════════════════════════════════════════════════
+
+/// Центральная сущность. Один Contact = один физический человек.
+/// Связь с Driver (Яндекс) опциональна через yandexDriverId.
+model Contact {
+  id                String           @id @default(cuid())
+  displayName       String
+  displayNameSource ContactNameSource @default(channel)
+  masterSource      ContactSource    @default(chat)
+  yandexDriverId    String?          @unique         // FK → Driver.yandexDriverId
+  primaryPhoneId    String?
+  notes             String?
+  customFields      Json?            @default("{}")
+  tags              String[]         @default([])
+  isArchived        Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  phones            ContactPhone[]
+  identities        ContactIdentity[]
+  chats             Chat[]
+  tasks             Task[]
+  mergesAsSurvivor  ContactMerge[]   @relation("MergeSurvivor")
+  mergesAsMerged    ContactMerge[]   @relation("MergeMerged")
+  driver            Driver?          @relation(fields: [yandexDriverId], references: [yandexDriverId])
+
+  @@index([displayName])
+  @@index([isArchived])
+}
+
+/// Телефонный номер контакта. Хранится в E.164 (+79221234567).
+model ContactPhone {
+  id         String          @id @default(cuid())
+  contactId  String
+  phone      String                              // E.164: +79221234567
+  label      String?                             // "основной", "рабочий"
+  isPrimary  Boolean         @default(false)
+  source     ContactPhoneSource @default(manual)
+  isActive   Boolean         @default(true)
+  verifiedAt DateTime?
+  createdAt  DateTime        @default(now())
+
+  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  identities ContactIdentity[]
+
+  @@unique([contactId, phone])
+  @@index([phone])
+}
+
+/// Идентификатор контакта в канале (telegramId, WA JID, maxUserId и т.д.)
+model ContactIdentity {
+  id          String      @id @default(cuid())
+  contactId   String
+  channel     ChatChannel
+  externalId  String                              // ID в канале
+  phoneId     String?                             // FK → ContactPhone
+  displayName String?                             // имя в этом канале
+  source      ContactIdentitySource @default(auto)
+  confidence  Float       @default(1.0)
+  isActive    Boolean     @default(true)
+  metadata    Json?       @default("{}")
+  createdAt   DateTime    @default(now())
+
+  reachabilityStatus    ReachabilityStatus @default(unknown)
+  reachabilityCheckedAt DateTime?
+
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  phone       ContactPhone? @relation(fields: [phoneId], references: [id])
+  chats       Chat[]
+
+  @@unique([channel, externalId])
+  @@index([contactId])
+  @@index([phoneId])
+}
+
+/// Аудит-лог операций склейки/расклейки контактов.
+model ContactMerge {
+  id             String       @id @default(cuid())
+  survivorId     String
+  mergedId       String
+  action         MergeAction  @default(merge)
+  mergedBy       String       @default("system")  // "system" | userId
+  reason         MergeReason
+  confidence     Float?
+  snapshotBefore Json                              // состояние merged до операции
+  createdAt      DateTime     @default(now())
+
+  survivor       Contact      @relation("MergeSurvivor", fields: [survivorId], references: [id])
+  merged         Contact      @relation("MergeMerged", fields: [mergedId], references: [id])
+
+  @@index([survivorId])
+  @@index([mergedId])
+}
+
+enum ContactSource {
+  yandex
+  chat
+  manual
+}
+
+enum ContactNameSource {
+  yandex
+  channel
+  manual
+}
+
+enum ContactPhoneSource {
+  yandex
+  whatsapp
+  telegram
+  max
+  manual
+}
+
+enum ContactIdentitySource {
+  auto
+  manual
+  yandex
+}
+
+enum ReachabilityStatus {
+  confirmed
+  unreachable
+  unknown
+}
+
+enum MergeAction {
+  merge
+  unmerge
+}
+
+enum MergeReason {
+  phone_match
+  identity_match
+  yandex_link
+  manual
+  undo
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // TASKS MODULE
 // ═══════════════════════════════════════════════════════════════════
 
@@ -623,6 +775,9 @@ model Task {
   priority              TaskPriority @default(medium)
   isActive              Boolean      @default(true)     // used in partial unique index
 
+  // Contact Model (Phase 0) — nullable for backward compatibility
+  contactId             String?
+
   // Trigger / Dedupe (for auto-tasks)
   triggerType           String?                          // business semantics: "driver_inactive"
   triggerKey            String?                          // specific computation: "inactive_3d_since_..."
@@ -657,10 +812,12 @@ model Task {
 
   // Relations
   driver                Driver       @relation(fields: [driverId], references: [id])
+  contact               Contact?     @relation(fields: [contactId], references: [id])
   events                TaskEvent[]
 
   // Indexes
   @@index([driverId])
+  @@index([contactId])
   @@index([status, priority, dueAt])
   @@index([isActive, source])
   @@index([chatId])

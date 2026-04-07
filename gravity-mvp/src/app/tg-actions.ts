@@ -6,6 +6,7 @@ import { StringSession } from 'telegram/sessions'
 import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage } from 'telegram/events'
+import * as registry from '@/lib/TransportRegistry'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -235,12 +236,20 @@ export async function disconnectTelegram(id: string) {
 }
 // Global cache for Telegram clients to prevent constant reconnects
 const clientCache = new Map<string, TelegramClient>()
+// instanceId per connection — links client to registry entry
+const tgInstanceIds = new Map<string, string>()
 // Idempotency guard: track which connections already have listeners attached
 const initializedListeners = new Set<string>()
 // Guard against concurrent initTelegramListeners calls
 let _initPromise: Promise<void> | null = null
 
+/** Get runtime status — delegates to TransportRegistry. */
+export async function getTelegramRuntimeStatus() {
+    return registry.getAllEntries().filter(e => e.channel === 'telegram')
+}
+
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 
 async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
@@ -288,6 +297,24 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 console.log(`[${loggerPrefix}] chat=${unifiedChat.id} remains UNLINKED (no driver match)`)
             }
         }
+
+        // ── Contact Model dual write ──────────────────────────────
+        try {
+            const contactResult = await ContactService.resolveContact(
+                'telegram',
+                senderId,
+                null,  // TG GramJS не передаёт номер телефона
+                message.sender?.firstName || message.sender?.username || null,
+            )
+            await ContactService.ensureChatLinked(
+                unifiedChat.id,
+                contactResult.contact.id,
+                contactResult.identity.id,
+            )
+        } catch (contactErr: any) {
+            console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
+        }
+        // ──────────────────────────────────────────────────────────
 
         // 3. DE-DUPLICATION: by externalId or content+time
         const existing = await (prisma.message as any).findFirst({
@@ -404,6 +431,9 @@ export async function initTelegramListeners() {
             }
 
             console.log(`[TG-INIT] Initialization complete. Active listeners: ${initializedListeners.size}`)
+
+            // Start periodic health check (every 60s)
+            startTelegramHealthCheck(connections)
         } catch (err: any) {
             console.error(`[TG-INIT] Fatal error during initialization: ${err.message}`)
         } finally {
@@ -414,11 +444,35 @@ export async function initTelegramListeners() {
     return _initPromise
 }
 
+let _healthInterval: ReturnType<typeof setInterval> | null = null
+
+function startTelegramHealthCheck(connections: any[]) {
+    if (_healthInterval) return // Already running
+
+    _healthInterval = setInterval(async () => {
+        for (const conn of connections) {
+            const client = clientCache.get(conn.id)
+            const curInstanceId = tgInstanceIds.get(conn.id)
+
+            if (!client || !curInstanceId) continue
+
+            if (client.connected) {
+                registry.touch(conn.id, curInstanceId)
+            } else {
+                // Connection lost — use registry reconnect policy
+                clientCache.delete(conn.id)
+                initializedListeners.delete(conn.id)
+                registry.setReconnecting(conn.id, curInstanceId)
+                registry.scheduleReconnect(conn.id, curInstanceId, async () => { await getTelegramClient(conn) })
+            }
+        }
+    }, 60_000)
+}
+
 async function getTelegramClient(connection: any) {
     if (clientCache.has(connection.id)) {
         const cached = clientCache.get(connection.id)!
         if (cached.connected) {
-            // Ensure listener is attached even for cached clients
             attachInboundListener(cached, connection.id)
             catchUpMissedMessages(cached, connection.id).catch(() => {})
             return cached
@@ -435,16 +489,34 @@ async function getTelegramClient(connection: any) {
         }
     }
 
+    // Register in TransportRegistry
+    registry.ensureEntry(connection.id, 'telegram')
+    const instanceId = registry.beginNewInstance(connection.id)
+    tgInstanceIds.set(connection.id, instanceId)
+
+    const proxyHost = process.env.TG_PROXY_HOST
+    const proxyPort = process.env.TG_PROXY_PORT ? parseInt(process.env.TG_PROXY_PORT, 10) : undefined
+    const proxyConfig = proxyHost && proxyPort
+        ? { ip: proxyHost, port: proxyPort, socksType: 5 as const }
+        : undefined
+
     const client = new TelegramClient(
         new StringSession(connection.sessionString),
         connection.apiId,
         connection.apiHash,
-        { connectionRetries: 5 }
+        {
+            connectionRetries: 5,
+            ...(proxyConfig ? { proxy: proxyConfig } : {}),
+        }
     )
-    
+
+    if (proxyConfig) {
+        console.log(`[TG-CLIENT] Using SOCKS5 proxy ${proxyHost}:${proxyPort}`)
+    }
+
     await client.connect()
-    
-    // Attach idempotent listener
+    registry.setReady(connection.id, instanceId)
+
     attachInboundListener(client, connection.id)
     catchUpMissedMessages(client, connection.id).catch(() => {})
 
@@ -551,6 +623,8 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         ])
         
         console.log(`[TG-SEND] Message delivery SUCCESS`)
+        const sendInstanceId = tgInstanceIds.get(connection?.id)
+        if (connection && sendInstanceId) registry.touch(connection.id, sendInstanceId)
 
         // SYNC TO UNIFIED MESSAGE TABLE
         try {
@@ -667,4 +741,131 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         // We no longer disconnect here to keep the session alive in cache
         console.log(`[TG-SEND] End of call (client left active in cache)`)
     }
+}
+
+// Stubs: functions removed but still imported in settings/ai/actions.ts and TelegramLoginClient.tsx
+export async function importTelegramHistory(
+    jobId: string, mode: string, daysBack?: number, connectionId?: string
+) {
+    console.warn('[TG] importTelegramHistory is not implemented')
+}
+
+export async function pauseTelegramConnection(id: string, _deleteMessages?: boolean) {
+    console.warn('[TG] pauseTelegramConnection is not implemented')
+}
+
+export async function resumeTelegramConnection(id: string, _catchUp?: boolean) {
+    console.warn('[TG] resumeTelegramConnection is not implemented')
+}
+
+export async function deleteConnectionMessages(id: string) {
+    console.warn('[TG] deleteConnectionMessages is not implemented')
+}
+
+/**
+ * Check if a phone number is reachable on Telegram.
+ * Uses getEntity + ImportContacts (same as sendTelegramMessage) but without sending.
+ *
+ * On timeout or internal error returns { reachable: true } as a soft fallback —
+ * this means "don't show a warning", NOT "confirmed reachable".
+ */
+export async function checkTelegramReachability(
+    phone: string,
+    connectionId?: string
+): Promise<{ reachable: boolean; telegramId?: string; error?: string }> {
+    const TIMEOUT_MS = 10_000
+
+    // Wrap EVERYTHING (including getTelegramClient which can hang on connect())
+    // in a single timeout. On timeout returns { reachable: true } — soft fallback,
+    // meaning "don't show a warning", NOT "confirmed reachable".
+    const result = await Promise.race([
+        doCheck(phone, connectionId),
+        new Promise<{ reachable: true }>((resolve) =>
+            setTimeout(() => {
+                console.warn(`[TG-CHECK] Timeout (${TIMEOUT_MS}ms) for ${phone} — soft fallback`)
+                resolve({ reachable: true })
+            }, TIMEOUT_MS)
+        ),
+    ])
+
+    return result
+}
+
+async function doCheck(
+    phone: string,
+    connectionId?: string
+): Promise<{ reachable: boolean; telegramId?: string; error?: string }> {
+    try {
+        // Find connection (same logic as sendTelegramMessage)
+        let connection
+        if (connectionId) {
+            connection = await (prisma as any).telegramConnection.findUnique({
+                where: { id: connectionId, isActive: true }
+            })
+        } else {
+            connection = await (prisma as any).telegramConnection.findFirst({
+                where: { isActive: true, isDefault: true }
+            })
+            if (!connection) {
+                connection = await (prisma as any).telegramConnection.findFirst({
+                    where: { isActive: true }
+                })
+            }
+        }
+
+        if (!connection || !connection.sessionString) {
+            return { reachable: true }
+        }
+
+        const client = await getTelegramClient(connection)
+
+        // Normalize: prefix '+' for digit strings >= 10 chars
+        let target: string = phone
+        if (target.match(/^\d+$/) && target.length >= 10) {
+            target = '+' + target
+        }
+
+        return await resolveEntity(client, target)
+    } catch (err: any) {
+        console.error(`[TG-CHECK] Error for ${phone}: ${err.message}`)
+        return { reachable: true }
+    }
+}
+
+/** Resolve phone to Telegram entity without sending a message. */
+async function resolveEntity(
+    client: TelegramClient,
+    target: string
+): Promise<{ reachable: boolean; telegramId?: string; error?: string }> {
+    // Step 1: Try getEntity
+    try {
+        const entity = await client.getEntity(target)
+        return { reachable: true, telegramId: entity.id.toString() }
+    } catch {
+        // Fall through to ImportContacts
+    }
+
+    // Step 2: Try ImportContacts (only for phone numbers starting with '+')
+    if (!target.startsWith('+')) {
+        return { reachable: false, error: 'Номер не найден в Telegram' }
+    }
+
+    try {
+        const result = await client.invoke(new Api.contacts.ImportContacts({
+            contacts: [new Api.InputPhoneContact({
+                clientId: BigInt(Math.floor(Math.random() * 1000000)) as any,
+                phone: target,
+                firstName: 'Check',
+                lastName: ''
+            })]
+        }))
+
+        if (result && 'users' in result && result.users.length > 0) {
+            return { reachable: true, telegramId: result.users[0].id.toString() }
+        }
+    } catch {
+        // Import failed — number not on Telegram
+    }
+
+    return { reachable: false, error: 'Номер не найден в Telegram' }
 }

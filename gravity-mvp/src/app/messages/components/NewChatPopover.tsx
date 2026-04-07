@@ -1,32 +1,95 @@
 "use client"
 
-import { useState, useRef, useEffect, useMemo } from "react"
-import { X, Search, Send } from "lucide-react"
-import { useConversations, Conversation } from "../hooks/useConversations"
-import { useChatNavigation } from "../hooks/useChatNavigation"
+import { useState, useRef, useEffect } from "react"
+import { X, Search, Send, Loader2, AlertTriangle } from "lucide-react"
+import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
+import { useStartConversation } from "../hooks/useStartConversation"
 
 const CHANNELS = [
-    { id: 'wa', label: 'WA', color: 'bg-emerald-500', activeBg: 'bg-emerald-50 ring-emerald-500 text-emerald-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-    { id: 'tg', label: 'TG', color: 'bg-blue-500', activeBg: 'bg-blue-50 ring-blue-500 text-blue-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-    { id: 'max', label: 'MAX', color: 'bg-purple-500', activeBg: 'bg-purple-50 ring-purple-500 text-purple-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-    { id: 'ypro', label: 'YP', color: 'bg-yellow-500', activeBg: 'bg-yellow-50 ring-yellow-500 text-yellow-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'wa', label: 'WA', dbChannel: 'whatsapp', color: 'bg-emerald-500', activeBg: 'bg-emerald-50 ring-emerald-500 text-emerald-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'tg', label: 'TG', dbChannel: 'telegram', color: 'bg-blue-500', activeBg: 'bg-blue-50 ring-blue-500 text-blue-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'max', label: 'MAX', dbChannel: 'max', color: 'bg-purple-500', activeBg: 'bg-purple-50 ring-purple-500 text-purple-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'ypro', label: 'YP', dbChannel: 'yandex_pro', color: 'bg-yellow-500', activeBg: 'bg-yellow-50 ring-yellow-500 text-yellow-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
 ]
 
-export default function NewChatPopover({ onClose }: { onClose: () => void }) {
-    const { conversations } = useConversations()
-    const { setChatId, setChannel, updateQuery } = useChatNavigation()
+const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
+    whatsapp: { label: 'WA', cls: 'bg-emerald-50 text-emerald-600' },
+    telegram: { label: 'TG', cls: 'bg-blue-50 text-blue-600' },
+    max: { label: 'MAX', cls: 'bg-purple-50 text-purple-600' },
+    yandex_pro: { label: 'YP', cls: 'bg-yellow-50 text-yellow-600' },
+}
+
+interface NewChatPopoverProps {
+    onClose: () => void
+    onSelectChat: (chatId: string) => void
+}
+
+export default function NewChatPopover({ onClose, onSelectChat }: NewChatPopoverProps) {
     const [query, setQuery] = useState("")
     const [selectedChannel, setSelectedChannel] = useState("tg")
     const [showSuggestions, setShowSuggestions] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const popoverRef = useRef<HTMLDivElement>(null)
 
-    // Auto-focus input on mount
+    const { results, loading } = useContactSearch(query)
+    const { loading: starting, error: startError, startByContact, startByPhone, clearError } = useStartConversation()
+
+    // Pre-check reachability for new phone numbers on TG/WA
+    const [reachability, setReachability] = useState<{ reachable: boolean; error?: string } | null>(null)
+    const [checking, setChecking] = useState(false)
+
+    useEffect(() => {
+        const channelDef = CHANNELS.find(c => c.id === selectedChannel)
+        const dbChannel = channelDef?.dbChannel
+        const isCheckable = dbChannel === 'telegram' || dbChannel === 'whatsapp'
+        const phoneValue = query.trim()
+        const isPhoneInput = /^[\d\s\+\-\(\)]{7,}$/.test(phoneValue)
+
+        // Reset if not checkable or not a phone
+        if (!isCheckable || !isPhoneInput) {
+            setReachability(null)
+            setChecking(false)
+            return
+        }
+
+        setChecking(true)
+        setReachability(null)
+
+        const controller = new AbortController()
+        const timer = setTimeout(async () => {
+            try {
+                const res = await fetch('/api/channels/check-reachability', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: phoneValue, channel: dbChannel }),
+                    signal: controller.signal,
+                })
+                const data = await res.json()
+                if (!controller.signal.aborted) {
+                    // Only show warning when explicitly unreachable
+                    setReachability(data.reachable === false ? data : null)
+                }
+            } catch (err: any) {
+                // Aborted or network error — don't show warning
+                if (err.name !== 'AbortError') {
+                    console.error('[NewChat] Reachability check error:', err.message)
+                }
+            } finally {
+                if (!controller.signal.aborted) setChecking(false)
+            }
+        }, 600) // debounce 600ms
+
+        return () => {
+            clearTimeout(timer)
+            controller.abort()
+            setChecking(false)
+        }
+    }, [query, selectedChannel])
+
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50)
     }, [])
 
-    // Close on click outside
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
@@ -37,7 +100,6 @@ export default function NewChatPopover({ onClose }: { onClose: () => void }) {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [onClose])
 
-    // Close on Escape
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose()
@@ -46,55 +108,50 @@ export default function NewChatPopover({ onClose }: { onClose: () => void }) {
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [onClose])
 
-    // Contact suggestions — fuzzy match by name or phone
-    const suggestions = useMemo(() => {
-        if (!query || query.length < 2) return []
-        const q = query.toLowerCase()
-        return conversations.filter(c =>
-            c.name?.toLowerCase().includes(q) ||
-            c.driver?.phone?.includes(q) ||
-            c.externalChatId?.toLowerCase().includes(q)
-        ).slice(0, 5)
-    }, [query, conversations])
-
     const isPhone = /^[\d\s\+\-\(\)]{4,}$/.test(query.trim())
 
-    const handleSelectContact = (chat: Conversation) => {
-        // Map conversation channel to URL channel param
-        const channelMap: Record<string, string> = { whatsapp: 'wa', telegram: 'tg', max: 'max', yandex_pro: 'ypro' }
-        const channelParam = channelMap[chat.channel] || 'all'
-        // Atomic update: set both id and channel in a single URL push (prevents race condition)
-        updateQuery({ id: chat.id, channel: channelParam === 'all' ? null : channelParam })
-        onClose()
-        // Focus composer after navigation
-        setTimeout(() => {
-            document.getElementById('message-composer')?.focus()
-        }, 300)
+    const handleSelectContact = async (contact: ContactSearchResult) => {
+        const channelDef = CHANNELS.find(c => c.id === selectedChannel)
+        const dbChannel = channelDef?.dbChannel || 'telegram'
+
+        const existingChatId = contact.hasChat[dbChannel]
+
+        if (existingChatId) {
+            onSelectChat(existingChatId)
+            onClose()
+            setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+        } else {
+            // Contact exists but no chat in this channel — create it directly
+            const result = await startByContact(contact.id, selectedChannel)
+            if (result) {
+                onSelectChat(result.chatId)
+                onClose()
+                setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+            }
+        }
     }
 
-    const handleStartChat = () => {
-        if (!query.trim()) return
+    const handleStartChat = async () => {
+        if (!query.trim() || starting) return
 
-        // If we have a matching suggestion, open it
-        if (suggestions.length > 0) {
-            handleSelectContact(suggestions[0])
+        if (results.length > 0) {
+            await handleSelectContact(results[0])
             return
         }
 
-        // Otherwise: create new chat (in production — POST /api/messages/conversations)
-        // For now, we'll create an optimistic entry and navigate
-        const tempId = `new-${Date.now()}`
-        const channelMap: Record<string, string> = { wa: 'whatsapp', tg: 'telegram', max: 'max', ypro: 'yandex_pro' }
-
-        // Navigate with channel set
-        setChannel(selectedChannel as any)
-        setChatId(tempId)
-        onClose()
-
-        setTimeout(() => {
-            document.getElementById('message-composer')?.focus()
-        }, 300)
+        // No contact found — new phone number flow
+        if (isPhone) {
+            const result = await startByPhone(query.trim(), selectedChannel)
+            if (result) {
+                onSelectChat(result.chatId)
+                onClose()
+                setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+            }
+        }
     }
+
+    const primaryPhone = (c: ContactSearchResult) =>
+        c.phones.find(p => p.isPrimary)?.phone || c.phones[0]?.phone || null
 
     return (
         <div
@@ -116,6 +173,9 @@ export default function NewChatPopover({ onClose }: { onClose: () => void }) {
             <div className="px-3.5 pt-3 pb-2">
                 <div className="relative">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    {(loading || checking) && (
+                        <Loader2 size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                    )}
                     <input
                         ref={inputRef}
                         type="text"
@@ -123,47 +183,66 @@ export default function NewChatPopover({ onClose }: { onClose: () => void }) {
                         onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true) }}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleStartChat() }}
                         placeholder="Телефон или имя..."
-                        className="w-full h-[36px] bg-[#F4F5F7] rounded-lg pl-8 pr-3 text-[13px] outline-none placeholder:text-gray-400 font-medium text-[#111] focus:bg-[#EEF0F3] transition-colors"
+                        className="w-full h-[36px] bg-[#F4F5F7] rounded-lg pl-8 pr-8 text-[13px] outline-none placeholder:text-gray-400 font-medium text-[#111] focus:bg-[#EEF0F3] transition-colors"
                     />
                 </div>
 
-                {/* Suggestions dropdown */}
-                {showSuggestions && suggestions.length > 0 && (
-                    <div className="mt-1.5 bg-white border border-[#E8E8E8] rounded-lg shadow-sm max-h-[180px] overflow-y-auto">
-                        {suggestions.map(s => (
-                            <button
-                                key={s.id}
-                                onClick={() => handleSelectContact(s)}
-                                className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-gray-50 transition-colors text-left"
-                            >
-                                <div className="w-[32px] h-[32px] rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
-                                    {s.name?.substring(0, 2).toUpperCase() || "DR"}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-[13px] font-medium text-[#111] truncate">{s.name || "Водитель"}</div>
-                                    <div className="text-[11px] text-gray-400 truncate">
-                                        {s.driver?.phone || s.externalChatId}
+                {/* Contact search results */}
+                {showSuggestions && results.length > 0 && (
+                    <div className="mt-1.5 bg-white border border-[#E8E8E8] rounded-lg shadow-sm max-h-[220px] overflow-y-auto">
+                        {results.map(contact => {
+                            const phone = primaryPhone(contact)
+                            const channelDef = CHANNELS.find(c => c.id === selectedChannel)
+                            const dbChannel = channelDef?.dbChannel || 'telegram'
+                            const hasChatInChannel = !!contact.hasChat[dbChannel]
+
+                            return (
+                                <button
+                                    key={contact.id}
+                                    onClick={() => handleSelectContact(contact)}
+                                    className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-gray-50 transition-colors text-left group"
+                                >
+                                    <div className="w-[32px] h-[32px] rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
+                                        {(contact.displayName || "?").substring(0, 2).toUpperCase()}
                                     </div>
-                                </div>
-                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
-                                    s.channel === 'whatsapp' ? 'bg-emerald-50 text-emerald-600' :
-                                    s.channel === 'telegram' ? 'bg-blue-50 text-blue-600' :
-                                    s.channel === 'max' ? 'bg-purple-50 text-purple-600' :
-                                    'bg-yellow-50 text-yellow-600'
-                                }`}>
-                                    {s.channel === 'whatsapp' ? 'WA' : s.channel === 'telegram' ? 'TG' : s.channel === 'max' ? 'MAX' : 'YP'}
-                                </span>
-                            </button>
-                        ))}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-[13px] font-medium text-[#111] truncate">
+                                            {contact.displayName || "Без имени"}
+                                        </div>
+                                        <div className="text-[11px] text-gray-400 truncate flex items-center gap-1">
+                                            {phone && <span className="font-mono">{phone}</span>}
+                                            {!hasChatInChannel && (
+                                                <span className="text-[9px] text-orange-500 font-medium">новый</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {/* Channel badges */}
+                                    <div className="flex gap-0.5 shrink-0">
+                                        {contact.channels.map(ch => {
+                                            const badge = CHANNEL_BADGE[ch]
+                                            if (!badge) return null
+                                            return (
+                                                <span
+                                                    key={ch}
+                                                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`}
+                                                >
+                                                    {badge.label}
+                                                </span>
+                                            )
+                                        })}
+                                    </div>
+                                </button>
+                            )
+                        })}
                     </div>
                 )}
 
-                {/* New contact hint */}
-                {query.trim().length >= 2 && suggestions.length === 0 && (
+                {/* No results hints */}
+                {showSuggestions && query.trim().length >= 2 && !loading && results.length === 0 && (
                     <div className="mt-1.5 px-1 text-[11px] text-gray-400">
                         {isPhone
-                            ? <span>📱 Новый контакт: <span className="font-mono text-[#111]">{query.trim()}</span></span>
-                            : <span>👤 Поиск: <span className="font-medium text-[#111]">{query.trim()}</span></span>
+                            ? <span>Новый номер: <span className="font-mono text-[#111]">{query.trim()}</span></span>
+                            : <span>Контакт не найден: <span className="font-medium text-[#111]">{query.trim()}</span></span>
                         }
                     </div>
                 )}
@@ -189,19 +268,44 @@ export default function NewChatPopover({ onClose }: { onClose: () => void }) {
                 </div>
             </div>
 
+            {/* Reachability warning */}
+            {reachability && !reachability.reachable && (
+                <div className="px-3.5 pb-1.5">
+                    <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
+                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                        <span className="text-[11px] leading-tight">{reachability.error}</span>
+                    </div>
+                </div>
+            )}
+
+            {/* Error */}
+            {startError && (
+                <div className="px-3.5 pb-1">
+                    <div className="text-[11px] text-red-500 bg-red-50 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+                        <span>{startError}</span>
+                        <button onClick={clearError} className="text-red-400 hover:text-red-600 ml-2">
+                            <X size={10} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Action */}
             <div className="px-3.5 pb-3">
                 <button
                     onClick={handleStartChat}
-                    disabled={!query.trim()}
+                    disabled={!query.trim() || starting}
                     className={`w-full h-[36px] rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                        query.trim()
-                            ? 'bg-[#3390EC] text-white hover:bg-[#2B7FD4] active:scale-[0.98] shadow-md shadow-[#3390EC]/20'
-                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        !query.trim() || starting
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-[#3390EC] text-white hover:bg-[#2B7FD4] active:scale-[0.98] shadow-md shadow-[#3390EC]/20'
                     }`}
                 >
-                    <Send size={13} />
-                    Написать
+                    {starting ? (
+                        <><Loader2 size={13} className="animate-spin" /> Создаём...</>
+                    ) : (
+                        <><Send size={13} /> Написать</>
+                    )}
                 </button>
             </div>
         </div>

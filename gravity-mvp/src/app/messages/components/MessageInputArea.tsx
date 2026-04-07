@@ -129,7 +129,7 @@ export default function MessageInputArea({
 
     const handleSend = () => {
         if (!text.trim()) return
-        onSendMessage(text.trim(), effectiveSendChannel)
+        onSendMessage(text.trim(), effectiveNormalized)
         setText("")
         draftCache.delete(cacheKey)
         onClearReply()
@@ -244,6 +244,15 @@ export default function MessageInputArea({
     const isChannelLocked = activeChannelTab !== 'all' || !!replyContext
     const hasText = text.trim().length > 0
 
+    // FC-09: channel hint — explain why this channel is selected
+    const channelHintReason = replyContext
+        ? 'ответ'
+        : activeChannelTab !== 'all'
+            ? 'вкладка'
+            : manualSendChannelMode
+                ? 'выбран'
+                : null
+
     return (
         <>
         {/* Image preview modal */}
@@ -311,7 +320,19 @@ export default function MessageInputArea({
                 </div>
             )}
 
-            <div className={`flex items-end gap-1.5 px-2 py-1.5 ${!replyContext ? 'border-t border-[#E8E8E8]' : ''}`}>
+            {/* FC-09: Channel hint line */}
+            {channelHintReason && (
+                <div className={`flex items-center gap-1.5 px-3 py-1 ${!replyContext ? 'border-t border-[#E8E8E8]' : ''}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${currentChannelInfo.activeBg}`} />
+                    <span className="text-[11px] text-gray-400">
+                        Отправка через <span className={`font-medium ${currentChannelInfo.color}`}>{currentChannelInfo.label}</span>
+                        {channelHintReason === 'ответ' && <span className="text-gray-300"> · ответ на сообщение</span>}
+                        {channelHintReason === 'вкладка' && <span className="text-gray-300"> · по вкладке канала</span>}
+                    </span>
+                </div>
+            )}
+
+            <div className={`flex items-end gap-1.5 px-2 py-1.5 ${!replyContext && !channelHintReason ? 'border-t border-[#E8E8E8]' : ''}`}>
                 <input
                     ref={fileInputRef}
                     type="file"

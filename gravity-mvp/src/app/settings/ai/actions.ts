@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { importTelegramHistory } from '@/app/tg-actions'
+import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 
 // ─── AiAgentConfig ────────────────────────────────────────────────
 
@@ -175,17 +177,20 @@ export async function createImportJob(data: {
     channels: string[]
     mode: 'from_connection_time' | 'available_history' | 'last_n_days'
     daysBack?: number
+    connectionId?: string
 }) {
     const id = `job_${Date.now()}`
     const daysBack = data.daysBack ?? null
+    const connId = data.connectionId ?? null
     try {
         await prisma.$executeRaw`
-            INSERT INTO "HistoryImportJob" (id, channels, mode, "daysBack", status, "chatsScanned", "contactsFound", "messagesImported", "createdAt")
+            INSERT INTO "HistoryImportJob" (id, channels, mode, "daysBack", "connectionId", status, "chatsScanned", "contactsFound", "messagesImported", "createdAt")
             VALUES (
                 ${id},
                 ${data.channels}::text[],
                 ${data.mode}::"AiImportMode",
                 ${daysBack},
+                ${connId},
                 'queued'::"AiImportStatus",
                 0, 0, 0,
                 NOW()
@@ -195,7 +200,7 @@ export async function createImportJob(data: {
         console.error('[AI Import] createImportJob error:', e.message)
     }
 
-    const job = { id, ...data, status: 'queued', chatsScanned: 0, contactsFound: 0, messagesImported: 0, createdAt: new Date().toISOString() }
+    const job = { id, ...data, connectionId: connId, status: 'queued', chatsScanned: 0, contactsFound: 0, messagesImported: 0, createdAt: new Date().toISOString() }
     revalidatePath('/settings/ai')
 
     if (data.channels.includes('max')) {
@@ -212,6 +217,16 @@ export async function createImportJob(data: {
                 daysBack: data.daysBack,
             }),
         }).catch(e => console.error('[AI Import] scraper call error:', e.message))
+    }
+
+    if (data.channels.includes('telegram')) {
+        importTelegramHistory(id, data.mode, data.daysBack, data.connectionId)
+            .catch(e => console.error('[AI Import] telegram import error:', e.message))
+    }
+
+    if (data.channels.includes('whatsapp')) {
+        importWhatsAppHistory(id, data.mode, data.daysBack, data.connectionId)
+            .catch(e => console.error('[AI Import] whatsapp import error:', e.message))
     }
 
     return job

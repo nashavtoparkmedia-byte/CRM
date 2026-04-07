@@ -91,6 +91,49 @@ export async function deleteWhatsAppConnection(connectionId: string) {
     }
 }
 
+export async function pauseWhatsAppConnection(connectionId: string, deleteMessages: boolean) {
+    console.log(`[WA-ACTIONS] pauseWhatsAppConnection id=${connectionId} deleteMessages=${deleteMessages}`)
+    await prisma.whatsAppConnection.update({
+        where: { id: connectionId },
+        data: { isActive: false } as any
+    })
+    if (deleteMessages) {
+        await deleteWhatsAppMessages(connectionId)
+    }
+    revalidatePath('/settings/integrations/whatsapp')
+}
+
+export async function resumeWhatsAppConnection(connectionId: string, catchUp: boolean) {
+    console.log(`[WA-ACTIONS] resumeWhatsAppConnection id=${connectionId} catchUp=${catchUp}`)
+    if (!catchUp) {
+        // Delete buffered WA messages (stored in WhatsAppMessage with a buffered flag isn't implemented,
+        // so for WA we just unpause — buffering at WA level is handled in WhatsAppService)
+    }
+    await prisma.whatsAppConnection.update({
+        where: { id: connectionId },
+        data: { isActive: true } as any
+    })
+    revalidatePath('/settings/integrations/whatsapp')
+}
+
+export async function deleteWhatsAppMessages(connectionId: string) {
+    console.log(`[WA-ACTIONS] deleteWhatsAppMessages id=${connectionId}`)
+    // Delete from WA-specific tables
+    await prisma.whatsAppMessage.deleteMany({ where: { chat: { connectionId } } }).catch(() => {})
+    await prisma.whatsAppChat.deleteMany({ where: { connectionId } }).catch(() => {})
+    // Delete from unified Chat/Message table where channel='whatsapp'
+    const unifiedChats = await (prisma.chat as any).findMany({
+        where: { channel: 'whatsapp' },
+        select: { id: true, externalChatId: true }
+    })
+    if (unifiedChats.length > 0) {
+        const chatIds = unifiedChats.map((c: any) => c.id)
+        await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
+        await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+    }
+    revalidatePath('/messages')
+}
+
 export async function getWhatsAppChats(connectionId: string) {
     console.log(`[WA-ACTIONS] getWhatsAppChats called for: ${connectionId}`)
     return prisma.whatsAppChat.findMany({

@@ -76,17 +76,19 @@ export function useMessages(chatId: string | null) {
                     }))
                     
                     // MERGE: Keep optimistic messages that server doesn't know about yet
+                    // Optimistic IDs start with 'cmid-' (clientMessageId)
                     const existingOptimistic = (messageCache.get(chatId) || [])
-                        .filter(m => m.id.startsWith('opt-'))
-                    
+                        .filter(m => m.id.startsWith('cmid-'))
+
                     const pendingOptimistic = existingOptimistic.filter(opt => {
-                        return !enrichedData.some((srv: Message) => 
-                            srv.direction === 'outbound' && 
+                        // Remove optimistic if server returned a message with matching content+time
+                        return !enrichedData.some((srv: Message) =>
+                            srv.direction === 'outbound' &&
                             srv.content === opt.content &&
                             Math.abs(new Date(srv.sentAt).getTime() - new Date(opt.sentAt).getTime()) < 60000
                         )
                     })
-                    
+
                     const merged = [...enrichedData, ...pendingOptimistic]
                     messageCache.set(chatId, merged)
                     setMessages(merged)
@@ -119,15 +121,17 @@ export function useMessages(chatId: string | null) {
 
     const sendMessage = async (content: string, channel: string) => {
         if (!chatId) return
-        
+
         // Normalize channel for API (wa→whatsapp, tg→telegram, ypro→yandex_pro)
         const normalizeForApi = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch
         const apiChannel = normalizeForApi(channel)
 
+        // Generate stable idempotency key for duplicate prevention
+        const clientMessageId = `cmid-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+
         // Optimistic UI update (<50ms local echo contract)
-        const optimisticId = `opt-${Date.now()}`
         const optimisticMsg: Message = {
-            id: optimisticId,
+            id: clientMessageId,  // Use clientMessageId as optimistic ID
             direction: 'outbound',
             type: 'text',
             content,
@@ -136,7 +140,7 @@ export function useMessages(chatId: string | null) {
             channel: apiChannel,
             origin: 'operator'
         }
-        
+
         const currentMsgs = messageCache.get(chatId) || []
         const newMsgs = [...currentMsgs, optimisticMsg]
         messageCache.set(chatId, newMsgs)
@@ -147,24 +151,25 @@ export function useMessages(chatId: string | null) {
             lastMessageAt: optimisticMsg.sentAt,
             messages: [{ content: optimisticMsg.content }]
         })
-        
+
         // If chatId is a comma-separated list (unified view), use the first one for sending
         const primaryChatId = chatId.split(',')[0]
 
-        // Actual API call
+        // Actual API call — includes clientMessageId for idempotency
         try {
             const res = await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel })
+                body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel, clientMessageId })
             })
             
             if (res.ok) {
                 const result = await res.json()
-                // Update optimistic message with server response
+                // Update optimistic message with server ID and final status
+                const finalStatus = result.success === false ? 'failed' as const : 'delivered' as const
                 const updatedMsgs = (messageCache.get(chatId) || []).map(m =>
-                    m.id === optimisticId 
-                        ? { ...m, id: result.id || m.id, status: 'delivered' as const }
+                    m.id === clientMessageId
+                        ? { ...m, id: result.id || m.id, status: finalStatus, ...(result.error ? { metadata: { error: result.error } } : {}) }
                         : m
                 )
                 messageCache.set(chatId, updatedMsgs)
@@ -172,10 +177,9 @@ export function useMessages(chatId: string | null) {
             } else {
                 const err = await res.json().catch(() => ({ error: 'Unknown error' }))
                 console.error('[SEND] API Error:', err)
-                // Mark as failed
                 const errorText = err.error || err.message || 'Ошибка отправки'
                 const failedMsgs = (messageCache.get(chatId) || []).map(m =>
-                    m.id === optimisticId
+                    m.id === clientMessageId
                         ? { ...m, status: 'failed' as const, metadata: { error: errorText } }
                         : m
                 )
@@ -184,10 +188,9 @@ export function useMessages(chatId: string | null) {
             }
         } catch (err) {
             console.error('[SEND] Network Error:', err)
-            // Mark as failed
             const errorText = err instanceof Error ? err.message : 'Ошибка сети'
             const failedMsgs = (messageCache.get(chatId) || []).map(m =>
-                m.id === optimisticId
+                m.id === clientMessageId
                     ? { ...m, status: 'failed' as const, metadata: { error: errorText } }
                     : m
             )

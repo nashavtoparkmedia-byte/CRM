@@ -20,9 +20,11 @@ import {
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-const PRIORITY_CONFIG = {
+const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
+    critical: { label: 'Критичный', color: 'text-red-600 bg-red-50' },
     high: { label: 'Высокий', color: 'text-orange-600 bg-orange-50' },
     medium: { label: 'Обычный', color: 'text-blue-600 bg-blue-50' },
+    low: { label: 'Низкий', color: 'text-gray-600 bg-gray-50' },
 }
 
 const SOURCE_LABELS: Record<string, string> = {
