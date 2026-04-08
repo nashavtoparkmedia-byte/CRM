@@ -988,20 +988,41 @@ export async function importWhatsAppHistory(
             }
         }
 
-        // 4. Complete
-        const resultType = totalMessages > 0 ? 'full' : 'live_only'
+        // 4. Query actual DB totals (fetchMessages may return empty if auto-sync already consumed buffer)
+        const dbTotals = await prisma.$queryRaw<{ msg_count: bigint; chat_count: bigint; contact_count: bigint; min_date: Date | null; max_date: Date | null }[]>`
+            SELECT
+                (SELECT COUNT(*) FROM "Message" WHERE channel = 'whatsapp') as msg_count,
+                (SELECT COUNT(*) FROM "Chat" WHERE channel = 'whatsapp') as chat_count,
+                (SELECT COUNT(DISTINCT "contactId") FROM "Chat" WHERE channel = 'whatsapp' AND "contactId" IS NOT NULL) as contact_count,
+                (SELECT MIN("sentAt") FROM "Message" WHERE channel = 'whatsapp') as min_date,
+                (SELECT MAX("sentAt") FROM "Message" WHERE channel = 'whatsapp') as max_date
+        `
+        const db = dbTotals[0]
+        const dbMsgCount = Number(db?.msg_count ?? 0)
+        const dbChatCount = Number(db?.chat_count ?? 0)
+        const dbContactCount = Number(db?.contact_count ?? 0)
+
+        // Use DB totals if scan found nothing (auto-sync already loaded data)
+        const finalMessages = totalMessages > 0 ? totalMessages : dbMsgCount
+        const finalChats = totalChats > 0 ? totalChats : dbChatCount
+        const finalContacts = totalContacts > 0 ? totalContacts : dbContactCount
+        const finalMinDate = minDate ?? db?.min_date ?? null
+        const finalMaxDate = maxDate ?? db?.max_date ?? null
+
+        // 5. Complete
+        const resultType = finalMessages > 0 ? 'full' : 'live_only'
         await updateImportJob(jobId, {
             status: 'completed',
             resultType,
-            messagesImported: totalMessages,
-            chatsScanned: totalChats,
-            contactsFound: totalContacts,
+            messagesImported: finalMessages,
+            chatsScanned: finalChats,
+            contactsFound: finalContacts,
             finishedAt: new Date(),
-            coveredPeriodFrom: minDate,
-            coveredPeriodTo: maxDate,
-            detailsJson: { newMessages, existingMessages: totalMessages - newMessages },
+            coveredPeriodFrom: finalMinDate,
+            coveredPeriodTo: finalMaxDate,
+            detailsJson: { newMessages, existingMessages: finalMessages - newMessages },
         })
-        console.log(`[WA-IMPORT] Completed job=${jobId}: ${totalMessages} msgs (${newMessages} new), ${totalChats} chats, ${totalContacts} contacts`)
+        console.log(`[WA-IMPORT] Completed job=${jobId}: ${finalMessages} msgs (${newMessages} new, ${finalMessages - newMessages} existing), ${finalChats} chats, ${finalContacts} contacts`)
     } catch (err: any) {
         console.error(`[WA-IMPORT] Fatal error job=${jobId}: ${err.message}`)
         await updateImportJob(jobId, {
