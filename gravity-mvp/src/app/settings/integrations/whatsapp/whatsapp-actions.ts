@@ -1,7 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { initializeClient, destroyClient, sendMessage as waSendMessage } from '@/lib/whatsapp/WhatsAppService'
+import { initializeClient, destroyClient, sendMessage as waSendMessage, resetSyncGuard } from '@/lib/whatsapp/WhatsAppService'
 import { revalidatePath } from 'next/cache'
 
 export async function createWhatsAppConnection(name?: string) {
@@ -120,36 +120,47 @@ export async function resumeWhatsAppConnection(connectionId: string, catchUp: bo
 
 export async function deleteWhatsAppMessages(connectionId: string) {
     console.log(`[WA-ACTIONS] deleteWhatsAppMessages id=${connectionId}`)
+    // Reset auto-sync guard so future sync can re-populate
+    resetSyncGuard(connectionId)
     // Delete from WA-specific tables
-    await prisma.whatsAppMessage.deleteMany({ where: { chat: { connectionId } } }).catch(() => {})
-    await prisma.whatsAppChat.deleteMany({ where: { connectionId } }).catch(() => {})
+    try {
+        await prisma.whatsAppMessage.deleteMany({ where: { chat: { connectionId } } })
+    } catch (e: any) { console.error(`[WA-DELETE] WhatsAppMessage delete error: ${e.message}`) }
+
+    try {
+        await prisma.whatsAppChat.deleteMany({ where: { connectionId } })
+    } catch (e: any) { console.error(`[WA-DELETE] WhatsAppChat delete error: ${e.message}`) }
+
     // Delete from unified Chat/Message table where channel='whatsapp'
     const unifiedChats = await (prisma.chat as any).findMany({
         where: { channel: 'whatsapp' },
-        select: { id: true, externalChatId: true }
+        select: { id: true },
     })
     if (unifiedChats.length > 0) {
         const chatIds = unifiedChats.map((c: any) => c.id)
-        // Collect contactIds before deleting chats
+        // Collect contactIds before deleting
         const chatsWithContacts = await (prisma.chat as any).findMany({
             where: { id: { in: chatIds } },
             select: { contactId: true },
         })
         const contactIds = [...new Set(chatsWithContacts.map((c: any) => c.contactId).filter(Boolean))] as string[]
 
-        await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
-        await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+        const msgDel = await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
+        console.log(`[WA-DELETE] Deleted ${msgDel.count} messages`)
+        const chatDel = await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+        console.log(`[WA-DELETE] Deleted ${chatDel.count} chats`)
 
-        // Cleanup dangling identities (scoped to affected contacts)
+        // Cleanup dangling identities
         if (contactIds.length > 0) {
             const { ContactService } = await import('@/lib/ContactService')
             await ContactService.cleanupDanglingIdentities(contactIds)
         }
     }
-    // Clean up HistoryImportJob records so ChannelSyncBlock resets to "Не загружена"
-    await prisma.$executeRaw`
-        DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels)
-    `.catch(() => {})
+    // Clean up HistoryImportJob records so ChannelSyncBlock resets
+    try {
+        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels)`
+        console.log(`[WA-DELETE] Cleaned up import jobs`)
+    } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
 
     revalidatePath('/messages')
 }

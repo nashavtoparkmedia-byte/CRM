@@ -22,6 +22,11 @@ const globalForWAIds = global as unknown as { _waInstanceIds?: Map<string, strin
 const instanceIds = globalForWAIds._waInstanceIds || new Map<string, string>()
 if (process.env.NODE_ENV !== 'production') globalForWAIds._waInstanceIds = instanceIds
 
+// Guard: track which connections already had auto-sync (prevent re-sync on reconnect)
+const globalSyncDone = global as unknown as { _waSyncDone?: Set<string> }
+const syncDoneSet = globalSyncDone._waSyncDone || new Set<string>()
+if (process.env.NODE_ENV !== 'production') globalSyncDone._waSyncDone = syncDoneSet
+
 if (typeof global.fetch === 'undefined') {
     // @ts-ignore
     global.fetch = fetch as any
@@ -233,6 +238,11 @@ export function getClient(connectionId: string): Client | undefined {
     return clients.get(connectionId)
 }
 
+/** Reset the auto-sync guard so next ready event will re-sync */
+export function resetSyncGuard(connectionId: string) {
+    syncDoneSet.delete(connectionId)
+}
+
 /** Get runtime status — delegates to TransportRegistry. */
 export function getRuntimeStatus() {
     return registry.getAllEntries().filter(e => e.channel === 'whatsapp')
@@ -302,9 +312,15 @@ export async function initializeClient(connectionId: string): Promise<void> {
                 status: 'ready',
                 phoneNumber: info?.wid?.user || null
             })
-            syncHistory(connectionId, client).catch(err =>
-                console.error(`[WA-SERVICE] Background sync error:`, err)
-            )
+            // Auto-sync only on first ready (not on reconnects)
+            if (!syncDoneSet.has(connectionId)) {
+                syncDoneSet.add(connectionId)
+                syncHistory(connectionId, client).catch(err =>
+                    console.error(`[WA-SERVICE] Background sync error:`, err)
+                )
+            } else {
+                console.log(`[WA-SERVICE] Skipping auto-sync for ${connectionId} (already done)`)
+            }
         } catch (err) {
             console.error(`[WA-SERVICE] Ready event error for ${connectionId}:`, err)
         }
