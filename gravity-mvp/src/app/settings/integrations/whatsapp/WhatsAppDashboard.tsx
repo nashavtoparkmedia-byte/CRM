@@ -82,32 +82,47 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
     const handlePauseConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
-        await pauseWhatsAppConnection(conn.id, deleteMessages)
-        setLivePaused(true)
-        setPauseDialog(false)
-        setLoading(false)
-        onRefresh()
+        try {
+            await pauseWhatsAppConnection(conn.id, deleteMessages)
+            setLivePaused(true)
+            setPauseDialog(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Pause failed:', err)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleResumeConfirm = async (catchUp: boolean) => {
         setLoading(true)
-        await resumeWhatsAppConnection(conn.id, catchUp)
-        setLivePaused(false)
-        setResumeDialog(false)
-        setLoading(false)
-        onRefresh()
+        try {
+            await resumeWhatsAppConnection(conn.id, catchUp)
+            setLivePaused(false)
+            setResumeDialog(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Resume failed:', err)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleDisconnectConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
-        if (deleteMessages) {
-            await deleteWhatsAppMessages(conn.id)
+        try {
+            if (deleteMessages) {
+                await deleteWhatsAppMessages(conn.id)
+            }
+            await disconnectWhatsApp(conn.id)
+            setLiveStatus('idle')
+            setDisconnectDialog(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Disconnect failed:', err)
+        } finally {
+            setLoading(false)
         }
-        await disconnectWhatsApp(conn.id)
-        setLiveStatus('idle')
-        setDisconnectDialog(false)
-        setLoading(false)
-        onRefresh()
     }
 
     if (!isClient) {
@@ -219,7 +234,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
             )}
             {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
                 <div className="flex items-center justify-end pt-3 mt-auto border-t border-dashed">
-                    <Button size="sm" onClick={async () => { setLoading(true); await createWhatsAppConnection(conn.name || undefined); onRefresh(); setLoading(false) }} disabled={loading} className="h-8 px-3 text-xs">
+                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }} disabled={loading} className="h-8 px-3 text-xs">
                         {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
                     </Button>
                 </div>
@@ -322,11 +337,17 @@ export function WhatsAppDashboard({ initialConnections }: { initialConnections: 
     }
 
     const handleAdd = async () => {
+        // Guard: don't create if there's already a pending QR connection
+        const pendingStatuses = ['idle', 'qr', 'qr_expired', 'authenticated']
+        const hasPending = connections.some(c => pendingStatuses.includes(c.status))
+        if (hasPending) return
         setAdding(true)
         await createWhatsAppConnection()
         await refresh()
         setAdding(false)
     }
+
+    const hasPendingConnection = connections.some(c => ['idle', 'qr', 'qr_expired', 'authenticated'].includes(c.status))
 
     if (!isClient) return (
         <div className="space-y-8 animate-pulse p-2">
@@ -342,7 +363,7 @@ export function WhatsAppDashboard({ initialConnections }: { initialConnections: 
         <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
                 <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты ({connections.length})</h2>
-                <Button onClick={handleAdd} disabled={adding} size="sm" variant="outline">
+                <Button onClick={handleAdd} disabled={adding || hasPendingConnection} size="sm" variant="outline" title={hasPendingConnection ? 'Дождитесь завершения текущего подключения' : undefined}>
                     {adding ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <MessageCircle size={14} className="mr-1.5" />}
                     Добавить аккаунт
                 </Button>

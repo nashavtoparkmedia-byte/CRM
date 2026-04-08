@@ -189,10 +189,12 @@ export async function checkTelegramAuthStatus(loginId: string, apiId: number, ap
 }
 
 export async function getTelegramConnections() {
-    return await (prisma as any).telegramConnection.findMany({
-        where: { isActive: true },
+    const conns = await (prisma as any).telegramConnection.findMany({
+        where: { sessionString: { not: null } },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }]
     })
+    // Map isActive=false → isPaused=true for the UI
+    return conns.map((c: any) => ({ ...c, isPaused: !c.isActive }))
 }
 
 export async function updateTelegramConnectionSettings(id: string, name: string, isDefault: boolean) {
@@ -765,31 +767,344 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
     }
 }
 
-// Stubs: functions removed but still imported in settings/ai/actions.ts and TelegramLoginClient.tsx
+/**
+ * Import Telegram history as a HistoryImportJob.
+ * Uses GramJS getDialogs/getMessages to fetch history, processes through the standard pipeline.
+ */
 export async function importTelegramHistory(
     jobId: string, mode: string, daysBack?: number, connectionId?: string
 ) {
-    console.warn('[TG] importTelegramHistory is not implemented')
+    console.log(`[TG-IMPORT] Starting job=${jobId} mode=${mode} daysBack=${daysBack} conn=${connectionId}`)
+
+    // 1. Resolve connection
+    let connection: any
+    if (connectionId) {
+        connection = await (prisma as any).telegramConnection.findUnique({ where: { id: connectionId } })
+    } else {
+        const conns = await (prisma as any).telegramConnection.findMany({
+            where: { isActive: true, sessionString: { not: null } }
+        })
+        connection = conns[0] ?? null
+    }
+
+    if (!connection || !connection.sessionString) {
+        console.error('[TG-IMPORT] No active Telegram connection found')
+        await updateTgImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+        return
+    }
+
+    // 2. Get or create client
+    let client: TelegramClient
+    try {
+        client = await getTelegramClient(connection)
+    } catch (err: any) {
+        console.error(`[TG-IMPORT] Failed to get client: ${err.message}`)
+        await updateTgImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+        return
+    }
+
+    // 3. Update job to running
+    await updateTgImportJob(jobId, { status: 'running', startedAt: new Date() })
+
+    // 4. Compute cutoff date
+    let cutoff: Date
+    if (mode === 'last_n_days' && daysBack) {
+        cutoff = new Date()
+        cutoff.setDate(cutoff.getDate() - daysBack)
+    } else if (mode === 'from_connection_time') {
+        cutoff = new Date()
+    } else {
+        // available_history — 3 months
+        cutoff = new Date()
+        cutoff.setMonth(cutoff.getMonth() - 3)
+    }
+
+    let totalMessages = 0
+    let newMessages = 0
+    let totalChats = 0
+    let totalContacts = 0
+    let minDate: Date | null = null
+    let maxDate: Date | null = null
+
+    try {
+        // 5. Fetch dialogs (up to 100)
+        const dialogs = await client.getDialogs({ limit: 100 })
+        console.log(`[TG-IMPORT] Found ${dialogs.length} dialogs`)
+
+        for (const dialog of dialogs) {
+            if (!dialog.isUser) continue // skip groups/channels for now
+            totalChats++
+
+            const peerId = dialog.entity?.id?.toString()
+            if (!peerId) continue
+
+            const externalChatId = `telegram:${peerId}`
+            const chatName = (dialog.entity as any)?.firstName
+                || (dialog.entity as any)?.username
+                || `TG ${peerId}`
+
+            try {
+                // Upsert unified Chat
+                let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
+                if (!unifiedChat) {
+                    unifiedChat = await (prisma.chat as any).create({
+                        data: {
+                            externalChatId,
+                            channel: 'telegram',
+                            name: chatName,
+                            status: 'new',
+                            metadata: { connectionId: connection.id }
+                        }
+                    })
+                } else {
+                    await (prisma.chat as any).update({
+                        where: { id: unifiedChat.id },
+                        data: { name: chatName }
+                    })
+                }
+
+                // Contact resolution
+                if (!unifiedChat.contactId) {
+                    try {
+                        await ContactService.resolveContact('telegram', peerId, null, chatName)
+                        totalContacts++
+                    } catch {}
+                }
+
+                // Driver linking
+                if (!unifiedChat.driverId) {
+                    await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: peerId })
+                }
+
+                // Fetch messages — determine limit based on mode
+                const msgLimit = mode === 'from_connection_time' ? 20 : 200
+                const messages = await client.getMessages(dialog.entity!, { limit: msgLimit })
+
+                let chatMaxTs: Date | null = null
+                for (const msg of messages) {
+                    if (!msg.message) continue // skip service messages
+                    const ts = msg.date ? new Date(msg.date * 1000) : new Date()
+                    if (ts < cutoff) continue
+
+                    if (!minDate || ts < minDate) minDate = ts
+                    if (!maxDate || ts > maxDate) maxDate = ts
+                    if (!chatMaxTs || ts > chatMaxTs) chatMaxTs = ts
+
+                    const externalMsgId = msg.id?.toString()
+                    const isOutbound = !!msg.out
+
+                    // Dedup
+                    const existing = await (prisma.message as any).findFirst({
+                        where: {
+                            OR: [
+                                ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
+                                {
+                                    chatId: unifiedChat.id,
+                                    content: msg.message,
+                                    direction: isOutbound ? 'outbound' : 'inbound',
+                                    sentAt: { gte: new Date(ts.getTime() - 5000), lte: new Date(ts.getTime() + 5000) }
+                                }
+                            ]
+                        }
+                    })
+
+                    totalMessages++
+                    if (!existing) {
+                        await (prisma.message as any).create({
+                            data: {
+                                chatId: unifiedChat.id,
+                                direction: isOutbound ? 'outbound' : 'inbound',
+                                content: msg.message,
+                                channel: 'telegram',
+                                type: 'text',
+                                sentAt: ts,
+                                status: 'delivered',
+                                externalId: externalMsgId,
+                            }
+                        })
+                        newMessages++
+                    }
+                }
+
+                // Update lastMessageAt
+                if (chatMaxTs) {
+                    await (prisma.chat as any).update({
+                        where: { id: unifiedChat.id },
+                        data: { lastMessageAt: chatMaxTs }
+                    })
+                }
+
+                // Periodic progress update (every 5 chats)
+                if (totalChats % 5 === 0) {
+                    await updateTgImportJob(jobId, {
+                        status: 'running',
+                        messagesImported: totalMessages,
+                        chatsScanned: totalChats,
+                        contactsFound: totalContacts,
+                    })
+                }
+            } catch (chatErr: any) {
+                console.error(`[TG-IMPORT] Dialog error peerId=${peerId}: ${chatErr.message}`)
+            }
+        }
+
+        // 6. Query actual DB totals scoped to cutoff period
+        const dbTotals = await prisma.$queryRaw<{ msg_count: bigint; chat_count: bigint; contact_count: bigint; min_date: Date | null; max_date: Date | null }[]>`
+            SELECT
+                (SELECT COUNT(*) FROM "Message" WHERE channel = 'telegram' AND "sentAt" >= ${cutoff}) as msg_count,
+                (SELECT COUNT(*) FROM "Chat" WHERE channel = 'telegram') as chat_count,
+                (SELECT COUNT(DISTINCT "contactId") FROM "Chat" WHERE channel = 'telegram' AND "contactId" IS NOT NULL) as contact_count,
+                (SELECT MIN("sentAt") FROM "Message" WHERE channel = 'telegram' AND "sentAt" >= ${cutoff}) as min_date,
+                (SELECT MAX("sentAt") FROM "Message" WHERE channel = 'telegram') as max_date
+        `
+        const db = dbTotals[0]
+        const dbMsgCount = Number(db?.msg_count ?? 0)
+        const dbChatCount = Number(db?.chat_count ?? 0)
+        const dbContactCount = Number(db?.contact_count ?? 0)
+
+        const finalMessages = totalMessages > 0 ? totalMessages : dbMsgCount
+        const finalChats = totalChats > 0 ? totalChats : dbChatCount
+        const finalContacts = totalContacts > 0 ? totalContacts : dbContactCount
+        const finalMinDate = minDate ?? db?.min_date ?? null
+        const finalMaxDate = maxDate ?? db?.max_date ?? null
+
+        // 7. Complete
+        const resultType = finalMessages > 0 ? 'full' : 'live_only'
+        await updateTgImportJob(jobId, {
+            status: 'completed',
+            resultType,
+            messagesImported: finalMessages,
+            chatsScanned: finalChats,
+            contactsFound: finalContacts,
+            finishedAt: new Date(),
+            coveredPeriodFrom: finalMinDate,
+            coveredPeriodTo: finalMaxDate,
+            detailsJson: { newMessages, existingMessages: finalMessages - newMessages },
+        })
+        console.log(`[TG-IMPORT] Completed job=${jobId}: ${finalMessages} msgs (${newMessages} new), ${finalChats} chats, ${finalContacts} contacts`)
+    } catch (err: any) {
+        console.error(`[TG-IMPORT] Fatal error job=${jobId}: ${err.message}`)
+        await updateTgImportJob(jobId, {
+            status: 'failed',
+            resultType: 'failed',
+            messagesImported: totalMessages,
+            chatsScanned: totalChats,
+            contactsFound: totalContacts,
+            finishedAt: new Date(),
+        })
+    }
 }
 
-export async function pauseTelegramConnection(id: string, _deleteMessages?: boolean) {
-    console.warn('[TG] pauseTelegramConnection is not implemented')
+/** Update HistoryImportJob fields directly via Prisma */
+async function updateTgImportJob(jobId: string, data: {
+    status?: string
+    resultType?: string
+    messagesImported?: number
+    chatsScanned?: number
+    contactsFound?: number
+    startedAt?: Date | null
+    finishedAt?: Date | null
+    coveredPeriodFrom?: Date | null
+    coveredPeriodTo?: Date | null
+    detailsJson?: any
+}) {
+    try {
+        const sets: string[] = []
+        const vals: any[] = []
+        let idx = 1
+
+        if (data.status !== undefined)           { sets.push(`status = $${idx}::"AiImportStatus"`); vals.push(data.status); idx++ }
+        if (data.resultType !== undefined)        { sets.push(`"resultType" = $${idx}`); vals.push(data.resultType); idx++ }
+        if (data.messagesImported !== undefined)  { sets.push(`"messagesImported" = $${idx}`); vals.push(data.messagesImported); idx++ }
+        if (data.chatsScanned !== undefined)      { sets.push(`"chatsScanned" = $${idx}`); vals.push(data.chatsScanned); idx++ }
+        if (data.contactsFound !== undefined)     { sets.push(`"contactsFound" = $${idx}`); vals.push(data.contactsFound); idx++ }
+        if (data.startedAt !== undefined)         { sets.push(`"startedAt" = $${idx}`); vals.push(data.startedAt); idx++ }
+        if (data.finishedAt !== undefined)        { sets.push(`"finishedAt" = $${idx}`); vals.push(data.finishedAt); idx++ }
+        if (data.coveredPeriodFrom !== undefined) { sets.push(`"coveredPeriodFrom" = $${idx}`); vals.push(data.coveredPeriodFrom); idx++ }
+        if (data.coveredPeriodTo !== undefined)   { sets.push(`"coveredPeriodTo" = $${idx}`); vals.push(data.coveredPeriodTo); idx++ }
+        if (data.detailsJson !== undefined)       { sets.push(`"detailsJson" = $${idx}::jsonb`); vals.push(JSON.stringify(data.detailsJson)); idx++ }
+
+        if (sets.length === 0) return
+        vals.push(jobId)
+        await prisma.$executeRawUnsafe(
+            `UPDATE "HistoryImportJob" SET ${sets.join(', ')} WHERE id = $${idx}`,
+            ...vals
+        )
+    } catch (err: any) {
+        console.error(`[TG-IMPORT] updateTgImportJob error: ${err.message}`)
+    }
 }
 
-export async function resumeTelegramConnection(id: string, _catchUp?: boolean) {
-    console.warn('[TG] resumeTelegramConnection is not implemented')
-}
+export async function pauseTelegramConnection(id: string, deleteMessages?: boolean) {
+    console.log(`[TG] pauseTelegramConnection id=${id} deleteMessages=${deleteMessages}`)
 
-export async function deleteConnectionMessages(id: string) {
-    const { ContactService } = await import('@/lib/ContactService')
-
-    // Find all telegram chats
-    const tgChats = await (prisma.chat as any).findMany({
-        where: { channel: 'telegram' },
-        select: { id: true, contactId: true },
+    // Mark as paused (isActive=false → isPaused=true in UI)
+    await (prisma as any).telegramConnection.update({
+        where: { id },
+        data: { isActive: false }
     })
 
-    if (tgChats.length === 0) return
+    // Stop the listener for this connection
+    if (clientCache.has(id)) {
+        initializedListeners.delete(id)
+        console.log(`[TG] Listener removed for paused connection ${id}`)
+    }
+
+    // Optionally delete messages
+    if (deleteMessages) {
+        await deleteConnectionMessages(id)
+    }
+
+    revalidatePath('/settings/integrations/telegram')
+}
+
+export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
+    console.log(`[TG] resumeTelegramConnection id=${id} catchUp=${catchUp}`)
+
+    // Mark as active (isPaused=false in UI)
+    await (prisma as any).telegramConnection.update({
+        where: { id },
+        data: { isActive: true }
+    })
+
+    // Re-initialize listener
+    const conn = await (prisma as any).telegramConnection.findUnique({ where: { id } })
+    if (conn?.sessionString) {
+        try {
+            const client = await getTelegramClient(conn)
+            if (catchUp) {
+                await catchUpMissedMessages(client, id)
+            }
+        } catch (err: any) {
+            console.error(`[TG] Failed to resume connection ${id}: ${err.message}`)
+        }
+    }
+
+    revalidatePath('/settings/integrations/telegram')
+}
+
+export async function deleteConnectionMessages(connectionId: string) {
+    const { ContactService } = await import('@/lib/ContactService')
+
+    // Find telegram chats scoped to this connection (via metadata.connectionId)
+    // If connectionId is not in metadata, fall back to all telegram chats
+    const allTgChats = await (prisma.chat as any).findMany({
+        where: { channel: 'telegram' },
+        select: { id: true, contactId: true, metadata: true },
+    })
+
+    // Filter to chats belonging to this specific connection
+    const tgChats = allTgChats.filter((c: any) => {
+        const meta = c.metadata as any
+        return !meta?.connectionId || meta.connectionId === connectionId
+    })
+
+    if (tgChats.length === 0) {
+        console.log(`[TG] No chats found for connection ${connectionId}`)
+        // Still clean up import jobs
+        await cleanupImportJobs('telegram', connectionId)
+        return
+    }
 
     const chatIds = tgChats.map((c: any) => c.id)
     const contactIds = [...new Set(tgChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
@@ -798,10 +1113,35 @@ export async function deleteConnectionMessages(id: string) {
     await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
     await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
 
-    // Cleanup dangling identities (scoped to affected contacts)
-    await ContactService.cleanupDanglingIdentities(contactIds)
+    // Cleanup dangling identities
+    if (contactIds.length > 0) {
+        await ContactService.cleanupDanglingIdentities(contactIds)
+    }
 
-    console.log(`[TG] Deleted ${chatIds.length} chats and messages for telegram channel`)
+    // Clean up HistoryImportJob records so ChannelSyncBlock resets to "Не загружена"
+    await cleanupImportJobs('telegram', connectionId)
+
+    console.log(`[TG] Deleted ${chatIds.length} chats and messages for connection ${connectionId}`)
+}
+
+/** Remove HistoryImportJob records for a channel+connection so the sync block resets */
+async function cleanupImportJobs(channel: string, connectionId?: string) {
+    try {
+        if (connectionId) {
+            await prisma.$executeRaw`
+                DELETE FROM "HistoryImportJob"
+                WHERE ${channel} = ANY(channels) AND "connectionId" = ${connectionId}
+            `
+        } else {
+            await prisma.$executeRaw`
+                DELETE FROM "HistoryImportJob"
+                WHERE ${channel} = ANY(channels)
+            `
+        }
+        console.log(`[TG] Cleaned up import jobs for channel=${channel} conn=${connectionId}`)
+    } catch (err: any) {
+        console.error(`[TG] cleanupImportJobs error: ${err.message}`)
+    }
 }
 
 /**

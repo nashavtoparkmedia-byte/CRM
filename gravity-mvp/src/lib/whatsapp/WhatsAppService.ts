@@ -22,6 +22,11 @@ const globalForWAIds = global as unknown as { _waInstanceIds?: Map<string, strin
 const instanceIds = globalForWAIds._waInstanceIds || new Map<string, string>()
 if (process.env.NODE_ENV !== 'production') globalForWAIds._waInstanceIds = instanceIds
 
+// Guard: track which connections already had auto-sync (prevent re-sync on reconnect)
+const globalSyncDone = global as unknown as { _waSyncDone?: Set<string> }
+const syncDoneSet = globalSyncDone._waSyncDone || new Set<string>()
+if (process.env.NODE_ENV !== 'production') globalSyncDone._waSyncDone = syncDoneSet
+
 if (typeof global.fetch === 'undefined') {
     // @ts-ignore
     global.fetch = fetch as any
@@ -115,11 +120,30 @@ async function syncHistory(connectionId: string, client: Client) {
                     }
                 }
 
-                const messages = await chatRaw.fetchMessages({ limit: 1000 })
-                const filtered = messages.filter(m => {
-                    const ts = new Date(m.timestamp * 1000)
-                    return ts >= cutoff
-                })
+                // Fetch messages — try fetchMessages, fall back to Store for @lid chats
+                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
+                try {
+                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
+                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type }))
+                } catch {
+                    const page = (client as any).pupPage
+                    if (page) {
+                        try {
+                            rawMsgs = await page.evaluate((cid: string) => {
+                                const store = (window as any).Store
+                                if (!store?.Chat) return []
+                                const chat = store.Chat.get(cid)
+                                if (!chat?.msgs) return []
+                                const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
+                                return models.map((m: any) => ({
+                                    id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
+                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat',
+                                }))
+                            }, chatRaw.id._serialized)
+                        } catch {}
+                    }
+                }
+                const filtered = rawMsgs.filter(m => new Date(m.timestamp * 1000) >= cutoff)
 
                 let maxTimestamp: Date | null = null
                 for (const msg of filtered) {
@@ -128,13 +152,13 @@ async function syncHistory(connectionId: string, client: Client) {
                         if (!maxTimestamp || ts > maxTimestamp) maxTimestamp = ts
 
                         const msgType = mapMsgType(msg.type)
-                        
+
                         // Legacy WhatsAppMessage
                         await prisma.whatsAppMessage.upsert({
-                            where: { id_chatId: { id: msg.id._serialized, chatId: chatRaw.id._serialized } },
+                            where: { id_chatId: { id: msg.id, chatId: chatRaw.id._serialized } },
                             update: {},
                             create: {
-                                id: msg.id._serialized,
+                                id: msg.id,
                                 chatId: chatRaw.id._serialized,
                                 body: msg.body || '',
                                 fromMe: msg.fromMe,
@@ -146,11 +170,10 @@ async function syncHistory(connectionId: string, client: Client) {
                         // Unified Message
                         const unifiedChat = await prisma.chat.findUnique({ where: { externalChatId: chatRaw.id._serialized } })
                         if (unifiedChat) {
-                            // DE-DUPLICATION: check if we already have this message (by externalId OR content+time)
                             const existing = await prisma.message.findFirst({
                                 where: {
                                     OR: [
-                                        { externalId: msg.id._serialized },
+                                        { externalId: msg.id },
                                         {
                                             chatId: unifiedChat.id,
                                             content: msg.body || '',
@@ -165,11 +188,10 @@ async function syncHistory(connectionId: string, client: Client) {
                             })
 
                             if (existing) {
-                                // Update existing message with provider ID if it was missing
                                 if (!existing.externalId) {
                                     await prisma.message.update({
                                         where: { id: existing.id },
-                                        data: { externalId: msg.id._serialized }
+                                        data: { externalId: msg.id }
                                     })
                                 }
                             } else {
@@ -179,14 +201,15 @@ async function syncHistory(connectionId: string, client: Client) {
                                         direction: msg.fromMe ? 'outbound' : 'inbound',
                                         type: mapToUnifiedMessageType(msg.type),
                                         content: msg.body || '',
-                                        externalId: msg.id._serialized,
+                                        externalId: msg.id,
+                                        channel: 'whatsapp',
                                         sentAt: ts
                                     }
                                 })
                             }
                         }
                     } catch (msgErr) {
-                        console.error(`[WA-SERVICE] Failed to save message ${msg.id._serialized}:`, msgErr)
+                        console.error(`[WA-SERVICE] Failed to save message ${msg.id}:`, msgErr)
                     }
                 }
 
@@ -231,6 +254,11 @@ function mapToUnifiedMessageType(type: string): 'text' | 'image' | 'audio' | 'vi
 
 export function getClient(connectionId: string): Client | undefined {
     return clients.get(connectionId)
+}
+
+/** Reset the auto-sync guard so next ready event will re-sync */
+export function resetSyncGuard(connectionId: string) {
+    syncDoneSet.delete(connectionId)
 }
 
 /** Get runtime status — delegates to TransportRegistry. */
@@ -302,9 +330,15 @@ export async function initializeClient(connectionId: string): Promise<void> {
                 status: 'ready',
                 phoneNumber: info?.wid?.user || null
             })
-            syncHistory(connectionId, client).catch(err =>
-                console.error(`[WA-SERVICE] Background sync error:`, err)
-            )
+            // Auto-sync only on first ready (not on reconnects)
+            if (!syncDoneSet.has(connectionId)) {
+                syncDoneSet.add(connectionId)
+                syncHistory(connectionId, client).catch(err =>
+                    console.error(`[WA-SERVICE] Background sync error:`, err)
+                )
+            } else {
+                console.log(`[WA-SERVICE] Skipping auto-sync for ${connectionId} (already done)`)
+            }
         } catch (err) {
             console.error(`[WA-SERVICE] Ready event error for ${connectionId}:`, err)
         }
@@ -818,11 +852,294 @@ export async function downloadMedia(messageId: string, chatId: string): Promise<
     return null
 }
 
-// Stub: function was removed but is still imported in settings/ai/actions.ts
+/**
+ * Import WhatsApp history as a HistoryImportJob.
+ * Reuses the existing syncHistory logic but respects mode/daysBack and tracks job metrics.
+ */
 export async function importWhatsAppHistory(
     jobId: string, mode: string, daysBack?: number, connectionId?: string
 ) {
-    console.warn('[WA] importWhatsAppHistory is not implemented')
+    console.log(`[WA-IMPORT] Starting job=${jobId} mode=${mode} daysBack=${daysBack} conn=${connectionId}`)
+
+    // 1. Resolve connection
+    let connId = connectionId
+    if (!connId) {
+        const conns = await prisma.whatsAppConnection.findMany({ where: { status: 'ready' } })
+        if (conns.length === 0) {
+            console.error('[WA-IMPORT] No ready WhatsApp connections')
+            await updateImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+            return
+        }
+        connId = conns[0].id
+    }
+
+    const client = clients.get(connId)
+    if (!client) {
+        console.error(`[WA-IMPORT] Client not found for connection ${connId}`)
+        await updateImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+        return
+    }
+
+    // 2. Update job to running
+    await updateImportJob(jobId, { status: 'running', startedAt: new Date() })
+
+    // 3. Compute cutoff date based on mode
+    let cutoff: Date
+    if (mode === 'last_n_days' && daysBack) {
+        cutoff = new Date()
+        cutoff.setDate(cutoff.getDate() - daysBack)
+    } else if (mode === 'from_connection_time') {
+        cutoff = new Date() // only new messages from now
+    } else {
+        // available_history — use the standard 3-month window
+        cutoff = getHistoryCutoff()
+    }
+
+    let totalMessages = 0
+    let newMessages = 0
+    let totalChats = 0
+    let totalContacts = 0
+    let minDate: Date | null = null
+    let maxDate: Date | null = null
+
+    try {
+        const chatsRaw = await client.getChats()
+
+        for (const chatRaw of chatsRaw) {
+            try {
+                totalChats++
+
+                // Upsert legacy WA chat
+                await prisma.whatsAppChat.upsert({
+                    where: { id: chatRaw.id._serialized },
+                    update: { name: chatRaw.name },
+                    create: { id: chatRaw.id._serialized, connectionId: connId!, name: chatRaw.name }
+                })
+
+                // Upsert unified Chat
+                const unifiedChat = await prisma.chat.upsert({
+                    where: { externalChatId: chatRaw.id._serialized },
+                    update: { name: chatRaw.name },
+                    create: {
+                        externalChatId: chatRaw.id._serialized,
+                        channel: 'whatsapp',
+                        name: chatRaw.name,
+                        metadata: { connectionId: connId }
+                    }
+                })
+
+                // Contact resolution
+                if (!unifiedChat.contactId) {
+                    try {
+                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
+                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+                            await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            totalContacts++
+                        }
+                    } catch {}
+                }
+
+                // Fetch messages — try fetchMessages first, fall back to Store.Chat.msgs for @lid chats
+                let rawMessages: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
+                try {
+                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
+                    rawMessages = fetched.map(m => ({
+                        id: m.id._serialized,
+                        body: m.body || '',
+                        timestamp: m.timestamp,
+                        fromMe: m.fromMe,
+                        type: m.type,
+                    }))
+                } catch {
+                    // fetchMessages fails for @lid chats — use Puppeteer Store directly
+                    const page = (client as any).pupPage
+                    if (page) {
+                        try {
+                            rawMessages = await page.evaluate((cid: string) => {
+                                const store = (window as any).Store
+                                if (!store?.Chat) return []
+                                const chat = store.Chat.get(cid)
+                                if (!chat?.msgs) return []
+                                const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
+                                return models.map((m: any) => ({
+                                    id: m.id?._serialized || '',
+                                    body: m.body || '',
+                                    timestamp: m.t || 0,
+                                    fromMe: !!m.id?.fromMe,
+                                    type: m.type || 'chat',
+                                }))
+                            }, chatRaw.id._serialized)
+                        } catch {}
+                    }
+                }
+                const filtered = rawMessages.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+
+                let chatMaxTs: Date | null = null
+                for (const msg of filtered) {
+                    try {
+                        const ts = new Date(msg.timestamp * 1000)
+                        if (!chatMaxTs || ts > chatMaxTs) chatMaxTs = ts
+                        if (!minDate || ts < minDate) minDate = ts
+                        if (!maxDate || ts > maxDate) maxDate = ts
+
+                        const msgType = mapMsgType(msg.type)
+                        const msgId = msg.id // already a string from rawMessages
+
+                        // Legacy
+                        await prisma.whatsAppMessage.upsert({
+                            where: { id_chatId: { id: msgId, chatId: chatRaw.id._serialized } },
+                            update: {},
+                            create: {
+                                id: msgId,
+                                chatId: chatRaw.id._serialized,
+                                body: msg.body || '',
+                                fromMe: msg.fromMe,
+                                timestamp: ts,
+                                type: msgType,
+                            }
+                        })
+
+                        // Unified Message with dedup
+                        const existing = await prisma.message.findFirst({
+                            where: {
+                                OR: [
+                                    { externalId: msgId },
+                                    {
+                                        chatId: unifiedChat.id,
+                                        content: msg.body || '',
+                                        direction: msg.fromMe ? 'outbound' : 'inbound',
+                                        sentAt: { gte: new Date(ts.getTime() - 2000), lte: new Date(ts.getTime() + 2000) }
+                                    }
+                                ]
+                            }
+                        })
+
+                        totalMessages++
+                        if (!existing) {
+                            await prisma.message.create({
+                                data: {
+                                    chatId: unifiedChat.id,
+                                    direction: msg.fromMe ? 'outbound' : 'inbound',
+                                    type: mapToUnifiedMessageType(msg.type),
+                                    content: msg.body || '',
+                                    externalId: msgId,
+                                    channel: 'whatsapp',
+                                    sentAt: ts
+                                }
+                            })
+                            newMessages++
+                        }
+                    } catch (msgErr: any) {
+                        console.error(`[WA-IMPORT] Msg error ${msg.id}: ${msgErr.message}`)
+                    }
+                }
+
+                // Update lastMessageAt
+                if (chatMaxTs) {
+                    await prisma.whatsAppChat.update({ where: { id: chatRaw.id._serialized }, data: { lastMessageAt: chatMaxTs } })
+                    await prisma.chat.update({ where: { externalChatId: chatRaw.id._serialized }, data: { lastMessageAt: chatMaxTs } })
+                }
+
+                // Periodic job progress update (every 5 chats)
+                if (totalChats % 5 === 0) {
+                    await updateImportJob(jobId, {
+                        status: 'running',
+                        messagesImported: totalMessages,
+                        chatsScanned: totalChats,
+                        contactsFound: totalContacts,
+                    })
+                }
+            } catch (chatErr: any) {
+                console.error(`[WA-IMPORT] Chat error ${chatRaw.id._serialized}: ${chatErr.message}`)
+            }
+        }
+
+        // 4. Query actual DB totals scoped to WA chats and cutoff period
+        const dbTotals = await prisma.$queryRaw<{ msg_count: bigint; chat_count: bigint; contact_count: bigint; min_date: Date | null; max_date: Date | null }[]>`
+            SELECT
+                (SELECT COUNT(*) FROM "Message" m JOIN "Chat" c ON m."chatId" = c.id WHERE c.channel = 'whatsapp' AND m."sentAt" >= ${cutoff}) as msg_count,
+                (SELECT COUNT(*) FROM "Chat" WHERE channel = 'whatsapp') as chat_count,
+                (SELECT COUNT(DISTINCT "contactId") FROM "Chat" WHERE channel = 'whatsapp' AND "contactId" IS NOT NULL) as contact_count,
+                (SELECT MIN(m."sentAt") FROM "Message" m JOIN "Chat" c ON m."chatId" = c.id WHERE c.channel = 'whatsapp' AND m."sentAt" >= ${cutoff}) as min_date,
+                (SELECT MAX(m."sentAt") FROM "Message" m JOIN "Chat" c ON m."chatId" = c.id WHERE c.channel = 'whatsapp') as max_date
+        `
+        const db = dbTotals[0]
+        const dbMsgCount = Number(db?.msg_count ?? 0)
+        const dbChatCount = Number(db?.chat_count ?? 0)
+        const dbContactCount = Number(db?.contact_count ?? 0)
+
+        // Use DB totals if scan found nothing (auto-sync already loaded data)
+        const finalMessages = totalMessages > 0 ? totalMessages : dbMsgCount
+        const finalChats = totalChats > 0 ? totalChats : dbChatCount
+        const finalContacts = totalContacts > 0 ? totalContacts : dbContactCount
+        const finalMinDate = minDate ?? db?.min_date ?? null
+        const finalMaxDate = maxDate ?? db?.max_date ?? null
+
+        // 5. Complete
+        const resultType = finalMessages > 0 ? 'full' : 'live_only'
+        await updateImportJob(jobId, {
+            status: 'completed',
+            resultType,
+            messagesImported: finalMessages,
+            chatsScanned: finalChats,
+            contactsFound: finalContacts,
+            finishedAt: new Date(),
+            coveredPeriodFrom: finalMinDate,
+            coveredPeriodTo: finalMaxDate,
+            detailsJson: { newMessages, existingMessages: finalMessages - newMessages },
+        })
+        console.log(`[WA-IMPORT] Completed job=${jobId}: ${finalMessages} msgs (${newMessages} new, ${finalMessages - newMessages} existing), ${finalChats} chats, ${finalContacts} contacts`)
+    } catch (err: any) {
+        console.error(`[WA-IMPORT] Fatal error job=${jobId}: ${err.message}`)
+        await updateImportJob(jobId, {
+            status: 'failed',
+            resultType: 'failed',
+            messagesImported: totalMessages,
+            chatsScanned: totalChats,
+            contactsFound: totalContacts,
+            finishedAt: new Date(),
+        })
+    }
+}
+
+/** Update HistoryImportJob fields directly via Prisma */
+async function updateImportJob(jobId: string, data: {
+    status?: string
+    resultType?: string
+    messagesImported?: number
+    chatsScanned?: number
+    contactsFound?: number
+    startedAt?: Date | null
+    finishedAt?: Date | null
+    coveredPeriodFrom?: Date | null
+    coveredPeriodTo?: Date | null
+    detailsJson?: any
+}) {
+    try {
+        const sets: string[] = []
+        const vals: any[] = []
+        let idx = 1
+
+        if (data.status !== undefined)           { sets.push(`status = $${idx}::"AiImportStatus"`); vals.push(data.status); idx++ }
+        if (data.resultType !== undefined)        { sets.push(`"resultType" = $${idx}`); vals.push(data.resultType); idx++ }
+        if (data.messagesImported !== undefined)  { sets.push(`"messagesImported" = $${idx}`); vals.push(data.messagesImported); idx++ }
+        if (data.chatsScanned !== undefined)      { sets.push(`"chatsScanned" = $${idx}`); vals.push(data.chatsScanned); idx++ }
+        if (data.contactsFound !== undefined)     { sets.push(`"contactsFound" = $${idx}`); vals.push(data.contactsFound); idx++ }
+        if (data.startedAt !== undefined)         { sets.push(`"startedAt" = $${idx}`); vals.push(data.startedAt); idx++ }
+        if (data.finishedAt !== undefined)        { sets.push(`"finishedAt" = $${idx}`); vals.push(data.finishedAt); idx++ }
+        if (data.coveredPeriodFrom !== undefined) { sets.push(`"coveredPeriodFrom" = $${idx}`); vals.push(data.coveredPeriodFrom); idx++ }
+        if (data.coveredPeriodTo !== undefined)   { sets.push(`"coveredPeriodTo" = $${idx}`); vals.push(data.coveredPeriodTo); idx++ }
+        if (data.detailsJson !== undefined)       { sets.push(`"detailsJson" = $${idx}::jsonb`); vals.push(JSON.stringify(data.detailsJson)); idx++ }
+
+        if (sets.length === 0) return
+        vals.push(jobId)
+        await prisma.$executeRawUnsafe(
+            `UPDATE "HistoryImportJob" SET ${sets.join(', ')} WHERE id = $${idx}`,
+            ...vals
+        )
+    } catch (err: any) {
+        console.error(`[WA-IMPORT] updateImportJob error: ${err.message}`)
+    }
 }
 
 /**

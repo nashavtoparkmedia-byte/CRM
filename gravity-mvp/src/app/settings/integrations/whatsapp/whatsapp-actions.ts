@@ -1,11 +1,21 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { initializeClient, destroyClient, sendMessage as waSendMessage } from '@/lib/whatsapp/WhatsAppService'
+import { initializeClient, destroyClient, sendMessage as waSendMessage, resetSyncGuard } from '@/lib/whatsapp/WhatsAppService'
 import { revalidatePath } from 'next/cache'
 
 export async function createWhatsAppConnection(name?: string) {
     console.log(`[WA-ACTIONS] createWhatsAppConnection called with name: ${name}`)
+
+    // Guard: prevent creating a new connection if one is already pending QR scan
+    const pending = await prisma.whatsAppConnection.findFirst({
+        where: { status: { in: ['idle', 'qr', 'qr_expired', 'authenticated'] } }
+    })
+    if (pending) {
+        console.log(`[WA-ACTIONS] Blocked: already have pending connection ${pending.id} (status=${pending.status})`)
+        return pending
+    }
+
     const connection = await prisma.whatsAppConnection.create({
         data: { name: name || 'WhatsApp Account', status: 'idle' }
     })
@@ -93,10 +103,8 @@ export async function deleteWhatsAppConnection(connectionId: string) {
 
 export async function pauseWhatsAppConnection(connectionId: string, deleteMessages: boolean) {
     console.log(`[WA-ACTIONS] pauseWhatsAppConnection id=${connectionId} deleteMessages=${deleteMessages}`)
-    await prisma.whatsAppConnection.update({
-        where: { id: connectionId },
-        data: { isActive: false } as any
-    })
+    // Note: WhatsAppConnection schema has no isPaused/isActive field.
+    // Pause is handled at the client level in WhatsAppService.
     if (deleteMessages) {
         await deleteWhatsAppMessages(connectionId)
     }
@@ -105,45 +113,52 @@ export async function pauseWhatsAppConnection(connectionId: string, deleteMessag
 
 export async function resumeWhatsAppConnection(connectionId: string, catchUp: boolean) {
     console.log(`[WA-ACTIONS] resumeWhatsAppConnection id=${connectionId} catchUp=${catchUp}`)
-    if (!catchUp) {
-        // Delete buffered WA messages (stored in WhatsAppMessage with a buffered flag isn't implemented,
-        // so for WA we just unpause — buffering at WA level is handled in WhatsAppService)
-    }
-    await prisma.whatsAppConnection.update({
-        where: { id: connectionId },
-        data: { isActive: true } as any
-    })
+    // Note: WhatsAppConnection schema has no isPaused/isActive field.
+    // Resume is handled at the client level in WhatsAppService.
     revalidatePath('/settings/integrations/whatsapp')
 }
 
 export async function deleteWhatsAppMessages(connectionId: string) {
     console.log(`[WA-ACTIONS] deleteWhatsAppMessages id=${connectionId}`)
+    // Reset auto-sync guard so future sync can re-populate
+    resetSyncGuard(connectionId)
     // Delete from WA-specific tables
-    await prisma.whatsAppMessage.deleteMany({ where: { chat: { connectionId } } }).catch(() => {})
-    await prisma.whatsAppChat.deleteMany({ where: { connectionId } }).catch(() => {})
-    // Delete from unified Chat/Message table where channel='whatsapp'
+    try {
+        await prisma.whatsAppMessage.deleteMany({ where: { chat: { connectionId } } })
+    } catch (e: any) { console.error(`[WA-DELETE] WhatsAppMessage delete error: ${e.message}`) }
+
+    try {
+        await prisma.whatsAppChat.deleteMany({ where: { connectionId } })
+    } catch (e: any) { console.error(`[WA-DELETE] WhatsAppChat delete error: ${e.message}`) }
+
+    // Delete ALL messages with channel='whatsapp' (including cross-channel ones in TG/MAX chats)
+    const crossChannelDel = await (prisma.message as any).deleteMany({ where: { channel: 'whatsapp' } })
+    console.log(`[WA-DELETE] Deleted ${crossChannelDel.count} WA messages (all channels)`)
+
+    // Delete unified WA chats
     const unifiedChats = await (prisma.chat as any).findMany({
         where: { channel: 'whatsapp' },
-        select: { id: true, externalChatId: true }
+        select: { id: true, contactId: true },
     })
     if (unifiedChats.length > 0) {
         const chatIds = unifiedChats.map((c: any) => c.id)
-        // Collect contactIds before deleting chats
-        const chatsWithContacts = await (prisma.chat as any).findMany({
-            where: { id: { in: chatIds } },
-            select: { contactId: true },
-        })
-        const contactIds = [...new Set(chatsWithContacts.map((c: any) => c.contactId).filter(Boolean))] as string[]
+        const contactIds = [...new Set(unifiedChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
 
-        await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
-        await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+        const chatDel = await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+        console.log(`[WA-DELETE] Deleted ${chatDel.count} chats`)
 
-        // Cleanup dangling identities (scoped to affected contacts)
+        // Cleanup dangling identities
         if (contactIds.length > 0) {
             const { ContactService } = await import('@/lib/ContactService')
             await ContactService.cleanupDanglingIdentities(contactIds)
         }
     }
+    // Clean up HistoryImportJob records so ChannelSyncBlock resets
+    try {
+        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels)`
+        console.log(`[WA-DELETE] Cleaned up import jobs`)
+    } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
+
     revalidatePath('/messages')
 }
 
