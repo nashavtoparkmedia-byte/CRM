@@ -190,7 +190,7 @@ export async function checkTelegramAuthStatus(loginId: string, apiId: number, ap
 
 export async function getTelegramConnections() {
     return await (prisma as any).telegramConnection.findMany({
-        where: { isActive: true },
+        where: { sessionString: { not: null } },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }]
     })
 }
@@ -1036,13 +1036,7 @@ async function updateTgImportJob(jobId: string, data: {
 export async function pauseTelegramConnection(id: string, deleteMessages?: boolean) {
     console.log(`[TG] pauseTelegramConnection id=${id} deleteMessages=${deleteMessages}`)
 
-    // Mark connection as inactive
-    await (prisma as any).telegramConnection.update({
-        where: { id },
-        data: { isActive: false }
-    })
-
-    // Stop the listener for this connection
+    // Stop the listener for this connection (don't change isActive — that hides the card)
     if (clientCache.has(id)) {
         initializedListeners.delete(id)
         console.log(`[TG] Listener removed for paused connection ${id}`)
@@ -1058,12 +1052,6 @@ export async function pauseTelegramConnection(id: string, deleteMessages?: boole
 
 export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
     console.log(`[TG] resumeTelegramConnection id=${id} catchUp=${catchUp}`)
-
-    // Mark connection as active
-    await (prisma as any).telegramConnection.update({
-        where: { id },
-        data: { isActive: true }
-    })
 
     // Re-initialize listener
     const conn = await (prisma as any).telegramConnection.findUnique({ where: { id } })
