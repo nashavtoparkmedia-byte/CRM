@@ -1008,24 +1008,76 @@ async function updateTgImportJob(jobId: string, data: {
     }
 }
 
-export async function pauseTelegramConnection(id: string, _deleteMessages?: boolean) {
-    console.warn('[TG] pauseTelegramConnection is not implemented')
-}
+export async function pauseTelegramConnection(id: string, deleteMessages?: boolean) {
+    console.log(`[TG] pauseTelegramConnection id=${id} deleteMessages=${deleteMessages}`)
 
-export async function resumeTelegramConnection(id: string, _catchUp?: boolean) {
-    console.warn('[TG] resumeTelegramConnection is not implemented')
-}
-
-export async function deleteConnectionMessages(id: string) {
-    const { ContactService } = await import('@/lib/ContactService')
-
-    // Find all telegram chats
-    const tgChats = await (prisma.chat as any).findMany({
-        where: { channel: 'telegram' },
-        select: { id: true, contactId: true },
+    // Mark connection as inactive
+    await (prisma as any).telegramConnection.update({
+        where: { id },
+        data: { isActive: false }
     })
 
-    if (tgChats.length === 0) return
+    // Stop the listener for this connection
+    if (clientCache.has(id)) {
+        initializedListeners.delete(id)
+        console.log(`[TG] Listener removed for paused connection ${id}`)
+    }
+
+    // Optionally delete messages
+    if (deleteMessages) {
+        await deleteConnectionMessages(id)
+    }
+
+    revalidatePath('/settings/integrations/telegram')
+}
+
+export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
+    console.log(`[TG] resumeTelegramConnection id=${id} catchUp=${catchUp}`)
+
+    // Mark connection as active
+    await (prisma as any).telegramConnection.update({
+        where: { id },
+        data: { isActive: true }
+    })
+
+    // Re-initialize listener
+    const conn = await (prisma as any).telegramConnection.findUnique({ where: { id } })
+    if (conn?.sessionString) {
+        try {
+            const client = await getTelegramClient(conn)
+            if (catchUp) {
+                await catchUpMissedMessages(client, id)
+            }
+        } catch (err: any) {
+            console.error(`[TG] Failed to resume connection ${id}: ${err.message}`)
+        }
+    }
+
+    revalidatePath('/settings/integrations/telegram')
+}
+
+export async function deleteConnectionMessages(connectionId: string) {
+    const { ContactService } = await import('@/lib/ContactService')
+
+    // Find telegram chats scoped to this connection (via metadata.connectionId)
+    // If connectionId is not in metadata, fall back to all telegram chats
+    const allTgChats = await (prisma.chat as any).findMany({
+        where: { channel: 'telegram' },
+        select: { id: true, contactId: true, metadata: true },
+    })
+
+    // Filter to chats belonging to this specific connection
+    const tgChats = allTgChats.filter((c: any) => {
+        const meta = c.metadata as any
+        return !meta?.connectionId || meta.connectionId === connectionId
+    })
+
+    if (tgChats.length === 0) {
+        console.log(`[TG] No chats found for connection ${connectionId}`)
+        // Still clean up import jobs
+        await cleanupImportJobs('telegram', connectionId)
+        return
+    }
 
     const chatIds = tgChats.map((c: any) => c.id)
     const contactIds = [...new Set(tgChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
@@ -1034,10 +1086,35 @@ export async function deleteConnectionMessages(id: string) {
     await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
     await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
 
-    // Cleanup dangling identities (scoped to affected contacts)
-    await ContactService.cleanupDanglingIdentities(contactIds)
+    // Cleanup dangling identities
+    if (contactIds.length > 0) {
+        await ContactService.cleanupDanglingIdentities(contactIds)
+    }
 
-    console.log(`[TG] Deleted ${chatIds.length} chats and messages for telegram channel`)
+    // Clean up HistoryImportJob records so ChannelSyncBlock resets to "Не загружена"
+    await cleanupImportJobs('telegram', connectionId)
+
+    console.log(`[TG] Deleted ${chatIds.length} chats and messages for connection ${connectionId}`)
+}
+
+/** Remove HistoryImportJob records for a channel+connection so the sync block resets */
+async function cleanupImportJobs(channel: string, connectionId?: string) {
+    try {
+        if (connectionId) {
+            await prisma.$executeRaw`
+                DELETE FROM "HistoryImportJob"
+                WHERE ${channel} = ANY(channels) AND "connectionId" = ${connectionId}
+            `
+        } else {
+            await prisma.$executeRaw`
+                DELETE FROM "HistoryImportJob"
+                WHERE ${channel} = ANY(channels)
+            `
+        }
+        console.log(`[TG] Cleaned up import jobs for channel=${channel} conn=${connectionId}`)
+    } catch (err: any) {
+        console.error(`[TG] cleanupImportJobs error: ${err.message}`)
+    }
 }
 
 /**
