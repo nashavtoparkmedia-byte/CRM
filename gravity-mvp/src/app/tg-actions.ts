@@ -957,6 +957,7 @@ export async function importTelegramHistory(
             finishedAt: new Date(),
             coveredPeriodFrom: minDate,
             coveredPeriodTo: maxDate,
+            detailsJson: { newMessages, existingMessages: totalMessages - newMessages },
         })
         console.log(`[TG-IMPORT] Completed job=${jobId}: ${totalMessages} msgs (${newMessages} new), ${totalChats} chats, ${totalContacts} contacts`)
     } catch (err: any) {
@@ -983,6 +984,7 @@ async function updateTgImportJob(jobId: string, data: {
     finishedAt?: Date | null
     coveredPeriodFrom?: Date | null
     coveredPeriodTo?: Date | null
+    detailsJson?: any
 }) {
     try {
         const sets: string[] = []
@@ -998,6 +1000,7 @@ async function updateTgImportJob(jobId: string, data: {
         if (data.finishedAt !== undefined)        { sets.push(`"finishedAt" = $${idx}`); vals.push(data.finishedAt); idx++ }
         if (data.coveredPeriodFrom !== undefined) { sets.push(`"coveredPeriodFrom" = $${idx}`); vals.push(data.coveredPeriodFrom); idx++ }
         if (data.coveredPeriodTo !== undefined)   { sets.push(`"coveredPeriodTo" = $${idx}`); vals.push(data.coveredPeriodTo); idx++ }
+        if (data.detailsJson !== undefined)       { sets.push(`"detailsJson" = $${idx}::jsonb`); vals.push(JSON.stringify(data.detailsJson)); idx++ }
 
         if (sets.length === 0) return
         vals.push(jobId)

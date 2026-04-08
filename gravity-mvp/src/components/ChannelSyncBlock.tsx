@@ -21,6 +21,7 @@ interface ImportJob {
     channels: string[]
     mode: string
     connectionId?: string | null
+    detailsJson?: { newMessages?: number; existingMessages?: number } | null
 }
 
 interface Props {
@@ -215,11 +216,28 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                         <StatMini label="Чатов"     value={lastJob.chatsScanned}     color="green" />
                         <StatMini label="Контактов" value={lastJob.contactsFound}    color="green" />
                     </div>
-                    {newMsgs !== null && (
-                        <div className={`text-[11px] px-3 py-1.5 rounded-lg ${newMsgs === 0 ? 'bg-gray-50 text-gray-500' : 'bg-green-50 text-green-700'}`}>
-                            Синхронизация завершена · Новых сообщений: <b>{newMsgs}</b>
-                        </div>
-                    )}
+                    {(() => {
+                        const details = lastJob.detailsJson as any
+                        const newCount = details?.newMessages ?? 0
+                        const existingCount = details?.existingMessages ?? 0
+                        const hasDetails = details && (newCount > 0 || existingCount > 0)
+                        return (
+                            <div className="text-[11px] px-3 py-1.5 rounded-lg bg-gray-50 text-gray-600 space-y-0.5">
+                                <div className="font-medium text-gray-700">Синхронизация завершена</div>
+                                {hasDetails ? (
+                                    <div className="flex flex-wrap gap-x-3">
+                                        {existingCount > 0 && <span>Уже в CRM: <b>{existingCount.toLocaleString()}</b></span>}
+                                        <span className={newCount > 0 ? 'text-green-700' : ''}>
+                                            Новых загружено: <b>{newCount.toLocaleString()}</b>
+                                        </span>
+                                        <span>Итого обработано: <b>{lastJob.messagesImported.toLocaleString()}</b></span>
+                                    </div>
+                                ) : (
+                                    <span>Обработано сообщений: <b>{lastJob.messagesImported.toLocaleString()}</b></span>
+                                )}
+                            </div>
+                        )
+                    })()}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
                         {lastJob.coveredPeriodFrom && lastJob.coveredPeriodTo && (
                             <span>Период: <b className="text-gray-600">{fmt(lastJob.coveredPeriodFrom)} — {fmt(lastJob.coveredPeriodTo)}</b></span>
