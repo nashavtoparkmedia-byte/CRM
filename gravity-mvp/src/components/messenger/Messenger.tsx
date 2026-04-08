@@ -41,7 +41,7 @@ interface Conversation {
     lastMessageAt: string
     unreadCount: number
     requiresResponse: boolean
-    status: 'new' | 'active' | 'waiting'
+    status: 'new' | 'open' | 'waiting_customer' | 'waiting_internal' | 'resolved'
     driver?: {
         id: string
         fullName: string
@@ -378,10 +378,11 @@ export default function Messenger() {
     const getStatusLabel = (status: string) => {
         switch (status) {
             case 'new': return 'Новый'
-            case 'active': return 'В работе'
-            case 'waiting': return 'Ожидаем ответ'
-            case 'closed': return 'Закрыт'
-            default: return status.toUpperCase()
+            case 'open': return 'В работе'
+            case 'waiting_customer': return 'Ожидаем клиента'
+            case 'waiting_internal': return 'Внутренний'
+            case 'resolved': return 'Завершён'
+            default: return status
         }
     }
 
@@ -539,8 +540,8 @@ export default function Messenger() {
                                         <div className="flex items-center gap-1 bg-muted/50 px-2 py-0.5 rounded-lg border border-border/20">
                                             <span className={`text-[9px] font-black uppercase tracking-widest ${
                                                 chat.status === 'new' ? 'text-blue-500' :
-                                                chat.status === 'active' ? 'text-emerald-500' :
-                                                chat.status === 'waiting' ? 'text-orange-500' :
+                                                chat.status === 'open' ? 'text-emerald-500' :
+                                                chat.status === 'waiting_customer' ? 'text-orange-500' :
                                                 'text-muted-foreground'
                                             }`}>
                                                 {getStatusLabel(chat.status)}
@@ -574,8 +575,8 @@ export default function Messenger() {
                                         <h3 className="font-extrabold text-lg text-foreground tracking-tight leading-none">{selectedChat.name}</h3>
                                         <Badge variant="outline" className={`text-[9px] font-black tracking-tighter uppercase px-1.5 h-4 border-none ${
                                             selectedChat.status === 'new' ? 'bg-blue-500/10 text-blue-500' :
-                                            selectedChat.status === 'active' ? 'bg-emerald-500/10 text-emerald-500' :
-                                            selectedChat.status === 'waiting' ? 'bg-orange-500/10 text-orange-500' :
+                                            selectedChat.status === 'open' ? 'bg-emerald-500/10 text-emerald-500' :
+                                            selectedChat.status === 'waiting_customer' ? 'bg-orange-500/10 text-orange-500' :
                                             'bg-muted text-muted-foreground'
                                         }`}>
                                             {getStatusLabel(selectedChat.status)}

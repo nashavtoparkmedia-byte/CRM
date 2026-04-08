@@ -17,7 +17,7 @@ export default async function MessagesPage({
 
     // Normalize list tab (default to 'all')
     const listParam = typeof resolvedParams.list === 'string' ? resolvedParams.list : 'all'
-    const allowedListTabs = ['all', 'unread', 'assigned', 'auto', 'ai'] 
+    const allowedListTabs = ['all', 'queue', 'mine', 'waiting', 'resolved', 'unread', 'assigned']
     const activeListTab = allowedListTabs.includes(listParam) ? listParam : 'all'
 
     // Normalize channel tab (default to 'all')

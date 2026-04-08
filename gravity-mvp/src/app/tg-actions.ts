@@ -275,7 +275,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                     channel: 'telegram',
                     name: `TG ${senderId}`,
                     lastMessageAt: now,
-                    status: 'active'
+                    status: 'new'
                 }
             })
             chatCreated = true
@@ -465,8 +465,30 @@ function startTelegramHealthCheck(connections: any[]) {
                 registry.setReconnecting(conn.id, curInstanceId)
                 registry.scheduleReconnect(conn.id, curInstanceId, async () => { await getTelegramClient(conn) })
             }
+
+            // Check for prolonged degradation (>5 min not ready)
+            const degradedMs = registry.getDegradedDuration(conn.id)
+            if (degradedMs && degradedMs > 5 * 60 * 1000) {
+                const { opsLog } = await import('@/lib/opsLog')
+                const entry = registry.getEntry(conn.id)
+                opsLog('warn', 'tg_prolonged_degradation', {
+                    connectionId: conn.id,
+                    channel: 'telegram',
+                    degradedSinceMs: degradedMs,
+                    retryAttempt: entry?.retryAttempt,
+                    error: entry?.lastError || undefined,
+                })
+            }
         }
     }, 60_000)
+}
+
+/** Stop TG health check interval. Called during graceful shutdown. */
+export async function stopTelegramHealthCheck(): Promise<void> {
+    if (_healthInterval) {
+        clearInterval(_healthInterval)
+        _healthInterval = null
+    }
 }
 
 async function getTelegramClient(connection: any) {
@@ -759,7 +781,27 @@ export async function resumeTelegramConnection(id: string, _catchUp?: boolean) {
 }
 
 export async function deleteConnectionMessages(id: string) {
-    console.warn('[TG] deleteConnectionMessages is not implemented')
+    const { ContactService } = await import('@/lib/ContactService')
+
+    // Find all telegram chats
+    const tgChats = await (prisma.chat as any).findMany({
+        where: { channel: 'telegram' },
+        select: { id: true, contactId: true },
+    })
+
+    if (tgChats.length === 0) return
+
+    const chatIds = tgChats.map((c: any) => c.id)
+    const contactIds = [...new Set(tgChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
+
+    // Delete messages then chats
+    await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
+    await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+
+    // Cleanup dangling identities (scoped to affected contacts)
+    await ContactService.cleanupDanglingIdentities(contactIds)
+
+    console.log(`[TG] Deleted ${chatIds.length} chats and messages for telegram channel`)
 }
 
 /**

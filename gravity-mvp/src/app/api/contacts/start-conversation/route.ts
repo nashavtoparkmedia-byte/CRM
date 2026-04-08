@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
           channel,
           externalChatId,
           name: contact.displayName,
-          status: 'active',
+          status: 'new',
           contactId: contact.id,
           contactIdentityId: identity.id,
         },

@@ -26,6 +26,7 @@ export interface ConnectionEntry {
   startedAt: Date
   readyAt: Date | null
   reconnectInFlight: boolean    // duplicate reconnect guard
+  degradedAt: Date | null       // when connection left 'ready' state
 }
 
 // ── Registry (module-level singleton, survives hot reload) ───
@@ -54,6 +55,7 @@ export function ensureEntry(connectionId: string, channel: 'whatsapp' | 'telegra
       startedAt: new Date(),
       readyAt: null,
       reconnectInFlight: false,
+      degradedAt: null,
     }
     entries.set(connectionId, entry)
   }
@@ -92,6 +94,7 @@ export function setReady(connectionId: string, instanceId: string): void {
   entry.retryAttempt = 0
   entry.reconnectInFlight = false
   entry.lastError = null
+  entry.degradedAt = null
   log('state_ready', connectionId, entry.channel, { instanceId: short(instanceId) })
 }
 
@@ -99,6 +102,7 @@ export function setReconnecting(connectionId: string, instanceId: string): void 
   if (!guardInstance(connectionId, instanceId, 'setReconnecting')) return
   const entry = entries.get(connectionId)!
   entry.state = 'reconnecting'
+  if (!entry.degradedAt) entry.degradedAt = new Date()
   log('state_reconnecting', connectionId, entry.channel, { instanceId: short(instanceId), attempt: entry.retryAttempt })
 }
 
@@ -108,6 +112,7 @@ export function setFailed(connectionId: string, instanceId: string, error: strin
   entry.state = 'failed'
   entry.lastError = error
   entry.reconnectInFlight = false
+  if (!entry.degradedAt) entry.degradedAt = new Date()
   cancelReconnect(connectionId)
   log('state_failed', connectionId, entry.channel, { instanceId: short(instanceId), error })
 }
@@ -224,6 +229,21 @@ export function getEntry(connectionId: string): ConnectionEntry | null {
 
 export function getAllEntries(): ConnectionEntry[] {
   return Array.from(entries.values())
+}
+
+export function getInstanceId(connectionId: string): string | null {
+  return entries.get(connectionId)?.instanceId || null
+}
+
+export function touchLastSeen(connectionId: string): void {
+  const entry = entries.get(connectionId)
+  if (entry) entry.lastSeen = new Date()
+}
+
+export function getDegradedDuration(connectionId: string): number | null {
+  const entry = entries.get(connectionId)
+  if (!entry || !entry.degradedAt) return null
+  return Date.now() - entry.degradedAt.getTime()
 }
 
 // ── Internal Helpers ──────────────────────────────────────────

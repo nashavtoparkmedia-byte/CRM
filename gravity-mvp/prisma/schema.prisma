@@ -340,6 +340,11 @@ model Chat {
   requiresResponse   Boolean          @default(false)
   status             String           @default("new")
 
+  // Conversation Workflow
+  assignedToUserId   String?
+  lastInboundAt      DateTime?
+  lastOutboundAt     DateTime?
+
   // Contact Model (Phase 0) — nullable for backward compatibility
   contactId          String?
   contactIdentityId  String?
@@ -354,6 +359,8 @@ model Chat {
   @@index([contactIdentityId])
   @@index([lastMessageAt(sort: Desc)])
   @@index([status])
+  @@index([assignedToUserId])
+  @@index([status, assignedToUserId])
 }
 
 model Message {
@@ -681,6 +688,7 @@ model ContactMerge {
   mergedBy       String       @default("system")  // "system" | userId
   reason         MergeReason
   confidence     Float?
+  driverYandexId String?                           // Driver.yandexDriverId at merge time
   snapshotBefore Json                              // состояние merged до операции
   createdAt      DateTime     @default(now())
 

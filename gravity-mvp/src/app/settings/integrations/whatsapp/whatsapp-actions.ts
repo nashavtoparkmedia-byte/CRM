@@ -128,8 +128,21 @@ export async function deleteWhatsAppMessages(connectionId: string) {
     })
     if (unifiedChats.length > 0) {
         const chatIds = unifiedChats.map((c: any) => c.id)
+        // Collect contactIds before deleting chats
+        const chatsWithContacts = await (prisma.chat as any).findMany({
+            where: { id: { in: chatIds } },
+            select: { contactId: true },
+        })
+        const contactIds = [...new Set(chatsWithContacts.map((c: any) => c.contactId).filter(Boolean))] as string[]
+
         await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
         await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+
+        // Cleanup dangling identities (scoped to affected contacts)
+        if (contactIds.length > 0) {
+            const { ContactService } = await import('@/lib/ContactService')
+            await ContactService.cleanupDanglingIdentities(contactIds)
+        }
     }
     revalidatePath('/messages')
 }

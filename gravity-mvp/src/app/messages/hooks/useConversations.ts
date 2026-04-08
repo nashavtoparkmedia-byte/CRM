@@ -8,7 +8,10 @@ export interface Conversation {
     lastMessageAt: string
     unreadCount: number
     requiresResponse: boolean
-    status: 'new' | 'active' | 'waiting'
+    status: 'new' | 'open' | 'waiting_customer' | 'waiting_internal' | 'resolved'
+    assignedToUserId?: string | null
+    lastInboundAt?: string | null
+    lastOutboundAt?: string | null
     driver?: {
         id: string
         fullName: string
@@ -104,5 +107,21 @@ export function useConversations() {
         globalListeners.forEach(l => l([...globalConversations]))
     }, [])
 
-    return { conversations, setConversations, isLoading }
+    return { conversations, setConversations, isLoading, refreshConversations }
+}
+
+/**
+ * Force an immediate refetch of conversations (shared across all hook instances).
+ */
+export async function refreshConversations() {
+    try {
+        const res = await fetch('/api/messages/conversations')
+        const data = await res.json()
+        if (Array.isArray(data)) {
+            globalConversations = data
+            globalListeners.forEach(l => l([...globalConversations]))
+        }
+    } catch (err) {
+        console.error('[refreshConversations] Failed:', err)
+    }
 }

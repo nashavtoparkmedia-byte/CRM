@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList } from "lucide-react"
+import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList, UserPlus, CheckCircle2, RotateCcw, UserMinus } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
@@ -22,6 +22,7 @@ interface ChatHeaderProps {
     activeSearchIndex: number
     onSearchNavigate: (direction: 'up' | 'down') => void
     onOpenCreateTask?: () => void
+    onConversationUpdate?: () => void
 }
 
 export default function ChatHeader({ 
@@ -34,7 +35,8 @@ export default function ChatHeader({
     searchResultsCount,
     activeSearchIndex,
     onSearchNavigate,
-    onOpenCreateTask
+    onOpenCreateTask,
+    onConversationUpdate
 }: ChatHeaderProps) {
     const { toggleProfileDrawer } = useChatNavigation()
     const searchInputRef = useRef<HTMLInputElement>(null)
@@ -74,10 +76,11 @@ export default function ChatHeader({
     const getStatusLabel = (status: string) => {
         switch (status) {
             case 'new': return 'Новый'
-            case 'active': return 'В работе'
-            case 'waiting': return 'Ожидаем ответ'
-            case 'closed': return 'Закрыт'
-            default: return status.toUpperCase()
+            case 'open': return 'В работе'
+            case 'waiting_customer': return 'Ожидаем клиента'
+            case 'waiting_internal': return 'Внутренний вопрос'
+            case 'resolved': return 'Завершён'
+            default: return status
         }
     }
 
@@ -167,7 +170,7 @@ export default function ChatHeader({
                                 <span className="text-[11px] text-gray-400">·</span>
                                 <span className="text-[11px] text-gray-500 font-mono truncate">{chat.driver?.phone || chat.externalChatId?.split(':')[1] || chat.externalChatId}</span>
                                 <span className="text-[11px] text-gray-400">·</span>
-                                <span className={`text-[11px] font-medium ${chat.status === 'active' ? 'text-[#3390EC]' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
+                                <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
                             </div>
                         </div>
 
@@ -241,9 +244,63 @@ export default function ChatHeader({
                                 )}
                             </div>
 
-                            <button 
+                            {/* Workflow action buttons */}
+                            {!chat.assignedToUserId ? (
+                                <button
+                                    onClick={async () => {
+                                        const userId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1]
+                                        if (!userId) return
+                                        await fetch(`/api/chats/${chat.id}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
+                                        onConversationUpdate?.()
+                                    }}
+                                    className="h-[28px] px-2 rounded-md hover:bg-blue-50 flex items-center gap-1 text-[11px] font-medium text-[#3390EC] transition-colors"
+                                    title="Взять себе"
+                                >
+                                    <UserPlus size={13} />
+                                    <span>Взять</span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={async () => {
+                                        await fetch(`/api/chats/${chat.id}/unassign`, { method: 'POST' })
+                                        onConversationUpdate?.()
+                                    }}
+                                    className="h-[28px] px-2 rounded-md hover:bg-gray-100 flex items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors"
+                                    title="Снять назначение"
+                                >
+                                    <UserMinus size={13} />
+                                </button>
+                            )}
+
+                            {chat.status !== 'resolved' ? (
+                                <button
+                                    onClick={async () => {
+                                        await fetch(`/api/chats/${chat.id}/resolve`, { method: 'POST' })
+                                        onConversationUpdate?.()
+                                    }}
+                                    className="h-[28px] px-2 rounded-md hover:bg-green-50 flex items-center gap-1 text-[11px] font-medium text-emerald-500 transition-colors"
+                                    title="Завершить"
+                                >
+                                    <CheckCircle2 size={13} />
+                                    <span>Завершить</span>
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={async () => {
+                                        await fetch(`/api/chats/${chat.id}/reopen`, { method: 'POST' })
+                                        onConversationUpdate?.()
+                                    }}
+                                    className="h-[28px] px-2 rounded-md hover:bg-amber-50 flex items-center gap-1 text-[11px] font-medium text-amber-500 transition-colors"
+                                    title="Переоткрыть"
+                                >
+                                    <RotateCcw size={13} />
+                                    <span>Открыть</span>
+                                </button>
+                            )}
+
+                            <button
                                 onClick={() => setIsSearchActive(true)}
-                                className="h-[28px] w-[28px] rounded-md hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors" 
+                                className="h-[28px] w-[28px] rounded-md hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors"
                                 title="Поиск (Cmd/Ctrl+F)"
                             >
                                 <Search size={15} />

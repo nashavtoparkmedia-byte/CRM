@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { MessageSquare } from "lucide-react"
 import ChatHeader from "./ChatHeader"
 import ChatChannelTabs from "./ChatChannelTabs"
 import MessageFeed from "./MessageFeed"
 import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
-import { useConversations } from "../hooks/useConversations"
+import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 
@@ -149,6 +149,20 @@ function ChatWorkspaceInner({
     const handleSendMessage = (content: string, effectiveChannel: string) => {
         setLastSentAt(Date.now())
         sendMessage(content, effectiveChannel)
+
+        // Auto-assign on first reply: if chat is unassigned, assign to current user
+        if (!chat.assignedToUserId) {
+            const userId = typeof document !== 'undefined'
+                ? document.cookie.split(';').map((c: string) => c.trim()).find((c: string) => c.startsWith('crm_user_id='))?.split('=')[1]
+                : undefined
+            if (userId) {
+                fetch(`/api/chats/${chatId}/assign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId }),
+                }).catch(() => {})
+            }
+        }
     }
 
     const handleRetry = (msg: Message) => {
@@ -180,6 +194,7 @@ function ChatWorkspaceInner({
                 activeSearchIndex={activeSearchIndex}
                 onSearchNavigate={handleSearchNavigate}
                 onOpenCreateTask={() => setIsTaskModalOpenForChat(true)}
+                onConversationUpdate={refreshConversations}
             />
 
             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />

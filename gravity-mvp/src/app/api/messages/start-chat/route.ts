@@ -61,7 +61,7 @@ export async function POST(request: Request) {
                 channel,
                 externalChatId: prefixedId,
                 name: chatName,
-                status: 'active'
+                status: 'new'
             }
         })
 

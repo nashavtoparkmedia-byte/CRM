@@ -122,12 +122,20 @@ export async function deleteMaxMessages(id: string) {
     console.log(`[MAX-ACTIONS] deleteMaxMessages connectionId=${id}`)
     const chats = await (prisma.chat as any).findMany({
         where: { channel: 'max' },
-        select: { id: true }
+        select: { id: true, contactId: true }
     })
     if (chats.length > 0) {
         const chatIds = chats.map((c: any) => c.id)
+        const contactIds = [...new Set(chats.map((c: any) => c.contactId).filter(Boolean))] as string[]
+
         await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
         await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+
+        // Cleanup dangling identities (scoped to affected contacts)
+        if (contactIds.length > 0) {
+            const { ContactService } = await import('@/lib/ContactService')
+            await ContactService.cleanupDanglingIdentities(contactIds)
+        }
     }
     revalidatePath('/messages')
 }
@@ -171,7 +179,8 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
 
     try {
         console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}`)
-        const response = await fetch("http://localhost:3005/send-message", {
+        const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+        const response = await fetch(`${maxScraperUrl}/send-message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chatId: cleanTarget, message })

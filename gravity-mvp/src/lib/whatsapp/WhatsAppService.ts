@@ -5,6 +5,7 @@ import fs from 'fs'
 import fetch from 'node-fetch'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
+import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import * as registry from '@/lib/TransportRegistry'
 
@@ -89,7 +90,7 @@ async function syncHistory(connectionId: string, client: Client) {
                 })
 
                 // Create/Update Unified Chat
-                await prisma.chat.upsert({
+                const unifiedSyncChat = await prisma.chat.upsert({
                     where: { externalChatId: chatRaw.id._serialized },
                     update: { name: chatRaw.name },
                     create: {
@@ -99,6 +100,20 @@ async function syncHistory(connectionId: string, client: Client) {
                         metadata: { connectionId }
                     }
                 })
+
+                // Contact resolution: extract phone from WA chat ID (e.g. "79221853150@c.us")
+                if (!unifiedSyncChat.contactId) {
+                    try {
+                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
+                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                        }
+                    } catch (contactErr: any) {
+                        // Non-blocking — don't break sync
+                        console.warn(`[WA-SERVICE] syncHistory contact resolve failed for ${chatRaw.id._serialized}: ${contactErr.message}`)
+                    }
+                }
 
                 const messages = await chatRaw.fetchMessages({ limit: 1000 })
                 const filtered = messages.filter(m => {
@@ -455,6 +470,10 @@ export async function initializeClient(connectionId: string): Promise<void> {
                         sentAt: ts
                     }
                 })
+
+                // Workflow: inbound message state update
+                await ConversationWorkflowService.onInboundMessage(unifiedChat.id, ts)
+
                 console.log(`[WA-SERVICE] SAVED inbound msgId=${msg.id._serialized} to chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
                 emitMessageReceived(savedMsg).catch(e =>
                     console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
@@ -523,6 +542,78 @@ export async function destroyClient(connectionId: string): Promise<void> {
     clients.delete(connectionId)
     instanceIds.delete(connectionId)
     await safeUpdateConnection(connectionId, { status: 'idle', sessionData: null, phoneNumber: null })
+}
+
+/**
+ * Destroy all active WA clients. Used during graceful shutdown.
+ */
+export async function destroyAllClients(): Promise<void> {
+    const ids = Array.from(clients.keys())
+    for (const id of ids) {
+        await destroyClient(id)
+    }
+}
+
+/**
+ * Watchdog: check all ready WA clients for health.
+ * Only checks connections in 'ready' state. Cooldown: 60s per connection.
+ */
+const watchdogLastAction = new Map<string, number>()
+const WATCHDOG_COOLDOWN_MS = 60000
+
+export async function checkAllClientsHealth(): Promise<{ checkedCount: number; unhealthyCount: number; details: Array<{ connectionId: string; healthy: boolean; reason?: string }> }> {
+    const { opsLog } = await import('@/lib/opsLog')
+    const entries = registry.getAllEntries().filter(e => e.channel === 'whatsapp' && e.state === 'ready')
+    const details: Array<{ connectionId: string; healthy: boolean; reason?: string }> = []
+    let unhealthyCount = 0
+
+    for (const entry of entries) {
+        const client = clients.get(entry.connectionId)
+
+        if (!client) {
+            // Client object missing but registry says ready — stale
+            const lastAction = watchdogLastAction.get(entry.connectionId) || 0
+            if (Date.now() - lastAction < WATCHDOG_COOLDOWN_MS) {
+                details.push({ connectionId: entry.connectionId, healthy: false, reason: 'stale_cooldown' })
+                continue
+            }
+            watchdogLastAction.set(entry.connectionId, Date.now())
+            opsLog('warn', 'wa_watchdog_stale', { connectionId: entry.connectionId, reason: 'client_missing' })
+            const curInstanceId = registry.getInstanceId(entry.connectionId)
+            if (curInstanceId) {
+                registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: client missing from map')
+            }
+            unhealthyCount++
+            details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_missing' })
+            continue
+        }
+
+        if (!client.info) {
+            // Puppeteer dead — client.info is null
+            const lastAction = watchdogLastAction.get(entry.connectionId) || 0
+            if (Date.now() - lastAction < WATCHDOG_COOLDOWN_MS) {
+                details.push({ connectionId: entry.connectionId, healthy: false, reason: 'stale_info_cooldown' })
+                continue
+            }
+            watchdogLastAction.set(entry.connectionId, Date.now())
+            opsLog('warn', 'wa_watchdog_stale', { connectionId: entry.connectionId, reason: 'client_info_null' })
+            const curInstanceId = registry.getInstanceId(entry.connectionId)
+            if (curInstanceId) {
+                registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: puppeteer dead (client.info null)')
+            }
+            clients.delete(entry.connectionId)
+            unhealthyCount++
+            details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_info_null' })
+            continue
+        }
+
+        // Healthy
+        registry.touchLastSeen(entry.connectionId)
+        details.push({ connectionId: entry.connectionId, healthy: true })
+    }
+
+    opsLog('info', 'wa_watchdog_check', { checkedCount: entries.length, unhealthyCount })
+    return { checkedCount: entries.length, unhealthyCount, details }
 }
 
 export async function sendMessage(connectionId: string, chatId: string, text: string): Promise<{ externalId: string }> {

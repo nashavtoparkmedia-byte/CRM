@@ -5,7 +5,9 @@ import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
+import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { opsLog } from '@/lib/opsLog'
 
 export async function POST(request: Request) {
   try {
@@ -23,14 +25,15 @@ export async function POST(request: Request) {
       where: { externalChatId },
     })
 
+    const sentAt = timestamp ? new Date(timestamp) : new Date()
+
     if (!chat) {
       chat = await prisma.chat.create({
         data: {
           channel:       'max',
           externalChatId,
           name:          senderName || (senderId ? `MAX:${senderId}` : `MAX:${externalChatId}`),
-          lastMessageAt: timestamp ? new Date(timestamp) : new Date(),
-          unreadCount:   isOutgoing ? 0 : 1,
+          lastMessageAt: sentAt,
           status:        'new',
           metadata: {
             ...(senderId    ? { senderId: String(senderId) } : {}),
@@ -42,9 +45,7 @@ export async function POST(request: Request) {
       await prisma.chat.update({
         where: { id: chat.id },
         data: {
-          lastMessageAt: timestamp ? new Date(timestamp) : new Date(),
-          unreadCount:   isOutgoing ? chat.unreadCount : { increment: 1 },
-          status:        chat.status === 'resolved' ? 'new' : chat.status,
+          lastMessageAt: sentAt,
           // Обновляем имя если раньше было только MAX:ID
           ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),
           // Обновляем senderId / phone в metadata
@@ -57,6 +58,13 @@ export async function POST(request: Request) {
           } : {}),
         },
       })
+    }
+
+    // Workflow: update status/unread/requiresResponse via centralized service
+    if (!isOutgoing) {
+      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
+    } else {
+      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
 
     // Map messageType to Prisma MessageType enum
@@ -153,7 +161,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, chatInternalId: chat.id, messageId: message.id })
   } catch (err: any) {
-    console.error('[MAX Webhook] Error:', err)
+    opsLog('error', 'webhook_max_error', { channel: 'max', error: err.message })
     return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 })
   }
 }

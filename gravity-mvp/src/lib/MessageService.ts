@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { sendMessage as sendWhatsAppMessage } from './whatsapp/WhatsAppService'
+import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { opsLog } from '@/lib/opsLog'
 import { ChatChannel, MessageStatus } from '@prisma/client'
 
 function serialize(obj: any): any {
@@ -47,6 +49,24 @@ export class MessageService {
                 orderBy: { lastMessageAt: 'desc' }
             })
 
+            // 1b. Enrich with workflow fields not in Prisma client types
+            const workflowRows = await (prisma as any).$queryRaw`
+                SELECT id, "assignedToUserId", "lastInboundAt", "lastOutboundAt"
+                FROM "Chat"
+            `
+            const workflowMap = new Map<string, any>()
+            for (const row of workflowRows) {
+                workflowMap.set(row.id, row)
+            }
+            for (const chat of chats) {
+                const wf = workflowMap.get(chat.id)
+                if (wf) {
+                    chat.assignedToUserId = wf.assignedToUserId
+                    chat.lastInboundAt = wf.lastInboundAt
+                    chat.lastOutboundAt = wf.lastOutboundAt
+                }
+            }
+
             // 2. Group chats by contactId (priority) or driverId (fallback)
             // This ensures chats created via Contact API (with contactId but no driverId)
             // are grouped together with chats linked via Driver.
@@ -77,6 +97,8 @@ export class MessageService {
                 const primary = driverChats[0] // Most recently active chat
                 const allUnread = driverChats.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0)
                 const requiresResponse = driverChats.some((c: any) => c.requiresResponse)
+                // Ownership: use primary chat's assignee (most recent activity = authoritative)
+                const assignedToUserId = primary.assignedToUserId || driverChats.find((c: any) => c.assignedToUserId)?.assignedToUserId || null
                 const allChatIds = driverChats.map((c: any) => c.id)
                 const channelMap = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.id]))
                 
@@ -90,6 +112,7 @@ export class MessageService {
                     ...primary,
                     unreadCount: allUnread,
                     requiresResponse,
+                    assignedToUserId,
                     allChatIds,
                     channelMap, // { whatsapp: chatId, telegram: chatId, max: chatId }
                     allProfiles, // List of { channel, profileId }
@@ -119,7 +142,7 @@ export class MessageService {
 
             return serialize(mergedEntries)
         } catch (err: any) {
-            console.error('[MessageService] listConversations Error:', err)
+            opsLog('error', 'list_conversations_failed', { operation: 'listConversations', error: err.message })
             throw err
         }
     }
@@ -190,7 +213,7 @@ export class MessageService {
         })
 
         if (!chat) {
-            console.error(`[MessageService] ERROR: Chat ${chatId} not found`)
+            opsLog('error', 'chat_not_found', { operation: 'send', chatId })
             throw new Error(`Chat with ID ${chatId} not found`)
         }
 
@@ -253,8 +276,7 @@ export class MessageService {
                                 externalChatId: prefixedId,
                                 lastMessageAt: new Date(),
                                 unreadCount: 0,
-                                status: 'active',
-                                requiresResponse: false
+                                status: 'new'
                             }
                         })
                         targetChatId = createdChat.id
@@ -384,7 +406,8 @@ export class MessageService {
                         // Webhook/Bot Fallback (only for non-phone targets, e.g. bot chats)
                         if (isPhone) throw new Error('Telegram Bot cannot send to phone numbers. Please connect a Telegram Profile.');
                         
-                        const tgRes = await fetch('http://localhost:3001/api/bot/send-message', {
+                        const tgBotUrl = process.env.TELEGRAM_BOT_URL || 'http://localhost:3001'
+                        const tgRes = await fetch(`${tgBotUrl}/api/bot/send-message`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ chatId: rawExternalChatId, text: content })
@@ -408,22 +431,45 @@ export class MessageService {
             errorMessage = 'Ошибка доставки'
         }
 
-        // 3. Update status
+        // 3. Update status + retry classification
         try {
+            const metadata: any = {}
+            if (errorMessage) {
+                metadata.error = errorMessage
+                metadata.errorCode = getErrorCode(errorMessage)
+                metadata.errorSchemaVersion = ERROR_SCHEMA_VERSION
+                const retryable = classifyError(errorMessage)
+                metadata.retryable = retryable
+                metadata.retryAttempt = 0
+                metadata.maxRetries = 3
+                metadata.lastFailedAt = new Date().toISOString()
+                if (retryable) {
+                    opsLog('info', 'message_retry_classified', { messageId, chatId, channel, retryable: true, errorCode: metadata.errorCode })
+                } else {
+                    opsLog('info', 'message_retry_terminal', { messageId, chatId, channel, error: errorMessage, errorCode: metadata.errorCode })
+                }
+            }
+
             await (prisma.message as any).update({
                 where: { id: messageId },
-                data: { 
-                    status: deliveryStatus, 
+                data: {
+                    status: deliveryStatus,
                     externalId: deliveryExternalId || undefined,
-                    metadata: errorMessage ? { error: errorMessage } : undefined 
+                    metadata: Object.keys(metadata).length > 0 ? metadata : undefined
                 }
             })
+            const now = new Date()
             await (prisma.chat as any).update({
                 where: { id: chatId },
-                data: { lastMessageAt: new Date() }
+                data: { lastMessageAt: now }
             })
+
+            // Workflow: outbound message state update
+            if (deliveryStatus !== 'failed') {
+                await ConversationWorkflowService.onOutboundMessage(chatId, now)
+            }
         } catch (updErr) {
-            console.error(`Final Update FAILED`, updErr)
+            opsLog('error', 'message_status_update_failed', { operation: 'send', chatId, error: (updErr as any)?.message })
         }
 
         // 4. Update reachability status based on delivery outcome
@@ -441,4 +487,179 @@ export class MessageService {
 
         return { success: deliveryStatus !== 'failed', chatId: currentChatId, id: messageId, error: errorMessage }
     }
+
+    /**
+     * Retry a previously failed message. Reuses same message record (idempotent).
+     * Does NOT create a new Message — updates existing one.
+     */
+    static async retrySend(messageId: string): Promise<{ success: boolean; error?: string }> {
+        const message = await (prisma.message as any).findUnique({
+            where: { id: messageId },
+            include: { chat: { include: { driver: true } } },
+        })
+
+        if (!message) return { success: false, error: 'Message not found' }
+        if (message.status !== 'failed') return { success: false, error: `Status is ${message.status}, not failed` }
+
+        const meta = (message.metadata as any) || {}
+        if (!meta.retryable) return { success: false, error: 'Not retryable' }
+
+        const attempt = (meta.retryAttempt || 0) + 1
+        if (attempt > (meta.maxRetries || 3)) return { success: false, error: 'Max retries exceeded' }
+
+        // Backoff check: skip if too soon. Delay = min(2^attempt * 30s, 10min)
+        const backoffMs = Math.min(Math.pow(2, attempt) * 30000, 10 * 60 * 1000)
+        const lastFailed = meta.lastFailedAt ? new Date(meta.lastFailedAt).getTime() : 0
+        if (Date.now() - lastFailed < backoffMs) {
+            return { success: false, error: 'Backoff not elapsed' }
+        }
+
+        opsLog('info', 'message_retry_attempt', {
+            messageId, chatId: message.chatId, channel: message.channel, retryAttempt: attempt,
+        })
+
+        // Reset to 'sent' for delivery attempt
+        await (prisma.message as any).update({
+            where: { id: messageId },
+            data: { status: 'sent', metadata: { ...meta, retryAttempt: attempt } },
+        })
+
+        // Re-dispatch through channel
+        let deliveryStatus = 'failed'
+        let errorMessage: string | null = null
+        let deliveryExternalId: string | null = null
+
+        try {
+            const chat = message.chat
+            const rawExternalId = chat.externalChatId?.split(':').slice(1).join(':') || chat.externalChatId
+            const connId = (chat.metadata as any)?.connectionId
+
+            switch (message.channel) {
+                case 'whatsapp': {
+                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
+                    const waConn = connId || (await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' }, select: { id: true } }))?.id
+                    if (!waConn) throw new Error('No ready WhatsApp connection available.')
+                    await deliverWA(waConn, rawExternalId, message.content)
+                    deliveryStatus = 'delivered'
+                    break
+                }
+                case 'max': {
+                    const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
+                    await deliverMax(rawExternalId, message.content, { isPersonal: true, name: chat.driver?.fullName })
+                    deliveryStatus = 'delivered'
+                    break
+                }
+                case 'telegram': {
+                    const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
+                    const target = rawExternalId || chat.driver?.phone?.replace(/\D/g, '')
+                    if (!target) throw new Error('No target for TG')
+                    const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`
+                    const profileId = defaultConns[0]?.id
+                    if (!profileId) throw new Error('No active TG connection')
+                    const res = await deliverTG(target, message.content, profileId, {})
+                    if (res.externalId) deliveryExternalId = res.externalId
+                    deliveryStatus = 'delivered'
+                    break
+                }
+            }
+        } catch (err: any) {
+            errorMessage = err.message || 'Retry delivery failed'
+        }
+
+        // Update final status
+        const retryMeta: any = { ...meta, retryAttempt: attempt, lastFailedAt: new Date().toISOString() }
+        if (deliveryStatus === 'failed') {
+            retryMeta.error = errorMessage
+            retryMeta.retryable = classifyError(errorMessage || '')
+            opsLog('warn', 'message_retry_failed', { messageId, channel: message.channel, retryAttempt: attempt, error: errorMessage || undefined })
+        } else {
+            opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
+        }
+
+        await (prisma.message as any).update({
+            where: { id: messageId },
+            data: {
+                status: deliveryStatus,
+                externalId: deliveryExternalId || undefined,
+                metadata: retryMeta,
+            },
+        })
+
+        if (deliveryStatus !== 'failed') {
+            await ConversationWorkflowService.onOutboundMessage(message.chatId, new Date())
+        }
+
+        return { success: deliveryStatus !== 'failed', error: errorMessage || undefined }
+    }
+}
+
+// ── Error classification ─────────────────────────────────────────────────
+
+// ── Error Taxonomy (v1) ──────────────────────────────────────────────────
+
+const ERROR_SCHEMA_VERSION = 1
+
+type ErrorCode =
+    | 'TRANSPORT_UNAVAILABLE'
+    | 'TIMEOUT'
+    | 'NETWORK_ERROR'
+    | 'TRANSPORT_CRASH'
+    | 'RECIPIENT_NOT_FOUND'
+    | 'AUTH_FAILURE'
+    | 'VALIDATION_ERROR'
+    | 'UNKNOWN'
+
+const RETRYABLE_PATTERNS: Array<{ pattern: string; code: ErrorCode }> = [
+    { pattern: 'timeout', code: 'TIMEOUT' },
+    { pattern: 'no ready whatsapp connection', code: 'TRANSPORT_UNAVAILABLE' },
+    { pattern: 'client not connected', code: 'TRANSPORT_UNAVAILABLE' },
+    { pattern: 'client not found', code: 'TRANSPORT_UNAVAILABLE' },
+    { pattern: 'stale client', code: 'TRANSPORT_CRASH' },
+    { pattern: 'puppeteer crash', code: 'TRANSPORT_CRASH' },
+    { pattern: 'telegram is not connected', code: 'TRANSPORT_UNAVAILABLE' },
+    { pattern: 'no active max bot', code: 'TRANSPORT_UNAVAILABLE' },
+    { pattern: 'failed to send message via scraper', code: 'NETWORK_ERROR' },
+    { pattern: 'failed to call scraper', code: 'NETWORK_ERROR' },
+    { pattern: 'protocol error', code: 'TRANSPORT_CRASH' },
+    { pattern: 'target closed', code: 'TRANSPORT_CRASH' },
+    { pattern: 'session closed', code: 'TRANSPORT_CRASH' },
+    { pattern: 'detached frame', code: 'TRANSPORT_CRASH' },
+    { pattern: 'econnrefused', code: 'NETWORK_ERROR' },
+    { pattern: 'econnreset', code: 'NETWORK_ERROR' },
+    { pattern: 'epipe', code: 'NETWORK_ERROR' },
+    { pattern: 'network', code: 'NETWORK_ERROR' },
+    { pattern: 'tg bot error', code: 'NETWORK_ERROR' },
+]
+
+const TERMINAL_PATTERNS: Array<{ pattern: string; code: ErrorCode }> = [
+    { pattern: 'cannot find or import user', code: 'RECIPIENT_NOT_FOUND' },
+    { pattern: 'contact import returned empty', code: 'RECIPIENT_NOT_FOUND' },
+    { pattern: 'auth_failure', code: 'AUTH_FAILURE' },
+    { pattern: 'logout', code: 'AUTH_FAILURE' },
+    { pattern: 'no target', code: 'VALIDATION_ERROR' },
+    { pattern: 'telegram bot cannot send to phone', code: 'VALIDATION_ERROR' },
+    { pattern: 'invalid', code: 'VALIDATION_ERROR' },
+    { pattern: 'token is required', code: 'VALIDATION_ERROR' },
+]
+
+function classifyError(error: string): boolean {
+    const lower = error.toLowerCase()
+    for (const { pattern } of TERMINAL_PATTERNS) {
+        if (lower.includes(pattern)) return false
+    }
+    for (const { pattern } of RETRYABLE_PATTERNS) {
+        if (lower.includes(pattern)) return true
+    }
+    return false // safe default: terminal
+}
+
+function getErrorCode(error: string): ErrorCode {
+    const lower = error.toLowerCase()
+    for (const { pattern, code } of TERMINAL_PATTERNS) {
+        if (lower.includes(pattern)) return code
+    }
+    for (const { pattern, code } of RETRYABLE_PATTERNS) {
+        if (lower.includes(pattern)) return code
+    }
+    return 'UNKNOWN'
 }

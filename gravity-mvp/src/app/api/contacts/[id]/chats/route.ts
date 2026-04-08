@@ -109,7 +109,7 @@ export async function POST(
           channel,
           externalChatId,
           name: contact.displayName,
-          status: 'active',
+          status: 'new',
           contactId: id,
           contactIdentityId: identity.id,
         },

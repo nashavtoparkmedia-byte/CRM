@@ -4,6 +4,8 @@ import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
 import { changeDriverLimit } from '@/app/actions'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
+import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { opsLog } from '@/lib/opsLog'
 
 export async function POST(req: NextRequest) {
     try {
@@ -104,10 +106,11 @@ export async function POST(req: NextRequest) {
             })
 
             if (!existing) {
+                const msgDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
                 await (prisma.message as any).create({
                     data: {
                         chatId: unifiedChat.id,
-                        direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
+                        direction: msgDirection,
                         content: text,
                         channel: 'telegram',
                         type: 'text',
@@ -115,12 +118,20 @@ export async function POST(req: NextRequest) {
                         status: 'delivered'
                     }
                 })
+
+                // Workflow: update status/unread/requiresResponse
+                if (msgDirection === 'inbound') {
+                    await ConversationWorkflowService.onInboundMessage(unifiedChat.id, sentAt)
+                } else {
+                    await ConversationWorkflowService.onOutboundMessage(unifiedChat.id, sentAt)
+                }
+
                 console.log(`[WEBHOOK-TG] SAVED channel=telegram chatId=${unifiedChat.id} driverId=${unifiedChat.driverId || 'none'} dir=${direction} text="${text.substring(0, 30)}"`)
             } else {
                 console.log(`[WEBHOOK-TG] DB-DEDUP channel=telegram chatId=${unifiedChat.id} existing=${existing.id}`)
             }
         } catch (unifiedErr: any) {
-            console.error('[WEBHOOK-TG] Failed to save to unified chat:', unifiedErr.message)
+            opsLog('error', 'webhook_telegram_save_failed', { channel: 'telegram', error: unifiedErr.message })
         }
 
         // Try to find if user is a linked driver

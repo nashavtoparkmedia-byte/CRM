@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect, useRef } from "react"
-import { Search, LayoutGrid, AlertCircle, MessageSquare, Plus, Bot, Zap, Users, BarChart3, Truck, Settings } from "lucide-react"
+import { Search, LayoutGrid, AlertCircle, MessageSquare, Plus, Bot, Zap, Users, Clock, CheckCircle2, Inbox } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useDebounce } from "use-debounce"
@@ -27,6 +27,12 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
     const [showNewChat, setShowNewChat] = useState(false)
 
     const currentChannelTab = activeChannelTab || 'all'
+
+    // Current user for ownership filtering
+    const currentUserId = useMemo(() => {
+        if (typeof document === 'undefined') return undefined
+        return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1]
+    }, [])
 
     // FC-10: Contact Search API for broader results
     const { results: contactResults, loading: contactSearchLoading } = useContactSearch(searchQuery)
@@ -54,14 +60,23 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         }
 
         // 3. Tab Filter
-        if (activeListTab === 'unread') {
-            list = list.filter(c => c.unreadCount > 0 || c.requiresResponse)
-        } else if (activeListTab === 'assigned') {
-            list = list.filter(c => c.status === 'active')
-        } else if (activeListTab === 'auto') {
-            list = list.filter(c => c.messages?.some((m: any) => m.origin === 'auto'))
-        } else if (activeListTab === 'ai') {
-            list = list.filter(c => c.messages?.some((m: any) => m.origin === 'ai'))
+        if (activeListTab === 'all') {
+            // All except resolved
+            list = list.filter(c => c.status !== 'resolved')
+        } else if (activeListTab === 'queue') {
+            // Operator queue: unassigned, not resolved, needs attention
+            list = list.filter(c =>
+                !c.assignedToUserId &&
+                c.status !== 'resolved' &&
+                (c.unreadCount > 0 || c.requiresResponse || c.status === 'new' || c.status === 'open')
+            )
+        } else if (activeListTab === 'mine') {
+            // My chats: assigned to current user
+            list = list.filter(c => c.assignedToUserId && c.assignedToUserId === currentUserId)
+        } else if (activeListTab === 'waiting') {
+            list = list.filter(c => c.status === 'waiting_customer')
+        } else if (activeListTab === 'resolved') {
+            list = list.filter(c => c.status === 'resolved')
         }
 
         return list
@@ -134,10 +149,14 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         return () => window.removeEventListener('keydown', handleKeyDown)
     }, [filteredConversations, selectedChatId, setChatId])
 
-    // Local unread reset when chat is selected
+    // Local unread reset + API mark-read when chat is selected
     useEffect(() => {
         if (!selectedChatId || !setConversations) return
-        
+
+        // Find the conversation to check if mark-read is needed
+        const conv = conversations.find(c => c.id === selectedChatId || c.allChatIds?.includes(selectedChatId))
+
+        // Optimistic local reset
         setConversations((prev: Conversation[]) => prev.map(c => {
             if (c.id === selectedChatId || (c.allChatIds && c.allChatIds.includes(selectedChatId))) {
                 if (c.unreadCount === 0) return c
@@ -145,6 +164,11 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             }
             return c
         }))
+
+        // API call only if there are unread messages
+        if (conv && conv.unreadCount > 0) {
+            fetch(`/api/chats/${selectedChatId}/read`, { method: 'POST' }).catch(() => {})
+        }
     }, [selectedChatId, setConversations])
 
     // FC-10: Navigate to a contact from API search results
@@ -181,12 +205,21 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         }
     }
 
+    // Queue badge: unassigned + not resolved + needs attention
+    const queueCount = useMemo(() => {
+        return conversations.filter(c =>
+            !c.assignedToUserId &&
+            c.status !== 'resolved' &&
+            (c.unreadCount > 0 || c.requiresResponse)
+        ).length
+    }, [conversations])
+
     const listTabs = [
-        { id: 'all', label: 'Все' },
-        { id: 'unread', label: 'Новые' },
-        { id: 'assigned', label: 'Мои' },
-        { id: 'auto', label: 'Авто', icon: Zap, color: 'text-amber-500' },
-        { id: 'ai', label: 'AI', icon: Bot, color: 'text-violet-500' },
+        { id: 'all', label: 'Все', icon: MessageSquare },
+        { id: 'queue', label: 'Очередь', icon: Inbox, badge: queueCount || undefined },
+        { id: 'mine', label: 'Мои', icon: Users },
+        { id: 'waiting', label: 'Ожидание', icon: Clock },
+        { id: 'resolved', label: 'Решённые', icon: CheckCircle2 },
     ]
 
     const channelTabs = [
@@ -232,12 +265,30 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                         <div className="flex items-center justify-between gap-1">
-                            <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
-                                {chat.name || "Водитель"}
-                            </span>
-                            <span className={`text-[11px] font-medium shrink-0 ${isSelected ? 'text-white/60' : 'text-[#8A9099]'}`}>
-                                {timeString}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                                {/* Status dot */}
+                                <span className={`w-[6px] h-[6px] rounded-full shrink-0 ${
+                                    chat.status === 'new' ? 'bg-blue-400' :
+                                    chat.status === 'open' ? 'bg-emerald-400' :
+                                    chat.status === 'waiting_customer' ? 'bg-amber-400' :
+                                    chat.status === 'waiting_internal' ? 'bg-orange-400' :
+                                    'bg-gray-300'
+                                }`} />
+                                <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
+                                    {chat.name || "Водитель"}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Assigned operator initials */}
+                                {chat.assignedToUserId && !isSelected && (
+                                    <span className="text-[8px] font-bold text-gray-500 bg-gray-100 px-1 py-px rounded leading-none">
+                                        {chat.assignedToUserId === currentUserId ? 'Я' : chat.assignedToUserId.substring(0, 2).toUpperCase()}
+                                    </span>
+                                )}
+                                <span className={`text-[11px] font-medium ${isSelected ? 'text-white/60' : 'text-[#8A9099]'}`}>
+                                    {timeString}
+                                </span>
+                            </div>
                         </div>
                         
                         <p className={`text-[13px] leading-[16px] truncate pr-6 mt-0.5 font-medium ${isSelected ? 'text-white/80' : 'text-[#8A9099]'}`}>
@@ -342,17 +393,22 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                     const isActive = activeListTab === tab.id
                     const Icon = tab.icon
                     return (
-                        <button 
+                        <button
                             key={tab.id}
                             onClick={() => setListTab(tab.id as any)}
                             className={`h-[24px] px-2 text-[11px] rounded-md transition-all flex items-center gap-1 whitespace-nowrap shrink-0 ${
-                                isActive 
-                                ? 'bg-white text-[#111] font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06)]' 
+                                isActive
+                                ? 'bg-white text-[#111] font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
                                 : 'text-gray-400 hover:text-gray-600 hover:bg-white/50'
                             }`}
                         >
-                            {Icon && <Icon size={11} className={isActive ? tab.color : ''} />}
+                            {Icon && <Icon size={11} />}
                             {tab.label}
+                            {tab.badge && tab.badge > 0 && (
+                                <span className="ml-0.5 h-[14px] min-w-[14px] px-1 rounded-full bg-[#FF5252] text-white text-[9px] font-bold flex items-center justify-center leading-none">
+                                    {tab.badge > 99 ? '99+' : tab.badge}
+                                </span>
+                            )}
                         </button>
                     )
                 })}
@@ -374,17 +430,27 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                     </div>
                 ) : filteredConversations.length === 0 && extraContacts.length === 0 ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pb-20">
-                        {activeListTab === 'auto' ? (
+                        {activeListTab === 'queue' ? (
                             <>
-                                <Zap size={28} className="opacity-20 mb-3 text-amber-400" />
-                                <span className="text-[13px] font-medium">Нет авто-сообщений</span>
-                                <span className="text-[11px] text-gray-400 mt-1">Триггерные рассылки появятся здесь</span>
+                                <Inbox size={28} className="opacity-20 mb-3" />
+                                <span className="text-[13px] font-medium">Очередь пуста</span>
+                                <span className="text-[11px] text-gray-400 mt-1">Новые обращения появятся здесь</span>
                             </>
-                        ) : activeListTab === 'ai' ? (
+                        ) : activeListTab === 'mine' ? (
                             <>
-                                <Bot size={28} className="opacity-20 mb-3 text-violet-400" />
-                                <span className="text-[13px] font-medium">AI агент неактивен</span>
-                                <span className="text-[11px] text-gray-400 mt-1">Переписки агента появятся здесь</span>
+                                <Users size={28} className="opacity-20 mb-3" />
+                                <span className="text-[13px] font-medium">Нет назначенных чатов</span>
+                                <span className="text-[11px] text-gray-400 mt-1">Возьмите чат из очереди</span>
+                            </>
+                        ) : activeListTab === 'waiting' ? (
+                            <>
+                                <Clock size={28} className="opacity-20 mb-3" />
+                                <span className="text-[13px] font-medium">Нет ожидающих ответа</span>
+                            </>
+                        ) : activeListTab === 'resolved' ? (
+                            <>
+                                <CheckCircle2 size={28} className="opacity-20 mb-3" />
+                                <span className="text-[13px] font-medium">Нет решённых чатов</span>
                             </>
                         ) : (
                             <>

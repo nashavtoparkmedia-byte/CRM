@@ -271,7 +271,7 @@ export default function AiControlCenterClient({
                     // Опрашиваем БД, скрапер (счётчики) и здоровье транспорта параллельно
                     const [fresh, progressRes, health] = await Promise.all([
                         getAllImportJobs(10),
-                        fetch('http://localhost:3005/import-progress').then(r => r.json()).catch(() => null),
+                        fetch(`${process.env.NEXT_PUBLIC_MAX_SCRAPER_URL || 'http://localhost:3005'}/import-progress`).then(r => r.json()).catch(() => null),
                         checkScraperHealth(['max']),
                     ])
                     setImportJobs(fresh)

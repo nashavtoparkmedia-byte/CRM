@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
@@ -117,9 +118,9 @@ export async function POST(req: NextRequest) {
                 data: {
                     externalChatId,
                     channel: 'max',
-                    name: driverName || phone, // Use name from scraper if available
+                    name: driverName || phone,
                     lastMessageAt: sentAt,
-                    status: 'active'
+                    status: 'new'
                 }
             })
         } else {
@@ -181,6 +182,10 @@ export async function POST(req: NextRequest) {
                     status: 'delivered'
                 }
             })
+
+            // Workflow: inbound message state update
+            await ConversationWorkflowService.onInboundMessage(unifiedChat.id, sentAt)
+
             console.log(`[WEBHOOK-MAX] SAVED channel=max chatId=${unifiedChat.id} msgId=${messageId} driverId=${unifiedChat.driverId || 'none'} text="${text.substring(0, 30)}"`)
         } else {
             console.log(`[WEBHOOK-MAX] DB-DEDUP channel=max chatId=${unifiedChat.id} msgId=${messageId} existing=${existingMessage.id}`)

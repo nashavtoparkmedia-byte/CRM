@@ -1,9 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2 } from "lucide-react"
+import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
-import { useConversations } from "../hooks/useConversations"
+import { useConversations, refreshConversations } from "../hooks/useConversations"
+import { useContactSearch } from "../hooks/useContactSearch"
 import { useContact, type Contact, type ContactIdentity } from "../hooks/useContact"
 import { useChannelStatus } from "../hooks/useChannelStatus"
 import { AlertCircle } from "lucide-react"
@@ -59,6 +60,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [tagInput, setTagInput] = useState("")
     const [showTagInput, setShowTagInput] = useState(false)
     const [showMoreMenu, setShowMoreMenu] = useState(false)
+    const [showMergeDialog, setShowMergeDialog] = useState(false)
+    const [mergeSearch, setMergeSearch] = useState("")
+    const [mergeTarget, setMergeTarget] = useState<any>(null)
+    const [mergeMode, setMergeMode] = useState<'contact' | 'driver' | null>(null)
+    const [mergeLoading, setMergeLoading] = useState(false)
+    const [mergeError, setMergeError] = useState<string | null>(null)
+    const [mergeSuccess, setMergeSuccess] = useState(false)
+    const { results: mergeSearchResults, loading: mergeSearchLoading } = useContactSearch(showMergeDialog ? mergeSearch : '')
     const [customFields, setCustomFields] = useState<CustomField[]>(defaultCustomFields)
     const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
     const [editingFieldValue, setEditingFieldValue] = useState("")
@@ -204,17 +213,28 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {displayName.substring(0, 2).toUpperCase()}
                     </div>
                     <h3 className="text-[15px] font-semibold text-[#111]">{displayName}</h3>
-                    <div className="flex items-center gap-1 mt-1.5">
+                    <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${sourceInfo.color}`}>
                             {sourceInfo.label}
                         </span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                            chat.status === 'active' ? 'bg-green-50 text-green-700' :
+                            chat.status === 'open' || chat.status === 'waiting_customer' ? 'bg-green-50 text-green-700' :
                             chat.status === 'new' ? 'bg-blue-50 text-blue-700' :
+                            chat.status === 'resolved' ? 'bg-gray-100 text-gray-500' :
                             'bg-gray-100 text-gray-600'
                         }`}>
-                            {chat.status === 'active' ? 'В работе' : chat.status === 'new' ? 'Новый' : chat.status}
+                            {chat.status === 'open' ? 'В работе' : chat.status === 'new' ? 'Новый' : chat.status === 'waiting_customer' ? 'Ожидаем клиента' : chat.status === 'waiting_internal' ? 'Внутренний' : chat.status === 'resolved' ? 'Завершён' : chat.status}
                         </span>
+                        {contact && contact.identities.length > 1 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                                {contact.identities.length} канала
+                            </span>
+                        )}
+                        {contact && contact.mergeHistory && contact.mergeHistory.length > 0 && (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">
+                                Объединён
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -231,6 +251,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     </button>
                     <button className="flex-1 h-[30px] bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1">
                         <UserCheck size={11} /> Назначить
+                    </button>
+                    <button
+                        onClick={() => { setShowMergeDialog(true); setMergeMode(null); setMergeTarget(null); setMergeError(null); setMergeSuccess(false); setMergeSearch('') }}
+                        className="flex-1 h-[30px] bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-1"
+                        title="Объединить контакт"
+                    >
+                        <GitMerge size={11} /> Объединить
                     </button>
                     <div className="relative">
                         <button onClick={() => setShowMoreMenu(!showMoreMenu)} className="h-[30px] w-[30px] bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center">
@@ -312,6 +339,12 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                             )}
                                                             <span className="text-[11px]">{cfg?.icon || '?'}</span>
                                                             <span className="text-[11px] text-gray-600">{cfg?.label || identity.channel}</span>
+                                                            {identity.source === 'auto' && contact && contact.identities.length > 1 && (
+                                                                <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">авто</span>
+                                                            )}
+                                                            {identity.source === 'manual' && (
+                                                                <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">ручной</span>
+                                                            )}
                                                             {hasFailed && <AlertCircle size={10} className="text-red-500" />}
                                                         </div>
                                                         {!isYandex && (
@@ -388,6 +421,12 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         <span className="text-[11px] text-gray-400 font-mono">
                                             ID: {identity.externalId.length > 15 ? identity.externalId.substring(0, 15) + '...' : identity.externalId}
                                         </span>
+                                        {identity.source === 'auto' && contact && contact.identities.length > 1 && (
+                                            <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded">авто</span>
+                                        )}
+                                        {identity.source === 'manual' && (
+                                            <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded">ручной</span>
+                                        )}
                                     </div>
                                     {!isYandex && (
                                         <div className="ml-4">
@@ -602,6 +641,163 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     chatContext={{ chatId: chat.id }}
                     onClose={() => setIsTaskModalOpen(false)}
                 />
+            )}
+
+            {/* Merge Dialog */}
+            {showMergeDialog && (
+                <div className="fixed inset-0 bg-black/30 z-[100] flex items-center justify-center" onClick={() => setShowMergeDialog(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-[380px] max-h-[500px] flex flex-col animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="px-4 py-3 border-b border-[#E8E8E8] flex items-center justify-between shrink-0">
+                            <span className="text-[14px] font-bold text-[#111]">Объединить контакт</span>
+                            <button onClick={() => setShowMergeDialog(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                        </div>
+
+                        {/* Success state */}
+                        {mergeSuccess ? (
+                            <div className="px-4 py-8 flex flex-col items-center gap-2">
+                                <Check size={32} className="text-emerald-500" />
+                                <span className="text-[14px] font-semibold text-[#111]">Контакты объединены</span>
+                                <button onClick={() => setShowMergeDialog(false)} className="mt-2 px-4 py-1.5 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4]">
+                                    Закрыть
+                                </button>
+                            </div>
+                        ) : !mergeMode ? (
+                            /* Mode selection */
+                            <div className="px-4 py-3 space-y-2">
+                                <p className="text-[12px] text-gray-500 mb-3">Выберите тип объединения:</p>
+                                <button
+                                    onClick={() => setMergeMode('contact')}
+                                    className="w-full px-3 py-2.5 text-left bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                                >
+                                    <div className="text-[12px] font-semibold text-[#111]">С другим контактом</div>
+                                    <div className="text-[11px] text-gray-400 mt-0.5">Объединить два контакта (lead-to-lead)</div>
+                                </button>
+                                <button
+                                    onClick={() => setMergeMode('driver')}
+                                    className="w-full px-3 py-2.5 text-left bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
+                                >
+                                    <div className="text-[12px] font-semibold text-[#111]">С карточкой водителя</div>
+                                    <div className="text-[11px] text-gray-400 mt-0.5">Привязать к существующему водителю (Driver)</div>
+                                </button>
+                            </div>
+                        ) : mergeTarget ? (
+                            /* Confirmation */
+                            <div className="px-4 py-4 space-y-3">
+                                <p className="text-[12px] text-gray-600">
+                                    {mergeMode === 'contact'
+                                        ? contact?.yandexDriverId
+                                            ? <>Влить <strong>{mergeTarget.displayName}</strong> в текущий контакт <strong>{displayName}</strong>?</>
+                                            : <>Влить <strong>{displayName}</strong> в <strong>{mergeTarget.displayName}</strong>?</>
+                                        : <>Привязать <strong>{displayName}</strong> к водителю <strong>{mergeTarget.fullName || mergeTarget.displayName}</strong>?</>
+                                    }
+                                </p>
+                                {mergeError && <p className="text-[11px] text-red-500 bg-red-50 px-2 py-1 rounded">{mergeError}</p>}
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setMergeTarget(null); setMergeError(null) }} className="flex-1 h-[32px] bg-gray-100 text-gray-700 text-[12px] font-semibold rounded-lg hover:bg-gray-200">
+                                        Назад
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            setMergeLoading(true); setMergeError(null)
+                                            try {
+                                                const userId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1] || 'system'
+                                                let res: Response
+                                                if (mergeMode === 'driver') {
+                                                    res = await fetch(`/api/contacts/${contact?.id || chat?.contactId}/merge`, {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ driverId: mergeTarget.id, mergedBy: userId }),
+                                                    })
+                                                } else {
+                                                    // contact-to-contact: if current is driver-linked, current is target (survivor)
+                                                    const sourceId = contact?.yandexDriverId ? mergeTarget.id : (contact?.id || chat?.contactId)
+                                                    const targetId = contact?.yandexDriverId ? (contact?.id || chat?.contactId) : mergeTarget.id
+                                                    res = await fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
+                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({ mergedBy: userId }),
+                                                    })
+                                                }
+                                                const data = await res.json()
+                                                if (!res.ok) throw new Error(data.error || 'Ошибка объединения')
+                                                setMergeSuccess(true)
+                                                refetchContact()
+                                                refreshConversations()
+                                            } catch (e: any) {
+                                                setMergeError(e.message)
+                                            } finally {
+                                                setMergeLoading(false)
+                                            }
+                                        }}
+                                        disabled={mergeLoading}
+                                        className="flex-1 h-[32px] bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 flex items-center justify-center gap-1"
+                                    >
+                                        {mergeLoading ? <Loader2 size={12} className="animate-spin" /> : <GitMerge size={12} />}
+                                        Объединить
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* Search */
+                            <div className="flex flex-col min-h-0">
+                                <div className="px-3 py-2 shrink-0">
+                                    <div className="relative">
+                                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={mergeSearch}
+                                            onChange={e => setMergeSearch(e.target.value)}
+                                            placeholder={mergeMode === 'driver' ? 'Поиск водителя...' : 'Поиск контакта (имя, телефон)...'}
+                                            className="w-full h-[32px] bg-[#F4F5F7] rounded-lg pl-8 pr-3 text-[12px] outline-none placeholder:text-gray-400"
+                                            autoFocus
+                                        />
+                                    </div>
+                                    <button onClick={() => { setMergeMode(null); setMergeSearch('') }} className="text-[11px] text-[#3390EC] mt-1 hover:underline">
+                                        ← Назад к выбору типа
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-y-auto max-h-[280px]">
+                                    {mergeSearchLoading && mergeSearch.length >= 2 && (
+                                        <div className="px-4 py-3 text-[11px] text-gray-400 flex items-center gap-2">
+                                            <Loader2 size={12} className="animate-spin" /> Поиск...
+                                        </div>
+                                    )}
+                                    {mergeSearch.length >= 2 && !mergeSearchLoading && mergeSearchResults.length === 0 && (
+                                        <div className="px-4 py-6 text-center text-[12px] text-gray-400">Ничего не найдено</div>
+                                    )}
+                                    {mergeSearchResults.filter(r => r.id !== contact?.id).map(result => {
+                                        const phone = result.phones?.[0]?.phone
+                                        const hasDriver = !!(result as any).driver || result.masterSource === 'yandex'
+                                        const isValidTarget = mergeMode === 'driver' ? hasDriver : true
+                                        return (
+                                            <button
+                                                key={result.id}
+                                                onClick={() => isValidTarget && setMergeTarget(mergeMode === 'driver' ? { id: result.id, displayName: result.displayName, fullName: result.displayName } : result)}
+                                                disabled={!isValidTarget}
+                                                className={`w-full px-3 py-2 text-left flex items-center gap-2.5 transition-colors ${
+                                                    isValidTarget ? 'hover:bg-blue-50 cursor-pointer' : 'opacity-40 cursor-not-allowed'
+                                                }`}
+                                            >
+                                                <div className="h-[36px] w-[36px] rounded-full bg-[#E3E8ED] text-[#6B7A8D] flex items-center justify-center font-bold text-[12px] shrink-0">
+                                                    {(result.displayName || '?')[0].toUpperCase()}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[12px] font-semibold text-[#111] truncate">{result.displayName || 'Без имени'}</div>
+                                                    <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                                                        {phone && <span className="font-mono">{phone}</span>}
+                                                        {result.channels?.map((ch: string) => (
+                                                            <span key={ch} className="text-[8px] font-bold bg-gray-100 px-1 py-px rounded">{ch === 'whatsapp' ? 'WA' : ch === 'telegram' ? 'TG' : ch.toUpperCase()}</span>
+                                                        ))}
+                                                        {!isValidTarget && <span className="text-[9px] text-orange-500">нет водителя</span>}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     )
