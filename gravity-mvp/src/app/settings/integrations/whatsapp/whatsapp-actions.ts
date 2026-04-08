@@ -131,22 +131,19 @@ export async function deleteWhatsAppMessages(connectionId: string) {
         await prisma.whatsAppChat.deleteMany({ where: { connectionId } })
     } catch (e: any) { console.error(`[WA-DELETE] WhatsAppChat delete error: ${e.message}`) }
 
-    // Delete from unified Chat/Message table where channel='whatsapp'
+    // Delete ALL messages with channel='whatsapp' (including cross-channel ones in TG/MAX chats)
+    const crossChannelDel = await (prisma.message as any).deleteMany({ where: { channel: 'whatsapp' } })
+    console.log(`[WA-DELETE] Deleted ${crossChannelDel.count} WA messages (all channels)`)
+
+    // Delete unified WA chats
     const unifiedChats = await (prisma.chat as any).findMany({
         where: { channel: 'whatsapp' },
-        select: { id: true },
+        select: { id: true, contactId: true },
     })
     if (unifiedChats.length > 0) {
         const chatIds = unifiedChats.map((c: any) => c.id)
-        // Collect contactIds before deleting
-        const chatsWithContacts = await (prisma.chat as any).findMany({
-            where: { id: { in: chatIds } },
-            select: { contactId: true },
-        })
-        const contactIds = [...new Set(chatsWithContacts.map((c: any) => c.contactId).filter(Boolean))] as string[]
+        const contactIds = [...new Set(unifiedChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
 
-        const msgDel = await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
-        console.log(`[WA-DELETE] Deleted ${msgDel.count} messages`)
         const chatDel = await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
         console.log(`[WA-DELETE] Deleted ${chatDel.count} chats`)
 

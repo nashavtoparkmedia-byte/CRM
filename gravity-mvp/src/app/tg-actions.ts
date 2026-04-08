@@ -946,13 +946,13 @@ export async function importTelegramHistory(
             }
         }
 
-        // 6. Query actual DB totals (in case live listeners already imported data)
+        // 6. Query actual DB totals scoped to cutoff period
         const dbTotals = await prisma.$queryRaw<{ msg_count: bigint; chat_count: bigint; contact_count: bigint; min_date: Date | null; max_date: Date | null }[]>`
             SELECT
-                (SELECT COUNT(*) FROM "Message" WHERE channel = 'telegram') as msg_count,
+                (SELECT COUNT(*) FROM "Message" WHERE channel = 'telegram' AND "sentAt" >= ${cutoff}) as msg_count,
                 (SELECT COUNT(*) FROM "Chat" WHERE channel = 'telegram') as chat_count,
                 (SELECT COUNT(DISTINCT "contactId") FROM "Chat" WHERE channel = 'telegram' AND "contactId" IS NOT NULL) as contact_count,
-                (SELECT MIN("sentAt") FROM "Message" WHERE channel = 'telegram') as min_date,
+                (SELECT MIN("sentAt") FROM "Message" WHERE channel = 'telegram' AND "sentAt" >= ${cutoff}) as min_date,
                 (SELECT MAX("sentAt") FROM "Message" WHERE channel = 'telegram') as max_date
         `
         const db = dbTotals[0]

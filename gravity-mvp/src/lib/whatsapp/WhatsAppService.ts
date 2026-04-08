@@ -120,7 +120,12 @@ async function syncHistory(connectionId: string, client: Client) {
                     }
                 }
 
-                const messages = await chatRaw.fetchMessages({ limit: 1000 })
+                let messages: any[] = []
+                try {
+                    messages = await chatRaw.fetchMessages({ limit: 1000 })
+                } catch (fetchErr: any) {
+                    // @lid chats may throw "waitForChatLoading" — whatsapp-web.js limitation, skip
+                }
                 const filtered = messages.filter(m => {
                     const ts = new Date(m.timestamp * 1000)
                     return ts >= cutoff
@@ -921,8 +926,16 @@ export async function importWhatsAppHistory(
                     } catch {}
                 }
 
-                // Fetch and filter messages
-                const messages = await chatRaw.fetchMessages({ limit: 1000 })
+                // Fetch and filter messages (fetchMessages may fail for @lid chats — whatsapp-web.js limitation)
+                let messages: any[] = []
+                try {
+                    messages = await chatRaw.fetchMessages({ limit: 1000 })
+                } catch (fetchErr: any) {
+                    // @lid chats throw "waitForChatLoading" — skip silently, this is a library limitation
+                    if (!fetchErr.message?.includes('waitForChatLoading')) {
+                        console.warn(`[WA-IMPORT] fetchMessages failed for ${chatRaw.id._serialized}: ${fetchErr.message}`)
+                    }
+                }
                 const filtered = messages.filter(m => new Date(m.timestamp * 1000) >= cutoff)
 
                 let chatMaxTs: Date | null = null
@@ -1004,14 +1017,14 @@ export async function importWhatsAppHistory(
             }
         }
 
-        // 4. Query actual DB totals (fetchMessages may return empty if auto-sync already consumed buffer)
+        // 4. Query actual DB totals scoped to WA chats and cutoff period
         const dbTotals = await prisma.$queryRaw<{ msg_count: bigint; chat_count: bigint; contact_count: bigint; min_date: Date | null; max_date: Date | null }[]>`
             SELECT
-                (SELECT COUNT(*) FROM "Message" WHERE channel = 'whatsapp') as msg_count,
+                (SELECT COUNT(*) FROM "Message" m JOIN "Chat" c ON m."chatId" = c.id WHERE c.channel = 'whatsapp' AND m."sentAt" >= ${cutoff}) as msg_count,
                 (SELECT COUNT(*) FROM "Chat" WHERE channel = 'whatsapp') as chat_count,
                 (SELECT COUNT(DISTINCT "contactId") FROM "Chat" WHERE channel = 'whatsapp' AND "contactId" IS NOT NULL) as contact_count,
-                (SELECT MIN("sentAt") FROM "Message" WHERE channel = 'whatsapp') as min_date,
-                (SELECT MAX("sentAt") FROM "Message" WHERE channel = 'whatsapp') as max_date
+                (SELECT MIN(m."sentAt") FROM "Message" m JOIN "Chat" c ON m."chatId" = c.id WHERE c.channel = 'whatsapp' AND m."sentAt" >= ${cutoff}) as min_date,
+                (SELECT MAX(m."sentAt") FROM "Message" m JOIN "Chat" c ON m."chatId" = c.id WHERE c.channel = 'whatsapp') as max_date
         `
         const db = dbTotals[0]
         const dbMsgCount = Number(db?.msg_count ?? 0)
