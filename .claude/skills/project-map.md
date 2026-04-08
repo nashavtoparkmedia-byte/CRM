@@ -257,12 +257,13 @@ Scripts: `start:api`, `start:worker`, `login`, `test`
 ```
 CLAUDE.md                 — Инструкции для Claude
 start-all.bat             — Запуск всех 4 модулей
-.agents/knowledge/
-  max_chat_merging.md     — Anti-Ghost логика MAX
-  messenger_reference_snapshot.md — Референс мессенджера
-.agents/workflows/
-  start-all.md            — Документация запуска
-.claude/skills/           — Авто-скиллы Claude
+.claude/
+  knowledge/
+    max_chat_merging.md     — Anti-Ghost логика MAX
+    messenger_reference_snapshot.md — Референс мессенджера
+  workflows/
+    start-all.md            — Документация запуска
+  skills/                   — Авто-скиллы Claude
 ```
 
 ---

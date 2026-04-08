@@ -62,8 +62,8 @@ Internal CRM for managing drivers and analytics (NashAvtoParkMedia).
 ---
 
 ## База знаний агентов
-Перед работой с интеграциями читать `.agents/knowledge/`.  
-Пример: `.agents/knowledge/max_chat_merging.md` — логика Anti-Ghost чатов MAX Web Scraper.
+Перед работой с интеграциями читать `.claude/knowledge/`.  
+Пример: `.claude/knowledge/max_chat_merging.md` — логика Anti-Ghost чатов MAX Web Scraper.
 
 ---
 

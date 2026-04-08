@@ -43,15 +43,14 @@ userData/
 .DS_Store
 Thumbs.db
 
-# Agent state
+# Agent state (legacy)
 **/.agent/
-**/.agents/
 **/.qoder/
 **/user_data/
 **/.bot_profile/
 **/.chrome-auth-profile/
 
-# Claude Code worktrees
+# Claude Code internals
 .claude/.claude/
 .claude/worktrees/
 

@@ -34,7 +34,7 @@ The project relies on 6 core terminals. Use `send_command_input` to interact wit
 6. **TG Bot Frontend**: `npm run dev` in `./tg-bot/tg-bot-frontend`
 
 ### 3. Workflows
-- Always check `.agents/workflows/` for available automated tasks.
+- Always check `.claude/workflows/` for available automated tasks.
 - If a workflow exists (like `/start-all`), prefer using it.
 - Respect the `// turbo-all` annotation in workflows.
 
@@ -78,5 +78,5 @@ When the user uses the keyword **"Full Auto"**, the following protocol is active
 **Note to Agent**: The USER wants maximum automation. Conduct all tests independently before calling the user. If a test is possible via browser/script — DO IT YOURSELF.
 
 # База знаний агентов
-Изучай папку `.agents/knowledge/` перед работой с интеграциями, чтобы избежать поломок. 
-Пример: `.agents/knowledge/max_chat_merging.md` хранит логику Anti-Ghost чатов для MAX Web Scraper.
+Изучай папку `.claude/knowledge/` перед работой с интеграциями, чтобы избежать поломок. 
+Пример: `.claude/knowledge/max_chat_merging.md` хранит логику Anti-Ghost чатов для MAX Web Scraper.

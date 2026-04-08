@@ -44,7 +44,7 @@ fetch('http://localhost:3005').then(r => r.json())
 - Есть ли "CRM webhook вернул 500"
 
 ### 6. Проверить Anti-Ghost логику
-Прочитать `.agents/knowledge/max_chat_merging.md` для контекста.
+Прочитать `.claude/knowledge/max_chat_merging.md` для контекста.
 Проверить что webhook fallback работает:
 - В known_chats есть записи с телефонами
 - Нет чатов с пустым senderId

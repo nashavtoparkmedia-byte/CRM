@@ -1,5 +1,0 @@
-[master f5b2bc3] v2
- 5 files changed, 21 insertions(+), 3 deletions(-)
- create mode 100644 add_output_8.txt
- create mode 100644 final_commit_result.txt
- create mode 100644 git_status_9.txt
