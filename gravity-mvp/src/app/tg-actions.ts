@@ -189,10 +189,12 @@ export async function checkTelegramAuthStatus(loginId: string, apiId: number, ap
 }
 
 export async function getTelegramConnections() {
-    return await (prisma as any).telegramConnection.findMany({
+    const conns = await (prisma as any).telegramConnection.findMany({
         where: { sessionString: { not: null } },
         orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }]
     })
+    // Map isActive=false → isPaused=true for the UI
+    return conns.map((c: any) => ({ ...c, isPaused: !c.isActive }))
 }
 
 export async function updateTelegramConnectionSettings(id: string, name: string, isDefault: boolean) {
@@ -1036,7 +1038,13 @@ async function updateTgImportJob(jobId: string, data: {
 export async function pauseTelegramConnection(id: string, deleteMessages?: boolean) {
     console.log(`[TG] pauseTelegramConnection id=${id} deleteMessages=${deleteMessages}`)
 
-    // Stop the listener for this connection (don't change isActive — that hides the card)
+    // Mark as paused (isActive=false → isPaused=true in UI)
+    await (prisma as any).telegramConnection.update({
+        where: { id },
+        data: { isActive: false }
+    })
+
+    // Stop the listener for this connection
     if (clientCache.has(id)) {
         initializedListeners.delete(id)
         console.log(`[TG] Listener removed for paused connection ${id}`)
@@ -1052,6 +1060,12 @@ export async function pauseTelegramConnection(id: string, deleteMessages?: boole
 
 export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
     console.log(`[TG] resumeTelegramConnection id=${id} catchUp=${catchUp}`)
+
+    // Mark as active (isPaused=false in UI)
+    await (prisma as any).telegramConnection.update({
+        where: { id },
+        data: { isActive: true }
+    })
 
     // Re-initialize listener
     const conn = await (prisma as any).telegramConnection.findUnique({ where: { id } })
