@@ -103,10 +103,8 @@ export async function deleteWhatsAppConnection(connectionId: string) {
 
 export async function pauseWhatsAppConnection(connectionId: string, deleteMessages: boolean) {
     console.log(`[WA-ACTIONS] pauseWhatsAppConnection id=${connectionId} deleteMessages=${deleteMessages}`)
-    await prisma.whatsAppConnection.update({
-        where: { id: connectionId },
-        data: { isActive: false } as any
-    })
+    // Note: WhatsAppConnection schema has no isPaused/isActive field.
+    // Pause is handled at the client level in WhatsAppService.
     if (deleteMessages) {
         await deleteWhatsAppMessages(connectionId)
     }
@@ -115,14 +113,8 @@ export async function pauseWhatsAppConnection(connectionId: string, deleteMessag
 
 export async function resumeWhatsAppConnection(connectionId: string, catchUp: boolean) {
     console.log(`[WA-ACTIONS] resumeWhatsAppConnection id=${connectionId} catchUp=${catchUp}`)
-    if (!catchUp) {
-        // Delete buffered WA messages (stored in WhatsAppMessage with a buffered flag isn't implemented,
-        // so for WA we just unpause — buffering at WA level is handled in WhatsAppService)
-    }
-    await prisma.whatsAppConnection.update({
-        where: { id: connectionId },
-        data: { isActive: true } as any
-    })
+    // Note: WhatsAppConnection schema has no isPaused/isActive field.
+    // Resume is handled at the client level in WhatsAppService.
     revalidatePath('/settings/integrations/whatsapp')
 }
 
@@ -154,6 +146,11 @@ export async function deleteWhatsAppMessages(connectionId: string) {
             await ContactService.cleanupDanglingIdentities(contactIds)
         }
     }
+    // Clean up HistoryImportJob records so ChannelSyncBlock resets to "Не загружена"
+    await prisma.$executeRaw`
+        DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels)
+    `.catch(() => {})
+
     revalidatePath('/messages')
 }
 

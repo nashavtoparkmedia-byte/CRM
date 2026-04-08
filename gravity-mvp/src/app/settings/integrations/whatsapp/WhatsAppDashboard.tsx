@@ -82,32 +82,47 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
     const handlePauseConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
-        await pauseWhatsAppConnection(conn.id, deleteMessages)
-        setLivePaused(true)
-        setPauseDialog(false)
-        setLoading(false)
-        onRefresh()
+        try {
+            await pauseWhatsAppConnection(conn.id, deleteMessages)
+            setLivePaused(true)
+            setPauseDialog(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Pause failed:', err)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleResumeConfirm = async (catchUp: boolean) => {
         setLoading(true)
-        await resumeWhatsAppConnection(conn.id, catchUp)
-        setLivePaused(false)
-        setResumeDialog(false)
-        setLoading(false)
-        onRefresh()
+        try {
+            await resumeWhatsAppConnection(conn.id, catchUp)
+            setLivePaused(false)
+            setResumeDialog(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Resume failed:', err)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleDisconnectConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
-        if (deleteMessages) {
-            await deleteWhatsAppMessages(conn.id)
+        try {
+            if (deleteMessages) {
+                await deleteWhatsAppMessages(conn.id)
+            }
+            await disconnectWhatsApp(conn.id)
+            setLiveStatus('idle')
+            setDisconnectDialog(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Disconnect failed:', err)
+        } finally {
+            setLoading(false)
         }
-        await disconnectWhatsApp(conn.id)
-        setLiveStatus('idle')
-        setDisconnectDialog(false)
-        setLoading(false)
-        onRefresh()
     }
 
     if (!isClient) {
