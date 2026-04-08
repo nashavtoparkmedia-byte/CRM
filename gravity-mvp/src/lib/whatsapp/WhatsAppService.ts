@@ -862,6 +862,7 @@ export async function importWhatsAppHistory(
     }
 
     let totalMessages = 0
+    let newMessages = 0
     let totalChats = 0
     let totalContacts = 0
     let minDate: Date | null = null
@@ -947,6 +948,7 @@ export async function importWhatsAppHistory(
                             }
                         })
 
+                        totalMessages++
                         if (!existing) {
                             await prisma.message.create({
                                 data: {
@@ -959,7 +961,7 @@ export async function importWhatsAppHistory(
                                     sentAt: ts
                                 }
                             })
-                            totalMessages++
+                            newMessages++
                         }
                     } catch (msgErr: any) {
                         console.error(`[WA-IMPORT] Msg error ${msg.id._serialized}: ${msgErr.message}`)
@@ -998,7 +1000,7 @@ export async function importWhatsAppHistory(
             coveredPeriodFrom: minDate,
             coveredPeriodTo: maxDate,
         })
-        console.log(`[WA-IMPORT] Completed job=${jobId}: ${totalMessages} msgs, ${totalChats} chats, ${totalContacts} contacts`)
+        console.log(`[WA-IMPORT] Completed job=${jobId}: ${totalMessages} msgs (${newMessages} new), ${totalChats} chats, ${totalContacts} contacts`)
     } catch (err: any) {
         console.error(`[WA-IMPORT] Fatal error job=${jobId}: ${err.message}`)
         await updateImportJob(jobId, {

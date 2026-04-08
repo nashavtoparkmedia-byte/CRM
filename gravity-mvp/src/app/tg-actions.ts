@@ -818,6 +818,7 @@ export async function importTelegramHistory(
     }
 
     let totalMessages = 0
+    let newMessages = 0
     let totalChats = 0
     let totalContacts = 0
     let minDate: Date | null = null
@@ -905,6 +906,7 @@ export async function importTelegramHistory(
                         }
                     })
 
+                    totalMessages++
                     if (!existing) {
                         await (prisma.message as any).create({
                             data: {
@@ -918,7 +920,7 @@ export async function importTelegramHistory(
                                 externalId: externalMsgId,
                             }
                         })
-                        totalMessages++
+                        newMessages++
                     }
                 }
 
@@ -956,7 +958,7 @@ export async function importTelegramHistory(
             coveredPeriodFrom: minDate,
             coveredPeriodTo: maxDate,
         })
-        console.log(`[TG-IMPORT] Completed job=${jobId}: ${totalMessages} msgs, ${totalChats} chats, ${totalContacts} contacts`)
+        console.log(`[TG-IMPORT] Completed job=${jobId}: ${totalMessages} msgs (${newMessages} new), ${totalChats} chats, ${totalContacts} contacts`)
     } catch (err: any) {
         console.error(`[TG-IMPORT] Fatal error job=${jobId}: ${err.message}`)
         await updateTgImportJob(jobId, {
