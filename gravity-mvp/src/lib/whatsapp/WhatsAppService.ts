@@ -120,16 +120,30 @@ async function syncHistory(connectionId: string, client: Client) {
                     }
                 }
 
-                let messages: any[] = []
+                // Fetch messages — try fetchMessages, fall back to Store for @lid chats
+                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
                 try {
-                    messages = await chatRaw.fetchMessages({ limit: 1000 })
-                } catch (fetchErr: any) {
-                    // @lid chats may throw "waitForChatLoading" — whatsapp-web.js limitation, skip
+                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
+                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type }))
+                } catch {
+                    const page = (client as any).pupPage
+                    if (page) {
+                        try {
+                            rawMsgs = await page.evaluate((cid: string) => {
+                                const store = (window as any).Store
+                                if (!store?.Chat) return []
+                                const chat = store.Chat.get(cid)
+                                if (!chat?.msgs) return []
+                                const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
+                                return models.map((m: any) => ({
+                                    id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
+                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat',
+                                }))
+                            }, chatRaw.id._serialized)
+                        } catch {}
+                    }
                 }
-                const filtered = messages.filter(m => {
-                    const ts = new Date(m.timestamp * 1000)
-                    return ts >= cutoff
-                })
+                const filtered = rawMsgs.filter(m => new Date(m.timestamp * 1000) >= cutoff)
 
                 let maxTimestamp: Date | null = null
                 for (const msg of filtered) {
@@ -138,13 +152,13 @@ async function syncHistory(connectionId: string, client: Client) {
                         if (!maxTimestamp || ts > maxTimestamp) maxTimestamp = ts
 
                         const msgType = mapMsgType(msg.type)
-                        
+
                         // Legacy WhatsAppMessage
                         await prisma.whatsAppMessage.upsert({
-                            where: { id_chatId: { id: msg.id._serialized, chatId: chatRaw.id._serialized } },
+                            where: { id_chatId: { id: msg.id, chatId: chatRaw.id._serialized } },
                             update: {},
                             create: {
-                                id: msg.id._serialized,
+                                id: msg.id,
                                 chatId: chatRaw.id._serialized,
                                 body: msg.body || '',
                                 fromMe: msg.fromMe,
@@ -156,11 +170,10 @@ async function syncHistory(connectionId: string, client: Client) {
                         // Unified Message
                         const unifiedChat = await prisma.chat.findUnique({ where: { externalChatId: chatRaw.id._serialized } })
                         if (unifiedChat) {
-                            // DE-DUPLICATION: check if we already have this message (by externalId OR content+time)
                             const existing = await prisma.message.findFirst({
                                 where: {
                                     OR: [
-                                        { externalId: msg.id._serialized },
+                                        { externalId: msg.id },
                                         {
                                             chatId: unifiedChat.id,
                                             content: msg.body || '',
@@ -175,11 +188,10 @@ async function syncHistory(connectionId: string, client: Client) {
                             })
 
                             if (existing) {
-                                // Update existing message with provider ID if it was missing
                                 if (!existing.externalId) {
                                     await prisma.message.update({
                                         where: { id: existing.id },
-                                        data: { externalId: msg.id._serialized }
+                                        data: { externalId: msg.id }
                                     })
                                 }
                             } else {
@@ -189,14 +201,15 @@ async function syncHistory(connectionId: string, client: Client) {
                                         direction: msg.fromMe ? 'outbound' : 'inbound',
                                         type: mapToUnifiedMessageType(msg.type),
                                         content: msg.body || '',
-                                        externalId: msg.id._serialized,
+                                        externalId: msg.id,
+                                        channel: 'whatsapp',
                                         sentAt: ts
                                     }
                                 })
                             }
                         }
                     } catch (msgErr) {
-                        console.error(`[WA-SERVICE] Failed to save message ${msg.id._serialized}:`, msgErr)
+                        console.error(`[WA-SERVICE] Failed to save message ${msg.id}:`, msgErr)
                     }
                 }
 
@@ -926,17 +939,40 @@ export async function importWhatsAppHistory(
                     } catch {}
                 }
 
-                // Fetch and filter messages (fetchMessages may fail for @lid chats — whatsapp-web.js limitation)
-                let messages: any[] = []
+                // Fetch messages — try fetchMessages first, fall back to Store.Chat.msgs for @lid chats
+                let rawMessages: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
                 try {
-                    messages = await chatRaw.fetchMessages({ limit: 1000 })
-                } catch (fetchErr: any) {
-                    // @lid chats throw "waitForChatLoading" — skip silently, this is a library limitation
-                    if (!fetchErr.message?.includes('waitForChatLoading')) {
-                        console.warn(`[WA-IMPORT] fetchMessages failed for ${chatRaw.id._serialized}: ${fetchErr.message}`)
+                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
+                    rawMessages = fetched.map(m => ({
+                        id: m.id._serialized,
+                        body: m.body || '',
+                        timestamp: m.timestamp,
+                        fromMe: m.fromMe,
+                        type: m.type,
+                    }))
+                } catch {
+                    // fetchMessages fails for @lid chats — use Puppeteer Store directly
+                    const page = (client as any).pupPage
+                    if (page) {
+                        try {
+                            rawMessages = await page.evaluate((cid: string) => {
+                                const store = (window as any).Store
+                                if (!store?.Chat) return []
+                                const chat = store.Chat.get(cid)
+                                if (!chat?.msgs) return []
+                                const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
+                                return models.map((m: any) => ({
+                                    id: m.id?._serialized || '',
+                                    body: m.body || '',
+                                    timestamp: m.t || 0,
+                                    fromMe: !!m.id?.fromMe,
+                                    type: m.type || 'chat',
+                                }))
+                            }, chatRaw.id._serialized)
+                        } catch {}
                     }
                 }
-                const filtered = messages.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+                const filtered = rawMessages.filter(m => new Date(m.timestamp * 1000) >= cutoff)
 
                 let chatMaxTs: Date | null = null
                 for (const msg of filtered) {
@@ -947,13 +983,14 @@ export async function importWhatsAppHistory(
                         if (!maxDate || ts > maxDate) maxDate = ts
 
                         const msgType = mapMsgType(msg.type)
+                        const msgId = msg.id // already a string from rawMessages
 
                         // Legacy
                         await prisma.whatsAppMessage.upsert({
-                            where: { id_chatId: { id: msg.id._serialized, chatId: chatRaw.id._serialized } },
+                            where: { id_chatId: { id: msgId, chatId: chatRaw.id._serialized } },
                             update: {},
                             create: {
-                                id: msg.id._serialized,
+                                id: msgId,
                                 chatId: chatRaw.id._serialized,
                                 body: msg.body || '',
                                 fromMe: msg.fromMe,
@@ -966,7 +1003,7 @@ export async function importWhatsAppHistory(
                         const existing = await prisma.message.findFirst({
                             where: {
                                 OR: [
-                                    { externalId: msg.id._serialized },
+                                    { externalId: msgId },
                                     {
                                         chatId: unifiedChat.id,
                                         content: msg.body || '',
@@ -985,7 +1022,7 @@ export async function importWhatsAppHistory(
                                     direction: msg.fromMe ? 'outbound' : 'inbound',
                                     type: mapToUnifiedMessageType(msg.type),
                                     content: msg.body || '',
-                                    externalId: msg.id._serialized,
+                                    externalId: msgId,
                                     channel: 'whatsapp',
                                     sentAt: ts
                                 }
@@ -993,7 +1030,7 @@ export async function importWhatsAppHistory(
                             newMessages++
                         }
                     } catch (msgErr: any) {
-                        console.error(`[WA-IMPORT] Msg error ${msg.id._serialized}: ${msgErr.message}`)
+                        console.error(`[WA-IMPORT] Msg error ${msg.id}: ${msgErr.message}`)
                     }
                 }
 
