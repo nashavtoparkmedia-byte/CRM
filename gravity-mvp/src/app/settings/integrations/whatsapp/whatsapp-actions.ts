@@ -6,6 +6,16 @@ import { revalidatePath } from 'next/cache'
 
 export async function createWhatsAppConnection(name?: string) {
     console.log(`[WA-ACTIONS] createWhatsAppConnection called with name: ${name}`)
+
+    // Guard: prevent creating a new connection if one is already pending QR scan
+    const pending = await prisma.whatsAppConnection.findFirst({
+        where: { status: { in: ['idle', 'qr', 'qr_expired', 'authenticated'] } }
+    })
+    if (pending) {
+        console.log(`[WA-ACTIONS] Blocked: already have pending connection ${pending.id} (status=${pending.status})`)
+        return pending
+    }
+
     const connection = await prisma.whatsAppConnection.create({
         data: { name: name || 'WhatsApp Account', status: 'idle' }
     })

@@ -155,6 +155,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
         isImporting ? 'running' :
         !lastJob ? 'none' :
         lastJob.status === 'failed' ? 'error' :
+        lastJob.status === 'partial' ? 'partial' :
         lastJob.status === 'completed' && lastJob.resultType === 'partial' ? 'partial' :
         lastJob.status === 'completed' ? 'done' : 'none'
 

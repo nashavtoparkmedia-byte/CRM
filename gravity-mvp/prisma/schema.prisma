@@ -958,6 +958,7 @@ model HistoryImportJob {
   channels          String[]
   mode              AiImportMode
   daysBack          Int?
+  connectionId      String?
   status            AiImportStatus @default(queued)
   resultType        String?        /// "full" | "partial" | "live_only"
   startedAt         DateTime?
