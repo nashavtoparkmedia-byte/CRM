@@ -38,7 +38,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                 <TotalCard label="Повторные открытия" value={totals.reopened} color={totals.reopened > 0 ? '#dc2626' : '#94A3B8'} />
                 <TotalCard label="Быстрые закрытия" value={totals.fastClosed} color={totals.fastClosed > 0 ? '#d97706' : '#94A3B8'} />
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-5 gap-3">
                 <TotalCard
                     label="Средний Health Score"
                     value={totals.avgHealthScore}
@@ -58,6 +58,11 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     label="Ухудшается"
                     value={totals.decliningManagers}
                     color={totals.decliningManagers > 0 ? '#dc2626' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Устойчивое снижение"
+                    value={totals.sustainedDeclineManagers}
+                    color={totals.sustainedDeclineManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
             </div>
 
@@ -209,7 +214,13 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
                             breakdown={manager.healthBreakdown}
                             trend={manager.healthTrend}
                             previousScore={manager.previousHealthScore}
+                            declineStreak={manager.declineStreak}
                         />
+                        {manager.sustainedDecline && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                                Снижается
+                            </span>
+                        )}
                     </div>
                     <div className="text-[12px] text-[#94A3B8]">
                         {manager.role === 'lead' ? 'Руководитель' : 'Менеджер'}
@@ -307,12 +318,13 @@ const TREND_DISPLAY: Record<HealthTrend, { symbol: string; color: string }> = {
     stable: { symbol: '●', color: 'text-gray-400' },
 }
 
-function HealthBadge({ score, level, breakdown, trend, previousScore }: {
+function HealthBadge({ score, level, breakdown, trend, previousScore, declineStreak }: {
     score: number
     level: HealthLevel
     breakdown: HealthScoreBreakdown
     trend: HealthTrend
     previousScore: number | null
+    declineStreak: number
 }) {
     const colors = HEALTH_COLORS[level]
     const trendInfo = TREND_DISPLAY[trend]
@@ -332,11 +344,18 @@ function HealthBadge({ score, level, breakdown, trend, previousScore }: {
                 <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
                     <div className="font-semibold mb-1">Health Score: {score}/100</div>
                     {previousScore !== null && (
-                        <div className="flex justify-between gap-4 mb-1">
+                        <div className="flex justify-between gap-4">
                             <span className="text-gray-300">Предыдущий</span>
                             <span className="text-gray-200 font-medium">{previousScore}</span>
                         </div>
                     )}
+                    {declineStreak > 0 && (
+                        <div className="flex justify-between gap-4">
+                            <span className="text-gray-300">Серия снижений</span>
+                            <span className="text-red-300 font-medium">{declineStreak}x</span>
+                        </div>
+                    )}
+                    {penalties.length > 0 && <div className="border-t border-gray-600 my-1" />}
                     {penalties.map(p => (
                         <div key={p.label} className="flex justify-between gap-4">
                             <span className="text-gray-300">{p.label}</span>

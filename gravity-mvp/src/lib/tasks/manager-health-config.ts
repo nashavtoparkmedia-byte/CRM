@@ -24,6 +24,8 @@ export const HEALTH_SCORE_CONFIG = {
     criticalThreshold: 45,
     /** Minimum score change to register as a trend (not "stable") */
     trendSensitivity: 3,
+    /** Consecutive declining checks before flagging sustained decline */
+    declineStreakThreshold: 3,
 }
 
 export type HealthLevel = 'healthy' | 'warning' | 'critical'
@@ -102,47 +104,81 @@ const ENSURE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS health_snapshots (
   manager_id TEXT PRIMARY KEY,
   score INTEGER NOT NULL,
+  decline_streak INTEGER NOT NULL DEFAULT 0,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`
+
+const ENSURE_COLUMN_SQL = `
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'health_snapshots' AND column_name = 'decline_streak'
+  ) THEN
+    ALTER TABLE health_snapshots ADD COLUMN decline_streak INTEGER NOT NULL DEFAULT 0;
+  END IF;
+END $$`
 
 let tableEnsured = false
 
 async function ensureTable() {
     if (tableEnsured) return
     await prisma.$executeRawUnsafe(ENSURE_TABLE_SQL)
+    await prisma.$executeRawUnsafe(ENSURE_COLUMN_SQL)
     tableEnsured = true
 }
 
 export interface HealthSnapshot {
     managerId: string
     score: number
+    declineStreak: number
+}
+
+export interface PreviousHealthData {
+    score: number
+    declineStreak: number
 }
 
 /**
- * Read previous health scores for all managers.
+ * Read previous health scores and decline streaks for all managers.
  */
-export async function getPreviousHealthScores(): Promise<Map<string, number>> {
+export async function getPreviousHealthScores(): Promise<Map<string, PreviousHealthData>> {
     await ensureTable()
-    const rows: { manager_id: string; score: number }[] =
-        await prisma.$queryRawUnsafe('SELECT manager_id, score FROM health_snapshots')
-    const map = new Map<string, number>()
-    for (const r of rows) map.set(r.manager_id, r.score)
+    const rows: { manager_id: string; score: number; decline_streak: number }[] =
+        await prisma.$queryRawUnsafe('SELECT manager_id, score, decline_streak FROM health_snapshots')
+    const map = new Map<string, PreviousHealthData>()
+    for (const r of rows) map.set(r.manager_id, { score: r.score, declineStreak: r.decline_streak })
     return map
 }
 
 /**
- * Upsert current health scores (replaces previous snapshot).
+ * Upsert current health scores with decline streaks.
  */
 export async function saveHealthScores(snapshots: HealthSnapshot[]): Promise<void> {
     if (snapshots.length === 0) return
     await ensureTable()
-    // Build upsert for each manager
     const values = snapshots
-        .map(s => `('${s.managerId}', ${s.score}, NOW())`)
+        .map(s => `('${s.managerId}', ${s.score}, ${s.declineStreak}, NOW())`)
         .join(', ')
     await prisma.$executeRawUnsafe(`
-        INSERT INTO health_snapshots (manager_id, score, recorded_at)
+        INSERT INTO health_snapshots (manager_id, score, decline_streak, recorded_at)
         VALUES ${values}
-        ON CONFLICT (manager_id) DO UPDATE SET score = EXCLUDED.score, recorded_at = NOW()
+        ON CONFLICT (manager_id) DO UPDATE SET
+          score = EXCLUDED.score,
+          decline_streak = EXCLUDED.decline_streak,
+          recorded_at = NOW()
     `)
+}
+
+/**
+ * Calculate updated decline streak based on current trend.
+ */
+export function updateDeclineStreak(trend: HealthTrend, previousStreak: number): number {
+    return trend === 'declining' ? previousStreak + 1 : 0
+}
+
+/**
+ * Check if manager is in sustained decline.
+ */
+export function isSustainedDecline(declineStreak: number): boolean {
+    return declineStreak >= HEALTH_SCORE_CONFIG.declineStreakThreshold
 }
