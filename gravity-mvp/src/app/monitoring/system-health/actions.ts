@@ -5,6 +5,7 @@ import { detectFailures, type FailureDetectionResult } from '@/lib/failure-detec
 import { IntegrityChecker, type IntegrityReportSummary } from '@/lib/IntegrityChecker'
 import { getSlowOperations, getPerfSummary, type SlowOperationEntry, type PerfSummaryEntry } from '@/lib/perf-monitor'
 import { getActiveLocks, type ActiveLock } from '@/lib/execution-lock'
+import { getRecentStabilityReports, type StabilityReportSummary } from '@/lib/stability-check'
 import { OperationalJobs } from '@/lib/OperationalJobs'
 
 export interface SystemHealthData {
@@ -14,6 +15,7 @@ export interface SystemHealthData {
     slowOperations: SlowOperationEntry[]
     perfSummary: PerfSummaryEntry[]
     activeLocks: ActiveLock[]
+    stabilityReports: StabilityReportSummary[]
     backgroundJobs: Record<string, {
         isRunning: boolean
         lastRunAt: string | null
@@ -32,6 +34,7 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
         slowOperations,
         perfSummary,
         activeLocks,
+        stabilityReports,
     ] = await Promise.all([
         getCronHealthSummary(24).catch(() => [] as CronHealthSummaryEntry[]),
         detectFailures().catch(() => ({
@@ -44,6 +47,7 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
         getSlowOperations(10, 24).catch(() => [] as SlowOperationEntry[]),
         getPerfSummary(24).catch(() => [] as PerfSummaryEntry[]),
         getActiveLocks().catch(() => [] as ActiveLock[]),
+        getRecentStabilityReports(5).catch(() => [] as StabilityReportSummary[]),
     ])
 
     // Background jobs state (in-memory, synchronous)
@@ -65,6 +69,7 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
         slowOperations,
         perfSummary,
         activeLocks,
+        stabilityReports,
         backgroundJobs,
         fetchedAt: new Date().toISOString(),
     }

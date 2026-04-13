@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function SystemHealthContent({ data }: Props) {
     const router = useRouter()
-    const { cronSummary, failureDetection, integrityReports, slowOperations, perfSummary, activeLocks, backgroundJobs } = data
+    const { cronSummary, failureDetection, integrityReports, slowOperations, perfSummary, activeLocks, stabilityReports, backgroundJobs } = data
 
     const overallStatus = failureDetection.overallStatus
 
@@ -54,6 +54,28 @@ export default function SystemHealthContent({ data }: Props) {
                     </span>
                 </div>
             </div>
+
+            {/* Stability check history */}
+            {stabilityReports.length > 0 && (
+                <Section title="Проверки стабильности">
+                    <div className="space-y-1">
+                        {stabilityReports.map(r => (
+                            <div key={r.id} className="flex items-center gap-2.5 py-1.5">
+                                <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[r.status] || 'bg-gray-300'}`} />
+                                <span className="text-[13px] text-[#0F172A]">
+                                    {new Date(r.checkedAt).toLocaleString('ru-RU')}
+                                </span>
+                                <span className="text-[12px] text-[#94A3B8]">
+                                    {r.scope} · {r.anomalyCount === 0 ? 'без аномалий' : `${r.anomalyCount} аномалий`}
+                                </span>
+                                <span className={`text-[12px] font-medium ml-auto ${r.status === 'stable' ? 'text-green-600' : r.status === 'warning' ? 'text-yellow-600' : r.status === 'critical' ? 'text-red-600' : 'text-gray-400'}`}>
+                                    {STATUS_LABEL[r.status] || r.status}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </Section>
+            )}
 
             {/* Failure detection per operation */}
             {failureDetection.operations.length > 0 && (

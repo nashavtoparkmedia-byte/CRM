@@ -150,7 +150,24 @@ export async function register() {
         }, 24 * 60 * 60 * 1000)
         OperationalJobs.registerInterval(cleanupInterval)
 
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h'] })
+        // Daily stability check: every 24 hours (offset 1 hour after cleanup)
+        const stabilityInterval = setInterval(async () => {
+            await OperationalJobs.run('stability_check', async () => {
+                const { runStabilityCheck } = await import('@/lib/stability-check')
+                return await runStabilityCheck('daily')
+            })
+        }, 24 * 60 * 60 * 1000)
+        OperationalJobs.registerInterval(stabilityInterval)
+
+        // Run initial stability check 60s after startup
+        setTimeout(async () => {
+            await OperationalJobs.run('stability_check', async () => {
+                const { runStabilityCheck } = await import('@/lib/stability-check')
+                return await runStabilityCheck('daily')
+            })
+        }, 60000)
+
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h'] })
 
     }, 5000) // 5 second delay after server start
 
