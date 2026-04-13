@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import TaskCard from '@/app/tasks/components/TaskCard'
+import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 
 export default function DriverTasksWidget({ driverId }: { driverId: string }) {
     const [tasks, setTasks] = useState<TaskDTO[]>([])
@@ -84,7 +85,17 @@ export default function DriverTasksWidget({ driverId }: { driverId: string }) {
                 {tasks.length > 0 ? (
                     <>
                         {tasks.map((task) => (
-                            <TaskCard key={task.id} task={task} compact />
+                            <div key={task.id}>
+                                <TaskCard task={task} compact />
+                                {task.scenario && (
+                                    <div className="flex items-center gap-1 px-2 -mt-0.5 mb-1">
+                                        <span className="text-[10px] font-medium text-indigo-500">
+                                            {getScenario(task.scenario)?.label}
+                                            {task.stage && <> · {getStage(task.scenario, task.stage)?.label}</>}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                         ))}
 
                         {counts.active > tasks.length && (

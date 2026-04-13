@@ -3,6 +3,7 @@
 import type { TaskDTO } from '@/lib/tasks/types'
 import { useTasksStore } from '@/store/tasks-store'
 import { useResolveTask, useUpdateTask } from '@/hooks/use-task-mutations'
+import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import {
     Check,
     MessageSquare,
@@ -144,6 +145,12 @@ export default function TaskCard({ task }: TaskCardProps) {
             <div className="flex items-center gap-1.5 w-full h-[16px] text-[12px] text-gray-700 mt-0.5 min-w-0">
                 {getIcon()}
                 <span className="truncate font-semibold">{task.title}</span>
+                {task.scenario && (
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-600">
+                        {getScenario(task.scenario)?.label}
+                        {task.stage && <> · {getStage(task.scenario, task.stage)?.label}</>}
+                    </span>
+                )}
                 
                 <div className="flex items-center gap-1 ml-auto shrink-0 pr-1">
                     {/* Priority Icon with Dropdown */}

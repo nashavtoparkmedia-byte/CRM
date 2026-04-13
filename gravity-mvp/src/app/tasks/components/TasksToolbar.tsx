@@ -13,8 +13,11 @@ import {
     AlertTriangle,
     Plus,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import GlobalTaskCreateModal from './GlobalTaskCreateModal'
+import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
+import { TASK_TYPES } from '@/lib/tasks/types'
+import { getCrmUsers } from '@/app/tasks/actions'
 
 const VIEW_OPTIONS: { key: TaskView; label: string; icon: typeof List }[] = [
     { key: 'list', label: 'Список', icon: List },
@@ -44,6 +47,23 @@ const SOURCE_OPTIONS = [
     { value: 'chat', label: 'Из чата' },
 ]
 
+function getDatePreset(preset: string): { dateFrom?: string; dateTo?: string } {
+    const now = new Date()
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    if (preset === 'today') return { dateFrom: startOfDay.toISOString() }
+    if (preset === 'week') {
+        const weekAgo = new Date(startOfDay)
+        weekAgo.setDate(weekAgo.getDate() - 7)
+        return { dateFrom: weekAgo.toISOString() }
+    }
+    if (preset === 'month') {
+        const monthAgo = new Date(startOfDay)
+        monthAgo.setMonth(monthAgo.getMonth() - 1)
+        return { dateFrom: monthAgo.toISOString() }
+    }
+    return { dateFrom: undefined, dateTo: undefined }
+}
+
 export default function TasksToolbar() {
     const currentView = useTasksStore((s) => s.currentView)
     const setView = useTasksStore((s) => s.setView)
@@ -54,17 +74,32 @@ export default function TasksToolbar() {
     const [searchOpen, setSearchOpen] = useState(false)
     const [searchValue, setSearchValue] = useState('')
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+    const [crmUsers, setCrmUsers] = useState<{ id: string; name: string; role: string }[]>([])
+    const [periodPreset, setPeriodPreset] = useState('all')
+
+    useEffect(() => {
+        getCrmUsers().then(setCrmUsers).catch(() => {})
+    }, [])
 
     const handleSearch = (value: string) => {
         setSearchValue(value)
         setFilters({ search: value || undefined })
     }
 
+    const scenarioOptions = getAllScenarioOptions()
+    const activeScenario = filters.scenario
+    const activeScenarioConfig = activeScenario ? SCENARIOS[activeScenario] : null
+
     const hasActiveFilters =
         (filters.status && filters.status !== 'all') ||
         (filters.priority && filters.priority !== 'all') ||
         (filters.source && filters.source !== 'all') ||
-        filters.search
+        filters.search ||
+        filters.scenario !== undefined ||
+        filters.stage ||
+        filters.type ||
+        filters.dateFrom ||
+        filters.dateTo
 
     return (
         <div className="flex flex-col gap-3">
@@ -153,7 +188,58 @@ export default function TasksToolbar() {
                 </div>
             </div>
 
-            {/* Row 2: Filters */}
+            {/* Row 2: Scenario Tabs */}
+            <div className="flex items-center gap-1">
+                <button
+                    onClick={() => setFilters({ scenario: undefined, stage: undefined })}
+                    className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
+                        filters.scenario === undefined
+                            ? 'bg-[#4f46e5] text-white shadow-sm'
+                            : 'text-[#6b7280] hover:bg-[#f3f4f6]'
+                    }`}
+                >
+                    Все
+                </button>
+                {scenarioOptions.map((s) => (
+                    <button
+                        key={s.value}
+                        onClick={() => setFilters({ scenario: s.value, stage: undefined })}
+                        className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
+                            filters.scenario === s.value
+                                ? 'bg-[#4f46e5] text-white shadow-sm'
+                                : 'text-[#6b7280] hover:bg-[#f3f4f6]'
+                        }`}
+                    >
+                        {s.label}
+                    </button>
+                ))}
+                <button
+                    onClick={() => setFilters({ scenario: null, stage: undefined })}
+                    className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
+                        filters.scenario === null
+                            ? 'bg-[#4f46e5] text-white shadow-sm'
+                            : 'text-[#6b7280] hover:bg-[#f3f4f6]'
+                    }`}
+                >
+                    Без сценария
+                </button>
+
+                {/* Stage filter — only when a specific scenario is selected */}
+                {activeScenarioConfig && (
+                    <select
+                        value={filters.stage ?? ''}
+                        onChange={(e) => setFilters({ stage: e.target.value || undefined })}
+                        className="ml-2 text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                    >
+                        <option value="">Все этапы</option>
+                        {activeScenarioConfig.stages.map((st) => (
+                            <option key={st.id} value={st.id}>{st.label}</option>
+                        ))}
+                    </select>
+                )}
+            </div>
+
+            {/* Row 3: Filters */}
             <div className="flex items-center gap-2">
                 <select
                     value={(filters.status as string) ?? 'all'}
@@ -184,6 +270,47 @@ export default function TasksToolbar() {
                         <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                 </select>
+
+                {/* Type filter */}
+                <select
+                    value={filters.type ?? ''}
+                    onChange={(e) => setFilters({ type: e.target.value || undefined })}
+                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                >
+                    <option value="">Все типы</option>
+                    {TASK_TYPES.map((t) => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                    ))}
+                </select>
+
+                {/* Period filter */}
+                <select
+                    value={periodPreset}
+                    onChange={(e) => {
+                        setPeriodPreset(e.target.value)
+                        setFilters(getDatePreset(e.target.value))
+                    }}
+                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                >
+                    <option value="all">Все даты</option>
+                    <option value="today">Сегодня</option>
+                    <option value="week">Неделя</option>
+                    <option value="month">Месяц</option>
+                </select>
+
+                {/* Assignee filter */}
+                {crmUsers.length > 0 && (
+                    <select
+                        value={filters.assigneeId ?? ''}
+                        onChange={(e) => setFilters({ assigneeId: e.target.value || undefined })}
+                        className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                    >
+                        <option value="">Все менеджеры</option>
+                        {crmUsers.map((u) => (
+                            <option key={u.id} value={u.id}>{u.name}</option>
+                        ))}
+                    </select>
+                )}
 
                 {hasActiveFilters && (
                     <button

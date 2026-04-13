@@ -11,6 +11,7 @@ import {
 import { useCreateTask } from '@/hooks/use-task-mutations'
 import { checkSimilarTasks } from '@/app/tasks/actions'
 import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/types'
+import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 
 interface TaskCreateModalProps {
     driverId: string
@@ -41,17 +42,21 @@ export default function TaskCreateModal({
     onClose
 }: TaskCreateModalProps) {
     const createTask = useCreateTask()
-    
+
     // Form state
+    const [scenario, setScenario] = useState<string>('')  // '' = без сценария
     const [title, setTitle] = useState('')
     const [type, setType] = useState('call_back')
     const [description, setDescription] = useState('')
     const [priority, setPriority] = useState<TaskPriority>('medium')
     const [dueDate, setDueDate] = useState('')
-    
+    const [createError, setCreateError] = useState<string | null>(null)
+
     // Dedupe hints
     const [similarTasks, setSimilarTasks] = useState<SimilarTaskHint[]>([])
     const [isCheckingDedupe, setIsCheckingDedupe] = useState(false)
+
+    const scenarioOptions = getAllScenarioOptions()
 
     // Check for similar tasks on type change
     useEffect(() => {
@@ -73,11 +78,17 @@ export default function TaskCreateModal({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
-        const finalTitle = title.trim() || TASK_TYPES.find(t => t.value === type)?.label || 'Новая задача'
+        setCreateError(null)
+
+        const scenarioConfig = scenario ? SCENARIOS[scenario] : null
+        const finalTitle = title.trim()
+            || scenarioConfig?.label
+            || TASK_TYPES.find(t => t.value === type)?.label
+            || 'Новая задача'
+        const finalType = scenario || type
 
         let dueAt: string | undefined = undefined
         if (dueDate) {
-            // Local date to ISO
             const d = new Date(dueDate)
             if (!isNaN(d.getTime())) {
                 dueAt = d.toISOString()
@@ -87,7 +98,7 @@ export default function TaskCreateModal({
         createTask.mutate({
             driverId,
             source: chatContext ? 'chat' : source,
-            type,
+            type: finalType,
             title: finalTitle,
             description: description.trim() || undefined,
             priority,
@@ -96,10 +107,15 @@ export default function TaskCreateModal({
             originMessageId: chatContext?.messageId,
             originExcerpt: chatContext?.excerpt,
             originCreatedAt: chatContext?.createdAt,
+            scenario: scenario || undefined,
+            stage: scenarioConfig?.initialStage,
         }, {
             onSuccess: () => {
                 onClose()
-            }
+            },
+            onError: (err: any) => {
+                setCreateError(err?.message || 'Не удалось создать задачу')
+            },
         })
     }
 
@@ -123,8 +139,37 @@ export default function TaskCreateModal({
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
                     <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
-                        
-                        {/* Type & Predict */}
+
+                        {/* Scenario selector */}
+                        <div>
+                            <label className="block text-[12px] font-semibold text-[#374151] mb-1.5 uppercase tracking-wider">
+                                Сценарий
+                            </label>
+                            <select
+                                value={scenario}
+                                onChange={(e) => {
+                                    setScenario(e.target.value)
+                                    setCreateError(null)
+                                }}
+                                className="w-full h-[38px] bg-[#f9fafb] border border-[#d1d5db] rounded-lg px-3 text-[14px] outline-none focus:border-[#4f46e5]"
+                            >
+                                <option value="">Без сценария</option>
+                                {scenarioOptions.map(s => (
+                                    <option key={s.value} value={s.value}>{s.label}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Error from server (e.g. duplicate scenario) */}
+                        {createError && (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-3 animate-in fade-in">
+                                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
+                                <p className="text-[13px] text-red-800">{createError}</p>
+                            </div>
+                        )}
+
+                        {/* Type — only for non-scenario tasks */}
+                        {!scenario && (
                         <div>
                             <label className="block text-[12px] font-semibold text-[#374151] mb-1.5 uppercase tracking-wider">
                                 Тип
@@ -139,6 +184,7 @@ export default function TaskCreateModal({
                                 ))}
                             </select>
                         </div>
+                        )}
 
                         {/* Dedupe Warning */}
                         {similarTasks.length > 0 && (

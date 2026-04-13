@@ -9,6 +9,7 @@ import { useContact } from "../hooks/useContact"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
+import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import Link from 'next/link'
 
 interface ChatHeaderProps {
@@ -220,6 +221,11 @@ export default function ChatHeader({
                                                             <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isOverdue ? 'bg-red-500' : 'bg-[#3390EC]'}`} />
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="text-[13px] text-[#111] font-medium truncate">{task.title}</div>
+                                                                {task.scenario && (
+                                                                    <div className="text-[11px] mt-0.5 text-indigo-500">
+                                                                        {getScenario(task.scenario)?.label}{task.stage && <> · {getStage(task.scenario, task.stage)?.label}</>}
+                                                                    </div>
+                                                                )}
                                                                 <div className={`text-[11px] mt-0.5 ${isOverdue ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
                                                                     Срок: {dueLabel}
                                                                 </div>
