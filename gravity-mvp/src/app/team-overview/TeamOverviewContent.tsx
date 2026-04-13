@@ -9,6 +9,7 @@ import {
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority } from './actions'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
+import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import ReassignModal from './ReassignModal'
 
 interface TeamOverviewContentProps {
@@ -337,6 +338,8 @@ const INTERVENTION_BADGE: Record<'urgent' | 'high', { label: string; bg: string;
 function InterventionRow({ manager: m, onClick }: { manager: ManagerStats; onClick: () => void }) {
     const initials = m.managerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     const badge = INTERVENTION_BADGE[m.interventionPriority as 'urgent' | 'high']
+    const visibleReasons = m.interventionReasons.slice(0, 3)
+    const hiddenCount = m.interventionReasons.length - visibleReasons.length
 
     return (
         <button
@@ -348,26 +351,52 @@ function InterventionRow({ manager: m, onClick }: { manager: ManagerStats; onCli
             }`}>
                 {initials}
             </div>
-            <span className="text-[14px] font-medium text-[#111827] min-w-0 truncate">{m.managerName}</span>
-            {badge && (
-                <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
-                    {badge.label}
-                </span>
-            )}
-            <HealthBadge
-                score={m.healthScore}
-                level={m.healthLevel}
-                breakdown={m.healthBreakdown}
-                trend={m.healthTrend}
-                previousScore={m.previousHealthScore}
-                declineStreak={m.declineStreak}
-            />
-            {m.sustainedDecline && (
-                <span className="shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600">
-                    Снижается
-                </span>
-            )}
-            <div className="flex items-center gap-2 ml-auto shrink-0">
+            <div className="flex-1 min-w-0 text-left">
+                <div className="flex items-center gap-2">
+                    <span className="text-[14px] font-medium text-[#111827] truncate">{m.managerName}</span>
+                    {badge && (
+                        <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
+                            {badge.label}
+                        </span>
+                    )}
+                    <HealthBadge
+                        score={m.healthScore}
+                        level={m.healthLevel}
+                        breakdown={m.healthBreakdown}
+                        trend={m.healthTrend}
+                        previousScore={m.previousHealthScore}
+                        declineStreak={m.declineStreak}
+                    />
+                </div>
+                {/* Reason pills */}
+                {m.interventionReasons.length > 0 && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                        {visibleReasons.map(reason => {
+                            const rc = INTERVENTION_REASON_COLORS[reason]
+                            return (
+                                <span key={reason} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${rc.bg} ${rc.text}`}>
+                                    {INTERVENTION_REASON_LABELS[reason]}
+                                </span>
+                            )
+                        })}
+                        {hiddenCount > 0 && (
+                            <div className="relative group/reasons">
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 cursor-default">
+                                    +{hiddenCount}
+                                </span>
+                                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/reasons:block">
+                                    <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                                        {m.interventionReasons.map(r => (
+                                            <div key={r} className="py-0.5">{INTERVENTION_REASON_LABELS[r]}</div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
                 {m.overdue > 0 && <StatPill value={m.overdue} label="просроч" color="#dc2626" />}
                 {m.escalated > 0 && <StatPill value={m.escalated} label="эскал." color="#dc2626" />}
                 {m.highRiskTasks > 0 && <StatPill value={m.highRiskTasks} label="риск" color="#dc2626" />}

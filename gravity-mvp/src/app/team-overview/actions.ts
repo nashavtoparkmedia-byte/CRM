@@ -10,6 +10,7 @@ import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
 import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, type HealthLevel, type HealthScoreBreakdown, type HealthTrend } from '@/lib/tasks/manager-health-config'
+import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 
 export interface ManagerNextTask {
     id: string
@@ -47,6 +48,7 @@ export interface ManagerStats {
     sustainedDecline: boolean
     needsIntervention: boolean
     interventionPriority: InterventionPriority
+    interventionReasons: InterventionReason[]
     nextTask: ManagerNextTask | null
 }
 
@@ -305,6 +307,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             sustainedDecline: false,
             needsIntervention: false,
             interventionPriority: 'normal' as InterventionPriority,
+            interventionReasons: [] as InterventionReason[],
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -345,7 +348,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Persist current scores and decline streaks for next comparison
     await saveHealthScores(managers.map(m => ({ managerId: m.managerId, score: m.healthScore, declineStreak: m.declineStreak })))
 
-    // Compute intervention priority
+    // Compute intervention priority + reasons
     for (const m of managers) {
         const isUrgent = m.healthLevel === 'critical'
             || m.sustainedDecline
@@ -364,6 +367,17 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             m.interventionPriority = 'normal'
             m.needsIntervention = false
         }
+
+        m.interventionReasons = m.needsIntervention
+            ? buildInterventionReasons({
+                healthLevel: m.healthLevel,
+                sustainedDecline: m.sustainedDecline,
+                escalated: m.escalated,
+                overdue: m.overdue,
+                healthTrend: m.healthTrend,
+                highRiskTasks: m.highRiskTasks,
+            })
+            : []
     }
 
     // Build intervention queue (urgent + high only, sorted)
