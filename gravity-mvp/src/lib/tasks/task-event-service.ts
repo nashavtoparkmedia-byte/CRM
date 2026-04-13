@@ -5,11 +5,13 @@ import { prisma } from '@/lib/prisma'
  * Append-only audit log for task events.
  * Every significant action on a task should go through this service.
  */
+export type ActorType = 'system' | 'user' | 'auto' | 'ai' | 'driver'
+
 export async function logTaskEvent(
     taskId: string,
     eventType: string,
     payload: Record<string, unknown> = {},
-    actor?: { type: 'system' | 'user' | 'auto'; id?: string }
+    actor?: { type: ActorType; id?: string }
 ) {
     const cookieStore = await cookies();
     const userId = cookieStore.get('crm_user_id')?.value;

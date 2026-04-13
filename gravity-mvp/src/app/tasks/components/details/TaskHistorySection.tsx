@@ -127,16 +127,28 @@ export default function TaskHistorySection({
                             return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
                         };
 
-                        // Group by consecutive actorId
-                        const actorGroups: { actorId: string; actorUser: any; actorName: string; items: typeof processedEvents }[] = [];
+                        // Actor type display config
+                        const ACTOR_DISPLAY: Record<string, { label: string; initials: string; color: string }> = {
+                            system: { label: 'Система', initials: 'С', color: '#94A3B8' },
+                            auto:   { label: 'Авто', initials: 'A', color: '#6366F1' },
+                            ai:     { label: 'ИИ', initials: 'И', color: '#8B5CF6' },
+                            driver: { label: 'Водитель', initials: 'В', color: '#059669' },
+                        }
+
+                        // Group by consecutive actorId + actorType
+                        const actorGroups: { actorId: string; actorType: string; actorUser: any; actorName: string; actorInitials: string; actorColor: string; items: typeof processedEvents }[] = [];
                         processedEvents.forEach((item) => {
                             const lastGroup = actorGroups[actorGroups.length - 1];
-                            if (lastGroup && lastGroup.actorId === item.event.actorId) {
+                            const evActorType = item.event.actorType || 'system';
+                            if (lastGroup && lastGroup.actorId === item.event.actorId && lastGroup.actorType === evActorType) {
                                 lastGroup.items.push(item);
                             } else {
-                                const actorUser = users.find((u: any) => u.id === item.event.actorId);
-                                const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName || ''}`.trim() : 'Система';
-                                actorGroups.push({ actorId: item.event.actorId, actorUser, actorName, items: [item] });
+                                const actorUser = evActorType === 'user' ? users.find((u: any) => u.id === item.event.actorId) : null;
+                                const display = ACTOR_DISPLAY[evActorType] || ACTOR_DISPLAY.system;
+                                const actorName = actorUser ? `${actorUser.firstName} ${actorUser.lastName || ''}`.trim() : display.label;
+                                const actorInitials = actorUser ? getInitials(actorUser.firstName, actorUser.lastName) : display.initials;
+                                const actorColor = actorUser ? getUserColor(actorUser.id) : display.color;
+                                actorGroups.push({ actorId: item.event.actorId, actorType: evActorType, actorUser, actorName, actorInitials, actorColor, items: [item] });
                             }
                         });
 
@@ -161,16 +173,16 @@ export default function TaskHistorySection({
                                         </div>
                                     )}
                                     <div className={`${!showDaySeparator && gi > 0 ? 'mt-2' : ''}`}>
-                                        {/* Actor header — initials only, full name on hover */}
+                                        {/* Actor header — initials + type badge */}
                                         <div className="flex items-center gap-1.5 mb-1">
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
                                                         <div
                                                             className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold cursor-help shrink-0"
-                                                            style={{ backgroundColor: group.actorUser ? getUserColor(group.actorUser.id) : '#94A3B8' }}
+                                                            style={{ backgroundColor: group.actorColor }}
                                                         >
-                                                            {group.actorUser ? getInitials(group.actorUser.firstName, group.actorUser.lastName) : 'С'}
+                                                            {group.actorInitials}
                                                         </div>
                                                     </TooltipTrigger>
                                                     <TooltipContent className="bg-slate-800 border-none text-white text-[11px] font-bold px-2.5 py-1">
@@ -178,6 +190,14 @@ export default function TaskHistorySection({
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
+                                            {group.actorType !== 'user' && (
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{
+                                                    color: group.actorColor,
+                                                    backgroundColor: `${group.actorColor}15`,
+                                                }}>
+                                                    {group.actorName}
+                                                </span>
+                                            )}
                                         </div>
                                         {/* Events */}
                                         <div className="ml-[26px] space-y-1.5">
