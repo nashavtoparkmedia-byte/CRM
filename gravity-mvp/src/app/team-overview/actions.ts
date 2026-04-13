@@ -12,6 +12,7 @@ import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
 import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, type HealthLevel, type HealthScoreBreakdown, type HealthTrend } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { type InterventionAction } from '@/lib/tasks/intervention-action-config'
+import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
 
 export interface ManagerNextTask {
     id: string
@@ -60,6 +61,8 @@ export interface InterventionActionRecord {
     action: string
     comment: string | null
     timestamp: string
+    scoreAtAction: number | null
+    outcome: InterventionOutcome | null
 }
 
 export interface RootCauseStat {
@@ -389,7 +392,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             : []
     }
 
-    // Load last intervention actions for all managers
+    // Evaluate pending intervention outcomes, then load last actions
+    await evaluateInterventionOutcomes(managers.map(m => ({ managerId: m.managerId, healthScore: m.healthScore })))
     const lastActions = await getLastInterventionActions()
     for (const m of managers) {
         const la = lastActions.get(m.managerId)
@@ -586,8 +590,20 @@ CREATE TABLE IF NOT EXISTS intervention_actions (
   manager_id TEXT NOT NULL,
   action TEXT NOT NULL,
   comment TEXT,
+  score_at_action INTEGER,
+  outcome TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`
+
+const ENSURE_INTERVENTION_COLUMNS_SQL = `
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'intervention_actions' AND column_name = 'score_at_action') THEN
+    ALTER TABLE intervention_actions ADD COLUMN score_at_action INTEGER;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'intervention_actions' AND column_name = 'outcome') THEN
+    ALTER TABLE intervention_actions ADD COLUMN outcome TEXT;
+  END IF;
+END $$`
 
 const ENSURE_INTERVENTION_INDEX_SQL = `
 CREATE INDEX IF NOT EXISTS idx_intervention_actions_manager
@@ -598,25 +614,28 @@ let interventionTableEnsured = false
 async function ensureInterventionTable() {
     if (interventionTableEnsured) return
     await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_TABLE_SQL)
+    await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_COLUMNS_SQL)
     await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_INDEX_SQL)
     interventionTableEnsured = true
 }
 
 /**
- * Log an intervention action for a manager.
+ * Log an intervention action for a manager, storing current health score.
  */
 export async function logInterventionAction(params: {
     managerId: string
     action: InterventionAction
     comment?: string
+    scoreAtAction?: number
 }): Promise<void> {
     await ensureInterventionTable()
     const id = `ia_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const comment = params.comment?.trim() || null
+    const score = params.scoreAtAction ?? null
     await prisma.$executeRawUnsafe(
-        `INSERT INTO intervention_actions (id, manager_id, action, comment, created_at)
-         VALUES ($1, $2, $3, $4, NOW())`,
-        id, params.managerId, params.action, comment
+        `INSERT INTO intervention_actions (id, manager_id, action, comment, score_at_action, created_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())`,
+        id, params.managerId, params.action, comment, score
     )
 }
 
@@ -625,9 +644,9 @@ export async function logInterventionAction(params: {
  */
 async function getLastInterventionActions(): Promise<Map<string, InterventionActionRecord>> {
     await ensureInterventionTable()
-    const rows: { manager_id: string; action: string; comment: string | null; created_at: Date }[] =
+    const rows: { manager_id: string; action: string; comment: string | null; score_at_action: number | null; outcome: string | null; created_at: Date }[] =
         await prisma.$queryRawUnsafe(`
-            SELECT DISTINCT ON (manager_id) manager_id, action, comment, created_at
+            SELECT DISTINCT ON (manager_id) manager_id, action, comment, score_at_action, outcome, created_at
             FROM intervention_actions
             ORDER BY manager_id, created_at DESC
         `)
@@ -637,7 +656,40 @@ async function getLastInterventionActions(): Promise<Map<string, InterventionAct
             action: r.action,
             comment: r.comment,
             timestamp: r.created_at.toISOString(),
+            scoreAtAction: r.score_at_action,
+            outcome: (r.outcome as InterventionOutcome) ?? null,
         })
     }
     return map
+}
+
+/**
+ * Evaluate and persist outcomes for intervention actions that are past the outcome window.
+ */
+async function evaluateInterventionOutcomes(managers: { managerId: string; healthScore: number }[]): Promise<void> {
+    await ensureInterventionTable()
+    const windowMs = INTERVENTION_OUTCOME_CONFIG.outcomeWindowHours * 60 * 60 * 1000
+    const cutoff = new Date(Date.now() - windowMs)
+
+    // Find actions that have score_at_action but no outcome yet, and are older than the window
+    const pendingRows: { id: string; manager_id: string; score_at_action: number }[] =
+        await prisma.$queryRawUnsafe(`
+            SELECT id, manager_id, score_at_action
+            FROM intervention_actions
+            WHERE outcome IS NULL AND score_at_action IS NOT NULL AND created_at <= $1
+        `, cutoff)
+
+    if (pendingRows.length === 0) return
+
+    const scoreMap = new Map(managers.map(m => [m.managerId, m.healthScore]))
+
+    for (const row of pendingRows) {
+        const currentScore = scoreMap.get(row.manager_id)
+        if (currentScore === undefined) continue
+        const outcome = evaluateOutcome(row.score_at_action, currentScore)
+        await prisma.$executeRawUnsafe(
+            `UPDATE intervention_actions SET outcome = $1 WHERE id = $2`,
+            outcome, row.id
+        )
+    }
 }

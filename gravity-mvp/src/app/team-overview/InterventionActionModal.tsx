@@ -7,11 +7,12 @@ import { logInterventionAction } from './actions'
 interface InterventionActionModalProps {
     managerId: string
     managerName: string
+    healthScore: number
     onClose: () => void
     onDone: () => void
 }
 
-export default function InterventionActionModal({ managerId, managerName, onClose, onDone }: InterventionActionModalProps) {
+export default function InterventionActionModal({ managerId, managerName, healthScore, onClose, onDone }: InterventionActionModalProps) {
     const [action, setAction] = useState<InterventionAction | null>(null)
     const [comment, setComment] = useState('')
     const [isPending, startTransition] = useTransition()
@@ -23,6 +24,7 @@ export default function InterventionActionModal({ managerId, managerName, onClos
                 managerId,
                 action,
                 comment: comment.trim() || undefined,
+                scoreAtAction: healthScore,
             })
             onDone()
         })

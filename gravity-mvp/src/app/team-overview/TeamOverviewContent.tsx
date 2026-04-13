@@ -12,6 +12,7 @@ import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
 import type { InterventionAction } from '@/lib/tasks/intervention-action-config'
+import { INTERVENTION_OUTCOME_LABELS, INTERVENTION_OUTCOME_COLORS, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
 import ReassignModal from './ReassignModal'
 import InterventionActionModal from './InterventionActionModal'
 
@@ -23,7 +24,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
     const router = useRouter()
     const { totals, topRootCauses, patternAlerts, interventionQueue, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
-    const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string } | null>(null)
+    const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
     const allManagersList = managers.map(m => ({ managerId: m.managerId, managerName: m.managerName }))
 
@@ -156,7 +157,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                                 key={m.managerId}
                                 manager={m}
                                 onClick={() => router.push(`/tasks?assigneeId=${m.managerId}`)}
-                                onAction={() => setInterventionManager({ managerId: m.managerId, managerName: m.managerName })}
+                                onAction={() => setInterventionManager({ managerId: m.managerId, managerName: m.managerName, healthScore: m.healthScore })}
                             />
                         ))}
                     </div>
@@ -199,6 +200,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                 <InterventionActionModal
                     managerId={interventionManager.managerId}
                     managerName={interventionManager.managerName}
+                    healthScore={interventionManager.healthScore}
                     onClose={() => setInterventionManager(null)}
                     onDone={() => { setInterventionManager(null); router.refresh() }}
                 />
@@ -414,27 +416,43 @@ function InterventionRow({ manager: m, onClick, onAction }: {
                                     </div>
                                 </div>
                             )}
-                            {/* Last action indicator */}
+                            {/* Last action + outcome indicator */}
                             {lastAction && (
-                                <div className="relative group/lastact">
-                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200">
-                                        ✓ {INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}
-                                    </span>
-                                    <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/lastact:block">
-                                        <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
-                                            <div className="font-semibold mb-0.5">Последнее действие</div>
-                                            <div>{INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}</div>
-                                            {lastAction.comment && (
-                                                <div className="text-gray-300 mt-0.5">«{lastAction.comment}»</div>
-                                            )}
-                                            <div className="text-gray-400 mt-0.5">
-                                                {new Date(lastAction.timestamp).toLocaleString('ru-RU', {
-                                                    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-                                                })}
+                                <>
+                                    <div className="relative group/lastact">
+                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200">
+                                            ✓ {INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}
+                                        </span>
+                                        <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/lastact:block">
+                                            <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                                                <div className="font-semibold mb-0.5">Последнее действие</div>
+                                                <div>{INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}</div>
+                                                {lastAction.comment && (
+                                                    <div className="text-gray-300 mt-0.5">«{lastAction.comment}»</div>
+                                                )}
+                                                {lastAction.scoreAtAction !== null && (
+                                                    <div className="text-gray-400 mt-0.5">
+                                                        Health при действии: {lastAction.scoreAtAction}
+                                                        {lastAction.outcome && ` → сейчас: ${m.healthScore} (${m.healthScore - lastAction.scoreAtAction >= 0 ? '+' : ''}${m.healthScore - lastAction.scoreAtAction})`}
+                                                    </div>
+                                                )}
+                                                <div className="text-gray-400 mt-0.5">
+                                                    {new Date(lastAction.timestamp).toLocaleString('ru-RU', {
+                                                        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                                                    })}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
+                                    {lastAction.outcome && (() => {
+                                        const oc = INTERVENTION_OUTCOME_COLORS[lastAction.outcome as InterventionOutcome]
+                                        return (
+                                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${oc?.bg ?? 'bg-gray-100'} ${oc?.text ?? 'text-gray-500'}`}>
+                                                {INTERVENTION_OUTCOME_LABELS[lastAction.outcome as InterventionOutcome] ?? lastAction.outcome}
+                                            </span>
+                                        )
+                                    })()}
+                                </>
                             )}
                         </div>
                     )}
