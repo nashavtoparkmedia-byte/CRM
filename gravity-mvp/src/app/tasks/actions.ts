@@ -716,6 +716,48 @@ export async function correctTaskAction(
 }
 
 /**
+ * Resolve an escalation on a task.
+ * Sets metadata.escalated = false, logs escalation_resolved event.
+ * Idempotent: if already resolved, returns silently.
+ */
+export async function resolveEscalation(
+    taskId: string,
+    resolutionType: 'contacted' | 'reassigned' | 'closed'
+): Promise<{ ok: boolean }> {
+    const task = await prisma.task.findUnique({
+        where: { id: taskId },
+        select: { id: true, metadata: true },
+    })
+
+    if (!task) throw new Error('Task not found')
+
+    const meta = (task.metadata as Record<string, any>) || {}
+
+    // Idempotent: already resolved
+    if (!meta.escalated) return { ok: true }
+
+    const now = new Date()
+
+    await prisma.task.update({
+        where: { id: taskId },
+        data: {
+            metadata: {
+                ...meta,
+                escalated: false,
+                escalationResolvedAt: now.toISOString(),
+            },
+        },
+    })
+
+    await logTaskEvent(taskId, 'escalation_resolved', {
+        resolutionType,
+        resolvedAt: now.toISOString(),
+    })
+
+    return { ok: true }
+}
+
+/**
  * Migration: Recalculate attempts for all tasks based on historical events
  */
 export async function recalculateAllTaskAttempts(): Promise<{ updated: number }> {

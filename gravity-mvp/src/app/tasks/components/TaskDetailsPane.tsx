@@ -65,6 +65,7 @@ const EVENT_LABELS: Record<string, string> = {
     reassigned: 'Переназначена',
     mandatory_followup: 'Обязательный контакт',
     escalation_created: 'Эскалация',
+    escalation_resolved: 'Эскалация решена',
 }
 
 export default function TaskDetailsPane() {

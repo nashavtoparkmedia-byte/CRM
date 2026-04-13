@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createTask, updateTask, resolveTask } from '@/app/tasks/actions'
+import { createTask, updateTask, resolveTask, resolveEscalation } from '@/app/tasks/actions'
 import { useTasksStore } from '@/store/tasks-store'
 import type { CreateTaskInput, UpdateTaskInput, TaskDTO } from '@/lib/tasks/types'
 
@@ -108,6 +108,39 @@ export function useResolveTask() {
         },
 
         onError: (_err, { id }, context) => {
+            if (context?.previous) {
+                upsertTask(context.previous)
+            }
+        },
+    })
+}
+
+/**
+ * Resolve escalation mutation with optimistic update.
+ */
+export function useResolveEscalation() {
+    const queryClient = useQueryClient()
+    const upsertTask = useTasksStore((s) => s.upsertTask)
+    const tasksById = useTasksStore((s) => s.tasksById)
+
+    return useMutation({
+        mutationFn: ({ taskId, resolutionType }: { taskId: string; resolutionType: 'contacted' | 'reassigned' | 'closed' }) =>
+            resolveEscalation(taskId, resolutionType),
+
+        onMutate: async ({ taskId }) => {
+            const previous = tasksById[taskId]
+            if (previous) {
+                upsertTask({ ...previous, escalated: false, updatedAt: new Date().toISOString() })
+            }
+            return { previous }
+        },
+
+        onSuccess: (_result, { taskId }) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] })
+            queryClient.invalidateQueries({ queryKey: ['task-detail', taskId] })
+        },
+
+        onError: (_err, _vars, context) => {
             if (context?.previous) {
                 upsertTask(context.previous)
             }

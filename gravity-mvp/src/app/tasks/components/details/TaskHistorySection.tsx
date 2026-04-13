@@ -230,6 +230,7 @@ export default function TaskHistorySection({
                                                 const isSlaEscalated = event.eventType === 'sla_escalated';
                                                 const isMandatoryFollowup = event.eventType === 'mandatory_followup';
                                                 const isEscalation = event.eventType === 'escalation_created';
+                                                const isEscalationResolved = event.eventType === 'escalation_resolved';
 
                                                 // Build event label
                                                 let eventTitle: React.ReactNode;
@@ -309,6 +310,25 @@ export default function TaskHistorySection({
                                                                 <span className="text-[11px] text-red-400 mt-0.5">
                                                                     Обязательный контакт не выполнен
                                                                     {missedDueAt && <> (срок: {new Date(missedDueAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})</>}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                } else if (isEscalationResolved) {
+                                                    const RESOLUTION_LABELS: Record<string, string> = {
+                                                        contacted: 'Контакт выполнен',
+                                                        reassigned: 'Переназначена',
+                                                        closed: 'Задача закрыта',
+                                                    };
+                                                    const resType = (event.payload as any)?.resolutionType;
+                                                    eventTitle = (
+                                                        <div className="flex flex-col">
+                                                            <span style={{ fontWeight: 600 }} className="text-green-600 text-[13px]">
+                                                                {EVENT_LABELS.escalation_resolved || 'Эскалация решена'}
+                                                            </span>
+                                                            {resType && (
+                                                                <span className="text-[11px] text-green-500 mt-0.5">
+                                                                    {RESOLUTION_LABELS[resType] || resType}
                                                                 </span>
                                                             )}
                                                         </div>

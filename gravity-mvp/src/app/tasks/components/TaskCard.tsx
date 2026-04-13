@@ -2,7 +2,7 @@
 
 import type { TaskDTO } from '@/lib/tasks/types'
 import { useTasksStore } from '@/store/tasks-store'
-import { useResolveTask, useUpdateTask } from '@/hooks/use-task-mutations'
+import { useResolveTask, useUpdateTask, useResolveEscalation } from '@/hooks/use-task-mutations'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import {
     Check,
@@ -44,6 +44,7 @@ export default function TaskCard({ task }: TaskCardProps) {
     const selectedTaskId = useTasksStore((s) => s.selectedTaskId)
     const resolveTask = useResolveTask()
     const updateTask = useUpdateTask()
+    const resolveEscalation = useResolveEscalation()
     const router = useRouter()
 
     const isSelected = selectedTaskId === task.id
@@ -119,6 +120,10 @@ export default function TaskCard({ task }: TaskCardProps) {
         e.stopPropagation()
         router.push(`/messages?focusedDriver=${task.driverId}`)
     }
+    const handleResolveEscalation = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        resolveEscalation.mutate({ taskId: task.id, resolutionType: 'contacted' })
+    }
 
     // Color Bar Logic
     let barColor = 'bg-blue-500' // active
@@ -148,9 +153,18 @@ export default function TaskCard({ task }: TaskCardProps) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                     {isEscalated && (
-                        <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-red-100 text-red-600">
-                            Эскалация
-                        </span>
+                        <div className="flex items-center gap-0.5">
+                            <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                                Эскалация
+                            </span>
+                            <button
+                                onClick={handleResolveEscalation}
+                                className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-green-100 text-green-600 hover:bg-green-200 transition-colors"
+                                title="Снять эскалацию"
+                            >
+                                Решено
+                            </button>
+                        </div>
                     )}
                     {isMandatoryFollowup && !isEscalated && (
                         <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
