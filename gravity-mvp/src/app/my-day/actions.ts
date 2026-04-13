@@ -21,6 +21,7 @@ export interface DailyTask {
 }
 
 export interface DailySummary {
+    focusTask: DailyTask | null
     today: DailyTask[]
     overdue: DailyTask[]
     active: DailyTask[]
@@ -134,10 +135,19 @@ export async function getDailySummary(): Promise<DailySummary> {
         }),
     ])
 
+    // Apply priority scoring and sort all lists
+    const scoredToday = todayTasks.map(t => toDailyTask(t, now)).sort(compareTasks)
+    const scoredOverdue = overdueTasks.map(t => toDailyTask(t, now)).sort(compareTasks)
+    const scoredActive = activeTasks.map(t => toDailyTask(t, now)).sort(compareTasks)
+
+    // Focus task: first overdue, then first high-prio today, then first today
+    const focusTask = scoredOverdue[0] || scoredToday[0] || scoredActive[0] || null
+
     return {
-        today: todayTasks.map(t => toDailyTask(t, now)),
-        overdue: overdueTasks.map(t => toDailyTask(t, now)),
-        active: activeTasks.map(t => toDailyTask(t, now)),
+        focusTask,
+        today: scoredToday,
+        overdue: scoredOverdue,
+        active: scoredActive,
         metrics: {
             total: totalActive,
             overdue: overdueCount,
@@ -145,4 +155,31 @@ export async function getDailySummary(): Promise<DailySummary> {
             createdToday,
         },
     }
+}
+
+/**
+ * Priority score for task sorting (lower = more urgent).
+ * 1. Overdue tasks first
+ * 2. SLA breached tasks
+ * 3. High priority
+ * 4. Earlier dueAt
+ */
+function getTaskScore(task: DailyTask): number {
+    let score = 0
+    if (task.isOverdue) score -= 1000
+    if (task.isSlaBreached) score -= 500
+    if (task.priority === 'high') score -= 100
+    if (task.priority === 'critical') score -= 200
+    // Earlier dueAt = more urgent (add minutes as tiebreaker)
+    if (task.dueAt) {
+        const minutesUntilDue = (new Date(task.dueAt).getTime() - Date.now()) / 60000
+        score += Math.min(minutesUntilDue, 10000) // cap to avoid overflow
+    } else {
+        score += 5000 // no due date = lower urgency
+    }
+    return score
+}
+
+function compareTasks(a: DailyTask, b: DailyTask): number {
+    return getTaskScore(a) - getTaskScore(b)
 }
