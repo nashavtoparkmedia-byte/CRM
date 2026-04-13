@@ -22,6 +22,8 @@ import TaskMetaFields from './details/TaskMetaFields'
 import TaskFooterActions from './details/TaskFooterActions'
 import TaskDetailHeader from './details/TaskDetailHeader'
 import TaskHistorySection from './details/TaskHistorySection'
+import CloseReasonModal from './details/CloseReasonModal'
+import { getClosedReasons } from '@/lib/tasks/scenario-config'
 
 const STATUS_LABELS: Record<string, string> = {
     todo: 'К выполнению',
@@ -82,6 +84,8 @@ export default function TaskDetailsPane() {
     const [isSaving, setIsSaving] = useState(false)
     const [editingEventId, setEditingEventId] = useState<string | null>(null)
     const [lastActionTime, setLastActionTime] = useState(0)
+    const [showCloseReason, setShowCloseReason] = useState(false)
+    const [isClosing, setIsClosing] = useState(false)
 
     useEffect(() => {
         getDictionaries().then(setDicts)
@@ -321,7 +325,9 @@ export default function TaskDetailsPane() {
             {/* Footer actions */}
             {task.isActive && (
                 <TaskFooterActions
+                    scenario={task.scenario}
                     onResolve={(resolution) => resolveTask.mutate({ id: task.id, resolution })}
+                    onRequestCloseReason={() => setShowCloseReason(true)}
                 />
             )}
 
@@ -337,6 +343,31 @@ export default function TaskDetailsPane() {
                     onCommentChange={setComment}
                     onSave={handleSaveContactResult}
                     onClose={() => { setContactAction(null); setEditingEventId(null); }}
+                />
+            )}
+
+            {/* Modal: Причина закрытия сценарной задачи */}
+            {showCloseReason && task.scenario && (
+                <CloseReasonModal
+                    reasons={getClosedReasons(task.scenario)}
+                    isSaving={isClosing}
+                    onConfirm={async (reason, comment) => {
+                        setIsClosing(true)
+                        try {
+                            await updateTask.mutateAsync({
+                                id: task.id,
+                                patch: {
+                                    status: 'done',
+                                    closedReason: reason,
+                                    closedComment: comment || undefined,
+                                },
+                            })
+                            setShowCloseReason(false)
+                        } finally {
+                            setIsClosing(false)
+                        }
+                    }}
+                    onClose={() => setShowCloseReason(false)}
                 />
             )}
         </div>

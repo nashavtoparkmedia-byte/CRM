@@ -3,14 +3,24 @@
 import { Check } from 'lucide-react'
 
 interface TaskFooterActionsProps {
+    scenario?: string | null
     onResolve: (resolution: 'done' | 'cancelled') => void
+    onRequestCloseReason?: () => void
 }
 
-export default function TaskFooterActions({ onResolve }: TaskFooterActionsProps) {
+export default function TaskFooterActions({ scenario, onResolve, onRequestCloseReason }: TaskFooterActionsProps) {
+    const handleDone = () => {
+        if (scenario && onRequestCloseReason) {
+            onRequestCloseReason()
+        } else {
+            onResolve('done')
+        }
+    }
+
     return (
         <div className="px-4 py-3 flex items-center gap-3">
             <button
-                onClick={() => onResolve('done')}
+                onClick={handleDone}
                 style={{ height: '36px', padding: '8px 14px', fontSize: '14px', fontWeight: 500, borderRadius: '8px', width: 'auto' }}
                 className="flex items-center justify-center gap-1.5 bg-[#DCFCE7] text-[#166534] hover:bg-[#bbf7d0] transition-colors"
             >
