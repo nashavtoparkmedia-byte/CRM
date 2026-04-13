@@ -20,6 +20,30 @@ export async function register() {
 
     // Delay initialization to let DB connection pool warm up
     setTimeout(async () => {
+        // ── Configuration validation ────────────────────────────────────
+        try {
+            const { validateAllConfigs, validateCronSchedules } = await import('@/lib/config-validator')
+            const configResult = validateAllConfigs()
+            if (!configResult.valid) {
+                opsLog('error', 'config_validation_failed', {
+                    operation: 'startup',
+                    count: configResult.errors.length,
+                    error: configResult.errors.slice(0, 5).join('; '),
+                })
+            } else {
+                opsLog('info', 'config_validation_passed', { operation: 'startup', count: configResult.checkedRules })
+            }
+            const cronResult = validateCronSchedules()
+            if (!cronResult.valid) {
+                opsLog('error', 'cron_schedule_validation_failed', {
+                    operation: 'startup',
+                    error: cronResult.errors.join('; '),
+                })
+            }
+        } catch (err: any) {
+            opsLog('warn', 'config_validation_skipped', { operation: 'startup', error: err.message })
+        }
+
         // ── Database connectivity check ──────────────────────────────────
         try {
             const { prisma } = await import('@/lib/prisma')

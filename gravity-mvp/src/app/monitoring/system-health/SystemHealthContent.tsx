@@ -25,7 +25,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function SystemHealthContent({ data }: Props) {
     const router = useRouter()
-    const { cronSummary, failureDetection, integrityReports, slowOperations, perfSummary, activeLocks, stabilityReports, backgroundJobs } = data
+    const { cronSummary, failureDetection, integrityReports, slowOperations, perfSummary, activeLocks, stabilityReports, configValidation, cronValidation, runtimeGuardrails, recentConfigChanges, backgroundJobs } = data
 
     const overallStatus = failureDetection.overallStatus
 
@@ -54,6 +54,57 @@ export default function SystemHealthContent({ data }: Props) {
                     </span>
                 </div>
             </div>
+
+            {/* Guardrails */}
+            <Section title="Защитные ограничения">
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2.5">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${configValidation.valid ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <span className="text-[13px] text-[#0F172A]">Конфигурация</span>
+                        <span className="text-[12px] text-[#94A3B8]">
+                            {configValidation.checkedRules} правил · {configValidation.valid ? 'валидна' : `${configValidation.errors.length} ошибок`}
+                        </span>
+                    </div>
+                    {!configValidation.valid && configValidation.errors.map((err, i) => (
+                        <div key={i} className="text-[12px] text-red-500 ml-4">{err}</div>
+                    ))}
+                    <div className="flex items-center gap-2.5">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${cronValidation.valid ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <span className="text-[13px] text-[#0F172A]">Cron-расписания</span>
+                        <span className="text-[12px] text-[#94A3B8]">
+                            {cronValidation.schedules} задач · {cronValidation.valid ? 'валидны' : `${cronValidation.errors.length} ошибок`}
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${runtimeGuardrails.status === 'ok' ? 'bg-green-500' : runtimeGuardrails.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                        <span className="text-[13px] text-[#0F172A]">Runtime-гарантии</span>
+                        <span className="text-[12px] text-[#94A3B8]">
+                            {runtimeGuardrails.violations.length === 0 ? 'без нарушений' : `${runtimeGuardrails.violations.length} нарушений`}
+                        </span>
+                    </div>
+                    {runtimeGuardrails.violations.map((v, i) => (
+                        <div key={i} className={`text-[12px] ml-4 ${v.severity === 'critical' ? 'text-red-500' : 'text-yellow-600'}`}>
+                            {v.description}
+                        </div>
+                    ))}
+                </div>
+            </Section>
+
+            {/* Recent config changes */}
+            {recentConfigChanges.length > 0 && (
+                <Section title="Последние изменения конфигурации">
+                    <div className="space-y-1">
+                        {recentConfigChanges.map(c => (
+                            <div key={c.id} className="flex items-center gap-2.5 py-1.5 text-[12px]">
+                                <span className="text-[#0F172A] font-medium">{c.parameterName}</span>
+                                {c.previousValue && <span className="text-[#94A3B8] line-through">{c.previousValue}</span>}
+                                <span className="text-green-600">{c.newValue}</span>
+                                <span className="text-[#94A3B8] ml-auto">{new Date(c.changedAt).toLocaleString('ru-RU')}</span>
+                            </div>
+                        ))}
+                    </div>
+                </Section>
+            )}
 
             {/* Stability check history */}
             {stabilityReports.length > 0 && (
