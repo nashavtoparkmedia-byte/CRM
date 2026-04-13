@@ -7,7 +7,7 @@ import {
     Clock, ChevronRight, Repeat2, Heart,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
-import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert } from './actions'
+import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority } from './actions'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import ReassignModal from './ReassignModal'
 
@@ -17,7 +17,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
 
     const allManagersList = managers.map(m => ({ managerId: m.managerId, managerName: m.managerName }))
@@ -45,7 +45,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     color={totals.avgHealthScore >= 70 ? '#059669' : totals.avgHealthScore >= 45 ? '#d97706' : '#dc2626'}
                 />
                 <TotalCard
-                    label="Менеджеров в critical"
+                    label="В critical"
                     value={totals.criticalManagers}
                     color={totals.criticalManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
@@ -60,9 +60,21 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     color={totals.decliningManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
                 <TotalCard
-                    label="Устойчивое снижение"
+                    label="Устойч. снижение"
                     value={totals.sustainedDeclineManagers}
                     color={totals.sustainedDeclineManagers > 0 ? '#dc2626' : '#94A3B8'}
+                />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <TotalCard
+                    label="Срочное внимание"
+                    value={totals.urgentIntervention}
+                    color={totals.urgentIntervention > 0 ? '#dc2626' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Повышенное внимание"
+                    value={totals.highIntervention}
+                    color={totals.highIntervention > 0 ? '#ea580c' : '#94A3B8'}
                 />
             </div>
 
@@ -119,6 +131,27 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                                     {pa.trend === 'up' ? '▲' : pa.trend === 'down' ? '▼' : '●'}
                                 </span>
                             </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Intervention Queue */}
+            {interventionQueue.length > 0 && (
+                <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border-b border-red-200">
+                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                        <span className="text-[13px] font-semibold text-red-700">
+                            Требуют внимания ({interventionQueue.length})
+                        </span>
+                    </div>
+                    <div className="divide-y divide-[#f3f4f6]">
+                        {interventionQueue.map(m => (
+                            <InterventionRow
+                                key={m.managerId}
+                                manager={m}
+                                onClick={() => router.push(`/tasks?assigneeId=${m.managerId}`)}
+                            />
                         ))}
                     </div>
                 </div>
@@ -291,6 +324,56 @@ function StatPill({ value, label, color }: { value: number; label: string; color
             <span className="text-[14px] font-bold" style={{ color }}>{value}</span>
             <span className="text-[10px] font-medium" style={{ color: `${color}99` }}>{label}</span>
         </div>
+    )
+}
+
+// ─── Intervention Row ───────────────────────────────────────
+
+const INTERVENTION_BADGE: Record<'urgent' | 'high', { label: string; bg: string; text: string }> = {
+    urgent: { label: 'Срочно', bg: 'bg-red-100', text: 'text-red-600' },
+    high: { label: 'Внимание', bg: 'bg-orange-100', text: 'text-orange-600' },
+}
+
+function InterventionRow({ manager: m, onClick }: { manager: ManagerStats; onClick: () => void }) {
+    const initials = m.managerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    const badge = INTERVENTION_BADGE[m.interventionPriority as 'urgent' | 'high']
+
+    return (
+        <button
+            onClick={onClick}
+            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#f9fafb] transition-colors"
+        >
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
+                m.interventionPriority === 'urgent' ? 'bg-red-600' : 'bg-orange-500'
+            }`}>
+                {initials}
+            </div>
+            <span className="text-[14px] font-medium text-[#111827] min-w-0 truncate">{m.managerName}</span>
+            {badge && (
+                <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
+                    {badge.label}
+                </span>
+            )}
+            <HealthBadge
+                score={m.healthScore}
+                level={m.healthLevel}
+                breakdown={m.healthBreakdown}
+                trend={m.healthTrend}
+                previousScore={m.previousHealthScore}
+                declineStreak={m.declineStreak}
+            />
+            {m.sustainedDecline && (
+                <span className="shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                    Снижается
+                </span>
+            )}
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+                {m.overdue > 0 && <StatPill value={m.overdue} label="просроч" color="#dc2626" />}
+                {m.escalated > 0 && <StatPill value={m.escalated} label="эскал." color="#dc2626" />}
+                {m.highRiskTasks > 0 && <StatPill value={m.highRiskTasks} label="риск" color="#dc2626" />}
+            </div>
+            <ChevronRight className="w-4 h-4 text-[#d1d5db] shrink-0" />
+        </button>
     )
 }
 

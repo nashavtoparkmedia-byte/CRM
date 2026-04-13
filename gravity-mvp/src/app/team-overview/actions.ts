@@ -45,8 +45,12 @@ export interface ManagerStats {
     previousHealthScore: number | null
     declineStreak: number
     sustainedDecline: boolean
+    needsIntervention: boolean
+    interventionPriority: InterventionPriority
     nextTask: ManagerNextTask | null
 }
+
+export type InterventionPriority = 'urgent' | 'high' | 'normal'
 
 export interface RootCauseStat {
     cause: string
@@ -82,9 +86,12 @@ export interface TeamOverview {
         improvingManagers: number
         decliningManagers: number
         sustainedDeclineManagers: number
+        urgentIntervention: number
+        highIntervention: number
     }
     topRootCauses: RootCauseStat[]
     patternAlerts: PatternAlert[]
+    interventionQueue: ManagerStats[]
     managers: ManagerStats[]
 }
 
@@ -104,9 +111,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 
     if (users.length === 0) {
         return {
-            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0, sustainedDeclineManagers: 0 },
+            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0, sustainedDeclineManagers: 0, urgentIntervention: 0, highIntervention: 0 },
             topRootCauses: [],
             patternAlerts: [],
+            interventionQueue: [],
             managers: [],
         }
     }
@@ -295,6 +303,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             previousHealthScore: null,
             declineStreak: 0,
             sustainedDecline: false,
+            needsIntervention: false,
+            interventionPriority: 'normal' as InterventionPriority,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -335,6 +345,38 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Persist current scores and decline streaks for next comparison
     await saveHealthScores(managers.map(m => ({ managerId: m.managerId, score: m.healthScore, declineStreak: m.declineStreak })))
 
+    // Compute intervention priority
+    for (const m of managers) {
+        const isUrgent = m.healthLevel === 'critical'
+            || m.sustainedDecline
+            || (m.escalated > 0 && m.overdue > 0)
+        const isHigh = m.healthLevel === 'warning'
+            || m.healthTrend === 'declining'
+            || m.highRiskTasks > 0
+
+        if (isUrgent) {
+            m.interventionPriority = 'urgent'
+            m.needsIntervention = true
+        } else if (isHigh) {
+            m.interventionPriority = 'high'
+            m.needsIntervention = true
+        } else {
+            m.interventionPriority = 'normal'
+            m.needsIntervention = false
+        }
+    }
+
+    // Build intervention queue (urgent + high only, sorted)
+    const priorityOrder: Record<InterventionPriority, number> = { urgent: 0, high: 1, normal: 2 }
+    const interventionQueue = managers
+        .filter(m => m.needsIntervention)
+        .sort((a, b) =>
+            priorityOrder[a.interventionPriority] - priorityOrder[b.interventionPriority]
+            || b.overdue - a.overdue
+            || b.escalated - a.escalated
+            || a.healthScore - b.healthScore
+        )
+
     // Sort: overloaded first, then most overdue, then most active
     managers.sort((a, b) =>
         Number(b.isOverloaded) - Number(a.isOverloaded)
@@ -358,6 +400,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         improvingManagers: managers.filter(m => m.healthTrend === 'improving').length,
         decliningManagers: managers.filter(m => m.healthTrend === 'declining').length,
         sustainedDeclineManagers: managers.filter(m => m.sustainedDecline).length,
+        urgentIntervention: managers.filter(m => m.interventionPriority === 'urgent').length,
+        highIntervention: managers.filter(m => m.interventionPriority === 'high').length,
     }
 
     // Top root causes today (from escalation_resolved events)
@@ -427,7 +471,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         })
         .sort((a, b) => b.count - a.count)
 
-    return { totals, topRootCauses, patternAlerts, managers }
+    return { totals, topRootCauses, patternAlerts, interventionQueue, managers }
 }
 
 /**
