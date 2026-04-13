@@ -9,4 +9,6 @@ export const PATTERN_THRESHOLDS = {
     patternThreshold: 5,
     /** Time window in hours to look for patterns */
     patternWindowHours: 2,
+    /** Time window in hours for trend comparison (current vs previous period) */
+    trendWindowHours: 2,
 }

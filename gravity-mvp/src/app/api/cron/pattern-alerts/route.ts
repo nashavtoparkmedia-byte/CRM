@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { detectRootCausePatterns } from '@/lib/triggers'
+import { detectRootCausePatterns, calculateRootCauseTrends } from '@/lib/triggers'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,12 +13,15 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
     try {
         const result = await detectRootCausePatterns()
+        const trends = await calculateRootCauseTrends()
 
         return NextResponse.json({
             ok: true,
             alerts: result.alerts,
             warnings: result.warnings,
             patterns: result.patterns,
+            trends: trends.length,
+            trendDetails: trends,
             timestamp: new Date().toISOString(),
         })
     } catch (err) {

@@ -85,6 +85,11 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                                     pa.level === 'pattern' ? 'text-orange-600' : 'text-yellow-600'
                                 }`}>{pa.count}x</span>
                                 <span className="text-[11px] text-[#94A3B8]">за {pa.windowHours}ч</span>
+                                <span className={`text-[12px] font-bold ${
+                                    pa.trend === 'up' ? 'text-red-500' : pa.trend === 'down' ? 'text-green-500' : 'text-gray-400'
+                                }`} title={`Пред. период: ${pa.previousCount}x`}>
+                                    {pa.trend === 'up' ? '▲' : pa.trend === 'down' ? '▼' : '●'}
+                                </span>
                             </div>
                         ))}
                     </div>

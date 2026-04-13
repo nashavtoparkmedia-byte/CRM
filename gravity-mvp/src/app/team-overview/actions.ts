@@ -46,12 +46,16 @@ export interface RootCauseStat {
     count: number
 }
 
+export type TrendDirection = 'up' | 'down' | 'stable'
+
 export interface PatternAlert {
     rootCause: string
     label: string
     count: number
     windowHours: number
     level: 'warning' | 'pattern'
+    trend: TrendDirection
+    previousCount: number
 }
 
 export interface TeamOverview {
@@ -325,31 +329,51 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         .sort((a, b) => b.count - a.count)
         .slice(0, 3)
 
-    // Pattern alerts: detect repeating root causes in recent window
-    const patternWindowStart = new Date(now.getTime() - PATTERN_THRESHOLDS.patternWindowHours * 60 * 60 * 1000)
-    const recentResolvedEvents = await prisma.taskEvent.findMany({
+    // Pattern alerts with trend: detect repeating root causes in recent window
+    const patternWindowMs = PATTERN_THRESHOLDS.patternWindowHours * 60 * 60 * 1000
+    const trendWindowMs = PATTERN_THRESHOLDS.trendWindowHours * 60 * 60 * 1000
+    const patternWindowStart = new Date(now.getTime() - patternWindowMs)
+    const previousWindowStart = new Date(now.getTime() - patternWindowMs - trendWindowMs)
+
+    // Get events from both current and previous windows in one query
+    const allResolvedEvents = await prisma.taskEvent.findMany({
         where: {
             eventType: 'escalation_resolved',
-            createdAt: { gte: patternWindowStart },
+            createdAt: { gte: previousWindowStart },
         },
-        select: { payload: true },
+        select: { payload: true, createdAt: true },
     })
+
     const patternCounts = new Map<string, number>()
-    for (const ev of recentResolvedEvents) {
+    const previousCounts = new Map<string, number>()
+    for (const ev of allResolvedEvents) {
         const rc = (ev.payload as any)?.rootCause
-        if (rc) {
+        if (!rc) continue
+        if (ev.createdAt >= patternWindowStart) {
             patternCounts.set(rc, (patternCounts.get(rc) || 0) + 1)
+        } else {
+            previousCounts.set(rc, (previousCounts.get(rc) || 0) + 1)
         }
     }
+
     const patternAlerts: PatternAlert[] = Array.from(patternCounts.entries())
         .filter(([, count]) => count >= PATTERN_THRESHOLDS.warningThreshold)
-        .map(([rootCause, count]) => ({
-            rootCause,
-            label: getRootCauseLabel(rootCause),
-            count,
-            windowHours: PATTERN_THRESHOLDS.patternWindowHours,
-            level: (count >= PATTERN_THRESHOLDS.patternThreshold ? 'pattern' : 'warning') as 'warning' | 'pattern',
-        }))
+        .map(([rootCause, count]) => {
+            const prev = previousCounts.get(rootCause) || 0
+            let trend: TrendDirection = 'stable'
+            if (count > prev) trend = 'up'
+            else if (count < prev) trend = 'down'
+
+            return {
+                rootCause,
+                label: getRootCauseLabel(rootCause),
+                count,
+                windowHours: PATTERN_THRESHOLDS.patternWindowHours,
+                level: (count >= PATTERN_THRESHOLDS.patternThreshold ? 'pattern' : 'warning') as 'warning' | 'pattern',
+                trend,
+                previousCount: prev,
+            }
+        })
         .sort((a, b) => b.count - a.count)
 
     return { totals, topRootCauses, patternAlerts, managers }

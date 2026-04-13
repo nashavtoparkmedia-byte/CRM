@@ -827,6 +827,79 @@ export async function detectRootCausePatterns(): Promise<{ alerts: number; warni
     return { alerts, warnings, patterns }
 }
 
+// ─── Trend Monitoring ────────────────────────────────────────────────
+
+export type TrendDirection = 'up' | 'down' | 'stable'
+
+export interface RootCauseTrend {
+    rootCause: string
+    label: string
+    currentCount: number
+    previousCount: number
+    direction: TrendDirection
+}
+
+/**
+ * Calculate root cause trends by comparing current vs previous time window.
+ *
+ * Current window: now - trendWindowHours → now
+ * Previous window: now - 2*trendWindowHours → now - trendWindowHours
+ *
+ * Returns trends for all root causes that appeared in either window.
+ */
+export async function calculateRootCauseTrends(): Promise<RootCauseTrend[]> {
+    const now = new Date()
+    const windowMs = PATTERN_THRESHOLDS.trendWindowHours * 60 * 60 * 1000
+    const currentStart = new Date(now.getTime() - windowMs)
+    const previousStart = new Date(now.getTime() - 2 * windowMs)
+
+    // Batch: get events from both windows in one query
+    const allEvents = await prisma.taskEvent.findMany({
+        where: {
+            eventType: 'escalation_resolved',
+            createdAt: { gte: previousStart },
+        },
+        select: { payload: true, createdAt: true },
+    })
+
+    // Split into current and previous
+    const currentCounts = new Map<string, number>()
+    const previousCounts = new Map<string, number>()
+
+    for (const ev of allEvents) {
+        const rc = (ev.payload as any)?.rootCause
+        if (!rc) continue
+
+        if (ev.createdAt >= currentStart) {
+            currentCounts.set(rc, (currentCounts.get(rc) || 0) + 1)
+        } else {
+            previousCounts.set(rc, (previousCounts.get(rc) || 0) + 1)
+        }
+    }
+
+    // Merge all root causes from both windows
+    const allCauses = new Set([...currentCounts.keys(), ...previousCounts.keys()])
+
+    const trends: RootCauseTrend[] = Array.from(allCauses).map(rootCause => {
+        const currentCount = currentCounts.get(rootCause) || 0
+        const previousCount = previousCounts.get(rootCause) || 0
+
+        let direction: TrendDirection = 'stable'
+        if (currentCount > previousCount) direction = 'up'
+        else if (currentCount < previousCount) direction = 'down'
+
+        return {
+            rootCause,
+            label: getRootCauseLabel(rootCause),
+            currentCount,
+            previousCount,
+            direction,
+        }
+    })
+
+    return trends.sort((a, b) => b.currentCount - a.currentCount)
+}
+
 // ─── Trigger → Scenario Mapping ────────────────────────────────────
 
 function mapTriggerToScenario(condition: string): string {
