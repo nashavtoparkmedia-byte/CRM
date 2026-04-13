@@ -58,6 +58,9 @@ export default function TaskCard({ task }: TaskCardProps) {
     // Mandatory follow-up detection
     const isMandatoryFollowup = task.nextActionId === 'mandatory_followup'
 
+    // Escalation detection
+    const isEscalated = !!task.escalated
+
     // Calculate urgency / due logic
     let isOverdue = false
     let isToday = false
@@ -144,7 +147,12 @@ export default function TaskCard({ task }: TaskCardProps) {
                     {task.driverName}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                    {isMandatoryFollowup && (
+                    {isEscalated && (
+                        <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                            Эскалация
+                        </span>
+                    )}
+                    {isMandatoryFollowup && !isEscalated && (
                         <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
                             Обяз. контакт
                         </span>

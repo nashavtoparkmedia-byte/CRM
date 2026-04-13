@@ -64,6 +64,7 @@ const EVENT_LABELS: Record<string, string> = {
     sla_escalated: 'SLA просрочен',
     reassigned: 'Переназначена',
     mandatory_followup: 'Обязательный контакт',
+    escalation_created: 'Эскалация',
 }
 
 export default function TaskDetailsPane() {

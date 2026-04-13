@@ -229,6 +229,7 @@ export default function TaskHistorySection({
                                                 const isCorrected = event.eventType === 'contact_corrected';
                                                 const isSlaEscalated = event.eventType === 'sla_escalated';
                                                 const isMandatoryFollowup = event.eventType === 'mandatory_followup';
+                                                const isEscalation = event.eventType === 'escalation_created';
 
                                                 // Build event label
                                                 let eventTitle: React.ReactNode;
@@ -295,6 +296,22 @@ export default function TaskHistorySection({
                                                             {EVENT_LABELS.sla_escalated || 'SLA просрочен'}
                                                             {overdueBy && <span className="text-red-400 font-normal ml-1">({overdueBy})</span>}
                                                         </span>
+                                                    );
+                                                } else if (isEscalation) {
+                                                    const reason = (event.payload as any)?.reason;
+                                                    const missedDueAt = (event.payload as any)?.dueAt;
+                                                    eventTitle = (
+                                                        <div className="flex flex-col">
+                                                            <span style={{ fontWeight: 600 }} className="text-red-600 text-[13px]">
+                                                                {EVENT_LABELS.escalation_created || 'Эскалация'}
+                                                            </span>
+                                                            {reason === 'mandatory_followup_missed' && (
+                                                                <span className="text-[11px] text-red-400 mt-0.5">
+                                                                    Обязательный контакт не выполнен
+                                                                    {missedDueAt && <> (срок: {new Date(missedDueAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})</>}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     );
                                                 } else if (isMandatoryFollowup) {
                                                     const deadlineMin = (event.payload as any)?.deadlineMinutes;

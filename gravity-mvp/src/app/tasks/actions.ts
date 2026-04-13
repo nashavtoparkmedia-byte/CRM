@@ -63,6 +63,7 @@ function toTaskDTO(t: TaskWithDriver): TaskDTO {
         // Legacy metadata
         attempts: (t.metadata as any)?.attempts || 0,
         nextActionId: (t.metadata as any)?.nextActionId,
+        escalated: !!(t.metadata as any)?.escalated,
     }
 }
 

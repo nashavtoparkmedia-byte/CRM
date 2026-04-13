@@ -8,6 +8,7 @@ import { getScenario } from '@/lib/tasks/scenario-config'
 import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { CONTACT_EVENT_TYPES, RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { FOLLOWUP_THRESHOLDS } from '@/lib/tasks/followup-config'
+import { ESCALATION_THRESHOLDS } from '@/lib/tasks/escalation-config'
 
 interface DriverState {
     id: string
@@ -555,6 +556,121 @@ export async function enforceMandatoryFollowup(): Promise<{ enforced: number }> 
 
     console.log(`[followup] Done: ${enforced} tasks enforced`)
     return { enforced }
+}
+
+// ─── Escalation to Lead ──────────────────────────────────────────────
+
+/**
+ * Escalate high-risk tasks whose mandatory follow-up deadline has passed.
+ *
+ * Criteria:
+ *   - task.isActive = true
+ *   - metadata.nextActionId = 'mandatory_followup'
+ *   - task.dueAt < now - escalateAfterMinutes
+ *   - no existing 'escalation_created' event for this task
+ *
+ * Actions:
+ *   - Create 'escalation_created' TaskEvent
+ *   - Set metadata.escalated = true, metadata.escalatedAt = now
+ *
+ * Idempotent: tasks with existing escalation event are skipped.
+ * Uses direct Prisma (no cookies — safe for cron context).
+ */
+export async function evaluateEscalations(): Promise<{ escalated: number }> {
+    const now = new Date()
+    const threshold = new Date(now.getTime() - ESCALATION_THRESHOLDS.escalateAfterMinutes * 60 * 1000)
+
+    // Find active tasks with mandatory_followup that are past due
+    const allActive = await prisma.task.findMany({
+        where: {
+            isActive: true,
+            dueAt: { lt: threshold },
+        },
+        select: {
+            id: true,
+            metadata: true,
+            dueAt: true,
+            scenario: true,
+            stage: true,
+            assigneeId: true,
+        },
+    })
+
+    // Filter: only tasks with nextActionId = mandatory_followup
+    const candidates = allActive.filter(t => {
+        const meta = (t.metadata as Record<string, any>) || {}
+        return meta.nextActionId === FOLLOWUP_THRESHOLDS.mandatoryActionId
+    })
+
+    if (candidates.length === 0) {
+        console.log('[escalation] No mandatory follow-up tasks past due')
+        return { escalated: 0 }
+    }
+
+    const candidateIds = candidates.map(t => t.id)
+
+    // Batch dedup: check existing escalation events
+    const existingEvents = await prisma.taskEvent.findMany({
+        where: {
+            taskId: { in: candidateIds },
+            eventType: 'escalation_created',
+        },
+        select: { taskId: true },
+    })
+    const alreadyEscalatedSet = new Set(existingEvents.map(e => e.taskId))
+
+    const toEscalate = candidates.filter(t => !alreadyEscalatedSet.has(t.id))
+
+    if (toEscalate.length === 0) {
+        console.log(`[escalation] ${candidates.length} tasks already escalated`)
+        return { escalated: 0 }
+    }
+
+    let escalated = 0
+
+    for (const task of toEscalate) {
+        const meta = (task.metadata as Record<string, any>) || {}
+
+        try {
+            await prisma.$transaction([
+                // Set escalated flag in metadata
+                prisma.task.update({
+                    where: { id: task.id },
+                    data: {
+                        metadata: {
+                            ...meta,
+                            escalated: true,
+                            escalatedAt: now.toISOString(),
+                        },
+                    },
+                }),
+                // Log escalation event
+                prisma.taskEvent.create({
+                    data: {
+                        taskId: task.id,
+                        eventType: 'escalation_created',
+                        payload: {
+                            reason: 'mandatory_followup_missed',
+                            dueAt: task.dueAt?.toISOString() || null,
+                            scenario: task.scenario,
+                            stage: task.stage,
+                            assigneeId: task.assigneeId,
+                        },
+                        actorType: 'system',
+                        actorId: null,
+                    },
+                }),
+            ])
+
+            console.log(`[escalation] ✓ Task ${task.id} escalated (due was: ${task.dueAt?.toISOString()})`)
+            escalated++
+        } catch (err) {
+            console.error(`[escalation] ✗ Failed to escalate task ${task.id}:`, (err as Error).message)
+        }
+    }
+
+    console.log(`[escalation] Done: ${escalated} tasks escalated`)
+    return { escalated }
 }
 
 // ─── Trigger → Scenario Mapping ────────────────────────────────────

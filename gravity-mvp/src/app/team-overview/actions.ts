@@ -34,6 +34,7 @@ export interface ManagerStats {
     reopened: number
     fastClosed: number
     highRiskTasks: number
+    escalated: number
     nextTask: ManagerNextTask | null
 }
 
@@ -47,6 +48,7 @@ export interface TeamOverview {
         reopened: number
         fastClosed: number
         highRiskTasks: number
+        escalated: number
     }
     managers: ManagerStats[]
 }
@@ -67,7 +69,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 
     if (users.length === 0) {
         return {
-            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0 },
+            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0 },
             managers: [],
         }
     }
@@ -244,6 +246,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
                     responseThresholdMinutes: RESPONSE_THRESHOLDS.maxResponseMinutes,
                 }) === 'high'
             }).length,
+            escalated: tasks.filter(t => {
+                const meta = (t.metadata as Record<string, any>) || {}
+                return !!meta.escalated
+            }).length,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -276,6 +282,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         reopened: managers.reduce((s, m) => s + m.reopened, 0),
         fastClosed: managers.reduce((s, m) => s + m.fastClosed, 0),
         highRiskTasks: managers.reduce((s, m) => s + m.highRiskTasks, 0),
+        escalated: managers.reduce((s, m) => s + m.escalated, 0),
     }
 
     return { totals, managers }

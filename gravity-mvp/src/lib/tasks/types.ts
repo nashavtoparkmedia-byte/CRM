@@ -65,6 +65,7 @@ export interface TaskDTO {
     // Legacy metadata (kept for backward compat)
     attempts?: number
     nextActionId?: string
+    escalated?: boolean
 
     // Timestamps
     createdAt: string
