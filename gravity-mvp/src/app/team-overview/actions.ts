@@ -9,7 +9,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, type HealthLevel, type HealthScoreBreakdown, type HealthTrend } from '@/lib/tasks/manager-health-config'
+import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
@@ -93,6 +93,12 @@ export interface EffectivenessStat {
     improvementRate: number
 }
 
+export interface SerializedHealthHistoryPoint {
+    score: number
+    healthLevel: HealthLevel
+    recordedAt: string
+}
+
 export interface TeamOverview {
     totals: {
         active: number
@@ -119,6 +125,7 @@ export interface TeamOverview {
     patternAlerts: PatternAlert[]
     interventionQueue: ManagerStats[]
     effectivenessStats: EffectivenessStat[]
+    healthHistory: Record<string, SerializedHealthHistoryPoint[]>
     managers: ManagerStats[]
 }
 
@@ -143,6 +150,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             patternAlerts: [],
             interventionQueue: [],
             effectivenessStats: [],
+            healthHistory: {},
             managers: [],
         }
     }
@@ -526,7 +534,18 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Effectiveness stats
     const effectivenessStats = await getInterventionEffectiveness()
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, managers }
+    // Health history for sparklines
+    const historyMap = await getHealthHistory(managers.map(m => m.managerId))
+    const healthHistory: Record<string, SerializedHealthHistoryPoint[]> = {}
+    for (const [managerId, points] of historyMap) {
+        healthHistory[managerId] = points.map(p => ({
+            score: p.score,
+            healthLevel: p.healthLevel,
+            recordedAt: p.recordedAt.toISOString(),
+        }))
+    }
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, managers }
 }
 
 /**

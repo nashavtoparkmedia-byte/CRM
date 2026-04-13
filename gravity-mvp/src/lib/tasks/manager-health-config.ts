@@ -3,6 +3,19 @@
  * Penalties are subtracted from a base score of 100 per occurrence.
  * Adjustable without schema changes.
  */
+export const HEALTH_HISTORY_CONFIG = {
+    /** Default period for history visualization (days) */
+    defaultPeriodDays: 7,
+    /** Maximum allowed period (days) */
+    maxPeriodDays: 30,
+}
+
+export interface HealthHistoryPoint {
+    score: number
+    healthLevel: HealthLevel
+    recordedAt: Date
+}
+
 export const HEALTH_SCORE_CONFIG = {
     /** Penalty per overdue task */
     overduePenalty: 8,
@@ -220,4 +233,47 @@ export function updateDeclineStreak(trend: HealthTrend, previousStreak: number):
  */
 export function isSustainedDecline(declineStreak: number): boolean {
     return declineStreak >= HEALTH_SCORE_CONFIG.declineStreakThreshold
+}
+
+/**
+ * Read health score history for given managers within a time window.
+ * Returns raw points sorted ascending by recorded_at.
+ * Failure-tolerant: returns empty map on error.
+ */
+export async function getHealthHistory(
+    managerIds: string[],
+    periodDays?: number
+): Promise<Map<string, HealthHistoryPoint[]>> {
+    const result = new Map<string, HealthHistoryPoint[]>()
+    if (managerIds.length === 0) return result
+
+    try {
+        await ensureTable()
+        const days = Math.min(
+            periodDays ?? HEALTH_HISTORY_CONFIG.defaultPeriodDays,
+            HEALTH_HISTORY_CONFIG.maxPeriodDays
+        )
+
+        const rows: { manager_id: string; score: number; health_level: string; recorded_at: Date }[] =
+            await prisma.$queryRawUnsafe(`
+                SELECT manager_id, score, health_level, recorded_at
+                FROM health_score_history
+                WHERE manager_id = ANY($1)
+                  AND recorded_at >= NOW() - INTERVAL '${days} days'
+                ORDER BY manager_id, recorded_at ASC
+            `, managerIds)
+
+        for (const r of rows) {
+            if (!result.has(r.manager_id)) result.set(r.manager_id, [])
+            result.get(r.manager_id)!.push({
+                score: r.score,
+                healthLevel: r.health_level as HealthLevel,
+                recordedAt: r.recorded_at,
+            })
+        }
+    } catch (e) {
+        console.error('[health-history] Failed to read history, returning empty:', e)
+    }
+
+    return result
 }

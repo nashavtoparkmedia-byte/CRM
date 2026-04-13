@@ -7,7 +7,7 @@ import {
     Clock, ChevronRight, Repeat2, Heart,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
-import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat } from './actions'
+import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
@@ -22,7 +22,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -181,6 +181,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                             <InterventionRow
                                 key={m.managerId}
                                 manager={m}
+                                historyPoints={healthHistory[m.managerId] ?? []}
                                 onClick={() => router.push(`/tasks?assigneeId=${m.managerId}`)}
                                 onAction={() => setInterventionManager({ managerId: m.managerId, managerName: m.managerName, healthScore: m.healthScore })}
                             />
@@ -216,6 +217,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                         <ManagerCard
                             key={manager.managerId}
                             manager={manager}
+                            historyPoints={healthHistory[manager.managerId] ?? []}
                             onOpenTasks={() => router.push(`/tasks?assigneeId=${manager.managerId}`)}
                             onOpenTask={(taskId) => router.push(`/tasks?taskId=${taskId}`)}
                             onReassign={() => setReassignManager({ managerId: manager.managerId, managerName: manager.managerName })}
@@ -263,8 +265,9 @@ function TotalCard({ label, value, color }: { label: string; value: number; colo
 
 // ─── Manager Card ────────────────────────────────────────────
 
-function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
+function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassign }: {
     manager: ManagerStats
+    historyPoints: SerializedHealthHistoryPoint[]
     onOpenTasks: () => void
     onOpenTask: (taskId: string) => void
     onReassign: () => void
@@ -306,6 +309,7 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
                             previousScore={manager.previousHealthScore}
                             declineStreak={manager.declineStreak}
                         />
+                        <HealthSparkline points={historyPoints} level={manager.healthLevel} />
                         {manager.sustainedDecline && (
                             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600">
                                 Снижается
@@ -428,8 +432,9 @@ const INTERVENTION_BADGE: Record<'urgent' | 'high', { label: string; bg: string;
     high: { label: 'Внимание', bg: 'bg-orange-100', text: 'text-orange-600' },
 }
 
-function InterventionRow({ manager: m, onClick, onAction }: {
+function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
     manager: ManagerStats
+    historyPoints: SerializedHealthHistoryPoint[]
     onClick: () => void
     onAction: () => void
 }) {
@@ -466,6 +471,7 @@ function InterventionRow({ manager: m, onClick, onAction }: {
                             previousScore={m.previousHealthScore}
                             declineStreak={m.declineStreak}
                         />
+                        <HealthSparkline points={historyPoints} level={m.healthLevel} />
                     </div>
                     {/* Reason pills */}
                     {m.interventionReasons.length > 0 && (
@@ -630,6 +636,54 @@ function HealthBadge({ score, level, breakdown, trend, previousScore, declineStr
                     ))}
                 </div>
             </div>
+        </div>
+    )
+}
+
+// ─── Health Sparkline ───────────────────────────────────────
+
+const SPARKLINE_COLORS: Record<HealthLevel, string> = {
+    healthy: '#059669',
+    warning: '#d97706',
+    critical: '#dc2626',
+}
+
+function HealthSparkline({ points, level }: {
+    points: SerializedHealthHistoryPoint[]
+    level: HealthLevel
+}) {
+    if (points.length < 2) return null
+
+    const W = 80
+    const H = 24
+    const PAD = 2
+    const scores = points.map(p => p.score)
+    const min = Math.min(...scores)
+    const max = Math.max(...scores)
+    const range = max - min || 1
+
+    const polyPoints = scores.map((s, i) => {
+        const x = PAD + (i / (scores.length - 1)) * (W - PAD * 2)
+        const y = PAD + (1 - (s - min) / range) * (H - PAD * 2)
+        return `${x},${y}`
+    }).join(' ')
+
+    const first = scores[0]
+    const last = scores[scores.length - 1]
+    const tooltip = `${points.length > 0 ? Math.round((Date.now() - new Date(points[0].recordedAt).getTime()) / 86400000) : 7}д: ${first}→${last} (мин ${min}, макс ${max})`
+
+    return (
+        <div className="relative group/spark" title={tooltip}>
+            <svg width={W} height={H} className="shrink-0">
+                <polyline
+                    points={polyPoints}
+                    fill="none"
+                    stroke={SPARKLINE_COLORS[level]}
+                    strokeWidth={1.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                />
+            </svg>
         </div>
     )
 }
