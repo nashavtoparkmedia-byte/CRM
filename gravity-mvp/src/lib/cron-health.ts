@@ -51,7 +51,7 @@ export async function logCronHealth(entry: {
         await ensureTable()
         await prisma.$executeRawUnsafe(
             `INSERT INTO cron_health_log (cron_name, status, executed_at, duration_ms, error_message, metadata)
-             VALUES ($1, $2, NOW(), $3, $4, $5)`,
+             VALUES ($1, $2, NOW(), $3, $4, $5::jsonb)`,
             entry.cronName,
             entry.status,
             entry.durationMs,

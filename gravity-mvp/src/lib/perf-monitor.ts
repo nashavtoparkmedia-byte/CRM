@@ -99,7 +99,7 @@ export async function recordPerf(entry: {
         await ensureTable()
         await prisma.$executeRawUnsafe(
             `INSERT INTO perf_log (operation_name, operation_type, duration_ms, is_slow, logged_at, metadata)
-             VALUES ($1, $2, $3, $4, NOW(), $5)`,
+             VALUES ($1, $2, $3, $4, NOW(), $5::jsonb)`,
             entry.operationName,
             entry.operationType,
             entry.durationMs,

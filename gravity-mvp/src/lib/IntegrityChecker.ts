@@ -54,7 +54,7 @@ async function persistReport(report: IntegrityReport): Promise<void> {
     const warningCount = report.issues.filter(i => i.severity === 'warning').length
     await prisma.$executeRawUnsafe(
       `INSERT INTO integrity_check_log (checked_at, duration_ms, total_issues, critical_issues, warning_issues, details)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)`,
       report.checkedAt,
       report.durationMs,
       report.issues.length,
