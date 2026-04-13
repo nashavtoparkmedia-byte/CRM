@@ -373,7 +373,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         m.sustainedDecline = isSustainedDecline(m.declineStreak)
     }
     // Persist current scores and decline streaks for next comparison
-    await saveHealthScores(managers.map(m => ({ managerId: m.managerId, score: m.healthScore, declineStreak: m.declineStreak })))
+    await saveHealthScores(managers.map(m => ({ managerId: m.managerId, score: m.healthScore, declineStreak: m.declineStreak, healthLevel: m.healthLevel })))
 
     // Compute intervention priority + reasons
     for (const m of managers) {

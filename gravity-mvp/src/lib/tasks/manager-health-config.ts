@@ -118,12 +118,27 @@ DO $$ BEGIN
   END IF;
 END $$`
 
+const ENSURE_HISTORY_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS health_score_history (
+  id SERIAL PRIMARY KEY,
+  manager_id TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  health_level TEXT NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`
+
+const ENSURE_HISTORY_INDEX_SQL = `
+CREATE INDEX IF NOT EXISTS idx_hsh_manager_date
+  ON health_score_history (manager_id, recorded_at DESC)`
+
 let tableEnsured = false
 
 async function ensureTable() {
     if (tableEnsured) return
     await prisma.$executeRawUnsafe(ENSURE_TABLE_SQL)
     await prisma.$executeRawUnsafe(ENSURE_COLUMN_SQL)
+    await prisma.$executeRawUnsafe(ENSURE_HISTORY_TABLE_SQL)
+    await prisma.$executeRawUnsafe(ENSURE_HISTORY_INDEX_SQL)
     tableEnsured = true
 }
 
@@ -131,6 +146,7 @@ export interface HealthSnapshot {
     managerId: string
     score: number
     declineStreak: number
+    healthLevel: HealthLevel
 }
 
 export interface PreviousHealthData {
@@ -152,10 +168,14 @@ export async function getPreviousHealthScores(): Promise<Map<string, PreviousHea
 
 /**
  * Upsert current health scores with decline streaks.
+ * Also appends to health_score_history (max 1 record per manager per hour).
+ * History write is failure-tolerant — main upsert always completes.
  */
 export async function saveHealthScores(snapshots: HealthSnapshot[]): Promise<void> {
     if (snapshots.length === 0) return
     await ensureTable()
+
+    // 1. Primary upsert (existing behavior, untouched)
     const values = snapshots
         .map(s => `('${s.managerId}', ${s.score}, ${s.declineStreak}, NOW())`)
         .join(', ')
@@ -167,6 +187,25 @@ export async function saveHealthScores(snapshots: HealthSnapshot[]): Promise<voi
           decline_streak = EXCLUDED.decline_streak,
           recorded_at = NOW()
     `)
+
+    // 2. Append to history (failure-tolerant, 1-hour dedup)
+    try {
+        const historyValues = snapshots
+            .map(s => `('${s.managerId}', ${s.score}, '${s.healthLevel}')`)
+            .join(', ')
+        await prisma.$executeRawUnsafe(`
+            INSERT INTO health_score_history (manager_id, score, health_level, recorded_at)
+            SELECT v.manager_id, v.score, v.health_level, NOW()
+            FROM (VALUES ${historyValues}) AS v(manager_id, score, health_level)
+            WHERE NOT EXISTS (
+              SELECT 1 FROM health_score_history h
+              WHERE h.manager_id = v.manager_id
+                AND h.recorded_at > NOW() - INTERVAL '1 hour'
+            )
+        `)
+    } catch (e) {
+        console.error('[health-history] Failed to write history, continuing:', e)
+    }
 }
 
 /**
