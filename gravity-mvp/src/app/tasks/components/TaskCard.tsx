@@ -52,6 +52,9 @@ export default function TaskCard({ task }: TaskCardProps) {
     // SLA breach detection
     const isSlaBreached = task.slaDeadline ? new Date(task.slaDeadline) < new Date() && task.isActive : false
 
+    // Risk detection (simplified: based on attempts threshold)
+    const isHighRisk = (task.attempts || 0) >= 3
+
     // Calculate urgency / due logic
     let isOverdue = false
     let isToday = false
@@ -138,6 +141,11 @@ export default function TaskCard({ task }: TaskCardProps) {
                     {task.driverName}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                    {isHighRisk && (
+                        <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                            Риск
+                        </span>
+                    )}
                     {isSlaBreached && (
                         <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-red-100 text-red-600">
                             SLA

@@ -5,6 +5,8 @@ import { logTaskEvent } from '@/lib/tasks/task-event-service'
 import { isManagerOverloaded } from '@/lib/tasks/workload-config'
 import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config'
 import { isFastClose } from '@/lib/tasks/completion-config'
+import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
+import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 
 export interface ManagerNextTask {
     id: string
@@ -31,6 +33,7 @@ export interface ManagerStats {
     lateResponses: number
     reopened: number
     fastClosed: number
+    highRiskTasks: number
     nextTask: ManagerNextTask | null
 }
 
@@ -43,6 +46,7 @@ export interface TeamOverview {
         lateResponses: number
         reopened: number
         fastClosed: number
+        highRiskTasks: number
     }
     managers: ManagerStats[]
 }
@@ -82,6 +86,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             priority: true,
             dueAt: true,
             slaDeadline: true,
+            createdAt: true,
+            metadata: true,
             title: true,
             driverId: true,
             scenario: true,
@@ -107,6 +113,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // and the response time exceeds the threshold
     const assignedTaskIds = activeTasks.map(t => t.id)
     const lateResponseMap = new Map<string, number>()
+    let firstEventByTask = new Map<string, Date>()
 
     if (assignedTaskIds.length > 0) {
         // Get all tasks with their creation time and first contact event
@@ -129,7 +136,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         })
 
         // Dedupe: keep only first event per task
-        const firstEventByTask = new Map<string, Date>()
+        firstEventByTask = new Map<string, Date>()
         for (const ev of firstContactEvents) {
             if (!firstEventByTask.has(ev.taskId)) {
                 firstEventByTask.set(ev.taskId, ev.createdAt)
@@ -223,6 +230,20 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             lateResponses: lateResponseMap.get(user.id) || 0,
             reopened: reopenedMap.get(user.id) || 0,
             fastClosed: fastClosedMap.get(user.id) || 0,
+            highRiskTasks: tasks.filter(t => {
+                const meta = (t.metadata as Record<string, any>) || {}
+                const attempts = meta.attempts || 0
+                const isReopened = reopenedTaskIds.has(t.id)
+                const hasContact = firstEventByTask.has(t.id)
+                return evaluateTaskRisk({
+                    attempts,
+                    isReopened,
+                    hasContact,
+                    createdAt: t.createdAt,
+                    slaDeadline: t.slaDeadline,
+                    responseThresholdMinutes: RESPONSE_THRESHOLDS.maxResponseMinutes,
+                }) === 'high'
+            }).length,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -254,6 +275,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         lateResponses: managers.reduce((s, m) => s + m.lateResponses, 0),
         reopened: managers.reduce((s, m) => s + m.reopened, 0),
         fastClosed: managers.reduce((s, m) => s + m.fastClosed, 0),
+        highRiskTasks: managers.reduce((s, m) => s + m.highRiskTasks, 0),
     }
 
     return { totals, managers }
