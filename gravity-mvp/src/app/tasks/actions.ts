@@ -150,6 +150,73 @@ export async function searchDriversForTask(query: string) {
     return drivers
 }
 
+// ─── Bulk Actions ──────────────────────────────────────────────────────────
+
+/**
+ * Create care tasks in bulk for a list of drivers.
+ * Skips drivers that already have an active care task (idempotent).
+ */
+export async function createBulkCareTasks(
+    driverIds: string[]
+): Promise<{ created: number; skipped: number; errors: number }> {
+    const scenario = 'care'
+    const config = getScenario(scenario)
+    if (!config) throw new Error('Care scenario not found in config')
+
+    // Find which drivers already have active care tasks
+    const existingTasks = await prisma.task.findMany({
+        where: {
+            driverId: { in: driverIds },
+            scenario,
+            isActive: true,
+        },
+        select: { driverId: true },
+    })
+    const hasActiveSet = new Set(existingTasks.map(t => t.driverId))
+
+    // Load driver names for task titles
+    const drivers = await prisma.driver.findMany({
+        where: { id: { in: driverIds } },
+        select: { id: true, fullName: true, phone: true },
+    })
+    const driverMap = new Map(drivers.map(d => [d.id, d]))
+
+    let created = 0
+    let skipped = 0
+    let errors = 0
+
+    for (const driverId of driverIds) {
+        if (hasActiveSet.has(driverId)) {
+            skipped++
+            continue
+        }
+
+        const driver = driverMap.get(driverId)
+        if (!driver) {
+            skipped++
+            continue
+        }
+
+        try {
+            await createTask({
+                driverId,
+                source: 'manual',
+                type: 'care',
+                title: `${config.label} — ${driver.fullName}`,
+                scenario,
+                stage: config.initialStage,
+                priority: 'medium',
+            })
+            created++
+        } catch (err) {
+            console.warn(`[bulk-care] Failed for driver ${driverId}:`, (err as Error).message)
+            errors++
+        }
+    }
+
+    return { created, skipped, errors }
+}
+
 // ─── CRUD Actions ──────────────────────────────────────────────────────────
 
 /**

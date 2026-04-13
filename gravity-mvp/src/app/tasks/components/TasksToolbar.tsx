@@ -12,9 +12,11 @@ import {
     Bell,
     AlertTriangle,
     Plus,
+    Users,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import GlobalTaskCreateModal from './GlobalTaskCreateModal'
+import BulkCareModal from './BulkCareModal'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 import { TASK_TYPES } from '@/lib/tasks/types'
 import { getCrmUsers } from '@/app/tasks/actions'
@@ -74,6 +76,7 @@ export default function TasksToolbar() {
     const [searchOpen, setSearchOpen] = useState(false)
     const [searchValue, setSearchValue] = useState('')
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+    const [isBulkCareOpen, setIsBulkCareOpen] = useState(false)
     const [crmUsers, setCrmUsers] = useState<{ id: string; name: string; role: string }[]>([])
     const [periodPreset, setPeriodPreset] = useState('all')
 
@@ -178,6 +181,13 @@ export default function TasksToolbar() {
                         </button>
                     )}
                     
+                    <button
+                        onClick={() => setIsBulkCareOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e7eb] text-[#374151] text-[13px] font-medium hover:bg-[#f3f4f6] transition-colors ml-2"
+                    >
+                        <Users className="w-4 h-4 text-[#6b7280]" />
+                        Массовая забота
+                    </button>
                     <button
                         onClick={() => setIsCreateModalOpen(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors ml-2 shadow-sm"
@@ -325,6 +335,9 @@ export default function TasksToolbar() {
 
             {isCreateModalOpen && (
                 <GlobalTaskCreateModal onClose={() => setIsCreateModalOpen(false)} />
+            )}
+            {isBulkCareOpen && (
+                <BulkCareModal onClose={() => setIsBulkCareOpen(false)} />
             )}
         </div>
     )
