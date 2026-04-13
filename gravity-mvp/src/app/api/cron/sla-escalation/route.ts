@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { withCronLogging } from '@/lib/cron-health'
 import { evaluateSLAEscalation } from '@/lib/triggers'
 
 /**
@@ -8,17 +8,7 @@ import { evaluateSLAEscalation } from '@/lib/triggers'
  * Creates a one-time `sla_escalated` event per task.
  * Safe to call repeatedly — already-escalated tasks are skipped.
  */
-export async function GET() {
-    try {
-        const result = await evaluateSLAEscalation()
-
-        return NextResponse.json({
-            ok: true,
-            ...result,
-            timestamp: new Date().toISOString(),
-        })
-    } catch (error: any) {
-        console.error('[sla-escalation] Error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-}
+export const GET = withCronLogging('sla-escalation', async () => {
+    const result = await evaluateSLAEscalation()
+    return { ok: true, ...result }
+})

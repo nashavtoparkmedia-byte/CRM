@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { withCronLogging } from '@/lib/cron-health'
 import { evaluateAutoClose } from '@/lib/triggers'
 
 /**
@@ -12,17 +12,7 @@ import { evaluateAutoClose } from '@/lib/triggers'
  *   churn      → 'returned'   (водитель вернулся)
  *   onboarding → 'launched'   (водитель вышел на линию)
  */
-export async function GET() {
-    try {
-        const result = await evaluateAutoClose()
-
-        return NextResponse.json({
-            ok: true,
-            ...result,
-            timestamp: new Date().toISOString(),
-        })
-    } catch (error: any) {
-        console.error('[auto-close-tasks] Error:', error.message)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-}
+export const GET = withCronLogging('auto-close-tasks', async () => {
+    const result = await evaluateAutoClose()
+    return { ok: true, ...result }
+})

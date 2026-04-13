@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCronHealth } from '@/lib/cron-health'
 
 export const dynamic = 'force-dynamic'
 
 const SCRAPER_API_URL = process.env.SCRAPER_API_URL || 'http://localhost:3003/api/checks'
 
 export async function GET(request: Request) {
+    const start = Date.now()
+
     // Ensure this is called by an authorized cron jobs runner (e.g. Vercel Cron, GitHub Actions)
     const authHeader = request.headers.get('authorization')
     if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -84,6 +87,14 @@ export async function GET(request: Request) {
             }
         }
 
+        const durationMs = Date.now() - start
+        logCronHealth({
+            cronName: 'sync-scraper',
+            status: 'ok',
+            durationMs,
+            metadata: { dispatched: licenses.length, successCount, errorCount },
+        }).catch(() => {})
+
         return NextResponse.json({
             success: true,
             dispatched: licenses.length,
@@ -92,7 +103,14 @@ export async function GET(request: Request) {
         })
 
     } catch (err: any) {
+        const durationMs = Date.now() - start
         console.error('[Cron] Exception:', err.message)
+        logCronHealth({
+            cronName: 'sync-scraper',
+            status: 'error',
+            durationMs,
+            errorMessage: err.message,
+        }).catch(() => {})
         return NextResponse.json({ error: err.message }, { status: 500 })
     }
 }

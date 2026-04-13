@@ -1,4 +1,5 @@
 import { opsLog } from '@/lib/opsLog'
+import { logCronHealth } from '@/lib/cron-health'
 
 /**
  * OperationalJobs — tracks periodic background job state with overlap guard.
@@ -46,21 +47,27 @@ export class OperationalJobs {
 
     if (state.isRunning) {
       opsLog('info', 'job_skipped_overlap', { operation: name })
+      logCronHealth({ cronName: name, status: 'skipped', durationMs: 0 }).catch(() => {})
       return null
     }
 
     state.isRunning = true
     state.lastRunAt = new Date()
     state.lastError = null
+    const start = Date.now()
 
     try {
       const result = await fn()
       state.lastResult = result
       state.lastCompletedAt = new Date()
+      const durationMs = Date.now() - start
+      logCronHealth({ cronName: name, status: 'ok', durationMs }).catch(() => {})
       return result
     } catch (err: any) {
       state.lastError = err.message || String(err)
+      const durationMs = Date.now() - start
       opsLog('error', 'job_failed', { operation: name, error: state.lastError || undefined })
+      logCronHealth({ cronName: name, status: 'error', durationMs, errorMessage: state.lastError }).catch(() => {})
       return null
     } finally {
       state.isRunning = false

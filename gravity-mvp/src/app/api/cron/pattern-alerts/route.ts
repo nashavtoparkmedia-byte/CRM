@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { withCronLogging } from '@/lib/cron-health'
 import { detectRootCausePatterns, calculateRootCauseTrends } from '@/lib/triggers'
 
 export const dynamic = 'force-dynamic'
@@ -10,25 +10,15 @@ export const dynamic = 'force-dynamic'
  * early warnings, creates pattern_alert/early_warning events.
  * Safe to call multiple times.
  */
-export async function GET() {
-    try {
-        const result = await detectRootCausePatterns()
-        const trends = await calculateRootCauseTrends()
-
-        return NextResponse.json({
-            ok: true,
-            alerts: result.alerts,
-            warnings: result.warnings,
-            patterns: result.patterns,
-            trends: trends.length,
-            trendDetails: trends,
-            timestamp: new Date().toISOString(),
-        })
-    } catch (err) {
-        console.error('[cron/pattern-alerts] Error:', err)
-        return NextResponse.json(
-            { ok: false, error: (err as Error).message },
-            { status: 500 }
-        )
+export const GET = withCronLogging('pattern-alerts', async () => {
+    const result = await detectRootCausePatterns()
+    const trends = await calculateRootCauseTrends()
+    return {
+        ok: true,
+        alerts: result.alerts,
+        warnings: result.warnings,
+        patterns: result.patterns,
+        trends: trends.length,
+        trendDetails: trends,
     }
-}
+})
