@@ -3,7 +3,7 @@ import {
     Gift, CheckSquare, Database, BarChart3, Settings,
     IdCard, Activity, Archive, Clock, UserCheck, AlertCircle,
     TrendingDown, Ban, Eye, MessageCircle, Bot, FileText,
-    Timer, History, BarChart2, Phone, Key, CarFront, Link2,
+    Timer, History, BarChart2, Phone, Smartphone, Key, CarFront, Link2,
     Megaphone, Filter, PieChart, LucideIcon, Cpu
 } from "lucide-react";
 
@@ -36,7 +36,8 @@ export const DOMAINS: NavigationDomain[] = [
         icon: LayoutDashboard,
         hideContextPanel: true,
         items: [
-            { label: 'Панель управления', href: '/', icon: LayoutDashboard, sectionKey: 'dashboard' }
+            { label: 'Панель управления', href: '/', icon: LayoutDashboard, sectionKey: 'dashboard' },
+            { label: 'Мой день', href: '/my-day', icon: CheckSquare, sectionKey: 'my_day' }
         ]
     },
     {
@@ -142,7 +143,8 @@ export const DOMAINS: NavigationDomain[] = [
                     { label: "Telegram", href: "/settings/integrations/telegram", icon: MessageCircle, sectionKey: "telegram" },
                     { label: "WhatsApp", href: "/settings/integrations/whatsapp", icon: Phone, sectionKey: "whatsapp" },
                     { label: "MAX", href: "/settings/integrations/max", icon: MessageSquare, sectionKey: "max" },
-                    { label: "Bot", href: "/settings/integrations/bot", icon: Bot, sectionKey: "bot" }
+                    { label: "Bot", href: "/settings/integrations/bot", icon: Bot, sectionKey: "bot" },
+                    { label: "Телефония", href: "/settings/integrations/telephony", icon: Smartphone, sectionKey: "telephony" }
                 ]
             }
         ]

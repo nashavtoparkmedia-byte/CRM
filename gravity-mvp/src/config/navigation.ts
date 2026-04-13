@@ -24,6 +24,7 @@ export const NAVIGATION: NavigationGroup[] = [
     title: "Главная",
     items: [
       { name: "Dashboard", href: "/", icon: Activity, sectionKey: "dashboard" },
+      { name: "Мой день", href: "/my-day", icon: CheckSquare, sectionKey: "my_day" },
     ]
   },
   {
@@ -83,6 +84,7 @@ export const NAVIGATION: NavigationGroup[] = [
           { name: "MAX", href: "/max", icon: MessageSquare, sectionKey: "settings_max" },
           { name: "TG Бот", href: "/bot-admin", icon: Bot, sectionKey: "settings_bot" },
           { name: "WhatsApp", href: "/whatsapp", icon: Phone, sectionKey: "settings_whatsapp" },
+          { name: "Телефония", href: "/settings/integrations/telephony", icon: Phone, sectionKey: "settings_telephony" },
         ]
       },
     ]
