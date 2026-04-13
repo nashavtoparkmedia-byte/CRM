@@ -67,6 +67,7 @@ const EVENT_LABELS: Record<string, string> = {
     escalation_created: 'Эскалация',
     escalation_resolved: 'Эскалация решена',
     pattern_alert: 'Паттерн проблемы',
+    early_warning: 'Раннее предупреждение',
 }
 
 export default function TaskDetailsPane() {

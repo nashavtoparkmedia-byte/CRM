@@ -6,8 +6,9 @@ export const dynamic = 'force-dynamic'
 /**
  * GET /api/cron/pattern-alerts
  *
- * Idempotent endpoint: detects repeating root cause patterns
- * and creates pattern_alert events. Safe to call multiple times.
+ * Idempotent endpoint: detects repeating root cause patterns and
+ * early warnings, creates pattern_alert/early_warning events.
+ * Safe to call multiple times.
  */
 export async function GET() {
     try {
@@ -16,6 +17,7 @@ export async function GET() {
         return NextResponse.json({
             ok: true,
             alerts: result.alerts,
+            warnings: result.warnings,
             patterns: result.patterns,
             timestamp: new Date().toISOString(),
         })

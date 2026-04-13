@@ -51,6 +51,7 @@ export interface PatternAlert {
     label: string
     count: number
     windowHours: number
+    level: 'warning' | 'pattern'
 }
 
 export interface TeamOverview {
@@ -341,12 +342,13 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         }
     }
     const patternAlerts: PatternAlert[] = Array.from(patternCounts.entries())
-        .filter(([, count]) => count >= PATTERN_THRESHOLDS.patternThreshold)
+        .filter(([, count]) => count >= PATTERN_THRESHOLDS.warningThreshold)
         .map(([rootCause, count]) => ({
             rootCause,
             label: getRootCauseLabel(rootCause),
             count,
             windowHours: PATTERN_THRESHOLDS.patternWindowHours,
+            level: (count >= PATTERN_THRESHOLDS.patternThreshold ? 'pattern' : 'warning') as 'warning' | 'pattern',
         }))
         .sort((a, b) => b.count - a.count)
 

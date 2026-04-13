@@ -53,21 +53,37 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                 </div>
             )}
 
-            {/* Pattern alerts */}
+            {/* Pattern alerts & early warnings */}
             {patternAlerts.length > 0 && (
-                <div className="bg-orange-50 rounded-xl border border-orange-200 px-4 py-3">
+                <div className={`rounded-xl border px-4 py-3 ${
+                    patternAlerts.some(p => p.level === 'pattern')
+                        ? 'bg-orange-50 border-orange-200'
+                        : 'bg-yellow-50 border-yellow-200'
+                }`}>
                     <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className="w-4 h-4 text-orange-500" />
-                        <span className="text-[13px] font-semibold text-orange-700">Повторяющиеся проблемы</span>
+                        <AlertTriangle className={`w-4 h-4 ${
+                            patternAlerts.some(p => p.level === 'pattern') ? 'text-orange-500' : 'text-yellow-500'
+                        }`} />
+                        <span className={`text-[13px] font-semibold ${
+                            patternAlerts.some(p => p.level === 'pattern') ? 'text-orange-700' : 'text-yellow-700'
+                        }`}>Повторяющиеся проблемы</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         {patternAlerts.map((pa) => (
-                            <div key={pa.rootCause} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-orange-200">
-                                <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
-                                    Паттерн
+                            <div key={pa.rootCause} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border ${
+                                pa.level === 'pattern' ? 'border-orange-200' : 'border-yellow-200'
+                            }`}>
+                                <span className={`text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded ${
+                                    pa.level === 'pattern'
+                                        ? 'bg-orange-100 text-orange-600'
+                                        : 'bg-yellow-100 text-yellow-600'
+                                }`}>
+                                    {pa.level === 'pattern' ? 'Паттерн' : 'Предупреждение'}
                                 </span>
                                 <span className="text-[13px] font-semibold text-[#374151]">{pa.label}</span>
-                                <span className="text-[12px] text-orange-600 font-bold">{pa.count}x</span>
+                                <span className={`text-[12px] font-bold ${
+                                    pa.level === 'pattern' ? 'text-orange-600' : 'text-yellow-600'
+                                }`}>{pa.count}x</span>
                                 <span className="text-[11px] text-[#94A3B8]">за {pa.windowHours}ч</span>
                             </div>
                         ))}

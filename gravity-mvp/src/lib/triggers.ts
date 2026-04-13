@@ -681,19 +681,23 @@ export interface RootCausePattern {
     rootCause: string
     label: string
     count: number
+    isWarning: boolean
     isPattern: boolean
 }
 
 /**
- * Detect repeating root cause patterns in recent escalation resolutions.
+ * Detect repeating root cause patterns and early warnings in recent escalation resolutions.
  *
  * Aggregates escalation_resolved events within the configured time window,
- * groups by rootCause, and flags any that exceed the pattern threshold.
+ * groups by rootCause, and flags:
+ *   - isWarning: count >= warningThreshold AND count < patternThreshold
+ *   - isPattern: count >= patternThreshold
  *
- * If a pattern is detected and no 'pattern_alert' event exists for that
- * rootCause within the same window, creates one (idempotent).
+ * Creates events (idempotent, dedup by rootCause in window):
+ *   - 'early_warning' for warnings
+ *   - 'pattern_alert' for patterns
  */
-export async function detectRootCausePatterns(): Promise<{ alerts: number; patterns: RootCausePattern[] }> {
+export async function detectRootCausePatterns(): Promise<{ alerts: number; warnings: number; patterns: RootCausePattern[] }> {
     const now = new Date()
     const windowStart = new Date(now.getTime() - PATTERN_THRESHOLDS.patternWindowHours * 60 * 60 * 1000)
 
@@ -719,45 +723,53 @@ export async function detectRootCausePatterns(): Promise<{ alerts: number; patte
         rootCause,
         label: getRootCauseLabel(rootCause),
         count,
+        isWarning: count >= PATTERN_THRESHOLDS.warningThreshold && count < PATTERN_THRESHOLDS.patternThreshold,
         isPattern: count >= PATTERN_THRESHOLDS.patternThreshold,
     }))
 
     const detectedPatterns = patterns.filter(p => p.isPattern)
+    const detectedWarnings = patterns.filter(p => p.isWarning)
 
-    if (detectedPatterns.length === 0) {
-        console.log('[pattern-alerts] No patterns detected')
-        return { alerts: 0, patterns }
+    if (detectedPatterns.length === 0 && detectedWarnings.length === 0) {
+        console.log('[pattern-alerts] No patterns or warnings detected')
+        return { alerts: 0, warnings: 0, patterns }
     }
 
-    // Check which pattern alerts already exist in this window (dedup)
-    const existingAlerts = await prisma.taskEvent.findMany({
+    // Batch dedup: check existing events in this window
+    const existingEvents = await prisma.taskEvent.findMany({
         where: {
-            eventType: 'pattern_alert',
+            eventType: { in: ['pattern_alert', 'early_warning'] },
             createdAt: { gte: windowStart },
         },
-        select: { payload: true },
+        select: { eventType: true, payload: true },
     })
     const alertedCauses = new Set(
-        existingAlerts.map(e => (e.payload as any)?.rootCause).filter(Boolean)
+        existingEvents.filter(e => e.eventType === 'pattern_alert').map(e => (e.payload as any)?.rootCause).filter(Boolean)
+    )
+    const warnedCauses = new Set(
+        existingEvents.filter(e => e.eventType === 'early_warning').map(e => (e.payload as any)?.rootCause).filter(Boolean)
     )
 
-    let alerts = 0
+    // Find a recent task to attach events to (for traceability)
+    const recentTask = await prisma.taskEvent.findFirst({
+        where: {
+            eventType: 'escalation_resolved',
+            createdAt: { gte: windowStart },
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { taskId: true },
+    })
 
+    if (!recentTask) {
+        return { alerts: 0, warnings: 0, patterns }
+    }
+
+    let alerts = 0
+    let warnings = 0
+
+    // Create pattern_alert events
     for (const pattern of detectedPatterns) {
         if (alertedCauses.has(pattern.rootCause)) continue
-
-        // Create pattern_alert event (not tied to a specific task — use a sentinel)
-        // We attach it to the most recent task with this root cause for traceability
-        const recentTask = await prisma.taskEvent.findFirst({
-            where: {
-                eventType: 'escalation_resolved',
-                createdAt: { gte: windowStart },
-            },
-            orderBy: { createdAt: 'desc' },
-            select: { taskId: true },
-        })
-
-        if (!recentTask) continue
 
         try {
             await prisma.taskEvent.create({
@@ -776,15 +788,43 @@ export async function detectRootCausePatterns(): Promise<{ alerts: number; patte
                 },
             })
 
-            console.log(`[pattern-alerts] ✓ Pattern detected: ${pattern.label} (${pattern.count}x in ${PATTERN_THRESHOLDS.patternWindowHours}h)`)
+            console.log(`[pattern-alerts] ✓ Pattern: ${pattern.label} (${pattern.count}x in ${PATTERN_THRESHOLDS.patternWindowHours}h)`)
             alerts++
         } catch (err) {
             console.error(`[pattern-alerts] ✗ Failed to create alert for ${pattern.rootCause}:`, (err as Error).message)
         }
     }
 
-    console.log(`[pattern-alerts] Done: ${alerts} new alerts, ${detectedPatterns.length} patterns total`)
-    return { alerts, patterns }
+    // Create early_warning events
+    for (const warning of detectedWarnings) {
+        if (warnedCauses.has(warning.rootCause)) continue
+
+        try {
+            await prisma.taskEvent.create({
+                data: {
+                    taskId: recentTask.taskId,
+                    eventType: 'early_warning',
+                    payload: {
+                        rootCause: warning.rootCause,
+                        rootCauseLabel: warning.label,
+                        count: warning.count,
+                        windowHours: PATTERN_THRESHOLDS.patternWindowHours,
+                        warningThreshold: PATTERN_THRESHOLDS.warningThreshold,
+                    },
+                    actorType: 'system',
+                    actorId: null,
+                },
+            })
+
+            console.log(`[pattern-alerts] ⚠ Warning: ${warning.label} (${warning.count}x in ${PATTERN_THRESHOLDS.patternWindowHours}h)`)
+            warnings++
+        } catch (err) {
+            console.error(`[pattern-alerts] ✗ Failed to create warning for ${warning.rootCause}:`, (err as Error).message)
+        }
+    }
+
+    console.log(`[pattern-alerts] Done: ${alerts} alerts, ${warnings} warnings`)
+    return { alerts, warnings, patterns }
 }
 
 // ─── Trigger → Scenario Mapping ────────────────────────────────────
