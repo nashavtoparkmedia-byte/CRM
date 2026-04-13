@@ -98,6 +98,78 @@ export function computeTeamStability(
     }
 }
 
+export const RISK_PERSISTENCE_CONFIG = {
+    /** Hours of continuous risk before flagging as sustained */
+    sustainedRiskHours: 48,
+    /** Health levels that count as "at risk" */
+    riskLevels: ['warning', 'critical'] as readonly HealthLevel[],
+}
+
+export type RiskPersistenceStatus = 'sustained' | 'active' | 'clear'
+
+export interface RiskPersistenceResult {
+    status: RiskPersistenceStatus
+    riskDurationHours: number
+    riskSince: string | null
+}
+
+/**
+ * Compute risk persistence for a single manager from their history points.
+ * Pure, synchronous, deterministic, no side effects.
+ *
+ * Walks backward from the most recent point, counting consecutive risk-level entries.
+ * Continuity breaks when:
+ * - a point is not in riskLevels
+ * - the gap between adjacent points exceeds sustainedRiskHours
+ *
+ * Duration is computed from the earliest continuous risk point to the latest
+ * observed point timestamp (not NOW).
+ */
+export function computeRiskPersistence(points: HealthHistoryPoint[]): RiskPersistenceResult {
+    const clear: RiskPersistenceResult = { status: 'clear', riskDurationHours: 0, riskSince: null }
+
+    if (points.length < 2) return clear
+
+    // Sort ascending by time (enforce)
+    const sorted = [...points].sort(
+        (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime()
+    )
+
+    const latest = sorted[sorted.length - 1]
+    const riskLevels = RISK_PERSISTENCE_CONFIG.riskLevels as readonly string[]
+
+    // If latest point is not at risk → clear
+    if (!riskLevels.includes(latest.healthLevel)) return clear
+
+    // Walk backward from latest, find the continuous risk tail
+    const maxGapMs = RISK_PERSISTENCE_CONFIG.sustainedRiskHours * 60 * 60 * 1000
+    let earliestRiskIdx = sorted.length - 1
+
+    for (let i = sorted.length - 2; i >= 0; i--) {
+        // Check if this point is at risk
+        if (!riskLevels.includes(sorted[i].healthLevel)) break
+
+        // Check continuity gap: gap between sorted[i] and sorted[i+1]
+        const gapMs = sorted[i + 1].recordedAt.getTime() - sorted[i].recordedAt.getTime()
+        if (gapMs > maxGapMs) break
+
+        earliestRiskIdx = i
+    }
+
+    const riskSince = sorted[earliestRiskIdx].recordedAt
+    const durationMs = latest.recordedAt.getTime() - riskSince.getTime()
+    const durationHours = Math.round(durationMs / (60 * 60 * 1000) * 10) / 10
+
+    const thresholdHours = RISK_PERSISTENCE_CONFIG.sustainedRiskHours
+    const status: RiskPersistenceStatus = durationHours >= thresholdHours ? 'sustained' : 'active'
+
+    return {
+        status,
+        riskDurationHours: durationHours,
+        riskSince: riskSince.toISOString(),
+    }
+}
+
 export interface HealthHistoryPoint {
     score: number
     healthLevel: HealthLevel

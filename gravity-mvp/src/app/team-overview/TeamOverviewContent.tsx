@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
-import type { TeamStabilityResult } from '@/lib/tasks/manager-health-config'
+import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
@@ -72,7 +72,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     color={totals.sustainedDeclineManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
             </div>
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-6 gap-3">
                 <TotalCard
                     label="Срочное внимание"
                     value={totals.urgentIntervention}
@@ -97,6 +97,11 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     label="Цикл завершён"
                     value={totals.completedCycle}
                     color={totals.completedCycle > 0 ? '#059669' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Устойч. риск"
+                    value={totals.sustainedRiskManagers}
+                    color={totals.sustainedRiskManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
             </div>
 
@@ -319,6 +324,7 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
                                 Снижается
                             </span>
                         )}
+                        <RiskPersistenceBadge riskPersistence={manager.riskPersistence} />
                     </div>
                     <div className="text-[12px] text-[#94A3B8]">
                         {manager.role === 'lead' ? 'Руководитель' : 'Менеджер'}
@@ -476,6 +482,7 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                             declineStreak={m.declineStreak}
                         />
                         <HealthSparkline points={historyPoints} level={m.healthLevel} />
+                        <RiskPersistenceBadge riskPersistence={m.riskPersistence} />
                     </div>
                     {/* Reason pills */}
                     {m.interventionReasons.length > 0 && (
@@ -673,6 +680,33 @@ function TeamStabilityIndicator({ stability }: { stability: TeamStabilityResult 
                 <span className={`text-[13px] font-bold ${display.text}`}>{sign}{stability.changePct}%</span>
             </div>
         </div>
+    )
+}
+
+// ─── Risk Persistence Badge ─────────────────────────────────
+
+function RiskPersistenceBadge({ riskPersistence }: { riskPersistence: RiskPersistenceResult }) {
+    if (riskPersistence.status !== 'sustained') return null
+
+    const hours = riskPersistence.riskDurationHours
+    const label = hours >= 24
+        ? `Риск ${Math.floor(hours / 24)}д`
+        : `Риск ${Math.round(hours)}ч`
+
+    const sinceDate = riskPersistence.riskSince
+        ? new Date(riskPersistence.riskSince).toLocaleString('ru-RU', {
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+        })
+        : ''
+    const tooltip = `В зоне риска с ${sinceDate}, непрерывно ${Math.round(hours)}ч по наблюдаемым данным`
+
+    return (
+        <span
+            className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600"
+            title={tooltip}
+        >
+            {label}
+        </span>
     )
 }
 

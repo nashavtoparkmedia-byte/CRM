@@ -9,7 +9,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult } from '@/lib/tasks/manager-health-config'
+import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, computeRiskPersistence, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult, type RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
@@ -52,6 +52,7 @@ export interface ManagerStats {
     interventionPriority: InterventionPriority
     interventionReasons: InterventionReason[]
     lastInterventionAction: InterventionActionRecord | null
+    riskPersistence: RiskPersistenceResult
     nextTask: ManagerNextTask | null
 }
 
@@ -120,6 +121,7 @@ export interface TeamOverview {
         pendingAction: number
         pendingOutcome: number
         completedCycle: number
+        sustainedRiskManagers: number
     }
     topRootCauses: RootCauseStat[]
     patternAlerts: PatternAlert[]
@@ -146,7 +148,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 
     if (users.length === 0) {
         return {
-            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0, sustainedDeclineManagers: 0, urgentIntervention: 0, highIntervention: 0, pendingAction: 0, pendingOutcome: 0, completedCycle: 0 },
+            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0, sustainedDeclineManagers: 0, urgentIntervention: 0, highIntervention: 0, pendingAction: 0, pendingOutcome: 0, completedCycle: 0, sustainedRiskManagers: 0 },
             topRootCauses: [],
             patternAlerts: [],
             interventionQueue: [],
@@ -345,6 +347,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             interventionPriority: 'normal' as InterventionPriority,
             interventionReasons: [] as InterventionReason[],
             lastInterventionAction: null,
+            riskPersistence: { status: 'clear', riskDurationHours: 0, riskSince: null } as RiskPersistenceResult,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -464,6 +467,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         pendingAction: managers.filter(m => m.needsIntervention && !m.lastInterventionAction).length,
         pendingOutcome: managers.filter(m => m.lastInterventionAction && m.lastInterventionAction.outcome === null).length,
         completedCycle: managers.filter(m => m.lastInterventionAction && m.lastInterventionAction.outcome !== null).length,
+        sustainedRiskManagers: 0, // computed after history loaded
     }
 
     // Top root causes today (from escalation_resolved events)
@@ -546,6 +550,13 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             recordedAt: p.recordedAt.toISOString(),
         }))
     }
+
+    // Risk persistence per manager (pure computation from already-loaded history)
+    for (const m of managers) {
+        const pts = historyMap.get(m.managerId) ?? []
+        m.riskPersistence = computeRiskPersistence(pts)
+    }
+    totals.sustainedRiskManagers = managers.filter(m => m.riskPersistence.status === 'sustained').length
 
     // Team stability indicator (pure computation from already-loaded history)
     const stabilityInput: Record<string, HealthHistoryPoint[]> = {}
