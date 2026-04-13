@@ -62,6 +62,7 @@ const EVENT_LABELS: Record<string, string> = {
     contact_corrected: 'Обновлено',
     auto_closed: 'Автозакрытие',
     sla_escalated: 'SLA просрочен',
+    reassigned: 'Переназначена',
 }
 
 export default function TaskDetailsPane() {

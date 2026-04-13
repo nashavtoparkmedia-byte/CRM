@@ -1,12 +1,14 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     Users, AlertTriangle, CheckCircle, ArrowRight,
-    Clock, ChevronRight,
+    Clock, ChevronRight, Repeat2,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask } from './actions'
+import ReassignModal from './ReassignModal'
 
 interface TeamOverviewContentProps {
     overview: TeamOverview
@@ -15,6 +17,9 @@ interface TeamOverviewContentProps {
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
     const { totals, managers } = overview
+    const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
+
+    const allManagersList = managers.map(m => ({ managerId: m.managerId, managerName: m.managerName }))
 
     return (
         <div className="space-y-5">
@@ -41,9 +46,20 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                             manager={manager}
                             onOpenTasks={() => router.push(`/tasks?assigneeId=${manager.managerId}`)}
                             onOpenTask={(taskId) => router.push(`/tasks?taskId=${taskId}`)}
+                            onReassign={() => setReassignManager({ managerId: manager.managerId, managerName: manager.managerName })}
                         />
                     ))}
                 </div>
+            )}
+
+            {/* Reassign modal */}
+            {reassignManager && (
+                <ReassignModal
+                    sourceManager={reassignManager}
+                    allManagers={allManagersList}
+                    onClose={() => setReassignManager(null)}
+                    onDone={() => router.refresh()}
+                />
             )}
         </div>
     )
@@ -64,16 +80,17 @@ function TotalCard({ label, value, color }: { label: string; value: number; colo
 
 // ─── Manager Card ────────────────────────────────────────────
 
-function ManagerCard({ manager, onOpenTasks, onOpenTask }: {
+function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
     manager: ManagerStats
     onOpenTasks: () => void
     onOpenTask: (taskId: string) => void
+    onReassign: () => void
 }) {
     const initials = manager.managerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     const hasProblems = manager.overdue > 0
 
     return (
-        <div className={`bg-white rounded-xl border overflow-hidden transition-colors ${
+        <div className={`group relative bg-white rounded-xl border overflow-hidden transition-colors ${
             hasProblems ? 'border-red-200' : 'border-[#e5e7eb]'
         }`}>
             {/* Manager header */}
@@ -110,6 +127,18 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask }: {
 
                 <ChevronRight className="w-4 h-4 text-[#d1d5db] shrink-0" />
             </button>
+
+            {/* Reassign button */}
+            {manager.active > 0 && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onReassign() }}
+                    className="absolute top-3 right-12 px-2 py-1 rounded-lg text-[11px] font-medium text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#4f46e5] transition-colors opacity-0 group-hover:opacity-100 flex items-center gap-1"
+                    title="Передать задачи"
+                >
+                    <Repeat2 className="w-3.5 h-3.5" />
+                    Передать
+                </button>
+            )}
 
             {/* Next task preview */}
             {manager.nextTask && (

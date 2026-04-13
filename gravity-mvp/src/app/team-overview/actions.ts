@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { logTaskEvent } from '@/lib/tasks/task-event-service'
 
 export interface ManagerNextTask {
     id: string
@@ -150,4 +151,78 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     }
 
     return { totals, managers }
+}
+
+/**
+ * Reassign tasks from one manager to another.
+ * Logs a 'reassigned' event for each task.
+ */
+export async function reassignTasks(
+    taskIds: string[],
+    newAssigneeId: string
+): Promise<{ reassigned: number }> {
+    if (taskIds.length === 0) return { reassigned: 0 }
+
+    // Verify target user exists
+    const targetUser = await prisma.crmUser.findUnique({
+        where: { id: newAssigneeId },
+        select: { id: true, name: true },
+    })
+    if (!targetUser) throw new Error('Target user not found')
+
+    let reassigned = 0
+
+    for (const taskId of taskIds) {
+        const task = await prisma.task.findUnique({
+            where: { id: taskId },
+            select: { id: true, assigneeId: true },
+        })
+        if (!task) continue
+        if (task.assigneeId === newAssigneeId) continue // already assigned
+
+        const oldAssigneeId = task.assigneeId
+
+        await prisma.task.update({
+            where: { id: taskId },
+            data: { assigneeId: newAssigneeId },
+        })
+
+        await logTaskEvent(taskId, 'reassigned', {
+            from: oldAssigneeId,
+            to: newAssigneeId,
+            toName: targetUser.name,
+        })
+
+        reassigned++
+    }
+
+    return { reassigned }
+}
+
+/**
+ * Get active tasks for a specific manager (for reassign modal).
+ */
+export async function getManagerActiveTasks(managerId: string) {
+    const now = new Date()
+    const tasks = await prisma.task.findMany({
+        where: {
+            isActive: true,
+            assigneeId: managerId,
+        },
+        include: {
+            driver: { select: { fullName: true } },
+        },
+        orderBy: [{ dueAt: 'asc' }],
+    })
+
+    return tasks.map(t => ({
+        id: t.id,
+        title: t.title,
+        driverName: t.driver?.fullName || 'Неизвестный',
+        scenario: t.scenario,
+        stage: t.stage,
+        priority: t.priority,
+        dueAt: t.dueAt?.toISOString() ?? null,
+        isOverdue: !!(t.dueAt && t.dueAt < now),
+    }))
 }
