@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
+import type { PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
 import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
@@ -23,7 +24,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -157,6 +158,24 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                                 }`} title={`Пред. период: ${pa.previousCount}x`}>
                                     {pa.trend === 'up' ? '▲' : pa.trend === 'down' ? '▼' : '●'}
                                 </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Persistent root causes */}
+            {persistentRootCauses.length > 0 && (
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                    <div className="text-[12px] text-[#64748B] font-medium mb-2">Хронические проблемы</div>
+                    <div className="space-y-1.5">
+                        {persistentRootCauses.map(rc => (
+                            <div key={rc.cause} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#f8fafc]">
+                                <span className="text-[13px] font-medium text-[#374151]">{rc.label}</span>
+                                <span className="text-[12px] text-[#64748B]">·</span>
+                                <span className="text-[12px] text-[#64748B]">{rc.distinctDays} из {rc.periodDays} дней</span>
+                                <span className="text-[12px] text-[#64748B]">·</span>
+                                <span className="text-[12px] text-[#94A3B8]">{rc.totalCount} всего</span>
                             </div>
                         ))}
                     </div>

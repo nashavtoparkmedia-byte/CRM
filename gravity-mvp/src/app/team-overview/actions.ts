@@ -13,6 +13,7 @@ import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthSco
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
+import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
 
 export interface ManagerNextTask {
     id: string
@@ -129,6 +130,7 @@ export interface TeamOverview {
     effectivenessStats: EffectivenessStat[]
     healthHistory: Record<string, SerializedHealthHistoryPoint[]>
     teamStability: TeamStabilityResult
+    persistentRootCauses: PersistentRootCause[]
     managers: ManagerStats[]
 }
 
@@ -155,6 +157,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             effectivenessStats: [],
             healthHistory: {},
             teamStability: { status: 'insufficient_data', changePct: 0, firstHalfAvg: 0, secondHalfAvg: 0, dataPoints: 0 },
+            persistentRootCauses: [],
             managers: [],
         }
     }
@@ -565,7 +568,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     }
     const teamStability = computeTeamStability(stabilityInput)
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, managers }
+    // Persistent root causes (single grouped query)
+    const persistentRootCauses = await getRootCausePersistence()
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, managers }
 }
 
 /**
@@ -640,6 +646,44 @@ export async function getManagerActiveTasks(managerId: string) {
         dueAt: t.dueAt?.toISOString() ?? null,
         isOverdue: !!(t.dueAt && t.dueAt < now),
     }))
+}
+
+// ─── Root Cause Persistence ─────────────────────────────────
+
+/**
+ * Query persistent root causes: those appearing on >= minPersistentDays distinct calendar days.
+ * Single grouped query on task_events. Failure-tolerant: returns [] on error.
+ */
+async function getRootCausePersistence(): Promise<PersistentRootCause[]> {
+    try {
+        const cfg = ROOT_CAUSE_PERSISTENCE_CONFIG
+        const rows: { root_cause: string; total_count: string; distinct_days: string }[] =
+            await prisma.$queryRawUnsafe(`
+                SELECT
+                  payload->>'rootCause' as root_cause,
+                  COUNT(*)::text as total_count,
+                  COUNT(DISTINCT DATE(created_at))::text as distinct_days
+                FROM task_events
+                WHERE event_type = 'escalation_resolved'
+                  AND created_at >= NOW() - INTERVAL '${cfg.periodDays} days'
+                  AND payload->>'rootCause' IS NOT NULL
+                GROUP BY payload->>'rootCause'
+                HAVING COUNT(DISTINCT DATE(created_at)) >= ${cfg.minPersistentDays}
+                ORDER BY COUNT(DISTINCT DATE(created_at)) DESC, COUNT(*) DESC
+                LIMIT ${cfg.maxDisplay}
+            `)
+
+        return rows.map(r => ({
+            cause: r.root_cause,
+            label: getRootCauseLabel(r.root_cause),
+            totalCount: parseInt(r.total_count, 10) || 0,
+            distinctDays: parseInt(r.distinct_days, 10) || 0,
+            periodDays: cfg.periodDays,
+        }))
+    } catch (e) {
+        console.error('[root-cause-persistence] Failed to query, returning empty:', e)
+        return []
+    }
 }
 
 // ─── Intervention Actions (raw SQL, no migrations) ──────────
