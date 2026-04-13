@@ -9,7 +9,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, type HealthLevel, type HealthScoreBreakdown } from '@/lib/tasks/manager-health-config'
+import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, type HealthLevel, type HealthScoreBreakdown, type HealthTrend } from '@/lib/tasks/manager-health-config'
 
 export interface ManagerNextTask {
     id: string
@@ -41,6 +41,8 @@ export interface ManagerStats {
     healthScore: number
     healthLevel: HealthLevel
     healthBreakdown: HealthScoreBreakdown
+    healthTrend: HealthTrend
+    previousHealthScore: number | null
     nextTask: ManagerNextTask | null
 }
 
@@ -75,6 +77,8 @@ export interface TeamOverview {
         escalated: number
         avgHealthScore: number
         criticalManagers: number
+        improvingManagers: number
+        decliningManagers: number
     }
     topRootCauses: RootCauseStat[]
     patternAlerts: PatternAlert[]
@@ -97,7 +101,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 
     if (users.length === 0) {
         return {
-            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0 },
+            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0 },
             topRootCauses: [],
             patternAlerts: [],
             managers: [],
@@ -284,6 +288,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             healthScore: 0,
             healthLevel: 'healthy' as HealthLevel,
             healthBreakdown: { overdue: 0, escalated: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRisk: 0, overload: 0 },
+            healthTrend: 'stable' as HealthTrend,
+            previousHealthScore: null,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -299,7 +305,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         }
     })
 
-    // Compute health scores
+    // Compute health scores + trends
+    const previousScores = await getPreviousHealthScores()
     for (const m of managers) {
         const health = calculateManagerHealthScore({
             overdue: m.overdue,
@@ -313,7 +320,13 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         m.healthScore = health.score
         m.healthLevel = health.level
         m.healthBreakdown = health.breakdown
+
+        const prev = previousScores.get(m.managerId) ?? null
+        m.healthTrend = calculateHealthTrend(health.score, prev)
+        m.previousHealthScore = prev
     }
+    // Persist current scores for next comparison
+    await saveHealthScores(managers.map(m => ({ managerId: m.managerId, score: m.healthScore })))
 
     // Sort: overloaded first, then most overdue, then most active
     managers.sort((a, b) =>
@@ -335,6 +348,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         escalated: managers.reduce((s, m) => s + m.escalated, 0),
         avgHealthScore: managers.length > 0 ? Math.round(managers.reduce((s, m) => s + m.healthScore, 0) / managers.length) : 100,
         criticalManagers: managers.filter(m => m.healthLevel === 'critical').length,
+        improvingManagers: managers.filter(m => m.healthTrend === 'improving').length,
+        decliningManagers: managers.filter(m => m.healthTrend === 'declining').length,
     }
 
     // Top root causes today (from escalation_resolved events)

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert } from './actions'
-import type { HealthLevel, HealthScoreBreakdown } from '@/lib/tasks/manager-health-config'
+import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import ReassignModal from './ReassignModal'
 
 interface TeamOverviewContentProps {
@@ -38,7 +38,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                 <TotalCard label="Повторные открытия" value={totals.reopened} color={totals.reopened > 0 ? '#dc2626' : '#94A3B8'} />
                 <TotalCard label="Быстрые закрытия" value={totals.fastClosed} color={totals.fastClosed > 0 ? '#d97706' : '#94A3B8'} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-4 gap-3">
                 <TotalCard
                     label="Средний Health Score"
                     value={totals.avgHealthScore}
@@ -48,6 +48,16 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     label="Менеджеров в critical"
                     value={totals.criticalManagers}
                     color={totals.criticalManagers > 0 ? '#dc2626' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Улучшается"
+                    value={totals.improvingManagers}
+                    color={totals.improvingManagers > 0 ? '#059669' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Ухудшается"
+                    value={totals.decliningManagers}
+                    color={totals.decliningManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
             </div>
 
@@ -197,6 +207,8 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
                             score={manager.healthScore}
                             level={manager.healthLevel}
                             breakdown={manager.healthBreakdown}
+                            trend={manager.healthTrend}
+                            previousScore={manager.previousHealthScore}
                         />
                     </div>
                     <div className="text-[12px] text-[#94A3B8]">
@@ -289,12 +301,21 @@ const BREAKDOWN_LABELS: Record<keyof HealthScoreBreakdown, string> = {
     overload: 'Перегрузка',
 }
 
-function HealthBadge({ score, level, breakdown }: {
+const TREND_DISPLAY: Record<HealthTrend, { symbol: string; color: string }> = {
+    improving: { symbol: '▲', color: 'text-green-500' },
+    declining: { symbol: '▼', color: 'text-red-500' },
+    stable: { symbol: '●', color: 'text-gray-400' },
+}
+
+function HealthBadge({ score, level, breakdown, trend, previousScore }: {
     score: number
     level: HealthLevel
     breakdown: HealthScoreBreakdown
+    trend: HealthTrend
+    previousScore: number | null
 }) {
     const colors = HEALTH_COLORS[level]
+    const trendInfo = TREND_DISPLAY[trend]
     const penalties = Object.entries(breakdown)
         .filter(([, v]) => v > 0)
         .map(([k, v]) => ({ label: BREAKDOWN_LABELS[k as keyof HealthScoreBreakdown], value: v }))
@@ -304,21 +325,26 @@ function HealthBadge({ score, level, breakdown }: {
             <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${colors.bg} ${colors.border}`}>
                 <Heart className={`w-3 h-3 ${colors.text}`} />
                 <span className={`text-[11px] font-bold ${colors.text}`}>{score}</span>
+                <span className={`text-[10px] font-bold ${trendInfo.color}`}>{trendInfo.symbol}</span>
             </div>
             {/* Tooltip */}
-            {penalties.length > 0 && (
-                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/health:block">
-                    <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
-                        <div className="font-semibold mb-1">Health Score: {score}/100</div>
-                        {penalties.map(p => (
-                            <div key={p.label} className="flex justify-between gap-4">
-                                <span className="text-gray-300">{p.label}</span>
-                                <span className="text-red-300 font-medium">−{p.value}</span>
-                            </div>
-                        ))}
-                    </div>
+            <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/health:block">
+                <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                    <div className="font-semibold mb-1">Health Score: {score}/100</div>
+                    {previousScore !== null && (
+                        <div className="flex justify-between gap-4 mb-1">
+                            <span className="text-gray-300">Предыдущий</span>
+                            <span className="text-gray-200 font-medium">{previousScore}</span>
+                        </div>
+                    )}
+                    {penalties.map(p => (
+                        <div key={p.label} className="flex justify-between gap-4">
+                            <span className="text-gray-300">{p.label}</span>
+                            <span className="text-red-300 font-medium">−{p.value}</span>
+                        </div>
+                    ))}
                 </div>
-            )}
+            </div>
         </div>
     )
 }
