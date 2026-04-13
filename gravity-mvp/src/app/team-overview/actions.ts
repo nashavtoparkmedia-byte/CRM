@@ -111,6 +111,9 @@ export interface TeamOverview {
         sustainedDeclineManagers: number
         urgentIntervention: number
         highIntervention: number
+        pendingAction: number
+        pendingOutcome: number
+        completedCycle: number
     }
     topRootCauses: RootCauseStat[]
     patternAlerts: PatternAlert[]
@@ -135,7 +138,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 
     if (users.length === 0) {
         return {
-            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0, sustainedDeclineManagers: 0, urgentIntervention: 0, highIntervention: 0 },
+            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0, improvingManagers: 0, decliningManagers: 0, sustainedDeclineManagers: 0, urgentIntervention: 0, highIntervention: 0, pendingAction: 0, pendingOutcome: 0, completedCycle: 0 },
             topRootCauses: [],
             patternAlerts: [],
             interventionQueue: [],
@@ -448,6 +451,9 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         sustainedDeclineManagers: managers.filter(m => m.sustainedDecline).length,
         urgentIntervention: managers.filter(m => m.interventionPriority === 'urgent').length,
         highIntervention: managers.filter(m => m.interventionPriority === 'high').length,
+        pendingAction: managers.filter(m => m.needsIntervention && !m.lastInterventionAction).length,
+        pendingOutcome: managers.filter(m => m.lastInterventionAction && m.lastInterventionAction.outcome === null).length,
+        completedCycle: managers.filter(m => m.lastInterventionAction && m.lastInterventionAction.outcome !== null).length,
     }
 
     // Top root causes today (from escalation_resolved events)

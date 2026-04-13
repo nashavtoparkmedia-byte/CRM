@@ -71,7 +71,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     color={totals.sustainedDeclineManagers > 0 ? '#dc2626' : '#94A3B8'}
                 />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-5 gap-3">
                 <TotalCard
                     label="Срочное внимание"
                     value={totals.urgentIntervention}
@@ -81,6 +81,21 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     label="Повышенное внимание"
                     value={totals.highIntervention}
                     color={totals.highIntervention > 0 ? '#ea580c' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Ожидают действия"
+                    value={totals.pendingAction}
+                    color={totals.pendingAction > 0 ? '#dc2626' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Ожидают оценки"
+                    value={totals.pendingOutcome}
+                    color={totals.pendingOutcome > 0 ? '#d97706' : '#94A3B8'}
+                />
+                <TotalCard
+                    label="Цикл завершён"
+                    value={totals.completedCycle}
+                    color={totals.completedCycle > 0 ? '#059669' : '#94A3B8'}
                 />
             </div>
 
@@ -150,6 +165,16 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                         <span className="text-[13px] font-semibold text-red-700">
                             Требуют внимания ({interventionQueue.length})
                         </span>
+                        {totals.pendingAction > 0 && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                                {totals.pendingAction} ожидают действия
+                            </span>
+                        )}
+                        {totals.pendingOutcome > 0 && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">
+                                {totals.pendingOutcome} ожидают оценки
+                            </span>
+                        )}
                     </div>
                     <div className="divide-y divide-[#f3f4f6]">
                         {interventionQueue.map(m => (
@@ -467,7 +492,12 @@ function InterventionRow({ manager: m, onClick, onAction }: {
                                     </div>
                                 </div>
                             )}
-                            {/* Last action + outcome indicator */}
+                            {/* Lifecycle state indicator */}
+                            {!lastAction && (
+                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
+                                    Ожидает
+                                </span>
+                            )}
                             {lastAction && (
                                 <>
                                     <div className="relative group/lastact">
@@ -495,14 +525,18 @@ function InterventionRow({ manager: m, onClick, onAction }: {
                                             </div>
                                         </div>
                                     </div>
-                                    {lastAction.outcome && (() => {
+                                    {lastAction.outcome ? (() => {
                                         const oc = INTERVENTION_OUTCOME_COLORS[lastAction.outcome as InterventionOutcome]
                                         return (
                                             <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${oc?.bg ?? 'bg-gray-100'} ${oc?.text ?? 'text-gray-500'}`}>
                                                 {INTERVENTION_OUTCOME_LABELS[lastAction.outcome as InterventionOutcome] ?? lastAction.outcome}
                                             </span>
                                         )
-                                    })()}
+                                    })() : (
+                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">
+                                            Оценка...
+                                        </span>
+                                    )}
                                 </>
                             )}
                         </div>
