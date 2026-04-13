@@ -11,6 +11,7 @@ import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, Patter
 import type { PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
 import type { TeamCapacityResult } from '@/lib/tasks/capacity-config'
 import type { ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
+import { INTERVENTION_AGING_CONFIG } from '@/lib/tasks/intervention-aging-config'
 import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
@@ -26,7 +27,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -200,6 +201,11 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                         {totals.pendingOutcome > 0 && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">
                                 {totals.pendingOutcome} ожидают оценки
+                            </span>
+                        )}
+                        {interventionAging.agingPendingOutcome > 0 && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
+                                {interventionAging.agingPendingOutcome} устаревших
                             </span>
                         )}
                     </div>
@@ -577,9 +583,16 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                                             </span>
                                         )
                                     })() : (
-                                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">
-                                            Оценка...
-                                        </span>
+                                        <>
+                                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-700 border border-yellow-200">
+                                                Оценка...
+                                            </span>
+                                            {m.interventionAgingHours !== null && m.interventionAgingHours >= INTERVENTION_AGING_CONFIG.pendingOutcomeAgingHours && (
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-50 text-orange-600">
+                                                    {m.interventionAgingHours >= 24 ? `⏱ ${Math.floor(m.interventionAgingHours / 24)}д` : `⏱ ${Math.round(m.interventionAgingHours)}ч`}
+                                                </span>
+                                            )}
+                                        </>
                                     )}
                                 </>
                             )}

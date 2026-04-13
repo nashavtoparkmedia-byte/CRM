@@ -16,6 +16,7 @@ import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome 
 import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
 import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capacity-config'
 import { computeProcessReliability, type ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
+import { computeManagerInterventionAgingHours, isInterventionAging, type InterventionAgingResult } from '@/lib/tasks/intervention-aging-config'
 
 export interface ManagerNextTask {
     id: string
@@ -56,6 +57,7 @@ export interface ManagerStats {
     interventionReasons: InterventionReason[]
     lastInterventionAction: InterventionActionRecord | null
     riskPersistence: RiskPersistenceResult
+    interventionAgingHours: number | null
     nextTask: ManagerNextTask | null
 }
 
@@ -135,6 +137,7 @@ export interface TeamOverview {
     persistentRootCauses: PersistentRootCause[]
     teamCapacity: TeamCapacityResult | null
     processReliability: ProcessReliabilityResult
+    interventionAging: InterventionAgingResult
     managers: ManagerStats[]
 }
 
@@ -164,6 +167,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             persistentRootCauses: [],
             teamCapacity: null,
             processReliability: { status: 'no_data', cleanRate: 0, incidentRate: 0, totalActive: 0, totalIncidents: 0 },
+            interventionAging: { agingPendingOutcome: 0, oldestPendingOutcomeHours: 0 },
             managers: [],
         }
     }
@@ -357,6 +361,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             interventionReasons: [] as InterventionReason[],
             lastInterventionAction: null,
             riskPersistence: { status: 'clear', riskDurationHours: 0, riskSince: null } as RiskPersistenceResult,
+            interventionAgingHours: null,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -435,6 +440,11 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     for (const m of managers) {
         const la = lastActions.get(m.managerId)
         m.lastInterventionAction = la ?? null
+    }
+
+    // Compute intervention aging per manager
+    for (const m of managers) {
+        m.interventionAgingHours = computeManagerInterventionAgingHours(m.lastInterventionAction, now)
     }
 
     // Build intervention queue (urgent + high only, sorted)
@@ -583,7 +593,20 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Process reliability pressure (pure computation from already-loaded managers)
     const processReliability = computeProcessReliability(managers)
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, managers }
+    // Intervention aging aggregation (from already-computed per-manager aging)
+    let agingPendingOutcome = 0
+    let oldestPendingOutcomeHours = 0
+    for (const m of interventionQueue) {
+        if (m.interventionAgingHours !== null && isInterventionAging(m.interventionAgingHours)) {
+            agingPendingOutcome++
+            if (m.interventionAgingHours > oldestPendingOutcomeHours) {
+                oldestPendingOutcomeHours = m.interventionAgingHours
+            }
+        }
+    }
+    const interventionAging: InterventionAgingResult = { agingPendingOutcome, oldestPendingOutcomeHours }
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, managers }
 }
 
 /**
