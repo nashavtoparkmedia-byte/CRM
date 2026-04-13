@@ -113,6 +113,43 @@ export interface RiskPersistenceResult {
     riskSince: string | null
 }
 
+export interface TeamRiskProfileResult {
+    sustained: number
+    active: number
+    clear: number
+    totalManagers: number
+    persistenceRatio: number
+}
+
+/**
+ * Compute team-level risk profile from per-manager risk persistence.
+ * Pure, synchronous, deterministic, no side effects.
+ */
+export function computeTeamRiskProfile(
+    managers: { riskPersistence: RiskPersistenceResult }[]
+): TeamRiskProfileResult | null {
+    if (managers.length === 0) return null
+
+    let sustained = 0
+    let active = 0
+    let clear = 0
+
+    for (const m of managers) {
+        switch (m.riskPersistence.status) {
+            case 'sustained': sustained++; break
+            case 'active': active++; break
+            case 'clear': clear++; break
+        }
+    }
+
+    const total = managers.length
+    const persistenceRatio = total > 0
+        ? Math.round((sustained / total) * 1000) / 10
+        : 0
+
+    return { sustained, active, clear, totalManagers: total, persistenceRatio }
+}
+
 /**
  * Compute risk persistence for a single manager from their history points.
  * Pure, synchronous, deterministic, no side effects.

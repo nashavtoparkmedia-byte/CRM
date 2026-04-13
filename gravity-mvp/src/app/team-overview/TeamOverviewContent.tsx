@@ -13,7 +13,7 @@ import type { TeamCapacityResult } from '@/lib/tasks/capacity-config'
 import type { ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 import { INTERVENTION_AGING_CONFIG } from '@/lib/tasks/intervention-aging-config'
 import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
-import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
+import type { TeamStabilityResult, RiskPersistenceResult, TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
@@ -28,7 +28,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -255,6 +255,9 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Team capacity distribution */}
             {teamCapacity && <TeamCapacityBar capacity={teamCapacity} />}
+
+            {/* Team risk profile summary */}
+            {teamRiskProfile && <TeamRiskProfileSummary profile={teamRiskProfile} />}
 
             {/* Process reliability indicator */}
             <ProcessReliabilityIndicator reliability={processReliability} />
@@ -779,6 +782,22 @@ const RELIABILITY_DISPLAY: Record<Exclude<ProcessReliabilityResult['status'], 'n
     reliable: { label: 'Процессы стабильны', dot: 'bg-green-500', text: 'text-green-600' },
     pressured: { label: 'Процессы под давлением', dot: 'bg-yellow-500', text: 'text-yellow-700' },
     degraded: { label: 'Процессы деградируют', dot: 'bg-red-500', text: 'text-red-600' },
+}
+
+function TeamRiskProfileSummary({ profile }: { profile: TeamRiskProfileResult }) {
+    const tooltip = `Из ${profile.totalManagers} менеджеров: ${profile.clear} стабильных, ${profile.active} временных, ${profile.sustained} устойчивых рисков (${profile.persistenceRatio}% устойчивых)`
+    return (
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+            <div className="flex items-center gap-2.5 text-[13px]">
+                <span className="text-green-600 font-medium">{profile.clear} стабильных</span>
+                <span className="text-[#94A3B8]">·</span>
+                <span className="text-yellow-600 font-medium">{profile.active} временных</span>
+                <span className="text-[#94A3B8]">·</span>
+                <span className="text-red-600 font-medium">{profile.sustained} устойчивых</span>
+                <span className="text-[#94A3B8]">({profile.persistenceRatio}%)</span>
+            </div>
+        </div>
+    )
 }
 
 function ProcessReliabilityIndicator({ reliability }: { reliability: ProcessReliabilityResult }) {

@@ -9,7 +9,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, computeRiskPersistence, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult, type RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
+import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, computeRiskPersistence, computeTeamRiskProfile, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult, type RiskPersistenceResult, type TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
@@ -140,6 +140,7 @@ export interface TeamOverview {
     processReliability: ProcessReliabilityResult
     interventionAging: InterventionAgingResult
     outcomeTiming: OutcomeTimingResult
+    teamRiskProfile: TeamRiskProfileResult | null
     managers: ManagerStats[]
 }
 
@@ -171,6 +172,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             processReliability: { status: 'no_data', cleanRate: 0, incidentRate: 0, totalActive: 0, totalIncidents: 0 },
             interventionAging: { agingPendingOutcome: 0, oldestPendingOutcomeHours: 0 },
             outcomeTiming: { status: 'insufficient_data', completedCount: 0, recentCount: 0, avgPerDay: 0, newestDaysAgo: 0 },
+            teamRiskProfile: null,
             managers: [],
         }
     }
@@ -612,7 +614,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Outcome completion activity stats (single query)
     const outcomeTiming = await getOutcomeTimingStats()
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, managers }
+    // Team risk profile summary (pure computation from already-computed risk persistence)
+    const teamRiskProfile = computeTeamRiskProfile(managers)
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, managers }
 }
 
 /**
