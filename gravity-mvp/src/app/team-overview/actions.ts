@@ -9,7 +9,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint } from '@/lib/tasks/manager-health-config'
+import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
@@ -126,6 +126,7 @@ export interface TeamOverview {
     interventionQueue: ManagerStats[]
     effectivenessStats: EffectivenessStat[]
     healthHistory: Record<string, SerializedHealthHistoryPoint[]>
+    teamStability: TeamStabilityResult
     managers: ManagerStats[]
 }
 
@@ -151,6 +152,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             interventionQueue: [],
             effectivenessStats: [],
             healthHistory: {},
+            teamStability: { status: 'insufficient_data', changePct: 0, firstHalfAvg: 0, secondHalfAvg: 0, dataPoints: 0 },
             managers: [],
         }
     }
@@ -545,7 +547,14 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         }))
     }
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, managers }
+    // Team stability indicator (pure computation from already-loaded history)
+    const stabilityInput: Record<string, HealthHistoryPoint[]> = {}
+    for (const [managerId, points] of historyMap) {
+        stabilityInput[managerId] = points
+    }
+    const teamStability = computeTeamStability(stabilityInput)
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, managers }
 }
 
 /**

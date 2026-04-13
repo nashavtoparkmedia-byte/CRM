@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
+import type { TeamStabilityResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
@@ -22,7 +23,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -203,6 +204,9 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     </div>
                 </div>
             )}
+
+            {/* Team stability indicator */}
+            <TeamStabilityIndicator stability={teamStability} />
 
             {/* Manager cards */}
             {managers.length === 0 ? (
@@ -635,6 +639,38 @@ function HealthBadge({ score, level, breakdown, trend, previousScore, declineStr
                         </div>
                     ))}
                 </div>
+            </div>
+        </div>
+    )
+}
+
+// ─── Team Stability Indicator ───────────────────────────────
+
+const STABILITY_DISPLAY: Record<Exclude<TeamStabilityResult['status'], 'insufficient_data'>, { label: string; dot: string; text: string }> = {
+    improving: { label: 'Команда улучшается', dot: 'bg-green-500', text: 'text-green-600' },
+    stable: { label: 'Стабильно', dot: 'bg-gray-400', text: 'text-gray-500' },
+    degrading: { label: 'Команда ухудшается', dot: 'bg-red-500', text: 'text-red-600' },
+}
+
+function TeamStabilityIndicator({ stability }: { stability: TeamStabilityResult }) {
+    if (stability.status === 'insufficient_data') {
+        return (
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                <span className="text-[13px] text-[#94A3B8]">Недостаточно данных для оценки стабильности</span>
+            </div>
+        )
+    }
+
+    const display = STABILITY_DISPLAY[stability.status]
+    const sign = stability.changePct >= 0 ? '+' : ''
+    const tooltip = `Сравнение средней динамики health score за период (${stability.firstHalfAvg}→${stability.secondHalfAvg}, ${stability.dataPoints} менеджеров)`
+
+    return (
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+            <div className="flex items-center gap-2.5">
+                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
+                <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
+                <span className={`text-[13px] font-bold ${display.text}`}>{sign}{stability.changePct}%</span>
             </div>
         </div>
     )

@@ -10,6 +10,94 @@ export const HEALTH_HISTORY_CONFIG = {
     maxPeriodDays: 30,
 }
 
+export const STABILITY_CONFIG = {
+    /** Minimum number of managers with valid history to produce a signal */
+    minDataPoints: 3,
+    /** Per-manager change % above this = team improving */
+    improvingThresholdPct: 5,
+    /** Per-manager change % below this = team degrading (must be negative) */
+    degradingThresholdPct: -5,
+}
+
+export type TeamStabilityStatus = 'improving' | 'stable' | 'degrading' | 'insufficient_data'
+
+export interface TeamStabilityResult {
+    status: TeamStabilityStatus
+    changePct: number
+    firstHalfAvg: number
+    secondHalfAvg: number
+    dataPoints: number
+}
+
+/**
+ * Compute team-level stability from per-manager health history.
+ * Pure, synchronous, deterministic, no side effects.
+ *
+ * Algorithm:
+ * 1. For each manager, split their history into first half / second half
+ * 2. Compute per-manager changePct = ((secondAvg - firstAvg) / firstAvg) * 100
+ * 3. Average all per-manager changePct values → team changePct
+ * 4. Classify by thresholds
+ *
+ * Returns 'insufficient_data' when fewer than minDataPoints managers have
+ * enough history (≥2 points with both halves non-empty).
+ */
+export function computeTeamStability(
+    healthHistory: Record<string, HealthHistoryPoint[]>
+): TeamStabilityResult {
+    const insufficient: TeamStabilityResult = {
+        status: 'insufficient_data', changePct: 0,
+        firstHalfAvg: 0, secondHalfAvg: 0, dataPoints: 0,
+    }
+
+    const managerChanges: number[] = []
+    const managerFirstAvgs: number[] = []
+    const managerSecondAvgs: number[] = []
+
+    for (const points of Object.values(healthHistory)) {
+        if (points.length < 2) continue
+
+        // Sort ascending by time (should already be, but enforce)
+        const sorted = [...points].sort(
+            (a, b) => a.recordedAt.getTime() - b.recordedAt.getTime()
+        )
+
+        const mid = Math.floor(sorted.length / 2)
+        const firstHalf = sorted.slice(0, mid)
+        const secondHalf = sorted.slice(mid)
+
+        if (firstHalf.length === 0 || secondHalf.length === 0) continue
+
+        const firstAvg = firstHalf.reduce((s, p) => s + p.score, 0) / firstHalf.length
+        const secondAvg = secondHalf.reduce((s, p) => s + p.score, 0) / secondHalf.length
+
+        if (firstAvg === 0) continue // avoid division by zero
+
+        const changePct = ((secondAvg - firstAvg) / firstAvg) * 100
+        managerChanges.push(changePct)
+        managerFirstAvgs.push(firstAvg)
+        managerSecondAvgs.push(secondAvg)
+    }
+
+    if (managerChanges.length < STABILITY_CONFIG.minDataPoints) return insufficient
+
+    const teamChangePct = managerChanges.reduce((s, v) => s + v, 0) / managerChanges.length
+    const teamFirstAvg = managerFirstAvgs.reduce((s, v) => s + v, 0) / managerFirstAvgs.length
+    const teamSecondAvg = managerSecondAvgs.reduce((s, v) => s + v, 0) / managerSecondAvgs.length
+
+    let status: TeamStabilityStatus = 'stable'
+    if (teamChangePct >= STABILITY_CONFIG.improvingThresholdPct) status = 'improving'
+    else if (teamChangePct <= STABILITY_CONFIG.degradingThresholdPct) status = 'degrading'
+
+    return {
+        status,
+        changePct: Math.round(teamChangePct * 10) / 10,
+        firstHalfAvg: Math.round(teamFirstAvg * 10) / 10,
+        secondHalfAvg: Math.round(teamSecondAvg * 10) / 10,
+        dataPoints: managerChanges.length,
+    }
+}
+
 export interface HealthHistoryPoint {
     score: number
     healthLevel: HealthLevel
