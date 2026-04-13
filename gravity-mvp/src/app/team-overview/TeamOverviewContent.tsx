@@ -88,10 +88,11 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
 }) {
     const initials = manager.managerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     const hasProblems = manager.overdue > 0
+    const isOverloaded = manager.isOverloaded
 
     return (
         <div className={`group relative bg-white rounded-xl border overflow-hidden transition-colors ${
-            hasProblems ? 'border-red-200' : 'border-[#e5e7eb]'
+            isOverloaded ? 'border-red-300 bg-red-50/30' : hasProblems ? 'border-red-200' : 'border-[#e5e7eb]'
         }`}>
             {/* Manager header */}
             <button
@@ -100,14 +101,21 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
             >
                 {/* Avatar */}
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-[14px] font-bold shrink-0 ${
-                    hasProblems ? 'bg-red-500' : 'bg-[#4f46e5]'
+                    isOverloaded ? 'bg-red-600' : hasProblems ? 'bg-red-500' : 'bg-[#4f46e5]'
                 }`}>
                     {initials}
                 </div>
 
                 {/* Name + role */}
                 <div className="flex-1 min-w-0 text-left">
-                    <div className="text-[15px] font-semibold text-[#111827]">{manager.managerName}</div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[15px] font-semibold text-[#111827]">{manager.managerName}</span>
+                        {isOverloaded && (
+                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                                Перегружен
+                            </span>
+                        )}
+                    </div>
                     <div className="text-[12px] text-[#94A3B8]">
                         {manager.role === 'lead' ? 'Руководитель' : 'Менеджер'}
                     </div>

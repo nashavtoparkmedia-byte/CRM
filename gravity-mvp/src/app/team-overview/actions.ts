@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { logTaskEvent } from '@/lib/tasks/task-event-service'
+import { isManagerOverloaded } from '@/lib/tasks/workload-config'
 
 export interface ManagerNextTask {
     id: string
@@ -24,6 +25,7 @@ export interface ManagerStats {
     overdue: number
     highPriority: number
     closedToday: number
+    isOverloaded: boolean
     nextTask: ManagerNextTask | null
 }
 
@@ -124,6 +126,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             overdue: overdueTasks.length,
             highPriority: highPrioTasks.length,
             closedToday: closedMap.get(user.id) || 0,
+            isOverloaded: isManagerOverloaded(tasks.length, overdueTasks.length),
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -139,8 +142,12 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         }
     })
 
-    // Sort: most overdue first, then most active
-    managers.sort((a, b) => b.overdue - a.overdue || b.active - a.active)
+    // Sort: overloaded first, then most overdue, then most active
+    managers.sort((a, b) =>
+        Number(b.isOverloaded) - Number(a.isOverloaded)
+        || b.overdue - a.overdue
+        || b.active - a.active
+    )
 
     // Totals
     const totals = {
