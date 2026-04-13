@@ -4,10 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
     Users, AlertTriangle, CheckCircle, ArrowRight,
-    Clock, ChevronRight, Repeat2,
+    Clock, ChevronRight, Repeat2, Heart,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert } from './actions'
+import type { HealthLevel, HealthScoreBreakdown } from '@/lib/tasks/manager-health-config'
 import ReassignModal from './ReassignModal'
 
 interface TeamOverviewContentProps {
@@ -36,6 +37,18 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                 <TotalCard label="Эскалированные" value={totals.escalated} color={totals.escalated > 0 ? '#dc2626' : '#94A3B8'} />
                 <TotalCard label="Повторные открытия" value={totals.reopened} color={totals.reopened > 0 ? '#dc2626' : '#94A3B8'} />
                 <TotalCard label="Быстрые закрытия" value={totals.fastClosed} color={totals.fastClosed > 0 ? '#d97706' : '#94A3B8'} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <TotalCard
+                    label="Средний Health Score"
+                    value={totals.avgHealthScore}
+                    color={totals.avgHealthScore >= 70 ? '#059669' : totals.avgHealthScore >= 45 ? '#d97706' : '#dc2626'}
+                />
+                <TotalCard
+                    label="Менеджеров в critical"
+                    value={totals.criticalManagers}
+                    color={totals.criticalManagers > 0 ? '#dc2626' : '#94A3B8'}
+                />
             </div>
 
             {/* Root causes */}
@@ -180,6 +193,11 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
                                 Перегружен
                             </span>
                         )}
+                        <HealthBadge
+                            score={manager.healthScore}
+                            level={manager.healthLevel}
+                            breakdown={manager.healthBreakdown}
+                        />
                     </div>
                     <div className="text-[12px] text-[#94A3B8]">
                         {manager.role === 'lead' ? 'Руководитель' : 'Менеджер'}
@@ -249,6 +267,58 @@ function StatPill({ value, label, color }: { value: number; label: string; color
         <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: `${color}10` }}>
             <span className="text-[14px] font-bold" style={{ color }}>{value}</span>
             <span className="text-[10px] font-medium" style={{ color: `${color}99` }}>{label}</span>
+        </div>
+    )
+}
+
+// ─── Health Badge ───────────────────────────────────────────
+
+const HEALTH_COLORS: Record<HealthLevel, { bg: string; text: string; border: string }> = {
+    healthy: { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
+    warning: { bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+    critical: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
+}
+
+const BREAKDOWN_LABELS: Record<keyof HealthScoreBreakdown, string> = {
+    overdue: 'Просрочки',
+    escalated: 'Эскалации',
+    lateResponses: 'Медленные ответы',
+    reopened: 'Повторные',
+    fastClosed: 'Быстрые закрытия',
+    highRisk: 'Риск',
+    overload: 'Перегрузка',
+}
+
+function HealthBadge({ score, level, breakdown }: {
+    score: number
+    level: HealthLevel
+    breakdown: HealthScoreBreakdown
+}) {
+    const colors = HEALTH_COLORS[level]
+    const penalties = Object.entries(breakdown)
+        .filter(([, v]) => v > 0)
+        .map(([k, v]) => ({ label: BREAKDOWN_LABELS[k as keyof HealthScoreBreakdown], value: v }))
+
+    return (
+        <div className="relative group/health">
+            <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${colors.bg} ${colors.border}`}>
+                <Heart className={`w-3 h-3 ${colors.text}`} />
+                <span className={`text-[11px] font-bold ${colors.text}`}>{score}</span>
+            </div>
+            {/* Tooltip */}
+            {penalties.length > 0 && (
+                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/health:block">
+                    <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                        <div className="font-semibold mb-1">Health Score: {score}/100</div>
+                        {penalties.map(p => (
+                            <div key={p.label} className="flex justify-between gap-4">
+                                <span className="text-gray-300">{p.label}</span>
+                                <span className="text-red-300 font-medium">−{p.value}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

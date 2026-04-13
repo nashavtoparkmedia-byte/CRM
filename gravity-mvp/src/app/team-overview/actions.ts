@@ -9,6 +9,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
+import { calculateManagerHealthScore, type HealthLevel, type HealthScoreBreakdown } from '@/lib/tasks/manager-health-config'
 
 export interface ManagerNextTask {
     id: string
@@ -37,6 +38,9 @@ export interface ManagerStats {
     fastClosed: number
     highRiskTasks: number
     escalated: number
+    healthScore: number
+    healthLevel: HealthLevel
+    healthBreakdown: HealthScoreBreakdown
     nextTask: ManagerNextTask | null
 }
 
@@ -69,6 +73,8 @@ export interface TeamOverview {
         fastClosed: number
         highRiskTasks: number
         escalated: number
+        avgHealthScore: number
+        criticalManagers: number
     }
     topRootCauses: RootCauseStat[]
     patternAlerts: PatternAlert[]
@@ -91,7 +97,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 
     if (users.length === 0) {
         return {
-            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0 },
+            totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0, avgHealthScore: 100, criticalManagers: 0 },
             topRootCauses: [],
             patternAlerts: [],
             managers: [],
@@ -274,6 +280,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
                 const meta = (t.metadata as Record<string, any>) || {}
                 return !!meta.escalated
             }).length,
+            // Health score computed below after all metrics are set
+            healthScore: 0,
+            healthLevel: 'healthy' as HealthLevel,
+            healthBreakdown: { overdue: 0, escalated: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRisk: 0, overload: 0 },
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -288,6 +298,22 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             } : null,
         }
     })
+
+    // Compute health scores
+    for (const m of managers) {
+        const health = calculateManagerHealthScore({
+            overdue: m.overdue,
+            escalated: m.escalated,
+            lateResponses: m.lateResponses,
+            reopened: m.reopened,
+            fastClosed: m.fastClosed,
+            highRiskTasks: m.highRiskTasks,
+            isOverloaded: m.isOverloaded,
+        })
+        m.healthScore = health.score
+        m.healthLevel = health.level
+        m.healthBreakdown = health.breakdown
+    }
 
     // Sort: overloaded first, then most overdue, then most active
     managers.sort((a, b) =>
@@ -307,6 +333,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         fastClosed: managers.reduce((s, m) => s + m.fastClosed, 0),
         highRiskTasks: managers.reduce((s, m) => s + m.highRiskTasks, 0),
         escalated: managers.reduce((s, m) => s + m.escalated, 0),
+        avgHealthScore: managers.length > 0 ? Math.round(managers.reduce((s, m) => s + m.healthScore, 0) / managers.length) : 100,
+        criticalManagers: managers.filter(m => m.healthLevel === 'critical').length,
     }
 
     // Top root causes today (from escalation_resolved events)
