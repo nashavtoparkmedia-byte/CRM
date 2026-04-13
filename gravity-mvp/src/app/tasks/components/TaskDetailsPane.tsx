@@ -66,6 +66,7 @@ const EVENT_LABELS: Record<string, string> = {
     mandatory_followup: 'Обязательный контакт',
     escalation_created: 'Эскалация',
     escalation_resolved: 'Эскалация решена',
+    pattern_alert: 'Паттерн проблемы',
 }
 
 export default function TaskDetailsPane() {

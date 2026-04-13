@@ -7,7 +7,7 @@ import {
     Clock, ChevronRight, Repeat2,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
-import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat } from './actions'
+import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert } from './actions'
 import ReassignModal from './ReassignModal'
 
 interface TeamOverviewContentProps {
@@ -16,7 +16,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, managers } = overview
+    const { totals, topRootCauses, patternAlerts, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
 
     const allManagersList = managers.map(m => ({ managerId: m.managerId, managerName: m.managerName }))
@@ -47,6 +47,28 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                             <div key={rc.cause} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50">
                                 <span className="text-[14px] font-bold text-[#374151]">{rc.count}</span>
                                 <span className="text-[12px] text-[#64748B]">{rc.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Pattern alerts */}
+            {patternAlerts.length > 0 && (
+                <div className="bg-orange-50 rounded-xl border border-orange-200 px-4 py-3">
+                    <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="w-4 h-4 text-orange-500" />
+                        <span className="text-[13px] font-semibold text-orange-700">Повторяющиеся проблемы</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {patternAlerts.map((pa) => (
+                            <div key={pa.rootCause} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-orange-200">
+                                <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-orange-100 text-orange-600">
+                                    Паттерн
+                                </span>
+                                <span className="text-[13px] font-semibold text-[#374151]">{pa.label}</span>
+                                <span className="text-[12px] text-orange-600 font-bold">{pa.count}x</span>
+                                <span className="text-[11px] text-[#94A3B8]">за {pa.windowHours}ч</span>
                             </div>
                         ))}
                     </div>

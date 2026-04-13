@@ -8,6 +8,7 @@ import { isFastClose } from '@/lib/tasks/completion-config'
 import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
+import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
 
 export interface ManagerNextTask {
     id: string
@@ -45,6 +46,13 @@ export interface RootCauseStat {
     count: number
 }
 
+export interface PatternAlert {
+    rootCause: string
+    label: string
+    count: number
+    windowHours: number
+}
+
 export interface TeamOverview {
     totals: {
         active: number
@@ -58,6 +66,7 @@ export interface TeamOverview {
         escalated: number
     }
     topRootCauses: RootCauseStat[]
+    patternAlerts: PatternAlert[]
     managers: ManagerStats[]
 }
 
@@ -79,6 +88,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         return {
             totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0 },
             topRootCauses: [],
+            patternAlerts: [],
             managers: [],
         }
     }
@@ -314,7 +324,33 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         .sort((a, b) => b.count - a.count)
         .slice(0, 3)
 
-    return { totals, topRootCauses, managers }
+    // Pattern alerts: detect repeating root causes in recent window
+    const patternWindowStart = new Date(now.getTime() - PATTERN_THRESHOLDS.patternWindowHours * 60 * 60 * 1000)
+    const recentResolvedEvents = await prisma.taskEvent.findMany({
+        where: {
+            eventType: 'escalation_resolved',
+            createdAt: { gte: patternWindowStart },
+        },
+        select: { payload: true },
+    })
+    const patternCounts = new Map<string, number>()
+    for (const ev of recentResolvedEvents) {
+        const rc = (ev.payload as any)?.rootCause
+        if (rc) {
+            patternCounts.set(rc, (patternCounts.get(rc) || 0) + 1)
+        }
+    }
+    const patternAlerts: PatternAlert[] = Array.from(patternCounts.entries())
+        .filter(([, count]) => count >= PATTERN_THRESHOLDS.patternThreshold)
+        .map(([rootCause, count]) => ({
+            rootCause,
+            label: getRootCauseLabel(rootCause),
+            count,
+            windowHours: PATTERN_THRESHOLDS.patternWindowHours,
+        }))
+        .sort((a, b) => b.count - a.count)
+
+    return { totals, topRootCauses, patternAlerts, managers }
 }
 
 /**

@@ -9,6 +9,8 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { CONTACT_EVENT_TYPES, RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { FOLLOWUP_THRESHOLDS } from '@/lib/tasks/followup-config'
 import { ESCALATION_THRESHOLDS } from '@/lib/tasks/escalation-config'
+import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
+import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 
 interface DriverState {
     id: string
@@ -671,6 +673,118 @@ export async function evaluateEscalations(): Promise<{ escalated: number }> {
 
     console.log(`[escalation] Done: ${escalated} tasks escalated`)
     return { escalated }
+}
+
+// ─── Pattern Alerts ──────────────────────────────────────────────────
+
+export interface RootCausePattern {
+    rootCause: string
+    label: string
+    count: number
+    isPattern: boolean
+}
+
+/**
+ * Detect repeating root cause patterns in recent escalation resolutions.
+ *
+ * Aggregates escalation_resolved events within the configured time window,
+ * groups by rootCause, and flags any that exceed the pattern threshold.
+ *
+ * If a pattern is detected and no 'pattern_alert' event exists for that
+ * rootCause within the same window, creates one (idempotent).
+ */
+export async function detectRootCausePatterns(): Promise<{ alerts: number; patterns: RootCausePattern[] }> {
+    const now = new Date()
+    const windowStart = new Date(now.getTime() - PATTERN_THRESHOLDS.patternWindowHours * 60 * 60 * 1000)
+
+    // Get all escalation_resolved events in the window
+    const events = await prisma.taskEvent.findMany({
+        where: {
+            eventType: 'escalation_resolved',
+            createdAt: { gte: windowStart },
+        },
+        select: { payload: true },
+    })
+
+    // Aggregate by rootCause
+    const counts = new Map<string, number>()
+    for (const ev of events) {
+        const rc = (ev.payload as any)?.rootCause
+        if (rc) {
+            counts.set(rc, (counts.get(rc) || 0) + 1)
+        }
+    }
+
+    const patterns: RootCausePattern[] = Array.from(counts.entries()).map(([rootCause, count]) => ({
+        rootCause,
+        label: getRootCauseLabel(rootCause),
+        count,
+        isPattern: count >= PATTERN_THRESHOLDS.patternThreshold,
+    }))
+
+    const detectedPatterns = patterns.filter(p => p.isPattern)
+
+    if (detectedPatterns.length === 0) {
+        console.log('[pattern-alerts] No patterns detected')
+        return { alerts: 0, patterns }
+    }
+
+    // Check which pattern alerts already exist in this window (dedup)
+    const existingAlerts = await prisma.taskEvent.findMany({
+        where: {
+            eventType: 'pattern_alert',
+            createdAt: { gte: windowStart },
+        },
+        select: { payload: true },
+    })
+    const alertedCauses = new Set(
+        existingAlerts.map(e => (e.payload as any)?.rootCause).filter(Boolean)
+    )
+
+    let alerts = 0
+
+    for (const pattern of detectedPatterns) {
+        if (alertedCauses.has(pattern.rootCause)) continue
+
+        // Create pattern_alert event (not tied to a specific task — use a sentinel)
+        // We attach it to the most recent task with this root cause for traceability
+        const recentTask = await prisma.taskEvent.findFirst({
+            where: {
+                eventType: 'escalation_resolved',
+                createdAt: { gte: windowStart },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { taskId: true },
+        })
+
+        if (!recentTask) continue
+
+        try {
+            await prisma.taskEvent.create({
+                data: {
+                    taskId: recentTask.taskId,
+                    eventType: 'pattern_alert',
+                    payload: {
+                        rootCause: pattern.rootCause,
+                        rootCauseLabel: pattern.label,
+                        count: pattern.count,
+                        windowHours: PATTERN_THRESHOLDS.patternWindowHours,
+                        threshold: PATTERN_THRESHOLDS.patternThreshold,
+                    },
+                    actorType: 'system',
+                    actorId: null,
+                },
+            })
+
+            console.log(`[pattern-alerts] ✓ Pattern detected: ${pattern.label} (${pattern.count}x in ${PATTERN_THRESHOLDS.patternWindowHours}h)`)
+            alerts++
+        } catch (err) {
+            console.error(`[pattern-alerts] ✗ Failed to create alert for ${pattern.rootCause}:`, (err as Error).message)
+        }
+    }
+
+    console.log(`[pattern-alerts] Done: ${alerts} new alerts, ${detectedPatterns.length} patterns total`)
+    return { alerts, patterns }
 }
 
 // ─── Trigger → Scenario Mapping ────────────────────────────────────
