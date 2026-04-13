@@ -813,6 +813,15 @@ model Task {
   // Metadata
   metadata              Json?        @default("{}")
 
+  // Scenario (Phase 1) — nullable for backward compatibility
+  scenario              String?                          // 'onboarding' | 'churn' | 'care' | 'promo_control'
+  stage                 String?                          // current stage within scenario config
+  stageEnteredAt        DateTime?                        // when current stage was entered (for SLA calc)
+  nextActionAt          DateTime?                        // when manager should act next
+  slaDeadline           DateTime?                        // SLA deadline for current stage
+  closedReason          String?                          // e.g. 'returned', 'launched', 'lost', 'completed'
+  closedComment         String?                          // free-text comment on close
+
   // Timestamps
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
@@ -830,6 +839,10 @@ model Task {
   @@index([isActive, source])
   @@index([chatId])
   @@index([assigneeId])
+  @@index([scenario, stage, isActive])
+  @@index([driverId, scenario, isActive])
+  @@index([slaDeadline])
+  @@index([nextActionAt])
 
   @@map("tasks")
 }
@@ -849,6 +862,20 @@ model TaskEvent {
   @@index([eventType])
 
   @@map("task_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CRM USERS — Phase 0
+// ═══════════════════════════════════════════════════════════════════
+
+model CrmUser {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("manager")  // "manager" | "lead"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("crm_users")
 }
 
 // ═══════════════════════════════════════════════════════════════════

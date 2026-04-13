@@ -53,8 +53,16 @@ export interface TaskDTO {
     lastInboundMessageAt: string | null
     lastOutboundMessageAt: string | null
 
-    // Stage 2
-    scenario?: string
+    // Scenario
+    scenario: string | null
+    stage: string | null
+    stageEnteredAt: string | null
+    nextActionAt: string | null
+    slaDeadline: string | null
+    closedReason: string | null
+    closedComment: string | null
+
+    // Legacy metadata (kept for backward compat)
     attempts?: number
     nextActionId?: string
 
@@ -105,6 +113,10 @@ export interface CreateTaskInput {
     triggerType?: string
     triggerKey?: string
     dedupeKey?: string
+
+    // Scenario
+    scenario?: string
+    stage?: string
 }
 
 export interface UpdateTaskInput {
@@ -118,9 +130,15 @@ export interface UpdateTaskInput {
     assigneeId?: string | null
     hasNewReply?: boolean
     isActive?: boolean
-    
-    // Stage 2
-    scenario?: string
+
+    // Scenario
+    stage?: string
+    nextActionAt?: string | null
+    slaDeadline?: string | null
+    closedReason?: string
+    closedComment?: string
+
+    // Legacy metadata
     attempts?: number
     nextActionId?: string
 }
@@ -136,6 +154,15 @@ export interface TaskFilters {
     search?: string
     isActive?: boolean
     hasNewReply?: boolean
+
+    // Scenario filters
+    scenario?: string | null   // null = "без сценария", undefined = "все"
+    stage?: string
+
+    // Extended filters
+    type?: string
+    dateFrom?: string
+    dateTo?: string
 }
 
 // ─── View Types ────────────────────────────────────────────────────────────
