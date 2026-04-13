@@ -63,6 +63,7 @@ const EVENT_LABELS: Record<string, string> = {
     auto_closed: 'Автозакрытие',
     sla_escalated: 'SLA просрочен',
     reassigned: 'Переназначена',
+    mandatory_followup: 'Обязательный контакт',
 }
 
 export default function TaskDetailsPane() {

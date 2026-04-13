@@ -228,6 +228,7 @@ export default function TaskHistorySection({
                                                 const isStatusChange = event.eventType === 'status_changed';
                                                 const isCorrected = event.eventType === 'contact_corrected';
                                                 const isSlaEscalated = event.eventType === 'sla_escalated';
+                                                const isMandatoryFollowup = event.eventType === 'mandatory_followup';
 
                                                 // Build event label
                                                 let eventTitle: React.ReactNode;
@@ -293,6 +294,14 @@ export default function TaskHistorySection({
                                                         <span style={{ fontWeight: 600 }} className="text-red-600 text-[13px]">
                                                             {EVENT_LABELS.sla_escalated || 'SLA просрочен'}
                                                             {overdueBy && <span className="text-red-400 font-normal ml-1">({overdueBy})</span>}
+                                                        </span>
+                                                    );
+                                                } else if (isMandatoryFollowup) {
+                                                    const deadlineMin = (event.payload as any)?.deadlineMinutes;
+                                                    eventTitle = (
+                                                        <span style={{ fontWeight: 600 }} className="text-orange-600 text-[13px]">
+                                                            {EVENT_LABELS.mandatory_followup || 'Обязательный контакт'}
+                                                            {deadlineMin && <span className="text-orange-400 font-normal ml-1">(срок: {deadlineMin} мин)</span>}
                                                         </span>
                                                     );
                                                 } else if (technicalEventTypes.includes(event.eventType)) {

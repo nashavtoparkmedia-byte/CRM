@@ -5,6 +5,9 @@ import { logCommunicationEvent } from './communications'
 import { sendTelegramMessage } from '@/app/tg-actions'
 import { createTask } from '@/app/tasks/actions'
 import { getScenario } from '@/lib/tasks/scenario-config'
+import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
+import { CONTACT_EVENT_TYPES, RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
+import { FOLLOWUP_THRESHOLDS } from '@/lib/tasks/followup-config'
 
 interface DriverState {
     id: string
@@ -404,6 +407,154 @@ export async function evaluateSLAEscalation(): Promise<{ escalated: number }> {
 
     console.log(`[sla-escalation] Done: ${escalated}/${toEscalate.length} tasks escalated`)
     return { escalated }
+}
+
+// ─── Mandatory Follow-up Enforcement ─────────────────────────────────
+
+/**
+ * Enforce mandatory follow-up on high-risk tasks that have no nextActionId set.
+ *
+ * For each active task:
+ *   1. Evaluate risk level (using evaluateTaskRisk)
+ *   2. If risk = 'high' AND metadata.nextActionId is empty → enforce
+ *   3. Set metadata.nextActionId = 'mandatory_followup'
+ *   4. Set dueAt = now + followupDeadlineMinutes
+ *   5. Log 'mandatory_followup' event (dedup: skip if event already exists)
+ *
+ * Uses direct Prisma (no cookies dependency — safe for cron context).
+ * Idempotent: tasks already having nextActionId or existing event are skipped.
+ */
+export async function enforceMandatoryFollowup(): Promise<{ enforced: number }> {
+    const now = new Date()
+
+    // Get all active tasks with their metadata
+    const activeTasks = await prisma.task.findMany({
+        where: { isActive: true },
+        select: {
+            id: true,
+            metadata: true,
+            createdAt: true,
+            slaDeadline: true,
+        },
+    })
+
+    if (activeTasks.length === 0) {
+        console.log('[followup] No active tasks found')
+        return { enforced: 0 }
+    }
+
+    // Filter: only tasks without nextActionId
+    const candidates = activeTasks.filter(t => {
+        const meta = (t.metadata as Record<string, any>) || {}
+        return !meta.nextActionId
+    })
+
+    if (candidates.length === 0) {
+        console.log('[followup] All active tasks already have nextActionId')
+        return { enforced: 0 }
+    }
+
+    const candidateIds = candidates.map(t => t.id)
+
+    // Batch: check which tasks already have mandatory_followup events (dedup)
+    const existingEvents = await prisma.taskEvent.findMany({
+        where: {
+            taskId: { in: candidateIds },
+            eventType: 'mandatory_followup',
+        },
+        select: { taskId: true },
+    })
+    const alreadyEnforcedSet = new Set(existingEvents.map(e => e.taskId))
+
+    // Batch: get reopened task IDs
+    const reopenedEvents = await prisma.taskEvent.findMany({
+        where: {
+            taskId: { in: candidateIds },
+            eventType: 'status_changed',
+        },
+        select: { taskId: true, payload: true },
+    })
+    const reopenedTaskIds = new Set<string>()
+    for (const ev of reopenedEvents) {
+        const p = ev.payload as any
+        if (p && ['done', 'cancelled'].includes(p.from) && ['todo', 'in_progress', 'waiting_reply'].includes(p.to)) {
+            reopenedTaskIds.add(ev.taskId)
+        }
+    }
+
+    // Batch: get first contact events
+    const contactEvents = await prisma.taskEvent.findMany({
+        where: {
+            taskId: { in: candidateIds },
+            eventType: { in: CONTACT_EVENT_TYPES },
+        },
+        select: { taskId: true },
+    })
+    const hasContactSet = new Set(contactEvents.map(e => e.taskId))
+
+    let enforced = 0
+    const deadlineMs = FOLLOWUP_THRESHOLDS.followupDeadlineMinutes * 60 * 1000
+
+    for (const task of candidates) {
+        if (alreadyEnforcedSet.has(task.id)) continue
+
+        const meta = (task.metadata as Record<string, any>) || {}
+        const attempts = meta.attempts || 0
+
+        const risk = evaluateTaskRisk({
+            attempts,
+            isReopened: reopenedTaskIds.has(task.id),
+            hasContact: hasContactSet.has(task.id),
+            createdAt: task.createdAt,
+            slaDeadline: task.slaDeadline,
+            responseThresholdMinutes: RESPONSE_THRESHOLDS.maxResponseMinutes,
+        })
+
+        if (risk !== 'high') continue
+
+        const newDueAt = new Date(now.getTime() + deadlineMs)
+
+        try {
+            await prisma.$transaction([
+                // Set nextActionId and dueAt
+                prisma.task.update({
+                    where: { id: task.id },
+                    data: {
+                        metadata: {
+                            ...meta,
+                            nextActionId: FOLLOWUP_THRESHOLDS.mandatoryActionId,
+                        },
+                        dueAt: newDueAt,
+                    },
+                }),
+                // Log enforcement event
+                prisma.taskEvent.create({
+                    data: {
+                        taskId: task.id,
+                        eventType: 'mandatory_followup',
+                        payload: {
+                            reason: 'high_risk',
+                            attempts,
+                            isReopened: reopenedTaskIds.has(task.id),
+                            hasContact: hasContactSet.has(task.id),
+                            deadlineMinutes: FOLLOWUP_THRESHOLDS.followupDeadlineMinutes,
+                            dueAt: newDueAt.toISOString(),
+                        },
+                        actorType: 'system',
+                        actorId: null,
+                    },
+                }),
+            ])
+
+            console.log(`[followup] ✓ Task ${task.id} enforced (attempts: ${attempts}, due: ${newDueAt.toISOString()})`)
+            enforced++
+        } catch (err) {
+            console.error(`[followup] ✗ Failed to enforce task ${task.id}:`, (err as Error).message)
+        }
+    }
+
+    console.log(`[followup] Done: ${enforced} tasks enforced`)
+    return { enforced }
 }
 
 // ─── Trigger → Scenario Mapping ────────────────────────────────────
