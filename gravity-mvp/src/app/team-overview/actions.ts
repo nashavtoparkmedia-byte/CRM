@@ -15,6 +15,7 @@ import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
 import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
 import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capacity-config'
+import { computeProcessReliability, type ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 
 export interface ManagerNextTask {
     id: string
@@ -133,6 +134,7 @@ export interface TeamOverview {
     teamStability: TeamStabilityResult
     persistentRootCauses: PersistentRootCause[]
     teamCapacity: TeamCapacityResult | null
+    processReliability: ProcessReliabilityResult
     managers: ManagerStats[]
 }
 
@@ -161,6 +163,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             teamStability: { status: 'insufficient_data', changePct: 0, firstHalfAvg: 0, secondHalfAvg: 0, dataPoints: 0 },
             persistentRootCauses: [],
             teamCapacity: null,
+            processReliability: { status: 'no_data', cleanRate: 0, incidentRate: 0, totalActive: 0, totalIncidents: 0 },
             managers: [],
         }
     }
@@ -577,7 +580,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Team capacity distribution (pure computation from already-loaded managers)
     const teamCapacity = computeTeamCapacity(managers)
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, managers }
+    // Process reliability pressure (pure computation from already-loaded managers)
+    const processReliability = computeProcessReliability(managers)
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, managers }
 }
 
 /**

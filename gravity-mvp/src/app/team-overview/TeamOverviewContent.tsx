@@ -10,6 +10,7 @@ import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
 import type { PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
 import type { TeamCapacityResult } from '@/lib/tasks/capacity-config'
+import type { ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
@@ -25,7 +26,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -235,6 +236,9 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Team capacity distribution */}
             {teamCapacity && <TeamCapacityBar capacity={teamCapacity} />}
+
+            {/* Process reliability indicator */}
+            <ProcessReliabilityIndicator reliability={processReliability} />
 
             {/* Manager cards */}
             {managers.length === 0 ? (
@@ -738,6 +742,37 @@ function TeamCapacityBar({ capacity }: { capacity: TeamCapacityResult }) {
             {/* Summary text */}
             <div className="text-[12px] text-[#64748B] mt-2">
                 {avgActive} задач/менеджер · макс {maxActive}{maxManagerName ? ` (${maxManagerName})` : ''} · перекос ×{distributionSkew}
+            </div>
+        </div>
+    )
+}
+
+// ─── Process Reliability Indicator ──────────────────────────
+
+const RELIABILITY_DISPLAY: Record<Exclude<ProcessReliabilityResult['status'], 'no_data'>, { label: string; dot: string; text: string }> = {
+    reliable: { label: 'Процессы стабильны', dot: 'bg-green-500', text: 'text-green-600' },
+    pressured: { label: 'Процессы под давлением', dot: 'bg-yellow-500', text: 'text-yellow-700' },
+    degraded: { label: 'Процессы деградируют', dot: 'bg-red-500', text: 'text-red-600' },
+}
+
+function ProcessReliabilityIndicator({ reliability }: { reliability: ProcessReliabilityResult }) {
+    if (reliability.status === 'no_data') {
+        return (
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                <span className="text-[13px] text-[#94A3B8]">Нет активных задач для оценки надёжности</span>
+            </div>
+        )
+    }
+
+    const display = RELIABILITY_DISPLAY[reliability.status]
+    const tooltip = `${reliability.totalActive} активных задач, ${reliability.totalIncidents} инцидентных сигналов (просрочки + эскалации + повторные)`
+
+    return (
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+            <div className="flex items-center gap-2.5">
+                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
+                <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
+                <span className={`text-[13px] font-bold ${display.text}`}>{reliability.cleanRate}% чисто</span>
             </div>
         </div>
     )
