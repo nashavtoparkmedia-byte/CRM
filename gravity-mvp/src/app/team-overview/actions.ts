@@ -18,6 +18,7 @@ import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capaci
 import { computeProcessReliability, type ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 import { computeManagerInterventionAgingHours, isInterventionAging, type InterventionAgingResult } from '@/lib/tasks/intervention-aging-config'
 import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
+import { computeOperationalVolatility, type OperationalVolatilityResult } from '@/lib/tasks/volatility-config'
 
 export interface ManagerNextTask {
     id: string
@@ -141,6 +142,7 @@ export interface TeamOverview {
     interventionAging: InterventionAgingResult
     outcomeTiming: OutcomeTimingResult
     teamRiskProfile: TeamRiskProfileResult | null
+    operationalVolatility: OperationalVolatilityResult
     managers: ManagerStats[]
 }
 
@@ -173,6 +175,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             interventionAging: { agingPendingOutcome: 0, oldestPendingOutcomeHours: 0 },
             outcomeTiming: { status: 'insufficient_data', completedCount: 0, recentCount: 0, avgPerDay: 0, newestDaysAgo: 0 },
             teamRiskProfile: null,
+            operationalVolatility: { status: 'insufficient_data', teamCv: 0, managersIncluded: 0 },
             managers: [],
         }
     }
@@ -617,7 +620,14 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Team risk profile summary (pure computation from already-computed risk persistence)
     const teamRiskProfile = computeTeamRiskProfile(managers)
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, managers }
+    // Operational volatility (CV-based, pure computation from already-loaded history)
+    const volatilityInput: Record<string, { score: number }[]> = {}
+    for (const [managerId, points] of historyMap) {
+        volatilityInput[managerId] = points.map(p => ({ score: p.score }))
+    }
+    const operationalVolatility = computeOperationalVolatility(volatilityInput)
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, operationalVolatility, managers }
 }
 
 /**

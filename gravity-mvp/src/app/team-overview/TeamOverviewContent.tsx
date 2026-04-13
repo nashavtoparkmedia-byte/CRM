@@ -14,6 +14,7 @@ import type { ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 import { INTERVENTION_AGING_CONFIG } from '@/lib/tasks/intervention-aging-config'
 import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
 import type { TeamStabilityResult, RiskPersistenceResult, TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
+import type { OperationalVolatilityResult } from '@/lib/tasks/volatility-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
@@ -28,7 +29,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, operationalVolatility, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -258,6 +259,9 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Team risk profile summary */}
             {teamRiskProfile && <TeamRiskProfileSummary profile={teamRiskProfile} />}
+
+            {/* Operational volatility indicator */}
+            <OperationalVolatilityIndicator volatility={operationalVolatility} />
 
             {/* Process reliability indicator */}
             <ProcessReliabilityIndicator reliability={processReliability} />
@@ -782,6 +786,35 @@ const RELIABILITY_DISPLAY: Record<Exclude<ProcessReliabilityResult['status'], 'n
     reliable: { label: 'Процессы стабильны', dot: 'bg-green-500', text: 'text-green-600' },
     pressured: { label: 'Процессы под давлением', dot: 'bg-yellow-500', text: 'text-yellow-700' },
     degraded: { label: 'Процессы деградируют', dot: 'bg-red-500', text: 'text-red-600' },
+}
+
+const VOLATILITY_DISPLAY: Record<string, { label: string; dot: string; text: string }> = {
+    calm: { label: 'Стабильная динамика', dot: 'bg-green-500', text: 'text-green-600' },
+    moderate: { label: 'Умеренная волатильность', dot: 'bg-yellow-500', text: 'text-yellow-700' },
+    volatile: { label: 'Высокая волатильность', dot: 'bg-red-500', text: 'text-red-600' },
+}
+
+function OperationalVolatilityIndicator({ volatility }: { volatility: OperationalVolatilityResult }) {
+    if (volatility.status === 'insufficient_data') {
+        return (
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                <span className="text-[13px] text-[#94A3B8]">Недостаточно данных для оценки волатильности</span>
+            </div>
+        )
+    }
+
+    const display = VOLATILITY_DISPLAY[volatility.status]
+    const tooltip = `CV ${volatility.teamCv}% по ${volatility.managersIncluded} менеджерам`
+
+    return (
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+            <div className="flex items-center gap-2.5">
+                <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
+                <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
+                <span className="text-[13px] text-[#94A3B8]">CV {volatility.teamCv}%</span>
+            </div>
+        </div>
+    )
 }
 
 function TeamRiskProfileSummary({ profile }: { profile: TeamRiskProfileResult }) {
