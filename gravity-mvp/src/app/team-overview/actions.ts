@@ -17,6 +17,7 @@ import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/t
 import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capacity-config'
 import { computeProcessReliability, type ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 import { computeManagerInterventionAgingHours, isInterventionAging, type InterventionAgingResult } from '@/lib/tasks/intervention-aging-config'
+import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
 
 export interface ManagerNextTask {
     id: string
@@ -138,6 +139,7 @@ export interface TeamOverview {
     teamCapacity: TeamCapacityResult | null
     processReliability: ProcessReliabilityResult
     interventionAging: InterventionAgingResult
+    outcomeTiming: OutcomeTimingResult
     managers: ManagerStats[]
 }
 
@@ -168,6 +170,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             teamCapacity: null,
             processReliability: { status: 'no_data', cleanRate: 0, incidentRate: 0, totalActive: 0, totalIncidents: 0 },
             interventionAging: { agingPendingOutcome: 0, oldestPendingOutcomeHours: 0 },
+            outcomeTiming: { status: 'insufficient_data', completedCount: 0, recentCount: 0, avgPerDay: 0, newestDaysAgo: 0 },
             managers: [],
         }
     }
@@ -606,7 +609,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     }
     const interventionAging: InterventionAgingResult = { agingPendingOutcome, oldestPendingOutcomeHours }
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, managers }
+    // Outcome completion activity stats (single query)
+    const outcomeTiming = await getOutcomeTimingStats()
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, managers }
 }
 
 /**
@@ -718,6 +724,55 @@ async function getRootCausePersistence(): Promise<PersistentRootCause[]> {
     } catch (e) {
         console.error('[root-cause-persistence] Failed to query, returning empty:', e)
         return []
+    }
+}
+
+// ─── Outcome Completion Activity ────────────────────────────
+
+/**
+ * Query intervention completion recency and cadence.
+ * Single query on existing intervention_actions table.
+ * Failure-tolerant: returns insufficient_data on error.
+ */
+async function getOutcomeTimingStats(): Promise<OutcomeTimingResult> {
+    const insufficient: OutcomeTimingResult = {
+        status: 'insufficient_data', completedCount: 0, recentCount: 0, avgPerDay: 0, newestDaysAgo: 0,
+    }
+
+    try {
+        await ensureInterventionTable()
+        const cfg = OUTCOME_TIMING_CONFIG
+
+        const rows: { created_at: Date }[] = await prisma.$queryRawUnsafe(`
+            SELECT created_at
+            FROM intervention_actions
+            WHERE outcome IS NOT NULL
+            ORDER BY created_at DESC
+        `)
+
+        if (rows.length < cfg.minCompletedForStats) return insufficient
+
+        const now = Date.now()
+        const recentCutoff = now - cfg.recentPeriodDays * 24 * 60 * 60 * 1000
+        let recentCount = 0
+
+        for (const r of rows) {
+            if (r.created_at.getTime() >= recentCutoff) recentCount++
+        }
+
+        const newestDaysAgo = Math.round((now - rows[0].created_at.getTime()) / (24 * 60 * 60 * 1000) * 10) / 10
+        const avgPerDay = Math.round((recentCount / cfg.recentPeriodDays) * 10) / 10
+
+        return {
+            status: 'available',
+            completedCount: rows.length,
+            recentCount,
+            avgPerDay,
+            newestDaysAgo: Math.max(0, newestDaysAgo),
+        }
+    } catch (e) {
+        console.error('[outcome-timing] Failed to query, returning insufficient:', e)
+        return insufficient
     }
 }
 

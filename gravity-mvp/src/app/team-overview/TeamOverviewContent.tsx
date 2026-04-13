@@ -12,6 +12,7 @@ import type { PersistentRootCause } from '@/lib/tasks/root-cause-persistence-con
 import type { TeamCapacityResult } from '@/lib/tasks/capacity-config'
 import type { ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
 import { INTERVENTION_AGING_CONFIG } from '@/lib/tasks/intervention-aging-config'
+import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
 import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
@@ -27,7 +28,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -234,6 +235,18 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                             <EffectivenessRow key={stat.action} stat={stat} />
                         ))}
                     </div>
+                </div>
+            )}
+
+            {/* Outcome completion activity */}
+            {outcomeTiming.status === 'available' && (
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                    <span className="text-[13px] text-[#64748B]">
+                        {outcomeTiming.completedCount} завершённых · {outcomeTiming.recentCount} за {OUTCOME_TIMING_CONFIG.recentPeriodDays}д · {outcomeTiming.avgPerDay}/день
+                        {outcomeTiming.newestDaysAgo > 3 && (
+                            <span className="text-[#d97706]"> · последнее {Math.round(outcomeTiming.newestDaysAgo)}д назад</span>
+                        )}
+                    </span>
                 </div>
             )}
 
