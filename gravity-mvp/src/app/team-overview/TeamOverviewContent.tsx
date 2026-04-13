@@ -10,7 +10,10 @@ import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority } from './actions'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
+import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
+import type { InterventionAction } from '@/lib/tasks/intervention-action-config'
 import ReassignModal from './ReassignModal'
+import InterventionActionModal from './InterventionActionModal'
 
 interface TeamOverviewContentProps {
     overview: TeamOverview
@@ -20,6 +23,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
     const router = useRouter()
     const { totals, topRootCauses, patternAlerts, interventionQueue, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
+    const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string } | null>(null)
 
     const allManagersList = managers.map(m => ({ managerId: m.managerId, managerName: m.managerName }))
 
@@ -152,6 +156,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                                 key={m.managerId}
                                 manager={m}
                                 onClick={() => router.push(`/tasks?assigneeId=${m.managerId}`)}
+                                onAction={() => setInterventionManager({ managerId: m.managerId, managerName: m.managerName })}
                             />
                         ))}
                     </div>
@@ -186,6 +191,16 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                     allManagers={allManagersList}
                     onClose={() => setReassignManager(null)}
                     onDone={() => router.refresh()}
+                />
+            )}
+
+            {/* Intervention action modal */}
+            {interventionManager && (
+                <InterventionActionModal
+                    managerId={interventionManager.managerId}
+                    managerName={interventionManager.managerName}
+                    onClose={() => setInterventionManager(null)}
+                    onDone={() => { setInterventionManager(null); router.refresh() }}
                 />
             )}
         </div>
@@ -335,74 +350,110 @@ const INTERVENTION_BADGE: Record<'urgent' | 'high', { label: string; bg: string;
     high: { label: 'Внимание', bg: 'bg-orange-100', text: 'text-orange-600' },
 }
 
-function InterventionRow({ manager: m, onClick }: { manager: ManagerStats; onClick: () => void }) {
+function InterventionRow({ manager: m, onClick, onAction }: {
+    manager: ManagerStats
+    onClick: () => void
+    onAction: () => void
+}) {
     const initials = m.managerName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     const badge = INTERVENTION_BADGE[m.interventionPriority as 'urgent' | 'high']
     const visibleReasons = m.interventionReasons.slice(0, 3)
     const hiddenCount = m.interventionReasons.length - visibleReasons.length
+    const lastAction = m.lastInterventionAction
 
     return (
-        <button
-            onClick={onClick}
-            className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#f9fafb] transition-colors"
-        >
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
-                m.interventionPriority === 'urgent' ? 'bg-red-600' : 'bg-orange-500'
-            }`}>
-                {initials}
-            </div>
-            <div className="flex-1 min-w-0 text-left">
-                <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-medium text-[#111827] truncate">{m.managerName}</span>
-                    {badge && (
-                        <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
-                            {badge.label}
-                        </span>
-                    )}
-                    <HealthBadge
-                        score={m.healthScore}
-                        level={m.healthLevel}
-                        breakdown={m.healthBreakdown}
-                        trend={m.healthTrend}
-                        previousScore={m.previousHealthScore}
-                        declineStreak={m.declineStreak}
-                    />
+        <div className="group/irow">
+            <div
+                onClick={onClick}
+                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#f9fafb] transition-colors cursor-pointer"
+            >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
+                    m.interventionPriority === 'urgent' ? 'bg-red-600' : 'bg-orange-500'
+                }`}>
+                    {initials}
                 </div>
-                {/* Reason pills */}
-                {m.interventionReasons.length > 0 && (
-                    <div className="flex items-center gap-1.5 mt-1">
-                        {visibleReasons.map(reason => {
-                            const rc = INTERVENTION_REASON_COLORS[reason]
-                            return (
-                                <span key={reason} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${rc.bg} ${rc.text}`}>
-                                    {INTERVENTION_REASON_LABELS[reason]}
-                                </span>
-                            )
-                        })}
-                        {hiddenCount > 0 && (
-                            <div className="relative group/reasons">
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 cursor-default">
-                                    +{hiddenCount}
-                                </span>
-                                <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/reasons:block">
-                                    <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
-                                        {m.interventionReasons.map(r => (
-                                            <div key={r} className="py-0.5">{INTERVENTION_REASON_LABELS[r]}</div>
-                                        ))}
+                <div className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-medium text-[#111827] truncate">{m.managerName}</span>
+                        {badge && (
+                            <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
+                                {badge.label}
+                            </span>
+                        )}
+                        <HealthBadge
+                            score={m.healthScore}
+                            level={m.healthLevel}
+                            breakdown={m.healthBreakdown}
+                            trend={m.healthTrend}
+                            previousScore={m.previousHealthScore}
+                            declineStreak={m.declineStreak}
+                        />
+                    </div>
+                    {/* Reason pills */}
+                    {m.interventionReasons.length > 0 && (
+                        <div className="flex items-center gap-1.5 mt-1">
+                            {visibleReasons.map(reason => {
+                                const rc = INTERVENTION_REASON_COLORS[reason]
+                                return (
+                                    <span key={reason} className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${rc.bg} ${rc.text}`}>
+                                        {INTERVENTION_REASON_LABELS[reason]}
+                                    </span>
+                                )
+                            })}
+                            {hiddenCount > 0 && (
+                                <div className="relative group/reasons">
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 cursor-default">
+                                        +{hiddenCount}
+                                    </span>
+                                    <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/reasons:block">
+                                        <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                                            {m.interventionReasons.map(r => (
+                                                <div key={r} className="py-0.5">{INTERVENTION_REASON_LABELS[r]}</div>
+                                            ))}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            )}
+                            {/* Last action indicator */}
+                            {lastAction && (
+                                <div className="relative group/lastact">
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200">
+                                        ✓ {INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}
+                                    </span>
+                                    <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/lastact:block">
+                                        <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                                            <div className="font-semibold mb-0.5">Последнее действие</div>
+                                            <div>{INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}</div>
+                                            {lastAction.comment && (
+                                                <div className="text-gray-300 mt-0.5">«{lastAction.comment}»</div>
+                                            )}
+                                            <div className="text-gray-400 mt-0.5">
+                                                {new Date(lastAction.timestamp).toLocaleString('ru-RU', {
+                                                    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                    {m.overdue > 0 && <StatPill value={m.overdue} label="просроч" color="#dc2626" />}
+                    {m.escalated > 0 && <StatPill value={m.escalated} label="эскал." color="#dc2626" />}
+                    {m.highRiskTasks > 0 && <StatPill value={m.highRiskTasks} label="риск" color="#dc2626" />}
+                </div>
+                {/* Action button */}
+                <button
+                    onClick={(e) => { e.stopPropagation(); onAction() }}
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-[#2AABEE] border border-[#2AABEE]/30 hover:bg-blue-50 transition-colors opacity-0 group-hover/irow:opacity-100"
+                >
+                    Отметить
+                </button>
+                <ChevronRight className="w-4 h-4 text-[#d1d5db] shrink-0" />
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-                {m.overdue > 0 && <StatPill value={m.overdue} label="просроч" color="#dc2626" />}
-                {m.escalated > 0 && <StatPill value={m.escalated} label="эскал." color="#dc2626" />}
-                {m.highRiskTasks > 0 && <StatPill value={m.highRiskTasks} label="риск" color="#dc2626" />}
-            </div>
-            <ChevronRight className="w-4 h-4 text-[#d1d5db] shrink-0" />
-        </button>
+        </div>
     )
 }
 

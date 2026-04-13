@@ -11,6 +11,7 @@ import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
 import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, type HealthLevel, type HealthScoreBreakdown, type HealthTrend } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
+import { type InterventionAction } from '@/lib/tasks/intervention-action-config'
 
 export interface ManagerNextTask {
     id: string
@@ -49,10 +50,17 @@ export interface ManagerStats {
     needsIntervention: boolean
     interventionPriority: InterventionPriority
     interventionReasons: InterventionReason[]
+    lastInterventionAction: InterventionActionRecord | null
     nextTask: ManagerNextTask | null
 }
 
 export type InterventionPriority = 'urgent' | 'high' | 'normal'
+
+export interface InterventionActionRecord {
+    action: string
+    comment: string | null
+    timestamp: string
+}
 
 export interface RootCauseStat {
     cause: string
@@ -308,6 +316,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             needsIntervention: false,
             interventionPriority: 'normal' as InterventionPriority,
             interventionReasons: [] as InterventionReason[],
+            lastInterventionAction: null,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -378,6 +387,13 @@ export async function getTeamOverview(): Promise<TeamOverview> {
                 highRiskTasks: m.highRiskTasks,
             })
             : []
+    }
+
+    // Load last intervention actions for all managers
+    const lastActions = await getLastInterventionActions()
+    for (const m of managers) {
+        const la = lastActions.get(m.managerId)
+        m.lastInterventionAction = la ?? null
     }
 
     // Build intervention queue (urgent + high only, sorted)
@@ -560,4 +576,68 @@ export async function getManagerActiveTasks(managerId: string) {
         dueAt: t.dueAt?.toISOString() ?? null,
         isOverdue: !!(t.dueAt && t.dueAt < now),
     }))
+}
+
+// ─── Intervention Actions (raw SQL, no migrations) ──────────
+
+const ENSURE_INTERVENTION_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS intervention_actions (
+  id TEXT PRIMARY KEY,
+  manager_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  comment TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`
+
+const ENSURE_INTERVENTION_INDEX_SQL = `
+CREATE INDEX IF NOT EXISTS idx_intervention_actions_manager
+ON intervention_actions (manager_id, created_at DESC)`
+
+let interventionTableEnsured = false
+
+async function ensureInterventionTable() {
+    if (interventionTableEnsured) return
+    await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_TABLE_SQL)
+    await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_INDEX_SQL)
+    interventionTableEnsured = true
+}
+
+/**
+ * Log an intervention action for a manager.
+ */
+export async function logInterventionAction(params: {
+    managerId: string
+    action: InterventionAction
+    comment?: string
+}): Promise<void> {
+    await ensureInterventionTable()
+    const id = `ia_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const comment = params.comment?.trim() || null
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO intervention_actions (id, manager_id, action, comment, created_at)
+         VALUES ($1, $2, $3, $4, NOW())`,
+        id, params.managerId, params.action, comment
+    )
+}
+
+/**
+ * Get the last intervention action for each manager.
+ */
+async function getLastInterventionActions(): Promise<Map<string, InterventionActionRecord>> {
+    await ensureInterventionTable()
+    const rows: { manager_id: string; action: string; comment: string | null; created_at: Date }[] =
+        await prisma.$queryRawUnsafe(`
+            SELECT DISTINCT ON (manager_id) manager_id, action, comment, created_at
+            FROM intervention_actions
+            ORDER BY manager_id, created_at DESC
+        `)
+    const map = new Map<string, InterventionActionRecord>()
+    for (const r of rows) {
+        map.set(r.manager_id, {
+            action: r.action,
+            comment: r.comment,
+            timestamp: r.created_at.toISOString(),
+        })
+    }
+    return map
 }
