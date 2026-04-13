@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { logTaskEvent } from '@/lib/tasks/task-event-service'
 import { isManagerOverloaded } from '@/lib/tasks/workload-config'
+import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config'
 
 export interface ManagerNextTask {
     id: string
@@ -26,6 +27,7 @@ export interface ManagerStats {
     highPriority: number
     closedToday: number
     isOverloaded: boolean
+    lateResponses: number
     nextTask: ManagerNextTask | null
 }
 
@@ -35,6 +37,7 @@ export interface TeamOverview {
         overdue: number
         highPriority: number
         closedToday: number
+        lateResponses: number
     }
     managers: ManagerStats[]
 }
@@ -94,6 +97,51 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     })
     const closedMap = new Map(closedToday.map(r => [r.assigneeId, r._count.id]))
 
+    // Batch: count late responses per manager
+    // Find tasks assigned to these users that have a first contact event
+    // and the response time exceeds the threshold
+    const assignedTaskIds = activeTasks.map(t => t.id)
+    const lateResponseMap = new Map<string, number>()
+
+    if (assignedTaskIds.length > 0) {
+        // Get all tasks with their creation time and first contact event
+        const tasksWithCreation = await prisma.task.findMany({
+            where: {
+                id: { in: assignedTaskIds },
+            },
+            select: { id: true, createdAt: true, assigneeId: true },
+        })
+        const taskCreatedMap = new Map(tasksWithCreation.map(t => [t.id, { createdAt: t.createdAt, assigneeId: t.assigneeId }]))
+
+        // Get first contact event per task (oldest first)
+        const firstContactEvents = await prisma.taskEvent.findMany({
+            where: {
+                taskId: { in: assignedTaskIds },
+                eventType: { in: CONTACT_EVENT_TYPES },
+            },
+            orderBy: { createdAt: 'asc' },
+            select: { taskId: true, createdAt: true },
+        })
+
+        // Dedupe: keep only first event per task
+        const firstEventByTask = new Map<string, Date>()
+        for (const ev of firstContactEvents) {
+            if (!firstEventByTask.has(ev.taskId)) {
+                firstEventByTask.set(ev.taskId, ev.createdAt)
+            }
+        }
+
+        // Calculate late responses per manager
+        for (const [taskId, firstContactAt] of firstEventByTask) {
+            const taskInfo = taskCreatedMap.get(taskId)
+            if (!taskInfo || !taskInfo.assigneeId) continue
+            const responseMinutes = (firstContactAt.getTime() - taskInfo.createdAt.getTime()) / 60000
+            if (isLateResponse(responseMinutes)) {
+                lateResponseMap.set(taskInfo.assigneeId, (lateResponseMap.get(taskInfo.assigneeId) || 0) + 1)
+            }
+        }
+    }
+
     // Build per-manager stats
     const managers: ManagerStats[] = users.map(user => {
         const tasks = activeTasks.filter(t => t.assigneeId === user.id)
@@ -127,6 +175,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             highPriority: highPrioTasks.length,
             closedToday: closedMap.get(user.id) || 0,
             isOverloaded: isManagerOverloaded(tasks.length, overdueTasks.length),
+            lateResponses: lateResponseMap.get(user.id) || 0,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -155,6 +204,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         overdue: managers.reduce((s, m) => s + m.overdue, 0),
         highPriority: managers.reduce((s, m) => s + m.highPriority, 0),
         closedToday: managers.reduce((s, m) => s + m.closedToday, 0),
+        lateResponses: managers.reduce((s, m) => s + m.lateResponses, 0),
     }
 
     return { totals, managers }

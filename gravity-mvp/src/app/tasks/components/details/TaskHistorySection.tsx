@@ -5,6 +5,7 @@ import { FileText } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { TaskEventDTO } from '@/lib/tasks/types'
 import { getClosedReasons } from '@/lib/tasks/scenario-config'
+import { CONTACT_EVENT_TYPES, isLateResponse, formatResponseTime } from '@/lib/tasks/response-config'
 
 interface TaskHistorySectionProps {
     events: TaskEventDTO[]
@@ -74,6 +75,23 @@ export default function TaskHistorySection({
             ) : events && events.length > 0 ? (
                 <div className={`space-y-0 ${isHistoryExpanded && (events?.length || 0) > 10 ? 'max-h-[300px] overflow-y-auto pr-2 custom-scrollbar' : ''}`}>
                     {(() => {
+                        // Calculate first response time
+                        const createdEvent = events.find((e: any) => e.eventType === 'created');
+                        const allContactEvents = events.filter((e: any) => CONTACT_EVENT_TYPES.includes(e.eventType));
+                        // First contact = oldest contact event
+                        const firstContact = allContactEvents.length > 0
+                            ? allContactEvents.reduce((oldest: any, e: any) =>
+                                new Date(e.createdAt) < new Date(oldest.createdAt) ? e : oldest
+                            )
+                            : null;
+                        const firstContactId = firstContact?.id || null;
+                        let responseTimeMinutes: number | null = null;
+                        let responseLate = false;
+                        if (createdEvent && firstContact) {
+                            responseTimeMinutes = (new Date(firstContact.createdAt).getTime() - new Date(createdEvent.createdAt).getTime()) / 60000;
+                            responseLate = isLateResponse(responseTimeMinutes);
+                        }
+
                         // Technical event types to hide in 'actions' mode
                         const technicalTypes = ['postponed', 'status_changed', 'priority_changed'];
                         const rawEvents = historyMode === 'actions'
@@ -295,6 +313,16 @@ export default function TaskHistorySection({
                                                                     <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isSlaEscalated ? 'bg-red-500' : 'bg-[#d1d5db]'}`} />
                                                                     <div className="flex-1 min-w-0">
                                                                         {eventTitle}
+                                                                        {/* Response time on first contact */}
+                                                                        {event.id === firstContactId && responseTimeMinutes !== null && (
+                                                                            <span className={`text-[11px] font-medium ml-1.5 px-1.5 py-0.5 rounded inline-block mt-0.5 ${
+                                                                                responseLate
+                                                                                    ? 'bg-orange-100 text-orange-600'
+                                                                                    : 'bg-green-50 text-green-600'
+                                                                            }`}>
+                                                                                {responseLate ? 'Медленный ответ: ' : 'Ответ через: '}{formatResponseTime(responseTimeMinutes)}
+                                                                            </span>
+                                                                        )}
                                                                         {/* Postponed detail line */}
                                                                         {event.eventType === 'postponed' && event.payload && (event.payload as any).from && (
                                                                             <span style={{ fontWeight: 400, color: '#94A3B8' }} className="text-[12px] block mt-0.5">
