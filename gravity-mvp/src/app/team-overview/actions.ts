@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { logTaskEvent } from '@/lib/tasks/task-event-service'
 import { isManagerOverloaded } from '@/lib/tasks/workload-config'
 import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config'
+import { isFastClose } from '@/lib/tasks/completion-config'
 
 export interface ManagerNextTask {
     id: string
@@ -28,6 +29,8 @@ export interface ManagerStats {
     closedToday: number
     isOverloaded: boolean
     lateResponses: number
+    reopened: number
+    fastClosed: number
     nextTask: ManagerNextTask | null
 }
 
@@ -38,6 +41,8 @@ export interface TeamOverview {
         highPriority: number
         closedToday: number
         lateResponses: number
+        reopened: number
+        fastClosed: number
     }
     managers: ManagerStats[]
 }
@@ -142,6 +147,46 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         }
     }
 
+    // Batch: reopened tasks (status_changed events from done/cancelled back to active statuses)
+    const reopenedEvents = await prisma.taskEvent.findMany({
+        where: {
+            eventType: 'status_changed',
+            taskId: { in: assignedTaskIds.length > 0 ? assignedTaskIds : ['__none__'] },
+        },
+        select: { taskId: true, payload: true },
+    })
+    const reopenedTaskIds = new Set<string>()
+    for (const ev of reopenedEvents) {
+        const p = ev.payload as any
+        if (p && ['done', 'cancelled'].includes(p.from) && ['todo', 'in_progress', 'waiting_reply'].includes(p.to)) {
+            reopenedTaskIds.add(ev.taskId)
+        }
+    }
+    // Map reopened tasks to assignees
+    const reopenedMap = new Map<string, number>()
+    for (const taskId of reopenedTaskIds) {
+        const t = activeTasks.find(at => at.id === taskId)
+        if (t?.assigneeId) {
+            reopenedMap.set(t.assigneeId, (reopenedMap.get(t.assigneeId) || 0) + 1)
+        }
+    }
+
+    // Batch: fast-closed tasks (resolved today, time between created and resolved < threshold)
+    const recentlyClosed = await prisma.task.findMany({
+        where: {
+            status: { in: ['done', 'cancelled'] },
+            resolvedAt: { gte: todayStart, lte: todayEnd },
+            assigneeId: { in: userIds },
+        },
+        select: { id: true, assigneeId: true, createdAt: true, resolvedAt: true },
+    })
+    const fastClosedMap = new Map<string, number>()
+    for (const t of recentlyClosed) {
+        if (t.resolvedAt && t.assigneeId && isFastClose(t.createdAt, t.resolvedAt)) {
+            fastClosedMap.set(t.assigneeId, (fastClosedMap.get(t.assigneeId) || 0) + 1)
+        }
+    }
+
     // Build per-manager stats
     const managers: ManagerStats[] = users.map(user => {
         const tasks = activeTasks.filter(t => t.assigneeId === user.id)
@@ -176,6 +221,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             closedToday: closedMap.get(user.id) || 0,
             isOverloaded: isManagerOverloaded(tasks.length, overdueTasks.length),
             lateResponses: lateResponseMap.get(user.id) || 0,
+            reopened: reopenedMap.get(user.id) || 0,
+            fastClosed: fastClosedMap.get(user.id) || 0,
             nextTask: next ? {
                 id: next.id,
                 title: next.title,
@@ -205,6 +252,8 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         highPriority: managers.reduce((s, m) => s + m.highPriority, 0),
         closedToday: managers.reduce((s, m) => s + m.closedToday, 0),
         lateResponses: managers.reduce((s, m) => s + m.lateResponses, 0),
+        reopened: managers.reduce((s, m) => s + m.reopened, 0),
+        fastClosed: managers.reduce((s, m) => s + m.fastClosed, 0),
     }
 
     return { totals, managers }

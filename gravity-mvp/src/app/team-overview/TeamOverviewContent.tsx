@@ -24,12 +24,16 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
     return (
         <div className="space-y-5">
             {/* Team totals */}
-            <div className="grid grid-cols-5 gap-3">
+            <div className="grid grid-cols-4 gap-3">
                 <TotalCard label="Активных задач" value={totals.active} color="#4f46e5" />
                 <TotalCard label="Просрочено" value={totals.overdue} color={totals.overdue > 0 ? '#dc2626' : '#94A3B8'} />
-                <TotalCard label="Высокий приоритет" value={totals.highPriority} color={totals.highPriority > 0 ? '#ea580c' : '#94A3B8'} />
-                <TotalCard label="Медленные ответы" value={totals.lateResponses} color={totals.lateResponses > 0 ? '#d97706' : '#94A3B8'} />
                 <TotalCard label="Закрыто сегодня" value={totals.closedToday} color="#059669" />
+                <TotalCard label="Высокий приоритет" value={totals.highPriority} color={totals.highPriority > 0 ? '#ea580c' : '#94A3B8'} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+                <TotalCard label="Медленные ответы" value={totals.lateResponses} color={totals.lateResponses > 0 ? '#d97706' : '#94A3B8'} />
+                <TotalCard label="Повторные открытия" value={totals.reopened} color={totals.reopened > 0 ? '#dc2626' : '#94A3B8'} />
+                <TotalCard label="Быстрые закрытия" value={totals.fastClosed} color={totals.fastClosed > 0 ? '#d97706' : '#94A3B8'} />
             </div>
 
             {/* Manager cards */}
@@ -133,6 +137,12 @@ function ManagerCard({ manager, onOpenTasks, onOpenTask, onReassign }: {
                     )}
                     {manager.lateResponses > 0 && (
                         <StatPill value={manager.lateResponses} label="медлен" color="#d97706" />
+                    )}
+                    {manager.reopened > 0 && (
+                        <StatPill value={manager.reopened} label="повторн" color="#dc2626" />
+                    )}
+                    {manager.fastClosed > 0 && (
+                        <StatPill value={manager.fastClosed} label="быстр" color="#d97706" />
                     )}
                     <StatPill value={manager.closedToday} label="закрыто" color="#059669" />
                 </div>
