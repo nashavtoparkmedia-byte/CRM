@@ -43,6 +43,27 @@ export function useFilteredTasks(): TaskDTO[] {
             )
         }
 
+        // Scenario filters
+        if (filters.scenario !== undefined) {
+            tasks = tasks.filter((t) => t.scenario === filters.scenario)
+        }
+        if (filters.stage) {
+            tasks = tasks.filter((t) => t.stage === filters.stage)
+        }
+
+        // Extended filters
+        if (filters.type) {
+            tasks = tasks.filter((t) => t.type === filters.type)
+        }
+        if (filters.dateFrom) {
+            const from = new Date(filters.dateFrom).getTime()
+            tasks = tasks.filter((t) => new Date(t.createdAt).getTime() >= from)
+        }
+        if (filters.dateTo) {
+            const to = new Date(filters.dateTo).getTime()
+            tasks = tasks.filter((t) => new Date(t.createdAt).getTime() <= to)
+        }
+
         // Apply sort
         tasks.sort((a, b) => {
             const dir = sort.direction === 'asc' ? 1 : -1

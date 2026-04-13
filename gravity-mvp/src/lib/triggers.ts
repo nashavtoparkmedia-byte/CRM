@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { logCommunicationEvent } from './communications'
 import { sendTelegramMessage } from '@/app/tg-actions'
+import { createTask } from '@/app/tasks/actions'
+import { getScenario } from '@/lib/tasks/scenario-config'
 
 interface DriverState {
     id: string
@@ -65,8 +67,8 @@ export async function evaluateAllTriggers(): Promise<{ tasksCreated: number; mes
                     const sent = await executeAutoMessage(trigger, state)
                     if (sent) messagesSent++
                 } else if (trigger.action === 'manager_task') {
-                    await createManagerTask(trigger, state)
-                    tasksCreated++
+                    const created = await createScenarioTask(trigger, state)
+                    if (created) tasksCreated++
                 }
 
                 // Log the trigger firing
@@ -175,7 +177,170 @@ async function executeAutoMessage(
 }
 
 /**
- * Create a manager task from a trigger
+ * Create a scenario Task from a trigger (Phase 1 — replaces createManagerTask for new tasks).
+ * Maps trigger conditions to scenarios. Deduplicates by scenario + driverId.
+ */
+async function createScenarioTask(
+    trigger: { id: string; name: string; condition: string },
+    state: DriverState
+): Promise<boolean> {
+    const scenario = mapTriggerToScenario(trigger.condition)
+    const scenarioConfig = getScenario(scenario)
+    if (!scenarioConfig) return false
+
+    // Dedupe: check existing active Task with same scenario for this driver
+    const existing = await prisma.task.findFirst({
+        where: {
+            driverId: state.id,
+            scenario,
+            isActive: true,
+        },
+    })
+    if (existing) return false
+
+    const priority = state.daysWithoutTrips >= 7 ? 'high' : 'medium'
+    const title = `${scenarioConfig.label} — ${state.fullName} (${state.daysWithoutTrips}д без поездок)`
+
+    try {
+        await createTask({
+            driverId: state.id,
+            source: 'auto',
+            type: scenario,
+            title,
+            priority: priority as any,
+            scenario,
+            stage: scenarioConfig.initialStage,
+            triggerType: trigger.condition,
+            triggerKey: `${trigger.condition}_${state.daysWithoutTrips}d`,
+        })
+        return true
+    } catch (err) {
+        // Scenario constraint error (e.g. already has active main scenario) — skip silently
+        console.warn(`[triggers] Could not create scenario task for driver ${state.id}:`, (err as Error).message)
+        return false
+    }
+}
+
+// ─── Auto-Close: Churn & Onboarding ────────────────────────────────
+
+const AUTO_CLOSE_REASONS: Record<string, string> = {
+    churn: 'returned',       // Водитель вернулся — поездки появились
+    onboarding: 'launched',  // Водитель вышел на линию — первая поездка зафиксирована
+}
+
+/**
+ * Auto-close churn/onboarding tasks when trip activity is detected.
+ * Called alongside evaluateAllTriggers() from nightly cron.
+ *
+ * Detection logic:
+ *   Driver.lastOrderAt (DateTime?) — последний заказ.
+ *   Если lastOrderAt > task.createdAt → водитель совершил поездку после создания задачи → закрываем.
+ *
+ * Не использует updateTask / logTaskEvent (они зависят от cookies).
+ * Пишет напрямую в Prisma с транзакцией.
+ */
+export async function evaluateAutoClose(): Promise<{ closed: number }> {
+    const tasks = await prisma.task.findMany({
+        where: {
+            isActive: true,
+            scenario: { in: Object.keys(AUTO_CLOSE_REASONS) },
+        },
+        include: {
+            driver: { select: { lastOrderAt: true, fullName: true } },
+        },
+    })
+
+    if (tasks.length === 0) {
+        console.log('[auto-close] No active churn/onboarding tasks found')
+        return { closed: 0 }
+    }
+
+    let closed = 0
+
+    for (const task of tasks) {
+        const lastOrder = task.driver?.lastOrderAt
+        if (!lastOrder) continue
+
+        // Поездка появилась ПОСЛЕ создания задачи
+        if (lastOrder <= task.createdAt) continue
+
+        const closedReason = AUTO_CLOSE_REASONS[task.scenario!]
+        if (!closedReason) continue
+
+        const now = new Date()
+
+        try {
+            await prisma.$transaction([
+                // 1. Закрываем задачу
+                prisma.task.update({
+                    where: { id: task.id },
+                    data: {
+                        status: 'done',
+                        isActive: false,
+                        resolvedAt: now,
+                        resolvedBy: 'auto',
+                        closedReason,
+                    },
+                }),
+                // 2. Событие auto_closed
+                prisma.taskEvent.create({
+                    data: {
+                        taskId: task.id,
+                        eventType: 'auto_closed',
+                        payload: {
+                            reason: closedReason,
+                            scenario: task.scenario,
+                            lastOrderAt: lastOrder.toISOString(),
+                        },
+                        actorType: 'auto',
+                        actorId: null,
+                    },
+                }),
+                // 3. Событие status_changed (для единообразия истории)
+                prisma.taskEvent.create({
+                    data: {
+                        taskId: task.id,
+                        eventType: 'status_changed',
+                        payload: {
+                            from: task.status,
+                            to: 'done',
+                            auto: true,
+                        },
+                        actorType: 'auto',
+                        actorId: null,
+                    },
+                }),
+            ])
+
+            console.log(
+                `[auto-close] ✓ ${task.scenario} task ${task.id} closed (driver: ${task.driver?.fullName}, lastOrderAt: ${lastOrder.toISOString()})`
+            )
+            closed++
+        } catch (err) {
+            console.error(`[auto-close] ✗ Failed to close task ${task.id}:`, (err as Error).message)
+        }
+    }
+
+    console.log(`[auto-close] Done: ${closed}/${tasks.length} tasks closed`)
+    return { closed }
+}
+
+// ─── Trigger → Scenario Mapping ────────────────────────────────────
+
+function mapTriggerToScenario(condition: string): string {
+    switch (condition) {
+        case 'days_without_trips':
+        case 'segment_sleeping':
+        case 'segment_risk':
+        case 'after_promotion':
+            return 'churn'
+        default:
+            return 'churn'
+    }
+}
+
+/**
+ * Create a manager task from a trigger (legacy — kept for reference)
  */
 async function createManagerTask(
     trigger: { id: string; name: string; condition: string },

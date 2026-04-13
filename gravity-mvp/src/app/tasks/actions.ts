@@ -12,6 +12,7 @@ import type {
     SimilarTaskHint,
 } from '@/lib/tasks/types'
 import type { Prisma, Task } from '@prisma/client'
+import { getScenario, getStage, calculateSlaDeadline, getMainScenarioIds } from '@/lib/tasks/scenario-config'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -50,8 +51,16 @@ function toTaskDTO(t: TaskWithDriver): TaskDTO {
         updatedAt: t.updatedAt.toISOString(),
         resolvedAt: t.resolvedAt?.toISOString() ?? null,
         
-        // Stage 2
-        scenario: (t.metadata as any)?.scenario || 'contact',
+        // Scenario (Phase 1 — from DB columns)
+        scenario: t.scenario ?? null,
+        stage: t.stage ?? null,
+        stageEnteredAt: t.stageEnteredAt?.toISOString() ?? null,
+        nextActionAt: t.nextActionAt?.toISOString() ?? null,
+        slaDeadline: t.slaDeadline?.toISOString() ?? null,
+        closedReason: t.closedReason ?? null,
+        closedComment: t.closedComment ?? null,
+
+        // Legacy metadata
         attempts: (t.metadata as any)?.attempts || 0,
         nextActionId: (t.metadata as any)?.nextActionId,
     }
@@ -88,7 +97,36 @@ function buildWhere(filters: TaskFilters): Prisma.TaskWhereInput {
         ]
     }
 
+    // Scenario filters
+    if (filters.scenario !== undefined) {
+        where.scenario = filters.scenario // null = "без сценария"
+    }
+    if (filters.stage) {
+        where.stage = filters.stage
+    }
+
+    // Extended filters
+    if (filters.type) {
+        where.type = filters.type
+    }
+    if (filters.dateFrom || filters.dateTo) {
+        where.createdAt = {}
+        if (filters.dateFrom) (where.createdAt as any).gte = new Date(filters.dateFrom)
+        if (filters.dateTo) (where.createdAt as any).lte = new Date(filters.dateTo)
+    }
+
     return where
+}
+
+// ─── CRM Users ──────────────────────────────────────────────────────────────
+
+export async function getCrmUsers() {
+    const users = await prisma.crmUser.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, role: true },
+    })
+    return users
 }
 
 // ─── Search Helpers ──────────────────────────────────────────────────────────
@@ -138,11 +176,6 @@ export async function getTasks(
             await logTaskEvent(t.id, 'status_changed', { from: t.status, to: 'overdue' }, { type: 'system' });
         }
     }
-    // Retroactive Fixes
-    await prisma.task.updateMany({
-        where: { assigneeId: null },
-        data: { assigneeId: 'u3' }
-    });
     await recalculateAllTaskAttempts();
 
     const where = buildWhere(filters)
@@ -180,10 +213,6 @@ export async function getTasks(
  * Get a single task by ID.
  */
 export async function getTaskById(id: string): Promise<TaskDTO | null> {
-    await prisma.task.updateMany({
-        where: { id, assigneeId: null },
-        data: { assigneeId: 'u3' }
-    });
     const task = await prisma.task.findUnique({
         where: { id },
         include: {
@@ -197,10 +226,6 @@ export async function getTaskById(id: string): Promise<TaskDTO | null> {
  * Get task details with event history (on-demand for TaskDetailsPane).
  */
 export async function getTaskDetails(id: string): Promise<TaskDetailDTO | null> {
-    await prisma.task.updateMany({
-        where: { id, assigneeId: null },
-        data: { assigneeId: 'u3' }
-    });
     const task = await prisma.task.findUnique({
         where: { id },
         include: {
@@ -236,7 +261,27 @@ export async function getTaskDetails(id: string): Promise<TaskDetailDTO | null> 
 export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
     const { cookies } = await import('next/headers');
     const cookieStore = await cookies();
-    const currentUserId = cookieStore.get('crm_user_id')?.value || 'u3';
+    const currentUserId = cookieStore.get('crm_user_id')?.value || null;
+
+    // Enforce single main scenario per driver
+    if (input.scenario) {
+        const scenarioConfig = getScenario(input.scenario)
+        if (scenarioConfig?.isMainScenario) {
+            const mainIds = getMainScenarioIds()
+            const existing = await prisma.task.findFirst({
+                where: {
+                    driverId: input.driverId,
+                    scenario: { in: mainIds },
+                    isActive: true,
+                },
+                select: { id: true, scenario: true },
+            })
+            if (existing) {
+                const existingLabel = getScenario(existing.scenario!)?.label ?? existing.scenario
+                throw new Error(`У водителя уже есть активный сценарий: ${existingLabel}`)
+            }
+        }
+    }
 
     const task = await prisma.task.create({
         data: {
@@ -260,19 +305,69 @@ export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
             triggerType: input.triggerType,
             triggerKey: input.triggerKey,
             dedupeKey: input.dedupeKey,
+
+            // Scenario
+            scenario: input.scenario ?? null,
+            stage: input.stage ?? null,
+            stageEnteredAt: input.stage ? new Date() : null,
+            slaDeadline: (input.scenario && input.stage)
+                ? calculateSlaDeadline(input.scenario, input.stage, new Date())
+                : null,
         },
         include: {
             driver: { select: { fullName: true, phone: true, segment: true, lastOrderAt: true } },
         },
     })
 
+    // Auto-populate contactId if not set
+    if (!task.contactId) {
+        try {
+            const driver = await prisma.driver.findUnique({
+                where: { id: input.driverId },
+                select: { yandexDriverId: true },
+            })
+            if (driver?.yandexDriverId) {
+                const contact = await prisma.contact.findUnique({
+                    where: { yandexDriverId: driver.yandexDriverId },
+                    select: { id: true },
+                })
+                if (contact) {
+                    await prisma.task.update({
+                        where: { id: task.id },
+                        data: { contactId: contact.id },
+                    })
+                }
+            }
+        } catch {
+            // Non-critical: contactId is nullable
+        }
+    }
+
     await logTaskEvent(task.id, 'created', {
         source: input.source,
         type: input.type,
         chatId: input.chatId ?? null,
-    }, { type: 'user' })
+        scenario: input.scenario ?? null,
+        stage: input.stage ?? null,
+    }, { type: input.source === 'auto' ? 'auto' : 'user' })
 
     return toTaskDTO(task)
+}
+
+/**
+ * Change the stage of a scenario task.
+ * Validates that the stage exists in the scenario config.
+ */
+export async function changeStage(taskId: string, newStage: string): Promise<TaskDTO> {
+    const task = await prisma.task.findUniqueOrThrow({ where: { id: taskId } })
+    if (!task.scenario) {
+        throw new Error('Cannot change stage: task has no scenario')
+    }
+    const stageConfig = getStage(task.scenario, newStage)
+    if (!stageConfig) {
+        throw new Error(`Unknown stage "${newStage}" for scenario "${task.scenario}"`)
+    }
+    return updateTask(taskId, { stage: newStage })
 }
 
 /**
@@ -293,15 +388,36 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
     if (patch.isActive !== undefined) data.isActive = patch.isActive
     if (patch.source !== undefined) data.source = patch.source as any
 
-    // metadata updates
+    // Scenario field updates (Phase 1 — DB columns)
+    if (patch.stage !== undefined && patch.stage !== prevTask.stage && prevTask.scenario) {
+        const stageConfig = getStage(prevTask.scenario, patch.stage)
+        if (!stageConfig) {
+            throw new Error(`Unknown stage "${patch.stage}" for scenario "${prevTask.scenario}"`)
+        }
+        const now = new Date()
+        data.stage = patch.stage
+        data.stageEnteredAt = now
+        data.slaDeadline = calculateSlaDeadline(prevTask.scenario, patch.stage, now)
+        await logTaskEvent(id, 'stage_changed', {
+            from: prevTask.stage,
+            to: patch.stage,
+            scenarioId: prevTask.scenario,
+        }, { type: 'user' })
+    }
+    if (patch.nextActionAt !== undefined) {
+        data.nextActionAt = patch.nextActionAt ? new Date(patch.nextActionAt) : null
+    }
+    if (patch.slaDeadline !== undefined && patch.stage === undefined) {
+        data.slaDeadline = patch.slaDeadline ? new Date(patch.slaDeadline) : null
+    }
+    if (patch.closedReason !== undefined) data.closedReason = patch.closedReason
+    if (patch.closedComment !== undefined) data.closedComment = patch.closedComment
+
+    // Legacy metadata updates (attempts, nextActionId)
     const meta = (prevTask.metadata as Record<string, any>) || {}
     const newMeta = { ...meta }
     let metaChanged = false
 
-    if (patch.scenario !== undefined) {
-        newMeta.scenario = patch.scenario
-        metaChanged = true
-    }
     if (patch.attempts !== undefined) {
         newMeta.attempts = patch.attempts
         metaChanged = true
@@ -330,6 +446,10 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
         data.status = patch.status
         // Mark inactive on terminal states
         if (['done', 'cancelled', 'archived'].includes(patch.status)) {
+            // Scenario tasks require closedReason
+            if (prevTask.scenario && !patch.closedReason && !prevTask.closedReason) {
+                throw new Error('closedReason is required when closing a scenario task')
+            }
             data.isActive = false
             data.resolvedAt = new Date()
             data.resolvedBy = 'manager'
