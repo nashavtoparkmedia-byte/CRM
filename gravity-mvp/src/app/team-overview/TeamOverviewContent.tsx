@@ -37,6 +37,17 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
     return (
         <div className="space-y-5">
+            {/* Governance summary */}
+            <GovernanceSummary
+                teamStability={teamStability}
+                teamRiskProfile={teamRiskProfile}
+                operationalVolatility={operationalVolatility}
+                teamCapacity={teamCapacity}
+                processReliability={processReliability}
+                interventionAging={interventionAging}
+                outcomeTiming={outcomeTiming}
+            />
+
             {/* Team totals */}
             <div className="grid grid-cols-4 gap-3">
                 <TotalCard label="Активных задач" value={totals.active} color="#4f46e5" />
@@ -781,6 +792,114 @@ function TeamCapacityBar({ capacity }: { capacity: TeamCapacityResult }) {
 }
 
 // ─── Process Reliability Indicator ──────────────────────────
+
+// ─── Governance Summary ─────────────────────────────────
+
+type GovernanceSignal = { label: string; status: 'green' | 'yellow' | 'red' | 'gray' }
+
+function deriveGovernanceSignals(props: {
+    teamStability: TeamStabilityResult
+    teamRiskProfile: TeamRiskProfileResult | null
+    operationalVolatility: OperationalVolatilityResult
+    teamCapacity: TeamCapacityResult | null
+    processReliability: ProcessReliabilityResult
+    interventionAging: { agingPendingOutcome: number; oldestPendingOutcomeHours: number }
+    outcomeTiming: OutcomeTimingResult
+}): GovernanceSignal[] {
+    const signals: GovernanceSignal[] = []
+
+    // 1. Stability
+    const stabilityMap: Record<string, GovernanceSignal['status']> = {
+        improving: 'green', stable: 'green', degrading: 'red', insufficient_data: 'gray',
+    }
+    signals.push({ label: 'Стабильность', status: stabilityMap[props.teamStability.status] })
+
+    // 2. Risk profile
+    if (!props.teamRiskProfile) {
+        signals.push({ label: 'Риск-профиль', status: 'gray' })
+    } else if (props.teamRiskProfile.sustained === 0) {
+        signals.push({ label: 'Риск-профиль', status: 'green' })
+    } else if (props.teamRiskProfile.persistenceRatio <= 20) {
+        signals.push({ label: 'Риск-профиль', status: 'yellow' })
+    } else {
+        signals.push({ label: 'Риск-профиль', status: 'red' })
+    }
+
+    // 3. Volatility
+    const volMap: Record<string, GovernanceSignal['status']> = {
+        calm: 'green', moderate: 'yellow', volatile: 'red', insufficient_data: 'gray',
+    }
+    signals.push({ label: 'Волатильность', status: volMap[props.operationalVolatility.status] })
+
+    // 4. Capacity
+    if (!props.teamCapacity) {
+        signals.push({ label: 'Загрузка', status: 'gray' })
+    } else if (props.teamCapacity.overloaded > 0) {
+        signals.push({ label: 'Загрузка', status: 'red' })
+    } else if (props.teamCapacity.highPressure > 0) {
+        signals.push({ label: 'Загрузка', status: 'yellow' })
+    } else {
+        signals.push({ label: 'Загрузка', status: 'green' })
+    }
+
+    // 5. Reliability
+    const relMap: Record<string, GovernanceSignal['status']> = {
+        reliable: 'green', pressured: 'yellow', degraded: 'red', no_data: 'gray',
+    }
+    signals.push({ label: 'Надёжность', status: relMap[props.processReliability.status] })
+
+    // 6. Intervention aging
+    if (props.interventionAging.agingPendingOutcome === 0) {
+        signals.push({ label: 'Интервенции', status: 'green' })
+    } else if (props.interventionAging.agingPendingOutcome <= 2) {
+        signals.push({ label: 'Интервенции', status: 'yellow' })
+    } else {
+        signals.push({ label: 'Интервенции', status: 'red' })
+    }
+
+    // 7. Outcome activity
+    if (props.outcomeTiming.status === 'insufficient_data') {
+        signals.push({ label: 'Результативность', status: 'gray' })
+    } else if (props.outcomeTiming.recentCount > 0) {
+        signals.push({ label: 'Результативность', status: 'green' })
+    } else {
+        signals.push({ label: 'Результативность', status: 'yellow' })
+    }
+
+    return signals
+}
+
+const GOV_DOT_COLOR: Record<GovernanceSignal['status'], string> = {
+    green: 'bg-green-500',
+    yellow: 'bg-yellow-500',
+    red: 'bg-red-500',
+    gray: 'bg-gray-300',
+}
+
+function GovernanceSummary(props: {
+    teamStability: TeamStabilityResult
+    teamRiskProfile: TeamRiskProfileResult | null
+    operationalVolatility: OperationalVolatilityResult
+    teamCapacity: TeamCapacityResult | null
+    processReliability: ProcessReliabilityResult
+    interventionAging: { agingPendingOutcome: number; oldestPendingOutcomeHours: number }
+    outcomeTiming: OutcomeTimingResult
+}) {
+    const signals = deriveGovernanceSignals(props)
+
+    return (
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+            <div className="flex items-center gap-4 flex-wrap">
+                {signals.map((s) => (
+                    <div key={s.label} className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full shrink-0 ${GOV_DOT_COLOR[s.status]}`} />
+                        <span className="text-[13px] text-[#374151]">{s.label}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
+}
 
 const RELIABILITY_DISPLAY: Record<Exclude<ProcessReliabilityResult['status'], 'no_data'>, { label: string; dot: string; text: string }> = {
     reliable: { label: 'Процессы стабильны', dot: 'bg-green-500', text: 'text-green-600' },
