@@ -208,6 +208,7 @@ export default function TaskHistorySection({
                                                 const isContactAction = ['called', 'wrote'].includes(event.eventType);
                                                 const isStatusChange = event.eventType === 'status_changed';
                                                 const isCorrected = event.eventType === 'contact_corrected';
+                                                const isSlaEscalated = event.eventType === 'sla_escalated';
 
                                                 // Build event label
                                                 let eventTitle: React.ReactNode;
@@ -241,6 +242,14 @@ export default function TaskHistorySection({
                                                 } else if (isCreated) {
                                                     // Created: lightest
                                                     eventTitle = <span style={{ fontWeight: 400, color: '#94A3B8' }} className="text-[13px]">{EVENT_LABELS.created}</span>;
+                                                } else if (isSlaEscalated) {
+                                                    const overdueBy = (event.payload as any)?.overdueBy;
+                                                    eventTitle = (
+                                                        <span style={{ fontWeight: 600 }} className="text-red-600 text-[13px]">
+                                                            {EVENT_LABELS.sla_escalated || 'SLA просрочен'}
+                                                            {overdueBy && <span className="text-red-400 font-normal ml-1">({overdueBy})</span>}
+                                                        </span>
+                                                    );
                                                 } else if (technicalEventTypes.includes(event.eventType)) {
                                                     // Technical: muted
                                                     const label = dicts?.history_actions?.find((a: any) => a.id === event.eventType)?.label || EVENT_LABELS[event.eventType] || event.eventType;
@@ -256,7 +265,7 @@ export default function TaskHistorySection({
                                                         <div className="flex items-start gap-2">
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-start gap-1.5">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-[#d1d5db] mt-1.5 shrink-0" />
+                                                                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isSlaEscalated ? 'bg-red-500' : 'bg-[#d1d5db]'}`} />
                                                                     <div className="flex-1 min-w-0">
                                                                         {eventTitle}
                                                                         {/* Postponed detail line */}

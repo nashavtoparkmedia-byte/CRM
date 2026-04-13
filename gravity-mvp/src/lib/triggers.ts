@@ -325,6 +325,87 @@ export async function evaluateAutoClose(): Promise<{ closed: number }> {
     return { closed }
 }
 
+// ─── SLA Escalation ───────────────────────────────────────────────
+
+/**
+ * Escalate tasks that have breached their SLA deadline.
+ * Creates a one-time `sla_escalated` event per task (dedup by checking existing events).
+ *
+ * Criteria:
+ *   - task.isActive = true
+ *   - task.slaDeadline < now  OR  task.dueAt < now (fallback)
+ *   - no existing sla_escalated event for this task
+ *
+ * Uses direct Prisma (no cookies dependency — safe for cron context).
+ */
+export async function evaluateSLAEscalation(): Promise<{ escalated: number }> {
+    const now = new Date()
+
+    // Find active tasks past their SLA deadline or dueAt
+    const candidates = await prisma.task.findMany({
+        where: {
+            isActive: true,
+            OR: [
+                { slaDeadline: { lt: now } },
+                { dueAt: { lt: now } },
+            ],
+        },
+        select: { id: true, slaDeadline: true, dueAt: true, scenario: true, stage: true, driverId: true },
+    })
+
+    if (candidates.length === 0) {
+        console.log('[sla-escalation] No overdue tasks found')
+        return { escalated: 0 }
+    }
+
+    // Batch check: which tasks already have sla_escalated events
+    const alreadyEscalated = await prisma.taskEvent.findMany({
+        where: {
+            taskId: { in: candidates.map(t => t.id) },
+            eventType: 'sla_escalated',
+        },
+        select: { taskId: true },
+    })
+    const escalatedSet = new Set(alreadyEscalated.map(e => e.taskId))
+
+    const toEscalate = candidates.filter(t => !escalatedSet.has(t.id))
+
+    if (toEscalate.length === 0) {
+        console.log(`[sla-escalation] ${candidates.length} overdue tasks already escalated`)
+        return { escalated: 0 }
+    }
+
+    let escalated = 0
+
+    for (const task of toEscalate) {
+        const deadline = task.slaDeadline || task.dueAt
+        try {
+            await prisma.taskEvent.create({
+                data: {
+                    taskId: task.id,
+                    eventType: 'sla_escalated',
+                    payload: {
+                        slaDeadline: task.slaDeadline?.toISOString() || null,
+                        dueAt: task.dueAt?.toISOString() || null,
+                        scenario: task.scenario,
+                        stage: task.stage,
+                        overdueBy: deadline ? Math.round((now.getTime() - deadline.getTime()) / (1000 * 60 * 60)) + 'h' : null,
+                    },
+                    actorType: 'system',
+                    actorId: null,
+                },
+            })
+            console.log(`[sla-escalation] ✓ Task ${task.id} escalated (deadline: ${deadline?.toISOString()})`)
+            escalated++
+        } catch (err) {
+            console.error(`[sla-escalation] ✗ Failed to escalate task ${task.id}:`, (err as Error).message)
+        }
+    }
+
+    console.log(`[sla-escalation] Done: ${escalated}/${toEscalate.length} tasks escalated`)
+    return { escalated }
+}
+
 // ─── Trigger → Scenario Mapping ────────────────────────────────────
 
 function mapTriggerToScenario(condition: string): string {

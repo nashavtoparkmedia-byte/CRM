@@ -49,6 +49,9 @@ export default function TaskCard({ task }: TaskCardProps) {
     const isSelected = selectedTaskId === task.id
     const prio = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium
 
+    // SLA breach detection
+    const isSlaBreached = task.slaDeadline ? new Date(task.slaDeadline) < new Date() && task.isActive : false
+
     // Calculate urgency / due logic
     let isOverdue = false
     let isToday = false
@@ -134,11 +137,18 @@ export default function TaskCard({ task }: TaskCardProps) {
                 <div className="text-[13px] font-bold text-gray-900 truncate pr-2">
                     {task.driverName}
                 </div>
-                {task.dueAt && (
-                    <div className={`text-[10px] font-bold uppercase tracking-tight px-1 rounded ${isOverdue ? 'text-red-600' : isToday ? 'text-yellow-700' : 'text-gray-400'}`}>
-                        {dueLabel}
-                    </div>
-                )}
+                <div className="flex items-center gap-1 shrink-0">
+                    {isSlaBreached && (
+                        <span className="text-[9px] font-bold uppercase tracking-tight px-1.5 py-0.5 rounded bg-red-100 text-red-600">
+                            SLA
+                        </span>
+                    )}
+                    {task.dueAt && (
+                        <div className={`text-[10px] font-bold uppercase tracking-tight px-1 rounded ${isOverdue ? 'text-red-600' : isToday ? 'text-yellow-700' : 'text-gray-400'}`}>
+                            {dueLabel}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Middle row: Task details */}

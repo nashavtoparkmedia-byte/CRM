@@ -61,6 +61,7 @@ const EVENT_LABELS: Record<string, string> = {
     wrote: 'Написал',
     contact_corrected: 'Обновлено',
     auto_closed: 'Автозакрытие',
+    sla_escalated: 'SLA просрочен',
 }
 
 export default function TaskDetailsPane() {
