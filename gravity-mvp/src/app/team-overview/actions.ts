@@ -729,7 +729,7 @@ async function getInterventionEffectiveness(): Promise<EffectivenessStat[]> {
     for (const r of rows) {
         if (!actionMap.has(r.action)) actionMap.set(r.action, { improved: 0, unchanged: 0, worsened: 0 })
         const entry = actionMap.get(r.action)!
-        const count = parseInt(r.cnt, 10)
+        const count = parseInt(r.cnt, 10) || 0
         if (r.outcome === 'improved') entry.improved += count
         else if (r.outcome === 'unchanged') entry.unchanged += count
         else if (r.outcome === 'worsened') entry.worsened += count

@@ -12,7 +12,7 @@ import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
 import type { InterventionAction } from '@/lib/tasks/intervention-action-config'
-import { INTERVENTION_OUTCOME_LABELS, INTERVENTION_OUTCOME_COLORS, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
+import { INTERVENTION_OUTCOME_LABELS, INTERVENTION_OUTCOME_COLORS, EFFECTIVENESS_THRESHOLDS, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
 import ReassignModal from './ReassignModal'
 import InterventionActionModal from './InterventionActionModal'
 
@@ -362,9 +362,10 @@ function StatPill({ value, label, color }: { value: number; label: string; color
 // ─── Effectiveness Row ──────────────────────────────────────
 
 function EffectivenessRow({ stat }: { stat: EffectivenessStat }) {
-    const rateColor = stat.improvementRate >= 60
+    const { good, moderate } = EFFECTIVENESS_THRESHOLDS
+    const rateColor = stat.improvementRate >= good
         ? 'text-green-600 bg-green-50'
-        : stat.improvementRate >= 30
+        : stat.improvementRate >= moderate
             ? 'text-yellow-700 bg-yellow-50'
             : 'text-red-600 bg-red-50'
     const barWidth = Math.min(stat.improvementRate, 100)
@@ -376,7 +377,7 @@ function EffectivenessRow({ stat }: { stat: EffectivenessStat }) {
                 <div className="flex-1 h-1.5 rounded-full bg-[#f3f4f6] overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all ${
-                            stat.improvementRate >= 60 ? 'bg-green-400' : stat.improvementRate >= 30 ? 'bg-yellow-400' : 'bg-red-400'
+                            stat.improvementRate >= good ? 'bg-green-400' : stat.improvementRate >= moderate ? 'bg-yellow-400' : 'bg-red-400'
                         }`}
                         style={{ width: `${barWidth}%` }}
                     />

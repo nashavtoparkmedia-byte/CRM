@@ -26,6 +26,14 @@ export const INTERVENTION_OUTCOME_COLORS: Record<InterventionOutcome, { bg: stri
     worsened: { bg: 'bg-red-50', text: 'text-red-600' },
 }
 
+/** Effectiveness display thresholds (percentage) */
+export const EFFECTIVENESS_THRESHOLDS = {
+    /** improvementRate >= this = good (green) */
+    good: 60,
+    /** improvementRate >= this = moderate (yellow); < this = poor (red) */
+    moderate: 30,
+}
+
 /**
  * Evaluate intervention outcome by comparing health scores.
  */
