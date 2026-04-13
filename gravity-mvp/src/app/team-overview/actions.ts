@@ -14,6 +14,7 @@ import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/i
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
 import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
+import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capacity-config'
 
 export interface ManagerNextTask {
     id: string
@@ -131,6 +132,7 @@ export interface TeamOverview {
     healthHistory: Record<string, SerializedHealthHistoryPoint[]>
     teamStability: TeamStabilityResult
     persistentRootCauses: PersistentRootCause[]
+    teamCapacity: TeamCapacityResult | null
     managers: ManagerStats[]
 }
 
@@ -158,6 +160,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             healthHistory: {},
             teamStability: { status: 'insufficient_data', changePct: 0, firstHalfAvg: 0, secondHalfAvg: 0, dataPoints: 0 },
             persistentRootCauses: [],
+            teamCapacity: null,
             managers: [],
         }
     }
@@ -571,7 +574,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     // Persistent root causes (single grouped query)
     const persistentRootCauses = await getRootCausePersistence()
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, managers }
+    // Team capacity distribution (pure computation from already-loaded managers)
+    const teamCapacity = computeTeamCapacity(managers)
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, managers }
 }
 
 /**

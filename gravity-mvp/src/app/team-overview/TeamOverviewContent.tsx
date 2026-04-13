@@ -9,6 +9,7 @@ import {
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
 import type { PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
+import type { TeamCapacityResult } from '@/lib/tasks/capacity-config'
 import type { TeamStabilityResult, RiskPersistenceResult } from '@/lib/tasks/manager-health-config'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
@@ -24,7 +25,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -231,6 +232,9 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Team stability indicator */}
             <TeamStabilityIndicator stability={teamStability} />
+
+            {/* Team capacity distribution */}
+            {teamCapacity && <TeamCapacityBar capacity={teamCapacity} />}
 
             {/* Manager cards */}
             {managers.length === 0 ? (
@@ -697,6 +701,43 @@ function TeamStabilityIndicator({ stability }: { stability: TeamStabilityResult 
                 <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
                 <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
                 <span className={`text-[13px] font-bold ${display.text}`}>{sign}{stability.changePct}%</span>
+            </div>
+        </div>
+    )
+}
+
+// ─── Team Capacity Bar ─────────────────────────────────────
+
+const CAPACITY_SEGMENTS: { key: keyof Pick<TeamCapacityResult, 'overloaded' | 'highPressure' | 'balanced' | 'lowUtilization'>; color: string }[] = [
+    { key: 'overloaded', color: '#dc2626' },
+    { key: 'highPressure', color: '#ea580c' },
+    { key: 'balanced', color: '#059669' },
+    { key: 'lowUtilization', color: '#94A3B8' },
+]
+
+function TeamCapacityBar({ capacity }: { capacity: TeamCapacityResult }) {
+    const { totalManagers, avgActive, maxActive, maxManagerName, distributionSkew } = capacity
+
+    return (
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+            <div className="text-[12px] text-[#64748B] font-medium mb-2">Распределение нагрузки</div>
+            {/* Segmented bar */}
+            <div className="flex h-2 rounded-full overflow-hidden">
+                {CAPACITY_SEGMENTS.map(seg => {
+                    const count = capacity[seg.key]
+                    if (count === 0) return null
+                    const widthPct = (count / totalManagers) * 100
+                    return (
+                        <div
+                            key={seg.key}
+                            style={{ width: `${widthPct}%`, backgroundColor: seg.color }}
+                        />
+                    )
+                })}
+            </div>
+            {/* Summary text */}
+            <div className="text-[12px] text-[#64748B] mt-2">
+                {avgActive} задач/менеджер · макс {maxActive}{maxManagerName ? ` (${maxManagerName})` : ''} · перекос ×{distributionSkew}
             </div>
         </div>
     )
