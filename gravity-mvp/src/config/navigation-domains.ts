@@ -37,7 +37,8 @@ export const DOMAINS: NavigationDomain[] = [
         hideContextPanel: true,
         items: [
             { label: 'Панель управления', href: '/', icon: LayoutDashboard, sectionKey: 'dashboard' },
-            { label: 'Мой день', href: '/my-day', icon: CheckSquare, sectionKey: 'my_day' }
+            { label: 'Мой день', href: '/my-day', icon: CheckSquare, sectionKey: 'my_day' },
+            { label: 'Команда', href: '/team-overview', icon: Users, sectionKey: 'team_overview' }
         ]
     },
     {

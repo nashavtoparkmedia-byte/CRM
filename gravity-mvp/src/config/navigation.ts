@@ -25,6 +25,7 @@ export const NAVIGATION: NavigationGroup[] = [
     items: [
       { name: "Dashboard", href: "/", icon: Activity, sectionKey: "dashboard" },
       { name: "Мой день", href: "/my-day", icon: CheckSquare, sectionKey: "my_day" },
+      { name: "Команда", href: "/team-overview", icon: Users, sectionKey: "team_overview" },
     ]
   },
   {
