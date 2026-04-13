@@ -7,6 +7,7 @@ import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config
 import { isFastClose } from '@/lib/tasks/completion-config'
 import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
+import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 
 export interface ManagerNextTask {
     id: string
@@ -38,6 +39,12 @@ export interface ManagerStats {
     nextTask: ManagerNextTask | null
 }
 
+export interface RootCauseStat {
+    cause: string
+    label: string
+    count: number
+}
+
 export interface TeamOverview {
     totals: {
         active: number
@@ -50,6 +57,7 @@ export interface TeamOverview {
         highRiskTasks: number
         escalated: number
     }
+    topRootCauses: RootCauseStat[]
     managers: ManagerStats[]
 }
 
@@ -70,6 +78,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     if (users.length === 0) {
         return {
             totals: { active: 0, overdue: 0, highPriority: 0, closedToday: 0, lateResponses: 0, reopened: 0, fastClosed: 0, highRiskTasks: 0, escalated: 0 },
+            topRootCauses: [],
             managers: [],
         }
     }
@@ -285,7 +294,27 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         escalated: managers.reduce((s, m) => s + m.escalated, 0),
     }
 
-    return { totals, managers }
+    // Top root causes today (from escalation_resolved events)
+    const rootCauseEvents = await prisma.taskEvent.findMany({
+        where: {
+            eventType: 'escalation_resolved',
+            createdAt: { gte: todayStart, lte: todayEnd },
+        },
+        select: { payload: true },
+    })
+    const rootCauseCounts = new Map<string, number>()
+    for (const ev of rootCauseEvents) {
+        const rc = (ev.payload as any)?.rootCause
+        if (rc) {
+            rootCauseCounts.set(rc, (rootCauseCounts.get(rc) || 0) + 1)
+        }
+    }
+    const topRootCauses: RootCauseStat[] = Array.from(rootCauseCounts.entries())
+        .map(([cause, count]) => ({ cause, label: getRootCauseLabel(cause), count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3)
+
+    return { totals, topRootCauses, managers }
 }
 
 /**

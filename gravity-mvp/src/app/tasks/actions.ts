@@ -722,7 +722,9 @@ export async function correctTaskAction(
  */
 export async function resolveEscalation(
     taskId: string,
-    resolutionType: 'contacted' | 'reassigned' | 'closed'
+    resolutionType: 'contacted' | 'reassigned' | 'closed',
+    rootCause?: string,
+    comment?: string
 ): Promise<{ ok: boolean }> {
     const task = await prisma.task.findUnique({
         where: { id: taskId },
@@ -745,6 +747,7 @@ export async function resolveEscalation(
                 ...meta,
                 escalated: false,
                 escalationResolvedAt: now.toISOString(),
+                ...(rootCause ? { rootCause } : {}),
             },
         },
     })
@@ -752,6 +755,8 @@ export async function resolveEscalation(
     await logTaskEvent(taskId, 'escalation_resolved', {
         resolutionType,
         resolvedAt: now.toISOString(),
+        ...(rootCause ? { rootCause } : {}),
+        ...(comment ? { comment } : {}),
     })
 
     return { ok: true }

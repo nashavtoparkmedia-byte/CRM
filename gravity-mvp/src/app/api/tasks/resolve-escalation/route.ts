@@ -6,13 +6,13 @@ const VALID_RESOLUTION_TYPES = ['contacted', 'reassigned', 'closed']
 /**
  * POST /api/tasks/resolve-escalation
  *
- * Body: { taskId: string, resolutionType: 'contacted' | 'reassigned' | 'closed' }
+ * Body: { taskId: string, resolutionType: 'contacted' | 'reassigned' | 'closed', rootCause?: string, comment?: string }
  * Response: { ok: true }
  */
 export async function POST(request: Request) {
     try {
         const body = await request.json()
-        const { taskId, resolutionType } = body
+        const { taskId, resolutionType, rootCause, comment } = body
 
         if (!taskId || typeof taskId !== 'string') {
             return NextResponse.json(
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
             )
         }
 
-        const result = await resolveEscalation(taskId, resolutionType)
+        const result = await resolveEscalation(taskId, resolutionType, rootCause, comment)
 
         return NextResponse.json(result)
     } catch (error: any) {

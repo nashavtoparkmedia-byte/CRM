@@ -124,8 +124,12 @@ export function useResolveEscalation() {
     const tasksById = useTasksStore((s) => s.tasksById)
 
     return useMutation({
-        mutationFn: ({ taskId, resolutionType }: { taskId: string; resolutionType: 'contacted' | 'reassigned' | 'closed' }) =>
-            resolveEscalation(taskId, resolutionType),
+        mutationFn: ({ taskId, resolutionType, rootCause, comment }: {
+            taskId: string
+            resolutionType: 'contacted' | 'reassigned' | 'closed'
+            rootCause?: string
+            comment?: string
+        }) => resolveEscalation(taskId, resolutionType, rootCause, comment),
 
         onMutate: async ({ taskId }) => {
             const previous = tasksById[taskId]

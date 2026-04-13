@@ -6,6 +6,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { TaskEventDTO } from '@/lib/tasks/types'
 import { getClosedReasons } from '@/lib/tasks/scenario-config'
 import { CONTACT_EVENT_TYPES, isLateResponse, formatResponseTime } from '@/lib/tasks/response-config'
+import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 
 interface TaskHistorySectionProps {
     events: TaskEventDTO[]
@@ -321,6 +322,8 @@ export default function TaskHistorySection({
                                                         closed: 'Задача закрыта',
                                                     };
                                                     const resType = (event.payload as any)?.resolutionType;
+                                                    const evRootCause = (event.payload as any)?.rootCause;
+                                                    const evComment = (event.payload as any)?.comment;
                                                     eventTitle = (
                                                         <div className="flex flex-col">
                                                             <span style={{ fontWeight: 600 }} className="text-green-600 text-[13px]">
@@ -330,6 +333,16 @@ export default function TaskHistorySection({
                                                                 <span className="text-[11px] text-green-500 mt-0.5">
                                                                     {RESOLUTION_LABELS[resType] || resType}
                                                                 </span>
+                                                            )}
+                                                            {evRootCause && (
+                                                                <span className="text-[11px] text-gray-500 mt-0.5">
+                                                                    Причина: <span className="font-medium text-gray-700">{getRootCauseLabel(evRootCause)}</span>
+                                                                </span>
+                                                            )}
+                                                            {evComment && (
+                                                                <p className="text-[11px] text-gray-500 italic mt-0.5 bg-gray-50 px-1.5 py-0.5 rounded border-l-2 border-gray-200">
+                                                                    {evComment}
+                                                                </p>
                                                             )}
                                                         </div>
                                                     );

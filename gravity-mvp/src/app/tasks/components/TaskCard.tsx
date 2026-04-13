@@ -20,6 +20,8 @@ import {
     MousePointerClick
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import RootCauseModal from './RootCauseModal'
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
     critical: { label: 'Критичный', color: 'text-red-600 bg-red-50' },
@@ -46,6 +48,7 @@ export default function TaskCard({ task }: TaskCardProps) {
     const updateTask = useUpdateTask()
     const resolveEscalation = useResolveEscalation()
     const router = useRouter()
+    const [showRootCauseModal, setShowRootCauseModal] = useState(false)
 
     const isSelected = selectedTaskId === task.id
     const prio = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG.medium
@@ -122,7 +125,12 @@ export default function TaskCard({ task }: TaskCardProps) {
     }
     const handleResolveEscalation = (e: React.MouseEvent) => {
         e.stopPropagation()
-        resolveEscalation.mutate({ taskId: task.id, resolutionType: 'contacted' })
+        setShowRootCauseModal(true)
+    }
+    const handleRootCauseConfirm = (params: { taskId: string; resolutionType: 'contacted' | 'reassigned' | 'closed'; rootCause: string; comment: string }) => {
+        resolveEscalation.mutate(params, {
+            onSuccess: () => setShowRootCauseModal(false),
+        })
     }
 
     // Color Bar Logic
@@ -303,6 +311,16 @@ export default function TaskCard({ task }: TaskCardProps) {
                     </button>
                 </div>
             </div>
+
+            {/* Root Cause Modal */}
+            {showRootCauseModal && (
+                <RootCauseModal
+                    taskId={task.id}
+                    isSaving={resolveEscalation.isPending}
+                    onConfirm={handleRootCauseConfirm}
+                    onClose={() => setShowRootCauseModal(false)}
+                />
+            )}
         </div>
     )
 }

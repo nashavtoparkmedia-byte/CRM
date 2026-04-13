@@ -7,7 +7,7 @@ import {
     Clock, ChevronRight, Repeat2,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
-import type { TeamOverview, ManagerStats, ManagerNextTask } from './actions'
+import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat } from './actions'
 import ReassignModal from './ReassignModal'
 
 interface TeamOverviewContentProps {
@@ -16,7 +16,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, managers } = overview
+    const { totals, topRootCauses, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
 
     const allManagersList = managers.map(m => ({ managerId: m.managerId, managerName: m.managerName }))
@@ -37,6 +37,21 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                 <TotalCard label="Повторные открытия" value={totals.reopened} color={totals.reopened > 0 ? '#dc2626' : '#94A3B8'} />
                 <TotalCard label="Быстрые закрытия" value={totals.fastClosed} color={totals.fastClosed > 0 ? '#d97706' : '#94A3B8'} />
             </div>
+
+            {/* Root causes */}
+            {topRootCauses.length > 0 && (
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                    <div className="text-[12px] text-[#64748B] font-medium mb-2">Причины проблем (сегодня)</div>
+                    <div className="flex items-center gap-3">
+                        {topRootCauses.map((rc) => (
+                            <div key={rc.cause} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50">
+                                <span className="text-[14px] font-bold text-[#374151]">{rc.count}</span>
+                                <span className="text-[12px] text-[#64748B]">{rc.label}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Manager cards */}
             {managers.length === 0 ? (
