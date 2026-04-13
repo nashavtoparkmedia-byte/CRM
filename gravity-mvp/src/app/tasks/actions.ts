@@ -502,10 +502,18 @@ export async function updateTask(id: string, patch: UpdateTaskInput): Promise<Ta
     // Log status change
     if (finalStatus !== prevTask.status) {
         const actorType = (autoStatusChanged && !patch.status) ? 'system' : 'user'
-        await logTaskEvent(task.id, 'status_changed', {
+        const statusPayload: Record<string, unknown> = {
             from: prevTask.status,
             to: finalStatus,
-        }, { type: actorType })
+        }
+        // Enrich close events with reason/comment for history display
+        if (finalStatus === 'done' || finalStatus === 'cancelled') {
+            const reason = patch.closedReason || prevTask.closedReason
+            const comment = patch.closedComment || prevTask.closedComment
+            if (reason) statusPayload.closedReason = reason
+            if (comment) statusPayload.closedComment = comment
+        }
+        await logTaskEvent(task.id, 'status_changed', statusPayload, { type: actorType })
     }
 
     return toTaskDTO(task)

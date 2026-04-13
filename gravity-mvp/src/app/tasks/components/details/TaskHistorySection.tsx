@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { FileText } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { TaskEventDTO } from '@/lib/tasks/types'
+import { getClosedReasons } from '@/lib/tasks/scenario-config'
 
 interface TaskHistorySectionProps {
     events: TaskEventDTO[]
@@ -216,15 +217,41 @@ export default function TaskHistorySection({
                                                 const isCreated = event.eventType === 'created';
 
                                                 if (isStatusChange) {
-                                                    // Technical: muted
+                                                    const payload = event.payload as any;
+                                                    const isCloseEvent = payload.to === 'done' || payload.to === 'cancelled';
+                                                    const closedReason = payload.closedReason;
+                                                    const closedComment = payload.closedComment;
+                                                    // Resolve closedReason label from scenario config (check all scenarios)
+                                                    let reasonLabel = closedReason;
+                                                    if (closedReason && payload.scenario) {
+                                                        const reasons = getClosedReasons(payload.scenario);
+                                                        reasonLabel = reasons.find(r => r.value === closedReason)?.label || closedReason;
+                                                    } else if (closedReason) {
+                                                        // No scenario in payload — search all scenarios for label
+                                                        for (const sid of ['churn', 'onboarding', 'care', 'promo_control']) {
+                                                            const match = getClosedReasons(sid).find(r => r.value === closedReason);
+                                                            if (match) { reasonLabel = match.label; break; }
+                                                        }
+                                                    }
+
                                                     eventTitle = (
                                                         <div className="flex flex-col">
                                                             <span style={{ fontWeight: 400, color: '#64748B' }} className="text-[13px]">
                                                                 {dicts?.history_actions?.find((a: any) => a.id === 'status_changed')?.label || 'Смена статуса'}
                                                             </span>
                                                             <span style={{ fontWeight: 400, color: '#94A3B8' }} className="text-[12px] mt-0.5">
-                                                                {STATUS_LABELS[(event.payload as any).from] || (event.payload as any).from} → {STATUS_LABELS[(event.payload as any).to] || (event.payload as any).to}
+                                                                {STATUS_LABELS[payload.from] || payload.from} → {STATUS_LABELS[payload.to] || payload.to}
                                                             </span>
+                                                            {isCloseEvent && closedReason && (
+                                                                <span style={{ fontWeight: 400, color: '#64748B' }} className="text-[12px] mt-1">
+                                                                    Причина: <span style={{ fontWeight: 500, color: '#374151' }}>{reasonLabel}</span>
+                                                                </span>
+                                                            )}
+                                                            {isCloseEvent && closedComment && (
+                                                                <p className="text-[11px] text-[#64748B] italic mt-0.5 bg-gray-50 px-1.5 py-0.5 rounded border-l-2 border-gray-200">
+                                                                    «{closedComment}»
+                                                                </p>
+                                                            )}
                                                         </div>
                                                     );
                                                 } else if (isCorrected) {
