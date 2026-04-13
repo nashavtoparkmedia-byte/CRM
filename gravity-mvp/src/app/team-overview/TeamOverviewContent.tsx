@@ -7,7 +7,7 @@ import {
     Clock, ChevronRight, Repeat2, Heart,
 } from 'lucide-react'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
-import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority } from './actions'
+import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat } from './actions'
 import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
 import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
@@ -22,7 +22,7 @@ interface TeamOverviewContentProps {
 
 export default function TeamOverviewContent({ overview }: TeamOverviewContentProps) {
     const router = useRouter()
-    const { totals, topRootCauses, patternAlerts, interventionQueue, managers } = overview
+    const { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, managers } = overview
     const [reassignManager, setReassignManager] = useState<{ managerId: string; managerName: string } | null>(null)
     const [interventionManager, setInterventionManager] = useState<{ managerId: string; managerName: string; healthScore: number } | null>(null)
 
@@ -159,6 +159,20 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
                                 onClick={() => router.push(`/tasks?assigneeId=${m.managerId}`)}
                                 onAction={() => setInterventionManager({ managerId: m.managerId, managerName: m.managerName, healthScore: m.healthScore })}
                             />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Effectiveness analytics */}
+            {effectivenessStats.length > 0 && (
+                <div className="bg-white rounded-xl border border-[#e5e7eb] overflow-hidden">
+                    <div className="px-4 py-2.5 border-b border-[#f3f4f6]">
+                        <span className="text-[13px] font-semibold text-[#374151]">Эффективность вмешательств</span>
+                    </div>
+                    <div className="divide-y divide-[#f3f4f6]">
+                        {effectivenessStats.map(stat => (
+                            <EffectivenessRow key={stat.action} stat={stat} />
                         ))}
                     </div>
                 </div>
@@ -341,6 +355,42 @@ function StatPill({ value, label, color }: { value: number; label: string; color
         <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: `${color}10` }}>
             <span className="text-[14px] font-bold" style={{ color }}>{value}</span>
             <span className="text-[10px] font-medium" style={{ color: `${color}99` }}>{label}</span>
+        </div>
+    )
+}
+
+// ─── Effectiveness Row ──────────────────────────────────────
+
+function EffectivenessRow({ stat }: { stat: EffectivenessStat }) {
+    const rateColor = stat.improvementRate >= 60
+        ? 'text-green-600 bg-green-50'
+        : stat.improvementRate >= 30
+            ? 'text-yellow-700 bg-yellow-50'
+            : 'text-red-600 bg-red-50'
+    const barWidth = Math.min(stat.improvementRate, 100)
+
+    return (
+        <div className="flex items-center gap-3 px-4 py-2.5">
+            <span className="text-[13px] font-medium text-[#374151] min-w-[180px]">{stat.label}</span>
+            <div className="flex items-center gap-2 flex-1">
+                <div className="flex-1 h-1.5 rounded-full bg-[#f3f4f6] overflow-hidden">
+                    <div
+                        className={`h-full rounded-full transition-all ${
+                            stat.improvementRate >= 60 ? 'bg-green-400' : stat.improvementRate >= 30 ? 'bg-yellow-400' : 'bg-red-400'
+                        }`}
+                        style={{ width: `${barWidth}%` }}
+                    />
+                </div>
+                <span className={`shrink-0 text-[11px] font-bold px-1.5 py-0.5 rounded ${rateColor}`}>
+                    {stat.improvementRate}%
+                </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] text-[#94A3B8]">{stat.total} всего</span>
+                <span className="text-[11px] text-green-600">{stat.improved} ✓</span>
+                <span className="text-[11px] text-gray-400">{stat.unchanged} ●</span>
+                <span className="text-[11px] text-red-500">{stat.worsened} ✗</span>
+            </div>
         </div>
     )
 }

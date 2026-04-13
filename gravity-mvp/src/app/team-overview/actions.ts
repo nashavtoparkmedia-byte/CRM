@@ -11,7 +11,7 @@ import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
 import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, type HealthLevel, type HealthScoreBreakdown, type HealthTrend } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
-import { type InterventionAction } from '@/lib/tasks/intervention-action-config'
+import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
 
 export interface ManagerNextTask {
@@ -83,6 +83,16 @@ export interface PatternAlert {
     previousCount: number
 }
 
+export interface EffectivenessStat {
+    action: string
+    label: string
+    total: number
+    improved: number
+    unchanged: number
+    worsened: number
+    improvementRate: number
+}
+
 export interface TeamOverview {
     totals: {
         active: number
@@ -105,6 +115,7 @@ export interface TeamOverview {
     topRootCauses: RootCauseStat[]
     patternAlerts: PatternAlert[]
     interventionQueue: ManagerStats[]
+    effectivenessStats: EffectivenessStat[]
     managers: ManagerStats[]
 }
 
@@ -128,6 +139,7 @@ export async function getTeamOverview(): Promise<TeamOverview> {
             topRootCauses: [],
             patternAlerts: [],
             interventionQueue: [],
+            effectivenessStats: [],
             managers: [],
         }
     }
@@ -505,7 +517,10 @@ export async function getTeamOverview(): Promise<TeamOverview> {
         })
         .sort((a, b) => b.count - a.count)
 
-    return { totals, topRootCauses, patternAlerts, interventionQueue, managers }
+    // Effectiveness stats
+    const effectivenessStats = await getInterventionEffectiveness()
+
+    return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, managers }
 }
 
 /**
@@ -692,4 +707,49 @@ async function evaluateInterventionOutcomes(managers: { managerId: string; healt
             outcome, row.id
         )
     }
+}
+
+/**
+ * Aggregate intervention effectiveness stats by action type.
+ * Only considers actions with evaluated outcomes.
+ */
+async function getInterventionEffectiveness(): Promise<EffectivenessStat[]> {
+    await ensureInterventionTable()
+    const rows: { action: string; outcome: string; cnt: string }[] =
+        await prisma.$queryRawUnsafe(`
+            SELECT action, outcome, COUNT(*)::text as cnt
+            FROM intervention_actions
+            WHERE outcome IS NOT NULL
+            GROUP BY action, outcome
+            ORDER BY action, outcome
+        `)
+
+    // Aggregate per action
+    const actionMap = new Map<string, { improved: number; unchanged: number; worsened: number }>()
+    for (const r of rows) {
+        if (!actionMap.has(r.action)) actionMap.set(r.action, { improved: 0, unchanged: 0, worsened: 0 })
+        const entry = actionMap.get(r.action)!
+        const count = parseInt(r.cnt, 10)
+        if (r.outcome === 'improved') entry.improved += count
+        else if (r.outcome === 'unchanged') entry.unchanged += count
+        else if (r.outcome === 'worsened') entry.worsened += count
+    }
+
+    const stats: EffectivenessStat[] = []
+    for (const [action, counts] of actionMap) {
+        const total = counts.improved + counts.unchanged + counts.worsened
+        stats.push({
+            action,
+            label: INTERVENTION_ACTION_LABELS[action as InterventionAction] ?? action,
+            total,
+            improved: counts.improved,
+            unchanged: counts.unchanged,
+            worsened: counts.worsened,
+            improvementRate: total > 0 ? Math.round((counts.improved / total) * 100) : 0,
+        })
+    }
+
+    // Sort: best improvementRate first, then by total desc
+    stats.sort((a, b) => b.improvementRate - a.improvementRate || b.total - a.total)
+    return stats
 }
