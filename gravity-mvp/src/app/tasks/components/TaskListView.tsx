@@ -82,7 +82,7 @@ function DriverRow({
 
     const handleWrite = (e: React.MouseEvent) => {
         e.stopPropagation()
-        router.push(`/messages?msg=new&phone=${group.driverPhone}&driver=${group.driverId}`)
+        router.push(`/drivers/${group.driverId}`)
     }
     const handleCall = (e: React.MouseEvent) => {
         e.stopPropagation()

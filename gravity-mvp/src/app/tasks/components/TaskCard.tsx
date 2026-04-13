@@ -113,7 +113,7 @@ export default function TaskCard({ task }: TaskCardProps) {
 
     const handleWrite = (e: React.MouseEvent) => {
         e.stopPropagation()
-        router.push(`/messages?msg=new&phone=${task.driverPhone}&driver=${task.driverId}`)
+        router.push(`/drivers/${task.driverId}`)
     }
     const handleCall = (e: React.MouseEvent) => {
         e.stopPropagation()

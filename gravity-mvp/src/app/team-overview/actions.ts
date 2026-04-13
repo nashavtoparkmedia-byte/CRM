@@ -718,14 +718,14 @@ async function getRootCausePersistence(): Promise<PersistentRootCause[]> {
                 SELECT
                   payload->>'rootCause' as root_cause,
                   COUNT(*)::text as total_count,
-                  COUNT(DISTINCT DATE(created_at))::text as distinct_days
+                  COUNT(DISTINCT DATE("createdAt"))::text as distinct_days
                 FROM task_events
-                WHERE event_type = 'escalation_resolved'
-                  AND created_at >= NOW() - INTERVAL '${cfg.periodDays} days'
+                WHERE "eventType" = 'escalation_resolved'
+                  AND "createdAt" >= NOW() - INTERVAL '${cfg.periodDays} days'
                   AND payload->>'rootCause' IS NOT NULL
                 GROUP BY payload->>'rootCause'
-                HAVING COUNT(DISTINCT DATE(created_at)) >= ${cfg.minPersistentDays}
-                ORDER BY COUNT(DISTINCT DATE(created_at)) DESC, COUNT(*) DESC
+                HAVING COUNT(DISTINCT DATE("createdAt")) >= ${cfg.minPersistentDays}
+                ORDER BY COUNT(DISTINCT DATE("createdAt")) DESC, COUNT(*) DESC
                 LIMIT ${cfg.maxDisplay}
             `)
 

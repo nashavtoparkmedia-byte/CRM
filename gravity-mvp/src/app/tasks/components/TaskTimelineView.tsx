@@ -125,7 +125,7 @@ export default function TaskTimelineView() {
                 {/* Hover Quick Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
                     <button 
-                        onClick={() => router.push(`/messages?msg=new&phone=${group.driverPhone}&driver=${group.driverId}`)}
+                        onClick={() => router.push(`/drivers/${group.driverId}`)}
                         className="flex items-center justify-center gap-1.5 h-[32px] px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-[12px] font-semibold"
                         title="Написать"
                     >

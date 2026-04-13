@@ -299,7 +299,7 @@ export default function TaskDetailsPane() {
                     driverPhone={task.driverPhone}
                     driverId={task.driverId}
                     onCall={() => window.open(`tel:${task.driverPhone}`, '_self')}
-                    onWrite={() => router.push(`/messages?msg=new&phone=${task.driverPhone}&driver=${task.driverId}`)}
+                    onWrite={() => router.push(`/drivers/${task.driverId}`)}
                     onOpenChat={() => router.push(`/messages?focusedDriver=${task.driverId}`)}
                 />
                 {task.description && (

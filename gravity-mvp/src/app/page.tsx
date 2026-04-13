@@ -5,6 +5,7 @@ import { dashboardCards } from '@/lib/mock/dashboardData'
 import { SectionDescription } from '@/components/ui/SectionDescription'
 import { PageContainer } from '@/components/ui/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { DashboardTabs } from '@/components/ui/DashboardTabs'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,11 +18,12 @@ export default async function DashboardPage() {
             <div className="flex flex-col gap-6 animate-in fade-in duration-500">
                 {/* Header */}
                 <div>
-                    <PageHeader 
-                        title="Главная" 
-                        description="Общий обзор состояния парка" 
+                    <PageHeader
+                        title="Главная"
+                        description="Общий обзор состояния парка"
                     />
-                    <div className="-mt-4 mb-4">
+                    <DashboardTabs />
+                    <div className="mt-2 mb-4">
                         <SectionDescription sectionKey="dashboard" />
                     </div>
                 </div>
