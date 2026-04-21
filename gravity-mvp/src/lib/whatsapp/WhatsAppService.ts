@@ -300,11 +300,11 @@ export async function initializeClient(connectionId: string): Promise<void> {
         }),
         puppeteer: {
             headless: true,
+            executablePath: process.env.WA_CHROMIUM_PATH || 'D:\\shared\\playwright-browsers\\chromium-1217\\chrome-win64\\chrome.exe',
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
         },
         webVersionCache: {
-            type: 'remote',
-            remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1018280665-alpha.html',
+            type: 'none',
         }
     })
 

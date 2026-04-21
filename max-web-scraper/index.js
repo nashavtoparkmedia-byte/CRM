@@ -630,7 +630,7 @@ app.get('/status', (req, res) => {
 
 app.get('/qr', (req, res) => {
   const qrPath = path.join(__dirname, 'last_qr.png')
-  res.sendFile(qrPath, err => { if (err) res.status(404).json({ error: 'QR not found' }) })
+  res.sendFile(qrPath, { dotfiles: 'allow' }, err => { if (err) res.status(404).json({ error: 'QR not found' }) })
 })
 
 app.post('/set-history-mode', (req, res) => {

@@ -53,66 +53,30 @@ model MaxConnection {
   updatedAt DateTime @updatedAt
 }
 
-// Channel profile для водителя в MAX — не identity-модель, не замена Contact
-// maxExternalUserId / maxExternalChatId без @unique до завершения discovery
 model DriverMax {
-  id                  String   @id @default(cuid())
-  driverId            String   @unique
-  maxExternalUserId   String?  // stable user id — заполнится после Фазы 0
-  maxExternalChatId   String?  // chat/dialog id — может отличаться от user id
-  phone               String?
-  name                String?
-  createdAt           DateTime @default(now())
-
-  driver              Driver   @relation(fields: [driverId], references: [id])
+  id                String   @id @default(cuid())
+  driverId          String   @unique
+  maxExternalUserId String?
+  maxExternalChatId String?
+  phone             String?
+  name              String?
+  createdAt         DateTime @default(now())
+  driver            Driver   @relation(fields: [driverId], references: [id])
 
   @@index([maxExternalUserId])
   @@index([maxExternalChatId])
 }
 
-// Настройки личной сессии MAX (QR-авторизация)
-// Одна запись = одна активная сессия
 model MaxPersonalSession {
-  id                      String                   @id @default(cuid())
-
-  // Что выбрал пользователь при подключении
-  historyImportMode       MaxHistoryImportMode     @default(from_connection_time)
-
-  // Когда была выполнена QR-авторизация
+  id                      String               @id @default(cuid())
+  historyImportMode       MaxHistoryImportMode @default(from_connection_time)
   connectedAt             DateTime?
-
-  // Что реально смог транспорт (заполняется после Фазы 0.1)
   historySyncModeResolved MaxHistorySyncMode?
-
-  // Состояние процесса синхронизации
-  historySyncStatus       MaxHistorySyncStatus     @default(not_started)
-
-  // Когда завершилась начальная синхронизация
+  historySyncStatus       MaxHistorySyncStatus @default(not_started)
   initialSyncCompletedAt  DateTime?
-
-  isActive                Boolean                  @default(true)
-  createdAt               DateTime                 @default(now())
-  updatedAt               DateTime                 @updatedAt
-}
-
-enum MaxHistoryImportMode {
-  none                  // Не импортировать историю
-  from_connection_time  // Только новые сообщения с момента подключения
-  available_history     // Импортировать доступную историю
-}
-
-enum MaxHistorySyncMode {
-  live_only         // Mode C — только live events
-  partial_backfill  // Mode B — частичная история
-  full_backfill     // Mode A — полная доступная история
-}
-
-enum MaxHistorySyncStatus {
-  not_started
-  running
-  completed
-  partial   // завершён, но история была ограничена транспортом
-  failed
+  isActive                Boolean              @default(true)
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
 }
 
 model WhatsAppConnection {
@@ -313,13 +277,13 @@ model Driver {
   primaryYandexId      String?              @unique
   chats                Chat[]
   communicationEvents  CommunicationEvent[]
+  contactProfile       Contact?
   attentions           DriverAttention[]
   daySummaries         DriverDaySummary[]
   events               DriverEvent[]
+  maxProfile           DriverMax?
   managerTasks         ManagerTask[]
   tasks                Task[]
-  maxProfile           DriverMax?
-  contactProfile       Contact?             // inverse of Contact.yandexDriverId → Driver.yandexDriverId
 
   @@index([fullName])
   @@index([segment])
@@ -327,32 +291,30 @@ model Driver {
 }
 
 model Chat {
-  id                 String           @id @default(cuid())
-  driverId           String?
-  channel            ChatChannel
-  externalChatId     String           @unique
-  name               String?
-  lastMessageAt      DateTime?
-  unreadCount        Int              @default(0)
-  metadata           Json?            @default("{}")
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  requiresResponse   Boolean          @default(false)
-  status             String           @default("new")
-
-  // Conversation Workflow
-  assignedToUserId   String?
-  lastInboundAt      DateTime?
-  lastOutboundAt     DateTime?
-
-  // Contact Model (Phase 0) — nullable for backward compatibility
-  contactId          String?
-  contactIdentityId  String?
-
-  driver             Driver?          @relation(fields: [driverId], references: [id])
-  contact            Contact?         @relation(fields: [contactId], references: [id])
-  contactIdentity    ContactIdentity? @relation(fields: [contactIdentityId], references: [id])
-  messages           Message[]
+  id                String            @id @default(cuid())
+  driverId          String?
+  channel           ChatChannel
+  externalChatId    String            @unique
+  name              String?
+  lastMessageAt     DateTime?
+  unreadCount       Int               @default(0)
+  metadata          Json?             @default("{}")
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  requiresResponse  Boolean           @default(false)
+  status            String            @default("new")
+  contactId         String?
+  contactIdentityId String?
+  assignedToUserId  String?
+  lastInboundAt     DateTime?
+  lastOutboundAt    DateTime?
+  chatType          String            @default("private")
+  CallSession       CallSession[]
+  contact           Contact?          @relation(fields: [contactId], references: [id])
+  contactIdentity   ContactIdentity?  @relation(fields: [contactIdentityId], references: [id])
+  driver            Driver?           @relation(fields: [driverId], references: [id])
+  GroupVisibility   GroupVisibility[]
+  messages          Message[]
 
   @@index([driverId])
   @@index([contactId])
@@ -361,23 +323,25 @@ model Chat {
   @@index([status])
   @@index([assignedToUserId])
   @@index([status, assignedToUserId])
+  @@index([chatType])
 }
 
 model Message {
   id              String              @id @default(cuid())
-  clientMessageId String?             @unique    // Idempotency key from frontend
   chatId          String
   direction       MessageDirection
   type            MessageType         @default(text)
   content         String
   status          MessageStatus       @default(sent)
-  aiStatus        AiStatus?
-  channel         ChatChannel?        @default(whatsapp)
   externalId      String?             @unique
   metadata        Json?               @default("{}")
   sentAt          DateTime            @default(now())
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
+  channel         ChatChannel?        @default(whatsapp)
+  aiStatus        AiStatus?
+  clientMessageId String?             @unique
+  CallSession     CallSession?
   chat            Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
   attachments     MessageAttachment[]
   eventLogs       MessageEventLog[]
@@ -405,9 +369,9 @@ model MessageEventLog {
   id        String   @id @default(cuid())
   messageId String
   eventType String
-  status    String   @default("pending")  // pending | processing | processed | failed
   metadata  Json?
   createdAt DateTime @default(now())
+  status    String   @default("pending")
   updatedAt DateTime @updatedAt
   message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
@@ -533,6 +497,495 @@ model DailyParkStats {
   createdAt          DateTime @default(now())
 }
 
+/// Центральная сущность. Один Contact = один физический человек.
+/// Связь с Driver (Яндекс) опциональна через yandexDriverId.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model Contact {
+  id                String            @id @default(cuid())
+  displayName       String
+  displayNameSource ContactNameSource @default(channel)
+  masterSource      ContactSource     @default(chat)
+  yandexDriverId    String?           @unique
+  primaryPhoneId    String?
+  notes             String?
+  customFields      Json?             @default("{}")
+  tags              String[]          @default([])
+  isArchived        Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  CallSession       CallSession[]
+  chats             Chat[]
+  driver            Driver?           @relation(fields: [yandexDriverId], references: [yandexDriverId])
+  identities        ContactIdentity[]
+  mergesAsMerged    ContactMerge[]    @relation("MergeMerged")
+  mergesAsSurvivor  ContactMerge[]    @relation("MergeSurvivor")
+  phones            ContactPhone[]
+  tasks             Task[]
+
+  @@index([displayName])
+  @@index([isArchived])
+}
+
+/// Телефонный номер контакта. Хранится в E.164 (+79221234567).
+model ContactPhone {
+  id         String             @id @default(cuid())
+  contactId  String
+  phone      String
+  label      String?
+  isPrimary  Boolean            @default(false)
+  source     ContactPhoneSource @default(manual)
+  isActive   Boolean            @default(true)
+  verifiedAt DateTime?
+  createdAt  DateTime           @default(now())
+  identities ContactIdentity[]
+  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, phone])
+  @@index([phone])
+}
+
+/// Идентификатор контакта в канале (telegramId, WA JID, maxUserId и т.д.)
+model ContactIdentity {
+  id                    String                @id @default(cuid())
+  contactId             String
+  channel               ChatChannel
+  externalId            String
+  phoneId               String?
+  displayName           String?
+  source                ContactIdentitySource @default(auto)
+  confidence            Float                 @default(1.0)
+  isActive              Boolean               @default(true)
+  metadata              Json?                 @default("{}")
+  createdAt             DateTime              @default(now())
+  reachabilityCheckedAt DateTime?
+  reachabilityStatus    ReachabilityStatus    @default(unknown)
+  chats                 Chat[]
+  contact               Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  phone                 ContactPhone?         @relation(fields: [phoneId], references: [id])
+
+  @@unique([channel, externalId])
+  @@index([contactId])
+  @@index([phoneId])
+}
+
+/// Аудит-лог операций склейки/расклейки контактов.
+model ContactMerge {
+  id             String      @id @default(cuid())
+  survivorId     String
+  mergedId       String
+  action         MergeAction @default(merge)
+  mergedBy       String      @default("system")
+  reason         MergeReason
+  confidence     Float?
+  snapshotBefore Json
+  createdAt      DateTime    @default(now())
+  driverYandexId String?
+  merged         Contact     @relation("MergeMerged", fields: [mergedId], references: [id])
+  survivor       Contact     @relation("MergeSurvivor", fields: [survivorId], references: [id])
+
+  @@index([survivorId])
+  @@index([mergedId])
+}
+
+model Task {
+  id                    String       @id @default(cuid())
+  driverId              String
+  source                TaskSource   @default(manual)
+  type                  String
+  title                 String
+  description           String?
+  status                TaskStatus   @default(todo)
+  priority              TaskPriority @default(medium)
+  isActive              Boolean      @default(true)
+  triggerType           String?
+  triggerKey            String?
+  dedupeKey             String?
+  dueAt                 DateTime?
+  assigneeId            String?
+  createdBy             String?
+  resolvedBy            String?
+  chatId                String?
+  originMessageId       String?
+  originExcerpt         String?
+  originCreatedAt       DateTime?
+  hasNewReply           Boolean      @default(false)
+  lastInboundMessageAt  DateTime?
+  lastOutboundMessageAt DateTime?
+  metadata              Json?        @default("{}")
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+  resolvedAt            DateTime?
+  contactId             String?
+  scenario              String?
+  stage                 String?
+  stageEnteredAt        DateTime?
+  nextActionAt          DateTime?
+  slaDeadline           DateTime?
+  closedReason          String?
+  closedComment         String?
+  scenarioData          Json?        @default("{}")
+  events                TaskEvent[]
+  contact               Contact?     @relation(fields: [contactId], references: [id])
+  driver                Driver       @relation(fields: [driverId], references: [id])
+
+  @@index([driverId])
+  @@index([contactId])
+  @@index([status, priority, dueAt])
+  @@index([isActive, source])
+  @@index([chatId])
+  @@index([assigneeId])
+  @@index([scenario, stage, isActive])
+  @@index([driverId, scenario, isActive])
+  @@index([slaDeadline])
+  @@index([nextActionAt])
+  @@map("tasks")
+}
+
+model TaskEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  eventType String
+  payload   Json?    @default("{}")
+  actorType String?  @default("system")
+  actorId   String?
+  createdAt DateTime @default(now())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt(sort: Desc)])
+  @@index([eventType])
+  @@map("task_events")
+}
+
+model CrmUser {
+  id        String   @id @default(cuid())
+  name      String
+  role      String   @default("manager")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("crm_users")
+}
+
+/// Единственная запись — настройки AI агента (upsert by id="singleton")
+model AiAgentConfig {
+  id                    String         @id @default("singleton")
+  enabled               Boolean        @default(false)
+  mode                  AiAgentMode    @default(off)
+  provider              AiProviderType @default(anthropic)
+  apiKeyEncrypted       String?
+  classificationModel   String         @default("claude-haiku-4-5")
+  responseModel         String         @default("claude-sonnet-4-5")
+  language              String         @default("ru")
+  confidenceThreshold   Float          @default(0.75)
+  maxAutoRepliesPerChat Int            @default(5)
+  activeChannels        String[]
+  /// { alwaysEscalate: string[], neverAutoReply: string[] }
+  escalationPolicy      Json?
+  /// { enabled: bool, from: "09:00", to: "21:00", timezone: "Europe/Moscow" }
+  workingHours          Json?
+  /// [{ condition, model }]
+  routingRules          Json?
+  promptRole            String?
+  promptTone            String?
+  promptAllowed         String?
+  promptForbidden       String?
+  /// "ok" | "error" | "unchecked"
+  connectionStatus      String?
+  lastConnectionCheckAt DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+/// FAQ / База знаний агента
+model KnowledgeBaseEntry {
+  id              String    @id @default(cuid())
+  title           String
+  category        String    @default("general")
+  sampleQuestions Json      @default("[]")
+  answer          String
+  tags            String[]
+  channels        String[]
+  active          Boolean   @default(true)
+  priority        Int       @default(0)
+  lastReviewedAt  DateTime?
+  updatedBy       String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([active, priority(sort: Desc)])
+  @@index([category])
+}
+
+/// Журнал решений AI агента
+model AiDecisionLog {
+  id                   String   @id @default(cuid())
+  messageId            String?
+  chatId               String?
+  channel              String?
+  detectedIntent       String?
+  confidence           Float?
+  /// "auto_reply" | "escalate" | "skip"
+  decision             String?
+  selectedModel        String?
+  usedKnowledgeEntries Json?
+  generatedReply       String?
+  replySent            Boolean  @default(false)
+  escalated            Boolean  @default(false)
+  error                String?
+  reviewedByOperator   Boolean  @default(false)
+  /// "good" | "bad" | "fixed"
+  operatorVerdict      String?
+  createdAt            DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([channel])
+  @@index([detectedIntent])
+  @@index([decision])
+}
+
+/// Задания на импорт истории из мессенджеров
+model HistoryImportJob {
+  id                String         @id @default(cuid())
+  channels          String[]
+  mode              AiImportMode
+  daysBack          Int?
+  status            AiImportStatus @default(queued)
+  /// "full" | "partial" | "live_only"
+  resultType        String?
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  chatsScanned      Int            @default(0)
+  contactsFound     Int            @default(0)
+  messagesImported  Int            @default(0)
+  coveredPeriodFrom DateTime?
+  coveredPeriodTo   DateTime?
+  detailsJson       Json?
+  createdAt         DateTime       @default(now())
+  connectionId      String?
+
+  @@index([status, createdAt(sort: Desc)])
+}
+
+model CallSession {
+  id              String           @id
+  deviceId        String
+  chatId          String?
+  messageId       String?          @unique
+  contactId       String?
+  direction       MessageDirection
+  callerNumber    String
+  calleeNumber    String
+  status          CallStatus       @default(ringing)
+  startedAt       DateTime         @default(now())
+  answeredAt      DateTime?
+  endedAt         DateTime?
+  duration        Int?
+  disposition     CallDisposition?
+  androidCallId   String?
+  metadata        Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime
+  Chat            Chat?            @relation(fields: [chatId], references: [id])
+  Contact         Contact?         @relation(fields: [contactId], references: [id])
+  TelephonyDevice TelephonyDevice  @relation(fields: [deviceId], references: [id])
+  Message         Message?         @relation(fields: [messageId], references: [id])
+
+  @@index([calleeNumber])
+  @@index([callerNumber])
+  @@index([chatId])
+  @@index([contactId])
+  @@index([deviceId, androidCallId])
+  @@index([deviceId, startedAt(sort: Desc)])
+  @@index([deviceId, status])
+}
+
+model GroupVisibility {
+  id         String   @id
+  userId     String
+  chatId     String
+  visibility String   @default("visible")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  Chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chatId])
+  @@index([userId])
+}
+
+model TelephonyCommand {
+  id              String          @id
+  deviceId        String
+  type            String
+  payload         Json
+  status          CommandStatus   @default(pending)
+  deliveredAt     DateTime?
+  executedAt      DateTime?
+  failedAt        DateTime?
+  failReason      String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime
+  TelephonyDevice TelephonyDevice @relation(fields: [deviceId], references: [id])
+
+  @@index([deviceId, status])
+  @@index([status, createdAt])
+}
+
+model TelephonyDevice {
+  id               String             @id
+  androidId        String             @unique
+  name             String
+  phoneNumber      String?
+  simOperator      String?
+  status           DeviceStatus       @default(offline)
+  isActive         Boolean            @default(true)
+  revokedAt        DateTime?
+  lastHeartbeat    DateTime?
+  appVersion       String?
+  deviceSecret     String             @unique
+  fcmToken         String?
+  metadata         Json?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime
+  CallSession      CallSession[]
+  TelephonyCommand TelephonyCommand[]
+
+  @@index([isActive])
+  @@index([lastHeartbeat])
+  @@index([status])
+}
+
+model config_change_log {
+  id             Int      @id @default(autoincrement())
+  parameter_name String
+  previous_value String?
+  new_value      String
+  changed_at     DateTime @default(now()) @db.Timestamptz(6)
+  changed_by     String?
+
+  @@index([changed_at(sort: Desc)], map: "idx_config_change_log_time")
+}
+
+model cron_health_log {
+  id            Int      @id @default(autoincrement())
+  cron_name     String
+  status        String   @default("ok")
+  executed_at   DateTime @default(now()) @db.Timestamptz(6)
+  duration_ms   Int      @default(0)
+  error_message String?
+  metadata      Json?
+
+  @@index([cron_name, executed_at(sort: Desc)], map: "idx_cron_health_log_name_time")
+}
+
+model execution_lock {
+  operation_name String   @id
+  locked_at      DateTime @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime @db.Timestamptz(6)
+  locked_by      String?
+}
+
+model health_score_history {
+  id           Int      @id @default(autoincrement())
+  manager_id   String
+  score        Int
+  health_level String
+  recorded_at  DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([manager_id, recorded_at(sort: Desc)], map: "idx_hsh_manager_date")
+  @@index([manager_id, recorded_at(sort: Desc)], map: "idx_hsh_manager_time")
+}
+
+model health_snapshots {
+  manager_id     String   @id
+  score          Int
+  decline_streak Int      @default(0)
+  recorded_at    DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model integrity_check_log {
+  id              Int      @id @default(autoincrement())
+  checked_at      DateTime @default(now()) @db.Timestamptz(6)
+  duration_ms     Int      @default(0)
+  total_issues    Int      @default(0)
+  critical_issues Int      @default(0)
+  warning_issues  Int      @default(0)
+  details         Json?
+
+  @@index([checked_at(sort: Desc)], map: "idx_integrity_check_log_time")
+}
+
+model intervention_actions {
+  id              String   @id
+  manager_id      String
+  action          String
+  comment         String?
+  score_at_action Int?
+  outcome         String?
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([manager_id, created_at(sort: Desc)], map: "idx_intervention_actions_manager")
+}
+
+model perf_log {
+  id             Int      @id @default(autoincrement())
+  operation_name String
+  operation_type String   @default("other")
+  duration_ms    Int
+  is_slow        Boolean  @default(false)
+  logged_at      DateTime @default(now()) @db.Timestamptz(6)
+  metadata       Json?
+
+  @@index([logged_at(sort: Desc)], map: "idx_perf_log_time")
+}
+
+model scenario_field_settings {
+  id         String    @id
+  scenarioId String
+  fieldId    String
+  showInList Boolean?
+  showInCard Boolean?
+  filterable Boolean?
+  sortable   Boolean?
+  groupable  Boolean?
+  order      Int?
+  updatedAt  DateTime? @default(now()) @db.Timestamp(6)
+  updatedBy  String?
+
+  @@unique([scenarioId, fieldId], map: "scenario_field_settings_unique")
+  @@index([scenarioId], map: "scenario_field_settings_scenario_idx")
+}
+
+model stability_check_log {
+  id            Int      @id @default(autoincrement())
+  scope         String
+  status        String
+  checked_at    DateTime @default(now()) @db.Timestamptz(6)
+  anomaly_count Int      @default(0)
+  report        Json?
+
+  @@index([checked_at(sort: Desc)], map: "idx_stability_check_log_time")
+}
+
+enum MaxHistoryImportMode {
+  none
+  from_connection_time
+  available_history
+}
+
+enum MaxHistorySyncMode {
+  live_only
+  partial_backfill
+  full_backfill
+}
+
+enum MaxHistorySyncStatus {
+  not_started
+  running
+  completed
+  partial
+  failed
+}
+
 enum MessageDirection {
   inbound
   outbound
@@ -540,11 +993,11 @@ enum MessageDirection {
 }
 
 enum AiStatus {
-  pending    // входящее — ожидает обработки AI
-  processing // AI обрабатывает
-  done       // AI ответил или передал оператору
-  skipped    // не требует обработки AI
-  failed     // ошибка AI
+  pending
+  processing
+  done
+  skipped
+  failed
 }
 
 enum ChatChannel {
@@ -552,6 +1005,7 @@ enum ChatChannel {
   whatsapp
   max
   yandex_pro
+  phone
 }
 
 enum MessageStatus {
@@ -571,6 +1025,7 @@ enum MessageType {
   voice
   document
   system
+  call
 }
 
 enum WhatsAppMessageType {
@@ -602,103 +1057,6 @@ enum AnalyticsEventType {
   BROADCAST_FAILED
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// UNIFIED CONTACT MODEL — spec v1.1
-// ═══════════════════════════════════════════════════════════════════
-
-/// Центральная сущность. Один Contact = один физический человек.
-/// Связь с Driver (Яндекс) опциональна через yandexDriverId.
-model Contact {
-  id                String           @id @default(cuid())
-  displayName       String
-  displayNameSource ContactNameSource @default(channel)
-  masterSource      ContactSource    @default(chat)
-  yandexDriverId    String?          @unique         // FK → Driver.yandexDriverId
-  primaryPhoneId    String?
-  notes             String?
-  customFields      Json?            @default("{}")
-  tags              String[]         @default([])
-  isArchived        Boolean          @default(false)
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-
-  phones            ContactPhone[]
-  identities        ContactIdentity[]
-  chats             Chat[]
-  tasks             Task[]
-  mergesAsSurvivor  ContactMerge[]   @relation("MergeSurvivor")
-  mergesAsMerged    ContactMerge[]   @relation("MergeMerged")
-  driver            Driver?          @relation(fields: [yandexDriverId], references: [yandexDriverId])
-
-  @@index([displayName])
-  @@index([isArchived])
-}
-
-/// Телефонный номер контакта. Хранится в E.164 (+79221234567).
-model ContactPhone {
-  id         String          @id @default(cuid())
-  contactId  String
-  phone      String                              // E.164: +79221234567
-  label      String?                             // "основной", "рабочий"
-  isPrimary  Boolean         @default(false)
-  source     ContactPhoneSource @default(manual)
-  isActive   Boolean         @default(true)
-  verifiedAt DateTime?
-  createdAt  DateTime        @default(now())
-
-  contact    Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  identities ContactIdentity[]
-
-  @@unique([contactId, phone])
-  @@index([phone])
-}
-
-/// Идентификатор контакта в канале (telegramId, WA JID, maxUserId и т.д.)
-model ContactIdentity {
-  id          String      @id @default(cuid())
-  contactId   String
-  channel     ChatChannel
-  externalId  String                              // ID в канале
-  phoneId     String?                             // FK → ContactPhone
-  displayName String?                             // имя в этом канале
-  source      ContactIdentitySource @default(auto)
-  confidence  Float       @default(1.0)
-  isActive    Boolean     @default(true)
-  metadata    Json?       @default("{}")
-  createdAt   DateTime    @default(now())
-
-  reachabilityStatus    ReachabilityStatus @default(unknown)
-  reachabilityCheckedAt DateTime?
-
-  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  phone       ContactPhone? @relation(fields: [phoneId], references: [id])
-  chats       Chat[]
-
-  @@unique([channel, externalId])
-  @@index([contactId])
-  @@index([phoneId])
-}
-
-/// Аудит-лог операций склейки/расклейки контактов.
-model ContactMerge {
-  id             String       @id @default(cuid())
-  survivorId     String
-  mergedId       String
-  action         MergeAction  @default(merge)
-  mergedBy       String       @default("system")  // "system" | userId
-  reason         MergeReason
-  confidence     Float?
-  driverYandexId String?                           // Driver.yandexDriverId at merge time
-  snapshotBefore Json                              // состояние merged до операции
-  createdAt      DateTime     @default(now())
-
-  survivor       Contact      @relation("MergeSurvivor", fields: [survivorId], references: [id])
-  merged         Contact      @relation("MergeMerged", fields: [mergedId], references: [id])
-
-  @@index([survivorId])
-  @@index([mergedId])
-}
-
 enum ContactSource {
   yandex
   chat
@@ -717,6 +1075,7 @@ enum ContactPhoneSource {
   telegram
   max
   manual
+  phone
 }
 
 enum ContactIdentitySource {
@@ -744,10 +1103,6 @@ enum MergeReason {
   undo
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// TASKS MODULE
-// ═══════════════════════════════════════════════════════════════════
-
 enum TaskSource {
   auto
   manual
@@ -771,119 +1126,6 @@ enum TaskPriority {
   medium
   low
 }
-
-model Task {
-  id                    String       @id @default(cuid())
-  driverId              String
-  source                TaskSource   @default(manual)
-  type                  String                          // e.g. "call_back", "check_docs", "inactive_followup"
-  title                 String
-  description           String?
-  status                TaskStatus   @default(todo)
-  priority              TaskPriority @default(medium)
-  isActive              Boolean      @default(true)     // used in partial unique index
-
-  // Contact Model (Phase 0) — nullable for backward compatibility
-  contactId             String?
-
-  // Trigger / Dedupe (for auto-tasks)
-  triggerType           String?                          // business semantics: "driver_inactive"
-  triggerKey            String?                          // specific computation: "inactive_3d_since_..."
-  dedupeKey             String?                          // technical consolidation key
-
-  // Scheduling
-  dueAt                 DateTime?
-
-  // Assignment
-  assigneeId            String?
-  createdBy             String?
-  resolvedBy            String?
-
-  // Chat linkage
-  chatId                String?
-  originMessageId       String?
-  originExcerpt         String?
-  originCreatedAt       DateTime?
-
-  // Reactive sync flags
-  hasNewReply           Boolean      @default(false)
-  lastInboundMessageAt  DateTime?
-  lastOutboundMessageAt DateTime?
-
-  // Metadata
-  metadata              Json?        @default("{}")
-
-  // Scenario Fields (Wave 1) — structured operational data per scenario
-  scenarioData          Json?        @default("{}")
-
-  // Scenario (Phase 1) — nullable for backward compatibility
-  scenario              String?                          // 'onboarding' | 'churn' | 'care' | 'promo_control'
-  stage                 String?                          // current stage within scenario config
-  stageEnteredAt        DateTime?                        // when current stage was entered (for SLA calc)
-  nextActionAt          DateTime?                        // when manager should act next
-  slaDeadline           DateTime?                        // SLA deadline for current stage
-  closedReason          String?                          // e.g. 'returned', 'launched', 'lost', 'completed'
-  closedComment         String?                          // free-text comment on close
-
-  // Timestamps
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-  resolvedAt            DateTime?
-
-  // Relations
-  driver                Driver       @relation(fields: [driverId], references: [id])
-  contact               Contact?     @relation(fields: [contactId], references: [id])
-  events                TaskEvent[]
-
-  // Indexes
-  @@index([driverId])
-  @@index([contactId])
-  @@index([status, priority, dueAt])
-  @@index([isActive, source])
-  @@index([chatId])
-  @@index([assigneeId])
-  @@index([scenario, stage, isActive])
-  @@index([driverId, scenario, isActive])
-  @@index([slaDeadline])
-  @@index([nextActionAt])
-
-  @@map("tasks")
-}
-
-model TaskEvent {
-  id        String   @id @default(cuid())
-  taskId    String
-  eventType String                          // e.g. "created", "status_changed", "message_sent", "reply_received"
-  payload   Json?    @default("{}")
-  actorType String?  @default("system")     // "system" | "user" | "auto"
-  actorId   String?
-  createdAt DateTime @default(now())
-
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId, createdAt(sort: Desc)])
-  @@index([eventType])
-
-  @@map("task_events")
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// CRM USERS — Phase 0
-// ═══════════════════════════════════════════════════════════════════
-
-model CrmUser {
-  id        String   @id @default(cuid())
-  name      String
-  role      String   @default("manager")  // "manager" | "lead"
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  @@map("crm_users")
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// AI CONTROL CENTER — Block 3.5
-// ═══════════════════════════════════════════════════════════════════
 
 enum AiAgentMode {
   off
@@ -911,95 +1153,29 @@ enum AiImportStatus {
   failed
 }
 
-/// Единственная запись — настройки AI агента (upsert by id="singleton")
-model AiAgentConfig {
-  id                   String         @id @default("singleton")
-  enabled              Boolean        @default(false)
-  mode                 AiAgentMode    @default(off)
-  provider             AiProviderType @default(anthropic)
-  apiKeyEncrypted      String?
-  classificationModel  String         @default("claude-haiku-4-5")
-  responseModel        String         @default("claude-sonnet-4-5")
-  language             String         @default("ru")
-  confidenceThreshold  Float          @default(0.75)
-  maxAutoRepliesPerChat Int           @default(5)
-  activeChannels       String[]
-  escalationPolicy     Json?          /// { alwaysEscalate: string[], neverAutoReply: string[] }
-  workingHours         Json?          /// { enabled: bool, from: "09:00", to: "21:00", timezone: "Europe/Moscow" }
-  routingRules         Json?          /// [{ condition, model }]
-  promptRole           String?
-  promptTone           String?
-  promptAllowed        String?
-  promptForbidden      String?
-  connectionStatus     String?        /// "ok" | "error" | "unchecked"
-  lastConnectionCheckAt DateTime?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+enum CallDisposition {
+  answered
+  missed
+  busy
+  rejected
+  no_answer
 }
 
-/// FAQ / База знаний агента
-model KnowledgeBaseEntry {
-  id              String    @id @default(cuid())
-  title           String
-  category        String    @default("general")
-  sampleQuestions Json      @default("[]")
-  answer          String
-  tags            String[]
-  channels        String[]
-  active          Boolean   @default(true)
-  priority        Int       @default(0)
-  lastReviewedAt  DateTime?
-  updatedBy       String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([active, priority(sort: Desc)])
-  @@index([category])
+enum CallStatus {
+  ringing
+  active
+  completed
+  failed
 }
 
-/// Журнал решений AI агента
-model AiDecisionLog {
-  id                   String   @id @default(cuid())
-  messageId            String?
-  chatId               String?
-  channel              String?
-  detectedIntent       String?
-  confidence           Float?
-  decision             String?  /// "auto_reply" | "escalate" | "skip"
-  selectedModel        String?
-  usedKnowledgeEntries Json?
-  generatedReply       String?
-  replySent            Boolean  @default(false)
-  escalated            Boolean  @default(false)
-  error                String?
-  reviewedByOperator   Boolean  @default(false)
-  operatorVerdict      String?  /// "good" | "bad" | "fixed"
-  createdAt            DateTime @default(now())
-
-  @@index([createdAt(sort: Desc)])
-  @@index([channel])
-  @@index([detectedIntent])
-  @@index([decision])
+enum CommandStatus {
+  pending
+  delivered
+  executed
+  failed
 }
 
-/// Задания на импорт истории из мессенджеров
-model HistoryImportJob {
-  id                String         @id @default(cuid())
-  channels          String[]
-  mode              AiImportMode
-  daysBack          Int?
-  connectionId      String?
-  status            AiImportStatus @default(queued)
-  resultType        String?        /// "full" | "partial" | "live_only"
-  startedAt         DateTime?
-  finishedAt        DateTime?
-  chatsScanned      Int            @default(0)
-  contactsFound     Int            @default(0)
-  messagesImported  Int            @default(0)
-  coveredPeriodFrom DateTime?
-  coveredPeriodTo   DateTime?
-  detailsJson       Json?
-  createdAt         DateTime       @default(now())
-
-  @@index([status, createdAt(sort: Desc)])
+enum DeviceStatus {
+  online
+  offline
 }
