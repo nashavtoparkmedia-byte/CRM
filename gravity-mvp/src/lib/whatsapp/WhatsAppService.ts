@@ -1495,8 +1495,9 @@ export async function getActualStatus(connectionId: string): Promise<{
 }
 
 /**
- * Destroy client, wipe LocalAuth session folder, reset DB status.
- * For UI "Пересоздать сессию" button in broken/auth_failed/degraded states.
+ * Destroy client, wipe LocalAuth session folder, reset DB status,
+ * then AUTO-RESTART init so user sees progress immediately (QR or broken again).
+ * Wired to UI "Пересоздать сессию" button in broken/auth_failed/degraded states.
  */
 export async function forceResetSession(connectionId: string): Promise<void> {
     opsLog('info', 'wa_force_reset_start', { connectionId })
@@ -1517,5 +1518,14 @@ export async function forceResetSession(connectionId: string): Promise<void> {
 
     await safeUpdateConnection(connectionId, {
         status: 'idle', sessionData: null, phoneNumber: null,
+    })
+
+    // Auto-restart init in background so user sees live progress (QR or broken again).
+    // Do NOT await — UI needs immediate response; init status flows through state store.
+    opsLog('info', 'wa_force_reset_auto_init', { connectionId })
+    initializeClient(connectionId).catch(err => {
+        opsLog('error', 'wa_force_reset_auto_init_failed', {
+            connectionId, error: err?.message ?? String(err),
+        })
     })
 }
