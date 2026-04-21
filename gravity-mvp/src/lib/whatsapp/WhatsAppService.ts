@@ -2,12 +2,12 @@ import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
 import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
-import fetch from 'node-fetch'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import * as registry from '@/lib/TransportRegistry'
+import { opsLog } from '@/lib/opsLog'
 
 const MAX_MEDIA_SIZE_BYTES = 10 * 1024 * 1024 // 10MB per file
 const HISTORY_MONTHS = 3
@@ -26,11 +26,6 @@ if (process.env.NODE_ENV !== 'production') globalForWAIds._waInstanceIds = insta
 const globalSyncDone = global as unknown as { _waSyncDone?: Set<string> }
 const syncDoneSet = globalSyncDone._waSyncDone || new Set<string>()
 if (process.env.NODE_ENV !== 'production') globalSyncDone._waSyncDone = syncDoneSet
-
-if (typeof global.fetch === 'undefined') {
-    // @ts-ignore
-    global.fetch = fetch as any
-}
 
 async function safeUpdateConnection(connectionId: string, data: any) {
     try {
@@ -280,14 +275,24 @@ export async function initializeClient(connectionId: string): Promise<void> {
     // Always ensure registry entry exists
     registry.ensureEntry(connectionId, 'whatsapp')
 
-    if (clients.has(connectionId) && clients.get(connectionId)!.info) {
-        // Client already alive — just ensure registry reflects ready state
-        if (!instanceIds.has(connectionId)) {
-            const iid = registry.beginNewInstance(connectionId)
-            instanceIds.set(connectionId, iid)
-            registry.setReady(connectionId, iid)
+    // Smart reuse: only skip init if client is actually alive AND heartbeat is fresh.
+    // `client.info` alone is not enough — can be truthy for zombie puppeteer process.
+    const existingClient = clients.get(connectionId)
+    const existingEntry = registry.getEntry(connectionId)
+    if (existingClient?.info && existingEntry?.state === 'ready') {
+        const lastSeen = existingEntry.lastSeen?.getTime() ?? 0
+        const heartbeatAgeMs = Date.now() - lastSeen
+        if (heartbeatAgeMs < 5 * 60 * 1000) {
+            opsLog('info', 'wa_init_skipped_healthy', { connectionId, heartbeatAgeMs })
+            if (!instanceIds.has(connectionId)) {
+                const iid = registry.beginNewInstance(connectionId)
+                instanceIds.set(connectionId, iid)
+                registry.setReady(connectionId, iid)
+            }
+            return
         }
-        return
+        opsLog('warn', 'wa_init_existing_stale_destroying', { connectionId, heartbeatAgeMs })
+        await destroyClient(connectionId).catch(() => {})
     }
 
     const instanceId = registry.beginNewInstance(connectionId)
@@ -307,6 +312,8 @@ export async function initializeClient(connectionId: string): Promise<void> {
                 '--disable-dev-shm-usage',
                 '--disable-gpu',
                 '--disable-blink-features=AutomationControlled',
+                '--disable-features=IsolateOrigins,site-per-process',
+                '--disable-site-isolation-trials',
             ],
             ignoreDefaultArgs: ['--enable-automation'],
         },
@@ -317,9 +324,22 @@ export async function initializeClient(connectionId: string): Promise<void> {
 
     clients.set(connectionId, client)
 
+    // Visibility into WA Web internal lifecycle — helps diagnose "Execution context destroyed"
+    client.on('loading_screen', (percent, message) => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
+        opsLog('info', 'wa_loading_screen', { connectionId, instanceId, percent, message })
+    })
+
+    client.on('change_state', (waState) => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
+        registry.touch(connectionId, instanceId)
+        opsLog('info', 'wa_change_state', { connectionId, instanceId, waState: String(waState) })
+    })
+
     client.on('qr', async (qr) => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
         try {
-            console.log(`[WA-SERVICE] QR received for ${connectionId}`)
+            opsLog('info', 'wa_qr_received', { connectionId, instanceId })
             const QRCode = (await import('qrcode')).default
             const qrDataUrl = await QRCode.toDataURL(qr)
             await safeUpdateConnection(connectionId, { status: 'qr', sessionData: qrDataUrl })
@@ -329,10 +349,12 @@ export async function initializeClient(connectionId: string): Promise<void> {
     })
 
     client.on('authenticated', async () => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
         try {
-            console.log(`[WA-SERVICE] Authenticated for ${connectionId}`)
+            opsLog('info', 'wa_authenticated', { connectionId, instanceId })
             await safeUpdateConnection(connectionId, { status: 'authenticated' })
-            await saveSession(connectionId, client)
+            // saveSession moved to 'ready' handler — on 'authenticated', WA Web may still be
+            // navigating internally and pupPage.evaluate can trigger "Execution context destroyed"
         } catch (err) {
             console.error(`[WA-SERVICE] Authenticated event error for ${connectionId}:`, err)
         }
@@ -342,19 +364,29 @@ export async function initializeClient(connectionId: string): Promise<void> {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
             registry.setReady(connectionId, instanceId)
+            opsLog('info', 'wa_ready', { connectionId, instanceId, phone: client.info?.wid?.user })
             const info = client.info
             await safeUpdateConnection(connectionId, {
                 status: 'ready',
                 phoneNumber: info?.wid?.user || null
             })
-            // Auto-sync only on first ready (not on reconnects)
+            // saveSession moved here — WA Web is stabilized after 'ready'
+            await saveSession(connectionId, client)
+            // Auto-sync only on first ready. Flag is set only AFTER syncHistory succeeds.
             if (!syncDoneSet.has(connectionId)) {
-                syncDoneSet.add(connectionId)
-                syncHistory(connectionId, client).catch(err =>
-                    console.error(`[WA-SERVICE] Background sync error:`, err)
-                )
+                syncHistory(connectionId, client)
+                    .then(() => {
+                        syncDoneSet.add(connectionId)
+                        opsLog('info', 'wa_sync_complete', { connectionId, instanceId })
+                    })
+                    .catch(err => {
+                        opsLog('error', 'wa_sync_failed', {
+                            connectionId, instanceId,
+                            error: err?.message ?? String(err),
+                        })
+                    })
             } else {
-                console.log(`[WA-SERVICE] Skipping auto-sync for ${connectionId} (already done)`)
+                opsLog('info', 'wa_sync_skipped_already_done', { connectionId, instanceId })
             }
         } catch (err) {
             console.error(`[WA-SERVICE] Ready event error for ${connectionId}:`, err)
@@ -362,6 +394,8 @@ export async function initializeClient(connectionId: string): Promise<void> {
     })
 
     client.on('message', async (msg: Message) => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
+        registry.touch(connectionId, instanceId)
         const isOutbound = msg.fromMe
         // For outbound messages (sent from manager's phone), the chat partner is `msg.to`, not `msg.from`.
         // For inbound, partner is `msg.from`. We use this as the chat key in either case.
@@ -575,9 +609,16 @@ export async function initializeClient(connectionId: string): Promise<void> {
         }
     })
 
+    // Heartbeat from any outgoing/incoming ACK — proves channel is truly alive
+    client.on('message_ack', () => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
+        registry.touch(connectionId, instanceId)
+    })
+
     client.on('auth_failure', async (msg) => {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            opsLog('error', 'wa_auth_failure', { connectionId, instanceId, reason: String(msg) })
             // Unrecoverable — no auto-reconnect
             registry.setFailed(connectionId, instanceId, `auth_failure: ${msg}`)
             await safeUpdateConnection(connectionId, { status: 'error' })
@@ -606,12 +647,44 @@ export async function initializeClient(connectionId: string): Promise<void> {
         }
     })
 
+    const INIT_TIMEOUT_MS = 60_000
+    const initStartedAt = Date.now()
+    opsLog('info', 'wa_init_call', { connectionId, instanceId })
+
     try {
-        await client.initialize()
-    } catch (err) {
-        console.error(`[WA-SERVICE] Initialization failed for ${connectionId}:`, err)
+        await Promise.race([
+            client.initialize(),
+            new Promise<never>((_, reject) =>
+                setTimeout(
+                    () => reject(new Error(`initialize_timeout_${INIT_TIMEOUT_MS}ms`)),
+                    INIT_TIMEOUT_MS,
+                ),
+            ),
+        ])
+        opsLog('info', 'wa_init_success', {
+            connectionId, instanceId, elapsedMs: Date.now() - initStartedAt,
+        })
+    } catch (err: any) {
+        const elapsedMs = Date.now() - initStartedAt
+        const msg = err?.message ?? String(err)
+        const errorClass =
+            /Execution context was destroyed/i.test(msg) ? 'cdp_context_destroyed' :
+            /Navigation timeout/i.test(msg) ? 'navigation_timeout' :
+            /Target closed/i.test(msg) ? 'browser_closed' :
+            /initialize_timeout/i.test(msg) ? 'our_init_timeout' :
+            'other'
+        opsLog('error', 'wa_init_failed', {
+            connectionId, instanceId, elapsedMs, errorClass,
+            errorMessage: msg,
+            errorStack: err?.stack?.split('\n').slice(0, 5).join('\n'),
+        })
+        // Critical: write error status to DB so UI doesn't show stale "ready" from previous session
+        await safeUpdateConnection(connectionId, { status: 'error' })
+        registry.setFailed(connectionId, instanceId, `init_failed: ${errorClass}`)
+        try { await client.destroy() } catch { /* zombie process may not respond */ }
         clients.delete(connectionId)
-        throw err
+        instanceIds.delete(connectionId)
+        // NO throw — warmup continues with other connections
     }
 }
 
@@ -1345,4 +1418,104 @@ export async function checkReachability(
         console.error(`[WA-CHECK] Error checking ${phone}: ${err.message}`)
         return { reachable: true }
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Derived status — single source of truth for UI
+// Combines DB status + registry state + runtime liveness + heartbeat
+// ═══════════════════════════════════════════════════════════════════
+
+const HEARTBEAT_STALE_MS = 5 * 60 * 1000
+
+export type ActualWhatsAppState =
+    | 'idle' | 'initializing' | 'qr_required' | 'authenticated'
+    | 'ready' | 'degraded' | 'reconnecting' | 'disconnected'
+    | 'auth_failed' | 'broken'
+
+const HUMAN_LABELS: Record<ActualWhatsAppState, string> = {
+    idle: 'Не подключён',
+    initializing: 'Подключение…',
+    qr_required: 'Отсканируйте QR-код',
+    authenticated: 'Авторизация…',
+    ready: 'Подключён и готов к работе',
+    degraded: 'Связь нестабильна',
+    reconnecting: 'Переподключаемся…',
+    disconnected: 'Отключено',
+    auth_failed: 'Требуется новая авторизация',
+    broken: 'Ошибка запуска — пересоздайте сессию',
+}
+
+export async function getActualStatus(connectionId: string): Promise<{
+    state: ActualWhatsAppState
+    humanReadable: string
+    canRetry: boolean
+    canForceQR: boolean
+    canForceReset: boolean
+    lastReadyAt: Date | null
+    lastError: string | null
+}> {
+    const db = await prisma.whatsAppConnection.findUnique({ where: { id: connectionId } })
+    const entry = registry.getEntry(connectionId)
+    const client = clients.get(connectionId)
+
+    let state: ActualWhatsAppState
+
+    if (!db) {
+        state = 'idle'
+    } else if (entry?.state === 'failed') {
+        const isAuth = (entry.lastError ?? '').toLowerCase().includes('auth_failure')
+        state = isAuth ? 'auth_failed' : 'broken'
+    } else if (entry?.state === 'reconnecting') {
+        state = 'reconnecting'
+    } else if (entry?.state === 'initializing') {
+        state = db.status === 'qr' ? 'qr_required'
+              : db.status === 'authenticated' ? 'authenticated'
+              : 'initializing'
+    } else if (entry?.state === 'ready') {
+        const alive = !!client?.info
+        const lastSeen = entry.lastSeen?.getTime() ?? 0
+        const heartbeatFresh = Date.now() - lastSeen < HEARTBEAT_STALE_MS
+        if (!alive) state = 'broken'
+        else if (!heartbeatFresh) state = 'degraded'
+        else state = 'ready'
+    } else {
+        // entry?.state === 'stopped' OR !entry
+        state = db.status === 'qr' ? 'qr_required' : 'idle'
+    }
+
+    return {
+        state,
+        humanReadable: HUMAN_LABELS[state],
+        canRetry: ['broken', 'disconnected', 'degraded', 'reconnecting'].includes(state),
+        canForceQR: ['idle', 'broken', 'auth_failed'].includes(state),
+        canForceReset: ['broken', 'auth_failed', 'degraded'].includes(state),
+        lastReadyAt: entry?.readyAt ?? null,
+        lastError: entry?.lastError ?? null,
+    }
+}
+
+/**
+ * Destroy client, wipe LocalAuth session folder, reset DB status.
+ * For UI "Пересоздать сессию" button in broken/auth_failed/degraded states.
+ */
+export async function forceResetSession(connectionId: string): Promise<void> {
+    opsLog('info', 'wa_force_reset_start', { connectionId })
+    await destroyClient(connectionId)
+    syncDoneSet.delete(connectionId)
+
+    const sessionDir = path.join(
+        process.cwd(), 'node_modules', '.wwebjs_auth', `session-${connectionId}`
+    )
+    try {
+        await fs.promises.rm(sessionDir, { recursive: true, force: true })
+        opsLog('info', 'wa_force_reset_session_wiped', { connectionId, path: sessionDir })
+    } catch (err: any) {
+        opsLog('warn', 'wa_force_reset_wipe_failed', {
+            connectionId, error: err?.message ?? String(err),
+        })
+    }
+
+    await safeUpdateConnection(connectionId, {
+        status: 'idle', sessionData: null, phoneNumber: null,
+    })
 }

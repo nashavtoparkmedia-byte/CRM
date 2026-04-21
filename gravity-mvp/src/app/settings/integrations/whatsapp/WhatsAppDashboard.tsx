@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut } from 'lucide-react'
-import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages } from './whatsapp-actions'
+import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession } from './whatsapp-actions'
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
 import { Button } from "@/components/ui/button"
@@ -15,16 +15,29 @@ type WaConnection = {
     status: string
     phoneNumber: string | null
     sessionData: string | null
+    // Derived fields from getActualStatus — may be undefined for stale connections
+    actualState?: string
+    actualLabel?: string
+    canRetry?: boolean
+    canForceQR?: boolean
+    canForceReset?: boolean
+    lastError?: string | null
 }
 
 function StatusDot({ status }: { status: string }) {
     const map: Record<string, { label: string; dot: string; text: string }> = {
         idle:          { label: 'Ожидание',       dot: 'bg-gray-400',    text: 'text-muted-foreground' },
+        initializing:  { label: 'Подключение...', dot: 'bg-blue-400',    text: 'text-blue-600' },
         qr:            { label: 'Сканируйте QR',  dot: 'bg-amber-400',   text: 'text-amber-600' },
+        qr_required:   { label: 'Сканируйте QR',  dot: 'bg-amber-400',   text: 'text-amber-600' },
         qr_expired:    { label: 'QR Истек',       dot: 'bg-red-500',     text: 'text-destructive' },
-        authenticated: { label: 'Подключение...', dot: 'bg-blue-400',    text: 'text-blue-600' },
+        authenticated: { label: 'Авторизация...', dot: 'bg-blue-400',    text: 'text-blue-600' },
         ready:         { label: 'Подключено',     dot: 'bg-emerald-500', text: 'text-emerald-600' },
+        degraded:      { label: 'Нестабильно',    dot: 'bg-yellow-500',  text: 'text-yellow-600' },
+        reconnecting:  { label: 'Переподключаемся...', dot: 'bg-yellow-500', text: 'text-yellow-600' },
         disconnected:  { label: 'Отключено',      dot: 'bg-red-500',     text: 'text-destructive' },
+        auth_failed:   { label: 'Требуется QR',   dot: 'bg-red-500',     text: 'text-destructive' },
+        broken:        { label: 'Ошибка запуска', dot: 'bg-red-500',     text: 'text-destructive' },
         error:         { label: 'Ошибка',         dot: 'bg-red-500',     text: 'text-destructive' },
     }
     const s = map[status] || { label: status, dot: 'bg-gray-400', text: 'text-muted-foreground' }
@@ -39,7 +52,10 @@ function StatusDot({ status }: { status: string }) {
 function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: () => void }) {
     const [isClient, setIsClient] = useState(false)
     const [loading, setLoading] = useState(false)
-    const [liveStatus, setLiveStatus] = useState(conn.status)
+    // liveStatus uses actualState from backend (source of truth) — falls back to conn.status for legacy
+    const [liveStatus, setLiveStatus] = useState(conn.actualState || conn.status)
+    const [liveLastError, setLiveLastError] = useState<string | null>(conn.lastError || null)
+    const [liveCanForceReset, setLiveCanForceReset] = useState(conn.canForceReset || false)
     const [livePaused, setLivePaused] = useState((conn as any).isPaused ?? false)
     const [liveQr, setLiveQr] = useState<string | null>(null)
     const pollingRef = useRef<NodeJS.Timeout | null>(null)
@@ -53,24 +69,30 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
     }, [])
 
     useEffect(() => {
-        setLiveStatus(conn.status)
-        if (conn.status === 'qr' && conn.sessionData?.startsWith('data:')) {
+        setLiveStatus(conn.actualState || conn.status)
+        setLiveLastError(conn.lastError || null)
+        setLiveCanForceReset(conn.canForceReset || false)
+        if ((conn.actualState === 'qr_required' || conn.status === 'qr') && conn.sessionData?.startsWith('data:')) {
             setLiveQr(conn.sessionData)
         }
     }, [conn])
 
     useEffect(() => {
         if (!isClient) return
-        const shouldPoll = ['idle', 'qr', 'qr_expired', 'authenticated'].includes(liveStatus)
+        // Poll while transitioning; also poll for degraded/reconnecting/broken so recovery shows up
+        const shouldPoll = ['idle', 'qr', 'qr_required', 'qr_expired', 'authenticated', 'initializing', 'degraded', 'reconnecting'].includes(liveStatus)
         if (shouldPoll) {
             pollingRef.current = setInterval(async () => {
                 const fresh = await getWhatsAppStatus(conn.id)
                 if (!fresh) return
-                setLiveStatus(fresh.status)
-                if (fresh.status === 'qr' && fresh.sessionData?.startsWith('data:')) {
+                const actual = (fresh as any).actualState || fresh.status
+                setLiveStatus(actual)
+                setLiveLastError((fresh as any).lastError || null)
+                setLiveCanForceReset((fresh as any).canForceReset || false)
+                if ((actual === 'qr_required' || actual === 'qr') && fresh.sessionData?.startsWith('data:')) {
                     setLiveQr(fresh.sessionData)
                 }
-                if (fresh.status === 'ready') {
+                if (actual === 'ready') {
                     if (pollingRef.current) clearInterval(pollingRef.current)
                     onRefresh()
                 }
@@ -80,6 +102,21 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         }
         return () => { if (pollingRef.current) clearInterval(pollingRef.current) }
     }, [liveStatus, conn.id, onRefresh, isClient])
+
+    const handleForceReset = async () => {
+        if (!confirm('Пересоздать сессию? Потребуется снова отсканировать QR-код.')) return
+        setLoading(true)
+        try {
+            await forceResetWhatsAppSession(conn.id)
+            setLiveStatus('idle')
+            setLiveLastError(null)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Force reset failed:', err)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const handlePauseConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
@@ -150,7 +187,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
             </div>
 
             {/* QR Display */}
-            {(liveStatus === 'qr' || liveStatus === 'qr_expired') && (
+            {(liveStatus === 'qr' || liveStatus === 'qr_required' || liveStatus === 'qr_expired') && (
                 <div className="flex flex-col items-center gap-3 py-4">
                     {liveStatus === 'qr_expired' ? (
                         <div className="text-center text-orange-600">
@@ -191,10 +228,62 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
             )}
 
             {/* Connecting */}
-            {liveStatus === 'authenticated' && (
+            {(liveStatus === 'authenticated' || liveStatus === 'initializing') && (
                 <div className="flex items-center gap-3 py-4 text-blue-600">
                     <Loader2 size={18} className="animate-spin" />
-                    <span className="text-sm font-medium">Завершение аутентификации...</span>
+                    <span className="text-sm font-medium">
+                        {liveStatus === 'initializing' ? 'Подключение...' : 'Завершение аутентификации...'}
+                    </span>
+                </div>
+            )}
+
+            {/* Reconnecting */}
+            {liveStatus === 'reconnecting' && (
+                <div className="flex items-center gap-3 py-4 text-yellow-600">
+                    <Loader2 size={18} className="animate-spin" />
+                    <span className="text-sm font-medium">Переподключаемся...</span>
+                </div>
+            )}
+
+            {/* Degraded — connection unstable */}
+            {liveStatus === 'degraded' && (
+                <div className="flex flex-col gap-2 py-4">
+                    <div className="flex items-center gap-3 text-yellow-600">
+                        <AlertTriangle size={18} />
+                        <span className="text-sm font-medium">Связь нестабильна — нет сигнала от WhatsApp {'>'} 5 минут</span>
+                    </div>
+                    <Button onClick={handleForceReset} variant="outline" size="sm" disabled={loading} className="self-start">
+                        <RefreshCw size={14} className="mr-2" /> Пересоздать сессию
+                    </Button>
+                </div>
+            )}
+
+            {/* Broken — init crashed or runtime dead */}
+            {liveStatus === 'broken' && (
+                <div className="flex flex-col gap-2 py-4">
+                    <div className="flex items-center gap-3 text-red-600">
+                        <AlertTriangle size={18} />
+                        <span className="text-sm font-medium">Ошибка запуска WhatsApp-клиента</span>
+                    </div>
+                    {liveLastError && (
+                        <div className="text-xs text-muted-foreground break-all">{liveLastError}</div>
+                    )}
+                    <Button onClick={handleForceReset} variant="outline" size="sm" disabled={loading} className="self-start">
+                        <RefreshCw size={14} className="mr-2" /> Пересоздать сессию
+                    </Button>
+                </div>
+            )}
+
+            {/* Auth failed — need fresh QR */}
+            {liveStatus === 'auth_failed' && (
+                <div className="flex flex-col gap-2 py-4">
+                    <div className="flex items-center gap-3 text-red-600">
+                        <AlertTriangle size={18} />
+                        <span className="text-sm font-medium">Требуется повторная авторизация</span>
+                    </div>
+                    <Button onClick={handleForceReset} variant="outline" size="sm" disabled={loading} className="self-start">
+                        <RefreshCw size={14} className="mr-2" /> Сбросить и отсканировать QR
+                    </Button>
                 </div>
             )}
 

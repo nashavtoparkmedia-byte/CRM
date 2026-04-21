@@ -59,17 +59,44 @@ export async function getWhatsAppConnections() {
 }
 
 export async function getWhatsAppStatus(connectionId: string) {
-    console.log(`[WA-ACTIONS] getWhatsAppStatus called for: ${connectionId}`)
+    const { getActualStatus } = await import('@/lib/whatsapp/WhatsAppService')
     const conn = await prisma.whatsAppConnection.findUnique({
         where: { id: connectionId }
     })
-    return conn
+    if (!conn) return null
+    const actual = await getActualStatus(connectionId)
+    return {
+        ...conn,
+        // Derived fields — UI MUST use these, not raw conn.status.
+        // `actualState === 'ready'` is the ONLY condition for "подключён и готов к работе".
+        actualState: actual.state,
+        actualLabel: actual.humanReadable,
+        canRetry: actual.canRetry,
+        canForceQR: actual.canForceQR,
+        canForceReset: actual.canForceReset,
+        lastReadyAt: actual.lastReadyAt,
+        lastError: actual.lastError,
+    }
 }
 
 export async function disconnectWhatsApp(connectionId: string) {
     console.log(`[WA-ACTIONS] disconnectWhatsApp called for: ${connectionId}`)
     await destroyClient(connectionId)
+    // destroyClient does not update DB status — without this, UI would keep showing 'ready'
+    await prisma.whatsAppConnection.update({
+        where: { id: connectionId },
+        data: { status: 'idle', sessionData: null },
+    }).catch(() => {})
+    revalidatePath('/settings/integrations/whatsapp')
     revalidatePath('/whatsapp')
+}
+
+export async function forceResetWhatsAppSession(connectionId: string) {
+    console.log(`[WA-ACTIONS] forceResetWhatsAppSession called for: ${connectionId}`)
+    const { forceResetSession } = await import('@/lib/whatsapp/WhatsAppService')
+    await forceResetSession(connectionId)
+    revalidatePath('/settings/integrations/whatsapp')
+    return { success: true }
 }
 
 export async function deleteWhatsAppConnection(connectionId: string) {
