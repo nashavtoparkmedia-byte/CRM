@@ -86,6 +86,32 @@ export function useFilteredTasks(): TaskDTO[] {
             tasks = tasks.filter(t => t.scenarioMeta?.completeness === filters.scenarioCompleteness)
         }
 
+        // Block E: overdue filter (task-level)
+        if (filters.overdue) {
+            const now = Date.now()
+            tasks = tasks.filter(t => {
+                if (t.status === 'overdue') return true
+                const next = t.nextActionAt ? new Date(t.nextActionAt).getTime() : null
+                if (next !== null && next < now) return true
+                const sla = t.slaDeadline ? new Date(t.slaDeadline).getTime() : null
+                if (sla !== null && sla < now) return true
+                return false
+            })
+        }
+
+        // Block E: computed offer verdict
+        if (filters.offerAllowed) {
+            tasks = tasks.filter(t => t.offerAllowed?.verdict === filters.offerAllowed)
+        }
+
+        // Block E: park (externalParkName from scenarioData)
+        if (filters.park) {
+            tasks = tasks.filter(t => {
+                const field = t.scenarioFieldsPreview?.find(f => f.fieldId === 'externalParkName')
+                return field?.value === filters.park
+            })
+        }
+
         // Apply sort
         tasks.sort((a, b) => {
             const dir = sort.direction === 'asc' ? 1 : -1
@@ -174,6 +200,31 @@ export function useSelectedTask(): TaskDTO | null {
     const tasksById = useTasksStore((s) => s.tasksById)
 
     return selectedTaskId ? tasksById[selectedTaskId] ?? null : null
+}
+
+/**
+ * Top-N distinct externalParkName values from currently loaded tasks.
+ * Used by the churn "Какой парк?" filter.
+ */
+export function useTopParks(limit = 20): { value: string; count: number }[] {
+    const tasksById = useTasksStore((s) => s.tasksById)
+    const taskIds = useTasksStore((s) => s.taskIds)
+    return useMemo(() => {
+        const counts = new Map<string, number>()
+        for (const id of taskIds) {
+            const t = tasksById[id]
+            if (!t) continue
+            const f = t.scenarioFieldsPreview?.find(x => x.fieldId === 'externalParkName')
+            if (!f || !f.value) continue
+            const v = String(f.value).trim()
+            if (!v) continue
+            counts.set(v, (counts.get(v) ?? 0) + 1)
+        }
+        return Array.from(counts.entries())
+            .map(([value, count]) => ({ value, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, limit)
+    }, [tasksById, taskIds, limit])
 }
 
 /**

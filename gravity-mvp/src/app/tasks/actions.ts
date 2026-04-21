@@ -16,7 +16,8 @@ import { getScenario, getStage, calculateSlaDeadline, getMainScenarioIds, getSce
 import type { ScenarioData } from '@/lib/tasks/scenario-config'
 import { buildInitialScenarioData, updateScenarioField as updateScenarioFieldLogic, resetScenarioField as resetScenarioFieldLogic } from '@/lib/tasks/scenario-fields'
 import { getAllScenarioSettingsMap, mergeFieldsWithOverrides } from '@/lib/tasks/scenario-settings'
-import { MAX_LIST_PREVIEW_FIELDS, type MergedFieldConfig } from '@/lib/tasks/scenario-settings-types'
+import { type MergedFieldConfig } from '@/lib/tasks/scenario-settings-types'
+import { resolveOfferAllowed } from '@/lib/tasks/offer-rules'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -50,8 +51,18 @@ const CONTACT_RESULT_LABELS: Record<string, string> = {
 
 interface WorkSummary {
     lastContactAt: string | null
+    lastContactType: string | null
     lastContactResult: string | null
+    lastContactBy: string | null
     touchCount: number
+}
+
+const EMPTY_WORK_SUMMARY: WorkSummary = {
+    lastContactAt: null,
+    lastContactType: null,
+    lastContactResult: null,
+    lastContactBy: null,
+    touchCount: 0,
 }
 
 interface EnrichedTask {
@@ -65,6 +76,19 @@ interface EnrichedTask {
 function toEnrichedTaskDTO(e: EnrichedTask): TaskDTO {
     const t = e.task
     const meta = (t.metadata as any) ?? {}
+
+    // Compute offer verdict (for churn only — other scenarios get null)
+    let offerAllowed: TaskDTO['offerAllowed'] = null
+    if (t.scenario === 'churn') {
+        const baseDto: Pick<TaskDTO, 'priority'> = { priority: t.priority }
+        const resolved = resolveOfferAllowed(baseDto as TaskDTO, e.scenarioDataRaw)
+        offerAllowed = {
+            verdict: resolved.verdict,
+            reason: resolved.reason,
+            ruleId: resolved.ruleId,
+            isOverridden: resolved.isOverridden,
+        }
+    }
 
     return {
         id: t.id,
@@ -119,8 +143,13 @@ function toEnrichedTaskDTO(e: EnrichedTask): TaskDTO {
 
         // Work summary
         lastContactAt: e.workSummary.lastContactAt,
+        lastContactType: e.workSummary.lastContactType,
         lastContactResult: e.workSummary.lastContactResult,
+        lastContactBy: e.workSummary.lastContactBy,
         touchCount: e.workSummary.touchCount,
+
+        // Offer decision
+        offerAllowed,
 
         // Scenario fields preview (respects per-scenario settings: showInList, order, limit 8)
         scenarioFieldsPreview: buildScenarioFieldsPreview(t.scenario, e.scenarioDataRaw, e.mergedFieldsMap),
@@ -167,15 +196,16 @@ function buildScenarioMeta(
 function buildScenarioFieldsPreview(
     scenarioId: string | null,
     scenarioData: ScenarioData | null,
-    mergedFieldsMap?: Map<string, MergedFieldConfig[]>,
+    _mergedFieldsMap?: Map<string, MergedFieldConfig[]>,
 ): TaskDTO['scenarioFieldsPreview'] {
     if (!scenarioId || !scenarioData) return null
-    // If merged override provided — use it (respects per-scenario settings: showInList, order)
-    const merged = mergedFieldsMap?.get(scenarioId)
-    const fields = merged
-        ? merged.filter(f => f.showInList).slice(0, MAX_LIST_PREVIEW_FIELDS)
-        : getScenarioListFields(scenarioId).slice(0, MAX_LIST_PREVIEW_FIELDS)
 
+    // Emit EVERY field defined in scenario config, without limit and
+    // without the showInList filter. Consumers that only need the old
+    // "preview" (max 8, showInList=true) — e.g. legacy TaskListRow —
+    // slice the array on the render side. Block G list-renderers need
+    // every field available to render any configurable column.
+    const fields = getScenarioFields(scenarioId)
     if (fields.length === 0) return null
 
     const preview: NonNullable<TaskDTO['scenarioFieldsPreview']> = []
@@ -196,7 +226,7 @@ function buildScenarioFieldsPreview(
 function toTaskDTO(t: TaskWithDriver): TaskDTO {
     return toEnrichedTaskDTO({
         task: t,
-        workSummary: { lastContactAt: null, lastContactResult: null, touchCount: 0 },
+        workSummary: EMPTY_WORK_SUMMARY,
         assigneeName: null,
         scenarioDataRaw: null,
     })
@@ -412,36 +442,51 @@ export async function getTasks(
 
     const taskIds = tasks.map(t => t.id)
 
-    // 1. Work summary: last contact event + touch count per task
+    // 1. Work summary: last contact event + touch count per task (incl. type + actor)
     const contactEvents = await prisma.taskEvent.findMany({
         where: {
             taskId: { in: taskIds },
             eventType: { in: CONTACT_EVENT_TYPES },
         },
-        select: { taskId: true, eventType: true, payload: true, createdAt: true },
+        select: { taskId: true, eventType: true, payload: true, createdAt: true, actorType: true, actorId: true },
         orderBy: { createdAt: 'desc' },
     })
+
+    // 2. Load display names for assignees AND for contact actors in one query
+    const assigneeIds = [...new Set(tasks.map(t => t.assigneeId).filter(Boolean))] as string[]
+    const actorIds = [...new Set(contactEvents.map(e => e.actorId).filter(Boolean))] as string[]
+    const userIds = [...new Set([...assigneeIds, ...actorIds])]
+    const userNameMap = new Map<string, string>()
+    if (userIds.length > 0) {
+        const users = await prisma.crmUser.findMany({
+            where: { id: { in: userIds } },
+            select: { id: true, name: true },
+        })
+        for (const u of users) userNameMap.set(u.id, u.name)
+    }
+    const assigneeMap = userNameMap  // same source, just aliased for readability
 
     const workSummaryMap = new Map<string, WorkSummary>()
     for (const taskId of taskIds) {
         const events = contactEvents.filter(e => e.taskId === taskId)
         const last = events[0]
+        let lastContactBy: string | null = null
+        if (last) {
+            if (last.actorId && userNameMap.has(last.actorId)) {
+                lastContactBy = userNameMap.get(last.actorId)!
+            } else if (last.actorType === 'system') {
+                lastContactBy = 'Система'
+            } else if (last.actorType === 'auto') {
+                lastContactBy = 'Авто'
+            }
+        }
         workSummaryMap.set(taskId, {
             lastContactAt: last?.createdAt.toISOString() ?? null,
+            lastContactType: last?.eventType ?? null,
             lastContactResult: last ? ((last.payload as any)?.resultId ?? last.eventType) : null,
+            lastContactBy,
             touchCount: events.length,
         })
-    }
-
-    // 2. Assignee names
-    const assigneeIds = [...new Set(tasks.map(t => t.assigneeId).filter(Boolean))] as string[]
-    const assigneeMap = new Map<string, string>()
-    if (assigneeIds.length > 0) {
-        const users = await prisma.crmUser.findMany({
-            where: { id: { in: assigneeIds } },
-            select: { id: true, name: true },
-        })
-        for (const u of users) assigneeMap.set(u.id, u.name)
     }
 
     // 3. ScenarioData (raw query since field not yet in Prisma Client types)
@@ -464,7 +509,7 @@ export async function getTasks(
     return {
         tasks: tasks.map(t => toEnrichedTaskDTO({
             task: t,
-            workSummary: workSummaryMap.get(t.id) ?? { lastContactAt: null, lastContactResult: null, touchCount: 0 },
+            workSummary: workSummaryMap.get(t.id) ?? EMPTY_WORK_SUMMARY,
             assigneeName: t.assigneeId ? assigneeMap.get(t.assigneeId) ?? null : null,
             scenarioDataRaw: scenarioDataMap.get(t.id) ?? null,
             mergedFieldsMap,

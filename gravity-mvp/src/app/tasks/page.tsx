@@ -7,6 +7,7 @@ import TaskListView from './components/TaskListView'
 import TaskBoardView from './components/TaskBoardView'
 import TaskTimelineView from './components/TaskTimelineView'
 import TaskDetailsPane from './components/TaskDetailsPane'
+import TaskToastContainer from './components/TaskToastContainer'
 import { Loader2 } from 'lucide-react'
 
 export default function TasksPage() {
@@ -61,6 +62,9 @@ export default function TasksPage() {
                 {/* Details Pane (conditional) */}
                 {selectedTaskId && <TaskDetailsPane />}
             </div>
+
+            {/* Inline-action feedback toasts */}
+            <TaskToastContainer />
         </div>
     )
 }

@@ -17,6 +17,13 @@ import {
 import { useState, useEffect } from 'react'
 import GlobalTaskCreateModal from './GlobalTaskCreateModal'
 import BulkCareModal from './BulkCareModal'
+import TaskListModeSwitcher from './TaskListModeSwitcher'
+import TaskListColumnsSettings from './TaskListColumnsSettings'
+import TaskListDensitySwitcher from './TaskListDensitySwitcher'
+import TaskListExcelButtons from './TaskListExcelButtons'
+import ChurnExtraFilters from './ChurnExtraFilters'
+import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
+import { useListViewStore } from '@/store/list-view-store'
 import { SCENARIOS, getAllScenarioOptions, getScenarioFilterableFields, getScenarioPresets } from '@/lib/tasks/scenario-config'
 import type { ScenarioFieldDef } from '@/lib/tasks/scenario-config'
 import { TASK_TYPES } from '@/lib/tasks/types'
@@ -265,6 +272,11 @@ export default function TasksToolbar() {
                 )}
             </div>
 
+            {/* Row 2.25: List View controls (churn only on MVP) */}
+            {activeScenario === 'churn' && currentView === 'list' && (
+                <ChurnListControls />
+            )}
+
             {/* Row 2.5: Presets */}
             <div className="flex items-center gap-1.5">
                 <PresetButton
@@ -420,6 +432,26 @@ export default function TasksToolbar() {
             {isBulkCareOpen && (
                 <BulkCareModal onClose={() => setIsBulkCareOpen(false)} />
             )}
+        </div>
+    )
+}
+
+// ─── Churn List Controls (mode switcher + columns settings) ─────
+
+function ChurnListControls() {
+    const activeViewMap = useListViewStore(s => s.activeViewIdByScenario)
+    const activeChurnViewId = activeViewMap['churn'] ?? getDefaultViewId('churn')
+    const activeView = getSystemView(activeChurnViewId) ?? getSystemView(getDefaultViewId('churn'))
+    if (!activeView) return null
+
+    return (
+        <div className="flex items-center gap-3 flex-wrap">
+            <TaskListModeSwitcher scenario="churn" />
+            <TaskListDensitySwitcher scenario="churn" />
+            <TaskListColumnsSettings view={activeView} />
+            <TaskListExcelButtons />
+            <div className="h-6 w-px bg-[#E4ECFC]" />
+            <ChurnExtraFilters />
         </div>
     )
 }
