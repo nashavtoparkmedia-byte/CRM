@@ -666,6 +666,21 @@ model CrmUser {
   @@map("crm_users")
 }
 
+/// Rollout observation layer for the churn tasks list.
+/// Written fire-and-forget from the client via recordUsage() server action.
+/// Nothing reads it in the app — it's analytics surface only.
+model UsageEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
+  @@map("usage_events")
+}
+
 /// Единственная запись — настройки AI агента (upsert by id="singleton")
 model AiAgentConfig {
   id                    String         @id @default("singleton")

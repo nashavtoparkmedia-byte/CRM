@@ -78,8 +78,18 @@ export interface TaskDTO {
 
     // Work summary (derived from TaskEvent)
     lastContactAt: string | null
+    lastContactType: string | null      // 'called' | 'wrote' | 'message_sent' | 'contacted' | null
     lastContactResult: string | null
+    lastContactBy: string | null        // Display name of the actor who made the last contact
     touchCount: number
+
+    // Offer decision (computed on the server via offer-rules.resolveOfferAllowed)
+    offerAllowed: {
+        verdict: 'yes' | 'no' | 'maybe'
+        reason: string
+        ruleId: string
+        isOverridden: boolean
+    } | null
 
     // Scenario fields preview (for list view)
     scenarioFieldsPreview: {
@@ -215,13 +225,24 @@ export interface TaskFilters {
     scenarioSource?: 'auto' | 'manual' | 'derived'
     // Заполненность карточки: полная / частичная / пустая
     scenarioCompleteness?: 'full' | 'partial' | 'empty'
+
+    // Block E: extra list filters
+    /** true → only cases where the deadline is in the past or task.status==='overdue' */
+    overdue?: boolean
+    /** Filter by computed offer verdict (override-aware) */
+    offerAllowed?: 'yes' | 'no' | 'maybe'
+    /** Filter by externalParkName (scenarioData) — exact match */
+    park?: string
 }
 
 // ─── View Types ────────────────────────────────────────────────────────────
 
 export type TaskView = 'list' | 'board' | 'timeline'
 
-export type TaskSortField = 'dueAt' | 'priority' | 'createdAt' | 'updatedAt'
+export type TaskSortField =
+    | 'dueAt' | 'priority' | 'createdAt' | 'updatedAt'
+    // Table-mode sortable fields (MVP churn)
+    | 'fullName' | 'stage' | 'nextActionAt' | 'lastContactAt'
 export type TaskSortDirection = 'asc' | 'desc'
 
 export interface TaskSort {

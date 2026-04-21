@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useTasksQuery } from '@/hooks/use-tasks-query'
 import { useTasksStore } from '@/store/tasks-store'
 import TasksToolbar from './components/TasksToolbar'
@@ -7,12 +8,19 @@ import TaskListView from './components/TaskListView'
 import TaskBoardView from './components/TaskBoardView'
 import TaskTimelineView from './components/TaskTimelineView'
 import TaskDetailsPane from './components/TaskDetailsPane'
+import TaskToastContainer from './components/TaskToastContainer'
+import { recordUsage } from '@/lib/tasks/usage'
 import { Loader2 } from 'lucide-react'
 
 export default function TasksPage() {
     const { isLoading, isError, error } = useTasksQuery({ isActive: true })
     const currentView = useTasksStore((s) => s.currentView)
     const selectedTaskId = useTasksStore((s) => s.selectedTaskId)
+
+    // Rollout observation: one event per page mount
+    useEffect(() => {
+        void recordUsage('tasks_list_opened')
+    }, [])
 
     return (
         <div className="flex flex-col min-h-[calc(100vh-theme(spacing.16))] p-6">
@@ -61,6 +69,9 @@ export default function TasksPage() {
                 {/* Details Pane (conditional) */}
                 {selectedTaskId && <TaskDetailsPane />}
             </div>
+
+            {/* Inline-action feedback toasts */}
+            <TaskToastContainer />
         </div>
     )
 }

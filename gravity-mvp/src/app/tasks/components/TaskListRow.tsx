@@ -51,7 +51,7 @@ export default function TaskListRow({ task, isSelected, onSelect, hideScenarioTa
                 )}
                 <PriorityBadge priority={task.priority} />
 
-                {task.scenarioFieldsPreview?.map(f => (
+                {task.scenarioFieldsPreview?.slice(0, 8).map(f => (
                     <ScenarioFieldBadge key={f.fieldId} field={f} scenarioId={task.scenario} />
                 ))}
 
