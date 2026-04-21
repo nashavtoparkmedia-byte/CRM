@@ -24,6 +24,7 @@ import TaskListExcelButtons from './TaskListExcelButtons'
 import ChurnExtraFilters from './ChurnExtraFilters'
 import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
 import { useListViewStore } from '@/store/list-view-store'
+import { recordUsage } from '@/lib/tasks/usage'
 import { SCENARIOS, getAllScenarioOptions, getScenarioFilterableFields, getScenarioPresets } from '@/lib/tasks/scenario-config'
 import type { ScenarioFieldDef } from '@/lib/tasks/scenario-config'
 import { TASK_TYPES } from '@/lib/tasks/types'
@@ -214,7 +215,10 @@ export default function TasksToolbar() {
             {/* Row 2: Scenario Tabs */}
             <div className="flex items-center gap-1">
                 <button
-                    onClick={() => setFilters({ scenario: undefined, stage: undefined })}
+                    onClick={() => {
+                        setFilters({ scenario: undefined, stage: undefined })
+                        void recordUsage('filter_change', { key: 'scenario', value: 'all' })
+                    }}
                     className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                         filters.scenario === undefined
                             ? 'bg-[#4f46e5] text-white shadow-sm'
@@ -226,7 +230,10 @@ export default function TasksToolbar() {
                 {scenarioOptions.map((s) => (
                     <button
                         key={s.value}
-                        onClick={() => setFilters({ scenario: s.value, stage: undefined })}
+                        onClick={() => {
+                            setFilters({ scenario: s.value, stage: undefined })
+                            void recordUsage('filter_change', { key: 'scenario', value: s.value })
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
                             filters.scenario === s.value
                                 ? 'bg-[#4f46e5] text-white shadow-sm'

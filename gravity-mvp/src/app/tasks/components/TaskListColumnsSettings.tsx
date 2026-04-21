@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Settings2, GripVertical, RotateCcw } from 'lucide-react'
 import { useListViewStore } from '@/store/list-view-store'
 import { resolveLayout } from '@/lib/tasks/list-columns'
+import { recordUsage } from '@/lib/tasks/usage'
 import type { ListViewDef, ResolvedBlock, ResolvedColumn } from '@/lib/tasks/list-schema'
 
 interface Props {
@@ -64,13 +65,17 @@ export default function TaskListColumnsSettings({ view, trigger }: Props) {
                         <BlockSection
                             key={block.id}
                             block={block}
-                            onToggle={(columnId, visible) => setColumnVisibility(view.id, columnId, visible)}
+                            onToggle={(columnId, visible) => {
+                                setColumnVisibility(view.id, columnId, visible)
+                                void recordUsage('column_toggle', { viewId: view.id, columnId, visible })
+                            }}
                             onReorder={(ids) => {
                                 // Merge this block's new order with the rest of the existing order.
                                 const others = layout.blocks
                                     .filter(b => b.id !== block.id)
                                     .flatMap(b => b.columns.map(c => c.id))
                                 setColumnOrder(view.id, [...ids, ...others])
+                                void recordUsage('column_reorder', { viewId: view.id, block: block.id, count: ids.length })
                             }}
                         />
                     ))}

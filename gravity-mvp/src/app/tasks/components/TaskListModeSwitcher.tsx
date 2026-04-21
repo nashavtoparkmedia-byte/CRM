@@ -7,6 +7,7 @@
 
 import { useListViewStore } from '@/store/list-view-store'
 import { getSystemViews, getDefaultViewId } from '@/lib/tasks/list-views'
+import { recordUsage } from '@/lib/tasks/usage'
 import { Briefcase, Eye, Table2 } from 'lucide-react'
 
 interface Props {
@@ -36,7 +37,10 @@ export default function TaskListModeSwitcher({ scenario }: Props) {
                 return (
                     <button
                         key={v.id}
-                        onClick={() => setActive(scenario, v.id)}
+                        onClick={() => {
+                            setActive(scenario, v.id)
+                            void recordUsage('mode_switch', { viewId: v.id, mode: v.mode })
+                        }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
                             active
                                 ? 'bg-white text-[#1E40AF] shadow-sm'

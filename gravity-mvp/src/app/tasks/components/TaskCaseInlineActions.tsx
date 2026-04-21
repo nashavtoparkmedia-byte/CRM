@@ -17,6 +17,7 @@ import { Phone, MessageSquare, Clock, Flame, Loader2, ChevronDown } from 'lucide
 import type { TaskDTO } from '@/lib/tasks/types'
 import { useTasksStore } from '@/store/tasks-store'
 import { pushToast } from '@/lib/tasks/toast-store'
+import { recordUsage } from '@/lib/tasks/usage'
 import {
     inlineLogCall,
     inlineLogMessage,
@@ -44,6 +45,7 @@ export default function TaskCaseInlineActions({ task }: Props) {
     ) => {
         if (busy) return
         setBusy(key)
+        void recordUsage('inline_action', { kind: key, taskId: task.id })
         const prev = task
         upsertTask({ ...prev, ...optimistic })
         try {
