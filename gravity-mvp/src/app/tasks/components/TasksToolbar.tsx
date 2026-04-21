@@ -91,11 +91,19 @@ export default function TasksToolbar() {
 
     return (
         <div className="flex flex-col gap-3">
-            {/* ── Row 1 ─ view switcher + mode + density  |  stats  |  search + excel + create ── */}
-            <div className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
+            {/* ─────────────────────────────────────────────────────────
+                Row 1 — three zones on one line:
+                  LEFT   : view switcher + mode switcher (stacked)
+                  CENTER : active / overdue / new-reply counters
+                  RIGHT  : search + excel + density + bulk + create
+                All mode/density/excel controls are ALWAYS visible (no
+                scenario/view gating) so the UI stays predictable.
+                ─────────────────────────────────────────────────────── */}
+            <div className="flex items-start justify-between flex-wrap gap-3">
+                {/* LEFT — navigation + mode */}
+                <div className="flex flex-col gap-1.5">
                     {/* View Switcher: Список / Доска / Время */}
-                    <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5">
+                    <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5 w-fit">
                         {VIEW_OPTIONS.map((opt) => (
                             <button
                                 key={opt.key}
@@ -112,39 +120,34 @@ export default function TasksToolbar() {
                         ))}
                     </div>
 
-                    {/* Churn-list-only controls — next to view switcher, as requested */}
-                    {isChurnList && (
-                        <>
-                            <TaskListModeSwitcher scenario="churn" />
-                            <TaskListDensitySwitcher scenario="churn" />
-                        </>
-                    )}
-
-                    {/* Quick Stats */}
-                    <div className="flex items-center gap-3 ml-2 text-[12px] text-[#9ca3af]">
-                        <span className="flex items-center gap-1">
-                            <span className="font-semibold text-[#374151]">{counts.active}</span>
-                            активных
-                        </span>
-                        {counts.overdue > 0 && (
-                            <span className="flex items-center gap-1 text-red-500">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span className="font-semibold">{counts.overdue}</span>
-                                просрочено
-                            </span>
-                        )}
-                        {counts.hasNewReply > 0 && (
-                            <span className="flex items-center gap-1 text-blue-500">
-                                <Bell className="w-3 h-3" />
-                                <span className="font-semibold">{counts.hasNewReply}</span>
-                                с ответом
-                            </span>
-                        )}
-                    </div>
+                    {/* Mode Switcher — always visible, under the view switcher */}
+                    <TaskListModeSwitcher scenario="churn" />
                 </div>
 
-                {/* Right side: Search, Excel (churn+list), Bulk, Create */}
-                <div className="flex items-center gap-2 flex-wrap">
+                {/* CENTER — stats */}
+                <div className="flex items-center gap-3 text-[12px] text-[#9ca3af] self-center">
+                    <span className="flex items-center gap-1">
+                        <span className="font-semibold text-[#374151]">{counts.active}</span>
+                        активных
+                    </span>
+                    {counts.overdue > 0 && (
+                        <span className="flex items-center gap-1 text-red-500">
+                            <AlertTriangle className="w-3 h-3" />
+                            <span className="font-semibold">{counts.overdue}</span>
+                            просрочено
+                        </span>
+                    )}
+                    {counts.hasNewReply > 0 && (
+                        <span className="flex items-center gap-1 text-blue-500">
+                            <Bell className="w-3 h-3" />
+                            <span className="font-semibold">{counts.hasNewReply}</span>
+                            с ответом
+                        </span>
+                    )}
+                </div>
+
+                {/* RIGHT — actions: search, excel, density, bulk, create */}
+                <div className="flex items-center gap-2 flex-wrap self-center">
                     {searchOpen ? (
                         <div className="flex items-center bg-[#f3f4f6] rounded-lg overflow-hidden">
                             <Search className="w-4 h-4 text-[#9ca3af] ml-3" />
@@ -174,8 +177,11 @@ export default function TasksToolbar() {
                         </button>
                     )}
 
-                    {/* Excel — right side of toolbar, per TЗ */}
-                    {isChurnList && <TaskListExcelButtons />}
+                    {/* Excel — always visible */}
+                    <TaskListExcelButtons />
+
+                    {/* Density — always visible, in the RIGHT action zone per TЗ */}
+                    <TaskListDensitySwitcher scenario="churn" />
 
                     <button
                         onClick={() => setIsBulkCareOpen(true)}
