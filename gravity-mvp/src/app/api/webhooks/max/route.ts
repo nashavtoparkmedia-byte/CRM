@@ -38,6 +38,7 @@ export async function POST(request: Request) {
           metadata: {
             ...(senderId    ? { senderId: String(senderId) } : {}),
             ...(senderPhone ? { phone: senderPhone }         : {}),
+            connectionId: 'max_scraper',
           },
         },
       })
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
               ...((chat.metadata as any) || {}),
               ...(senderId    ? { senderId: String(senderId) } : {}),
               ...(senderPhone ? { phone: senderPhone }         : {}),
+              connectionId: (chat.metadata as any)?.connectionId || 'max_scraper',
             }
           } : {}),
         },

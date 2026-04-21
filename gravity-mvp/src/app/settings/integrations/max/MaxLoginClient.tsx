@@ -328,7 +328,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
                     <TabsContent value="personal" className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-base font-semibold text-foreground">Личный аккаунт MAX</h2>
+                            <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты (1)</h2>
                             {!isScraperOnline && (
                                 <span className="flex items-center gap-1.5 text-xs font-medium text-destructive">
                                     <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Скрейпер не запущен
@@ -339,19 +339,22 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         {isPersonalLoggedIn ? (
                             <div className="rounded-2xl border bg-card p-5 shadow-sm transition-all">
                                 <div className="flex items-start gap-3 mb-3">
-                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isPersonalPaused ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
                                         <Smartphone size={18} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="font-semibold text-sm text-foreground mb-0.5">Личный аккаунт MAX</div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="font-semibold text-sm text-foreground">MAX</div>
+                                        <div className="flex items-center gap-2 mt-0.5">
+                                            {process.env.NEXT_PUBLIC_MAX_SCRAPER_PHONE && (
+                                                <span className="text-xs text-muted-foreground">{process.env.NEXT_PUBLIC_MAX_SCRAPER_PHONE}</span>
+                                            )}
                                             {isPersonalPaused ? (
                                                 <span className="flex items-center gap-1 text-[11px] text-amber-600">
                                                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> На паузе
                                                 </span>
                                             ) : (
                                                 <span className="flex items-center gap-1 text-[11px] text-emerald-600">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Подключен через браузер
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Подключено
                                                 </span>
                                             )}
                                         </div>

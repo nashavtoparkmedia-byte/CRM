@@ -72,14 +72,19 @@ export function prepareMessagesForUI(messages: Message[]): UIItem[] {
         // Same visual side = same direction AND (effectively) same sender context
         // Strict rules: consecutive, same author/direction, <= 5 min difference
         
-        const isSameSideAsPrev = prevMsg && 
-            prevMsg.direction === msg.direction && 
+        // Call messages are always standalone — never grouped with adjacent messages
+        const isCallMsg = msg.type === 'call'
+        const prevIsCall = prevMsg?.type === 'call'
+        const nextIsCall = nextMsg?.type === 'call'
+
+        const isSameSideAsPrev = !isCallMsg && !prevIsCall && prevMsg &&
+            prevMsg.direction === msg.direction &&
             prevMsg.origin === msg.origin &&
             (new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 5 * 60 * 1000 &&
             getDateLabel(new Date(prevMsg.sentAt)) === dateLabel;
 
-        const isSameSideAsNext = nextMsg && 
-            nextMsg.direction === msg.direction && 
+        const isSameSideAsNext = !isCallMsg && !nextIsCall && nextMsg &&
+            nextMsg.direction === msg.direction &&
             nextMsg.origin === msg.origin &&
             (new Date(nextMsg.sentAt).getTime() - new Date(msg.sentAt).getTime()) <= 5 * 60 * 1000 &&
             getDateLabel(new Date(nextMsg.sentAt)) === dateLabel;

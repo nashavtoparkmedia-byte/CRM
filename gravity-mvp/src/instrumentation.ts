@@ -191,7 +191,16 @@ export async function register() {
             })
         }, 60000)
 
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h'] })
+        // Device offline check: every 90 seconds
+        const deviceOfflineInterval = setInterval(async () => {
+            await OperationalJobs.run('device_offline_check', async () => {
+                const { TelephonyService } = await import('@/lib/TelephonyService')
+                await TelephonyService.markOfflineStaleDevices()
+            })
+        }, 90 * 1000)
+        OperationalJobs.registerInterval(deviceOfflineInterval)
+
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'device_offline:90s'] })
 
     }, 5000) // 5 second delay after server start
 

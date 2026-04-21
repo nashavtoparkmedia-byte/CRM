@@ -12,7 +12,11 @@ import type {
     SimilarTaskHint,
 } from '@/lib/tasks/types'
 import type { Prisma, Task } from '@prisma/client'
-import { getScenario, getStage, calculateSlaDeadline, getMainScenarioIds } from '@/lib/tasks/scenario-config'
+import { getScenario, getStage, calculateSlaDeadline, getMainScenarioIds, getScenarioListFields, getScenarioFields } from '@/lib/tasks/scenario-config'
+import type { ScenarioData } from '@/lib/tasks/scenario-config'
+import { buildInitialScenarioData, updateScenarioField as updateScenarioFieldLogic, resetScenarioField as resetScenarioFieldLogic } from '@/lib/tasks/scenario-fields'
+import { getAllScenarioSettingsMap, mergeFieldsWithOverrides } from '@/lib/tasks/scenario-settings'
+import { MAX_LIST_PREVIEW_FIELDS, type MergedFieldConfig } from '@/lib/tasks/scenario-settings-types'
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -20,7 +24,48 @@ type TaskWithDriver = Task & {
     driver: { fullName: string; phone: string | null; segment: string; lastOrderAt: Date | null }
 }
 
-function toTaskDTO(t: TaskWithDriver): TaskDTO {
+// Priority label mapping
+const PRIORITY_LABELS: Record<string, string> = {
+    critical: 'Критический',
+    high: 'Высокий',
+    medium: 'Средний',
+    low: 'Низкий',
+}
+
+// Contact event types for work summary
+const CONTACT_EVENT_TYPES = ['called', 'wrote', 'message_sent', 'contacted']
+
+// Contact result labels
+const CONTACT_RESULT_LABELS: Record<string, string> = {
+    answered: 'Дозвонились',
+    no_answer: 'Не дозвонились',
+    busy: 'Занято',
+    callback: 'Перезвонить',
+    positive: 'Положительный',
+    neutral: 'Нейтральный',
+    negative: 'Отрицательный',
+    message_sent: 'Отправлено',
+    message_read: 'Прочитано',
+}
+
+interface WorkSummary {
+    lastContactAt: string | null
+    lastContactResult: string | null
+    touchCount: number
+}
+
+interface EnrichedTask {
+    task: TaskWithDriver
+    workSummary: WorkSummary
+    assigneeName: string | null
+    scenarioDataRaw: ScenarioData | null
+    mergedFieldsMap?: Map<string, MergedFieldConfig[]>
+}
+
+function toEnrichedTaskDTO(e: EnrichedTask): TaskDTO {
+    const t = e.task
+    const meta = (t.metadata as any) ?? {}
+
     return {
         id: t.id,
         driverId: t.driverId,
@@ -50,8 +95,8 @@ function toTaskDTO(t: TaskWithDriver): TaskDTO {
         createdAt: t.createdAt.toISOString(),
         updatedAt: t.updatedAt.toISOString(),
         resolvedAt: t.resolvedAt?.toISOString() ?? null,
-        
-        // Scenario (Phase 1 — from DB columns)
+
+        // Scenario
         scenario: t.scenario ?? null,
         stage: t.stage ?? null,
         stageEnteredAt: t.stageEnteredAt?.toISOString() ?? null,
@@ -61,10 +106,100 @@ function toTaskDTO(t: TaskWithDriver): TaskDTO {
         closedComment: t.closedComment ?? null,
 
         // Legacy metadata
-        attempts: (t.metadata as any)?.attempts || 0,
-        nextActionId: (t.metadata as any)?.nextActionId,
-        escalated: !!(t.metadata as any)?.escalated,
+        attempts: meta.attempts || 0,
+        nextActionId: meta.nextActionId,
+        escalated: !!meta.escalated,
+
+        // Wave 1: Enriched fields
+        priorityLabel: PRIORITY_LABELS[t.priority] ?? t.priority,
+        isEscalated: !!meta.escalated,
+        assignee: t.assigneeId && e.assigneeName
+            ? { id: t.assigneeId, name: e.assigneeName }
+            : null,
+
+        // Work summary
+        lastContactAt: e.workSummary.lastContactAt,
+        lastContactResult: e.workSummary.lastContactResult,
+        touchCount: e.workSummary.touchCount,
+
+        // Scenario fields preview (respects per-scenario settings: showInList, order, limit 8)
+        scenarioFieldsPreview: buildScenarioFieldsPreview(t.scenario, e.scenarioDataRaw, e.mergedFieldsMap),
+
+        // Scenario meta — сводка по scenarioData (для фильтров/сортировок)
+        scenarioMeta: buildScenarioMeta(t.scenario, e.scenarioDataRaw),
     }
+}
+
+function buildScenarioMeta(
+    scenarioId: string | null,
+    scenarioData: ScenarioData | null,
+): TaskDTO['scenarioMeta'] {
+    if (!scenarioId) return null
+    const cardFields = getScenarioFields(scenarioId).filter(f => f.showInCard)
+    const requiredCount = cardFields.length
+    if (requiredCount === 0) return null
+
+    const sources = new Set<'auto' | 'manual' | 'derived'>()
+    let filledCount = 0
+    if (scenarioData) {
+        for (const f of cardFields) {
+            const entry = scenarioData[f.id]
+            if (entry && entry.value !== null && entry.value !== undefined) {
+                filledCount++
+                if (entry.source) sources.add(entry.source)
+            }
+        }
+    }
+
+    let completeness: 'full' | 'partial' | 'empty'
+    if (filledCount === 0) completeness = 'empty'
+    else if (filledCount >= requiredCount) completeness = 'full'
+    else completeness = 'partial'
+
+    return {
+        sourceTypes: Array.from(sources),
+        filledCount,
+        requiredCount,
+        completeness,
+    }
+}
+
+function buildScenarioFieldsPreview(
+    scenarioId: string | null,
+    scenarioData: ScenarioData | null,
+    mergedFieldsMap?: Map<string, MergedFieldConfig[]>,
+): TaskDTO['scenarioFieldsPreview'] {
+    if (!scenarioId || !scenarioData) return null
+    // If merged override provided — use it (respects per-scenario settings: showInList, order)
+    const merged = mergedFieldsMap?.get(scenarioId)
+    const fields = merged
+        ? merged.filter(f => f.showInList).slice(0, MAX_LIST_PREVIEW_FIELDS)
+        : getScenarioListFields(scenarioId).slice(0, MAX_LIST_PREVIEW_FIELDS)
+
+    if (fields.length === 0) return null
+
+    const preview: NonNullable<TaskDTO['scenarioFieldsPreview']> = []
+    for (const field of fields) {
+        const entry = scenarioData[field.id]
+        if (entry === undefined || entry === null || entry.value === undefined || entry.value === null) continue
+        preview.push({
+            fieldId: field.id,
+            label: field.label,
+            type: field.type,
+            value: entry.value,
+        })
+    }
+    return preview.length > 0 ? preview : null
+}
+
+// Keep legacy mapper for backward compat (used by getTaskById, createTask, etc.)
+function toTaskDTO(t: TaskWithDriver): TaskDTO {
+    return toEnrichedTaskDTO({
+        task: t,
+        workSummary: { lastContactAt: null, lastContactResult: null, touchCount: 0 },
+        assigneeName: null,
+        scenarioDataRaw: null,
+    })
 }
 
 function buildWhere(filters: TaskFilters): Prisma.TaskWhereInput {
@@ -271,8 +406,69 @@ export async function getTasks(
         prisma.task.count({ where }),
     ])
 
+    if (tasks.length === 0) return { tasks: [], total }
+
+    // ── Wave 1: Enrich with work summary, assignee names, scenarioData ──
+
+    const taskIds = tasks.map(t => t.id)
+
+    // 1. Work summary: last contact event + touch count per task
+    const contactEvents = await prisma.taskEvent.findMany({
+        where: {
+            taskId: { in: taskIds },
+            eventType: { in: CONTACT_EVENT_TYPES },
+        },
+        select: { taskId: true, eventType: true, payload: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+    })
+
+    const workSummaryMap = new Map<string, WorkSummary>()
+    for (const taskId of taskIds) {
+        const events = contactEvents.filter(e => e.taskId === taskId)
+        const last = events[0]
+        workSummaryMap.set(taskId, {
+            lastContactAt: last?.createdAt.toISOString() ?? null,
+            lastContactResult: last ? ((last.payload as any)?.resultId ?? last.eventType) : null,
+            touchCount: events.length,
+        })
+    }
+
+    // 2. Assignee names
+    const assigneeIds = [...new Set(tasks.map(t => t.assigneeId).filter(Boolean))] as string[]
+    const assigneeMap = new Map<string, string>()
+    if (assigneeIds.length > 0) {
+        const users = await prisma.crmUser.findMany({
+            where: { id: { in: assigneeIds } },
+            select: { id: true, name: true },
+        })
+        for (const u of users) assigneeMap.set(u.id, u.name)
+    }
+
+    // 3. ScenarioData (raw query since field not yet in Prisma Client types)
+    const scenarioDataRows = await prisma.$queryRaw<{ id: string; scenarioData: ScenarioData | null }[]>`
+        SELECT id, "scenarioData"::jsonb as "scenarioData" FROM tasks WHERE id = ANY(${taskIds})
+    `
+    const scenarioDataMap = new Map<string, ScenarioData | null>()
+    for (const row of scenarioDataRows) {
+        scenarioDataMap.set(row.id, row.scenarioData)
+    }
+
+    // 4. Scenario field settings (per-scenario overrides)
+    const scenarioIds = [...new Set(tasks.map(t => t.scenario).filter(Boolean))] as string[]
+    const settingsMap = await getAllScenarioSettingsMap(scenarioIds)
+    const mergedFieldsMap = new Map<string, MergedFieldConfig[]>()
+    for (const sid of scenarioIds) {
+        mergedFieldsMap.set(sid, mergeFieldsWithOverrides(sid, settingsMap.get(sid) ?? []))
+    }
+
     return {
-        tasks: tasks.map(toTaskDTO),
+        tasks: tasks.map(t => toEnrichedTaskDTO({
+            task: t,
+            workSummary: workSummaryMap.get(t.id) ?? { lastContactAt: null, lastContactResult: null, touchCount: 0 },
+            assigneeName: t.assigneeId ? assigneeMap.get(t.assigneeId) ?? null : null,
+            scenarioDataRaw: scenarioDataMap.get(t.id) ?? null,
+            mergedFieldsMap,
+        })),
         total,
     }
 }
@@ -317,9 +513,16 @@ export async function getTaskDetails(id: string): Promise<TaskDetailDTO | null> 
         createdAt: e.createdAt.toISOString(),
     }))
 
+    // Load full scenarioData for the card
+    const scenarioDataRows = await prisma.$queryRaw<{ scenarioData: ScenarioData | null }[]>`
+        SELECT "scenarioData"::jsonb as "scenarioData" FROM tasks WHERE id = ${id} LIMIT 1
+    `
+    const scenarioDataFull = scenarioDataRows[0]?.scenarioData ?? null
+
     return {
         ...toTaskDTO(task),
         events,
+        scenarioDataFull: scenarioDataFull as TaskDetailDTO['scenarioDataFull'],
     }
 }
 
@@ -386,6 +589,20 @@ export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
             driver: { select: { fullName: true, phone: true, segment: true, lastOrderAt: true } },
         },
     })
+
+    // Auto-populate scenarioData for scenario tasks
+    if (input.scenario) {
+        try {
+            const scenarioData = await buildInitialScenarioData(input.scenario, input.driverId)
+            if (Object.keys(scenarioData).length > 0) {
+                await prisma.$executeRaw`
+                    UPDATE tasks SET "scenarioData" = ${JSON.stringify(scenarioData)}::jsonb WHERE id = ${task.id}
+                `
+            }
+        } catch {
+            // Non-critical: scenarioData is nullable
+        }
+    }
 
     // Auto-populate contactId if not set
     if (!task.contactId) {
@@ -793,4 +1010,21 @@ export async function recalculateAllTaskAttempts(): Promise<{ updated: number }>
     }
 
     return { updated };
+}
+
+// ─── Scenario Field Update ────────────────────────────────────────────────
+
+export async function updateTaskScenarioField(
+    taskId: string,
+    fieldId: string,
+    value: unknown,
+): Promise<void> {
+    await updateScenarioFieldLogic(taskId, fieldId, value)
+}
+
+export async function resetTaskScenarioField(
+    taskId: string,
+    fieldId: string,
+): Promise<void> {
+    await resetScenarioFieldLogic(taskId, fieldId)
 }

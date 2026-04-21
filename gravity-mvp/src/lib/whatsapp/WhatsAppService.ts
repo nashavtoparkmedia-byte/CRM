@@ -1,4 +1,4 @@
-import { Client, LocalAuth, Message } from 'whatsapp-web.js'
+import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
 import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
@@ -176,7 +176,7 @@ async function syncHistory(connectionId: string, client: Client) {
                                         { externalId: msg.id },
                                         {
                                             chatId: unifiedChat.id,
-                                            content: msg.body || '',
+                                            content: waContentWithFallback(msg.body, msg.type),
                                             direction: msg.fromMe ? 'outbound' : 'inbound',
                                             sentAt: {
                                                 gte: new Date(ts.getTime() - 2000),
@@ -200,7 +200,7 @@ async function syncHistory(connectionId: string, client: Client) {
                                         chatId: unifiedChat.id,
                                         direction: msg.fromMe ? 'outbound' : 'inbound',
                                         type: mapToUnifiedMessageType(msg.type),
-                                        content: msg.body || '',
+                                        content: waContentWithFallback(msg.body, msg.type),
                                         externalId: msg.id,
                                         channel: 'whatsapp',
                                         sentAt: ts
@@ -250,6 +250,16 @@ function mapToUnifiedMessageType(type: string): 'text' | 'image' | 'audio' | 'vi
         'document': 'document'
     }
     return map[type] || 'text'
+}
+
+function waContentWithFallback(body: string | undefined, type: string): string {
+    if (body) return body
+    const fallbacks: Record<string, string> = {
+        image: '[Фото]', video: '[Видео]', voice: '[Голосовое]',
+        audio: '[Аудио]', document: '[Документ]', sticker: '[Стикер]',
+        ptt: '[Голосовое]', vcard: '[Контакт]',
+    }
+    return fallbacks[type] || ''
 }
 
 export function getClient(connectionId: string): Client | undefined {
@@ -345,29 +355,36 @@ export async function initializeClient(connectionId: string): Promise<void> {
     })
 
     client.on('message', async (msg: Message) => {
-        // ECHO GUARD: Skip our own outbound messages that WA library fires as events
-        if (msg.fromMe) {
-            console.log(`[WA-SERVICE] SKIP fromMe=true msgId=${msg.id._serialized} from=${msg.from} body="${(msg.body || '').substring(0, 30)}"`)
-            return
-        }
+        const isOutbound = msg.fromMe
+        // For outbound messages (sent from manager's phone), the chat partner is `msg.to`, not `msg.from`.
+        // For inbound, partner is `msg.from`. We use this as the chat key in either case.
+        const partnerJid = isOutbound ? (msg.to || msg.from) : msg.from
+        const direction = isOutbound ? 'outbound' : 'inbound'
 
-        console.log(`[WA-SERVICE] INBOUND msgId=${msg.id._serialized} fromMe=${msg.fromMe} from=${msg.from} body="${(msg.body || '').substring(0, 30)}"`)
-        const logLine = `[${new Date().toISOString()}] INBOUND MSG: id=${msg.id._serialized} fromMe=${msg.fromMe} from=${msg.from} body="${msg.body}"\n`;
+        console.log(`[WA-SERVICE] ${direction.toUpperCase()} msgId=${msg.id._serialized} fromMe=${msg.fromMe} partner=${partnerJid} body="${(msg.body || '').substring(0, 30)}"`)
+        const logLine = `[${new Date().toISOString()}] ${direction.toUpperCase()} MSG: id=${msg.id._serialized} fromMe=${msg.fromMe} partner=${partnerJid} body="${msg.body}"\n`;
         try { fs.appendFileSync(path.join(process.cwd(), 'wa-incoming.log'), logLine); } catch(e) {}
         try {
-            let rawChatId = msg.from  // e.g. '79221853150@c.us'
+            let rawChatId = partnerJid  // e.g. '79221853150@c.us'
             const ts = new Date(msg.timestamp * 1000)
 
-            // If the sender is a LID, attempt to get their real phone number
+            // If the partner JID is a LID, attempt to get their real phone number.
+            // For inbound: msg.getContact() = sender. For outbound: use chat.getContact() to get recipient.
             if (rawChatId.includes('@lid')) {
                 try {
-                    const contact = await msg.getContact();
+                    let contact
+                    if (isOutbound) {
+                        const chatObj = await msg.getChat()
+                        contact = await chatObj.getContact()
+                    } else {
+                        contact = await msg.getContact()
+                    }
                     if (contact && contact.number) {
-                        console.log(`[WA-SERVICE] Translated LID ${rawChatId} to contact number ${contact.number}`);
-                        rawChatId = `${contact.number}@c.us`;
+                        console.log(`[WA-SERVICE] Translated LID ${rawChatId} to contact number ${contact.number}`)
+                        rawChatId = `${contact.number}@c.us`
                     }
                 } catch (e) {
-                    console.error(`[WA-SERVICE] Failed to get contact for LID ${rawChatId}`, e);
+                    console.error(`[WA-SERVICE] Failed to get contact for LID ${rawChatId}`, e)
                 }
             }
 
@@ -461,24 +478,26 @@ export async function initializeClient(connectionId: string): Promise<void> {
                     id: msg.id._serialized,
                     chatId: rawChatId,
                     body: msg.body || '',
-                    fromMe: false,
+                    fromMe: isOutbound,
                     timestamp: ts,
                     type: mapMsgType(msg.type)
                 }
             })
 
-            // Unified Message — with DB-level dedup logging
+            // Unified Message — dedup by externalId OR by content+direction+time window.
+            // For outbound messages, this also catches echoes from CRM-initiated sends
+            // (which create the optimistic Message record before the WA library fires the event).
             const existingUnified = await prisma.message.findFirst({
                 where: {
                     OR: [
                         { externalId: msg.id._serialized },
                         {
                             chatId: unifiedChat.id,
-                            content: msg.body || '',
-                            direction: 'inbound',
+                            content: waContentWithFallback(msg.body, msg.type),
+                            direction,
                             sentAt: {
-                                gte: new Date(ts.getTime() - 2000),
-                                lte: new Date(ts.getTime() + 2000)
+                                gte: new Date(ts.getTime() - 10000),
+                                lte: new Date(ts.getTime() + 10000)
                             }
                         }
                     ]
@@ -486,7 +505,7 @@ export async function initializeClient(connectionId: string): Promise<void> {
             })
 
             if (existingUnified) {
-                console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
+                console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
                 if (!existingUnified.externalId) {
                     await prisma.message.update({
                         where: { id: existingUnified.id },
@@ -494,24 +513,55 @@ export async function initializeClient(connectionId: string): Promise<void> {
                     })
                 }
             } else {
+                const msgType = mapToUnifiedMessageType(msg.type)
                 const savedMsg = await prisma.message.create({
                     data: {
                         chatId: unifiedChat.id,
-                        direction: 'inbound',
-                        type: mapToUnifiedMessageType(msg.type),
-                        content: msg.body || '',
+                        direction,
+                        type: msgType,
+                        content: waContentWithFallback(msg.body, msg.type),
                         externalId: msg.id._serialized,
-                        sentAt: ts
+                        sentAt: ts,
+                        status: isOutbound ? 'delivered' : undefined,
                     }
                 })
 
-                // Workflow: inbound message state update
-                await ConversationWorkflowService.onInboundMessage(unifiedChat.id, ts)
+                // Download and save media attachment (image, voice, video, document, sticker)
+                if (msg.hasMedia && msgType !== 'text') {
+                    try {
+                        const media = await msg.downloadMedia()
+                        if (media && media.data) {
+                            const dataUrl = `data:${media.mimetype};base64,${media.data}`
+                            await prisma.messageAttachment.create({
+                                data: {
+                                    messageId: savedMsg.id,
+                                    type: msgType,
+                                    url: dataUrl,
+                                    fileName: media.filename || null,
+                                    fileSize: Math.round(media.data.length * 0.75), // approx decoded size
+                                    mimeType: media.mimetype || null,
+                                }
+                            })
+                            console.log(`[WA-SERVICE] MEDIA saved: ${msgType} ${media.mimetype} for msg=${savedMsg.id}`)
+                        }
+                    } catch (mediaErr: any) {
+                        console.error(`[WA-SERVICE] Media download failed for msg=${savedMsg.id}:`, mediaErr.message)
+                    }
+                }
 
-                console.log(`[WA-SERVICE] SAVED inbound msgId=${msg.id._serialized} to chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
-                emitMessageReceived(savedMsg).catch(e =>
-                    console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
-                )
+                // Workflow: route by direction
+                if (isOutbound) {
+                    await ConversationWorkflowService.onOutboundMessage(unifiedChat.id, ts)
+                } else {
+                    await ConversationWorkflowService.onInboundMessage(unifiedChat.id, ts)
+                }
+
+                console.log(`[WA-SERVICE] SAVED ${direction} msgId=${msg.id._serialized} to chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
+                if (!isOutbound) {
+                    emitMessageReceived(savedMsg).catch(e =>
+                        console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
+                    )
+                }
             }
         } catch (err) {
             console.error(`[WA-SERVICE] Message event error for ${connectionId}:`, err)
@@ -834,6 +884,97 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
     return { externalId: msg.id._serialized }
 }
 
+/**
+ * Send a media message (photo, document, video, voice, audio) via WhatsApp.
+ * Accepts base64 data and wraps it as MessageMedia.
+ */
+export async function sendMedia(
+    connectionId: string,
+    chatId: string,
+    base64: string,
+    filename: string,
+    mimeType: string,
+    caption?: string,
+    options?: { sendAsVoice?: boolean; sendAsDocument?: boolean }
+): Promise<{ externalId: string }> {
+    let client = clients.get(connectionId)
+
+    // Lazy-load client if missing (same pattern as sendMessage)
+    if (client && !client.info) {
+        const curInstanceId = instanceIds.get(connectionId)
+        if (curInstanceId) registry.setFailed(connectionId, curInstanceId, 'stale client detected in sendMedia')
+        clients.delete(connectionId)
+        client = undefined
+    }
+
+    if (!client) {
+        const conn = await prisma.whatsAppConnection.findUnique({ where: { id: connectionId } })
+        if (conn && (conn.status === 'ready' || conn.status === 'authenticated')) {
+            console.log(`[WA-SERVICE] Lazy restoring client for sendMedia ${connectionId}`)
+            initializeClient(connectionId).catch(e =>
+                console.error(`[WA-SERVICE] Lazy init failed for ${connectionId}:`, e)
+            )
+            await new Promise<void>((resolve, reject) => {
+                let attempts = 0
+                const checkInterval = setInterval(() => {
+                    attempts++
+                    const c = clients.get(connectionId)
+                    if (c && c.info) { clearInterval(checkInterval); resolve(); return }
+                    if (attempts > 60) { clearInterval(checkInterval); reject(new Error('Timeout waiting for WhatsApp')) }
+                }, 500)
+            })
+            client = clients.get(connectionId)
+        }
+    }
+
+    if (!client) throw new Error('Client not connected')
+
+    // Ensure chatId has proper WhatsApp suffix
+    const digits = chatId.replace(/\D/g, '')
+    const defaultSuffix = digits.length >= 14 ? '@lid' : '@c.us'
+    const targetChatId = chatId.includes('@') ? chatId : `${digits}${defaultSuffix}`
+
+    // Build MessageMedia from base64 (strip data: prefix if present)
+    const cleanBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64
+    const media = new MessageMedia(mimeType, cleanBase64, filename)
+
+    const sendOptions: any = {}
+    if (caption) sendOptions.caption = caption
+    if (options?.sendAsVoice) sendOptions.sendAudioAsVoice = true
+    if (options?.sendAsDocument) sendOptions.sendMediaAsDocument = true
+
+    let msg
+    try {
+        msg = await client.sendMessage(targetChatId, media, sendOptions)
+    } catch (sendErr: any) {
+        const errMsg = sendErr.message || ''
+        const isPuppeteerDead = errMsg.includes('detached Frame') || errMsg.includes('Protocol error') ||
+            errMsg.includes('Target closed') || errMsg.includes('Session closed')
+        if (isPuppeteerDead) {
+            const curInstanceId = instanceIds.get(connectionId)
+            if (curInstanceId) registry.setFailed(connectionId, curInstanceId, `puppeteer crash: ${errMsg}`)
+            clients.delete(connectionId)
+        }
+        throw sendErr
+    }
+
+    const sendInstanceId = instanceIds.get(connectionId)
+    if (sendInstanceId) registry.touch(connectionId, sendInstanceId)
+
+    const ts = new Date(msg.timestamp * 1000)
+
+    // Ensure WhatsAppChat exists
+    await prisma.whatsAppChat.upsert({
+        where: { id: targetChatId },
+        update: { lastMessageAt: ts },
+        create: { id: targetChatId, connectionId, name: targetChatId.split('@')[0], lastMessageAt: ts }
+    })
+
+    console.log(`[WA-SERVICE] SENT media type=${mimeType} filename=${filename} to=${targetChatId} msgId=${msg.id._serialized}`)
+
+    return { externalId: msg.id._serialized }
+}
+
 export async function downloadMedia(messageId: string, chatId: string): Promise<string | null> {
     const msg = await prisma.whatsAppMessage.findUnique({
         where: { id_chatId: { id: messageId, chatId } }
@@ -1006,7 +1147,7 @@ export async function importWhatsAppHistory(
                                     { externalId: msgId },
                                     {
                                         chatId: unifiedChat.id,
-                                        content: msg.body || '',
+                                        content: waContentWithFallback(msg.body, msg.type),
                                         direction: msg.fromMe ? 'outbound' : 'inbound',
                                         sentAt: { gte: new Date(ts.getTime() - 2000), lte: new Date(ts.getTime() + 2000) }
                                     }
@@ -1021,7 +1162,7 @@ export async function importWhatsAppHistory(
                                     chatId: unifiedChat.id,
                                     direction: msg.fromMe ? 'outbound' : 'inbound',
                                     type: mapToUnifiedMessageType(msg.type),
-                                    content: msg.body || '',
+                                    content: waContentWithFallback(msg.body, msg.type),
                                     externalId: msgId,
                                     channel: 'whatsapp',
                                     sentAt: ts

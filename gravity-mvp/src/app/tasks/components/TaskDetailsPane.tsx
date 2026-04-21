@@ -23,6 +23,8 @@ import TaskFooterActions from './details/TaskFooterActions'
 import TaskDetailHeader from './details/TaskDetailHeader'
 import TaskHistorySection from './details/TaskHistorySection'
 import CloseReasonModal from './details/CloseReasonModal'
+import ScenarioFieldsSection from './details/ScenarioFieldsSection'
+import TaskOperationalHeader from './details/TaskOperationalHeader'
 import { getClosedReasons } from '@/lib/tasks/scenario-config'
 
 const STATUS_LABELS: Record<string, string> = {
@@ -231,7 +233,12 @@ export default function TaskDetailsPane() {
                     </button>
                 )}
 
-                {/* Scenario context — only for scenario tasks */}
+                {/* Уровень 1: Оперативная шапка */}
+                {task.scenario && (
+                    <TaskOperationalHeader task={task} />
+                )}
+
+                {/* Scenario context — stage progression */}
                 {task.scenario && (
                     <ScenarioContextSection
                         task={task}
@@ -239,7 +246,7 @@ export default function TaskDetailsPane() {
                     />
                 )}
 
-                {/* 1. Сетка полей: Сценарий | Событие | Статус | Срок */}
+                {/* Сетка: Сценарий | Событие | Статус | Срок */}
                 <TaskMetaFields
                     task={task}
                     scenario={scenario}
@@ -254,7 +261,7 @@ export default function TaskDetailsPane() {
                 />
 
 
-                {/* Блок: Последний контакт (под сеткой полей) */}
+                {/* Уровень 2: Последний контакт */}
                 {lastContact && (
                     <LastContactSection
                         lastContact={lastContact}
@@ -313,6 +320,11 @@ export default function TaskDetailsPane() {
                         originMessageId={task.originMessageId}
                         originExcerpt={task.originExcerpt}
                     />
+                )}
+
+                {/* Уровень 3: Служебные поля "Контекст кейса" (свёрнуто по умолчанию) */}
+                {task.scenario && (
+                    <ScenarioFieldsSection task={task} />
                 )}
 
                 <TaskHistorySection

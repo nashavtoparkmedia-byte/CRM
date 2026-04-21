@@ -49,39 +49,85 @@ export class MessageService {
                 orderBy: { lastMessageAt: 'desc' }
             })
 
-            // 1b. Enrich with workflow fields not in Prisma client types
-            const workflowRows = await (prisma as any).$queryRaw`
-                SELECT id, "assignedToUserId", "lastInboundAt", "lastOutboundAt"
+            // 1b. Enrich with fields not in Prisma client types (chatType, workflow fields)
+            const extraRows = await (prisma as any).$queryRaw`
+                SELECT id, "chatType", "assignedToUserId", "lastInboundAt", "lastOutboundAt"
                 FROM "Chat"
             `
-            const workflowMap = new Map<string, any>()
-            for (const row of workflowRows) {
-                workflowMap.set(row.id, row)
+            const extraMap = new Map<string, any>()
+            for (const row of extraRows) {
+                extraMap.set(row.id, row)
             }
             for (const chat of chats) {
-                const wf = workflowMap.get(chat.id)
-                if (wf) {
-                    chat.assignedToUserId = wf.assignedToUserId
-                    chat.lastInboundAt = wf.lastInboundAt
-                    chat.lastOutboundAt = wf.lastOutboundAt
+                const extra = extraMap.get(chat.id)
+                if (extra) {
+                    chat.chatType = extra.chatType || 'private'
+                    chat.assignedToUserId = extra.assignedToUserId
+                    chat.lastInboundAt = extra.lastInboundAt
+                    chat.lastOutboundAt = extra.lastOutboundAt
                 }
             }
 
             // 2. Group chats by contactId (priority) or driverId (fallback)
             // This ensures chats created via Contact API (with contactId but no driverId)
             // are grouped together with chats linked via Driver.
-            const groups = new Map<string, any[]>()
             const ungroupedChats: any[] = []
 
+            // Union-Find merge: chats sharing contactId OR driverId end up in the same group
+            const chatToGroup = new Map<string, string>() // chatId → groupKey
+            const keyToGroup = new Map<string, string>()   // contactId/driverId → groupKey
+            const groupChats = new Map<string, any[]>()    // groupKey → chats
+
             for (const chat of chats) {
-                const key = chat.contactId || chat.driverId
-                if (key) {
-                    if (!groups.has(key)) groups.set(key, [])
-                    groups.get(key)!.push(chat)
-                } else {
+                if (chat.chatType && chat.chatType !== 'private') {
                     ungroupedChats.push(chat)
+                    continue
                 }
+                const keys = [
+                    chat.contactId ? `c:${chat.contactId}` : null,
+                    chat.driverId ? `d:${chat.driverId}` : null,
+                ].filter(Boolean) as string[]
+
+                if (keys.length === 0) {
+                    ungroupedChats.push(chat)
+                    continue
+                }
+
+                // Find existing group for any of the keys
+                let groupKey: string | null = null
+                for (const k of keys) {
+                    if (keyToGroup.has(k)) {
+                        groupKey = keyToGroup.get(k)!
+                        break
+                    }
+                }
+
+                if (!groupKey) {
+                    groupKey = keys[0]
+                    groupChats.set(groupKey, [])
+                }
+
+                // If chat has multiple keys, merge groups
+                for (const k of keys) {
+                    const existingGroup = keyToGroup.get(k)
+                    if (existingGroup && existingGroup !== groupKey) {
+                        // Merge existingGroup into groupKey
+                        const chatsToMove = groupChats.get(existingGroup) || []
+                        const targetChats = groupChats.get(groupKey) || []
+                        targetChats.push(...chatsToMove)
+                        groupChats.delete(existingGroup)
+                        // Re-point all keys from old group
+                        for (const [mk, mv] of keyToGroup) {
+                            if (mv === existingGroup) keyToGroup.set(mk, groupKey)
+                        }
+                    }
+                    keyToGroup.set(k, groupKey)
+                }
+
+                groupChats.get(groupKey)!.push(chat)
             }
+
+            const groups = groupChats
 
             // 3. For each driver group, create a merged entry
             const mergedEntries: any[] = []
@@ -101,6 +147,7 @@ export class MessageService {
                 const assignedToUserId = primary.assignedToUserId || driverChats.find((c: any) => c.assignedToUserId)?.assignedToUserId || null
                 const allChatIds = driverChats.map((c: any) => c.id)
                 const channelMap = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.id]))
+                const channelUnread = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.unreadCount || 0]))
                 
                 // Aggregate profiles from all chats for this driver
                 const allProfiles = driverChats.map((c: any) => ({
@@ -115,6 +162,7 @@ export class MessageService {
                     assignedToUserId,
                     allChatIds,
                     channelMap, // { whatsapp: chatId, telegram: chatId, max: chatId }
+                    channelUnread, // { whatsapp: 3, telegram: 1, ... }
                     allProfiles, // List of { channel, profileId }
                     // For display in channel-filter tabs, keep all channels the driver has
                     allChannels: driverChats.map((c: any) => c.channel)
@@ -128,13 +176,18 @@ export class MessageService {
                     ...chat,
                     allChatIds: [chat.id],
                     channelMap: { [chat.channel]: chat.id },
+                    channelUnread: { [chat.channel]: chat.unreadCount || 0 },
                     allProfiles: profileId ? [{ channel: chat.channel, profileId }] : [],
                     allChannels: [chat.channel]
                 })
             }
 
-            // 5. Sort by lastMessageAt
+            // 5. Sort: unread first (by lastMessageAt desc), then read (by lastMessageAt desc).
+            // Telegram-like ordering — attention items bubble to the top.
             mergedEntries.sort((a: any, b: any) => {
+                const aUnread = (a.unreadCount || 0) > 0 ? 1 : 0
+                const bUnread = (b.unreadCount || 0) > 0 ? 1 : 0
+                if (aUnread !== bUnread) return bUnread - aUnread
                 const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0
                 const tb = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : 0
                 return tb - ta

@@ -216,26 +216,26 @@ export default function MessageInputArea({
         setIsSendingImage(true)
         try {
             const base64 = dataUrl.split(',')[1]
-            const res = await fetch('/api/messages/send-image', {
+            const res = await fetch('/api/messages/send-media', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     chatId,
                     base64,
                     filename: file.name,
-                    mimeType: file.type,
+                    mimeType: file.type || 'application/octet-stream',
                     caption: text.trim() || '',
                 }),
             })
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}))
-                console.error('[send-image] failed:', err)
+                console.error('[send-media] failed:', err)
             } else {
                 setText('')
                 draftCache.delete(cacheKey)
             }
         } catch (err) {
-            console.error('[send-image] error:', err)
+            console.error('[send-media] error:', err)
         } finally {
             setIsSendingImage(false)
         }
@@ -255,17 +255,40 @@ export default function MessageInputArea({
 
     return (
         <>
-        {/* Image preview modal */}
-        {imagePreview && (
+        {/* Media preview modal */}
+        {imagePreview && (() => {
+            const mt = imagePreview.file.type || ''
+            const isImage = mt.startsWith('image/')
+            const isVideo = mt.startsWith('video/')
+            const isAudio = mt.startsWith('audio/')
+            const title = isImage ? 'Отправить фото' : isVideo ? 'Отправить видео' : isAudio ? 'Отправить аудио' : 'Отправить файл'
+            const fileSizeKb = Math.round(imagePreview.file.size / 1024)
+            return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setImagePreview(null)}>
                 <div className="bg-white rounded-2xl shadow-2xl p-4 max-w-sm w-full mx-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between">
-                        <span className="font-semibold text-[15px] text-gray-800">Отправить фото</span>
+                        <span className="font-semibold text-[15px] text-gray-800">{title}</span>
                         <button onClick={() => setImagePreview(null)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                             <X size={16} />
                         </button>
                     </div>
-                    <img src={imagePreview.dataUrl} alt="preview" className="w-full max-h-[320px] object-contain rounded-lg bg-gray-50" />
+                    {isImage ? (
+                        <img src={imagePreview.dataUrl} alt="preview" className="w-full max-h-[320px] object-contain rounded-lg bg-gray-50" />
+                    ) : isVideo ? (
+                        <video src={imagePreview.dataUrl} controls className="w-full max-h-[320px] rounded-lg bg-gray-50" />
+                    ) : isAudio ? (
+                        <audio src={imagePreview.dataUrl} controls className="w-full" />
+                    ) : (
+                        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+                            <div className="w-10 h-10 rounded-lg bg-[#3390EC]/10 flex items-center justify-center text-[#3390EC]">
+                                <Paperclip size={20} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="truncate text-[14px] font-medium text-gray-800">{imagePreview.file.name}</div>
+                                <div className="text-[12px] text-gray-500">{fileSizeKb} KB</div>
+                            </div>
+                        </div>
+                    )}
                     <div className="flex gap-2">
                         <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
                             Отмена
@@ -276,7 +299,8 @@ export default function MessageInputArea({
                     </div>
                 </div>
             </div>
-        )}
+            )
+        })()}
         <div className="shrink-0 bg-white z-10 flex flex-col relative">
             
             {/* Quick Reply Suggestions (auto-suggest above input) */}
@@ -336,14 +360,14 @@ export default function MessageInputArea({
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,.rar"
                     className="hidden"
                     onChange={handleFileSelect}
                 />
                 <button
                     className={`h-[36px] w-[36px] rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
                     onClick={() => fileInputRef.current?.click()}
-                    title="Прикрепить изображение"
+                    title="Прикрепить файл"
                 >
                     <Paperclip size={17} />
                 </button>

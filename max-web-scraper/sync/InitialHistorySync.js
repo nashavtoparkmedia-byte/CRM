@@ -21,17 +21,18 @@ class InitialHistorySync {
    * @param {object} messageSync - MessageSync instance
    * @param {Function} forwardFn - async (payload) => void
    */
-  constructor(transport, messageSync, forwardFn, mediaPipeline = null, chatCache = null) {
-    this._transport    = transport
-    this._sync         = messageSync
-    this._forward      = forwardFn
+  constructor(transport, messageSync, forwardFn, mediaPipeline = null, chatCache = null, contactStore = null) {
+    this._transport     = transport
+    this._sync          = messageSync
+    this._forward       = forwardFn
     this._mediaPipeline = mediaPipeline
-    this._chatCache    = chatCache  // Map of chatId → chat (из opcode 48 автозагрузки)
+    this._chatCache     = chatCache  // Map of chatId → chat (из opcode 48 автозагрузки)
+    this._contactStore  = contactStore  // ContactStore for name/phone enrichment
   }
 
   // ─── Запуск ─────────────────────────────────────────────────────────────
 
-  async runIfNeeded(historyImportMode = 'from_connection_time') {
+  async runIfNeeded(historyImportMode = 'from_connection_time', options = {}) {
     if (historyImportMode === 'none') {
       console.log('[InitialSync] Режим: none — история не импортируется')
       this._markDone('none')
@@ -44,6 +45,31 @@ class InitialHistorySync {
       const caught = await this._catchUpIfNeeded()
       this._markDone('from_connection_time')
       return { mode: 'from_connection_time', status: caught ? 'caught_up' : 'skipped' }
+    }
+
+    // last_n_days — загружаем ВСЕ чаты из MAX, но ограничиваем историю по дате
+    if (historyImportMode === 'last_n_days') {
+      const sinceTs = options.sinceTs || (Date.now() - 7 * 24 * 60 * 60 * 1000)
+      console.log(`[InitialSync] Режим: last_n_days — загрузка с ${new Date(sinceTs).toISOString()}`)
+
+      let status = 'completed'
+      try {
+        const chats = await this._fetchAllChats()
+        console.log(`[InitialSync] last_n_days: чатов найдено: ${chats.length}`)
+
+        for (const chat of chats) {
+          const chatId = chat.id ?? chat.chatId
+          if (!chatId || chatId === 0) continue
+          const count = await this._syncChatSince(chatId, sinceTs)
+          if (count > 0) console.log(`[InitialSync] last_n_days: chat ${chatId} → ${count} сообщений`)
+        }
+      } catch (e) {
+        console.error('[InitialSync] last_n_days ошибка:', e.message)
+        status = 'failed'
+      }
+
+      this._markDone('last_n_days')
+      return { mode: 'last_n_days', status }
     }
 
     if (fs.existsSync(DONE_FLAG)) {
@@ -72,6 +98,19 @@ class InitialHistorySync {
 
     this._markDone('available_history')
     return { mode: 'available_history', status }
+  }
+
+  // ─── Обогащение payload именем/телефоном из ContactStore ─────────────────
+
+  _enrichPayload(payload) {
+    if (!this._contactStore || !payload.senderId) return payload
+    const senderName  = this._contactStore.getName(payload.senderId)
+    const senderPhone = this._contactStore.getPhone(payload.senderId)
+    return {
+      ...payload,
+      ...(senderName  ? { senderName }  : {}),
+      ...(senderPhone ? { senderPhone } : {}),
+    }
   }
 
   // ─── Получить список всех чатов ─────────────────────────────────────────
@@ -141,10 +180,12 @@ class InitialHistorySync {
         try {
           // Detect outgoing by sender === myUserId (MAX protocol uses sender field, not out/is_out)
           const isOutgoing = myId && String(raw.sender) === String(myId)
-          if (isOutgoing) continue
           const msg = MessageParser.normalizeHistoryMessage(raw)
+          // Override isOutgoing from sender check (more reliable than protocol flags)
+          if (isOutgoing) msg.isOutgoing = true
           if (!this._sync.isDuplicate(msg)) {
-            await this._forward(MessageParser.toCrmPayload(msg, chatId))
+            const payload = this._enrichPayload(MessageParser.toCrmPayload(msg, chatId))
+            await this._forward(payload)
             this._sync.markSeen(msg)
             total++
           }
@@ -216,49 +257,75 @@ class InitialHistorySync {
 
   async _syncChatSince(chatId, sinceTs) {
     let total = 0
+    let fromTs = sinceTs
+    let pageNum = 0
+
     try {
-      const result = await this._transport.sendFrame(
-        OP.GET_HISTORY,
-        { chatId, from: sinceTs, forward: 50, backward: 0, getMessages: true },
-        { waitResponse: true }
-      )
-      const messages = (result && result.messages) ? result.messages : []
-      console.log(`[InitialSync] Chat ${chatId}: got ${messages.length} msgs after sinceTs=${sinceTs}`)
       const myId = this._transport._myUserId
-      for (const raw of messages) {
-        try {
-          if ((raw.time || 0) < sinceTs) continue
-          // Detect outgoing by sender === myUserId (MAX protocol uses sender field, not out/is_out)
-          const isOutgoing = myId && String(raw.sender) === String(myId)
-          if (isOutgoing) continue
-          const msg = MessageParser.normalizeHistoryMessage(raw)
-          if (!this._sync.isDuplicate(msg)) {
-            let payload = MessageParser.toCrmPayload(msg, chatId)
 
-            // Скачиваем вложения (фото, голосовые) если есть mediaPipeline
-            if (this._mediaPipeline && msg.attachments && msg.attachments.length > 0) {
-              const downloaded = []
-              for (const att of msg.attachments) {
-                if (!att.url) { downloaded.push(att); continue }
-                try {
-                  const file = await this._mediaPipeline.downloadAttachment(att.url, att.mimeType)
-                  downloaded.push({ ...att, localPath: file.localPath, size: file.size })
-                } catch (e) {
-                  console.error(`[InitialSync] Ошибка скачивания вложения в catch-up:`, e.message)
-                  downloaded.push(att)
-                }
-              }
-              payload = { ...payload, attachments: downloaded }
-            }
-
-            await this._forward(payload)
-            this._sync.markSeen(msg)
-            total++
-          }
-        } catch (e) {
-          console.error(`[InitialSync] Пропускаем catch-up сообщение:`, e.message,
-            '| raw.id:', raw?.id, '| chatId:', chatId)
+      // Paginate: request HISTORY_BATCH messages at a time until no more
+      do {
+        const result = await this._transport.sendFrame(
+          OP.GET_HISTORY,
+          { chatId, from: fromTs, forward: HISTORY_BATCH, backward: 0, getMessages: true },
+          { waitResponse: true }
+        )
+        const messages = (result && result.messages) ? result.messages : []
+        if (pageNum === 0) {
+          console.log(`[InitialSync] Chat ${chatId}: first page ${messages.length} msgs after sinceTs=${sinceTs}`)
         }
+
+        if (messages.length === 0) break
+
+        let lastTime = fromTs
+        for (const raw of messages) {
+          try {
+            const msgTime = raw.time || 0
+            if (msgTime < sinceTs) continue
+            if (msgTime > lastTime) lastTime = msgTime
+
+            const isOutgoing = myId && String(raw.sender) === String(myId)
+            const msg = MessageParser.normalizeHistoryMessage(raw)
+            if (isOutgoing) msg.isOutgoing = true
+            if (!this._sync.isDuplicate(msg)) {
+              let payload = this._enrichPayload(MessageParser.toCrmPayload(msg, chatId))
+
+              // Скачиваем вложения (фото, голосовые) если есть mediaPipeline
+              if (this._mediaPipeline && msg.attachments && msg.attachments.length > 0) {
+                const downloaded = []
+                for (const att of msg.attachments) {
+                  if (!att.url) { downloaded.push(att); continue }
+                  try {
+                    const file = await this._mediaPipeline.downloadAttachment(att.url, att.mimeType)
+                    downloaded.push({ ...att, localPath: file.localPath, size: file.size })
+                  } catch (e) {
+                    console.error(`[InitialSync] Ошибка скачивания вложения в catch-up:`, e.message)
+                    downloaded.push(att)
+                  }
+                }
+                payload = { ...payload, attachments: downloaded }
+              }
+
+              await this._forward(payload)
+              this._sync.markSeen(msg)
+              total++
+            }
+          } catch (e) {
+            console.error(`[InitialSync] Пропускаем catch-up сообщение:`, e.message,
+              '| raw.id:', raw?.id, '| chatId:', chatId)
+          }
+        }
+
+        // Move cursor forward for next page
+        fromTs = lastTime + 1
+        pageNum++
+
+        // Stop if we got fewer than requested (last page)
+        if (messages.length < HISTORY_BATCH) break
+      } while (pageNum < MAX_PAGES)
+
+      if (pageNum > 1) {
+        console.log(`[InitialSync] Chat ${chatId}: ${pageNum} pages, ${total} total msgs`)
       }
     } catch (e) {
       console.error(`[InitialSync] Catch-up chat ${chatId}:`, e.message)

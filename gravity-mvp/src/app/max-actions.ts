@@ -124,17 +124,42 @@ export async function deleteMaxMessages(id: string) {
         where: { channel: 'max' },
         select: { id: true, contactId: true }
     })
-    if (chats.length > 0) {
-        const chatIds = chats.map((c: any) => c.id)
-        const contactIds = [...new Set(chats.map((c: any) => c.contactId).filter(Boolean))] as string[]
+    if (chats.length === 0) {
+        console.log(`[MAX-ACTIONS] No MAX chats found, nothing to delete`)
+        revalidatePath('/messages')
+        return
+    }
 
-        await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } }).catch(() => {})
-        await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } }).catch(() => {})
+    const chatIds = chats.map((c: any) => c.id)
+    const contactIds = [...new Set(chats.map((c: any) => c.contactId).filter(Boolean))] as string[]
+    console.log(`[MAX-ACTIONS] Deleting ${chatIds.length} MAX chats with all messages...`)
 
-        // Cleanup dangling identities (scoped to affected contacts)
-        if (contactIds.length > 0) {
+    try {
+        // Use raw SQL for reliable bulk deletion — CASCADE handles Messages → Attachments → EventLogs
+        await (prisma as any).$executeRawUnsafe(
+            `DELETE FROM "Chat" WHERE channel = 'max'`
+        )
+        console.log(`[MAX-ACTIONS] Successfully deleted ${chatIds.length} MAX chats and all related data`)
+    } catch (e: any) {
+        console.error(`[MAX-ACTIONS] DELETE failed:`, e.message)
+        // Fallback: delete in order if raw SQL fails
+        try {
+            await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
+            await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+            console.log(`[MAX-ACTIONS] Fallback deletion succeeded`)
+        } catch (e2: any) {
+            console.error(`[MAX-ACTIONS] Fallback deletion also failed:`, e2.message)
+            throw e2
+        }
+    }
+
+    // Cleanup dangling identities (scoped to affected contacts)
+    if (contactIds.length > 0) {
+        try {
             const { ContactService } = await import('@/lib/ContactService')
             await ContactService.cleanupDanglingIdentities(contactIds)
+        } catch (e: any) {
+            console.error(`[MAX-ACTIONS] Identity cleanup failed:`, e.message)
         }
     }
     revalidatePath('/messages')

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search } from "lucide-react"
+import { X, Phone, PhoneOutgoing, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useContactSearch } from "../hooks/useContactSearch"
@@ -77,6 +77,39 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [aiStatus, setAiStatus] = useState<'active' | 'paused' | 'inactive'>('inactive')
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
+    const [callingPhone, setCallingPhone] = useState<string | null>(null)
+    const [callResult, setCallResult] = useState<{ phone: string; ok: boolean } | null>(null)
+
+    const handleCall = async (phoneNumber: string) => {
+        setCallingPhone(phoneNumber)
+        setCallResult(null)
+        try {
+            // Get first active online device
+            const devRes = await fetch('/api/telephony/devices')
+            if (!devRes.ok) throw new Error('Не удалось получить список устройств')
+            const devices = await devRes.json()
+            const device = devices.find((d: any) => d.isActive && d.status === 'online')
+            if (!device) {
+                setCallResult({ phone: phoneNumber, ok: false })
+                return
+            }
+            const res = await fetch('/api/telephony/commands/call', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    deviceId: device.id,
+                    phoneNumber,
+                    contactId: contact?.id,
+                }),
+            })
+            setCallResult({ phone: phoneNumber, ok: res.ok })
+        } catch {
+            setCallResult({ phone: phoneNumber, ok: false })
+        } finally {
+            setCallingPhone(null)
+            setTimeout(() => setCallResult(null), 3000)
+        }
+    }
 
     // Reachability: merge persisted status from DB with optional live-check override
     const [liveReachability, setLiveReachability] = useState<Record<string, boolean | null>>({})
@@ -317,6 +350,23 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {phone.isPrimary && (
                                             <Star size={10} className="text-yellow-500 fill-yellow-500" />
                                         )}
+                                        <button
+                                            onClick={() => handleCall(phone.phone)}
+                                            disabled={callingPhone === phone.phone}
+                                            title="Позвонить"
+                                            className="ml-auto text-[10px] text-orange-600 font-semibold px-2 py-0.5 rounded bg-orange-50 hover:bg-orange-100 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            {callingPhone === phone.phone ? (
+                                                <Loader2 size={9} className="animate-spin" />
+                                            ) : callResult?.phone === phone.phone ? (
+                                                callResult.ok ? <Check size={9} className="text-green-600" /> : <X size={9} className="text-red-500" />
+                                            ) : (
+                                                <PhoneOutgoing size={9} />
+                                            )}
+                                            {callingPhone === phone.phone ? 'Звоним...' :
+                                             callResult?.phone === phone.phone ? (callResult.ok ? 'Отправлено' : 'Нет устройства') :
+                                             'Позвонить'}
+                                        </button>
                                     </div>
                                     <div className="ml-4 space-y-0.5">
                                         {/* Existing identities */}

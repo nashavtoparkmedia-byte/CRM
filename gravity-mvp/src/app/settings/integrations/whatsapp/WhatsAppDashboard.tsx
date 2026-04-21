@@ -45,6 +45,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
     const pollingRef = useRef<NodeJS.Timeout | null>(null)
     const [pauseDialog, setPauseDialog] = useState(false)
     const [resumeDialog, setResumeDialog] = useState(false)
+    const [syncKey, setSyncKey] = useState(0)
     const [disconnectDialog, setDisconnectDialog] = useState(false)
 
     useEffect(() => {
@@ -86,6 +87,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
             await pauseWhatsAppConnection(conn.id, deleteMessages)
             setLivePaused(true)
             setPauseDialog(false)
+            if (deleteMessages) setSyncKey(k => k + 1)
             onRefresh()
         } catch (err) {
             console.error('[WA] Pause failed:', err)
@@ -113,6 +115,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         try {
             if (deleteMessages) {
                 await deleteWhatsAppMessages(conn.id)
+                setSyncKey(k => k + 1)
             }
             await disconnectWhatsApp(conn.id)
             setLiveStatus('idle')
@@ -212,7 +215,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
             {/* История сообщений */}
             {liveStatus === 'ready' && (
-                <ChannelSyncBlock channel="whatsapp" connectionId={conn.id} />
+                <ChannelSyncBlock key={syncKey} channel="whatsapp" connectionId={conn.id} />
             )}
 
             {/* Actions */}

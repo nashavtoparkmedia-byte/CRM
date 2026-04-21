@@ -15,7 +15,7 @@
  *   page.tsx passes the initial chatId from the URL; subsequent switches are local.
  */
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import ChatList from "./ChatList"
 import ChatWorkspace from "./ChatWorkspace"
@@ -27,24 +27,40 @@ export default function MessagesShell({
     activeChannelTab,
     isProfileOpen,
     initialMessageId,
+    initialPhone,
 }: {
     initialChatId: string | null
     activeListTab: string
     activeChannelTab: string
     isProfileOpen: boolean
     initialMessageId: string | null
+    initialPhone?: string | null
+    initialPhone?: string | null
 }) {
     const [chatId, setChatIdState] = useState(initialChatId)
+    const [channelTab, setChannelTab] = useState(activeChannelTab)
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
     const [, startTransition] = useTransition()
 
-    const handleSelectChat = (id: string) => {
+    // Sync channelTab with URL param (ChatChannelTabs updates URL directly)
+    const urlChannel = searchParams.get('channel') || 'all'
+    useEffect(() => {
+        setChannelTab(urlChannel)
+    }, [urlChannel])
+
+    const handleSelectChat = (id: string, channelHint?: string) => {
         setChatIdState(id)
+        if (channelHint) {
+            setChannelTab(channelHint)
+        }
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
             params.set('id', id)
+            if (channelHint) {
+                params.set('channel', channelHint)
+            }
             router.replace(`${pathname}?${params.toString()}`, { scroll: false })
         })
     }
@@ -54,13 +70,14 @@ export default function MessagesShell({
             <ChatList
                 selectedChatId={chatId}
                 activeListTab={activeListTab}
-                activeChannelTab={activeChannelTab}
+                activeChannelTab={channelTab}
                 onSelectChat={handleSelectChat}
+                initialPhone={initialPhone}
             />
 
             <ChatWorkspace
                 chatId={chatId}
-                activeChannelTab={activeChannelTab}
+                activeChannelTab={channelTab}
                 isProfileOpen={isProfileOpen}
                 initialMessageId={initialMessageId}
             />

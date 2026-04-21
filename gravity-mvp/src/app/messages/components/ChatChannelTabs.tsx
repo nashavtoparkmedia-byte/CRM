@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, Conversation } from "../hooks/useConversations"
 
-// Initial defaults (overwritten by dynamic fetch)
 const SELECTED_ACCOUNTS_KEY = 'chat-selected-accounts-v1'
 
 export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels }: { activeChannelTab: string, chat: Conversation, failedChannels?: Set<string> }) {
@@ -15,19 +14,14 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
     const [selectedAccounts, setSelectedAccounts] = useState<Record<string, string>>({})
     const dropdownRef = useRef<HTMLDivElement>(null)
 
-    // 1. Fetch real accounts
     useEffect(() => {
         const fetchAccounts = async () => {
             try {
                 const res = await fetch('/api/channels/accounts')
                 const data = await res.json()
                 setChannelAccounts(data)
-
-                // Load saved selections from localStorage
                 const saved = localStorage.getItem(SELECTED_ACCOUNTS_KEY)
                 const initialSelections: Record<string, string> = saved ? JSON.parse(saved) : {}
-
-                // Ensure defaults are set for all channels
                 Object.entries(data).forEach(([ch, accs]: [string, any]) => {
                     if (!initialSelections[ch] && accs.length > 0) {
                         const def = accs.find((a: any) => a.isDefault) || accs[0]
@@ -53,31 +47,35 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
     }, [])
 
     const channels = [
-        { id: 'all', label: 'Все', short: 'Все' },
-        { id: 'wa', label: 'WhatsApp', short: 'WA', dot: 'bg-emerald-500' },
-        { id: 'tg', label: 'Telegram', short: 'TG', dot: 'bg-blue-500' },
-        { id: 'max', label: 'MAX', short: 'MAX', dot: 'bg-purple-500' },
-        { id: 'ypro', label: 'Yandex Pro', short: 'YP', dot: 'bg-yellow-500' }
+        { id: 'all', label: 'Все', short: 'All', channelKey: '' },
+        { id: 'wa', label: 'WhatsApp', short: 'WhatsApp', dot: 'bg-emerald-500', channelKey: 'whatsapp' },
+        { id: 'tg', label: 'Telegram', short: 'Telegram', dot: 'bg-blue-500', channelKey: 'telegram' },
+        { id: 'max', label: 'MAX', short: 'MAX', dot: 'bg-purple-500', channelKey: 'max' },
+        { id: 'ypro', label: 'Yandex Pro', short: 'Yandex Pro', dot: 'bg-yellow-500', channelKey: 'yandex_pro' },
+        { id: 'phone', label: 'Телефон', short: 'Телефон', dot: 'bg-orange-500', channelKey: 'phone' }
     ]
 
-    // ONE CLICK = switch channel AND open account dropdown
+    // Get unread count for a channel
+    const getChannelUnread = (channelKey: string): number => {
+        if (!channelKey) {
+            // "All" tab — total unread
+            return chat.unreadCount || 0
+        }
+        return chat.channelUnread?.[channelKey] || 0
+    }
+
     const handleChannelClick = (chId: string) => {
         if (chId === 'all') {
             updateQuery({ channel: null })
             setExpandedChannel(null)
             return
         }
-        
-        // Use channelMap from the merged conversation to find the chatId for the target channel
         const normalizedChannel = chId === 'wa' ? 'whatsapp' : chId === 'tg' ? 'telegram' : chId === 'ypro' ? 'yandex_pro' : chId
         const targetChatId = chat.channelMap?.[normalizedChannel]
-        
-        // Atomic update: switch channel AND chatId if we have a specific chat for that channel
         const updates: Record<string, string | null> = { channel: chId }
         if (targetChatId && targetChatId !== chat.id) {
             updates.id = targetChatId
         }
-        
         updateQuery(updates)
         setExpandedChannel(chId === expandedChannel ? null : chId)
     }
@@ -96,27 +94,34 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
     }
 
     return (
-        <div className="h-[30px] flex items-center px-4 shrink-0 bg-[#FAFAFA] border-b border-[#E8E8E8] gap-0 relative" ref={dropdownRef}>
-            {channels.map((ch, idx) => {
+        <div className="h-[40px] flex items-center px-4 shrink-0 bg-white border-b border-[#E8E8E8] gap-1 relative" ref={dropdownRef}>
+            {channels.map((ch) => {
                 const isActive = activeChannelTab === ch.id
-                const activeAccount = ch.id !== 'all' ? getActiveAccount(ch.id) : null
-                
+                const unread = getChannelUnread(ch.channelKey)
+                const hasFailed = ch.id !== 'all' && failedChannels?.has(ch.channelKey)
+
                 return (
                     <div key={ch.id} className="relative flex items-center">
-                        {idx > 0 && <span className="text-gray-300 text-[10px] mx-1.5">·</span>}
                         <button
                             onClick={() => handleChannelClick(ch.id)}
-                            className={`text-[12px] transition-all whitespace-nowrap px-0.5 relative ${
+                            className={`h-[32px] px-3 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                                 isActive
-                                ? 'text-[#111] font-bold'
-                                : 'text-gray-400 hover:text-gray-600 font-medium'
+                                ? 'bg-[#3390EC] text-white'
+                                : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
                             }`}
                         >
-                            {ch.short || ch.label}
-                            {ch.id !== 'all' && failedChannels?.has(
-                                ch.id === 'wa' ? 'whatsapp' : ch.id === 'tg' ? 'telegram' : ch.id === 'ypro' ? 'yandex_pro' : ch.id
-                            ) && (
-                                <span className="absolute -top-0.5 -right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
+                            {ch.short}
+                            {unread > 0 && (
+                                <span className={`h-[18px] min-w-[18px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center leading-none ${
+                                    isActive
+                                    ? 'bg-white/25 text-white'
+                                    : 'bg-[#3390EC] text-white'
+                                }`}>
+                                    {unread > 99 ? '99+' : unread}
+                                </span>
+                            )}
+                            {hasFailed && !unread && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
                             )}
                         </button>
 
@@ -157,11 +162,11 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
             })}
 
             {/* Active channel's selected account info */}
-            {activeChannelTab !== 'all' && (
-                <div className="flex items-center gap-1.5 ml-2.5 text-[10px] text-gray-400 border-l border-[#E0E0E0] pl-2.5">
-                    <span className="font-semibold text-gray-500">{getActiveAccount(activeChannelTab)?.label}</span>
+            {activeChannelTab !== 'all' && getActiveAccount(activeChannelTab) && (
+                <div className="flex items-center gap-1.5 ml-auto text-[11px] text-gray-400">
+                    <span className="font-medium text-gray-500">{getActiveAccount(activeChannelTab)?.label}</span>
                     {getActiveAccount(activeChannelTab)?.phone && (
-                        <span className="font-mono text-[9px] bg-gray-100 px-1 rounded">
+                        <span className="font-mono text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
                             {getActiveAccount(activeChannelTab)?.phone}
                         </span>
                     )}

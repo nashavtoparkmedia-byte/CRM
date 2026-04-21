@@ -88,7 +88,7 @@ export default function TaskTimelineView() {
                 <div className="min-w-[1000px] flex flex-col min-h-full pb-4">
                     {/* Table Header */}
                     <div className="flex sticky top-0 z-10 border-b border-gray-200 bg-gray-50 shadow-sm">
-                        <div className="w-[260px] shrink-0 p-3 flex items-center border-r border-gray-200 bg-gray-50">
+                        <div className="w-[320px] shrink-0 p-3 flex items-center border-r border-gray-200 bg-gray-50">
                             <span className="text-[12px] font-semibold text-gray-500 uppercase tracking-wider">Водитель</span>
                         </div>
                         
@@ -113,19 +113,22 @@ export default function TaskTimelineView() {
                         {groupedDrivers.map(group => (
                             <div key={group.driverId} className="flex border-b border-gray-100 hover:bg-gray-50/50 transition-colors group/row">
                                 {/* Driver Info */}
-                                <div className="w-[260px] shrink-0 h-[56px] px-3 flex items-center gap-2 border-r border-gray-200 bg-white group-hover/row:bg-transparent">
+                                <div className="w-[320px] shrink-0 h-[56px] px-3 flex items-center gap-2 border-r border-gray-200 bg-white group-hover/row:bg-transparent">
                                     <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[12px] flex items-center justify-center shrink-0">
                                         {group.driverName.charAt(0)}
                                     </div>
-                                    <div className="flex-1 min-w-0 pr-2">
-                                        <div className="text-[13px] font-semibold text-gray-900 truncate">
+                                    <div className="flex-1 min-w-0 pr-2 cursor-pointer" onClick={() => router.push(`/drivers/${group.driverId}`)}>
+                                        <div className="text-[13px] font-semibold text-gray-900 whitespace-nowrap hover:text-[#2AABEE] transition-colors">
                                             {group.driverName}
                                         </div>
+                                        {group.driverPhone && (
+                                            <div className="text-[11px] text-gray-400 font-mono">{group.driverPhone}</div>
+                                        )}
                                     </div>
                 {/* Hover Quick Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover/row:opacity-100 transition-opacity">
                     <button 
-                        onClick={() => router.push(`/drivers/${group.driverId}`)}
+                        onClick={() => router.push(`/messages?msg=new&phone=${group.driverPhone}&driver=${group.driverId}`)}
                         className="flex items-center justify-center gap-1.5 h-[32px] px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-[12px] font-semibold"
                         title="Написать"
                     >

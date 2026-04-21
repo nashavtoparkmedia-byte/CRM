@@ -17,9 +17,11 @@ import {
 import { useState, useEffect } from 'react'
 import GlobalTaskCreateModal from './GlobalTaskCreateModal'
 import BulkCareModal from './BulkCareModal'
-import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
+import { SCENARIOS, getAllScenarioOptions, getScenarioFilterableFields, getScenarioPresets } from '@/lib/tasks/scenario-config'
+import type { ScenarioFieldDef } from '@/lib/tasks/scenario-config'
 import { TASK_TYPES } from '@/lib/tasks/types'
 import { getCrmUsers } from '@/app/tasks/actions'
+import { Flame, PhoneOff, Clock, Bell as BellIcon, Settings } from 'lucide-react'
 
 const VIEW_OPTIONS: { key: TaskView; label: string; icon: typeof List }[] = [
     { key: 'list', label: 'Список', icon: List },
@@ -101,6 +103,10 @@ export default function TasksToolbar() {
         filters.scenario !== undefined ||
         filters.stage ||
         filters.type ||
+        filters.preset ||
+        filters.scenarioSource ||
+        filters.scenarioCompleteness ||
+        (filters.scenarioFields && filters.scenarioFields.length > 0) ||
         filters.dateFrom ||
         filters.dateTo
 
@@ -236,16 +242,67 @@ export default function TasksToolbar() {
 
                 {/* Stage filter — only when a specific scenario is selected */}
                 {activeScenarioConfig && (
-                    <select
-                        value={filters.stage ?? ''}
-                        onChange={(e) => setFilters({ stage: e.target.value || undefined })}
-                        className="ml-2 text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                    >
-                        <option value="">Все этапы</option>
-                        {activeScenarioConfig.stages.map((st) => (
-                            <option key={st.id} value={st.id}>{st.label}</option>
-                        ))}
-                    </select>
+                    <>
+                        <select
+                            value={filters.stage ?? ''}
+                            onChange={(e) => setFilters({ stage: e.target.value || undefined })}
+                            className="ml-2 text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                        >
+                            <option value="">Все этапы</option>
+                            {activeScenarioConfig.stages.map((st) => (
+                                <option key={st.id} value={st.id}>{st.label}</option>
+                            ))}
+                        </select>
+                        <a
+                            href={`/settings/scenarios/${activeScenarioConfig.id}/fields`}
+                            className="ml-auto flex items-center gap-1 text-[12px] text-[#4f46e5] hover:text-[#4338ca] transition-colors"
+                            title="Настроить отображение полей"
+                        >
+                            <Settings className="w-3.5 h-3.5" />
+                            Настройки полей
+                        </a>
+                    </>
+                )}
+            </div>
+
+            {/* Row 2.5: Presets */}
+            <div className="flex items-center gap-1.5">
+                <PresetButton
+                    label="Горячие"
+                    icon={<Flame className="w-3.5 h-3.5" />}
+                    active={filters.preset === 'hot'}
+                    onClick={() => setFilters({ preset: filters.preset === 'hot' ? undefined : 'hot' })}
+                    color="red"
+                />
+                <PresetButton
+                    label="Без контакта"
+                    icon={<PhoneOff className="w-3.5 h-3.5" />}
+                    active={filters.preset === 'no_contact'}
+                    onClick={() => setFilters({ preset: filters.preset === 'no_contact' ? undefined : 'no_contact' })}
+                    color="orange"
+                />
+                <PresetButton
+                    label="SLA горит"
+                    icon={<Clock className="w-3.5 h-3.5" />}
+                    active={filters.preset === 'sla_burning'}
+                    onClick={() => setFilters({ preset: filters.preset === 'sla_burning' ? undefined : 'sla_burning' })}
+                    color="red"
+                />
+                <PresetButton
+                    label="Новый ответ"
+                    icon={<BellIcon className="w-3.5 h-3.5" />}
+                    active={filters.preset === 'has_reply'}
+                    onClick={() => setFilters({ preset: filters.preset === 'has_reply' ? undefined : 'has_reply' })}
+                    color="blue"
+                />
+
+                {/* Dynamic scenario field filters */}
+                {activeScenarioConfig && (
+                    <DynamicScenarioFilters
+                        scenarioId={activeScenarioConfig.id}
+                        currentFilters={filters.scenarioFields ?? []}
+                        onChange={(sf) => setFilters({ scenarioFields: sf.length > 0 ? sf : undefined })}
+                    />
                 )}
             </div>
 
@@ -322,6 +379,30 @@ export default function TasksToolbar() {
                     </select>
                 )}
 
+                {/* Churn: filter by source of scenario data */}
+                <select
+                    value={filters.scenarioSource ?? ''}
+                    onChange={(e) => setFilters({ scenarioSource: (e.target.value || undefined) as any })}
+                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                >
+                    <option value="">Источник: все</option>
+                    <option value="auto">Есть данные [API Яндекс]</option>
+                    <option value="manual">Есть данные [Вручную]</option>
+                    <option value="derived">Есть данные [Рассчитано]</option>
+                </select>
+
+                {/* Churn: filter by completeness of card */}
+                <select
+                    value={filters.scenarioCompleteness ?? ''}
+                    onChange={(e) => setFilters({ scenarioCompleteness: (e.target.value || undefined) as any })}
+                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                >
+                    <option value="">Заполненность: все</option>
+                    <option value="full">Полностью заполнена</option>
+                    <option value="partial">Частично заполнена</option>
+                    <option value="empty">Пустая</option>
+                </select>
+
                 {hasActiveFilters && (
                     <button
                         onClick={resetFilters}
@@ -341,4 +422,137 @@ export default function TasksToolbar() {
             )}
         </div>
     )
+}
+
+// ─── Preset Button ────────────────────────────────────────────────
+
+function PresetButton({
+    label,
+    icon,
+    active,
+    onClick,
+    color,
+}: {
+    label: string
+    icon: React.ReactNode
+    active: boolean
+    onClick: () => void
+    color: 'red' | 'orange' | 'blue'
+}) {
+    const colors = {
+        red: active ? 'bg-red-100 text-red-700 border-red-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-red-50',
+        orange: active ? 'bg-orange-100 text-orange-700 border-orange-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50',
+        blue: active ? 'bg-blue-100 text-blue-700 border-blue-300' : 'bg-white text-gray-600 border-gray-200 hover:bg-blue-50',
+    }
+
+    return (
+        <button
+            onClick={onClick}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-[12px] font-medium transition-all ${colors[color]}`}
+        >
+            {icon}
+            {label}
+        </button>
+    )
+}
+
+// ─── Dynamic Scenario Filters ─────────────────────────────────────
+
+function DynamicScenarioFilters({
+    scenarioId,
+    currentFilters,
+    onChange,
+}: {
+    scenarioId: string
+    currentFilters: NonNullable<import('@/lib/tasks/types').TaskFilters['scenarioFields']>
+    onChange: (filters: NonNullable<import('@/lib/tasks/types').TaskFilters['scenarioFields']>) => void
+}) {
+    const fields = getScenarioFilterableFields(scenarioId)
+    if (fields.length === 0) return null
+
+    const updateField = (fieldId: string, operator: string, value: unknown) => {
+        const rest = currentFilters.filter(f => f.fieldId !== fieldId)
+        if (value === undefined || value === '' || value === 'all') {
+            onChange(rest)
+        } else {
+            onChange([...rest, { fieldId, operator: operator as any, value }])
+        }
+    }
+
+    const getValue = (fieldId: string) => {
+        return currentFilters.find(f => f.fieldId === fieldId)?.value
+    }
+
+    return (
+        <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-gray-200">
+            {fields.map(field => (
+                <ScenarioFieldFilter
+                    key={field.id}
+                    field={field}
+                    value={getValue(field.id)}
+                    onChange={(val) => updateField(field.id, field.type === 'number' ? 'gt' : 'eq', val)}
+                />
+            ))}
+        </div>
+    )
+}
+
+function ScenarioFieldFilter({
+    field,
+    value,
+    onChange,
+}: {
+    field: ScenarioFieldDef
+    value: unknown
+    onChange: (val: unknown) => void
+}) {
+    if (field.type === 'boolean') {
+        const current = value as boolean | undefined
+        return (
+            <select
+                value={current === undefined ? 'all' : current ? 'yes' : 'no'}
+                onChange={(e) => {
+                    if (e.target.value === 'all') onChange(undefined)
+                    else onChange(e.target.value === 'yes')
+                }}
+                className="text-[12px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-2 py-1 text-[#374151] outline-none focus:border-[#4f46e5] cursor-pointer"
+            >
+                <option value="all">{field.label}: все</option>
+                <option value="yes">{field.label}: да</option>
+                <option value="no">{field.label}: нет</option>
+            </select>
+        )
+    }
+
+    if (field.type === 'enum' && field.enumOptions) {
+        return (
+            <select
+                value={(value as string) ?? 'all'}
+                onChange={(e) => onChange(e.target.value === 'all' ? undefined : e.target.value)}
+                className="text-[12px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-2 py-1 text-[#374151] outline-none focus:border-[#4f46e5] cursor-pointer"
+            >
+                <option value="all">{field.label}: все</option>
+                {field.enumOptions.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+            </select>
+        )
+    }
+
+    if (field.type === 'number') {
+        return (
+            <div className="flex items-center gap-1">
+                <span className="text-[12px] text-gray-500">{field.label} &gt;</span>
+                <input
+                    type="number"
+                    value={(value as number) ?? ''}
+                    onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
+                    placeholder="0"
+                    className="w-[50px] text-[12px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-2 py-1 text-[#374151] outline-none focus:border-[#4f46e5]"
+                />
+            </div>
+        )
+    }
+
+    return null
 }

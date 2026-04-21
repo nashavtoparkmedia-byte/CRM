@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { TelegramClient, Api } from 'telegram'
 import { StringSession } from 'telegram/sessions'
+import { CustomFile } from 'telegram/client/uploads'
 import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage } from 'telegram/events'
@@ -254,10 +255,30 @@ import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 
+function detectTgMediaType(message: any): { type: string; fallback: string } | null {
+    if (!message.media) return null
+    const mediaClass = message.media.className || ''
+    if (mediaClass.includes('Photo') || message.photo) return { type: 'image', fallback: '[Фото]' }
+    if (mediaClass.includes('Document')) {
+        const attrs = message.media.document?.attributes || []
+        for (const attr of attrs) {
+            const cn = attr.className || ''
+            if (cn.includes('Audio') || cn.includes('Voice')) return { type: 'voice', fallback: '[Голосовое]' }
+            if (cn.includes('Video')) return { type: 'video', fallback: '[Видео]' }
+            if (cn.includes('Sticker')) return { type: 'sticker', fallback: '[Стикер]' }
+        }
+        return { type: 'document', fallback: '[Документ]' }
+    }
+    if (mediaClass.includes('Geo')) return { type: 'text', fallback: '[Геолокация]' }
+    if (mediaClass.includes('Contact')) return { type: 'text', fallback: '[Контакт]' }
+    return { type: 'text', fallback: '[Медиа]' }
+}
+
 async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
     if (message && !message.out) {
         const senderId = message.peerId?.userId?.toString() || message.fromId?.userId?.toString();
-        const text = message.message
+        const mediaInfo = detectTgMediaType(message)
+        const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
         if (!senderId || !text) return
 
         const externalChatId = `telegram:${senderId}`
@@ -339,18 +360,49 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         if (existing) {
             console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
         } else {
+            const msgType = mediaInfo?.type || 'text'
             const savedMsg = await (prisma.message as any).create({
                 data: {
                     chatId: unifiedChat.id,
                     direction: 'inbound',
                     content: text,
                     channel: 'telegram',
-                    type: 'text',
+                    type: msgType,
                     sentAt: now,
                     status: 'delivered',
                     externalId: externalMsgId
                 }
             })
+
+            // Download and save media attachment (photo, voice, video, document, sticker)
+            if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
+                try {
+                    const client = clientCache.get(connectionId)
+                    if (client) {
+                        const buffer = await client.downloadMedia(message, {})
+                        if (buffer && Buffer.isBuffer(buffer)) {
+                            const mimeType = message.media?.document?.mimeType ||
+                                (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
+                            const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+                            const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                            await (prisma.messageAttachment as any).create({
+                                data: {
+                                    messageId: savedMsg.id,
+                                    type: msgType,
+                                    url: dataUrl,
+                                    fileName,
+                                    fileSize: buffer.length,
+                                    mimeType,
+                                }
+                            })
+                            console.log(`[${loggerPrefix}] MEDIA saved: ${msgType} ${mimeType} for msg=${savedMsg.id}`)
+                        }
+                    }
+                } catch (mediaErr: any) {
+                    console.error(`[${loggerPrefix}] Media download failed for msg=${savedMsg.id}:`, mediaErr.message)
+                }
+            }
+
             console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
             emitMessageReceived(savedMsg).catch(e =>
                 console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
@@ -768,6 +820,116 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
 }
 
 /**
+ * Send media (photo, document, video, voice, audio) via Telegram personal account.
+ * @param phoneNumber - target phone number or entity ID
+ * @param base64 - file data as base64 (with or without data: prefix)
+ * @param filename - original filename
+ * @param mimeType - MIME type (e.g. 'image/jpeg', 'application/pdf', 'audio/ogg')
+ * @param caption - optional caption text
+ * @param connectionId - which TG connection to use
+ */
+export async function sendTelegramMedia(
+    phoneNumber: string,
+    base64: string,
+    filename: string,
+    mimeType: string,
+    caption?: string,
+    connectionId?: string
+): Promise<{ success: boolean; externalId?: string }> {
+    console.log(`[TG-MEDIA] START: phone=${phoneNumber} filename=${filename} mime=${mimeType} connId=${connectionId}`)
+
+    let connection
+    if (connectionId) {
+        connection = await (prisma as any).telegramConnection.findUnique({
+            where: { id: connectionId, isActive: true }
+        })
+    } else {
+        connection = await (prisma as any).telegramConnection.findFirst({ where: { isActive: true, isDefault: true } })
+        if (!connection) {
+            connection = await (prisma as any).telegramConnection.findFirst({ where: { isActive: true } })
+        }
+    }
+
+    if (!connection || !connection.sessionString) {
+        throw new Error('Telegram is not connected or selected account is inactive')
+    }
+
+    const client = await getTelegramClient(connection)
+
+    try {
+        // Normalize target
+        let target: any = phoneNumber
+        if (typeof target === 'string' && target.match(/^\d+$/) && target.length >= 10 && !target.startsWith('+')) {
+            target = '+' + target
+        }
+
+        // Resolve entity
+        let entity
+        try {
+            if (typeof target === 'string' && target.match(/^\d+$/) && !target.startsWith('+')) {
+                try { entity = await client.getEntity(BigInt(target) as any) }
+                catch { entity = await client.getEntity(target) }
+            } else {
+                entity = await client.getEntity(target)
+            }
+        } catch (entityErr: any) {
+            if (target.startsWith('+')) {
+                const result = await client.invoke(new Api.contacts.ImportContacts({
+                    contacts: [new Api.InputPhoneContact({
+                        clientId: BigInt(Math.floor(Math.random() * 1000000)) as any,
+                        phone: target, firstName: 'Driver', lastName: ''
+                    })]
+                }))
+                if (result && 'users' in result && result.users.length > 0) entity = result.users[0]
+                else throw new Error(`Cannot import contact ${target}`)
+            } else {
+                throw entityErr
+            }
+        }
+
+        // Decode base64 → Buffer
+        const cleanBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64
+        const buffer = Buffer.from(cleanBase64, 'base64')
+
+        // Wrap as CustomFile for GramJS
+        const file = new CustomFile(filename, buffer.length, '', buffer)
+
+        // Determine send options based on mime type
+        const isImage  = mimeType.startsWith('image/')
+        const isVideo  = mimeType.startsWith('video/')
+        const isVoice  = mimeType === 'audio/ogg' || mimeType === 'audio/opus' || mimeType === 'audio/ogg; codecs=opus'
+        const isAudio  = mimeType.startsWith('audio/') && !isVoice
+
+        const sendOpts: any = { file, caption }
+        if (isVoice) {
+            sendOpts.voiceNote = true
+        } else if (isImage || isVideo || isAudio) {
+            // let GramJS auto-detect from MIME
+        } else {
+            // Document/other — force as document
+            sendOpts.forceDocument = true
+        }
+
+        console.log(`[TG-MEDIA] Sending: image=${isImage} video=${isVideo} voice=${isVoice} audio=${isAudio} doc=${sendOpts.forceDocument || false}`)
+
+        const result = await Promise.race([
+            client.sendFile(entity || target, sendOpts),
+            new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Telegram sendFile timeout (60s)')), 60000))
+        ])
+
+        console.log(`[TG-MEDIA] SUCCESS: externalId=${result?.id?.toString()}`)
+
+        const sendInstanceId = tgInstanceIds.get(connection?.id)
+        if (connection && sendInstanceId) registry.touch(connection.id, sendInstanceId)
+
+        return { success: true, externalId: result?.id?.toString() }
+    } catch (err: any) {
+        console.error('[TG-MEDIA] SEND ERROR:', err)
+        throw new Error(`Telegram media delivery failed: ${err.message}`)
+    }
+}
+
+/**
  * Import Telegram history as a HistoryImportJob.
  * Uses GramJS getDialogs/getMessages to fetch history, processes through the standard pipeline.
  */
@@ -882,7 +1044,9 @@ export async function importTelegramHistory(
 
                 let chatMaxTs: Date | null = null
                 for (const msg of messages) {
-                    if (!msg.message) continue // skip service messages
+                    const histMediaInfo = detectTgMediaType(msg)
+                    const msgText = msg.message || (histMediaInfo ? histMediaInfo.fallback : '')
+                    if (!msgText) continue // skip empty service messages
                     const ts = msg.date ? new Date(msg.date * 1000) : new Date()
                     if (ts < cutoff) continue
 
@@ -892,6 +1056,7 @@ export async function importTelegramHistory(
 
                     const externalMsgId = msg.id?.toString()
                     const isOutbound = !!msg.out
+                    const histMsgType = histMediaInfo?.type || 'text'
 
                     // Dedup
                     const existing = await (prisma.message as any).findFirst({
@@ -900,7 +1065,7 @@ export async function importTelegramHistory(
                                 ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
                                 {
                                     chatId: unifiedChat.id,
-                                    content: msg.message,
+                                    content: msgText,
                                     direction: isOutbound ? 'outbound' : 'inbound',
                                     sentAt: { gte: new Date(ts.getTime() - 5000), lte: new Date(ts.getTime() + 5000) }
                                 }
@@ -910,18 +1075,44 @@ export async function importTelegramHistory(
 
                     totalMessages++
                     if (!existing) {
-                        await (prisma.message as any).create({
+                        const savedHistMsg = await (prisma.message as any).create({
                             data: {
                                 chatId: unifiedChat.id,
                                 direction: isOutbound ? 'outbound' : 'inbound',
-                                content: msg.message,
+                                content: msgText,
                                 channel: 'telegram',
-                                type: 'text',
+                                type: histMsgType,
                                 sentAt: ts,
                                 status: 'delivered',
                                 externalId: externalMsgId,
                             }
                         })
+
+                        // Download media for history import
+                        if (histMediaInfo && histMsgType !== 'text' && client) {
+                            try {
+                                const buffer = await client.downloadMedia(msg, {})
+                                if (buffer && Buffer.isBuffer(buffer)) {
+                                    const mimeType = msg.media?.document?.mimeType ||
+                                        (histMsgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
+                                    const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+                                    const fileName = msg.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                                    await (prisma.messageAttachment as any).create({
+                                        data: {
+                                            messageId: savedHistMsg.id,
+                                            type: histMsgType,
+                                            url: dataUrl,
+                                            fileName,
+                                            fileSize: buffer.length,
+                                            mimeType,
+                                        }
+                                    })
+                                }
+                            } catch (mediaErr: any) {
+                                // Non-blocking — message saved, media skipped
+                            }
+                        }
+
                         newMessages++
                     }
                 }

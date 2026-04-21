@@ -58,12 +58,12 @@ async function main() {
         try {
             await prisma.driver.upsert({
                 where: { yandexDriverId: yandexId },
-                update: { fullName: driverNames[i] },
+                update: { fullName: driverNames[i], phone: `+7900${String(10000000 + i).slice(1)}` },
                 create: {
                     id,
                     yandexDriverId: yandexId,
                     fullName: driverNames[i],
-                    phone: `+7900${String(1000000 + i).slice(1)}`,
+                    phone: `+7900${String(10000000 + i).slice(1)}`,
                     segment: randomPick(['profitable', 'medium', 'small', 'sleeping']),
                     lastOrderAt: Math.random() > 0.3 ? daysAgo(randomInt(0, 14)) : null,
                 },

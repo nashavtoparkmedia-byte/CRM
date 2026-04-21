@@ -67,6 +67,36 @@ export interface TaskDTO {
     nextActionId?: string
     escalated?: boolean
 
+    // ─── Wave 1: Enriched fields ──────────────────────────────────
+
+    // Importance signals
+    priorityLabel: string
+    isEscalated: boolean
+
+    // Assignee display data
+    assignee: { id: string; name: string } | null
+
+    // Work summary (derived from TaskEvent)
+    lastContactAt: string | null
+    lastContactResult: string | null
+    touchCount: number
+
+    // Scenario fields preview (for list view)
+    scenarioFieldsPreview: {
+        fieldId: string
+        label: string
+        type: 'boolean' | 'number' | 'string' | 'enum' | 'date'
+        value: unknown
+    }[] | null
+
+    // Мета-сводка по scenarioData (для фильтров и сортировки)
+    scenarioMeta?: {
+        sourceTypes: ('auto' | 'manual' | 'derived')[]   // какие source присутствуют
+        filledCount: number                               // сколько полей заполнено
+        requiredCount: number                             // сколько полей с showInCard=true в сценарии
+        completeness: 'full' | 'partial' | 'empty'
+    } | null
+
     // Timestamps
     createdAt: string
     updatedAt: string
@@ -77,7 +107,12 @@ export interface TaskDTO {
 
 export interface TaskDetailDTO extends TaskDTO {
     events: TaskEventDTO[]
-    // Future: driverContext, chatPreview, etc.
+    // Полный scenarioData для карточки (все поля showInCard, не только preview)
+    scenarioDataFull: Record<string, {
+        value: unknown
+        source: 'auto' | 'manual' | 'derived'
+        updatedAt: string
+    }> | null
 }
 
 // ─── Task Event DTO ────────────────────────────────────────────────────────
@@ -164,6 +199,22 @@ export interface TaskFilters {
     type?: string
     dateFrom?: string
     dateTo?: string
+
+    // Wave 1: Scenario field filters
+    scenarioFields?: {
+        fieldId: string
+        operator: 'eq' | 'gt' | 'lt' | 'exists' | 'not_exists'
+        value?: unknown
+    }[]
+
+    // Wave 1: Presets
+    preset?: 'hot' | 'no_contact' | 'sla_burning' | 'has_reply'
+
+    // Churn: мета-фильтры по scenario data
+    // Источник данных: присутствие хотя бы одного поля с таким source
+    scenarioSource?: 'auto' | 'manual' | 'derived'
+    // Заполненность карточки: полная / частичная / пустая
+    scenarioCompleteness?: 'full' | 'partial' | 'empty'
 }
 
 // ─── View Types ────────────────────────────────────────────────────────────

@@ -22,11 +22,13 @@ const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
 interface NewChatPopoverProps {
     onClose: () => void
     onSelectChat: (chatId: string) => void
+    initialQuery?: string
 }
 
-export default function NewChatPopover({ onClose, onSelectChat }: NewChatPopoverProps) {
-    const [query, setQuery] = useState("")
-    const [selectedChannel, setSelectedChannel] = useState("tg")
+export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: NewChatPopoverProps) {
+    const [query, setQuery] = useState(initialQuery || "")
+    const [selectedChannel, setSelectedChannel] = useState(initialQuery ? "wa" : "tg")
+    const [autoStarted, setAutoStarted] = useState(false)
     const [showSuggestions, setShowSuggestions] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
     const popoverRef = useRef<HTMLDivElement>(null)
@@ -89,6 +91,29 @@ export default function NewChatPopover({ onClose, onSelectChat }: NewChatPopover
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50)
     }, [])
+
+    // Auto-start chat when opened from tasks with a phone number
+    useEffect(() => {
+        if (initialQuery && !autoStarted && !starting) {
+            setAutoStarted(true)
+            // Small delay to let contact search finish first
+            const timer = setTimeout(async () => {
+                if (results.length > 0) {
+                    // Contact found — open existing or create chat
+                    await handleSelectContact(results[0])
+                } else {
+                    // No contact — create new chat by phone
+                    const result = await startByPhone(initialQuery, selectedChannel)
+                    if (result) {
+                        onSelectChat(result.chatId)
+                        onClose()
+                        setTimeout(() => document.getElementById('message-composer')?.focus(), 300)
+                    }
+                }
+            }, 800)
+            return () => clearTimeout(timer)
+        }
+    }, [initialQuery, autoStarted, results, starting])
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {

@@ -7,7 +7,7 @@ import crypto from 'crypto'
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId } = body
+        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing } = body
 
         if (!text) {
             return NextResponse.json({ error: 'Missing required field: text' }, { status: 400 })
@@ -89,7 +89,8 @@ export async function POST(req: NextRequest) {
         }
         const sentAt = timestamp ? new Date(timestamp) : new Date()
 
-        console.log(`[WEBHOOK-MAX] Received: externalChatId=${externalChatId} phone=${phoneDigits} chatId=${maxChatId || 'none'} text="${text.substring(0, 50)}"`)
+        const direction = isOutgoing ? 'outbound' : 'inbound'
+        console.log(`[WEBHOOK-MAX] Received: externalChatId=${externalChatId} phone=${phoneDigits} chatId=${maxChatId || 'none'} direction=${direction} text="${text.substring(0, 50)}"`)
 
         // Migrate old phone-based chats to new chatId-based format
         if (maxChatId && phoneDigits) {
@@ -147,11 +148,12 @@ export async function POST(req: NextRequest) {
         }
 
         // 3. Create Message
-        // Generate a deterministic ID based on timestamp, phone AND text hash to prevent collision
+        // Generate a deterministic ID based on timestamp, phone, direction AND text hash to prevent collision
+        const dirPrefix = isOutgoing ? 'max_out' : 'max_in'
         const textHash = crypto.createHash('md5').update(text).digest('hex').substring(0, 8)
-        const messageId = `max_in_${phoneDigits}_${sentAt.getTime()}_${textHash}`
+        const messageId = `${dirPrefix}_${phoneDigits}_${sentAt.getTime()}_${textHash}`
 
-        // Check if message already exists (by deterministic ID OR content+time echo)
+        // Check if message already exists (by deterministic ID OR content+time echo with ANY direction)
         const existingMessage = await (prisma.message as any).findFirst({
             where: {
                 OR: [
@@ -159,7 +161,6 @@ export async function POST(req: NextRequest) {
                     {
                         chatId: unifiedChat.id,
                         content: text,
-                        direction: 'outbound',
                         sentAt: {
                             gte: new Date(sentAt.getTime() - 120000),
                             lte: new Date(sentAt.getTime() + 120000)
@@ -174,7 +175,7 @@ export async function POST(req: NextRequest) {
                 data: {
                     id: messageId,
                     chatId: unifiedChat.id,
-                    direction: 'inbound',
+                    direction,
                     content: text,
                     channel: 'max',
                     type: 'text',
@@ -183,10 +184,12 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            // Workflow: inbound message state update
-            await ConversationWorkflowService.onInboundMessage(unifiedChat.id, sentAt)
+            // Workflow: only trigger inbound workflow for driver messages
+            if (!isOutgoing) {
+                await ConversationWorkflowService.onInboundMessage(unifiedChat.id, sentAt)
+            }
 
-            console.log(`[WEBHOOK-MAX] SAVED channel=max chatId=${unifiedChat.id} msgId=${messageId} driverId=${unifiedChat.driverId || 'none'} text="${text.substring(0, 30)}"`)
+            console.log(`[WEBHOOK-MAX] SAVED channel=max chatId=${unifiedChat.id} msgId=${messageId} direction=${direction} driverId=${unifiedChat.driverId || 'none'} text="${text.substring(0, 30)}"`)
         } else {
             console.log(`[WEBHOOK-MAX] DB-DEDUP channel=max chatId=${unifiedChat.id} msgId=${messageId} existing=${existingMessage.id}`)
         }

@@ -53,6 +53,22 @@ Thumbs.db
 # Claude Code internals
 .claude/.claude/
 .claude/worktrees/
+.claude/settings.local.json
+gravity-mvp/.claude/
+
+# Playwright browsers (local cache, moved off C: per project convention)
+.playwright-browsers/
+
+# Telephony runtime logs
+telephony-heartbeat-logs.txt
+
+# Android build artifacts (android-telephony/)
+**/.gradle/
+**/build/
+**/.idea/
+**/.kotlin/
+**/local.properties
+**/*.iml
 
 # MAX scraper runtime state
 max-web-scraper/.initial_sync_done

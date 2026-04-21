@@ -36,7 +36,7 @@ export async function GET() {
                 }
             }),
             max: [
-                { id: 'scraper', phone: 'Scraper', label: 'MAX Scraper (Личный)', isDefault: true },
+                { id: 'max_scraper', phone: process.env.MAX_SCRAPER_PHONE || 'MAX', label: 'MAX', isDefault: true },
                 ...maxConnections.map(c => ({
                     id: c.id,
                     phone: 'Bot',

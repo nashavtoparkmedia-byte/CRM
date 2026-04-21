@@ -48,7 +48,7 @@ const DEFAULT_FILTERS: TaskFilters = {
 }
 
 const DEFAULT_SORT: TaskSort = {
-    field: 'createdAt',
+    field: 'priority',
     direction: 'desc',
 }
 

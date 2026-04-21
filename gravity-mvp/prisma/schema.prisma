@@ -813,6 +813,9 @@ model Task {
   // Metadata
   metadata              Json?        @default("{}")
 
+  // Scenario Fields (Wave 1) — structured operational data per scenario
+  scenarioData          Json?        @default("{}")
+
   // Scenario (Phase 1) — nullable for backward compatibility
   scenario              String?                          // 'onboarding' | 'churn' | 'care' | 'promo_control'
   stage                 String?                          // current stage within scenario config

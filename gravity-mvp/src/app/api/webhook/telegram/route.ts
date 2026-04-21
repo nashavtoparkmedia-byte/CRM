@@ -13,11 +13,64 @@ export async function POST(req: NextRequest) {
         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
 
         // Structure expected from Bot's webhook payload
-        const { telegramId, text, direction, username, timestamp } = body
+        const { telegramId, text, direction, username, timestamp,
+                chatType, chatId: tgChatId, chatTitle,
+                firstName, lastName } = body
 
         if (!telegramId || !text) {
             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
         }
+
+        // ── GROUP BRANCH: route group/supergroup/channel messages separately ──
+        const isGroup = chatType && chatType !== 'private'
+        if (isGroup) {
+            const sentAt = timestamp ? new Date(timestamp) : new Date()
+            const groupExternalId = `telegram:group:${tgChatId}`
+
+            let unifiedChat = await (prisma.chat as any).upsert({
+                where: { externalChatId: groupExternalId },
+                update: { lastMessageAt: sentAt },
+                create: {
+                    externalChatId: groupExternalId,
+                    channel: 'telegram',
+                    chatType: chatType,       // 'group' | 'supergroup' | 'channel'
+                    name: chatTitle || `TG Group ${tgChatId}`,
+                    lastMessageAt: sentAt,
+                    metadata: { chatTitle, chatType }
+                }
+            })
+
+            // senderName priority: firstName > username > fallback ID
+            const senderDisplay = firstName
+                ? (lastName ? `${firstName} ${lastName}` : firstName)
+                : (username ? `@${username}` : `User ${telegramId}`)
+
+            await (prisma.message as any).create({
+                data: {
+                    chatId: unifiedChat.id,
+                    direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
+                    content: text,
+                    channel: 'telegram',
+                    type: 'text',
+                    sentAt,
+                    status: 'delivered',
+                    metadata: {
+                        senderId: telegramId.toString(),
+                        senderName: senderDisplay,
+                        senderUsername: username || null
+                    }
+                }
+            })
+
+            // Lightweight workflow: only unreadCount + lastInboundAt (no requiresResponse, no status transition)
+            if (direction !== 'OUTGOING') {
+                await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, sentAt)
+            }
+
+            console.log(`[WEBHOOK-TG] GROUP chatId=${unifiedChat.id} type=${chatType} title=${chatTitle} sender=${senderDisplay}`)
+            return NextResponse.json({ success: true, processed: 'group_message' })
+        }
+        // ── END GROUP BRANCH ──
 
         const tgIdBigInt = BigInt(telegramId)
 
@@ -34,7 +87,7 @@ export async function POST(req: NextRequest) {
         // so inbound TG messages appear in the CRM Messenger UI
         try {
             const externalChatId = `telegram:${telegramId.toString()}`
-            
+
             // USE BOT TIMESTAMP FOR STABLE SORTING
             const sentAt = timestamp ? new Date(timestamp) : new Date()
 

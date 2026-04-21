@@ -3,7 +3,9 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
-import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw } from "lucide-react"
+import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react"
+import MessageContextMenu from "./MessageContextMenu"
+import ImageLightbox from "./ImageLightbox"
 
 // ── Anchor-based scroll memory (module-level, survives remounts) ──
 // Primary: anchor msgId + offset from viewport top
@@ -19,6 +21,7 @@ const scrollAnchorMemory = new Map<string, ScrollAnchor>()
 export default function MessageFeed({
     chatId,
     channelTab,
+    chatType,
     uiItems,
     isLoading,
     hasMoreHistory,
@@ -26,12 +29,14 @@ export default function MessageFeed({
     onReply,
     onRetry,
     onCreateTask,
+    onReaction,
     activeSearchMessageId,
     onFocusComposer,
     lastSentAt
 }: {
     chatId: string
     channelTab: string
+    chatType?: string
     uiItems: UIItem[]
     isLoading: boolean
     hasMoreHistory: boolean
@@ -39,6 +44,7 @@ export default function MessageFeed({
     onReply?: (msg: Message) => void
     onRetry?: (msg: Message) => void
     onCreateTask?: (msg: Message) => void
+    onReaction?: (msgId: string, emoji: string) => void
     activeSearchMessageId?: string | null
     onFocusComposer?: () => void
     lastSentAt?: number
@@ -46,6 +52,10 @@ export default function MessageFeed({
     // Ссылка на scrollable div (заменяет VirtuosoHandle)
     const scrollerRef = useRef<HTMLDivElement>(null)
     const [atBottom, setAtBottom] = useState(true)
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null)
+    // Lightbox state
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
     const [showNewMessagesBadge, setShowNewMessagesBadge] = useState(false)
     const seenMessageIds = useRef<Set<string>>(new Set())
     const prevItemCount = useRef(uiItems.length)
@@ -311,6 +321,18 @@ export default function MessageFeed({
     }
 
     // ──────────────────────────────────────────────────────────
+    // Collect all image URLs for lightbox navigation
+    // ──────────────────────────────────────────────────────────
+    const allImageUrls: string[] = []
+    for (const item of uiItems) {
+        if (item.type === 'message' && item.message.type === 'image' && item.message.attachments) {
+            for (const att of item.message.attachments) {
+                if (att.url) allImageUrls.push(att.url)
+            }
+        }
+    }
+
+    // ──────────────────────────────────────────────────────────
     // Рендер элементов
     // ──────────────────────────────────────────────────────────
 
@@ -322,7 +344,41 @@ export default function MessageFeed({
         </div>
     )
 
+    const renderCallMessage = (item: MessageUIItem) => {
+        const { message: msg, spacingTop } = item
+        const meta = msg.metadata as Record<string, any> | undefined
+        const disposition = meta?.disposition || 'no_answer'
+        const isInbound = msg.direction === 'inbound'
+        const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+        const colorClass = disposition === 'answered'
+            ? 'text-green-600 bg-green-50 border-green-100'
+            : (disposition === 'missed' || disposition === 'rejected')
+                ? 'text-red-600 bg-red-50 border-red-100'
+                : 'text-gray-500 bg-gray-50 border-gray-100'
+
+        const CallIcon = disposition === 'missed' || disposition === 'rejected'
+            ? PhoneMissed
+            : isInbound ? PhoneIncoming : PhoneOutgoing
+
+        return (
+            <div
+                className="flex justify-center w-full px-4"
+                style={{ marginTop: spacingTop }}
+                data-msg-id={msg.id}
+            >
+                <div className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm border ${colorClass}`}>
+                    <CallIcon size={16} strokeWidth={2} />
+                    <span className="font-medium">{msg.content}</span>
+                    <span className="text-[11px] opacity-60">{timeString}</span>
+                </div>
+            </div>
+        )
+    }
+
     const renderMessage = (item: MessageUIItem) => {
+        if (item.message.type === 'call') return renderCallMessage(item)
+
         const { message: msg, position, showAvatar, showName, showTail, spacingTop, statusPlacement } = item
         const isOutbound = msg.direction === 'outbound'
         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -349,12 +405,14 @@ export default function MessageFeed({
                                 msg.channel === 'telegram' || msg.channel === 'tg' ? 'bg-[#3390EC]/10 border-[#3390EC]/20 text-[#3390EC]' :
                                 msg.channel === 'whatsapp' || msg.channel === 'wa' ? 'bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366]' :
                                 msg.channel === 'max' ? 'bg-[#8E24AA]/10 border-[#8E24AA]/20 text-[#8E24AA]' :
+                                msg.channel === 'phone' ? 'bg-orange-100 border-orange-200 text-orange-500' :
                                 'bg-[#3390EC]/10 border-[#3390EC]/20 text-[#3390EC]'
                             }`}>
                                 {msg.account?.substring(0, 1).toUpperCase() || (
                                     msg.channel === 'telegram' || msg.channel === 'tg' ? 'T' :
                                     msg.channel === 'whatsapp' || msg.channel === 'wa' ? 'W' :
                                     msg.channel === 'max' ? 'M' :
+                                    msg.channel === 'phone' ? '☎' :
                                     msg.channel === 'yandex' || msg.channel === 'yp' ? 'Y' : 'U'
                                 )}
                             </div>
@@ -363,6 +421,12 @@ export default function MessageFeed({
                 )}
 
                 <div className={`flex flex-col max-w-[70%] ${isOutbound ? 'items-end' : 'items-start'}`}>
+                    {/* Group chat: sender name for inbound messages */}
+                    {chatType && chatType !== 'private' && !isOutbound && msg.metadata?.senderName && (
+                        <div className="text-[12px] font-semibold text-[#3390EC] mb-0.5 ml-1">
+                            {msg.metadata.senderName}
+                        </div>
+                    )}
                     <div
                         className={`relative group px-3 pt-1.5 pb-1.5 shadow-sm transition-shadow ${
                             isOutbound ? 'bg-[#D1F7B6]' : 'bg-white'
@@ -370,6 +434,10 @@ export default function MessageFeed({
                         style={{
                             borderRadius: radius[position],
                             minWidth: '60px'
+                        }}
+                        onContextMenu={(e) => {
+                            e.preventDefault()
+                            setContextMenu({ msg, x: e.clientX, y: e.clientY })
                         }}
                     >
                         {showName && (
@@ -399,16 +467,19 @@ export default function MessageFeed({
                         {/* Изображения */}
                         {msg.type === 'image' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
-                                {msg.attachments.filter(a => a.url).map(att => (
-                                    <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer">
+                                {msg.attachments.filter(a => a.url).map(att => {
+                                    const imgIndex = allImageUrls.indexOf(att.url)
+                                    return (
                                         <img
+                                            key={att.id}
                                             src={att.url}
                                             alt="фото"
                                             className="max-w-[280px] max-h-[320px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                            onClick={() => setLightboxIndex(imgIndex >= 0 ? imgIndex : 0)}
                                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                                         />
-                                    </a>
-                                ))}
+                                    )
+                                })}
                             </div>
                         )}
 
@@ -480,13 +551,26 @@ export default function MessageFeed({
                             )}
                         </div>
 
-                        {/* Кнопки действий (hover) */}
-                        <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-20 ${isOutbound ? 'right-full mr-2' : 'left-full ml-2'}`}>
-                           <button onClick={() => onReply && onReply(msg)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><Reply size={14} /></button>
-                           <button onClick={() => navigator.clipboard.writeText(msg.content)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><Copy size={13} /></button>
-                           <button onClick={() => onCreateTask?.(msg)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><ClipboardList size={14} /></button>
+                        {/* Quick reply button (hover) */}
+                        <div className={`absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 ${isOutbound ? 'right-full mr-1' : 'left-full ml-1'}`}>
+                           <button onClick={() => onReply && onReply(msg)} className="w-7 h-7 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-400 hover:text-[#3390EC] transition-colors" title="Ответить"><Reply size={13} /></button>
                         </div>
                     </div>
+
+                    {/* Reaction badges */}
+                    {msg.metadata?.reactions && Object.keys(msg.metadata.reactions as Record<string, number>).length > 0 && (
+                        <div className={`flex flex-wrap gap-1 mt-0.5 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                            {Object.entries(msg.metadata.reactions as Record<string, number>).map(([emoji]) => (
+                                <button
+                                    key={emoji}
+                                    onClick={() => onReaction?.(msg.id, emoji)}
+                                    className="h-6 px-1.5 rounded-full bg-white border border-gray-200 shadow-sm flex items-center gap-0.5 text-[13px] hover:border-[#3390EC]/40 transition-colors"
+                                >
+                                    {emoji}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         )
@@ -550,6 +634,28 @@ export default function MessageFeed({
                     </div>
                 )}
             </div>
+
+            {/* Context menu */}
+            {contextMenu && (
+                <MessageContextMenu
+                    msg={contextMenu.msg}
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={() => setContextMenu(null)}
+                    onReply={onReply}
+                    onCreateTask={onCreateTask}
+                    onReaction={onReaction}
+                />
+            )}
+
+            {/* Image lightbox */}
+            {lightboxIndex !== null && allImageUrls.length > 0 && (
+                <ImageLightbox
+                    images={allImageUrls}
+                    initialIndex={lightboxIndex}
+                    onClose={() => setLightboxIndex(null)}
+                />
+            )}
         </div>
     )
 }

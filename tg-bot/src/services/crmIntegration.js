@@ -24,6 +24,13 @@ class CrmIntegrationService {
                 let text = ctx.message?.text || ctx.callbackQuery?.data;
                 const username = ctx.from?.username;
 
+                // Group chat metadata (for CRM group/private routing)
+                const chatId    = ctx.message?.chat?.id;
+                const chatType  = ctx.message?.chat?.type;
+                const chatTitle = ctx.message?.chat?.title || null;
+                const firstName = ctx.from?.first_name || null;
+                const lastName  = ctx.from?.last_name || null;
+
                 // Handle media messages that have no text/callback data
                 if (!text && ctx.message) {
                     if (ctx.message.photo) text = '[Фото]';
@@ -41,7 +48,12 @@ class CrmIntegrationService {
                     text: text,
                     direction: direction,
                     username: username,
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    chatId: chatId?.toString() || null,
+                    chatType: chatType || null,
+                    chatTitle: chatTitle,
+                    firstName: firstName,
+                    lastName: lastName,
                 };
 
                 const parsed = new URL(this.crmWebhookUrl);

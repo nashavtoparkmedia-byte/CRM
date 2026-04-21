@@ -38,6 +38,21 @@ export class ConversationWorkflowService {
   }
 
   /**
+   * Lightweight handler for group chat inbound messages.
+   * Only increments unreadCount and updates lastInboundAt.
+   * Does NOT set requiresResponse, does NOT transition status.
+   */
+  static async onGroupInboundMessage(chatId: string, sentAt: Date): Promise<void> {
+    await prisma.$executeRaw`
+      UPDATE "Chat"
+      SET "unreadCount" = "unreadCount" + 1,
+          "lastInboundAt" = ${sentAt},
+          "updatedAt" = NOW()
+      WHERE id = ${chatId}
+    `
+  }
+
+  /**
    * Called by MessageService.send() after successful delivery.
    */
   static async onOutboundMessage(chatId: string, sentAt: Date): Promise<void> {

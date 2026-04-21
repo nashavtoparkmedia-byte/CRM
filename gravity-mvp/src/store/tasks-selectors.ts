@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import { useTasksStore } from './tasks-store'
-import type { TaskDTO, TaskStatus } from '@/lib/tasks/types'
+import type { TaskDTO, TaskStatus, TaskFilters } from '@/lib/tasks/types'
+import { getScenarioPresets } from '@/lib/tasks/scenario-config'
+import type { ScenarioData } from '@/lib/tasks/scenario-config'
 
 /**
  * Get all tasks as sorted array (applying current filters + sort from store).
@@ -64,20 +66,54 @@ export function useFilteredTasks(): TaskDTO[] {
             tasks = tasks.filter((t) => new Date(t.createdAt).getTime() <= to)
         }
 
+        // Wave 1: Preset filters
+        if (filters.preset) {
+            tasks = applyPreset(tasks, filters.preset, filters.scenario ?? undefined)
+        }
+
+        // Wave 1: Scenario field filters
+        if (filters.scenarioFields && filters.scenarioFields.length > 0) {
+            tasks = applyScenarioFieldFilters(tasks, filters.scenarioFields)
+        }
+
+        // Churn ext: source meta filter
+        if (filters.scenarioSource) {
+            tasks = tasks.filter(t => t.scenarioMeta?.sourceTypes?.includes(filters.scenarioSource!) ?? false)
+        }
+
+        // Churn ext: completeness filter
+        if (filters.scenarioCompleteness) {
+            tasks = tasks.filter(t => t.scenarioMeta?.completeness === filters.scenarioCompleteness)
+        }
+
         // Apply sort
         tasks.sort((a, b) => {
             const dir = sort.direction === 'asc' ? 1 : -1
             const aVal = a[sort.field]
             const bVal = b[sort.field]
 
+            if (sort.field === 'priority') {
+                const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+                const aPri = order[a.priority] ?? 2
+                const bPri = order[b.priority] ?? 2
+                if (aPri !== bPri) return (aPri - bPri) * dir
+
+                // Within same priority: SLA breach / overdue first
+                const now = Date.now()
+                const aUrgent = (a.slaDeadline && new Date(a.slaDeadline).getTime() < now) || a.status === 'overdue'
+                const bUrgent = (b.slaDeadline && new Date(b.slaDeadline).getTime() < now) || b.status === 'overdue'
+                if (aUrgent && !bUrgent) return -1
+                if (!aUrgent && bUrgent) return 1
+
+                // Within same urgency: dueAt ASC
+                const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Infinity
+                const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Infinity
+                return aDue - bDue
+            }
+
             if (aVal == null && bVal == null) return 0
             if (aVal == null) return 1
             if (bVal == null) return -1
-
-            if (sort.field === 'priority') {
-                const order = { critical: 0, high: 1, medium: 2, low: 3 }
-                return (order[aVal as keyof typeof order] - order[bVal as keyof typeof order]) * dir
-            }
 
             return aVal < bVal ? -dir : aVal > bVal ? dir : 0
         })
@@ -168,4 +204,70 @@ export function useTaskCounts(): Record<string, number> {
 
         return counts
     }, [tasksById, taskIds])
+}
+
+// ─── Wave 1: Preset filter logic ──────────────────────────────────
+
+function applyPreset(
+    tasks: TaskDTO[],
+    preset: NonNullable<TaskFilters['preset']>,
+    scenarioId?: string,
+): TaskDTO[] {
+    const now = Date.now()
+    const twoHoursMs = 2 * 60 * 60 * 1000
+
+    switch (preset) {
+        case 'hot': {
+            const threshold = scenarioId
+                ? getScenarioPresets(scenarioId).hotInactiveDaysThreshold ?? 7
+                : 7
+            return tasks.filter(t => {
+                if (t.priority === 'critical' || t.priority === 'high') return true
+                if (t.slaDeadline && new Date(t.slaDeadline).getTime() < now + twoHoursMs) return true
+                if (t.dueAt && new Date(t.dueAt).getTime() < now + twoHoursMs) return true
+                // Check inactiveDays from scenario fields preview
+                const inactiveDays = t.scenarioFieldsPreview?.find(f => f.fieldId === 'inactiveDays')
+                if (inactiveDays && typeof inactiveDays.value === 'number' && inactiveDays.value >= threshold) return true
+                return false
+            })
+        }
+        case 'no_contact':
+            return tasks.filter(t => t.touchCount === 0 || !t.lastContactAt)
+        case 'sla_burning':
+            return tasks.filter(t => {
+                if (t.slaDeadline && new Date(t.slaDeadline).getTime() < now + twoHoursMs) return true
+                if (t.dueAt && new Date(t.dueAt).getTime() < now) return true
+                return false
+            })
+        case 'has_reply':
+            return tasks.filter(t => t.hasNewReply)
+        default:
+            return tasks
+    }
+}
+
+// ─── Wave 1: Scenario field filter logic ──────────────────────────
+
+function applyScenarioFieldFilters(
+    tasks: TaskDTO[],
+    fieldFilters: NonNullable<TaskFilters['scenarioFields']>,
+): TaskDTO[] {
+    return tasks.filter(task => {
+        if (!task.scenarioFieldsPreview) return false
+        return fieldFilters.every(filter => {
+            const field = task.scenarioFieldsPreview?.find(f => f.fieldId === filter.fieldId)
+            if (!field) {
+                return filter.operator === 'not_exists'
+            }
+            if (filter.operator === 'exists') return true
+            if (filter.operator === 'eq') return field.value === filter.value
+            if (filter.operator === 'gt' && typeof field.value === 'number' && typeof filter.value === 'number') {
+                return field.value > filter.value
+            }
+            if (filter.operator === 'lt' && typeof field.value === 'number' && typeof filter.value === 'number') {
+                return field.value < filter.value
+            }
+            return true
+        })
+    })
 }

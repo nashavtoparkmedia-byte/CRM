@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="24dp"
+    android:background="#FFFFFF">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal">
+
+        <!-- Header -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="CRM Телефония"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="#0F172A"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Подключение устройства к CRM"
+            android:textSize="14sp"
+            android:textColor="#64748B"
+            android:layout_marginBottom="32dp" />
+
+        <!-- Server URL -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="URL сервера CRM"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#0F172A"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/urlInput"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:hint="http://192.168.0.102:3002"
+            android:inputType="textUri"
+            android:textSize="15sp"
+            android:paddingHorizontal="12dp"
+            android:background="@drawable/input_bg"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Register -->
+        <Button
+            android:id="@+id/registerButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Зарегистрировать"
+            android:textSize="15sp"
+            android:textAllCaps="false"
+            android:backgroundTint="#2AABEE"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Permissions -->
+        <Button
+            android:id="@+id/permissionButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Запросить разрешения"
+            android:textSize="15sp"
+            android:textAllCaps="false"
+            android:backgroundTint="#E4ECFC"
+            android:textColor="#0F172A"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Service -->
+        <Button
+            android:id="@+id/serviceButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="Запустить сервис"
+            android:textSize="15sp"
+            android:textAllCaps="false"
+            android:backgroundTint="#059669"
+            android:textColor="#FFFFFF"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Status -->
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Загрузка..."
+            android:textSize="13sp"
+            android:textColor="#64748B"
+            android:fontFamily="monospace"
+            android:lineSpacingMultiplier="1.4"
+            android:padding="16dp"
+            android:background="#F1F5FD" />
+
+    </LinearLayout>
+</ScrollView>

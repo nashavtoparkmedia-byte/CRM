@@ -9,6 +9,8 @@ import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
+import { useCallEvents } from "../hooks/useCallEvents"
+import CallNotificationBanner from "./CallNotificationBanner"
 
 export default function ChatWorkspace({
     chatId,
@@ -96,6 +98,7 @@ function ChatWorkspaceInner({
     conversations: any[]
 }) {
     const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
+    const { activeCall } = useCallEvents()
 
     // A3: Compute channels that have failed outbound messages
     const failedChannels = useMemo(() => {
@@ -179,6 +182,20 @@ function ChatWorkspaceInner({
         })
     }
 
+    const handleReaction = useCallback(async (msgId: string, emoji: string) => {
+        try {
+            const res = await fetch('/api/messages/reaction', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageId: msgId, emoji })
+            })
+            if (!res.ok) return
+            // Optimistic: will be refreshed on next poll
+        } catch (e) {
+            console.error('[Reaction] error:', e)
+        }
+    }, [])
+
     const isEmptyChannel = effectiveChatId?.startsWith('empty:')
 
     return (
@@ -198,6 +215,7 @@ function ChatWorkspaceInner({
             />
 
             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />
+            <CallNotificationBanner activeCall={activeCall} />
 
             {isEmptyChannel ? (
                 <div className="flex-1 flex flex-col items-center justify-center messenger-bg">
@@ -217,6 +235,7 @@ function ChatWorkspaceInner({
                 <MessageFeed
                     chatId={chatId}
                     channelTab={activeChannelTab}
+                    chatType={chat?.chatType}
                     uiItems={uiItems}
                     isLoading={isLoading}
                     hasMoreHistory={hasMoreHistory}
@@ -224,6 +243,7 @@ function ChatWorkspaceInner({
                     onReply={handleReply}
                     onRetry={handleRetry}
                     onCreateTask={setTaskModalContext}
+                    onReaction={handleReaction}
                     activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
                     onFocusComposer={() => document.getElementById('message-composer')?.focus()}
                     lastSentAt={lastSentAt}

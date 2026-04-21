@@ -146,7 +146,6 @@ async function forwardToWebhook(payload) {
 // ─── Обработка входящего сообщения ───────────────────────────────────────────
 
 async function handleIncoming(msg, mediaPipeline, messageSync) {
-  if (msg.isOutgoing) return
   if (messageSync.isDuplicate(msg)) return
 
   let payload = MessageParser.toCrmPayload(msg)
@@ -219,27 +218,28 @@ async function sendText(transport, chatId, text) {
   })
 }
 
-// ─── Отправка изображения: opcode 80 → HTTP upload → opcode 64 ───────────────
+// ─── Отправка медиа: opcode 80 → HTTP upload → opcode 64 ──────────────────
 
-async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType, caption) {
-  // 1. Запросить URL для загрузки
-  const uploadResp = await transport.sendFrame(
-    OP.GET_UPLOAD_URL,
-    { count: 1 },
-    { waitResponse: true }
-  )
-
+/**
+ * Upload a file to MAX servers and get a token.
+ * @param {object} transport
+ * @param {Buffer} fileBuffer
+ * @param {string} filename
+ * @param {string} mimeType
+ * @param {string} fieldName - form field name (e.g. 'photo' for images, 'file' for others)
+ * @returns {Promise<object>} upload response JSON
+ */
+async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName = 'photo') {
+  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_URL, { count: 1 }, { waitResponse: true })
   if (!uploadResp || !uploadResp.url) {
-    throw new Error('Не получен URL для загрузки фото')
+    throw new Error('Не получен URL для загрузки')
   }
 
   const uploadUrl = uploadResp.url
-
-  // 2. Загрузить файл напрямую из Node.js (apiToken уже в URL — куки не нужны)
   const uploadData = await new Promise((resolve, reject) => {
     const boundary = '----MaxBoundary' + Date.now()
     const header = Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
+      `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
     )
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
     const body = Buffer.concat([header, fileBuffer, footer])
@@ -259,7 +259,7 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
       let data = ''
       res.on('data', c => { data += c })
       res.on('end', () => {
-        console.log('[sendImage] Upload status:', res.statusCode, 'response:', data.slice(0, 300))
+        console.log(`[uploadFile] Upload status: ${res.statusCode} response: ${data.slice(0, 300)}`)
         if (res.statusCode >= 400) { reject(new Error(`Upload HTTP ${res.statusCode}: ${data}`)); return }
         try { resolve(JSON.parse(data)) } catch { resolve(null) }
       })
@@ -269,13 +269,19 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
     req.end()
   })
 
-  // photoToken приходит из ответа: {"photos": {"<key>": {"token": "..."}}}
+  return uploadData
+}
+
+/**
+ * Send a photo message (opcode 80 upload + opcode 64 send).
+ */
+async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType, caption) {
+  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, 'photo')
   const photoToken = uploadData?.photoToken
     || uploadData?.token
     || (uploadData?.photos && Object.values(uploadData.photos)[0]?.token)
   if (!photoToken) throw new Error(`photoToken не найден в ответе: ${JSON.stringify(uploadData)}`)
 
-  // 3. Отправить сообщение с фото
   const cid = -Date.now()
   await transport.sendFrame(OP.SEND_MESSAGE, {
     chatId,
@@ -283,6 +289,38 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
       cid,
       text:    caption || '',
       attaches: [{ _type: 'PHOTO', photoToken }],
+    },
+    notify: true,
+  })
+}
+
+/**
+ * Send a generic media message (document, video, audio, voice).
+ * Uses same upload endpoint but with different attach type.
+ */
+async function sendGenericMedia(transport, chatId, fileBuffer, filename, mimeType, caption, mediaType) {
+  const fieldName = mediaType === 'video' ? 'video' : (mediaType === 'audio' || mediaType === 'voice' ? 'audio' : 'file')
+  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName)
+  const token = uploadData?.token
+    || uploadData?.fileToken
+    || uploadData?.videoToken
+    || uploadData?.audioToken
+    || (uploadData?.files && Object.values(uploadData.files)[0]?.token)
+    || (uploadData?.videos && Object.values(uploadData.videos)[0]?.token)
+    || (uploadData?.audios && Object.values(uploadData.audios)[0]?.token)
+  if (!token) throw new Error(`token не найден для ${mediaType}: ${JSON.stringify(uploadData)}`)
+
+  const typeMap = { video: 'VIDEO', audio: 'AUDIO', voice: 'AUDIO', document: 'FILE' }
+  const maxType = typeMap[mediaType] || 'FILE'
+  const tokenField = mediaType === 'video' ? 'videoToken' : (mediaType === 'audio' || mediaType === 'voice' ? 'audioToken' : 'fileToken')
+
+  const cid = -Date.now()
+  await transport.sendFrame(OP.SEND_MESSAGE, {
+    chatId,
+    message: {
+      cid,
+      text: caption || '',
+      attaches: [{ _type: maxType, [tokenField]: token, name: filename, mimeType }],
     },
     notify: true,
   })
@@ -358,7 +396,7 @@ async function init() {
 
   // 4. Создаём зависимые объекты
   mediaPipeline = new MediaPipeline(page)
-  initialSync   = new InitialHistorySync(transport, sync, forwardToWebhook, mediaPipeline, chatCache)
+  initialSync   = new InitialHistorySync(transport, sync, forwardToWebhook, mediaPipeline, chatCache, contactStore)
 
   // Перехватываем raw-фреймы (каждый блок изолирован — ошибка в одном не ломает другие)
   transport.onRawFrame(async data => {
@@ -540,6 +578,31 @@ app.post('/send-image', async (req, res) => {
   }
 })
 
+// Универсальный endpoint для отправки любого медиа
+app.post('/send-media', async (req, res) => {
+  const { chatId, base64, filename, mimeType, caption, mediaType } = req.body
+  if (!chatId || !base64 || !filename || !mimeType || !mediaType) {
+    return res.status(400).json({ error: 'chatId, base64, filename, mimeType, mediaType are required' })
+  }
+  if (!isReady) {
+    return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
+  }
+  try {
+    const fileBuffer = Buffer.from(base64, 'base64')
+    await enqueueSend(async () => {
+      if (mediaType === 'image') {
+        return sendImage(transport, page, Number(chatId), fileBuffer, filename, mimeType, caption)
+      } else {
+        return sendGenericMedia(transport, Number(chatId), fileBuffer, filename, mimeType, caption, mediaType)
+      }
+    })
+    res.json({ success: true })
+  } catch (e) {
+    console.error('[send-media] Error:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 // Debug: list contacts
 app.get('/contacts', (req, res) => {
   if (!contactStore) return res.json({ contacts: [], total: 0 })
@@ -663,6 +726,9 @@ app.post('/import-history', async (req, res) => {
         JSON.stringify({ ts: sinceTs })
       )
     } catch {}
+    // Reset dedup + done flag so re-import actually processes messages
+    InitialHistorySync.resetDoneFlag()
+    sync.clear()
   } else if (mode === 'available_history') {
     // Сбрасываем last_activity чтобы захватить максимально доступную историю
     try { fs.unlinkSync(path.join(__dirname, 'last_activity.json')) } catch {}
@@ -680,8 +746,12 @@ app.post('/import-history', async (req, res) => {
   ;(async () => {
     startImportSession(jobId, crmApiUrl)
     try {
-      const importMode = mode === 'last_n_days' ? 'from_connection_time' : mode
-      await initialSync.runIfNeeded(importMode)
+      if (mode === 'last_n_days') {
+        const sinceTs = Date.now() - (daysBack || 7) * 24 * 60 * 60 * 1000
+        await initialSync.runIfNeeded('last_n_days', { sinceTs })
+      } else {
+        await initialSync.runIfNeeded(mode)
+      }
       await finishImportSession('completed', mode === 'available_history' ? 'full' : 'partial')
     } catch (e) {
       console.error('[Import] Ошибка:', e.message)

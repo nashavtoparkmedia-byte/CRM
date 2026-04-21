@@ -6,7 +6,8 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3002,
-      "cwd": "gravity-mvp"
+      "cwd": "gravity-mvp",
+      "autoPort": false
     }
   ]
 }

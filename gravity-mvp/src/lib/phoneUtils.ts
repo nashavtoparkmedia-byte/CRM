@@ -48,7 +48,7 @@ export function parseExternalChatId(externalChatId: string): { channel: string; 
   const channel = externalChatId.slice(0, colonIndex)
   const externalId = externalChatId.slice(colonIndex + 1)
 
-  const knownChannels = ['whatsapp', 'telegram', 'max', 'yandex_pro']
+  const knownChannels = ['whatsapp', 'telegram', 'max', 'yandex_pro', 'phone']
   if (knownChannels.includes(channel)) {
     return { channel, externalId }
   }
