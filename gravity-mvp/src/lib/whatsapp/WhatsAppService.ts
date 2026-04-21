@@ -301,7 +301,14 @@ export async function initializeClient(connectionId: string): Promise<void> {
         puppeteer: {
             headless: true,
             executablePath: process.env.WA_CHROMIUM_PATH || 'D:\\shared\\playwright-browsers\\chromium-1217\\chrome-win64\\chrome.exe',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu',
+                '--disable-blink-features=AutomationControlled',
+            ],
+            ignoreDefaultArgs: ['--enable-automation'],
         },
         webVersionCache: {
             type: 'none',
