@@ -13,6 +13,11 @@ import {
     AlertTriangle,
     Plus,
     Users,
+    Flame,
+    PhoneOff,
+    Clock,
+    Bell as BellIcon,
+    Settings,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import GlobalTaskCreateModal from './GlobalTaskCreateModal'
@@ -21,60 +26,18 @@ import TaskListModeSwitcher from './TaskListModeSwitcher'
 import TaskListColumnsSettings from './TaskListColumnsSettings'
 import TaskListDensitySwitcher from './TaskListDensitySwitcher'
 import TaskListExcelButtons from './TaskListExcelButtons'
-import ChurnExtraFilters from './ChurnExtraFilters'
+import TaskListFiltersPopover from './TaskListFiltersPopover'
 import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
 import { useListViewStore } from '@/store/list-view-store'
 import { recordUsage } from '@/lib/tasks/usage'
-import { SCENARIOS, getAllScenarioOptions, getScenarioFilterableFields, getScenarioPresets } from '@/lib/tasks/scenario-config'
-import type { ScenarioFieldDef } from '@/lib/tasks/scenario-config'
-import { TASK_TYPES } from '@/lib/tasks/types'
+import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 import { getCrmUsers } from '@/app/tasks/actions'
-import { Flame, PhoneOff, Clock, Bell as BellIcon, Settings } from 'lucide-react'
 
 const VIEW_OPTIONS: { key: TaskView; label: string; icon: typeof List }[] = [
     { key: 'list', label: 'Список', icon: List },
     { key: 'board', label: 'Доска', icon: Columns3 },
     { key: 'timeline', label: 'Время', icon: Calendar },
 ]
-
-const STATUS_OPTIONS = [
-    { value: 'all', label: 'Все статусы' },
-    { value: 'todo', label: 'К выполнению' },
-    { value: 'in_progress', label: 'В работе' },
-    { value: 'waiting_reply', label: 'Ждет ответа' },
-    { value: 'overdue', label: 'Просрочено' },
-    { value: 'done', label: 'Выполнено' },
-]
-
-const PRIORITY_OPTIONS = [
-    { value: 'all', label: 'Все приоритеты' },
-    { value: 'high', label: 'Высокий' },
-    { value: 'medium', label: 'Обычный' },
-]
-
-const SOURCE_OPTIONS = [
-    { value: 'all', label: 'Все источники' },
-    { value: 'auto', label: 'Авто' },
-    { value: 'manual', label: 'Ручная' },
-    { value: 'chat', label: 'Из чата' },
-]
-
-function getDatePreset(preset: string): { dateFrom?: string; dateTo?: string } {
-    const now = new Date()
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    if (preset === 'today') return { dateFrom: startOfDay.toISOString() }
-    if (preset === 'week') {
-        const weekAgo = new Date(startOfDay)
-        weekAgo.setDate(weekAgo.getDate() - 7)
-        return { dateFrom: weekAgo.toISOString() }
-    }
-    if (preset === 'month') {
-        const monthAgo = new Date(startOfDay)
-        monthAgo.setMonth(monthAgo.getMonth() - 1)
-        return { dateFrom: monthAgo.toISOString() }
-    }
-    return { dateFrom: undefined, dateTo: undefined }
-}
 
 export default function TasksToolbar() {
     const currentView = useTasksStore((s) => s.currentView)
@@ -88,7 +51,6 @@ export default function TasksToolbar() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
     const [isBulkCareOpen, setIsBulkCareOpen] = useState(false)
     const [crmUsers, setCrmUsers] = useState<{ id: string; name: string; role: string }[]>([])
-    const [periodPreset, setPeriodPreset] = useState('all')
 
     useEffect(() => {
         getCrmUsers().then(setCrmUsers).catch(() => {})
@@ -102,6 +64,11 @@ export default function TasksToolbar() {
     const scenarioOptions = getAllScenarioOptions()
     const activeScenario = filters.scenario
     const activeScenarioConfig = activeScenario ? SCENARIOS[activeScenario] : null
+    const isChurnList = activeScenario === 'churn' && currentView === 'list'
+
+    const activeViewMap = useListViewStore(s => s.activeViewIdByScenario)
+    const activeChurnViewId = activeViewMap['churn'] ?? getDefaultViewId('churn')
+    const activeChurnView = getSystemView(activeChurnViewId) ?? getSystemView(getDefaultViewId('churn'))
 
     const hasActiveFilters =
         (filters.status && filters.status !== 'all') ||
@@ -116,14 +83,18 @@ export default function TasksToolbar() {
         filters.scenarioCompleteness ||
         (filters.scenarioFields && filters.scenarioFields.length > 0) ||
         filters.dateFrom ||
-        filters.dateTo
+        filters.dateTo ||
+        filters.overdue ||
+        filters.offerAllowed ||
+        filters.park ||
+        filters.assigneeId
 
     return (
         <div className="flex flex-col gap-3">
-            {/* Row 1: View Switcher + Quick Stats + Search */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    {/* View Switcher */}
+            {/* ── Row 1 ─ view switcher + mode + density  |  stats  |  search + excel + create ── */}
+            <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* View Switcher: Список / Доска / Время */}
                     <div className="flex items-center bg-[#f3f4f6] rounded-lg p-0.5">
                         {VIEW_OPTIONS.map((opt) => (
                             <button
@@ -141,8 +112,16 @@ export default function TasksToolbar() {
                         ))}
                     </div>
 
+                    {/* Churn-list-only controls — next to view switcher, as requested */}
+                    {isChurnList && (
+                        <>
+                            <TaskListModeSwitcher scenario="churn" />
+                            <TaskListDensitySwitcher scenario="churn" />
+                        </>
+                    )}
+
                     {/* Quick Stats */}
-                    <div className="flex items-center gap-3 ml-4 text-[12px] text-[#9ca3af]">
+                    <div className="flex items-center gap-3 ml-2 text-[12px] text-[#9ca3af]">
                         <span className="flex items-center gap-1">
                             <span className="font-semibold text-[#374151]">{counts.active}</span>
                             активных
@@ -164,8 +143,8 @@ export default function TasksToolbar() {
                     </div>
                 </div>
 
-                {/* Search */}
-                <div className="flex items-center gap-2">
+                {/* Right side: Search, Excel (churn+list), Bulk, Create */}
+                <div className="flex items-center gap-2 flex-wrap">
                     {searchOpen ? (
                         <div className="flex items-center bg-[#f3f4f6] rounded-lg overflow-hidden">
                             <Search className="w-4 h-4 text-[#9ca3af] ml-3" />
@@ -194,17 +173,20 @@ export default function TasksToolbar() {
                             <Search className="w-4 h-4" />
                         </button>
                     )}
-                    
+
+                    {/* Excel — right side of toolbar, per TЗ */}
+                    {isChurnList && <TaskListExcelButtons />}
+
                     <button
                         onClick={() => setIsBulkCareOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e7eb] text-[#374151] text-[13px] font-medium hover:bg-[#f3f4f6] transition-colors ml-2"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e7eb] text-[#374151] text-[13px] font-medium hover:bg-[#f3f4f6] transition-colors"
                     >
                         <Users className="w-4 h-4 text-[#6b7280]" />
                         Массовая забота
                     </button>
                     <button
                         onClick={() => setIsCreateModalOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors ml-2 shadow-sm"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors shadow-sm"
                     >
                         <Plus className="w-4 h-4" />
                         Создать задачу
@@ -212,8 +194,8 @@ export default function TasksToolbar() {
                 </div>
             </div>
 
-            {/* Row 2: Scenario Tabs */}
-            <div className="flex items-center gap-1">
+            {/* ── Row 2 ─ scenario tabs + stage + column settings + scenario field settings link ── */}
+            <div className="flex items-center gap-1 flex-wrap">
                 <button
                     onClick={() => {
                         setFilters({ scenario: undefined, stage: undefined })
@@ -254,7 +236,7 @@ export default function TasksToolbar() {
                     Без сценария
                 </button>
 
-                {/* Stage filter — only when a specific scenario is selected */}
+                {/* Stage select — only when a specific scenario is picked */}
                 {activeScenarioConfig && (
                     <>
                         <select
@@ -267,6 +249,12 @@ export default function TasksToolbar() {
                                 <option key={st.id} value={st.id}>{st.label}</option>
                             ))}
                         </select>
+
+                        {/* Column settings lives with stage / scenario tools, as it scopes to the active view */}
+                        {isChurnList && activeChurnView && (
+                            <TaskListColumnsSettings view={activeChurnView} />
+                        )}
+
                         <a
                             href={`/settings/scenarios/${activeScenarioConfig.id}/fields`}
                             className="ml-auto flex items-center gap-1 text-[12px] text-[#4f46e5] hover:text-[#4338ca] transition-colors"
@@ -279,13 +267,8 @@ export default function TasksToolbar() {
                 )}
             </div>
 
-            {/* Row 2.25: List View controls (churn only on MVP) */}
-            {activeScenario === 'churn' && currentView === 'list' && (
-                <ChurnListControls />
-            )}
-
-            {/* Row 2.5: Presets */}
-            <div className="flex items-center gap-1.5">
+            {/* ── Row 3 ─ 4 visible presets + "Фильтры" popover + reset ── */}
+            <div className="flex items-center gap-1.5 flex-wrap">
                 <PresetButton
                     label="Горячие"
                     icon={<Flame className="w-3.5 h-3.5" />}
@@ -315,112 +298,9 @@ export default function TasksToolbar() {
                     color="blue"
                 />
 
-                {/* Dynamic scenario field filters */}
-                {activeScenarioConfig && (
-                    <DynamicScenarioFilters
-                        scenarioId={activeScenarioConfig.id}
-                        currentFilters={filters.scenarioFields ?? []}
-                        onChange={(sf) => setFilters({ scenarioFields: sf.length > 0 ? sf : undefined })}
-                    />
-                )}
-            </div>
+                <div className="h-5 w-px bg-[#E4ECFC] mx-1" />
 
-            {/* Row 3: Filters */}
-            <div className="flex items-center gap-2">
-                <select
-                    value={(filters.status as string) ?? 'all'}
-                    onChange={(e) => setFilters({ status: e.target.value as any })}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    {STATUS_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                </select>
-
-                <select
-                    value={(filters.priority as string) ?? 'all'}
-                    onChange={(e) => setFilters({ priority: e.target.value as any })}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    {PRIORITY_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                </select>
-
-                <select
-                    value={(filters.source as string) ?? 'all'}
-                    onChange={(e) => setFilters({ source: e.target.value as any })}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    {SOURCE_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                </select>
-
-                {/* Type filter */}
-                <select
-                    value={filters.type ?? ''}
-                    onChange={(e) => setFilters({ type: e.target.value || undefined })}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    <option value="">Все типы</option>
-                    {TASK_TYPES.map((t) => (
-                        <option key={t.value} value={t.value}>{t.label}</option>
-                    ))}
-                </select>
-
-                {/* Period filter */}
-                <select
-                    value={periodPreset}
-                    onChange={(e) => {
-                        setPeriodPreset(e.target.value)
-                        setFilters(getDatePreset(e.target.value))
-                    }}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    <option value="all">Все даты</option>
-                    <option value="today">Сегодня</option>
-                    <option value="week">Неделя</option>
-                    <option value="month">Месяц</option>
-                </select>
-
-                {/* Assignee filter */}
-                {crmUsers.length > 0 && (
-                    <select
-                        value={filters.assigneeId ?? ''}
-                        onChange={(e) => setFilters({ assigneeId: e.target.value || undefined })}
-                        className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                    >
-                        <option value="">Все менеджеры</option>
-                        {crmUsers.map((u) => (
-                            <option key={u.id} value={u.id}>{u.name}</option>
-                        ))}
-                    </select>
-                )}
-
-                {/* Churn: filter by source of scenario data */}
-                <select
-                    value={filters.scenarioSource ?? ''}
-                    onChange={(e) => setFilters({ scenarioSource: (e.target.value || undefined) as any })}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    <option value="">Источник: все</option>
-                    <option value="auto">Есть данные [API Яндекс]</option>
-                    <option value="manual">Есть данные [Вручную]</option>
-                    <option value="derived">Есть данные [Рассчитано]</option>
-                </select>
-
-                {/* Churn: filter by completeness of card */}
-                <select
-                    value={filters.scenarioCompleteness ?? ''}
-                    onChange={(e) => setFilters({ scenarioCompleteness: (e.target.value || undefined) as any })}
-                    className="text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
-                >
-                    <option value="">Заполненность: все</option>
-                    <option value="full">Полностью заполнена</option>
-                    <option value="partial">Частично заполнена</option>
-                    <option value="empty">Пустая</option>
-                </select>
+                <TaskListFiltersPopover crmUsers={crmUsers} />
 
                 {hasActiveFilters && (
                     <button
@@ -439,26 +319,6 @@ export default function TasksToolbar() {
             {isBulkCareOpen && (
                 <BulkCareModal onClose={() => setIsBulkCareOpen(false)} />
             )}
-        </div>
-    )
-}
-
-// ─── Churn List Controls (mode switcher + columns settings) ─────
-
-function ChurnListControls() {
-    const activeViewMap = useListViewStore(s => s.activeViewIdByScenario)
-    const activeChurnViewId = activeViewMap['churn'] ?? getDefaultViewId('churn')
-    const activeView = getSystemView(activeChurnViewId) ?? getSystemView(getDefaultViewId('churn'))
-    if (!activeView) return null
-
-    return (
-        <div className="flex items-center gap-3 flex-wrap">
-            <TaskListModeSwitcher scenario="churn" />
-            <TaskListDensitySwitcher scenario="churn" />
-            <TaskListColumnsSettings view={activeView} />
-            <TaskListExcelButtons />
-            <div className="h-6 w-px bg-[#E4ECFC]" />
-            <ChurnExtraFilters />
         </div>
     )
 }
@@ -493,105 +353,4 @@ function PresetButton({
             {label}
         </button>
     )
-}
-
-// ─── Dynamic Scenario Filters ─────────────────────────────────────
-
-function DynamicScenarioFilters({
-    scenarioId,
-    currentFilters,
-    onChange,
-}: {
-    scenarioId: string
-    currentFilters: NonNullable<import('@/lib/tasks/types').TaskFilters['scenarioFields']>
-    onChange: (filters: NonNullable<import('@/lib/tasks/types').TaskFilters['scenarioFields']>) => void
-}) {
-    const fields = getScenarioFilterableFields(scenarioId)
-    if (fields.length === 0) return null
-
-    const updateField = (fieldId: string, operator: string, value: unknown) => {
-        const rest = currentFilters.filter(f => f.fieldId !== fieldId)
-        if (value === undefined || value === '' || value === 'all') {
-            onChange(rest)
-        } else {
-            onChange([...rest, { fieldId, operator: operator as any, value }])
-        }
-    }
-
-    const getValue = (fieldId: string) => {
-        return currentFilters.find(f => f.fieldId === fieldId)?.value
-    }
-
-    return (
-        <div className="flex items-center gap-1.5 ml-2 pl-2 border-l border-gray-200">
-            {fields.map(field => (
-                <ScenarioFieldFilter
-                    key={field.id}
-                    field={field}
-                    value={getValue(field.id)}
-                    onChange={(val) => updateField(field.id, field.type === 'number' ? 'gt' : 'eq', val)}
-                />
-            ))}
-        </div>
-    )
-}
-
-function ScenarioFieldFilter({
-    field,
-    value,
-    onChange,
-}: {
-    field: ScenarioFieldDef
-    value: unknown
-    onChange: (val: unknown) => void
-}) {
-    if (field.type === 'boolean') {
-        const current = value as boolean | undefined
-        return (
-            <select
-                value={current === undefined ? 'all' : current ? 'yes' : 'no'}
-                onChange={(e) => {
-                    if (e.target.value === 'all') onChange(undefined)
-                    else onChange(e.target.value === 'yes')
-                }}
-                className="text-[12px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-2 py-1 text-[#374151] outline-none focus:border-[#4f46e5] cursor-pointer"
-            >
-                <option value="all">{field.label}: все</option>
-                <option value="yes">{field.label}: да</option>
-                <option value="no">{field.label}: нет</option>
-            </select>
-        )
-    }
-
-    if (field.type === 'enum' && field.enumOptions) {
-        return (
-            <select
-                value={(value as string) ?? 'all'}
-                onChange={(e) => onChange(e.target.value === 'all' ? undefined : e.target.value)}
-                className="text-[12px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-2 py-1 text-[#374151] outline-none focus:border-[#4f46e5] cursor-pointer"
-            >
-                <option value="all">{field.label}: все</option>
-                {field.enumOptions.map(o => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-            </select>
-        )
-    }
-
-    if (field.type === 'number') {
-        return (
-            <div className="flex items-center gap-1">
-                <span className="text-[12px] text-gray-500">{field.label} &gt;</span>
-                <input
-                    type="number"
-                    value={(value as number) ?? ''}
-                    onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    placeholder="0"
-                    className="w-[50px] text-[12px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-2 py-1 text-[#374151] outline-none focus:border-[#4f46e5]"
-                />
-            </div>
-        )
-    }
-
-    return null
 }
