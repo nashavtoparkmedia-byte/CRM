@@ -72,12 +72,15 @@ export async function register() {
                 select: { id: true, name: true },
             })
             opsLog('info', 'whatsapp_warmup_start', { operation: 'startup', count: readyConns.length })
+            // FIX 8: sequential warmup — previous parallel forEach caused Chromium process storms
+            // and races on LocalAuth folder when multiple connections existed.
             for (const conn of readyConns) {
-                initializeClient(conn.id).then(() => {
+                try {
+                    await initializeClient(conn.id)
                     opsLog('info', 'whatsapp_warmup_success', { connectionId: conn.id })
-                }).catch((err: any) => {
+                } catch (err: any) {
                     opsLog('error', 'whatsapp_warmup_failed', { connectionId: conn.id, error: err.message })
-                })
+                }
             }
         } catch (err: any) {
             opsLog('error', 'whatsapp_warmup_error', { operation: 'startup', error: err.message })

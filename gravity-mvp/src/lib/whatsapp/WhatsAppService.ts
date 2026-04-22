@@ -27,6 +27,17 @@ const globalSyncDone = global as unknown as { _waSyncDone?: Set<string> }
 const syncDoneSet = globalSyncDone._waSyncDone || new Set<string>()
 if (process.env.NODE_ENV !== 'production') globalSyncDone._waSyncDone = syncDoneSet
 
+// FIX 1: In-flight guard — prevent overlapping initializeClient for same connectionId.
+// Parallel callers get the same Promise; resolved on finally.
+const globalForInitPromises = global as unknown as { _waInitPromises?: Map<string, Promise<void>> }
+const initPromises: Map<string, Promise<void>> = globalForInitPromises._waInitPromises || new Map()
+if (process.env.NODE_ENV !== 'production') globalForInitPromises._waInitPromises = initPromises
+
+// FIX 7: Serialize forceResetSession per connectionId.
+const globalForResetLocks = global as unknown as { _waResetLocks?: Map<string, Promise<void>> }
+const forceResetLocks: Map<string, Promise<void>> = globalForResetLocks._waResetLocks || new Map()
+if (process.env.NODE_ENV !== 'production') globalForResetLocks._waResetLocks = forceResetLocks
+
 async function safeUpdateConnection(connectionId: string, data: any) {
     try {
         await prisma.whatsAppConnection.update({
@@ -272,11 +283,28 @@ export function getRuntimeStatus() {
 }
 
 export async function initializeClient(connectionId: string): Promise<void> {
+    // FIX 1: In-flight guard — if init already running for this id, return same Promise.
+    const inFlight = initPromises.get(connectionId)
+    if (inFlight) {
+        opsLog('info', 'wa_init_joined_in_flight', { connectionId })
+        return inFlight
+    }
+
+    const promise = doInitializeClient(connectionId)
+    initPromises.set(connectionId, promise)
+    try {
+        await promise
+    } finally {
+        initPromises.delete(connectionId)
+    }
+}
+
+async function doInitializeClient(connectionId: string): Promise<void> {
     // Always ensure registry entry exists
     registry.ensureEntry(connectionId, 'whatsapp')
 
-    // Smart reuse: only skip init if client is actually alive AND heartbeat is fresh.
-    // `client.info` alone is not enough — can be truthy for zombie puppeteer process.
+    // FIX 2: Non-destructive smart-reuse. If healthy — just return.
+    // DO NOT call beginNewInstance/setReady — those would invalidate live event handlers.
     const existingClient = clients.get(connectionId)
     const existingEntry = registry.getEntry(connectionId)
     if (existingClient?.info && existingEntry?.state === 'ready') {
@@ -284,11 +312,6 @@ export async function initializeClient(connectionId: string): Promise<void> {
         const heartbeatAgeMs = Date.now() - lastSeen
         if (heartbeatAgeMs < 5 * 60 * 1000) {
             opsLog('info', 'wa_init_skipped_healthy', { connectionId, heartbeatAgeMs })
-            if (!instanceIds.has(connectionId)) {
-                const iid = registry.beginNewInstance(connectionId)
-                instanceIds.set(connectionId, iid)
-                registry.setReady(connectionId, iid)
-            }
             return
         }
         opsLog('warn', 'wa_init_existing_stale_destroying', { connectionId, heartbeatAgeMs })
@@ -321,6 +344,15 @@ export async function initializeClient(connectionId: string): Promise<void> {
             type: 'none',
         }
     })
+
+    // FIX 3: ensure no zombie Chromium — fully destroy any stale client tied to this id
+    // before inserting the new one. Best-effort, never throws.
+    const stalePrev = clients.get(connectionId)
+    if (stalePrev) {
+        opsLog('warn', 'wa_init_prev_client_destroy', { connectionId })
+        try { stalePrev.removeAllListeners() } catch { /* ignore */ }
+        try { await stalePrev.destroy() } catch { /* ignore zombie */ }
+    }
 
     clients.set(connectionId, client)
 
@@ -372,14 +404,16 @@ export async function initializeClient(connectionId: string): Promise<void> {
             })
             // saveSession moved here — WA Web is stabilized after 'ready'
             await saveSession(connectionId, client)
-            // Auto-sync only on first ready. Flag is set only AFTER syncHistory succeeds.
+            // FIX 6: sync guard — set flag BEFORE starting syncHistory to block parallel
+            // runs. Only rollback on failure so a subsequent ready can retry.
             if (!syncDoneSet.has(connectionId)) {
+                syncDoneSet.add(connectionId)
                 syncHistory(connectionId, client)
                     .then(() => {
-                        syncDoneSet.add(connectionId)
                         opsLog('info', 'wa_sync_complete', { connectionId, instanceId })
                     })
                     .catch(err => {
+                        syncDoneSet.delete(connectionId) // rollback to permit retry on next ready
                         opsLog('error', 'wa_sync_failed', {
                             connectionId, instanceId,
                             error: err?.message ?? String(err),
@@ -623,6 +657,7 @@ export async function initializeClient(connectionId: string): Promise<void> {
             registry.setFailed(connectionId, instanceId, `auth_failure: ${msg}`)
             await safeUpdateConnection(connectionId, { status: 'error' })
             clients.delete(connectionId)
+            instanceIds.delete(connectionId) // FIX 5: drop stale instanceId
         } catch (err) {
             console.error(`[WA-SERVICE] Auth failure handler error:`, err)
         }
@@ -633,6 +668,7 @@ export async function initializeClient(connectionId: string): Promise<void> {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
             await safeUpdateConnection(connectionId, { status: 'disconnected' })
             clients.delete(connectionId)
+            instanceIds.delete(connectionId) // FIX 5: drop stale instanceId — next init creates a new one
 
             if (reason === 'LOGOUT') {
                 // Intentional logout — no reconnect
@@ -694,6 +730,10 @@ export async function destroyClient(connectionId: string): Promise<void> {
     console.log(`[WA-TRANSPORT] client_destroying connId=${connectionId}`)
     registry.setStopped(connectionId)
 
+    // FIX 4: drop listeners BEFORE destroy — prevents stale handlers from firing
+    // during the teardown and causing DB writes/heartbeats against a dead instance.
+    try { client.removeAllListeners() } catch { /* ignore */ }
+
     try {
         await Promise.race([
             client.destroy(),
@@ -747,6 +787,7 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
             if (curInstanceId) {
                 registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: client missing from map')
             }
+            instanceIds.delete(entry.connectionId) // FIX 5: drop stale instanceId
             unhealthyCount++
             details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_missing' })
             continue
@@ -765,7 +806,9 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
             if (curInstanceId) {
                 registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: puppeteer dead (client.info null)')
             }
+            try { client.removeAllListeners() } catch { /* ignore */ } // FIX 4 extension: drop listeners on dead client
             clients.delete(entry.connectionId)
+            instanceIds.delete(entry.connectionId) // FIX 5: drop stale instanceId
             unhealthyCount++
             details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_info_null' })
             continue
@@ -1498,8 +1541,27 @@ export async function getActualStatus(connectionId: string): Promise<{
  * Destroy client, wipe LocalAuth session folder, reset DB status,
  * then AUTO-RESTART init so user sees progress immediately (QR or broken again).
  * Wired to UI "Пересоздать сессию" button in broken/auth_failed/degraded states.
+ *
+ * FIX 7: serialized per connectionId via forceResetLocks map.
+ * Concurrent callers all await the same Promise; lock cleared on completion.
  */
 export async function forceResetSession(connectionId: string): Promise<void> {
+    const inFlight = forceResetLocks.get(connectionId)
+    if (inFlight) {
+        opsLog('info', 'wa_force_reset_joined_in_flight', { connectionId })
+        return inFlight
+    }
+
+    const promise = doForceResetSession(connectionId)
+    forceResetLocks.set(connectionId, promise)
+    try {
+        await promise
+    } finally {
+        forceResetLocks.delete(connectionId)
+    }
+}
+
+async function doForceResetSession(connectionId: string): Promise<void> {
     opsLog('info', 'wa_force_reset_start', { connectionId })
     await destroyClient(connectionId)
     syncDoneSet.delete(connectionId)
@@ -1522,6 +1584,7 @@ export async function forceResetSession(connectionId: string): Promise<void> {
 
     // Auto-restart init in background so user sees live progress (QR or broken again).
     // Do NOT await — UI needs immediate response; init status flows through state store.
+    // initializeClient has its own in-flight guard (FIX 1), safe to call here.
     opsLog('info', 'wa_force_reset_auto_init', { connectionId })
     initializeClient(connectionId).catch(err => {
         opsLog('error', 'wa_force_reset_auto_init_failed', {
