@@ -445,7 +445,20 @@ async function handleIncomingMessage(
     const rawChatId = toLegacyJid(remoteJid) // 79221853150@c.us
     const waType = baileysMessageType(m)
     const body = extractMessageBody(m)
-    const ts = new Date((Number(m.messageTimestamp) || 0) * 1000)
+    // Clamp timestamp to valid range. Baileys fetchMessageHistory sometimes
+    // returns corrupted messageTimestamp for outbound messages (observed
+    // dates in 2038 — year-2038 bug territory). Reject absurd values.
+    const rawTs = Number(m.messageTimestamp) || 0
+    const nowSec = Math.floor(Date.now() / 1000)
+    const validTs = rawTs > 1420070400 /* 2015-01-01 */ && rawTs < nowSec + 3600 /* max: +1h future for clock skew */
+    const ts = validTs ? new Date(rawTs * 1000) : new Date()
+    if (!validTs && rawTs > 0) {
+        opsLog('warn', 'wa_msg_ts_clamped', {
+            connectionId, msgId: m.key?.id, rawTs,
+            wasFuture: rawTs > nowSec + 3600,
+            fromMe: !!m.key?.fromMe,
+        })
+    }
 
     // ROSTER: persist chat as anchor for future backfill (fetchMessageHistory).
     // Track both oldestMsgTs (for pagination anchor) and newestMsgTs
@@ -611,15 +624,56 @@ async function handleIncomingMessage(
                 })
             }
         } else {
+            const unifiedType = mapToUnifiedMessageType(waType)
             const savedMsg = await prisma.message.create({
                 data: {
                     chatId: unifiedChat.id, direction,
-                    type: mapToUnifiedMessageType(waType) as any,
+                    type: unifiedType as any,
                     content: waContentWithFallback(body, waType),
                     externalId: waMsgId, sentAt: ts,
                     status: isOutbound ? 'delivered' : undefined,
                 },
             })
+
+            // Download + save media attachment (image/video/audio/voice/document/sticker)
+            if (unifiedType !== 'text' && (m.message as any)) {
+                const mediaNode: any =
+                    (m.message as any)?.imageMessage ||
+                    (m.message as any)?.videoMessage ||
+                    (m.message as any)?.audioMessage ||
+                    (m.message as any)?.documentMessage ||
+                    (m.message as any)?.stickerMessage
+                if (mediaNode) {
+                    try {
+                        const buffer = await downloadMediaMessage(m, 'buffer', {}) as Buffer
+                        if (buffer && buffer.length > 0 && buffer.length <= MAX_MEDIA_SIZE_BYTES) {
+                            const mimeType = mediaNode.mimetype || 'application/octet-stream'
+                            const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+                            await prisma.messageAttachment.create({
+                                data: {
+                                    messageId: savedMsg.id,
+                                    type: unifiedType as any,
+                                    url: dataUrl,
+                                    fileName: mediaNode.fileName || null,
+                                    fileSize: buffer.length,
+                                    mimeType,
+                                },
+                            })
+                            console.log(`[WA-SERVICE] MEDIA saved: ${unifiedType} ${mimeType} ${buffer.length}B msg=${savedMsg.id}`)
+                        } else if (buffer && buffer.length > MAX_MEDIA_SIZE_BYTES) {
+                            console.warn(`[WA-SERVICE] MEDIA too large (${buffer.length}B > ${MAX_MEDIA_SIZE_BYTES}B), skipped msg=${savedMsg.id}`)
+                        }
+                    } catch (mediaErr: any) {
+                        // Non-fatal — message itself is saved, just no media preview.
+                        // Common: "No session record" for messages from chats we haven't handshaked yet
+                        // (relevant for fetchMessageHistory backfill of old chats).
+                        const msg = String(mediaErr?.message || mediaErr)
+                        if (!/No session record|Bad MAC|ToDo/i.test(msg)) {
+                            console.warn(`[WA-SERVICE] MEDIA download failed for msg=${savedMsg.id}: ${msg}`)
+                        }
+                    }
+                }
+            }
 
             // Workflow routing
             if (isOutbound) {
