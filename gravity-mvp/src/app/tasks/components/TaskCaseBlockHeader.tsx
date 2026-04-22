@@ -25,6 +25,9 @@ export default function TaskCaseBlockHeader({ layout, viewId }: Props) {
     const [dragId, setDragId] = useState<string | null>(null)
     const [hoverId, setHoverId] = useState<string | null>(null)
 
+    // Identification's fullName already lives in the sticky ФИО zone.
+    // If the identification block has no other visible columns, we don't
+    // need to render a second "Идентификация" band in the flex area.
     const blocksWithCols = layout.blocks.map(b => ({
         ...b,
         excludedCols: b.visibleColumns.filter(c => c.id !== 'fullName'),
@@ -49,14 +52,13 @@ export default function TaskCaseBlockHeader({ layout, viewId }: Props) {
     return (
         <div className="sticky top-0 z-20 bg-white border-b border-[#E2E8F0]">
             <div className="flex items-stretch w-full min-h-[28px]">
+                {/* Sticky ФИО zone — colored to match identification, but
+                    no label here. Any extra identification columns (licenseNumber
+                    etc.) render their own block band in the flex area below. */}
                 <div className="flex items-center shrink-0 pr-3"
                      style={{ backgroundColor: '#F3F4F6' }}>
                     <div className="w-[3px] self-stretch shrink-0 bg-transparent" />
-                    <div className="flex items-center gap-1 pl-2 text-[11px] uppercase tracking-wide text-[#334155] font-semibold"
-                         style={{ width: '220px' }}>
-                        <GripVertical className="w-3 h-3 text-[#94A3B8]" />
-                        Идентификация
-                    </div>
+                    <div className="pl-2" style={{ width: '220px' }} />
                 </div>
 
                 <div className="flex items-stretch flex-1 min-w-0">

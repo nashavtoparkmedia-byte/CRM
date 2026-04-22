@@ -87,14 +87,13 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
         <div className="sticky top-0 z-20 bg-white border-b border-[#CBD5E1]">
             {/* Row 1 — coloured block headers */}
             <div className="flex items-stretch w-full min-h-[28px] border-b border-[#E2E8F0]">
-                {/* Sticky-zone spacer for ФИО column */}
+                {/* Spacer under the sticky ФИО column — identification color, no label.
+                    The identification block's other columns (licenseNumber, phone…)
+                    get their own labelled band below. */}
                 <div className="flex items-center shrink-0 pr-3 bg-[#F3F4F6]"
                      style={{ borderRight: '1px solid #E2E8F0' }}>
                     <div className="w-[3px] self-stretch shrink-0 bg-transparent" />
-                    <div className="flex items-center pl-2 text-[11px] uppercase tracking-wide text-[#475569] font-semibold"
-                         style={{ width: '220px' }}>
-                        Идентификация
-                    </div>
+                    <div className="pl-2" style={{ width: '220px' }} />
                 </div>
 
                 {/* One draggable cell per block, width = sum of block.visibleColumns.widthPx */}
