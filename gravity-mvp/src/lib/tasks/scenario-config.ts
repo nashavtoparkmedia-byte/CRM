@@ -215,6 +215,31 @@ export const SCENARIOS: Record<string, ScenarioConfig> = {
                     { value: 'other', label: 'Другое' },
                 ],
             },
+
+            // ─── Block E (Excel contract) — editable text fields ─────────────
+            // Kept as `string`/text: the Excel template uses free phrasing
+            // («Контроль — срок возврата известен», «ПРИОРИТЕТ 1. Срочно…»),
+            // so enum-validation would over-constrain it.
+            {
+                id: 'semanticStatus', label: 'Статус по смыслу',
+                type: 'string', source: 'manual',
+                showInList: false, showInCard: true, filterable: false, sortable: false, priorityWeight: 0,
+            },
+            {
+                id: 'messageTemplate', label: 'Что написать водителю',
+                type: 'string', source: 'manual',
+                showInList: false, showInCard: true, filterable: false, sortable: false, priorityWeight: 0,
+            },
+            {
+                id: 'returnPriority', label: 'Приоритет / статус возврата',
+                type: 'string', source: 'manual',
+                showInList: false, showInCard: true, filterable: false, sortable: false, priorityWeight: 0,
+            },
+            {
+                id: 'contactResult', label: 'Результат контакта',
+                type: 'string', source: 'manual',
+                showInList: false, showInCard: true, filterable: false, sortable: false, priorityWeight: 0,
+            },
         ],
         presets: {
             hotInactiveDaysThreshold: 7,

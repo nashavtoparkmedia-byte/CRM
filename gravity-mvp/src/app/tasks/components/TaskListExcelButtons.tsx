@@ -1,63 +1,60 @@
 'use client'
 
 // ═══════════════════════════════════════════════════════════════════
-// TaskListExcelButtons — Export (works) + Import (preview only).
+// TaskListExcelButtons — Excel export + import against the canonical
+// «Отток_шаблон» template.
 //
-// Export: builds a CSV of the currently filtered task list, using the
-// active churn layout's visible columns in on-screen order. Headers
-// use the stable exportKey (not the Russian label) — this is the
-// contract for the future import pipeline.
+//   Export  → exportChurnXlsx (server action) → template-based .xlsx
+//   Import  → previewChurnImport → diff dialog → applyChurnImport
 //
-// Import: opens a file picker, parses CSV in the browser, and shows
-// a preview dialog with row count + the first rows. Actual apply
-// (match + diff + write) is intentionally out of scope for this stage.
+// Neither side knows the column contract — it lives in lib/tasks/excel-contract.ts.
 // ═══════════════════════════════════════════════════════════════════
 
 import { useRef, useState } from 'react'
-import { Upload, Download } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Upload, Download, Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { pushToast } from '@/lib/tasks/toast-store'
 import { recordUsage } from '@/lib/tasks/usage'
-import { useFilteredTasks } from '@/store/tasks-selectors'
-import { useListViewStore } from '@/store/list-view-store'
-import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
-import { resolveLayout } from '@/lib/tasks/list-columns'
-import { exportTasksToCsv, downloadBlob } from '@/lib/tasks/csv-export'
-
-interface ParsedCsv {
-    filename: string
-    size: number
-    headers: string[]
-    rows: string[][]
-}
+import { useTasksStore } from '@/store/tasks-store'
+import {
+    exportChurnXlsx,
+    previewChurnImport,
+    applyChurnImport,
+    type ImportPreviewResult,
+} from '../excel-actions'
 
 export default function TaskListExcelButtons() {
-    const tasks = useFilteredTasks()
-    const activeMap = useListViewStore(s => s.activeViewIdByScenario)
-    const overridesByViewId = useListViewStore(s => s.overridesByViewId)
+    const qc = useQueryClient()
+    const filters = useTasksStore(s => s.filters)
+    const sort = useTasksStore(s => s.sort)
 
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const [importPreview, setImportPreview] = useState<ParsedCsv | null>(null)
+    const [busy, setBusy] = useState<'export' | 'import' | null>(null)
+    const [preview, setPreview] = useState<ImportPreviewResult | null>(null)
+    const [applying, setApplying] = useState(false)
 
-    const handleExport = () => {
+    const handleExport = async () => {
+        if (busy) return
+        setBusy('export')
         void recordUsage('excel_click', { kind: 'export' })
         try {
-            const activeId = activeMap['churn'] ?? getDefaultViewId('churn')
-            const view = getSystemView(activeId) ?? getSystemView(getDefaultViewId('churn'))
-            if (!view) {
-                pushToast('Нет активного представления', 'error')
-                return
-            }
-            const layout = resolveLayout(view, overridesByViewId[view.id])
-            const result = exportTasksToCsv(tasks, layout)
-            downloadBlob(result.blob, result.filename)
-            pushToast(`Экспортировано ${result.rowCount} задач · ${result.columnCount} колонок`, 'success')
+            const result = await exportChurnXlsx(filters, sort)
+            const bytes = Uint8Array.from(atob(result.base64), c => c.charCodeAt(0))
+            const blob = new Blob([bytes], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            })
+            downloadBlob(blob, result.filename)
+            pushToast(`Экспортировано ${result.rowCount} кейсов`, 'success')
         } catch (e) {
             pushToast('Ошибка экспорта: ' + (e as Error).message, 'error')
+        } finally {
+            setBusy(null)
         }
     }
 
     const handleImportClick = () => {
+        if (busy) return
         void recordUsage('excel_click', { kind: 'import' })
         fileInputRef.current?.click()
     }
@@ -66,17 +63,36 @@ export default function TaskListExcelButtons() {
         const file = e.target.files?.[0]
         e.target.value = '' // allow same-file re-selection
         if (!file) return
+        setBusy('import')
         try {
-            const text = await file.text()
-            const parsed = parseCsv(text)
-            setImportPreview({
-                filename: file.name,
-                size: file.size,
-                headers: parsed.headers,
-                rows: parsed.rows,
-            })
+            const buf = await file.arrayBuffer()
+            const base64 = arrayBufferToBase64(buf)
+            const result = await previewChurnImport(base64)
+            setPreview(result)
         } catch (err) {
             pushToast('Не удалось прочитать файл: ' + (err as Error).message, 'error')
+        } finally {
+            setBusy(null)
+        }
+    }
+
+    const handleApply = async () => {
+        if (!preview || applying) return
+        setApplying(true)
+        try {
+            const res = await applyChurnImport(preview.token)
+            await qc.invalidateQueries({ queryKey: ['tasks'] })
+            setPreview(null)
+            if (res.errors.length === 0) {
+                pushToast(`Обновлено ${res.applied} кейсов`, 'success')
+            } else {
+                pushToast(`Обновлено ${res.applied}, ошибок: ${res.errors.length}`, 'error')
+                console.error('[import] errors:', res.errors)
+            }
+        } catch (e) {
+            pushToast('Ошибка применения: ' + (e as Error).message, 'error')
+        } finally {
+            setApplying(false)
         }
     }
 
@@ -85,99 +101,140 @@ export default function TaskListExcelButtons() {
             <div className="flex items-center gap-1">
                 <button
                     onClick={handleExport}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#E4ECFC] text-[#64748B] text-[12px] font-medium hover:bg-[#F1F5FD] transition-colors"
-                    title="Экспортировать текущий список в CSV"
+                    disabled={!!busy}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#E4ECFC] text-[#64748B] text-[12px] font-medium hover:bg-[#F1F5FD] transition-colors disabled:opacity-50"
+                    title="Экспортировать в Excel по шаблону Отток"
                 >
-                    <Download className="w-3.5 h-3.5" />
+                    {busy === 'export' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                     Экспорт
                 </button>
                 <button
                     onClick={handleImportClick}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#E4ECFC] text-[#64748B] text-[12px] font-medium hover:bg-[#F1F5FD] transition-colors"
-                    title="Импортировать CSV-файл (предпросмотр)"
+                    disabled={!!busy}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#E4ECFC] text-[#64748B] text-[12px] font-medium hover:bg-[#F1F5FD] transition-colors disabled:opacity-50"
+                    title="Импортировать Excel-файл по шаблону Отток"
                 >
-                    <Upload className="w-3.5 h-3.5" />
+                    {busy === 'import' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
                     Импорт
                 </button>
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,text/csv"
+                    accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     onChange={handleFileChosen}
                     className="hidden"
                 />
             </div>
 
-            {importPreview && (
+            {preview && (
                 <ImportPreviewDialog
-                    preview={importPreview}
-                    onClose={() => setImportPreview(null)}
+                    preview={preview}
+                    applying={applying}
+                    onClose={() => setPreview(null)}
+                    onApply={handleApply}
                 />
             )}
         </>
     )
 }
 
-// ─── Import preview ──────────────────────────────────────────────────
+// ─── Preview dialog ─────────────────────────────────────────────────
 
 function ImportPreviewDialog({
-    preview,
-    onClose,
+    preview, applying, onClose, onApply,
 }: {
-    preview: ParsedCsv
+    preview: ImportPreviewResult
+    applying: boolean
     onClose: () => void
+    onApply: () => void
 }) {
+    const canApply = preview.rowsWithChanges > 0 && !applying
     return (
-        <Dialog open={true} onOpenChange={(o) => { if (!o) onClose() }}>
-            <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+        <Dialog open={true} onOpenChange={(o) => { if (!o && !applying) onClose() }}>
+            <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Импорт CSV — предпросмотр</DialogTitle>
+                    <DialogTitle>Импорт Отток — предпросмотр</DialogTitle>
                 </DialogHeader>
 
-                <div className="text-[13px] text-[#0F172A] mb-3 space-y-0.5">
-                    <div><span className="text-[#64748B]">Файл:</span> {preview.filename}</div>
-                    <div><span className="text-[#64748B]">Размер:</span> {(preview.size / 1024).toFixed(1)} KB</div>
-                    <div><span className="text-[#64748B]">Колонок:</span> {preview.headers.length}</div>
-                    <div><span className="text-[#64748B]">Строк:</span> {preview.rows.length}</div>
+                <div className="grid grid-cols-4 gap-2 mb-3 text-[12px]">
+                    <Stat label="Всего строк"     value={preview.totalRows} />
+                    <Stat label="Совпали"         value={preview.matchedRows} tone="ok" />
+                    <Stat label="С изменениями"   value={preview.rowsWithChanges} tone="info" />
+                    <Stat label="С ошибками"      value={preview.rowsWithErrors} tone={preview.rowsWithErrors > 0 ? 'warn' : 'ok'} />
                 </div>
 
-                <div className="overflow-auto border border-[#E4ECFC] rounded-lg flex-1">
-                    <table className="w-full text-[12px]">
-                        <thead className="bg-[#F8FAFC] sticky top-0">
-                            <tr>
-                                {preview.headers.map((h, i) => (
-                                    <th key={i} className="px-2 py-1.5 text-left font-semibold text-[#475569] border-b border-[#E4ECFC] whitespace-nowrap">
-                                        {h}
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {preview.rows.slice(0, 50).map((row, ri) => (
-                                <tr key={ri} className="border-b border-[#EEF2FF]">
-                                    {row.map((cell, ci) => (
-                                        <td key={ci} className="px-2 py-1 text-[#0F172A] whitespace-nowrap max-w-[200px] truncate" title={cell}>
-                                            {cell || '—'}
-                                        </td>
-                                    ))}
+                <div className="flex-1 overflow-auto border border-[#E4ECFC] rounded-lg">
+                    {preview.sampleDiffs.length === 0 ? (
+                        <div className="p-6 text-center text-[#64748B] text-[13px]">
+                            Изменений не обнаружено. Загруженный файл совпадает с текущим состоянием.
+                        </div>
+                    ) : (
+                        <table className="w-full text-[12px]">
+                            <thead className="bg-[#F8FAFC] sticky top-0 z-10">
+                                <tr className="text-left">
+                                    <th className="px-2 py-1.5 border-b">Строка</th>
+                                    <th className="px-2 py-1.5 border-b">ID кейса</th>
+                                    <th className="px-2 py-1.5 border-b">Изменения</th>
+                                    <th className="px-2 py-1.5 border-b">Ошибки</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {preview.sampleDiffs.map((d, i) => (
+                                    <tr key={i} className="border-b border-[#EEF2FF] align-top">
+                                        <td className="px-2 py-1.5 text-[#64748B]">{d.rowNumber}</td>
+                                        <td className="px-2 py-1.5 font-mono text-[11px] text-[#475569]" title={d.taskId}>
+                                            {d.taskId.slice(-6)}
+                                        </td>
+                                        <td className="px-2 py-1.5">
+                                            {d.changes.length === 0 ? (
+                                                <span className="text-[#94A3B8]">—</span>
+                                            ) : (
+                                                <ul className="space-y-0.5">
+                                                    {d.changes.slice(0, 6).map((c, j) => (
+                                                        <li key={j} className="text-[#0F172A]">
+                                                            <span className="text-[#64748B]">{c.field}:</span>{' '}
+                                                            <span className="line-through text-[#94A3B8]">{formatVal(c.from)}</span>
+                                                            {' → '}
+                                                            <span className="font-medium">{formatVal(c.to)}</span>
+                                                        </li>
+                                                    ))}
+                                                    {d.changes.length > 6 && (
+                                                        <li className="text-[11px] text-[#64748B]">…и ещё {d.changes.length - 6}</li>
+                                                    )}
+                                                </ul>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-1.5 text-[#B91C1C]">
+                                            {d.errors.join('; ') || '—'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
 
-                <div className="mt-3 text-[12px] text-[#64748B] bg-[#FEF3C7] border border-[#FCD34D] rounded-lg p-2.5">
-                    <strong className="text-[#92400E]">Применение изменений ещё не реализовано.</strong>
-                    {' '}Это предпросмотр содержимого файла. Чтобы данные попали в задачи, нужна следующая фаза:
-                    матчинг по ключу, preview-diff и conflict detection.
-                </div>
+                {preview.unmatchedRows > 0 && (
+                    <div className="mt-3 text-[12px] text-[#92400E] bg-[#FEF3C7] border border-[#FCD34D] rounded-lg p-2">
+                        Не сопоставлены {preview.unmatchedRows} строк — проверь «ID кейса» в колонке A.
+                    </div>
+                )}
 
                 <div className="flex justify-end gap-2 mt-3">
                     <button
                         onClick={onClose}
-                        className="px-4 py-1.5 rounded-lg border border-[#E4ECFC] text-[#334155] text-[13px] font-medium hover:bg-[#F8FAFC]"
+                        disabled={applying}
+                        className="px-4 py-1.5 rounded-lg border border-[#E4ECFC] text-[#334155] text-[13px] font-medium hover:bg-[#F8FAFC] disabled:opacity-50"
                     >
-                        Закрыть
+                        Отмена
+                    </button>
+                    <button
+                        onClick={onApply}
+                        disabled={!canApply}
+                        className="px-4 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] disabled:opacity-40 flex items-center gap-1.5"
+                    >
+                        {applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        Применить{preview.rowsWithChanges > 0 ? ` (${preview.rowsWithChanges})` : ''}
                     </button>
                 </div>
             </DialogContent>
@@ -185,45 +242,41 @@ function ImportPreviewDialog({
     )
 }
 
-// ─── Minimal CSV parser ──────────────────────────────────────────────
+function Stat({ label, value, tone }: { label: string; value: number; tone?: 'ok' | 'warn' | 'info' }) {
+    const color =
+        tone === 'ok'   ? 'text-[#166534]' :
+        tone === 'warn' ? 'text-[#B91C1C]' :
+        tone === 'info' ? 'text-[#1E40AF]' :
+                          'text-[#0F172A]'
+    return (
+        <div className="bg-[#F8FAFC] border border-[#E4ECFC] rounded-lg px-3 py-2">
+            <div className="text-[#64748B] text-[11px]">{label}</div>
+            <div className={`text-[18px] font-semibold ${color}`}>{value}</div>
+        </div>
+    )
+}
 
-function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-    // Strip BOM
-    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1)
+function formatVal(v: unknown): string {
+    if (v === null || v === undefined) return '—'
+    if (v instanceof Date) return v.toISOString().slice(0, 10)
+    if (typeof v === 'object') return JSON.stringify(v).slice(0, 60)
+    const s = String(v)
+    return s.length > 60 ? s.slice(0, 57) + '…' : s
+}
 
-    // Detect separator: semicolon wins if it appears in the first line
-    // before any comma; otherwise comma. Tabs supported as fallback.
-    const firstLine = text.split(/\r?\n/, 1)[0] ?? ''
-    const sep = firstLine.includes(';') ? ';' : firstLine.includes('\t') ? '\t' : ','
+// ─── Helpers ─────────────────────────────────────────────────────────
 
-    const rows: string[][] = []
-    let cur: string[] = []
-    let field = ''
-    let inQuotes = false
-    const flushField = () => { cur.push(field); field = '' }
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+    const bytes = new Uint8Array(buf)
+    let bin = ''
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
+    return btoa(bin)
+}
 
-    for (let i = 0; i < text.length; i++) {
-        const c = text[i]
-        if (inQuotes) {
-            if (c === '"') {
-                if (text[i + 1] === '"') { field += '"'; i++ }
-                else inQuotes = false
-            } else field += c
-        } else {
-            if (c === '"') inQuotes = true
-            else if (c === sep) flushField()
-            else if (c === '\r') { /* ignore, let \n handle */ }
-            else if (c === '\n') {
-                cur.push(field); field = ''
-                rows.push(cur); cur = []
-            } else field += c
-        }
-    }
-    if (field.length > 0 || cur.length > 0) {
-        cur.push(field)
-        rows.push(cur)
-    }
-
-    const headers = rows.shift() ?? []
-    return { headers, rows }
+function downloadBlob(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
