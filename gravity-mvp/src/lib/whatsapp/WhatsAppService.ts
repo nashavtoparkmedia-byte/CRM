@@ -1012,11 +1012,13 @@ export async function importWhatsAppHistory(
 
         const BATCH_PER_CHAT = 50
         const MAX_PAGES_PER_CHAT = 20 // hard stop: up to 1000 msgs per chat
-        const RATE_LIMIT_MS = 600 // pause between batches (WA anti-abuse)
-        const PARALLEL_CHATS = 5 // process N chats concurrently for ~5x throughput
+        const RATE_LIMIT_MS = 800 // pause between batches (WA anti-abuse)
+        const PARALLEL_CHATS = 3 // 5 caused "Not connected" in Baileys under load
         let totalFetched = 0
         let chatsProcessed = 0
         let errors = 0
+        let consecutiveErrors = 0
+        const MAX_CONSECUTIVE_ERRORS = 15
 
         // Helper: process single chat through its pagination loop
         const processChat = async (entry: typeof roster[number]) => {
@@ -1030,8 +1032,8 @@ export async function importWhatsAppHistory(
                     try {
                         await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, oldestKey, oldestTs)
                         totalFetched += BATCH_PER_CHAT
-                        // Small pause within a chat's pagination to avoid hammering
-                        await new Promise(r => setTimeout(r, 200))
+                        consecutiveErrors = 0
+                        await new Promise(r => setTimeout(r, 250))
 
                         const refreshed = await prisma.whatsAppChatRoster.findUnique({
                             where: { connectionId_jid: { connectionId, jid: entry.jid } },
@@ -1045,8 +1047,15 @@ export async function importWhatsAppHistory(
                         const activeCutoff = connectionSyncCutoffs.get(connectionId)
                         if (activeCutoff && refreshed.oldestMsgTs < activeCutoff) break
                     } catch (pageErr: any) {
+                        const msg = String(pageErr?.message || pageErr)
+                        consecutiveErrors++
+                        // "Not connected" / "TIMEOUT" are transient — skip this page but don't hard-fail
+                        if (/Not connected|TIMEOUT|Connection Closed/i.test(msg)) {
+                            // throttle when WA pushes back
+                            await new Promise(r => setTimeout(r, 1500))
+                        }
                         opsLog('warn', 'wa_backfill_page_error', {
-                            jobId, jid: entry.jid, page, err: pageErr?.message,
+                            jobId, jid: entry.jid, page, err: msg,
                         })
                         break
                     }
@@ -1061,6 +1070,14 @@ export async function importWhatsAppHistory(
 
         // Process roster in parallel batches (PARALLEL_CHATS at once)
         for (let i = 0; i < roster.length; i += PARALLEL_CHATS) {
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                opsLog('warn', 'wa_backfill_circuit_break', {
+                    jobId, connectionId,
+                    reason: `${consecutiveErrors} consecutive errors — aborting`,
+                    chatsProcessed,
+                })
+                break
+            }
             const batch = roster.slice(i, i + PARALLEL_CHATS)
             await Promise.all(batch.map(processChat))
             chatsProcessed += batch.length

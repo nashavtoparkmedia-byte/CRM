@@ -233,22 +233,38 @@ export async function deleteWhatsAppMessages(connectionId: string) {
         console.log(`[WA-DELETE] Cleaned up import jobs for connection ${connectionId}`)
     } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
 
-    // Orphan cleanup: whatsapp unified chats without any messages are phantoms
-    // (from old wa-web.js era without metadata.connectionId, or left over from
-    // aborted syncs). They clutter /messages — safe to remove since empty.
+    // Wipe all whatsapp chats + their messages that were missed by the
+    // metadata.connectionId filter above. Legacy chats from wa-web.js era
+    // have metadata={} — those were never touched. Now: if this is the
+    // ONLY active WA connection, all remaining whatsapp chats are orphans
+    // of this connection or dead history — safe to wipe wholesale.
     try {
-        const orphanChats = await (prisma.chat as any).findMany({
-            where: { channel: 'whatsapp' },
-            select: { id: true, _count: { select: { messages: true } } },
+        const activeWaCount = await prisma.whatsAppConnection.count({
+            where: { status: { in: ['ready', 'authenticated', 'qr', 'idle'] } },
         })
-        const orphanIds = orphanChats
-            .filter((c: any) => (c._count?.messages ?? 0) === 0)
-            .map((c: any) => c.id)
-        if (orphanIds.length > 0) {
-            const orphanDel = await (prisma.chat as any).deleteMany({ where: { id: { in: orphanIds } } })
-            console.log(`[WA-DELETE] Removed ${orphanDel.count} orphan whatsapp chats (no messages)`)
+        if (activeWaCount <= 1) {
+            const leftoverMsgs = await (prisma.message as any).deleteMany({
+                where: { channel: 'whatsapp' },
+            })
+            const leftoverChats = await (prisma.chat as any).deleteMany({
+                where: { channel: 'whatsapp' },
+            })
+            console.log(`[WA-DELETE] Wholesale wipe (single WA connection): removed ${leftoverMsgs.count} msgs, ${leftoverChats.count} chats`)
+        } else {
+            // Multiple WA connections — be conservative, only remove truly orphan (zero messages)
+            const orphanChats = await (prisma.chat as any).findMany({
+                where: { channel: 'whatsapp' },
+                select: { id: true, _count: { select: { messages: true } } },
+            })
+            const orphanIds = orphanChats
+                .filter((c: any) => (c._count?.messages ?? 0) === 0)
+                .map((c: any) => c.id)
+            if (orphanIds.length > 0) {
+                const orphanDel = await (prisma.chat as any).deleteMany({ where: { id: { in: orphanIds } } })
+                console.log(`[WA-DELETE] Removed ${orphanDel.count} orphan whatsapp chats (no messages)`)
+            }
         }
-    } catch (e: any) { console.error(`[WA-DELETE] Orphan chat cleanup error: ${e.message}`) }
+    } catch (e: any) { console.error(`[WA-DELETE] Wholesale cleanup error: ${e.message}`) }
 
     revalidatePath('/messages')
 }
