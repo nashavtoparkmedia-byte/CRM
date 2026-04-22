@@ -16,6 +16,7 @@
 
 import ExcelJS from 'exceljs'
 import * as XLSX from 'xlsx'
+import JSZip from 'jszip'
 import { prisma } from '@/lib/prisma'
 import {
     CHURN_COLUMNS,
@@ -35,6 +36,37 @@ import type { TaskFilters, TaskSort, TaskDTO } from '@/lib/tasks/types'
 // types and keep the rest of the code using regular Prisma queries.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const task$ = prisma.task as unknown as any
+
+// Replace XML numeric entities for non-BMP code points (e.g. &#128081;
+// for 👑) with the actual UTF-8 character. Workaround for a SheetJS CE
+// bug that uses String.fromCharCode on the raw integer → low 16 bits →
+// PUA garbage.
+async function sanitizeXlsxBuffer(buf: Buffer): Promise<Buffer> {
+    try {
+        const zip = await JSZip.loadAsync(buf)
+        const names = Object.keys(zip.files)
+        for (const name of names) {
+            if (!/\.(xml|rels)$/i.test(name)) continue
+            const entry = zip.file(name)
+            if (!entry) continue
+            let xml = await entry.async('string')
+            const decimal = xml.replace(/&#(\d+);/g, (m, n: string) => {
+                const cp = parseInt(n, 10)
+                return cp > 0xFFFF ? String.fromCodePoint(cp) : m
+            })
+            const hex = decimal.replace(/&#x([0-9a-fA-F]+);/g, (m, h: string) => {
+                const cp = parseInt(h, 16)
+                return cp > 0xFFFF ? String.fromCodePoint(cp) : m
+            })
+            if (hex !== xml) zip.file(name, hex)
+        }
+        return await zip.generateAsync({ type: 'nodebuffer' })
+    } catch {
+        // On any zip-level failure fall through — XLSX.read will raise a
+        // cleaner error than we could.
+        return buf
+    }
+}
 
 async function readScenarioDataMap(ids: string[]): Promise<Map<string, Record<string, { value: unknown }>>> {
     if (ids.length === 0) return new Map()
@@ -275,7 +307,12 @@ interface PreparedRow {
 export async function previewChurnImport(base64: string): Promise<ImportPreviewResult> {
     // Reader: SheetJS — it tolerates arbitrary producer files (including
     // the reference template, which exceljs.load chokes on).
-    const buf = Buffer.from(base64, 'base64')
+    //
+    // SheetJS has a bug where numeric XML entities for non-BMP code points
+    // (e.g. 👑 = &#128081;) get decoded via String.fromCharCode → low 16
+    // bits only → ends up as U+F451 (PUA). We pre-sanitize the xlsx so
+    // those entities become real UTF-8 characters before parsing.
+    const buf = await sanitizeXlsxBuffer(Buffer.from(base64, 'base64'))
     const wb = XLSX.read(buf, { type: 'buffer', cellDates: true })
     const ws = wb.Sheets[TEMPLATE_SHEET_NAME]
     if (!ws) throw new Error(`Лист «${TEMPLATE_SHEET_NAME}» не найден в файле`)
@@ -651,12 +688,23 @@ async function resolveDriverForImport(row: TokenRow): Promise<string | null> {
     const license = (row.licenseNumber ?? '').trim()
     const name = (row.driverName ?? '').trim()
 
+    // Match by license — authoritative when present. If a longer
+    // (or different) name comes from Excel, propagate it back so the
+    // export round-trip is lossless on column B.
     if (license) {
         const hit = await prisma.driver.findFirst({
             where: { licenseNumber: license },
-            select: { id: true },
+            select: { id: true, fullName: true },
         })
-        if (hit) return hit.id
+        if (hit) {
+            if (name && name !== hit.fullName) {
+                await prisma.driver.update({
+                    where: { id: hit.id },
+                    data: { fullName: name },
+                })
+            }
+            return hit.id
+        }
     }
     if (name) {
         const hit = await prisma.driver.findFirst({
@@ -667,8 +715,7 @@ async function resolveDriverForImport(row: TokenRow): Promise<string | null> {
     }
 
     // Not found — create a synthetic driver so the test of the Excel
-    // contract can proceed without hand-seeding driver tables. In a
-    // real import flow this branch should probably error instead.
+    // contract can proceed without hand-seeding driver tables.
     const syntheticYandexId = `excel-import:${license || name || 'unknown'}:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
     const created = await prisma.driver.create({
         data: {

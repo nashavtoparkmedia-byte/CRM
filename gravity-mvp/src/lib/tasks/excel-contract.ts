@@ -127,7 +127,39 @@ function sd(task: TaskDTO, key: string): unknown {
 }
 
 function dateOrEmpty(iso: string | null | undefined): Date | null {
-    return isRealDate(iso) ? new Date(iso!) : null
+    // For the Excel side we use date-only cells. The value stored in Postgres
+    // is UTC-midnight of that calendar day (set by parseDateOnlyUTC on the
+    // import side). Convert back to a *local*-midnight Date with the same
+    // Y/M/D so Excel shows the same calendar date regardless of viewer's
+    // timezone. Without this, a UTC-midnight Date viewed in MSK (UTC+5)
+    // shifts -1 day.
+    if (!isRealDate(iso)) return null
+    const d = new Date(iso!)
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+}
+
+/**
+ * Parse a "YYYY-MM-DD" (optionally with trailing " HH:MM:SS") or a JS Date
+ * into a UTC-midnight Date for that calendar day. No TZ guessing.
+ */
+function parseDateOnlyUTC(raw: unknown): Date | null {
+    if (raw === null || raw === undefined || raw === '') return null
+    let y: number, mo: number, d: number
+    if (raw instanceof Date) {
+        // SheetJS produces Date at local midnight of that Y/M/D — take
+        // its local components, not the UTC ones (which would shift).
+        if (Number.isNaN(raw.getTime())) return null
+        y = raw.getFullYear(); mo = raw.getMonth(); d = raw.getDate()
+    } else {
+        const s = String(raw).trim()
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
+        if (!m) return null
+        y = +m[1]; mo = +m[2] - 1; d = +m[3]
+    }
+    const utc = Date.UTC(y, mo, d)
+    if (!Number.isFinite(utc)) return null
+    const out = new Date(utc)
+    return out.getTime() >= new Date('2010-01-01T00:00:00Z').getTime() ? out : null
 }
 
 // ─── THE CONTRACT ────────────────────────────────────────────────────
@@ -247,16 +279,9 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
             return dateOrEmpty(t.lastContactAt)
         },
         fromExcel: raw => {
-            if (raw === null || raw === undefined || raw === '') return null
-            let iso: string | null = null
-            if (raw instanceof Date) {
-                if (isRealDate(raw.toISOString())) iso = raw.toISOString()
-            } else {
-                const d = new Date(String(raw))
-                if (!Number.isNaN(d.getTime()) && isRealDate(d.toISOString())) iso = d.toISOString()
-            }
-            if (!iso) return null
-            return { scenarioData: { lastContactDate: iso } }
+            const d = parseDateOnlyUTC(raw)
+            if (!d) return null
+            return { scenarioData: { lastContactDate: d.toISOString() } }
         },
     },
     {
@@ -279,18 +304,9 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         letter: 'O', header: 'Дедлайн следующего действия', block: 'manager_work', edit: 'YES',
         toExcel: t => dateOrEmpty(t.nextActionAt),
         fromExcel: raw => {
-            if (raw === null || raw === undefined || raw === '') return null
-            let iso: string | null = null
-            if (raw instanceof Date) {
-                if (raw.getTime() >= EPOCH_GUARD) iso = raw.toISOString()
-            } else {
-                const s = String(raw).trim()
-                if (s) {
-                    const d = new Date(s)
-                    if (!Number.isNaN(d.getTime()) && d.getTime() >= EPOCH_GUARD) iso = d.toISOString()
-                }
-            }
-            if (!iso) return null
+            const d = parseDateOnlyUTC(raw)
+            if (!d) return null
+            const iso = d.toISOString()
             return { task: { nextActionAt: iso, dueAt: iso } }
         },
     },
@@ -365,16 +381,9 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         letter: 'V', header: 'Дата закрытия', block: 'closing', edit: 'YES',
         toExcel: t => dateOrEmpty(t.resolvedAt),
         fromExcel: raw => {
-            if (raw === null || raw === undefined || raw === '') return null
-            let iso: string | null = null
-            if (raw instanceof Date) {
-                if (raw.getTime() >= EPOCH_GUARD) iso = raw.toISOString()
-            } else {
-                const d = new Date(String(raw))
-                if (!Number.isNaN(d.getTime()) && d.getTime() >= EPOCH_GUARD) iso = d.toISOString()
-            }
-            if (!iso) return null
-            return { task: { resolvedAt: iso } }
+            const d = parseDateOnlyUTC(raw)
+            if (!d) return null
+            return { task: { resolvedAt: d.toISOString() } }
         },
     },
     {
