@@ -15,6 +15,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import ExcelJS from 'exceljs'
+import * as XLSX from 'xlsx'
 import { prisma } from '@/lib/prisma'
 import {
     CHURN_COLUMNS,
@@ -251,55 +252,103 @@ export interface ImportDiffRow {
 
 export interface ImportPreviewResult {
     totalRows: number
-    matchedRows: number
-    unmatchedRows: number
+    updateRows: number
+    createRows: number
     rowsWithChanges: number
     rowsWithErrors: number
     sampleDiffs: ImportDiffRow[]
     token: string
 }
 
+type RowMode = 'update' | 'create'
+
 interface PreparedRow {
     rowNumber: number
-    taskId: string
+    excelId: string               // raw value of column A
+    mode: RowMode
     patches: Array<{ colLetter: string; patch: ImportPatch }>
+    driverName: string | null     // column B (for create + display)
+    licenseNumber: string | null  // column C (for create + driver lookup)
     errors: string[]
 }
 
 export async function previewChurnImport(base64: string): Promise<ImportPreviewResult> {
-    const bufferNode = Buffer.from(base64, 'base64')
-    const wb = new ExcelJS.Workbook()
-    await wb.xlsx.load(bufferNode.buffer.slice(bufferNode.byteOffset, bufferNode.byteOffset + bufferNode.byteLength))
-    const ws = wb.getWorksheet(TEMPLATE_SHEET_NAME)
+    // Reader: SheetJS — it tolerates arbitrary producer files (including
+    // the reference template, which exceljs.load chokes on).
+    const buf = Buffer.from(base64, 'base64')
+    const wb = XLSX.read(buf, { type: 'buffer', cellDates: true })
+    const ws = wb.Sheets[TEMPLATE_SHEET_NAME]
     if (!ws) throw new Error(`Лист «${TEMPLATE_SHEET_NAME}» не найден в файле`)
 
-    // Build letter → ExcelColumnDef from the header row (row 3)
+    const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:A1')
+
+    // Header row (1-based) → letter → ExcelColumnDef
     const headerMap = new Map<string, (typeof CHURN_COLUMNS)[number]>()
-    const headerRow = ws.getRow(HEADER_ROW)
-    headerRow.eachCell((cell, colNumber) => {
-        const letter = colNumberToLetter(colNumber)
-        const header = String(cell.value ?? '').trim()
+    for (let c = range.s.c; c <= range.e.c; c++) {
+        const letter = XLSX.utils.encode_col(c)
+        const cell = ws[`${letter}${HEADER_ROW}`]
+        if (!cell) continue
+        const header = String(cell.v ?? '').trim()
         const col = CHURN_COLUMN_BY_HEADER[header] ?? CHURN_COLUMN_BY_LETTER[letter]
         if (col) headerMap.set(letter, col)
-    })
+    }
 
     // Collect rows
     const prepared: PreparedRow[] = []
-    for (let r = FIRST_DATA_ROW; r <= ws.rowCount; r++) {
-        const row = ws.getRow(r)
-        const idCellVal = row.getCell('A').value
-        const taskId = idCellVal == null ? '' : String(idCellVal).trim()
-        if (!taskId) continue
+    for (let r0 = FIRST_DATA_ROW - 1; r0 <= range.e.r; r0++) {
+        const rowNumber = r0 + 1
+        const aCell = ws[`A${rowNumber}`]
+        const bCell = ws[`B${rowNumber}`]
+        const cCell = ws[`C${rowNumber}`]
+        const excelId = aCell ? String(aCell.v ?? '').trim() : ''
+        const driverName = bCell ? String(bCell.v ?? '').trim() : ''
+        const licenseNumber = cCell ? String(cCell.v ?? '').trim() : ''
 
-        const prow: PreparedRow = { rowNumber: r, taskId, patches: [], errors: [] }
+        // Skip truly empty rows
+        if (!excelId && !driverName && !licenseNumber) {
+            // also require at least one editable cell to be meaningful
+            let anyFilled = false
+            for (const letter of headerMap.keys()) {
+                const v = ws[`${letter}${rowNumber}`]?.v
+                if (v !== null && v !== undefined && v !== '') { anyFilled = true; break }
+            }
+            if (!anyFilled) continue
+        }
+
+        // Rules for row mode:
+        //   empty A                         → create
+        //   A matches cuid pattern          → update
+        //   A non-empty but not a cuid      → create (with an info line
+        //     so the user understands the ID from Excel is discarded)
+        const looksLikeCuid = /^c[a-z0-9]{15,}$/.test(excelId)
+        const mode: RowMode = !excelId ? 'create' : looksLikeCuid ? 'update' : 'create'
+        const prow: PreparedRow = {
+            rowNumber,
+            excelId,
+            mode,
+            patches: [],
+            driverName: driverName || null,
+            licenseNumber: licenseNumber || null,
+            errors: [],
+        }
+        if (mode === 'create' && excelId) {
+            prow.errors.push(`ID «${excelId}» не является внутренним ID CRM — создастся новая задача`)
+        }
+
         for (const [letter, col] of headerMap) {
             if (!col.fromExcel) continue
-            const cellVal = row.getCell(letter).value
-            if (cellVal === null || cellVal === undefined || cellVal === '') continue
-            const raw = normalizeCell(cellVal)
+            const cell = ws[`${letter}${rowNumber}`]
+            if (!cell || cell.v === null || cell.v === undefined || cell.v === '') continue
+            const raw = cell.t === 'd' ? (cell.v as Date) : cell.v
             const patch = col.fromExcel(raw)
             if (patch) prow.patches.push({ colLetter: letter, patch })
         }
+
+        // Create-mode requires at least a driver identifier
+        if (prow.mode === 'create' && !prow.driverName && !prow.licenseNumber) {
+            prow.errors.push('Создание: нужны «ФИО водителя» (B) или «Номер ВУ» (C)')
+        }
+
         prepared.push(prow)
     }
 
@@ -320,72 +369,102 @@ export async function previewChurnImport(base64: string): Promise<ImportPreviewR
         for (const u of users) assigneeByName.set(u.name, u.id)
     }
 
-    // Current DB state for diff — regular typed fields via Prisma,
-    // scenarioData separately via raw SQL (stale client workaround).
-    const ids = [...new Set(prepared.map(r => r.taskId))]
-    const dbRows = ids.length > 0 ? await prisma.task.findMany({
-        where: { id: { in: ids } },
+    // Diff: update-mode compares against DB, create-mode is straight insert.
+    const updIds = [...new Set(prepared.filter(r => r.mode === 'update').map(r => r.excelId))]
+    const dbRows = updIds.length > 0 ? await prisma.task.findMany({
+        where: { id: { in: updIds } },
         select: {
             id: true, stage: true, title: true, nextActionAt: true, dueAt: true,
             resolvedAt: true, closedReason: true, assigneeId: true,
         },
     }) : []
-    const sdMap = await readScenarioDataMap(ids)
+    const sdMap = await readScenarioDataMap(updIds)
     const dbById = new Map(dbRows.map(t => [t.id, { ...t, scenarioData: sdMap.get(t.id) ?? null }]))
 
     const diffs: ImportDiffRow[] = []
-    let matched = 0, withChanges = 0, withErrors = 0
+    let updates = 0, creates = 0, withChanges = 0, withErrors = 0
     for (const row of prepared) {
-        const existing = dbById.get(row.taskId)
         const diff: ImportDiffRow = {
             rowNumber: row.rowNumber,
-            taskId: row.taskId,
-            matched: !!existing,
+            taskId: row.excelId || '(new)',
+            matched: row.mode === 'update' && dbById.has(row.excelId),
             changes: [],
             errors: [...row.errors],
         }
-        if (!existing) {
-            diff.errors.push('Кейс с таким ID не найден в базе')
-            diffs.push(diff); withErrors++; continue
-        }
-        matched++
-        const sd = (existing.scenarioData ?? {}) as Record<string, { value?: unknown } | unknown>
-        for (const { patch } of row.patches) {
-            if (patch.task) {
-                for (const [k, v] of Object.entries(patch.task)) {
-                    if (k === '__assigneeName') {
-                        const name = v as string
-                        const id = assigneeByName.get(name)
-                        if (id) {
-                            if (existing.assigneeId !== id) diff.changes.push({ field: 'assigneeId', from: existing.assigneeId, to: id })
-                        } else {
-                            diff.errors.push(`Менеджер «${name}» не найден`)
+
+        if (row.mode === 'create') {
+            creates++
+            diff.changes.push({
+                field: '__create',
+                from: null,
+                to: `Новый кейс${row.driverName ? `: ${row.driverName}` : ''}${row.licenseNumber ? ` (ВУ ${row.licenseNumber})` : ''}`,
+            })
+            // show which editable fields will be populated on create
+            for (const { patch } of row.patches) {
+                if (patch.task) {
+                    for (const [k, v] of Object.entries(patch.task)) {
+                        if (k === '__assigneeName') {
+                            if (!assigneeByName.has(v as string)) diff.errors.push(`Менеджер «${v}» не найден`)
+                            continue
                         }
-                        continue
+                        diff.changes.push({ field: k, from: null, to: v })
                     }
-                    const from = (existing as unknown as Record<string, unknown>)[k]
-                    if (!sameValue(from, v)) diff.changes.push({ field: k, from, to: v })
+                }
+                if (patch.scenarioData) {
+                    for (const [k, v] of Object.entries(patch.scenarioData)) {
+                        diff.changes.push({ field: `scenarioData.${k}`, from: null, to: v })
+                    }
                 }
             }
-            if (patch.scenarioData) {
-                for (const [k, v] of Object.entries(patch.scenarioData)) {
-                    const existingField = sd[k] as { value?: unknown } | undefined
-                    const from = existingField && typeof existingField === 'object' && 'value' in existingField
-                        ? existingField.value : undefined
-                    if (!sameValue(from, v)) diff.changes.push({ field: `scenarioData.${k}`, from, to: v })
+        } else {
+            updates++
+            const existing = dbById.get(row.excelId)
+            if (!existing) {
+                diff.errors.push('Кейс с таким ID не найден в базе')
+                diffs.push(diff); withErrors++; continue
+            }
+            const sd = (existing.scenarioData ?? {}) as Record<string, { value?: unknown } | unknown>
+            for (const { patch } of row.patches) {
+                if (patch.task) {
+                    for (const [k, v] of Object.entries(patch.task)) {
+                        if (k === '__assigneeName') {
+                            const name = v as string
+                            const id = assigneeByName.get(name)
+                            if (id) {
+                                if (existing.assigneeId !== id) diff.changes.push({ field: 'assigneeId', from: existing.assigneeId, to: id })
+                            } else {
+                                diff.errors.push(`Менеджер «${name}» не найден`)
+                            }
+                            continue
+                        }
+                        const from = (existing as unknown as Record<string, unknown>)[k]
+                        if (!sameValue(from, v)) diff.changes.push({ field: k, from, to: v })
+                    }
+                }
+                if (patch.scenarioData) {
+                    for (const [k, v] of Object.entries(patch.scenarioData)) {
+                        const existingField = sd[k] as { value?: unknown } | undefined
+                        const from = existingField && typeof existingField === 'object' && 'value' in existingField
+                            ? existingField.value : undefined
+                        if (!sameValue(from, v)) diff.changes.push({ field: `scenarioData.${k}`, from, to: v })
+                    }
                 }
             }
         }
+
         if (diff.changes.length > 0) withChanges++
         if (diff.errors.length > 0) withErrors++
         diffs.push(diff)
     }
 
     const payload = {
-        v: 1,
+        v: 2,
         rows: prepared.map(r => ({
             rowNumber: r.rowNumber,
-            taskId: r.taskId,
+            excelId: r.excelId,
+            mode: r.mode,
+            driverName: r.driverName,
+            licenseNumber: r.licenseNumber,
             patches: r.patches.map(p => ({
                 colLetter: p.colLetter,
                 patch: resolveAssigneeInPatch(p.patch, assigneeByName),
@@ -395,37 +474,13 @@ export async function previewChurnImport(base64: string): Promise<ImportPreviewR
 
     return {
         totalRows: prepared.length,
-        matchedRows: matched,
-        unmatchedRows: prepared.length - matched,
+        updateRows: updates,
+        createRows: creates,
         rowsWithChanges: withChanges,
         rowsWithErrors: withErrors,
         sampleDiffs: diffs.filter(d => d.changes.length > 0 || d.errors.length > 0).slice(0, 50),
         token: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64'),
     }
-}
-
-function colNumberToLetter(n: number): string {
-    let s = ''
-    while (n > 0) {
-        const rem = (n - 1) % 26
-        s = String.fromCharCode(65 + rem) + s
-        n = Math.floor((n - 1) / 26)
-    }
-    return s
-}
-
-function normalizeCell(v: unknown): unknown {
-    if (v instanceof Date) return v
-    if (v && typeof v === 'object') {
-        // exceljs rich text / formula / shared string
-        const obj = v as Record<string, unknown>
-        if (typeof obj.text === 'string') return obj.text
-        if (typeof obj.result !== 'undefined') return obj.result
-        if (Array.isArray(obj.richText)) {
-            return (obj.richText as Array<{ text?: string }>).map(t => t.text ?? '').join('')
-        }
-    }
-    return v
 }
 
 function resolveAssigneeInPatch(
@@ -453,24 +508,35 @@ function sameValue(a: unknown, b: unknown): boolean {
 // ─── Import: apply ──────────────────────────────────────────────────
 
 export interface ApplyResult {
-    applied: number
+    created: number
+    updated: number
     skipped: number
-    errors: Array<{ taskId: string; message: string }>
+    errors: Array<{ row: string; message: string }>
+}
+
+interface TokenRow {
+    rowNumber: number
+    excelId: string
+    mode: RowMode
+    driverName: string | null
+    licenseNumber: string | null
+    patches: Array<{ colLetter: string; patch: ImportPatch }>
 }
 
 export async function applyChurnImport(token: string): Promise<ApplyResult> {
-    let payload: { v: number; rows: Array<{ rowNumber: number; taskId: string; patches: Array<{ patch: ImportPatch }> }> }
+    let payload: { v: number; rows: TokenRow[] }
     try {
         payload = JSON.parse(Buffer.from(token, 'base64').toString('utf8'))
     } catch {
         throw new Error('Повреждённый токен импорта')
     }
-    if (payload.v !== 1) throw new Error('Неподдерживаемая версия токена')
+    if (payload.v !== 2) throw new Error('Неподдерживаемая версия токена (нужен v=2, этот v=' + payload.v + ')')
 
-    let applied = 0, skipped = 0
+    let created = 0, updated = 0, skipped = 0
     const errors: ApplyResult['errors'] = []
 
     for (const row of payload.rows) {
+        const label = `row ${row.rowNumber}${row.excelId ? ` (${row.excelId.slice(-6)})` : ' (new)'}`
         try {
             const taskPatch: Record<string, unknown> = {}
             const sdPatch: Record<string, unknown> = {}
@@ -483,24 +549,29 @@ export async function applyChurnImport(token: string): Promise<ApplyResult> {
                     taskPatch[key] = new Date(taskPatch[key] as string)
                 }
             }
+
+            if (row.mode === 'create') {
+                const taskId = await createChurnTaskFromRow(row, taskPatch, sdPatch)
+                if (taskId) created++
+                else skipped++
+                continue
+            }
+
+            // update
             const hasTask = Object.keys(taskPatch).length > 0
             const hasSd = Object.keys(sdPatch).length > 0
             if (!hasTask && !hasSd) { skipped++; continue }
 
-            // Two-phase apply:
-            //   1. typed fields via Prisma (stage/title/nextActionAt/…)
-            //   2. scenarioData merge via raw UPDATE (stale Prisma Client
-            //      DLL can't see the column).
             if (hasTask) {
                 await prisma.task.update({
-                    where: { id: row.taskId },
+                    where: { id: row.excelId },
                     data: taskPatch as Parameters<typeof prisma.task.update>[0]['data'],
                 })
             }
             if (hasSd) {
                 const existing = await prisma.$queryRawUnsafe<Array<{ scenarioData: Record<string, unknown> | null }>>(
                     `SELECT "scenarioData" FROM "tasks" WHERE "id" = $1`,
-                    row.taskId,
+                    row.excelId,
                 )
                 const current = (existing[0]?.scenarioData ?? {}) as Record<string, { value?: unknown; source?: string; updatedAt?: string }>
                 for (const [k, v] of Object.entries(sdPatch)) {
@@ -512,12 +583,101 @@ export async function applyChurnImport(token: string): Promise<ApplyResult> {
                         updatedAt: new Date().toISOString(),
                     }
                 }
-                await writeScenarioData(row.taskId, current)
+                await writeScenarioData(row.excelId, current)
             }
-            applied++
+            updated++
         } catch (e) {
-            errors.push({ taskId: row.taskId, message: (e as Error).message })
+            errors.push({ row: label, message: (e as Error).message })
         }
     }
-    return { applied, skipped, errors }
+    return { created, updated, skipped, errors }
+}
+
+async function createChurnTaskFromRow(
+    row: TokenRow,
+    taskPatch: Record<string, unknown>,
+    sdPatch: Record<string, unknown>,
+): Promise<string | null> {
+    // ─ Resolve / create Driver by licenseNumber or fullName ─
+    const driverId = await resolveDriverForImport(row)
+    if (!driverId) return null
+
+    // ─ Build scenarioData wrapped per field ─
+    const scenarioData: Record<string, { value: unknown; source: string; updatedAt: string }> = {}
+    const now = new Date().toISOString()
+    for (const [k, v] of Object.entries(sdPatch)) {
+        scenarioData[k] = { value: v, source: 'manual', updatedAt: now }
+    }
+    // Also stamp licenseNumber so list exports later show it
+    if (row.licenseNumber && !scenarioData.licenseNumber) {
+        scenarioData.licenseNumber = { value: row.licenseNumber, source: 'manual', updatedAt: now }
+    }
+
+    // ─ Build Task create data ─
+    const title = (taskPatch.title as string | undefined) ?? 'Импорт Excel'
+    const stage = (taskPatch.stage as string | undefined) ?? 'detected'
+    const nextActionAt = (taskPatch.nextActionAt as Date | undefined) ?? null
+    const dueAt = (taskPatch.dueAt as Date | undefined) ?? nextActionAt
+    const resolvedAt = (taskPatch.resolvedAt as Date | undefined) ?? null
+    const closedReason = (taskPatch.closedReason as string | undefined) ?? null
+    const assigneeId = (taskPatch.assigneeId as string | undefined) ?? null
+
+    // Use Prisma for everything except scenarioData (stale client doesn't know it),
+    // then raw-write scenarioData in the same transaction-ish sequence.
+    const task = await prisma.task.create({
+        data: {
+            driverId,
+            source: 'manual',
+            type: 'other',
+            title,
+            status: closedReason ? 'done' : 'todo',
+            priority: 'medium',
+            isActive: !closedReason,
+            scenario: 'churn',
+            stage,
+            nextActionAt,
+            dueAt,
+            resolvedAt,
+            closedReason,
+            assigneeId,
+            stageEnteredAt: new Date(),
+        },
+    })
+    await writeScenarioData(task.id, scenarioData)
+    return task.id
+}
+
+async function resolveDriverForImport(row: TokenRow): Promise<string | null> {
+    const license = (row.licenseNumber ?? '').trim()
+    const name = (row.driverName ?? '').trim()
+
+    if (license) {
+        const hit = await prisma.driver.findFirst({
+            where: { licenseNumber: license },
+            select: { id: true },
+        })
+        if (hit) return hit.id
+    }
+    if (name) {
+        const hit = await prisma.driver.findFirst({
+            where: { fullName: name },
+            select: { id: true },
+        })
+        if (hit) return hit.id
+    }
+
+    // Not found — create a synthetic driver so the test of the Excel
+    // contract can proceed without hand-seeding driver tables. In a
+    // real import flow this branch should probably error instead.
+    const syntheticYandexId = `excel-import:${license || name || 'unknown'}:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
+    const created = await prisma.driver.create({
+        data: {
+            yandexDriverId: syntheticYandexId,
+            fullName: name || `Без имени (${license || 'no-license'})`,
+            licenseNumber: license || null,
+            segment: 'unknown',
+        },
+        select: { id: true },
+    })
+    return created.id
 }

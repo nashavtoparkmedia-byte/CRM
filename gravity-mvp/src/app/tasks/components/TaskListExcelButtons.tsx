@@ -84,9 +84,13 @@ export default function TaskListExcelButtons() {
             await qc.invalidateQueries({ queryKey: ['tasks'] })
             setPreview(null)
             if (res.errors.length === 0) {
-                pushToast(`Обновлено ${res.applied} кейсов`, 'success')
+                const parts = []
+                if (res.created) parts.push(`создано ${res.created}`)
+                if (res.updated) parts.push(`обновлено ${res.updated}`)
+                if (res.skipped) parts.push(`пропущено ${res.skipped}`)
+                pushToast(`Импорт: ${parts.join(', ') || 'изменений нет'}`, 'success')
             } else {
-                pushToast(`Обновлено ${res.applied}, ошибок: ${res.errors.length}`, 'error')
+                pushToast(`Импорт частично: создано ${res.created}, обновлено ${res.updated}, ошибок ${res.errors.length}`, 'error')
                 console.error('[import] errors:', res.errors)
             }
         } catch (e) {
@@ -157,10 +161,10 @@ function ImportPreviewDialog({
                 </DialogHeader>
 
                 <div className="grid grid-cols-4 gap-2 mb-3 text-[12px]">
-                    <Stat label="Всего строк"     value={preview.totalRows} />
-                    <Stat label="Совпали"         value={preview.matchedRows} tone="ok" />
-                    <Stat label="С изменениями"   value={preview.rowsWithChanges} tone="info" />
-                    <Stat label="С ошибками"      value={preview.rowsWithErrors} tone={preview.rowsWithErrors > 0 ? 'warn' : 'ok'} />
+                    <Stat label="Всего строк" value={preview.totalRows} />
+                    <Stat label="Создастся"    value={preview.createRows} tone={preview.createRows > 0 ? 'info' : 'ok'} />
+                    <Stat label="Обновится"    value={preview.updateRows} tone={preview.updateRows > 0 ? 'info' : 'ok'} />
+                    <Stat label="С ошибками"   value={preview.rowsWithErrors} tone={preview.rowsWithErrors > 0 ? 'warn' : 'ok'} />
                 </div>
 
                 <div className="flex-1 overflow-auto border border-[#E4ECFC] rounded-lg">
@@ -214,11 +218,6 @@ function ImportPreviewDialog({
                     )}
                 </div>
 
-                {preview.unmatchedRows > 0 && (
-                    <div className="mt-3 text-[12px] text-[#92400E] bg-[#FEF3C7] border border-[#FCD34D] rounded-lg p-2">
-                        Не сопоставлены {preview.unmatchedRows} строк — проверь «ID кейса» в колонке A.
-                    </div>
-                )}
 
                 <div className="flex justify-end gap-2 mt-3">
                     <button
