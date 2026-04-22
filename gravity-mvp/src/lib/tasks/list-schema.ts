@@ -47,6 +47,8 @@ export interface BlockDef {
     id: string
     label: string
     order: number
+    /** Background color for the block header — matches the Excel template. */
+    color?: string
 }
 
 // ─── View definition ─────────────────────────────────────────────────

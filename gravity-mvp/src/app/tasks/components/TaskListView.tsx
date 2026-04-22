@@ -7,6 +7,7 @@ import { useListViewStore } from '@/store/list-view-store'
 import TaskListRow from './TaskListRow'
 import TaskCaseRow from './TaskCaseRow'
 import TaskCaseListHeader from './TaskCaseListHeader'
+import TaskCaseBlockHeader from './TaskCaseBlockHeader'
 import TaskControlChips from './TaskControlChips'
 import { resolveLayout } from '@/lib/tasks/list-columns'
 import { getDefaultViewId, getSystemView } from '@/lib/tasks/list-views'
@@ -100,7 +101,7 @@ export default function TaskListView() {
                 {mode === 'control' && <TaskControlChips />}
 
                 <div className="flex flex-col overflow-x-auto border-t border-[#EEF2FF]">
-                    {isTable && (
+                    {isTable ? (
                         <TaskCaseListHeader
                             layout={churnLayout}
                             sortField={tableSortField}
@@ -110,6 +111,8 @@ export default function TaskListView() {
                                 setTableSortDirection(d)
                             }}
                         />
+                    ) : (
+                        <TaskCaseBlockHeader layout={churnLayout} />
                     )}
 
                     {groups && groups.length > 0 ? (

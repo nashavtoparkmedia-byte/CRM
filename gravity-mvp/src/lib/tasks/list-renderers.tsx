@@ -82,6 +82,11 @@ function findEnumOption(scenarioId: string | null, fieldId: string, value: unkno
 
 function renderEnumValue(fieldId: string, value: unknown, ctx: RenderContext): React.ReactNode {
     if (value === null || value === undefined || value === '') return <EmptyCell />
+    // Raw booleans from scenarioData render as "true"/"false" by default —
+    // that's what the cowork audit flagged. Translate to "Да" / "Нет".
+    if (typeof value === 'boolean') {
+        return <TextCell>{value ? 'Да' : 'Нет'}</TextCell>
+    }
     const opt = findEnumOption(ctx.scenarioId, fieldId, value)
     const label = opt?.label ?? String(value)
     return <TextCell>{label}</TextCell>
@@ -346,10 +351,34 @@ const RENDERERS: Record<string, FieldRenderer> = {
         },
         render: v => v
             ? <Badge className="bg-[#FEE2E2] text-[#B91C1C]">Да</Badge>
-            : <MutedCell>нет</MutedCell>,
+            : <MutedCell>Нет</MutedCell>,
     },
 
-    // Block 6: Управление возвратом
+    // Block 4 extras: Работа менеджера (editable text overrides)
+    semanticStatus: {
+        getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'semanticStatus')?.value ?? null,
+        render: v => v ? <TextCell>{String(v)}</TextCell> : <EmptyCell />,
+    },
+
+    // Block 5: Оффер и правила — editable overrides
+    messageTemplate: {
+        getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'messageTemplate')?.value ?? null,
+        render: v => v ? <TextCell className="truncate">{String(v)}</TextCell> : <EmptyCell />,
+    },
+
+    // Block 6: Закрытие — editable overrides
+    returnPriority: {
+        getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'returnPriority')?.value ?? null,
+        render: v => v ? <TextCell>{String(v)}</TextCell> : <EmptyCell />,
+    },
+    contactResult: {
+        getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'contactResult')?.value ?? null,
+        render: v => v ? <MutedCell>{String(v)}</MutedCell> : <EmptyCell />,
+    },
+
+    // ─────────────────────────────────────────────────────────────────
+    // (below: pre-existing renderers for return_management columns that
+    // now live in offer_rules / closing blocks — ids unchanged.)
     offerType: {
         getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'offerType')?.value ?? null,
         render: v => v ? <TextCell>{String(v)}</TextCell> : <EmptyCell />,

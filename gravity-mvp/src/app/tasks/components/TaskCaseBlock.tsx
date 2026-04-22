@@ -53,7 +53,10 @@ export default function TaskCaseBlock({ task, block, ctx, showBlockLabel, showCe
                         style={cellStyle}
                     >
                         {showCellLabels && (
-                            <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] leading-tight truncate">
+                            <div
+                                className="text-[10px] uppercase tracking-wide text-[#94A3B8] leading-tight truncate"
+                                title={col.label}
+                            >
                                 {col.labelShort ?? col.label}
                             </div>
                         )}

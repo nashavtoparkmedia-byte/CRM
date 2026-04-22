@@ -18,13 +18,16 @@ import type {
 
 // ─── Blocks ──────────────────────────────────────────────────────────
 
+// Canonical blocks — schema C (matches the reference Excel template).
+// Each block has a stable id, a user-facing label, and a background color
+// that matches the Excel workbook exactly.
 export const BLOCKS: BlockDef[] = [
-    { id: 'identification',    label: 'Идентификация',        order: 1 },
-    { id: 'case_management',   label: 'Управление кейсом',    order: 2 },
-    { id: 'driver_context',    label: 'Контекст водителя',    order: 3 },
-    { id: 'last_contact',      label: 'Последний контакт',    order: 4 },
-    { id: 'next_action',       label: 'Следующее действие',   order: 5 },
-    { id: 'return_management', label: 'Управление возвратом', order: 6 },
+    { id: 'identification',   label: 'Идентификация',     order: 1, color: '#F3F4F6' },
+    { id: 'case_management',  label: 'Управление кейсом', order: 2, color: '#EDE9FE' },
+    { id: 'driver_context',   label: 'Контекст водителя', order: 3, color: '#EAF2FF' },
+    { id: 'manager_work',     label: 'Работа менеджера',  order: 4, color: '#FFF4CC' },
+    { id: 'offer_rules',      label: 'Оффер и правила',   order: 5, color: '#E8F5E9' },
+    { id: 'closing',          label: 'Закрытие',          order: 6, color: '#FDECEA' },
 ]
 
 // ─── Churn columns ───────────────────────────────────────────────────
@@ -75,7 +78,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'project',
         exportKey: 'project',
-        block: 'identification',
+        block: 'case_management',
         label: 'Проект',
         source: { kind: 'computed', id: 'projectPlaceholder' },
         valueType: 'string',
@@ -90,7 +93,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'assignee',
         exportKey: 'assignee',
-        block: 'identification',
+        block: 'case_management',
         label: 'Менеджер',
         source: { kind: 'derived', id: 'assigneeName' },
         valueType: 'string',
@@ -218,10 +221,11 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         sortable: true,
         readonly: true,
     },
+    // ── Block 4: Работа менеджера ──
     {
         id: 'churnReason',
         exportKey: 'churn_reason',
-        block: 'driver_context',
+        block: 'manager_work',
         label: 'Причина оттока',
         labelShort: 'Причина',
         source: { kind: 'scenarioData', fieldId: 'churnReason' },
@@ -233,11 +237,24 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         sortable: false,
     },
 
-    // ── Block 4: Последний контакт ──
+    {
+        id: 'semanticStatus',
+        exportKey: 'semantic_status',
+        block: 'manager_work',
+        label: 'Статус по смыслу',
+        labelShort: 'Смысл',
+        source: { kind: 'scenarioData', fieldId: 'semanticStatus' },
+        valueType: 'string',
+        defaultVisible: false,
+        defaultOrder: 29,
+        defaultWidthPx: 180,
+        filterable: false,
+        sortable: false,
+    },
     {
         id: 'lastContactAt',
         exportKey: 'last_contact_at',
-        block: 'last_contact',
+        block: 'manager_work',
         label: 'Дата последнего контакта',
         labelShort: 'Дата',
         source: { kind: 'derived', id: 'lastContactAt' },
@@ -252,7 +269,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'lastContactType',
         exportKey: 'last_contact_type',
-        block: 'last_contact',
+        block: 'manager_work',
         label: 'Тип контакта',
         labelShort: 'Тип',
         source: { kind: 'derived', id: 'lastContactType' },
@@ -267,7 +284,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'lastContactResult',
         exportKey: 'last_contact_result',
-        block: 'last_contact',
+        block: 'manager_work',
         label: 'Результат последнего контакта',
         labelShort: 'Результат',
         source: { kind: 'derived', id: 'lastContactResult' },
@@ -282,7 +299,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'lastContactBy',
         exportKey: 'last_contact_by',
-        block: 'last_contact',
+        block: 'manager_work',
         label: 'Кто контактировал',
         labelShort: 'Кто',
         source: { kind: 'derived', id: 'lastContactBy' },
@@ -295,11 +312,10 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         readonly: true,
     },
 
-    // ── Block 5: Следующее действие ──
     {
         id: 'nextActionTitle',
         exportKey: 'next_action_title',
-        block: 'next_action',
+        block: 'manager_work',
         label: 'Что сделать',
         labelShort: 'Действие',
         source: { kind: 'task', field: 'title' },
@@ -313,7 +329,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'nextActionChannel',
         exportKey: 'next_action_channel',
-        block: 'next_action',
+        block: 'manager_work',
         label: 'Канал',
         source: { kind: 'task', field: 'type' },
         valueType: 'enum',
@@ -326,7 +342,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'nextActionAt',
         exportKey: 'next_action_at',
-        block: 'next_action',
+        block: 'manager_work',
         label: 'Дедлайн',
         source: { kind: 'task', field: 'nextActionAt' },
         valueType: 'date',
@@ -339,7 +355,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'mandatoryContact',
         exportKey: 'mandatory_contact',
-        block: 'next_action',
+        block: 'manager_work',
         label: 'Обязательный контакт',
         labelShort: 'Обязат.',
         source: { kind: 'computed', id: 'mandatoryContact' },
@@ -354,7 +370,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'isOverdue',
         exportKey: 'is_overdue',
-        block: 'next_action',
+        block: 'manager_work',
         label: 'Просрочено',
         labelShort: 'Проср.',
         source: { kind: 'computed', id: 'isOverdue' },
@@ -367,11 +383,25 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         readonly: true,
     },
 
-    // ── Block 6: Управление возвратом ──
+    // ── Block 5: Оффер и правила ──
+    {
+        id: 'messageTemplate',
+        exportKey: 'message_template',
+        block: 'offer_rules',
+        label: 'Что написать водителю',
+        labelShort: 'Текст',
+        source: { kind: 'scenarioData', fieldId: 'messageTemplate' },
+        valueType: 'string',
+        defaultVisible: false,
+        defaultOrder: 49,
+        defaultWidthPx: 300,
+        filterable: false,
+        sortable: false,
+    },
     {
         id: 'offerType',
         exportKey: 'offer_type',
-        block: 'return_management',
+        block: 'offer_rules',
         label: 'Оффер',
         source: { kind: 'scenarioData', fieldId: 'offerType' },
         valueType: 'string',
@@ -384,7 +414,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'offerAllowed',
         exportKey: 'offer_allowed',
-        block: 'return_management',
+        block: 'offer_rules',
         label: 'Можно давать акцию?',
         labelShort: 'Акция',
         source: { kind: 'computed', id: 'offerAllowed' },
@@ -399,7 +429,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'offerReason',
         exportKey: 'offer_reason',
-        block: 'return_management',
+        block: 'offer_rules',
         label: 'Почему даём / не даём',
         labelShort: 'Причина акции',
         source: { kind: 'computed', id: 'offerReason' },
@@ -411,10 +441,39 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         sortable: false,
         readonly: true,
     },
+    // ── Block 6: Закрытие ──
+    {
+        id: 'returnPriority',
+        exportKey: 'return_priority',
+        block: 'closing',
+        label: 'Приоритет / статус возврата',
+        labelShort: 'Приоритет',
+        source: { kind: 'scenarioData', fieldId: 'returnPriority' },
+        valueType: 'string',
+        defaultVisible: false,
+        defaultOrder: 55,
+        defaultWidthPx: 180,
+        filterable: false,
+        sortable: false,
+    },
+    {
+        id: 'contactResult',
+        exportKey: 'contact_result',
+        block: 'closing',
+        label: 'Результат контакта',
+        labelShort: 'Контакт',
+        source: { kind: 'scenarioData', fieldId: 'contactResult' },
+        valueType: 'string',
+        defaultVisible: false,
+        defaultOrder: 56,
+        defaultWidthPx: 160,
+        filterable: false,
+        sortable: false,
+    },
     {
         id: 'returnResult',
         exportKey: 'return_result',
-        block: 'return_management',
+        block: 'closing',
         label: 'Результат возврата',
         labelShort: 'Итог',
         source: { kind: 'task', field: 'closedReason' },
@@ -428,7 +487,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     {
         id: 'closedAt',
         exportKey: 'closed_at',
-        block: 'return_management',
+        block: 'closing',
         label: 'Дата закрытия',
         labelShort: 'Закрыт',
         source: { kind: 'task', field: 'resolvedAt' },

@@ -76,8 +76,10 @@ export function isRealDate(iso: string | null | undefined): boolean {
 // ─── Column definitions ──────────────────────────────────────────────
 
 export type ExcelEditMode = 'KEY' | 'DERIVED' | 'LOOKUP' | 'YES'
+// Same block ids as list-columns.ts BLOCKS — single vocabulary across
+// UI and Excel. Changing any value here means changing BLOCKS too.
 export type ExcelBlockId =
-    | 'identification' | 'case_mgmt' | 'context' | 'manager_work' | 'offer' | 'closing'
+    | 'identification' | 'case_management' | 'driver_context' | 'manager_work' | 'offer_rules' | 'closing'
 
 export interface ExcelColumnDef {
     /** Spreadsheet column letter (A..W). Stable contract. */
@@ -197,11 +199,11 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
 
     // ─── Управление кейсом ───────────────────────────────
     {
-        letter: 'D', header: 'Проект', block: 'case_mgmt', edit: 'DERIVED',
+        letter: 'D', header: 'Проект', block: 'case_management', edit: 'DERIVED',
         toExcel: () => REF_PROJECT,
     },
     {
-        letter: 'E', header: 'Менеджер', block: 'case_mgmt', edit: 'LOOKUP',
+        letter: 'E', header: 'Менеджер', block: 'case_management', edit: 'LOOKUP',
         toExcel: t => t.assignee?.name ?? '',
         fromExcel: raw => {
             const name = str(raw)
@@ -211,7 +213,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'F', header: 'Этап воронки', block: 'case_mgmt', edit: 'YES',
+        letter: 'F', header: 'Этап воронки', block: 'case_management', edit: 'YES',
         toExcel: t => (t.stage ? STAGE_LABEL_BY_ID[t.stage] ?? t.stage : ''),
         fromExcel: raw => {
             const label = str(raw)
@@ -224,7 +226,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
 
     // ─── Контекст водителя ───────────────────────────────
     {
-        letter: 'G', header: 'Катает в Яндекс?', block: 'context', edit: 'YES',
+        letter: 'G', header: 'Катает в Яндекс?', block: 'driver_context', edit: 'YES',
         toExcel: t => {
             const v = sd(t, 'yandexActive')
             if (v === true) return YANDEX_ACTIVE_LABELS.yes
@@ -240,7 +242,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'H', header: 'Какой парк?', block: 'context', edit: 'YES',
+        letter: 'H', header: 'Какой парк?', block: 'driver_context', edit: 'YES',
         toExcel: t => (sd(t, 'externalParkName') as string) ?? '',
         fromExcel: raw => {
             const s = str(raw); if (s === null) return null
@@ -248,7 +250,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'I', header: 'Сколько поездок в среднем по данным Яндекс', block: 'context', edit: 'YES',
+        letter: 'I', header: 'Сколько поездок в среднем по данным Яндекс', block: 'driver_context', edit: 'YES',
         toExcel: t => {
             const v = sd(t, 'yandexTripsCount')
             if (v === null || v === undefined) return ''
@@ -329,7 +331,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
 
     // ─── Оффер и правила ─────────────────────────────────
     {
-        letter: 'P', header: 'Что написать водителю (готовый текст)', block: 'offer', edit: 'YES',
+        letter: 'P', header: 'Что написать водителю (готовый текст)', block: 'offer_rules', edit: 'YES',
         toExcel: t => (sd(t, 'messageTemplate') as string) ?? '',
         fromExcel: raw => {
             const s = str(raw); if (s === null) return null
@@ -337,7 +339,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'Q', header: 'Оффер менеджеру', block: 'offer', edit: 'YES',
+        letter: 'Q', header: 'Оффер менеджеру', block: 'offer_rules', edit: 'YES',
         toExcel: t => (sd(t, 'offerType') as string) ?? '',
         fromExcel: raw => {
             const s = str(raw); if (s === null) return null
@@ -350,7 +352,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         // resolveOfferAllowed() already respects (see offer-rules.ts).
         // Computed verdict stays derived — export reads the resolved
         // value (override if set, else computed).
-        letter: 'R', header: 'Можно давать акцию?', block: 'offer', edit: 'YES',
+        letter: 'R', header: 'Можно давать акцию?', block: 'offer_rules', edit: 'YES',
         toExcel: t => {
             const v = t.offerAllowed?.verdict
             if (v === 'yes') return OFFER_ALLOWED_LABELS.yes
@@ -368,7 +370,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
     {
         // S is editable: manager explains why. Stored as
         // scenarioData.offerOverrideReason (used by resolveOfferAllowed).
-        letter: 'S', header: 'Почему даем / не даем оффер', block: 'offer', edit: 'YES',
+        letter: 'S', header: 'Почему даем / не даем оффер', block: 'offer_rules', edit: 'YES',
         toExcel: t => t.offerAllowed?.reason ?? '',
         fromExcel: raw => {
             const s = str(raw); if (s === null) return null
