@@ -36,8 +36,12 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
     const rowHeight = ROW_DENSITY_PX[density]
     // Block labels only belong in the table header / column settings, not in rows.
     const showBlockLabels = false
-    // Only the tallest density has room for cell labels without feeling cramped.
-    const showCellLabels  = density === 'comfortable'
+    // Cell labels per density:
+    //   compact      — none (column headers do that)
+    //   standard     — tiny labels above each value (inline)
+    //   comfortable  — vertical stack with "label: value" inside block
+    //                  (handled inside TaskCaseBlock, this flag ignored there)
+    const showCellLabels  = density !== 'compact'
     const showAvatar      = density !== 'compact'
 
     // Control mode: highlight the row tint by its primary signal.

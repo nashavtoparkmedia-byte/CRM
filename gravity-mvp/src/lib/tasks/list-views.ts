@@ -22,14 +22,14 @@ const CHURN_OPERATIONAL_COLUMNS = [
     'externalParkName',
     'isSelfEmployed',
     'yandexTripsCount',
+    // Block 4 — Manager work
     'churnReason',
-    // Block 4 — Last contact
     'lastContactResult',
-    // Block 5 — Next action
     'nextActionTitle',
     'nextActionAt',
-    // Block 6 — Return management
+    // Block 5 — Offer rules (per TЗ §11 — verdict + rule side by side)
     'offerAllowed',
+    'offerReason',
     'offerType',
 ]
 

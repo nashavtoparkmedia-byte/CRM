@@ -104,6 +104,7 @@ export default function TaskListView() {
                     {isTable ? (
                         <TaskCaseListHeader
                             layout={churnLayout}
+                            viewId={activeChurnView.id}
                             sortField={tableSortField}
                             sortDirection={tableSortDirection}
                             onSortChange={(f, d) => {
@@ -112,7 +113,7 @@ export default function TaskListView() {
                             }}
                         />
                     ) : (
-                        <TaskCaseBlockHeader layout={churnLayout} />
+                        <TaskCaseBlockHeader layout={churnLayout} viewId={activeChurnView.id} />
                     )}
 
                     {groups && groups.length > 0 ? (

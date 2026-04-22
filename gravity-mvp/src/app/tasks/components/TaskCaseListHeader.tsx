@@ -12,9 +12,12 @@
 // nextActionAt. Click cycles: off → desc → asc → off.
 // ═══════════════════════════════════════════════════════════════════
 
+import { useState } from 'react'
 import type { ResolvedLayout, ResolvedColumn } from '@/lib/tasks/list-schema'
 import type { TaskSortField, TaskSortDirection } from '@/lib/tasks/types'
-import { ChevronUp, ChevronDown } from 'lucide-react'
+import { ChevronUp, ChevronDown, GripVertical, EyeOff } from 'lucide-react'
+import { useListViewStore } from '@/store/list-view-store'
+import { recordUsage } from '@/lib/tasks/usage'
 
 const SORTABLE_IDS: Record<string, TaskSortField> = {
     fullName: 'fullName',
@@ -26,12 +29,18 @@ const SORTABLE_IDS: Record<string, TaskSortField> = {
 
 interface Props {
     layout: ResolvedLayout
+    viewId: string
     sortField: TaskSortField | null
     sortDirection: TaskSortDirection
     onSortChange: (field: TaskSortField | null, direction: TaskSortDirection) => void
 }
 
-export default function TaskCaseListHeader({ layout, sortField, sortDirection, onSortChange }: Props) {
+export default function TaskCaseListHeader({ layout, viewId, sortField, sortDirection, onSortChange }: Props) {
+    const setBlockOrder = useListViewStore(s => s.setBlockOrder)
+    const setColumnVisibility = useListViewStore(s => s.setColumnVisibility)
+    const [dragBlockId, setDragBlockId] = useState<string | null>(null)
+    const [hoverBlockId, setHoverBlockId] = useState<string | null>(null)
+
     const cycleSort = (field: TaskSortField) => {
         if (sortField !== field) onSortChange(field, 'desc')
         else if (sortDirection === 'desc') onSortChange(field, 'asc')
@@ -42,6 +51,27 @@ export default function TaskCaseListHeader({ layout, sortField, sortDirection, o
         const field = SORTABLE_IDS[col.id]
         if (!field) return
         cycleSort(field)
+    }
+
+    const handleBlockDrop = (targetBlockId: string) => {
+        if (!dragBlockId || dragBlockId === targetBlockId) {
+            setDragBlockId(null); setHoverBlockId(null); return
+        }
+        const ids = layout.blocks.map(b => b.id)
+        const from = ids.indexOf(dragBlockId)
+        const to = ids.indexOf(targetBlockId)
+        if (from === -1 || to === -1) return
+        const next = [...ids]
+        const [moved] = next.splice(from, 1)
+        next.splice(to, 0, moved)
+        setBlockOrder(viewId, next)
+        void recordUsage('block_reorder', { viewId, dragId: dragBlockId, targetBlockId, via: 'inline-table' })
+        setDragBlockId(null); setHoverBlockId(null)
+    }
+
+    const hideColumn = (columnId: string) => {
+        setColumnVisibility(viewId, columnId, false)
+        void recordUsage('column_toggle', { viewId, columnId, visible: false, via: 'inline' })
     }
 
     // Identification block owns fullName but fullName lives in the
@@ -67,22 +97,39 @@ export default function TaskCaseListHeader({ layout, sortField, sortDirection, o
                     </div>
                 </div>
 
-                {/* One cell per block, width = sum of block.visibleColumns.widthPx */}
+                {/* One draggable cell per block, width = sum of block.visibleColumns.widthPx */}
                 <div className="flex items-stretch flex-1 min-w-0">
                     {blocksWithCols.map(block => {
                         if (block.excludedCols.length === 0) return null
                         const totalWidth = block.excludedCols.reduce((sum, c) => sum + c.widthPx, 0)
+                        const isDragging = dragBlockId === block.id
+                        const isDropTarget = hoverBlockId === block.id && dragBlockId !== null && dragBlockId !== block.id
                         return (
                             <div
                                 key={block.id}
-                                className="flex items-center justify-center px-2 text-[11px] uppercase tracking-wide text-[#334155] font-semibold border-l border-[#E2E8F0]"
+                                draggable
+                                onDragStart={(e) => {
+                                    e.dataTransfer.effectAllowed = 'move'
+                                    setDragBlockId(block.id)
+                                }}
+                                onDragOver={(e) => {
+                                    if (!dragBlockId) return
+                                    e.preventDefault()
+                                    setHoverBlockId(block.id)
+                                }}
+                                onDrop={(e) => { e.preventDefault(); handleBlockDrop(block.id) }}
+                                onDragEnd={() => { setDragBlockId(null); setHoverBlockId(null) }}
+                                className={`group flex items-center justify-center gap-1 px-2 text-[11px] uppercase tracking-wide text-[#334155] font-semibold border-l border-[#E2E8F0] cursor-grab select-none transition-all ${
+                                    isDragging ? 'opacity-40' : ''
+                                } ${isDropTarget ? 'ring-2 ring-inset ring-[#4338CA]' : ''}`}
                                 style={{
                                     width: `${totalWidth}px`,
                                     minWidth: `${totalWidth}px`,
                                     backgroundColor: block.color ?? '#F3F4F6',
                                 }}
-                                title={block.label}
+                                title={`${block.label} — потяни, чтобы изменить порядок блоков`}
                             >
+                                <GripVertical className="w-3 h-3 text-[#94A3B8] opacity-40 group-hover:opacity-100 transition-opacity shrink-0" />
                                 <span className="truncate">{block.label}</span>
                             </div>
                         )
@@ -114,7 +161,7 @@ export default function TaskCaseListHeader({ layout, sortField, sortDirection, o
                             return (
                                 <div
                                     key={col.id}
-                                    className={`flex items-center px-2 ${i > 0 ? 'border-l border-[#E2E8F0]' : 'border-l border-[#CBD5E1]'}`}
+                                    className={`group flex items-center px-2 ${i > 0 ? 'border-l border-[#E2E8F0]' : 'border-l border-[#CBD5E1]'}`}
                                     style={{ width: `${col.widthPx}px`, minWidth: `${col.widthPx}px` }}
                                 >
                                     <HeaderButton
@@ -125,6 +172,13 @@ export default function TaskCaseListHeader({ layout, sortField, sortDirection, o
                                         direction={sortDirection}
                                         onClick={() => handleClick(col)}
                                     />
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); hideColumn(col.id) }}
+                                        className="ml-auto p-0.5 opacity-0 group-hover:opacity-100 text-[#94A3B8] hover:text-[#DC2626] transition-opacity shrink-0"
+                                        title="Скрыть колонку"
+                                    >
+                                        <EyeOff className="w-3 h-3" />
+                                    </button>
                                 </div>
                             )
                         })

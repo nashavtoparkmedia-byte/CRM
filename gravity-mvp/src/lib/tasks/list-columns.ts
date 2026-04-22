@@ -446,12 +446,14 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         exportKey: 'offer_reason',
         block: 'offer_rules',
         label: 'Почему даём / не даём',
-        labelShort: 'Причина акции',
+        labelShort: 'Причина',
         source: { kind: 'computed', id: 'offerReason' },
         valueType: 'string',
-        defaultVisible: false,
+        // The TЗ explicitly asks the manager to see not only the verdict
+        // but the rule that produced it, so this column is on by default.
+        defaultVisible: true,
         defaultOrder: 52,
-        defaultWidthPx: 200,
+        defaultWidthPx: 220,
         filterable: false,
         sortable: false,
         readonly: true,

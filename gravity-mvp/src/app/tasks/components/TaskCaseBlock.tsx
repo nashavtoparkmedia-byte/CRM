@@ -2,12 +2,17 @@
 
 // ═══════════════════════════════════════════════════════════════════
 // TaskCaseBlock — renders ONE logical block of a case row.
-// Composes column cells in order. Only visible columns are drawn.
 //
-// The block is a horizontally-laid flex container; each cell has its
-// configured width. Comfortable density uses stacked label+value to
-// be readable without a table header. Compact density omits labels
-// (the table header supplies column names for compact/table mode).
+// Layout policy by density:
+//   compact      — inline row, no labels (column headers do that job)
+//   standard     — inline row, tiny labels above each value
+//   comfortable  — VERTICAL stack (label: value per line), all columns
+//                  of the block stacked inside one block cell. This is
+//                  the "Подробно" mode from the TЗ.
+//
+// Column sizing:
+//   table mode  → fixed widthPx (Excel-like, h-scroll expected)
+//   other modes → flex-grow from widthPx (row shrinks to viewport first)
 // ═══════════════════════════════════════════════════════════════════
 
 import type { TaskDTO } from '@/lib/tasks/types'
@@ -29,12 +34,35 @@ export default function TaskCaseBlock({ task, block, ctx, showBlockLabel, showCe
     const columns = block.visibleColumns.filter(c => !excluded.has(c.id))
     if (columns.length === 0) return null
 
-    // Column sizing policy:
-    //   • table mode  → fixed widths (Excel-like, horizontal scroll is fine/expected)
-    //   • other modes → flex-grow from the configured width (row shrinks to viewport
-    //     first, only overflows if total content > viewport)
     const isFixed = ctx.mode === 'table'
+    const isDetailed = ctx.density === 'comfortable' && !isFixed
 
+    // Detailed mode: stack vertical, one row per column (label: value).
+    if (isDetailed) {
+        const totalFlex = columns.reduce((s, c) => s + c.widthPx, 0)
+        return (
+            <div className="flex flex-col py-1 px-2 min-w-0"
+                 style={{ flex: `${totalFlex} 1 0`, minWidth: '60px' }}>
+                {showBlockLabel && (
+                    <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] font-semibold mb-0.5">
+                        {block.label}
+                    </div>
+                )}
+                {columns.map(col => (
+                    <div key={col.id} className="flex items-baseline gap-1.5 min-w-0 text-[13px] leading-tight py-0.5">
+                        <span className="text-[#64748B] truncate shrink-0" title={col.label}>
+                            {col.labelShort ?? col.label}:
+                        </span>
+                        <span className="min-w-0 truncate flex items-center">
+                            {renderCell(task, col, ctx)}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        )
+    }
+
+    // Inline row mode (compact / standard / table).
     return (
         <div className={`flex items-stretch ${isFixed ? 'shrink-0' : 'flex-1 min-w-0'}`}>
             {showBlockLabel && (
