@@ -234,8 +234,30 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'L', header: 'Дата последнего контакта', block: 'manager_work', edit: 'DERIVED',
-        toExcel: t => dateOrEmpty(t.lastContactAt),
+        // L is editable: the file round-trip must preserve the date.
+        // On export prefer the manual override (scenarioData.lastContactDate),
+        // fall back to the derived TaskEvent-based value.
+        letter: 'L', header: 'Дата последнего контакта', block: 'manager_work', edit: 'YES',
+        toExcel: t => {
+            const override = sd(t, 'lastContactDate')
+            if (override) {
+                const d = new Date(String(override))
+                if (Number.isFinite(d.getTime()) && d.getTime() >= new Date('2010-01-01').getTime()) return d
+            }
+            return dateOrEmpty(t.lastContactAt)
+        },
+        fromExcel: raw => {
+            if (raw === null || raw === undefined || raw === '') return null
+            let iso: string | null = null
+            if (raw instanceof Date) {
+                if (isRealDate(raw.toISOString())) iso = raw.toISOString()
+            } else {
+                const d = new Date(String(raw))
+                if (!Number.isNaN(d.getTime()) && isRealDate(d.toISOString())) iso = d.toISOString()
+            }
+            if (!iso) return null
+            return { scenarioData: { lastContactDate: iso } }
+        },
     },
     {
         letter: 'M', header: 'Итог последнего контакта', block: 'manager_work', edit: 'YES',
@@ -291,18 +313,35 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'R', header: 'Можно давать акцию?', block: 'offer', edit: 'DERIVED',
-        // yes → ДА; no → НЕТ; maybe → empty (per Развилка 3)
+        // R is editable: the manager's final verdict on the offer. On
+        // import it writes scenarioData.offerAllowedOverride, which
+        // resolveOfferAllowed() already respects (see offer-rules.ts).
+        // Computed verdict stays derived — export reads the resolved
+        // value (override if set, else computed).
+        letter: 'R', header: 'Можно давать акцию?', block: 'offer', edit: 'YES',
         toExcel: t => {
             const v = t.offerAllowed?.verdict
             if (v === 'yes') return OFFER_ALLOWED_LABELS.yes
             if (v === 'no')  return OFFER_ALLOWED_LABELS.no
             return ''
         },
+        fromExcel: raw => {
+            const s = str(raw); if (s === null) return null
+            const u = s.toUpperCase()
+            if (u === 'ДА')  return { scenarioData: { offerAllowedOverride: 'yes' } }
+            if (u === 'НЕТ') return { scenarioData: { offerAllowedOverride: 'no' } }
+            return null
+        },
     },
     {
-        letter: 'S', header: 'Почему даем / не даем оффер', block: 'offer', edit: 'DERIVED',
+        // S is editable: manager explains why. Stored as
+        // scenarioData.offerOverrideReason (used by resolveOfferAllowed).
+        letter: 'S', header: 'Почему даем / не даем оффер', block: 'offer', edit: 'YES',
         toExcel: t => t.offerAllowed?.reason ?? '',
+        fromExcel: raw => {
+            const s = str(raw); if (s === null) return null
+            return { scenarioData: { offerOverrideReason: s } }
+        },
     },
 
     // ─── Закрытие ────────────────────────────────────────
