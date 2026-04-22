@@ -29,9 +29,30 @@ import { getTasks } from './actions'
 import type { TaskFilters, TaskSort, TaskDTO } from '@/lib/tasks/types'
 
 // Stale Prisma Client DLL (locked by parallel dev) doesn't know
-// about the `scenarioData` column on Task. Schema + DB do.
+// about the `scenarioData` column on Task. Schema + DB do. We read
+// / write that column via raw SQL to bypass the outdated generated
+// types and keep the rest of the code using regular Prisma queries.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const task$ = prisma.task as unknown as any
+
+async function readScenarioDataMap(ids: string[]): Promise<Map<string, Record<string, { value: unknown }>>> {
+    if (ids.length === 0) return new Map()
+    const rows = await prisma.$queryRawUnsafe<Array<{ id: string; scenarioData: Record<string, unknown> | null }>>(
+        `SELECT "id", "scenarioData" FROM "tasks" WHERE "id" = ANY($1::text[])`,
+        ids,
+    )
+    const m = new Map<string, Record<string, { value: unknown }>>()
+    for (const r of rows) m.set(r.id, (r.scenarioData ?? {}) as Record<string, { value: unknown }>)
+    return m
+}
+
+async function writeScenarioData(taskId: string, data: Record<string, unknown>): Promise<void> {
+    await prisma.$executeRawUnsafe(
+        `UPDATE "tasks" SET "scenarioData" = $1::jsonb, "updatedAt" = NOW() WHERE "id" = $2`,
+        JSON.stringify(data),
+        taskId,
+    )
+}
 
 // ─── Workbook skeleton builder ───────────────────────────────────────
 //
@@ -177,13 +198,7 @@ export async function exportChurnXlsx(
     // Fetch data scoped to churn
     const result = await getTasks({ ...filters, scenario: 'churn' }, sort)
     const ids = result.tasks.map(t => t.id)
-    const rawRows = ids.length > 0
-        ? await task$.findMany({
-            where: { id: { in: ids } },
-            select: { id: true, scenarioData: true },
-        }) as Array<{ id: string; scenarioData: Record<string, { value: unknown }> | null }>
-        : []
-    const scenarioById = new Map(rawRows.map(r => [r.id, (r.scenarioData ?? {}) as Record<string, { value: unknown }>]))
+    const scenarioById = await readScenarioDataMap(ids)
 
     // Append data rows
     let rowNum = FIRST_DATA_ROW
@@ -305,20 +320,18 @@ export async function previewChurnImport(base64: string): Promise<ImportPreviewR
         for (const u of users) assigneeByName.set(u.name, u.id)
     }
 
-    // Current DB state for diff
+    // Current DB state for diff — regular typed fields via Prisma,
+    // scenarioData separately via raw SQL (stale client workaround).
     const ids = [...new Set(prepared.map(r => r.taskId))]
-    const dbRows = ids.length > 0 ? await task$.findMany({
+    const dbRows = ids.length > 0 ? await prisma.task.findMany({
         where: { id: { in: ids } },
         select: {
             id: true, stage: true, title: true, nextActionAt: true, dueAt: true,
-            resolvedAt: true, closedReason: true, assigneeId: true, scenarioData: true,
+            resolvedAt: true, closedReason: true, assigneeId: true,
         },
-    }) as Array<{
-        id: string; stage: string | null; title: string; nextActionAt: Date | null;
-        dueAt: Date | null; resolvedAt: Date | null; closedReason: string | null;
-        assigneeId: string | null; scenarioData: Record<string, unknown> | null
-    }> : []
-    const dbById = new Map(dbRows.map(t => [t.id, t]))
+    }) : []
+    const sdMap = await readScenarioDataMap(ids)
+    const dbById = new Map(dbRows.map(t => [t.id, { ...t, scenarioData: sdMap.get(t.id) ?? null }]))
 
     const diffs: ImportDiffRow[] = []
     let matched = 0, withChanges = 0, withErrors = 0
@@ -474,32 +487,33 @@ export async function applyChurnImport(token: string): Promise<ApplyResult> {
             const hasSd = Object.keys(sdPatch).length > 0
             if (!hasTask && !hasSd) { skipped++; continue }
 
-            await prisma.$transaction(async (tx) => {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const txTask = (tx as any).task
-                if (hasSd) {
-                    const existing = await txTask.findUnique({
-                        where: { id: row.taskId },
-                        select: { scenarioData: true },
-                    }) as { scenarioData: Record<string, unknown> | null } | null
-                    const current = (existing?.scenarioData ?? {}) as Record<string, { value?: unknown; source?: string; updatedAt?: string }>
-                    for (const [k, v] of Object.entries(sdPatch)) {
-                        const prev = current[k]
-                        current[k] = {
-                            ...(prev && typeof prev === 'object' ? prev : {}),
-                            value: v,
-                            source: 'manual',
-                            updatedAt: new Date().toISOString(),
-                        }
+            // Two-phase apply:
+            //   1. typed fields via Prisma (stage/title/nextActionAt/…)
+            //   2. scenarioData merge via raw UPDATE (stale Prisma Client
+            //      DLL can't see the column).
+            if (hasTask) {
+                await prisma.task.update({
+                    where: { id: row.taskId },
+                    data: taskPatch as Parameters<typeof prisma.task.update>[0]['data'],
+                })
+            }
+            if (hasSd) {
+                const existing = await prisma.$queryRawUnsafe<Array<{ scenarioData: Record<string, unknown> | null }>>(
+                    `SELECT "scenarioData" FROM "tasks" WHERE "id" = $1`,
+                    row.taskId,
+                )
+                const current = (existing[0]?.scenarioData ?? {}) as Record<string, { value?: unknown; source?: string; updatedAt?: string }>
+                for (const [k, v] of Object.entries(sdPatch)) {
+                    const prev = current[k]
+                    current[k] = {
+                        ...(prev && typeof prev === 'object' ? prev : {}),
+                        value: v,
+                        source: 'manual',
+                        updatedAt: new Date().toISOString(),
                     }
-                    await txTask.update({
-                        where: { id: row.taskId },
-                        data: { scenarioData: current, ...taskPatch },
-                    })
-                } else {
-                    await txTask.update({ where: { id: row.taskId }, data: taskPatch })
                 }
-            })
+                await writeScenarioData(row.taskId, current)
+            }
             applied++
         } catch (e) {
             errors.push({ taskId: row.taskId, message: (e as Error).message })
