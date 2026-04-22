@@ -59,7 +59,7 @@ export async function getWhatsAppConnections() {
 }
 
 export async function getWhatsAppStatus(connectionId: string) {
-    const { getActualStatus } = await import('@/lib/whatsapp/WhatsAppService')
+    const { getActualStatus, isPaused } = await import('@/lib/whatsapp/WhatsAppService')
     const conn = await prisma.whatsAppConnection.findUnique({
         where: { id: connectionId }
     })
@@ -68,7 +68,6 @@ export async function getWhatsAppStatus(connectionId: string) {
     return {
         ...conn,
         // Derived fields — UI MUST use these, not raw conn.status.
-        // `actualState === 'ready'` is the ONLY condition for "подключён и готов к работе".
         actualState: actual.state,
         actualLabel: actual.humanReadable,
         canRetry: actual.canRetry,
@@ -76,17 +75,35 @@ export async function getWhatsAppStatus(connectionId: string) {
         canForceReset: actual.canForceReset,
         lastReadyAt: actual.lastReadyAt,
         lastError: actual.lastError,
+        isPaused: isPaused(connectionId), // runtime pause flag (in-memory)
     }
 }
 
-export async function disconnectWhatsApp(connectionId: string) {
-    console.log(`[WA-ACTIONS] disconnectWhatsApp called for: ${connectionId}`)
+export async function disconnectWhatsApp(connectionId: string, wipeAuth: boolean = false) {
+    console.log(`[WA-ACTIONS] disconnectWhatsApp called for: ${connectionId} wipeAuth=${wipeAuth}`)
     await destroyClient(connectionId)
     // destroyClient does not update DB status — without this, UI would keep showing 'ready'
     await prisma.whatsAppConnection.update({
         where: { id: connectionId },
         data: { status: 'idle', sessionData: null },
     }).catch(() => {})
+
+    // If user asked to wipe auth too (e.g. "Отключить и удалить сообщения"),
+    // clear the Baileys credentials folder so next connect actually requires QR scan.
+    if (wipeAuth) {
+        try {
+            const path = await import('path')
+            const fs = await import('fs')
+            const sessionDir = path.join(
+                process.cwd(), 'node_modules', '.baileys_auth', `session-${connectionId}`
+            )
+            await fs.promises.rm(sessionDir, { recursive: true, force: true })
+            console.log(`[WA-ACTIONS] Wiped auth folder: ${sessionDir}`)
+        } catch (err: any) {
+            console.error(`[WA-ACTIONS] Wipe auth failed:`, err.message)
+        }
+    }
+
     revalidatePath('/settings/integrations/whatsapp')
     revalidatePath('/whatsapp')
 }
@@ -130,19 +147,37 @@ export async function deleteWhatsAppConnection(connectionId: string) {
 
 export async function pauseWhatsAppConnection(connectionId: string, deleteMessages: boolean) {
     console.log(`[WA-ACTIONS] pauseWhatsAppConnection id=${connectionId} deleteMessages=${deleteMessages}`)
-    // Note: WhatsAppConnection schema has no isPaused/isActive field.
-    // Pause is handled at the client level in WhatsAppService.
+    // Keep Baileys socket alive — just flag this connection as paused so incoming
+    // messages are buffered in memory instead of being saved to DB.
+    const { setPaused } = await import('@/lib/whatsapp/WhatsAppService')
+    setPaused(connectionId, true)
     if (deleteMessages) {
         await deleteWhatsAppMessages(connectionId)
     }
     revalidatePath('/settings/integrations/whatsapp')
+    return { success: true, paused: true }
 }
 
 export async function resumeWhatsAppConnection(connectionId: string, catchUp: boolean) {
     console.log(`[WA-ACTIONS] resumeWhatsAppConnection id=${connectionId} catchUp=${catchUp}`)
-    // Note: WhatsAppConnection schema has no isPaused/isActive field.
-    // Resume is handled at the client level in WhatsAppService.
+    const { setPaused, flushPausedBuffer, dropPausedBuffer } = await import('@/lib/whatsapp/WhatsAppService')
+
+    // First release pause flag so no new messages are buffered during flush.
+    setPaused(connectionId, false)
+
+    let processed = 0
+    let dropped = 0
+    if (catchUp) {
+        // "Пробросить в CRM" — save buffered messages to DB via normal handler
+        processed = await flushPausedBuffer(connectionId)
+    } else {
+        // "Начать с этого места" — discard buffer
+        dropped = dropPausedBuffer(connectionId)
+    }
+
     revalidatePath('/settings/integrations/whatsapp')
+    revalidatePath('/messages')
+    return { success: true, paused: false, processed, dropped }
 }
 
 export async function deleteWhatsAppMessages(connectionId: string) {

@@ -79,8 +79,9 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
     useEffect(() => {
         if (!isClient) return
-        // Poll while transitioning; also poll for degraded/reconnecting/broken so recovery shows up
-        const shouldPoll = ['idle', 'qr', 'qr_required', 'qr_expired', 'authenticated', 'initializing', 'degraded', 'reconnecting'].includes(liveStatus)
+        // Poll while transitioning; also poll for degraded/reconnecting/broken so recovery shows up.
+        // broken must be polled — recoverable via auto-reconnect (Baileys code 515 is common after first auth).
+        const shouldPoll = ['idle', 'qr', 'qr_required', 'qr_expired', 'authenticated', 'initializing', 'degraded', 'reconnecting', 'broken'].includes(liveStatus)
         if (shouldPoll) {
             pollingRef.current = setInterval(async () => {
                 const fresh = await getWhatsAppStatus(conn.id)
@@ -89,6 +90,9 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                 setLiveStatus(actual)
                 setLiveLastError((fresh as any).lastError || null)
                 setLiveCanForceReset((fresh as any).canForceReset || false)
+                if (typeof (fresh as any).isPaused === 'boolean') {
+                    setLivePaused((fresh as any).isPaused)
+                }
                 if ((actual === 'qr_required' || actual === 'qr') && fresh.sessionData?.startsWith('data:')) {
                     setLiveQr(fresh.sessionData)
                 }
@@ -154,7 +158,9 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                 await deleteWhatsAppMessages(conn.id)
                 setSyncKey(k => k + 1)
             }
-            await disconnectWhatsApp(conn.id)
+            // Wipe auth only when user also deletes messages — total reset scenario.
+            // "Просто отключить" keeps auth so reconnect doesn't require QR.
+            await disconnectWhatsApp(conn.id, deleteMessages)
             setLiveStatus('idle')
             setDisconnectDialog(false)
             onRefresh()
@@ -181,6 +187,11 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                         <div className="flex items-center gap-2 mt-0.5">
                             {conn.phoneNumber && <span className="text-xs text-muted-foreground">+{conn.phoneNumber}</span>}
                             <StatusDot status={liveStatus} />
+                            {livePaused && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                    <PauseCircle size={11} /> На паузе
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -287,11 +298,17 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                 </div>
             )}
 
-            {/* Connected */}
-            {liveStatus === 'ready' && (
+            {/* Connected (or Paused) */}
+            {liveStatus === 'ready' && !livePaused && (
                 <div className="flex items-center gap-3 py-4 text-green-600">
                     <CheckCircle2 size={20} />
                     <span className="text-sm font-medium">Аккаунт подключен и готов к работе</span>
+                </div>
+            )}
+            {liveStatus === 'ready' && livePaused && (
+                <div className="flex items-center gap-3 py-4 text-amber-600">
+                    <PauseCircle size={20} />
+                    <span className="text-sm font-medium">Аккаунт на паузе — входящие буферизуются</span>
                 </div>
             )}
 
@@ -388,7 +405,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Отключить аккаунт</DialogTitle>
-                        <DialogDescription>Аккаунт будет полностью отключён. Для повторного подключения потребуется снова отсканировать QR-код.</DialogDescription>
+                        <DialogDescription>Выберите сценарий отключения. При удалении сообщений потребуется заново отсканировать QR-код для подключения.</DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-3 py-2">
                         <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handleDisconnectConfirm(false)}>
