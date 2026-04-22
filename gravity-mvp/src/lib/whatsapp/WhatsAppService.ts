@@ -466,7 +466,10 @@ async function handleIncomingMessage(
                     oldestMsgKey: m.key as any,
                     oldestMsgTs: ts,
                 } : {}),
-                ...(shouldUpdateNewest ? { newestMsgTs: ts } : {}),
+                ...(shouldUpdateNewest ? {
+                    newestMsgKey: m.key as any,
+                    newestMsgTs: ts,
+                } : {}),
             },
             create: {
                 connectionId,
@@ -474,6 +477,7 @@ async function handleIncomingMessage(
                 name: (m as any).pushName || null,
                 oldestMsgKey: m.key as any,
                 oldestMsgTs: ts,
+                newestMsgKey: m.key as any,
                 newestMsgTs: ts,
                 lastSeen: new Date(),
             },
@@ -973,25 +977,27 @@ export async function importWhatsAppHistory(
             return { imported: 0, errors: 1 }
         }
 
-        // Build roster query — if mode='last_n_days', pre-filter inactive chats
-        // (those with no activity within cutoff window) to skip ~95% of dead chats.
+        // For 'last_n_days' we need newestMsgKey to paginate BACKWARDS from newest.
+        // For 'available_history'/others we use oldestMsgKey to go further into the past.
+        // Different anchors → different selection criteria.
         const activeCutoff = connectionSyncCutoffs.get(connectionId)
-        const rosterWhere: any = {
-            connectionId,
-            oldestMsgKey: { not: Prisma.AnyNull },
-            oldestMsgTs: { not: null },
-        }
-        if (mode === 'last_n_days' && activeCutoff) {
-            rosterWhere.OR = [
-                { newestMsgTs: { gte: activeCutoff } },
-                { newestMsgTs: null }, // unknown activity — include to be safe (legacy rows)
-            ]
+        const isLastNDays = mode === 'last_n_days' && !!activeCutoff
+        const rosterWhere: any = { connectionId }
+        if (isLastNDays) {
+            // last_n_days: need newestMsgKey, and chat must have had activity within cutoff
+            rosterWhere.newestMsgKey = { not: Prisma.AnyNull }
+            rosterWhere.newestMsgTs = { gte: activeCutoff }
+        } else {
+            // available_history: need oldestMsgKey for backward pagination
+            rosterWhere.oldestMsgKey = { not: Prisma.AnyNull }
+            rosterWhere.oldestMsgTs = { not: null }
         }
         const roster = await prisma.whatsAppChatRoster.findMany({ where: rosterWhere })
         opsLog('info', 'wa_backfill_roster_selected', {
             jobId, connectionId, mode,
             selectedCount: roster.length,
             cutoff: activeCutoff?.toISOString(),
+            anchorStrategy: isLastNDays ? 'newest->backwards' : 'oldest->further_past',
         })
 
         if (!sock || roster.length === 0) {
@@ -1020,17 +1026,29 @@ export async function importWhatsAppHistory(
         let consecutiveErrors = 0
         const MAX_CONSECUTIVE_ERRORS = 15
 
-        // Helper: process single chat through its pagination loop
+        // Helper: process single chat through its pagination loop.
+        // Strategy depends on mode:
+        //   last_n_days       — start from NEWEST msg, paginate backwards; stop when < cutoff
+        //   available_history — start from OLDEST msg, paginate further into past; stop when no more
         const processChat = async (entry: typeof roster[number]) => {
             try {
-                const anchorKey = entry.oldestMsgKey as any
-                const anchorTs = entry.oldestMsgTs!.getTime() / 1000
-                let oldestKey = anchorKey
-                let oldestTs: number | any = anchorTs
+                const startKey = isLastNDays
+                    ? (entry.newestMsgKey as any)
+                    : (entry.oldestMsgKey as any)
+                const startTs = isLastNDays
+                    ? entry.newestMsgTs!.getTime() / 1000
+                    : entry.oldestMsgTs!.getTime() / 1000
+                let anchorKey = startKey
+                let anchorTs: number | any = startTs
+                let prevOldestTs: number = isLastNDays ? startTs : startTs
 
                 for (let page = 0; page < MAX_PAGES_PER_CHAT; page++) {
                     try {
-                        await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, oldestKey, oldestTs)
+                        // Baileys returns messages OLDER than (anchorKey, anchorTs).
+                        // For last_n_days: each page goes further into the past;
+                        //   stop when oldest seen < cutoff.
+                        // For available_history: same direction; stop when no new data.
+                        await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, anchorKey, anchorTs)
                         totalFetched += BATCH_PER_CHAT
                         consecutiveErrors = 0
                         await new Promise(r => setTimeout(r, 250))
@@ -1039,19 +1057,22 @@ export async function importWhatsAppHistory(
                             where: { connectionId_jid: { connectionId, jid: entry.jid } },
                         })
                         if (!refreshed?.oldestMsgTs) break
-                        const newTs = refreshed.oldestMsgTs.getTime() / 1000
-                        if (typeof oldestTs === 'number' && newTs >= oldestTs) break
-                        oldestKey = refreshed.oldestMsgKey as any
-                        oldestTs = newTs
+                        const refreshedOldestTs = refreshed.oldestMsgTs.getTime() / 1000
+                        // Progress detector: if oldestMsgTs didn't move older, Baileys gave us nothing new → stop
+                        if (refreshedOldestTs >= prevOldestTs) break
+                        prevOldestTs = refreshedOldestTs
 
-                        const activeCutoff = connectionSyncCutoffs.get(connectionId)
+                        // Next page anchor = current oldest (step further back)
+                        anchorKey = refreshed.oldestMsgKey as any
+                        anchorTs = refreshedOldestTs
+
+                        // Cutoff stop (last_n_days): if the oldest we now have is already
+                        // past cutoff, no need to go further.
                         if (activeCutoff && refreshed.oldestMsgTs < activeCutoff) break
                     } catch (pageErr: any) {
                         const msg = String(pageErr?.message || pageErr)
                         consecutiveErrors++
-                        // "Not connected" / "TIMEOUT" are transient — skip this page but don't hard-fail
                         if (/Not connected|TIMEOUT|Connection Closed/i.test(msg)) {
-                            // throttle when WA pushes back
                             await new Promise(r => setTimeout(r, 1500))
                         }
                         opsLog('warn', 'wa_backfill_page_error', {

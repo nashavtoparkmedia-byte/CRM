@@ -124,10 +124,11 @@ model WhatsAppChatRoster {
   connectionId    String
   jid             String   // 79221853150@s.whatsapp.net (Baileys format)
   name            String?
-  // Anchor for fetchMessageHistory — the oldest msg we've ever seen for this chat
-  oldestMsgKey    Json?    // serialized proto.IMessageKey (has remoteJid, fromMe, id, participant?)
+  // Anchor for paginating BACKWARDS in time (available_history mode)
+  oldestMsgKey    Json?    // serialized proto.IMessageKey
   oldestMsgTs     DateTime?
-  // Newest observed msg timestamp — enables "last N days" filter to skip inactive chats
+  // Anchor for last_n_days mode — start from newest and go backwards until cutoff
+  newestMsgKey    Json?
   newestMsgTs     DateTime?
   lastSeen        DateTime @default(now())
 
