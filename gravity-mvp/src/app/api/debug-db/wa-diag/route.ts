@@ -34,11 +34,29 @@ export async function GET(req: NextRequest) {
         const legacyChats = await prisma.whatsAppChat.count({ where: { connectionId: connId } })
         const legacyMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId: connId } } })
 
+        // Helper: oldest/newest message timestamps in legacy table for this connection.
+        // Useful for cutoff verification without scanning /api/messages per chat.
+        const [oldestMsg, newestMsg] = await Promise.all([
+            prisma.whatsAppMessage.findFirst({
+                where: { chat: { connectionId: connId } },
+                orderBy: { timestamp: 'asc' },
+                select: { timestamp: true },
+            }),
+            prisma.whatsAppMessage.findFirst({
+                where: { chat: { connectionId: connId } },
+                orderBy: { timestamp: 'desc' },
+                select: { timestamp: true },
+            }),
+        ])
+
         return NextResponse.json({
             connId,
             wsUser: sock.user?.id ?? null,
             legacyChats,
             legacyMsgs,
+            oldestLegacyMsgTs: oldestMsg?.timestamp ?? null,
+            newestLegacyMsgTs: newestMsg?.timestamp ?? null,
+            rosterSize: await prisma.whatsAppChatRoster.count({ where: { connectionId: connId } }),
             rosterSample: rosterEntries.map(r => ({
                 jid: r.jid,
                 name: r.name,

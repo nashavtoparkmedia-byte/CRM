@@ -996,12 +996,27 @@ export async function importWhatsAppHistory(
         const BATCH_PER_CHAT = 50
         const MAX_PAGES_PER_CHAT = 20 // hard stop: up to 1000 msgs per chat
         const RATE_LIMIT_MS = 600 // pause between chats (WA anti-abuse)
+        const LIVE_UPDATE_EVERY_N_CHATS = 3 // push progress to job row for UI polling
         let totalFetched = 0
         let chatsProcessed = 0
         let errors = 0
 
         for (const entry of roster) {
             chatsProcessed++
+
+            // Push live progress to HistoryImportJob so ChannelSyncBlock can show
+            // real counts instead of 0/0/0. Done every N chats to avoid DB flood.
+            if (chatsProcessed % LIVE_UPDATE_EVERY_N_CHATS === 0) {
+                try {
+                    const curMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId } } })
+                    const curChats = await prisma.whatsAppChat.count({ where: { connectionId } })
+                    await prisma.historyImportJob.update({
+                        where: { id: jobId },
+                        data: { messagesImported: curMsgs, chatsScanned: curChats },
+                    })
+                } catch { /* non-critical */ }
+            }
+
             try {
                 const anchorKey = entry.oldestMsgKey as any
                 const anchorTs = entry.oldestMsgTs!.getTime() / 1000
