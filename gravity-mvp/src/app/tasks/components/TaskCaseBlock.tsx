@@ -29,29 +29,40 @@ export default function TaskCaseBlock({ task, block, ctx, showBlockLabel, showCe
     const columns = block.visibleColumns.filter(c => !excluded.has(c.id))
     if (columns.length === 0) return null
 
+    // Column sizing policy:
+    //   • table mode  → fixed widths (Excel-like, horizontal scroll is fine/expected)
+    //   • other modes → flex-grow from the configured width (row shrinks to viewport
+    //     first, only overflows if total content > viewport)
+    const isFixed = ctx.mode === 'table'
+
     return (
-        <div className="flex items-stretch shrink-0">
+        <div className={`flex items-stretch ${isFixed ? 'shrink-0' : 'flex-1 min-w-0'}`}>
             {showBlockLabel && (
                 <div className="flex items-center pr-2 pl-1 text-[10px] uppercase tracking-wide text-[#94A3B8] font-semibold whitespace-nowrap">
                     {block.label}
                 </div>
             )}
-            {columns.map((col, i) => (
-                <div
-                    key={col.id}
-                    className={`flex flex-col justify-center px-2 min-w-0 ${i > 0 ? 'border-l border-[#EEF2FF]' : ''}`}
-                    style={{ width: `${col.widthPx}px`, minWidth: `${col.widthPx}px` }}
-                >
-                    {showCellLabels && (
-                        <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] leading-tight truncate">
-                            {col.labelShort ?? col.label}
+            {columns.map((col, i) => {
+                const cellStyle: React.CSSProperties = isFixed
+                    ? { width: `${col.widthPx}px`, minWidth: `${col.widthPx}px` }
+                    : { flex: `${col.widthPx} 1 0`, minWidth: '60px' }
+                return (
+                    <div
+                        key={col.id}
+                        className={`flex flex-col justify-center px-2 min-w-0 ${i > 0 ? 'border-l border-[#EEF2FF]' : ''}`}
+                        style={cellStyle}
+                    >
+                        {showCellLabels && (
+                            <div className="text-[10px] uppercase tracking-wide text-[#94A3B8] leading-tight truncate">
+                                {col.labelShort ?? col.label}
+                            </div>
+                        )}
+                        <div className="flex items-center min-w-0 leading-tight">
+                            {renderCell(task, col, ctx)}
                         </div>
-                    )}
-                    <div className="flex items-center min-w-0 leading-tight">
-                        {renderCell(task, col, ctx)}
                     </div>
-                </div>
-            ))}
+                )
+            })}
         </div>
     )
 }
