@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getClient } from '@/lib/whatsapp/WhatsAppService'
+import { getClient, getRuntimeStatus } from '@/lib/whatsapp/WhatsAppService'
 import { prisma } from '@/lib/prisma'
 
+// Diagnostic endpoint — reports WhatsApp connection state. Baileys edition.
+// Query: ?connId=<id> for detail, no query for list.
 export async function GET(req: NextRequest) {
     const connId = req.nextUrl.searchParams.get('connId')
     if (!connId) {
-        // List all connections and client status
         const conns = await prisma.whatsAppConnection.findMany()
         const result = conns.map(c => ({
             id: c.id,
@@ -13,52 +14,38 @@ export async function GET(req: NextRequest) {
             phone: c.phoneNumber,
             hasClient: !!getClient(c.id),
         }))
-        return NextResponse.json({ connections: result })
+        return NextResponse.json({
+            runtime: getRuntimeStatus(),
+            connections: result,
+        })
     }
 
-    const client = getClient(connId)
-    if (!client) {
+    const sock = getClient(connId)
+    if (!sock) {
         return NextResponse.json({ error: 'Client not in memory', connId })
     }
 
     try {
-        const chats = await client.getChats()
-        const results: any[] = []
-
-        // Test fetchMessages on first 5 chats that are not groups
-        let tested = 0
-        for (const chat of chats) {
-            if (tested >= 5) break
-            if (chat.isGroup) continue
-            tested++
-
-            try {
-                const msgs = await chat.fetchMessages({ limit: 10 })
-                results.push({
-                    chatId: chat.id._serialized,
-                    name: chat.name,
-                    fetchedCount: msgs.length,
-                    sampleTimestamps: msgs.slice(0, 3).map(m => ({
-                        ts: new Date(m.timestamp * 1000).toISOString(),
-                        body: (m.body || '').substring(0, 30),
-                        fromMe: m.fromMe,
-                        id: m.id._serialized,
-                    })),
-                })
-            } catch (e: any) {
-                results.push({
-                    chatId: chat.id._serialized,
-                    name: chat.name,
-                    error: e.message,
-                })
-            }
-        }
+        const rosterEntries = await prisma.whatsAppChatRoster.findMany({
+            where: { connectionId: connId },
+            orderBy: { lastSeen: 'desc' },
+            take: 20,
+        })
+        const legacyChats = await prisma.whatsAppChat.count({ where: { connectionId: connId } })
+        const legacyMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId: connId } } })
 
         return NextResponse.json({
             connId,
-            totalChats: chats.length,
-            nonGroupChats: chats.filter(c => !c.isGroup).length,
-            tested: results,
+            wsUser: sock.user?.id ?? null,
+            legacyChats,
+            legacyMsgs,
+            rosterSample: rosterEntries.map(r => ({
+                jid: r.jid,
+                name: r.name,
+                oldestMsgTs: r.oldestMsgTs,
+                lastSeen: r.lastSeen,
+                hasAnchorKey: !!r.oldestMsgKey,
+            })),
         })
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 })

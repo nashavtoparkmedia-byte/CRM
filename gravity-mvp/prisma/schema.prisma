@@ -116,6 +116,23 @@ model WhatsAppMessage {
   @@unique([id, chatId])
 }
 
+// Persistent chat directory — survives WhatsAppChat/Message deletion.
+// Used as anchor for Baileys fetchMessageHistory (backfill without QR re-scan).
+// Populated on every incoming message + messaging-history.set events.
+model WhatsAppChatRoster {
+  id              String   @id @default(cuid())
+  connectionId    String
+  jid             String   // 79221853150@s.whatsapp.net (Baileys format)
+  name            String?
+  // Anchor for fetchMessageHistory — the oldest msg we've ever seen for this chat
+  oldestMsgKey    Json?    // serialized proto.IMessageKey (has remoteJid, fromMe, id, participant?)
+  oldestMsgTs     DateTime?
+  lastSeen        DateTime @default(now())
+
+  @@unique([connectionId, jid])
+  @@index([connectionId])
+}
+
 model DriverTelegram {
   id            String   @id @default(cuid())
   driverId      String   @unique
@@ -664,21 +681,6 @@ model CrmUser {
   createdAt DateTime @default(now())
 
   @@map("crm_users")
-}
-
-/// Rollout observation layer for the churn tasks list.
-/// Written fire-and-forget from the client via recordUsage() server action.
-/// Nothing reads it in the app — it's analytics surface only.
-model UsageEvent {
-  id        String   @id @default(cuid())
-  userId    String?
-  action    String
-  payload   Json?
-  createdAt DateTime @default(now())
-
-  @@index([action, createdAt])
-  @@index([userId, createdAt])
-  @@map("usage_events")
 }
 
 /// Единственная запись — настройки AI агента (upsert by id="singleton")

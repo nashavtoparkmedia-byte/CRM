@@ -44,6 +44,7 @@ import makeWASocket, {
     Browsers,
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
@@ -446,6 +447,38 @@ async function handleIncomingMessage(
     const body = extractMessageBody(m)
     const ts = new Date((Number(m.messageTimestamp) || 0) * 1000)
 
+    // ROSTER: persist chat as anchor for future backfill (fetchMessageHistory).
+    // Update oldestMsgKey/oldestMsgTs only when this message is older than stored.
+    // Survives DB message wipe — key data for re-sync without QR rescan.
+    try {
+        const existing = await prisma.whatsAppChatRoster.findUnique({
+            where: { connectionId_jid: { connectionId, jid: remoteJid } },
+        })
+        const shouldUpdateAnchor = !existing?.oldestMsgTs || ts < existing.oldestMsgTs
+        await prisma.whatsAppChatRoster.upsert({
+            where: { connectionId_jid: { connectionId, jid: remoteJid } },
+            update: {
+                name: (m as any).pushName || existing?.name || null,
+                lastSeen: new Date(),
+                ...(shouldUpdateAnchor ? {
+                    oldestMsgKey: m.key as any,
+                    oldestMsgTs: ts,
+                } : {}),
+            },
+            create: {
+                connectionId,
+                jid: remoteJid,
+                name: (m as any).pushName || null,
+                oldestMsgKey: m.key as any,
+                oldestMsgTs: ts,
+                lastSeen: new Date(),
+            },
+        })
+    } catch (err: any) {
+        // Non-critical — roster is a helper, don't break message flow
+        console.warn(`[WA-ROSTER] upsert failed:`, err.message)
+    }
+
     // PAUSE: buffer message for later flush, don't process now
     if (pausedSet.has(connectionId)) {
         const buf = messageBuffers.get(connectionId) ?? []
@@ -847,7 +880,11 @@ export async function importWhatsAppHistory(
     daysBack: number | null | undefined,
     connectionId: string | null | undefined,
 ): Promise<{ imported: number; errors: number }> {
-    opsLog('info', 'wa_import_history_start', { jobId, mode, daysBack, connectionId })
+    opsLog('info', 'wa_import_history_start', {
+        jobId, mode,
+        daysBack: daysBack ?? undefined,
+        connectionId: connectionId ?? undefined,
+    })
 
     try {
         await prisma.historyImportJob.update({
@@ -912,18 +949,120 @@ export async function importWhatsAppHistory(
 
     // ALL modes need past data from Baileys to fill empty DB. Baileys only
     // delivers history via messaging-history.set on first-auth after QR scan.
-    // An active (already authenticated) session cannot request a replay.
-    // So if DB is empty AND socket is live → finalize job as failed with a
-    // clear reason, UI shows guidance to re-scan QR.
+    // HOWEVER: we persist a chat roster (WhatsAppChatRoster) with anchor
+    // msgKey+timestamp. If roster has entries, we can backfill per-chat via
+    // sock.fetchMessageHistory — avoiding QR rescan.
     if (startCount === 0 && clients.has(connectionId)) {
-        opsLog('warn', 'wa_import_history_requires_reset', {
-            jobId, connectionId, mode,
-            reason: 'DB empty + session active — re-scan QR required',
+        const sock = clients.get(connectionId)
+        // SAFEGUARD: only run backfill when connection is fully authenticated.
+        // In 'qr' / 'initializing' states sock exists but fetchMessageHistory would
+        // crash (no user, no session key). Instead — fail with a clear reason.
+        const entry = registry.getEntry(connectionId)
+        if (entry?.state !== 'ready') {
+            opsLog('warn', 'wa_import_backfill_not_ready', {
+                jobId, connectionId, mode,
+                registryState: entry?.state ?? 'unknown',
+            })
+            await finalizeImportJob(jobId, 'failed', {
+                reason: 'session_locked_needs_rescan',
+            })
+            return { imported: 0, errors: 1 }
+        }
+
+        const roster = await prisma.whatsAppChatRoster.findMany({
+            where: {
+                connectionId,
+                oldestMsgKey: { not: Prisma.AnyNull },
+                oldestMsgTs: { not: null },
+            },
         })
-        await finalizeImportJob(jobId, 'failed', {
-            reason: 'session_locked_needs_rescan',
+
+        if (!sock || roster.length === 0) {
+            // No anchors available — must re-scan QR
+            opsLog('warn', 'wa_import_history_requires_reset', {
+                jobId, connectionId, mode,
+                reason: 'DB empty + no roster — re-scan QR required',
+            })
+            await finalizeImportJob(jobId, 'failed', {
+                reason: 'session_locked_needs_rescan',
+            })
+            return { imported: 0, errors: 1 }
+        }
+
+        opsLog('info', 'wa_backfill_start', {
+            jobId, connectionId, mode, rosterSize: roster.length,
         })
-        return { imported: 0, errors: 1 }
+
+        const BATCH_PER_CHAT = 50
+        const MAX_PAGES_PER_CHAT = 20 // hard stop: up to 1000 msgs per chat
+        const RATE_LIMIT_MS = 600 // pause between chats (WA anti-abuse)
+        let totalFetched = 0
+        let chatsProcessed = 0
+        let errors = 0
+
+        for (const entry of roster) {
+            chatsProcessed++
+            try {
+                const anchorKey = entry.oldestMsgKey as any
+                const anchorTs = entry.oldestMsgTs!.getTime() / 1000
+                let oldestKey = anchorKey
+                let oldestTs: number | any = anchorTs
+
+                for (let page = 0; page < MAX_PAGES_PER_CHAT; page++) {
+                    try {
+                        // fetchMessageHistory returns nothing directly — incoming batch
+                        // arrives via messages.upsert event and goes through our handler
+                        // (cutoff filter applies there too).
+                        await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, oldestKey, oldestTs)
+                        totalFetched += BATCH_PER_CHAT
+                        await new Promise(r => setTimeout(r, RATE_LIMIT_MS))
+
+                        // Re-read roster anchor to see if it moved backwards (new older
+                        // messages arrived via handler and updated the anchor).
+                        const refreshed = await prisma.whatsAppChatRoster.findUnique({
+                            where: { connectionId_jid: { connectionId, jid: entry.jid } },
+                        })
+                        if (!refreshed?.oldestMsgTs) break
+                        const newTs = refreshed.oldestMsgTs.getTime() / 1000
+                        if (typeof oldestTs === 'number' && newTs >= oldestTs) break
+                        oldestKey = refreshed.oldestMsgKey as any
+                        oldestTs = newTs
+
+                        // Stop if cutoff reached (user wants only last N days)
+                        const activeCutoff = connectionSyncCutoffs.get(connectionId)
+                        if (activeCutoff && refreshed.oldestMsgTs < activeCutoff) break
+                    } catch (pageErr: any) {
+                        opsLog('warn', 'wa_backfill_page_error', {
+                            jobId, jid: entry.jid, page, err: pageErr?.message,
+                        })
+                        break
+                    }
+                }
+            } catch (err: any) {
+                errors++
+                opsLog('warn', 'wa_backfill_chat_error', {
+                    jobId, jid: entry.jid, err: err?.message,
+                })
+            }
+        }
+
+        // Allow a few seconds for last messages.upsert batches to finalize DB writes
+        await new Promise(r => setTimeout(r, 3000))
+
+        const finalMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId } } })
+        const finalChats = await prisma.whatsAppChat.count({ where: { connectionId } })
+
+        opsLog('info', 'wa_backfill_complete', {
+            jobId, connectionId, chatsProcessed, totalFetched,
+            finalMsgs, finalChats, errors,
+        })
+
+        await finalizeImportJob(jobId, 'completed', {
+            messagesImported: finalMsgs,
+            chatsScanned: finalChats,
+            contactsFound: finalChats,
+        })
+        return { imported: finalMsgs, errors }
     }
 
     // Poll DB to detect when history batches stop flowing. Quick exit if stable.
