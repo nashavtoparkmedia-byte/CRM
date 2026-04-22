@@ -995,28 +995,14 @@ export async function importWhatsAppHistory(
 
         const BATCH_PER_CHAT = 50
         const MAX_PAGES_PER_CHAT = 20 // hard stop: up to 1000 msgs per chat
-        const RATE_LIMIT_MS = 600 // pause between chats (WA anti-abuse)
-        const LIVE_UPDATE_EVERY_N_CHATS = 3 // push progress to job row for UI polling
+        const RATE_LIMIT_MS = 600 // pause between batches (WA anti-abuse)
+        const PARALLEL_CHATS = 5 // process N chats concurrently for ~5x throughput
         let totalFetched = 0
         let chatsProcessed = 0
         let errors = 0
 
-        for (const entry of roster) {
-            chatsProcessed++
-
-            // Push live progress to HistoryImportJob so ChannelSyncBlock can show
-            // real counts instead of 0/0/0. Done every N chats to avoid DB flood.
-            if (chatsProcessed % LIVE_UPDATE_EVERY_N_CHATS === 0) {
-                try {
-                    const curMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId } } })
-                    const curChats = await prisma.whatsAppChat.count({ where: { connectionId } })
-                    await prisma.historyImportJob.update({
-                        where: { id: jobId },
-                        data: { messagesImported: curMsgs, chatsScanned: curChats },
-                    })
-                } catch { /* non-critical */ }
-            }
-
+        // Helper: process single chat through its pagination loop
+        const processChat = async (entry: typeof roster[number]) => {
             try {
                 const anchorKey = entry.oldestMsgKey as any
                 const anchorTs = entry.oldestMsgTs!.getTime() / 1000
@@ -1025,15 +1011,11 @@ export async function importWhatsAppHistory(
 
                 for (let page = 0; page < MAX_PAGES_PER_CHAT; page++) {
                     try {
-                        // fetchMessageHistory returns nothing directly — incoming batch
-                        // arrives via messages.upsert event and goes through our handler
-                        // (cutoff filter applies there too).
                         await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, oldestKey, oldestTs)
                         totalFetched += BATCH_PER_CHAT
-                        await new Promise(r => setTimeout(r, RATE_LIMIT_MS))
+                        // Small pause within a chat's pagination to avoid hammering
+                        await new Promise(r => setTimeout(r, 200))
 
-                        // Re-read roster anchor to see if it moved backwards (new older
-                        // messages arrived via handler and updated the anchor).
                         const refreshed = await prisma.whatsAppChatRoster.findUnique({
                             where: { connectionId_jid: { connectionId, jid: entry.jid } },
                         })
@@ -1043,7 +1025,6 @@ export async function importWhatsAppHistory(
                         oldestKey = refreshed.oldestMsgKey as any
                         oldestTs = newTs
 
-                        // Stop if cutoff reached (user wants only last N days)
                         const activeCutoff = connectionSyncCutoffs.get(connectionId)
                         if (activeCutoff && refreshed.oldestMsgTs < activeCutoff) break
                     } catch (pageErr: any) {
@@ -1059,6 +1040,26 @@ export async function importWhatsAppHistory(
                     jobId, jid: entry.jid, err: err?.message,
                 })
             }
+        }
+
+        // Process roster in parallel batches (PARALLEL_CHATS at once)
+        for (let i = 0; i < roster.length; i += PARALLEL_CHATS) {
+            const batch = roster.slice(i, i + PARALLEL_CHATS)
+            await Promise.all(batch.map(processChat))
+            chatsProcessed += batch.length
+
+            // Live progress — push current DB counts to HistoryImportJob every batch
+            try {
+                const curMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId } } })
+                const curChats = await prisma.whatsAppChat.count({ where: { connectionId } })
+                await prisma.historyImportJob.update({
+                    where: { id: jobId },
+                    data: { messagesImported: curMsgs, chatsScanned: curChats },
+                })
+            } catch { /* non-critical */ }
+
+            // Rate limit between batches — WA anti-abuse
+            await new Promise(r => setTimeout(r, RATE_LIMIT_MS))
         }
 
         // Allow a few seconds for last messages.upsert batches to finalize DB writes
