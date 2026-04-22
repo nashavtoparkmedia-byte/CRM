@@ -910,13 +910,15 @@ export async function importWhatsAppHistory(
         where: { chat: { connectionId } },
     })
 
-    // If user explicitly wants full history ('available_history') but DB is empty
-    // and socket is active, Baileys won't re-deliver history on this session — it
-    // was a one-shot event at first auth. UI must guide user to re-scan QR.
-    if (mode === 'available_history' && startCount === 0 && clients.has(connectionId)) {
+    // ALL modes need past data from Baileys to fill empty DB. Baileys only
+    // delivers history via messaging-history.set on first-auth after QR scan.
+    // An active (already authenticated) session cannot request a replay.
+    // So if DB is empty AND socket is live → finalize job as failed with a
+    // clear reason, UI shows guidance to re-scan QR.
+    if (startCount === 0 && clients.has(connectionId)) {
         opsLog('warn', 'wa_import_history_requires_reset', {
-            jobId, connectionId,
-            reason: 'DB empty + session active — re-scan QR required to fetch full history',
+            jobId, connectionId, mode,
+            reason: 'DB empty + session active — re-scan QR required',
         })
         await finalizeImportJob(jobId, 'failed', {
             reason: 'session_locked_needs_rescan',

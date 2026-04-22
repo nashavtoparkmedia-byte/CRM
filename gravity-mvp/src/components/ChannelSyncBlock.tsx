@@ -254,12 +254,28 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
             )}
 
             {/* Error */}
-            {historyStatus === 'error' && (
-                <div className="flex items-center gap-2 text-[12px] text-red-600">
-                    <AlertCircle size={14} />
-                    <span>Ошибка синхронизации. Попробуйте ещё раз.</span>
-                </div>
-            )}
+            {historyStatus === 'error' && (() => {
+                const reason = (lastJob?.detailsJson as any)?.reason
+                if (reason === 'session_locked_needs_rescan') {
+                    return (
+                        <div className="flex flex-col gap-1 text-[12px] text-red-600">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle size={14} />
+                                <span>Нужно заново отсканировать QR-код.</span>
+                            </div>
+                            <span className="text-[11px] text-gray-500 ml-[22px]">
+                                История сообщений хранится на серверах WhatsApp и выдаётся только при новой авторизации. Нажмите «Отключить» → «Отключить и удалить» и подключите аккаунт снова.
+                            </span>
+                        </div>
+                    )
+                }
+                return (
+                    <div className="flex items-center gap-2 text-[12px] text-red-600">
+                        <AlertCircle size={14} />
+                        <span>Ошибка синхронизации. Попробуйте ещё раз.</span>
+                    </div>
+                )
+            })()}
 
             {/* None */}
             {historyStatus === 'none' && (
