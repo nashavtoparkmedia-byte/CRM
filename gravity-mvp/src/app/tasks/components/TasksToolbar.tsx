@@ -27,6 +27,7 @@ import TaskListColumnsSettings from './TaskListColumnsSettings'
 import TaskListDensitySwitcher from './TaskListDensitySwitcher'
 import TaskListExcelButtons from './TaskListExcelButtons'
 import TaskListFiltersPopover from './TaskListFiltersPopover'
+import TaskListPresetsMenu from './TaskListPresetsMenu'
 import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
 import { useListViewStore } from '@/store/list-view-store'
 import { recordUsage } from '@/lib/tasks/usage'
@@ -256,9 +257,12 @@ export default function TasksToolbar() {
                             ))}
                         </select>
 
-                        {/* Column settings lives with stage / scenario tools, as it scopes to the active view */}
+                        {/* Column settings + named presets — scoped to the active view */}
                         {isChurnList && activeChurnView && (
-                            <TaskListColumnsSettings view={activeChurnView} />
+                            <>
+                                <TaskListColumnsSettings view={activeChurnView} />
+                                <TaskListPresetsMenu scenario="churn" />
+                            </>
                         )}
 
                         <a

@@ -10,11 +10,24 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ListViewOverrides, ListRowDensity } from '@/lib/tasks/list-schema'
 import type { ControlSignal } from '@/lib/tasks/control-signals'
 
+export interface UserPreset {
+    id: string
+    name: string
+    scenario: string
+    /** Which system view this preset builds on (operational/control/table). */
+    baseViewId: string
+    /** Snapshot of overrides at the moment of save. */
+    overrides: ListViewOverrides
+    createdAt: string
+}
+
 interface ListViewState {
     /** Active view id per scenario (e.g. { churn: 'churn_operational' }). */
     activeViewIdByScenario: Record<string, string>
     /** User overrides keyed by view id. */
     overridesByViewId: Record<string, ListViewOverrides>
+    /** Named user presets (can be switched by id like system views). */
+    userPresets: UserPreset[]
     /** Control-mode chip filter. Empty = show all. */
     controlSignalFilter: ControlSignal[]
 
@@ -35,6 +48,13 @@ interface ListViewState {
     setControlSignalFilter: (signals: ControlSignal[]) => void
     toggleControlSignal: (signal: ControlSignal) => void
     clearControlSignalFilter: () => void
+
+    /** Save current overrides of a view as a named user preset. */
+    savePreset: (name: string, scenario: string, baseViewId: string, overrides: ListViewOverrides) => string
+    /** Activate a user preset: copy its overrides into overridesByViewId[baseViewId] and switch activeView. */
+    activatePreset: (presetId: string) => void
+    deletePreset: (presetId: string) => void
+    renamePreset: (presetId: string, name: string) => void
 }
 
 export const useListViewStore = create<ListViewState>()(
@@ -42,6 +62,7 @@ export const useListViewStore = create<ListViewState>()(
         (set) => ({
             activeViewIdByScenario: {},
             overridesByViewId: {},
+            userPresets: [],
             controlSignalFilter: [],
 
             setActiveView: (scenario, viewId) =>
@@ -166,6 +187,34 @@ export const useListViewStore = create<ListViewState>()(
                 }),
 
             clearControlSignalFilter: () => set({ controlSignalFilter: [] }),
+
+            savePreset: (name, scenario, baseViewId, overrides) => {
+                const id = `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+                set((s) => ({
+                    userPresets: [
+                        ...s.userPresets,
+                        { id, name, scenario, baseViewId, overrides: structuredClone(overrides), createdAt: new Date().toISOString() },
+                    ],
+                }))
+                return id
+            },
+
+            activatePreset: (presetId) => set((s) => {
+                const p = s.userPresets.find(x => x.id === presetId)
+                if (!p) return s
+                return {
+                    activeViewIdByScenario: { ...s.activeViewIdByScenario, [p.scenario]: p.baseViewId },
+                    overridesByViewId: { ...s.overridesByViewId, [p.baseViewId]: structuredClone(p.overrides) },
+                }
+            }),
+
+            deletePreset: (presetId) => set((s) => ({
+                userPresets: s.userPresets.filter(p => p.id !== presetId),
+            })),
+
+            renamePreset: (presetId, name) => set((s) => ({
+                userPresets: s.userPresets.map(p => p.id === presetId ? { ...p, name } : p),
+            })),
         }),
         {
             name: 'crm-tasks-list-views',
@@ -175,9 +224,10 @@ export const useListViewStore = create<ListViewState>()(
             partialize: (s) => ({
                 activeViewIdByScenario: s.activeViewIdByScenario,
                 overridesByViewId: s.overridesByViewId,
+                userPresets: s.userPresets,
                 controlSignalFilter: s.controlSignalFilter,
             }),
-            version: 1,
+            version: 2,
         },
     ),
 )
