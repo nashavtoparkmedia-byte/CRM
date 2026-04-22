@@ -277,6 +277,22 @@ export async function exportChurnXlsx(
     }
 }
 
+/**
+ * Export the empty import template — same structure as the regular
+ * export (blocks / headers / validations / dropdowns) but without data
+ * rows. Managers use this to prepare a file in Excel and upload back.
+ */
+export async function exportChurnTemplate(): Promise<ExportResult> {
+    const wb = buildSkeleton()
+    const out = await wb.xlsx.writeBuffer()
+    const base64 = Buffer.from(out as ArrayBuffer).toString('base64')
+    return {
+        filename: `Отток_шаблон_для_импорта.xlsx`,
+        base64,
+        rowCount: 0,
+    }
+}
+
 // ─── Import: preview ────────────────────────────────────────────────
 
 export interface ImportDiffRow {
@@ -287,12 +303,22 @@ export interface ImportDiffRow {
     errors: string[]
 }
 
+export interface UnmappedHeader {
+    letter: string
+    header: string
+    /** Suggested contract column letter, or null if no good guess. */
+    suggestedColumnLetter?: string | null
+}
+
 export interface ImportPreviewResult {
     totalRows: number
     updateRows: number
     createRows: number
     rowsWithChanges: number
     rowsWithErrors: number
+    /** Headers in the uploaded file that didn't match our column contract.
+     * UI asks the user to map them (or ignore). */
+    unmappedHeaders: UnmappedHeader[]
     sampleDiffs: ImportDiffRow[]
     token: string
 }
@@ -309,7 +335,17 @@ interface PreparedRow {
     errors: string[]
 }
 
-export async function previewChurnImport(base64: string): Promise<ImportPreviewResult> {
+/**
+ * @param base64            the uploaded xlsx as base64
+ * @param columnOverrides   optional user-provided mapping
+ *                          `{ excelLetter: contractLetter }` — lets the
+ *                          user map an unrecognized header to the right
+ *                          column in the contract.
+ */
+export async function previewChurnImport(
+    base64: string,
+    columnOverrides: Record<string, string> = {},
+): Promise<ImportPreviewResult> {
     // Reader: SheetJS — it tolerates arbitrary producer files (including
     // the reference template, which exceljs.load chokes on).
     //
@@ -324,15 +360,48 @@ export async function previewChurnImport(base64: string): Promise<ImportPreviewR
 
     const range = XLSX.utils.decode_range(ws['!ref'] ?? 'A1:A1')
 
-    // Header row (1-based) → letter → ExcelColumnDef
+    // Header row (1-based) → letter → ExcelColumnDef.
+    // Matching order:
+    //   1. explicit user override (columnOverrides[letter] → contract letter)
+    //   2. exact header match against CHURN_COLUMN_BY_HEADER
+    //   3. fallback: column letter (A..W) already matches the contract slot
     const headerMap = new Map<string, (typeof CHURN_COLUMNS)[number]>()
+    const unmappedHeaders: UnmappedHeader[] = []
     for (let c = range.s.c; c <= range.e.c; c++) {
         const letter = XLSX.utils.encode_col(c)
         const cell = ws[`${letter}${HEADER_ROW}`]
         if (!cell) continue
         const header = String(cell.v ?? '').trim()
-        const col = CHURN_COLUMN_BY_HEADER[header] ?? CHURN_COLUMN_BY_LETTER[letter]
-        if (col) headerMap.set(letter, col)
+        if (!header) continue
+
+        const overrideLetter = columnOverrides[letter]
+        const overrideCol = overrideLetter ? CHURN_COLUMN_BY_LETTER[overrideLetter] : undefined
+        if (overrideCol) { headerMap.set(letter, overrideCol); continue }
+
+        const byHeader = CHURN_COLUMN_BY_HEADER[header]
+        if (byHeader) { headerMap.set(letter, byHeader); continue }
+
+        const byLetter = CHURN_COLUMN_BY_LETTER[letter]
+        // If the letter slot exists and no explicit header conflict — accept it
+        if (byLetter && byLetter.header === header) {
+            headerMap.set(letter, byLetter)
+            continue
+        }
+
+        // Didn't match — offer a guess (fuzzy header → contract column) to
+        // help the user pick in the UI. Simple heuristic: shared keyword.
+        const lower = header.toLowerCase()
+        const guess = CHURN_COLUMNS.find(col => {
+            const h = col.header.toLowerCase()
+            // common first noun match: "этап", "парк", "оффер" …
+            const firstWord = lower.split(/\s+/)[0]
+            return firstWord && h.includes(firstWord)
+        })
+        unmappedHeaders.push({
+            letter,
+            header,
+            suggestedColumnLetter: guess?.letter ?? null,
+        })
     }
 
     // Collect rows
@@ -520,6 +589,7 @@ export async function previewChurnImport(base64: string): Promise<ImportPreviewR
         createRows: creates,
         rowsWithChanges: withChanges,
         rowsWithErrors: withErrors,
+        unmappedHeaders,
         sampleDiffs: diffs.filter(d => d.changes.length > 0 || d.errors.length > 0).slice(0, 50),
         token: Buffer.from(JSON.stringify(payload), 'utf8').toString('base64'),
     }
