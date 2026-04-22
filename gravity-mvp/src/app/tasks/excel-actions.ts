@@ -248,7 +248,12 @@ export async function exportChurnXlsx(
             const v = col.toExcel(enriched)
             if (v === null || v === '') continue
             const cell = row.getCell(col.letter)
-            if (v instanceof Date) {
+            if (col.isDate && typeof v === 'number') {
+                // Excel serial (days since 1899-12-30). No TZ conversion — the
+                // number is interpreted by Excel as the raw calendar day.
+                cell.value = v
+                cell.numFmt = 'yyyy-mm-dd'
+            } else if (v instanceof Date) {
                 cell.value = v
                 cell.numFmt = 'yyyy-mm-dd'
             } else {

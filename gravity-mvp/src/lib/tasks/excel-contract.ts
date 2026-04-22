@@ -89,6 +89,13 @@ export interface ExcelColumnDef {
     /** Edit policy for this column on import. */
     edit: ExcelEditMode
 
+    /**
+     * Date-only column. Numeric toExcel output is interpreted as an
+     * Excel serial number and the cell is formatted as 'yyyy-mm-dd'.
+     * Without this flag a number would be written as a raw number.
+     */
+    isDate?: boolean
+
     /** Extract the Excel value from a TaskDTO (used on export). */
     toExcel: (task: TaskDTO) => string | number | Date | null
 
@@ -126,16 +133,25 @@ function sd(task: TaskDTO, key: string): unknown {
     return preview?.value
 }
 
-function dateOrEmpty(iso: string | null | undefined): Date | null {
-    // For the Excel side we use date-only cells. The value stored in Postgres
-    // is UTC-midnight of that calendar day (set by parseDateOnlyUTC on the
-    // import side). Convert back to a *local*-midnight Date with the same
-    // Y/M/D so Excel shows the same calendar date regardless of viewer's
-    // timezone. Without this, a UTC-midnight Date viewed in MSK (UTC+5)
-    // shifts -1 day.
+/**
+ * For date-only Excel cells we emit the Excel serial number directly
+ * (days since 1899-12-30). This is TZ-free — Excel interprets it as
+ * the raw calendar day regardless of the viewer's timezone.
+ *
+ * Passing a JS Date to ExcelJS converts via Date.getTime() (UTC epoch
+ * ms), so a local-midnight Date in MSK (UTC+5) becomes serial=day-0.79
+ * and Excel shows the previous day at 19:00. Using the serial number
+ * bypasses the whole TZ conversion layer.
+ */
+const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30)
+
+function dateOrEmpty(iso: string | null | undefined): number | null {
     if (!isRealDate(iso)) return null
     const d = new Date(iso!)
-    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+    // Stored value is UTC-midnight of the target calendar day
+    // (parseDateOnlyUTC on import builds it this way).
+    const utc = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+    return (utc - EXCEL_EPOCH_UTC) / 86400000
 }
 
 /**
@@ -269,7 +285,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         // L is editable: the file round-trip must preserve the date.
         // On export prefer the manual override (scenarioData.lastContactDate),
         // fall back to the derived TaskEvent-based value.
-        letter: 'L', header: 'Дата последнего контакта', block: 'manager_work', edit: 'YES',
+        letter: 'L', header: 'Дата последнего контакта', block: 'manager_work', edit: 'YES', isDate: true,
         toExcel: t => {
             const override = sd(t, 'lastContactDate')
             if (override) {
@@ -301,7 +317,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'O', header: 'Дедлайн следующего действия', block: 'manager_work', edit: 'YES',
+        letter: 'O', header: 'Дедлайн следующего действия', block: 'manager_work', edit: 'YES', isDate: true,
         toExcel: t => dateOrEmpty(t.nextActionAt),
         fromExcel: raw => {
             const d = parseDateOnlyUTC(raw)
@@ -378,7 +394,7 @@ export const CHURN_COLUMNS: ExcelColumnDef[] = [
         },
     },
     {
-        letter: 'V', header: 'Дата закрытия', block: 'closing', edit: 'YES',
+        letter: 'V', header: 'Дата закрытия', block: 'closing', edit: 'YES', isDate: true,
         toExcel: t => dateOrEmpty(t.resolvedAt),
         fromExcel: raw => {
             const d = parseDateOnlyUTC(raw)
