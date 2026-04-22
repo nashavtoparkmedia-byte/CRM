@@ -24,6 +24,11 @@ interface ListViewState {
 
     setColumnVisibility: (viewId: string, columnId: string, visible: boolean) => void
     setColumnOrder: (viewId: string, orderedIds: string[]) => void
+    setColumnWidth: (viewId: string, columnId: string, widthPx: number) => void
+    setColumnLabel: (viewId: string, columnId: string, label: string | null) => void
+    setColumnBlock: (viewId: string, columnId: string, blockId: string) => void
+    setBlockOrder: (viewId: string, orderedBlockIds: string[]) => void
+    setBlockLabel: (viewId: string, blockId: string, label: string | null) => void
     setRowDensity: (viewId: string, density: ListRowDensity) => void
     resetOverrides: (viewId: string) => void
 
@@ -63,6 +68,69 @@ export const useListViewStore = create<ListViewState>()(
                         overridesByViewId: {
                             ...s.overridesByViewId,
                             [viewId]: { ...prev, columnOrder: orderedIds },
+                        },
+                    }
+                }),
+
+            setColumnWidth: (viewId, columnId, widthPx) =>
+                set((s) => {
+                    const prev = s.overridesByViewId[viewId] ?? {}
+                    const next = { ...(prev.columnWidths ?? {}), [columnId]: widthPx }
+                    return {
+                        overridesByViewId: {
+                            ...s.overridesByViewId,
+                            [viewId]: { ...prev, columnWidths: next },
+                        },
+                    }
+                }),
+
+            setColumnLabel: (viewId, columnId, label) =>
+                set((s) => {
+                    const prev = s.overridesByViewId[viewId] ?? {}
+                    const next = { ...(prev.columnLabels ?? {}) }
+                    if (label === null || label === '') delete next[columnId]
+                    else next[columnId] = label
+                    return {
+                        overridesByViewId: {
+                            ...s.overridesByViewId,
+                            [viewId]: { ...prev, columnLabels: next },
+                        },
+                    }
+                }),
+
+            setColumnBlock: (viewId, columnId, blockId) =>
+                set((s) => {
+                    const prev = s.overridesByViewId[viewId] ?? {}
+                    const next = { ...(prev.columnBlock ?? {}), [columnId]: blockId }
+                    return {
+                        overridesByViewId: {
+                            ...s.overridesByViewId,
+                            [viewId]: { ...prev, columnBlock: next },
+                        },
+                    }
+                }),
+
+            setBlockOrder: (viewId, orderedBlockIds) =>
+                set((s) => {
+                    const prev = s.overridesByViewId[viewId] ?? {}
+                    return {
+                        overridesByViewId: {
+                            ...s.overridesByViewId,
+                            [viewId]: { ...prev, blockOrder: orderedBlockIds },
+                        },
+                    }
+                }),
+
+            setBlockLabel: (viewId, blockId, label) =>
+                set((s) => {
+                    const prev = s.overridesByViewId[viewId] ?? {}
+                    const next = { ...(prev.blockLabels ?? {}) }
+                    if (label === null || label === '') delete next[blockId]
+                    else next[blockId] = label
+                    return {
+                        overridesByViewId: {
+                            ...s.overridesByViewId,
+                            [viewId]: { ...prev, blockLabels: next },
                         },
                     }
                 }),

@@ -564,10 +564,16 @@ export function resolveLayout(
         orderSource.forEach((id, idx) => orderIndex.set(id, idx))
     }
 
-    // Build ResolvedColumn[]
+    // Build ResolvedColumn[] with per-column overrides applied
+    const columnLabels = overrides?.columnLabels ?? {}
+    const columnBlock = overrides?.columnBlock ?? {}
     const resolved: ResolvedColumn[] = cols
         .map<ResolvedColumn>(c => ({
             ...c,
+            // user-chosen block wins over the declarative one
+            block: columnBlock[c.id] ?? c.block,
+            // user-chosen label wins over the declarative one (exportKey unchanged)
+            label: columnLabels[c.id] ?? c.label,
             visible: resolveVisible(c.id),
             widthPx: overrides?.columnWidths?.[c.id] ?? c.defaultWidthPx,
             order: orderIndex.get(c.id) ?? c.defaultOrder,
@@ -582,13 +588,25 @@ export function resolveLayout(
         byBlock.set(c.block, list)
     }
 
+    // Block order: overrides.blockOrder > BLOCKS[].order
+    const blockOrderIndex = new Map<string, number>()
+    if (overrides?.blockOrder) {
+        overrides.blockOrder.forEach((id, idx) => blockOrderIndex.set(id, idx))
+    }
+    const blockLabels = overrides?.blockLabels ?? {}
+
     const resolvedBlocks: ResolvedBlock[] = blocks
         .slice()
-        .sort((a, b) => a.order - b.order)
+        .sort((a, b) => {
+            const ai = blockOrderIndex.get(a.id) ?? (10000 + a.order)
+            const bi = blockOrderIndex.get(b.id) ?? (10000 + b.order)
+            return ai - bi
+        })
         .map(b => {
             const columns = byBlock.get(b.id) ?? []
             return {
                 ...b,
+                label: blockLabels[b.id] ?? b.label,
                 columns,
                 visibleColumns: columns.filter(c => c.visible),
             }

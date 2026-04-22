@@ -89,8 +89,16 @@ export interface ListViewOverrides {
     columnVisibility?: Record<string, boolean>
     /** Explicit column order (partial allowed: missing ids keep their default order after listed ones). */
     columnOrder?: string[]
-    /** Reserved for future resize feature — not used in MVP. */
+    /** Per-column width in px (overrides ListColumnDef.defaultWidthPx). */
     columnWidths?: Record<string, number>
+    /** Per-column label override (UI only; exportKey stays stable). */
+    columnLabels?: Record<string, string>
+    /** Per-column block assignment (lets the user move a column between blocks). */
+    columnBlock?: Record<string, string>
+    /** Explicit block order (partial allowed). */
+    blockOrder?: string[]
+    /** Per-block label override. */
+    blockLabels?: Record<string, string>
     /** User-level density override. If unset → view.rowDensity applies. */
     rowDensity?: ListRowDensity
 }
