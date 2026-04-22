@@ -127,10 +127,13 @@ model WhatsAppChatRoster {
   // Anchor for fetchMessageHistory — the oldest msg we've ever seen for this chat
   oldestMsgKey    Json?    // serialized proto.IMessageKey (has remoteJid, fromMe, id, participant?)
   oldestMsgTs     DateTime?
+  // Newest observed msg timestamp — enables "last N days" filter to skip inactive chats
+  newestMsgTs     DateTime?
   lastSeen        DateTime @default(now())
 
   @@unique([connectionId, jid])
   @@index([connectionId])
+  @@index([connectionId, newestMsgTs])
 }
 
 model DriverTelegram {

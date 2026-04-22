@@ -57,10 +57,14 @@ export async function GET(req: NextRequest) {
             oldestLegacyMsgTs: oldestMsg?.timestamp ?? null,
             newestLegacyMsgTs: newestMsg?.timestamp ?? null,
             rosterSize: await prisma.whatsAppChatRoster.count({ where: { connectionId: connId } }),
+            rosterWithNewestTs: await prisma.whatsAppChatRoster.count({
+                where: { connectionId: connId, newestMsgTs: { not: null } },
+            }),
             rosterSample: rosterEntries.map(r => ({
                 jid: r.jid,
                 name: r.name,
                 oldestMsgTs: r.oldestMsgTs,
+                newestMsgTs: r.newestMsgTs,
                 lastSeen: r.lastSeen,
                 hasAnchorKey: !!r.oldestMsgKey,
             })),

@@ -448,22 +448,25 @@ async function handleIncomingMessage(
     const ts = new Date((Number(m.messageTimestamp) || 0) * 1000)
 
     // ROSTER: persist chat as anchor for future backfill (fetchMessageHistory).
-    // Update oldestMsgKey/oldestMsgTs only when this message is older than stored.
+    // Track both oldestMsgTs (for pagination anchor) and newestMsgTs
+    // (for "last N days" filter — skip chats with no recent activity).
     // Survives DB message wipe — key data for re-sync without QR rescan.
     try {
         const existing = await prisma.whatsAppChatRoster.findUnique({
             where: { connectionId_jid: { connectionId, jid: remoteJid } },
         })
-        const shouldUpdateAnchor = !existing?.oldestMsgTs || ts < existing.oldestMsgTs
+        const shouldUpdateOldest = !existing?.oldestMsgTs || ts < existing.oldestMsgTs
+        const shouldUpdateNewest = !existing?.newestMsgTs || ts > existing.newestMsgTs
         await prisma.whatsAppChatRoster.upsert({
             where: { connectionId_jid: { connectionId, jid: remoteJid } },
             update: {
                 name: (m as any).pushName || existing?.name || null,
                 lastSeen: new Date(),
-                ...(shouldUpdateAnchor ? {
+                ...(shouldUpdateOldest ? {
                     oldestMsgKey: m.key as any,
                     oldestMsgTs: ts,
                 } : {}),
+                ...(shouldUpdateNewest ? { newestMsgTs: ts } : {}),
             },
             create: {
                 connectionId,
@@ -471,6 +474,7 @@ async function handleIncomingMessage(
                 name: (m as any).pushName || null,
                 oldestMsgKey: m.key as any,
                 oldestMsgTs: ts,
+                newestMsgTs: ts,
                 lastSeen: new Date(),
             },
         })
@@ -969,12 +973,25 @@ export async function importWhatsAppHistory(
             return { imported: 0, errors: 1 }
         }
 
-        const roster = await prisma.whatsAppChatRoster.findMany({
-            where: {
-                connectionId,
-                oldestMsgKey: { not: Prisma.AnyNull },
-                oldestMsgTs: { not: null },
-            },
+        // Build roster query — if mode='last_n_days', pre-filter inactive chats
+        // (those with no activity within cutoff window) to skip ~95% of dead chats.
+        const activeCutoff = connectionSyncCutoffs.get(connectionId)
+        const rosterWhere: any = {
+            connectionId,
+            oldestMsgKey: { not: Prisma.AnyNull },
+            oldestMsgTs: { not: null },
+        }
+        if (mode === 'last_n_days' && activeCutoff) {
+            rosterWhere.OR = [
+                { newestMsgTs: { gte: activeCutoff } },
+                { newestMsgTs: null }, // unknown activity — include to be safe (legacy rows)
+            ]
+        }
+        const roster = await prisma.whatsAppChatRoster.findMany({ where: rosterWhere })
+        opsLog('info', 'wa_backfill_roster_selected', {
+            jobId, connectionId, mode,
+            selectedCount: roster.length,
+            cutoff: activeCutoff?.toISOString(),
         })
 
         if (!sock || roster.length === 0) {

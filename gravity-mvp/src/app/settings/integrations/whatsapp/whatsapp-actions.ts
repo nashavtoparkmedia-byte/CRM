@@ -233,6 +233,23 @@ export async function deleteWhatsAppMessages(connectionId: string) {
         console.log(`[WA-DELETE] Cleaned up import jobs for connection ${connectionId}`)
     } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
 
+    // Orphan cleanup: whatsapp unified chats without any messages are phantoms
+    // (from old wa-web.js era without metadata.connectionId, or left over from
+    // aborted syncs). They clutter /messages — safe to remove since empty.
+    try {
+        const orphanChats = await (prisma.chat as any).findMany({
+            where: { channel: 'whatsapp' },
+            select: { id: true, _count: { select: { messages: true } } },
+        })
+        const orphanIds = orphanChats
+            .filter((c: any) => (c._count?.messages ?? 0) === 0)
+            .map((c: any) => c.id)
+        if (orphanIds.length > 0) {
+            const orphanDel = await (prisma.chat as any).deleteMany({ where: { id: { in: orphanIds } } })
+            console.log(`[WA-DELETE] Removed ${orphanDel.count} orphan whatsapp chats (no messages)`)
+        }
+    } catch (e: any) { console.error(`[WA-DELETE] Orphan chat cleanup error: ${e.message}`) }
+
     revalidatePath('/messages')
 }
 
