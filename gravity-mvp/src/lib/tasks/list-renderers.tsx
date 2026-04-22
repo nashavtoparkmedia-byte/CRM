@@ -354,6 +354,25 @@ const RENDERERS: Record<string, FieldRenderer> = {
             : <MutedCell>Нет</MutedCell>,
     },
 
+    // Case management: derived probability
+    returnProbability: {
+        getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'returnProbability')?.value ?? null,
+        render: v => {
+            if (!v) return <EmptyCell />
+            const s = String(v)
+            const style =
+                s === 'high'   ? 'bg-[#DCFCE7] text-[#166534]' :
+                s === 'medium' ? 'bg-[#FEF3C7] text-[#92400E]' :
+                s === 'low'    ? 'bg-[#FEE2E2] text-[#B91C1C]' :
+                                 'bg-[#F1F5F9] text-[#475569]'
+            const label =
+                s === 'high'   ? 'Высокая' :
+                s === 'medium' ? 'Средняя' :
+                s === 'low'    ? 'Низкая'  : s
+            return <Badge className={style}>{label}</Badge>
+        },
+    },
+
     // Block 4 extras: Работа менеджера (editable text overrides)
     semanticStatus: {
         getValue: t => t.scenarioFieldsPreview?.find(p => p.fieldId === 'semanticStatus')?.value ?? null,

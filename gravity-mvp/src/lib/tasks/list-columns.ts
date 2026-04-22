@@ -238,6 +238,21 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
     },
 
     {
+        id: 'returnProbability',
+        exportKey: 'return_probability',
+        block: 'case_management',
+        label: 'Вероятность возврата',
+        labelShort: 'Возврат',
+        source: { kind: 'scenarioData', fieldId: 'returnProbability' },
+        valueType: 'enum',
+        defaultVisible: false,
+        defaultOrder: 13,
+        defaultWidthPx: 130,
+        filterable: false,
+        sortable: false,
+        readonly: true,
+    },
+    {
         id: 'semanticStatus',
         exportKey: 'semantic_status',
         block: 'manager_work',

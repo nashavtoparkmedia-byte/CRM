@@ -73,15 +73,74 @@ interface EnrichedTask {
     mergedFieldsMap?: Map<string, MergedFieldConfig[]>
 }
 
+/**
+ * Append derived churn-only fields to scenarioData in a non-mutating way.
+ *   • inactiveDays       = days since last contact (from TaskEvent)
+ *   • returnProbability  = high / medium / low, from signals
+ *
+ * If the manual value is already present in scenarioData, keep it —
+ * manual always wins over derived.
+ */
+function withDerivedChurnFields(
+    data: ScenarioData | null,
+    task: TaskWithDriver,
+    work: WorkSummary,
+): ScenarioData {
+    const now = Date.now()
+    const out: ScenarioData = { ...(data ?? {}) }
+    const nowIso = new Date(now).toISOString()
+
+    // inactiveDays
+    const existingInactive = out.inactiveDays as { value?: unknown } | undefined
+    if (existingInactive?.value === undefined || existingInactive?.value === null) {
+        let days: number | null = null
+        if (work.lastContactAt) {
+            days = Math.floor((now - new Date(work.lastContactAt).getTime()) / 86_400_000)
+        } else if (task.driver?.lastOrderAt) {
+            days = Math.floor((now - task.driver.lastOrderAt.getTime()) / 86_400_000)
+        }
+        if (days !== null && days >= 0) {
+            out.inactiveDays = { value: days, source: 'derived', updatedAt: nowIso }
+        }
+    }
+
+    // returnProbability (simple signal-based heuristic — MVP)
+    const existingProb = out.returnProbability as { value?: unknown } | undefined
+    if (existingProb?.value === undefined || existingProb?.value === null) {
+        const offerOverride = out.offerAllowedOverride as { value?: unknown } | undefined
+        const yandexActive = (out.yandexActive as { value?: boolean } | undefined)?.value
+        const trips = Number((out.yandexTripsCount as { value?: unknown } | undefined)?.value)
+        const isSmz = (out.isSelfEmployed as { value?: boolean } | undefined)?.value === true
+        let prob: 'high' | 'medium' | 'low' = 'low'
+        if (offerOverride?.value === 'yes' || isSmz || (Number.isFinite(trips) && trips >= 100) || task.priority === 'critical') {
+            prob = 'high'
+        } else if (yandexActive === true || (Number.isFinite(trips) && trips >= 30)) {
+            prob = 'medium'
+        }
+        out.returnProbability = { value: prob, source: 'derived', updatedAt: nowIso }
+    }
+
+    return out
+}
+
 function toEnrichedTaskDTO(e: EnrichedTask): TaskDTO {
     const t = e.task
     const meta = (t.metadata as any) ?? {}
+
+    // ─── Auto-computed scenario fields ──────────────────────────
+    // Inject derived values into scenarioDataRaw so all downstream
+    // consumers (preview array, renderers, Excel export) see them
+    // without any per-column special case.
+    let scenarioDataRaw = e.scenarioDataRaw
+    if (t.scenario === 'churn') {
+        scenarioDataRaw = withDerivedChurnFields(scenarioDataRaw, t, e.workSummary)
+    }
 
     // Compute offer verdict (for churn only — other scenarios get null)
     let offerAllowed: TaskDTO['offerAllowed'] = null
     if (t.scenario === 'churn') {
         const baseDto: Pick<TaskDTO, 'priority'> = { priority: t.priority }
-        const resolved = resolveOfferAllowed(baseDto as TaskDTO, e.scenarioDataRaw)
+        const resolved = resolveOfferAllowed(baseDto as TaskDTO, scenarioDataRaw)
         offerAllowed = {
             verdict: resolved.verdict,
             reason: resolved.reason,
@@ -152,10 +211,10 @@ function toEnrichedTaskDTO(e: EnrichedTask): TaskDTO {
         offerAllowed,
 
         // Scenario fields preview (respects per-scenario settings: showInList, order, limit 8)
-        scenarioFieldsPreview: buildScenarioFieldsPreview(t.scenario, e.scenarioDataRaw, e.mergedFieldsMap),
+        scenarioFieldsPreview: buildScenarioFieldsPreview(t.scenario, scenarioDataRaw, e.mergedFieldsMap),
 
         // Scenario meta — сводка по scenarioData (для фильтров/сортировок)
-        scenarioMeta: buildScenarioMeta(t.scenario, e.scenarioDataRaw),
+        scenarioMeta: buildScenarioMeta(t.scenario, scenarioDataRaw),
     }
 }
 

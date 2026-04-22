@@ -240,6 +240,18 @@ export const SCENARIOS: Record<string, ScenarioConfig> = {
                 type: 'string', source: 'manual',
                 showInList: false, showInCard: true, filterable: false, sortable: false, priorityWeight: 0,
             },
+
+            // Auto-computed — derived in toEnrichedTaskDTO (actions.ts).
+            {
+                id: 'returnProbability', label: 'Вероятность возврата',
+                type: 'enum', source: 'derived',
+                showInList: false, showInCard: true, filterable: true, sortable: false, priorityWeight: 1,
+                enumOptions: [
+                    { value: 'high', label: 'Высокая' },
+                    { value: 'medium', label: 'Средняя' },
+                    { value: 'low', label: 'Низкая' },
+                ],
+            },
         ],
         presets: {
             hotInactiveDaysThreshold: 7,
