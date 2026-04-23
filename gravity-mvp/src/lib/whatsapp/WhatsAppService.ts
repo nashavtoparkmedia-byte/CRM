@@ -148,7 +148,46 @@ async function syncHistory(connectionId: string, client: Client) {
                 if (chatJid === 'status@broadcast') continue
                 if ((chatRaw as any).isGroup) continue
 
-                // Ensure chat exists in DB (legacy)
+                // Fetch messages FIRST — only create Chat rows if there's
+                // actually something to store. Previously chat.upsert ran
+                // before fetch, leaving ~97% of rows empty as UI ghosts.
+                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
+                try {
+                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
+                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type }))
+                } catch {
+                    const page = (client as any).pupPage
+                    if (page) {
+                        try {
+                            rawMsgs = await page.evaluate((cid: string) => {
+                                const store = (window as any).Store
+                                if (!store?.Chat) return []
+                                const chat = store.Chat.get(cid)
+                                if (!chat?.msgs) return []
+                                const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
+                                return models.map((m: any) => ({
+                                    id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
+                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat',
+                                }))
+                            }, chatRaw.id._serialized)
+                        } catch {}
+                    }
+                }
+
+                // Drop junk messages where body is a raw JID (system/e2e/gp2 frames).
+                const JID_LIKE = /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i
+                const cleanedRaw = rawMsgs.filter(m => {
+                    const body = (m.body || '').trim()
+                    if (!body) return true
+                    return !JID_LIKE.test(body)
+                })
+
+                const filtered = cleanedRaw.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+
+                // If no survivors, skip — no orphan chat row created.
+                if (filtered.length === 0) continue
+
+                // Ensure chat exists in DB (legacy) — only now that we have data.
                 await prisma.whatsAppChat.upsert({
                     where: { id: chatRaw.id._serialized },
                     update: { name: chatRaw.name },
@@ -184,31 +223,6 @@ async function syncHistory(connectionId: string, client: Client) {
                         console.warn(`[WA-SERVICE] syncHistory contact resolve failed for ${chatRaw.id._serialized}: ${contactErr.message}`)
                     }
                 }
-
-                // Fetch messages — try fetchMessages, fall back to Store for @lid chats
-                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
-                try {
-                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
-                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type }))
-                } catch {
-                    const page = (client as any).pupPage
-                    if (page) {
-                        try {
-                            rawMsgs = await page.evaluate((cid: string) => {
-                                const store = (window as any).Store
-                                if (!store?.Chat) return []
-                                const chat = store.Chat.get(cid)
-                                if (!chat?.msgs) return []
-                                const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
-                                return models.map((m: any) => ({
-                                    id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
-                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat',
-                                }))
-                            }, chatRaw.id._serialized)
-                        } catch {}
-                    }
-                }
-                const filtered = rawMsgs.filter(m => new Date(m.timestamp * 1000) >= cutoff)
 
                 let maxTimestamp: Date | null = null
                 for (const msg of filtered) {
@@ -497,6 +511,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         const toJid = msg.to || ''
         if (fromJid === 'status@broadcast' || toJid === 'status@broadcast') return
         if (fromJid.endsWith('@g.us') || toJid.endsWith('@g.us')) return
+
+        // Drop system/e2e/gp2 frames where body is a raw JID literal.
+        // User text never looks like "123456789@c.us" — it's protocol noise.
+        const bodyTrimmed = (msg.body || '').trim()
+        if (bodyTrimmed && /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i.test(bodyTrimmed)) {
+            console.log(`[WA-SERVICE] skip JID-body msg id=${msg.id._serialized} body="${bodyTrimmed}"`)
+            return
+        }
 
         // PAUSE: buffer for later flush, don't process now
         if (pausedSet.has(connectionId)) {
@@ -1344,39 +1366,9 @@ export async function importWhatsAppHistory(
                 if (chatJid === 'status@broadcast') continue
                 if ((chatRaw as any).isGroup) continue
 
-                totalChats++
-
-                // Upsert legacy WA chat
-                await prisma.whatsAppChat.upsert({
-                    where: { id: chatRaw.id._serialized },
-                    update: { name: chatRaw.name },
-                    create: { id: chatRaw.id._serialized, connectionId: connId!, name: chatRaw.name }
-                })
-
-                // Upsert unified Chat
-                const unifiedChat = await prisma.chat.upsert({
-                    where: { externalChatId: chatRaw.id._serialized },
-                    update: { name: chatRaw.name },
-                    create: {
-                        externalChatId: chatRaw.id._serialized,
-                        channel: 'whatsapp',
-                        name: chatRaw.name,
-                        metadata: { connectionId: connId }
-                    }
-                })
-
-                // Contact resolution
-                if (!unifiedChat.contactId) {
-                    try {
-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
-                            totalContacts++
-                        }
-                    } catch {}
-                }
-
-                // Fetch messages — try fetchMessages first, fall back to Store.Chat.msgs for @lid chats
+                // Fetch messages FIRST — only create Chat rows if there's
+                // actually something to store. Previous order (chat.upsert
+                // before fetch) left 463/478 empty chats as UI ghosts.
                 let rawMessages: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
@@ -1409,7 +1401,53 @@ export async function importWhatsAppHistory(
                         } catch {}
                     }
                 }
-                const filtered = rawMessages.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+
+                // Drop junk-body messages: some WA system/e2e/gp2 frames
+                // arrive with body = a JID literal (e.g. "252570316607633@lid").
+                // These aren't user text — filter them out regardless of type.
+                const JID_LIKE = /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i
+                const cleanedRaw = rawMessages.filter(m => {
+                    const body = (m.body || '').trim()
+                    if (!body) return true // empty body is fine (media, etc.) — keep
+                    return !JID_LIKE.test(body)
+                })
+
+                const filtered = cleanedRaw.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+
+                // If nothing survives the cutoff, skip this chat entirely —
+                // no orphan chat rows left behind.
+                if (filtered.length === 0) continue
+
+                totalChats++
+
+                // Now it's safe to create the chat rows — we have real data.
+                await prisma.whatsAppChat.upsert({
+                    where: { id: chatRaw.id._serialized },
+                    update: { name: chatRaw.name },
+                    create: { id: chatRaw.id._serialized, connectionId: connId!, name: chatRaw.name }
+                })
+
+                const unifiedChat = await prisma.chat.upsert({
+                    where: { externalChatId: chatRaw.id._serialized },
+                    update: { name: chatRaw.name },
+                    create: {
+                        externalChatId: chatRaw.id._serialized,
+                        channel: 'whatsapp',
+                        name: chatRaw.name,
+                        metadata: { connectionId: connId }
+                    }
+                })
+
+                // Contact resolution
+                if (!unifiedChat.contactId) {
+                    try {
+                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
+                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+                            await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            totalContacts++
+                        }
+                    } catch {}
+                }
 
                 let chatMaxTs: Date | null = null
                 for (const msg of filtered) {
