@@ -9,7 +9,11 @@ import { emitMessageReceived } from '@/lib/messageEvents'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 
-const MAX_MEDIA_SIZE_BYTES = 10 * 1024 * 1024 // 10MB per file
+// 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
+// short videos easily exceed that — skipped media left the UI with
+// a blank bubble. 25MB covers ~99% of WhatsApp media (WA itself caps
+// upload at ~100MB, typical user messages are under 25MB).
+const MAX_MEDIA_SIZE_BYTES = 25 * 1024 * 1024
 const HISTORY_MONTHS = 3
 
 // Global singleton map: connectionId -> Client instance

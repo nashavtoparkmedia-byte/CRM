@@ -494,6 +494,70 @@ export default function MessageFeed({
                             </div>
                         )}
 
+                        {/* Видео */}
+                        {msg.type === 'video' && msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mb-1">
+                                {msg.attachments.filter(a => a.url).map(att => (
+                                    <video
+                                        key={att.id}
+                                        src={att.url}
+                                        controls
+                                        className="max-w-[280px] max-h-[320px] rounded-lg"
+                                        preload="metadata"
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Стикер */}
+                        {msg.type === 'sticker' && msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mb-1">
+                                {msg.attachments.filter(a => a.url).map(att => (
+                                    <img
+                                        key={att.id}
+                                        src={att.url}
+                                        alt="стикер"
+                                        className="w-[140px] h-[140px] object-contain"
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Документ */}
+                        {msg.type === 'document' && msg.attachments && msg.attachments.length > 0 && (
+                            <div className="mb-1">
+                                {msg.attachments.filter(a => a.url).map(att => (
+                                    <a
+                                        key={att.id}
+                                        href={att.url}
+                                        download={att.fileName || 'document'}
+                                        className="inline-flex items-center gap-2 rounded-lg bg-[#F1F5FD] px-3 py-2 text-[13px] hover:bg-[#E4ECFC] transition-colors"
+                                    >
+                                        <span className="text-[#2AABEE]">📎</span>
+                                        <span className="font-medium truncate max-w-[200px]">
+                                            {att.fileName || 'Документ'}
+                                        </span>
+                                        {att.fileSize ? (
+                                            <span className="text-[#64748B] text-[11px]">
+                                                {(att.fileSize / 1024).toFixed(0)} KB
+                                            </span>
+                                        ) : null}
+                                    </a>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Placeholder when media type is known but attachment is missing
+                            (e.g., file too big, download failed, cold session). Without this,
+                            the PLACEHOLDERS-hider below would produce an empty bubble. */}
+                        {['image', 'video', 'voice', 'audio', 'sticker', 'document'].includes(msg.type) &&
+                         (!msg.attachments || msg.attachments.length === 0 || !msg.attachments.some(a => a.url)) && (
+                            <div className="mb-1 text-[13px] italic text-[#64748B] flex items-center gap-1.5">
+                                <span>📎</span>
+                                <span>Медиа недоступно (файл слишком большой или не загружен)</span>
+                            </div>
+                        )}
+
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
                             {(() => {
                                 // Hide auto-generated media placeholders ("[Фото]", "[Видео]"
