@@ -620,6 +620,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             return
         }
 
+        // Drop empty text frames — type='chat' with no body is protocol
+        // noise (receipts, mute markers, read acks that slip through).
+        // Media messages keep an empty body legitimately (caption absent).
+        if ((msg.type === 'chat' || !msg.type) && !bodyTrimmed && !msg.hasMedia) {
+            console.log(`[WA-SERVICE] skip empty-text msg id=${msg.id._serialized} type=${msg.type}`)
+            return
+        }
+
         // PAUSE: buffer for later flush, don't process now
         if (pausedSet.has(connectionId)) {
             const buf = messageBuffers.get(connectionId) ?? []
