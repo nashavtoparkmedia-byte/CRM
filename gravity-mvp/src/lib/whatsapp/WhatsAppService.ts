@@ -414,6 +414,10 @@ async function syncHistory(connectionId: string, client: Client) {
 }
 
 function mapMsgType(type: string): 'chat' | 'image' | 'audio' | 'video' | 'sticker' | 'voice' | 'document' {
+    // whatsapp-web.js returns raw protocol types — 'ptt' is push-to-talk
+    // voice message. Map it to our canonical 'voice' so media download
+    // and UI rendering treat it correctly.
+    if (type === 'ptt') return 'voice'
     const allowed = ['chat', 'image', 'audio', 'video', 'sticker', 'voice', 'document'] as const
     return allowed.includes(type as any) ? (type as typeof allowed[number]) : 'chat'
 }
@@ -426,7 +430,8 @@ function mapToUnifiedMessageType(type: string): 'text' | 'image' | 'audio' | 'vi
         'video': 'video',
         'sticker': 'sticker',
         'voice': 'voice',
-        'document': 'document'
+        'ptt': 'voice',        // push-to-talk voice message
+        'document': 'document',
     }
     return map[type] || 'text'
 }
