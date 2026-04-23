@@ -14,7 +14,7 @@ export interface MessageAttachment {
 export interface Message {
     id: string
     direction: 'inbound' | 'outbound'
-    type: 'text' | 'image' | 'video' | 'voice' | 'audio' | 'document' | 'system'
+    type: 'text' | 'image' | 'video' | 'voice' | 'audio' | 'document' | 'system' | 'call'
     content: string
     sentAt: string
     status: 'queued' | 'sent' | 'delivered' | 'read' | 'failed'
