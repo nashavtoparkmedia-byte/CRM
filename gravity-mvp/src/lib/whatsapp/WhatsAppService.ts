@@ -445,6 +445,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
         registry.touch(connectionId, instanceId)
 
+        // Skip groups (@g.us) and status broadcasts — CRM is 1:1 focused.
+        // Without this filter groups pollute the chat list with JID-looking
+        // "phone numbers" and raw/empty content.
+        const fromJid = msg.from || ''
+        const toJid = msg.to || ''
+        if (fromJid === 'status@broadcast' || toJid === 'status@broadcast') return
+        if (fromJid.endsWith('@g.us') || toJid.endsWith('@g.us')) return
+
         // PAUSE: buffer for later flush, don't process now
         if (pausedSet.has(connectionId)) {
             const buf = messageBuffers.get(connectionId) ?? []
