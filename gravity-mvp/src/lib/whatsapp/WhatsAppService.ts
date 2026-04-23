@@ -39,6 +39,38 @@ const forceResetLocks: Map<string, Promise<void>> = globalForResetLocks._waReset
 if (process.env.NODE_ENV !== 'production') globalForResetLocks._waResetLocks = forceResetLocks
 
 /**
+ * Clamp a WA timestamp (epoch seconds) into a sane range.
+ *
+ * WA Web occasionally hands us corrupted timestamps for outbound /
+ * system / e2e messages — most notably year 2038 (Y2038-style Long
+ * overflow). Unchecked, these break the 7-day backfill filter AND
+ * crush sort order (a "2038" message shows up ahead of real recent
+ * messages).
+ *
+ * Previously a version of this lived in the Baileys handleIncomingMessage
+ * (commit a16417b) but was lost when we reverted to whatsapp-web.js. This
+ * is the wa-web.js port, applied at every persistence site.
+ *
+ * Policy:
+ *   - rawSeconds NaN / 0 / below 2015-01-01 → fallback to now()
+ *   - rawSeconds more than 1h ahead of now   → fallback to now()
+ *   - otherwise                              → use as-is
+ *
+ * Returns a Date (ms-precision).
+ */
+const MIN_TS_MS = Date.UTC(2015, 0, 1)
+const FUTURE_TOLERANCE_MS = 60 * 60 * 1000 // 1h — clock skew budget
+function clampMessageTs(rawSeconds: unknown): Date {
+    const nowMs = Date.now()
+    const maxMs = nowMs + FUTURE_TOLERANCE_MS
+    const n = typeof rawSeconds === 'number' ? rawSeconds : Number(rawSeconds)
+    if (!Number.isFinite(n) || n <= 0) return new Date(nowMs)
+    const tsMs = n * 1000
+    if (tsMs < MIN_TS_MS || tsMs > maxMs) return new Date(nowMs)
+    return new Date(tsMs)
+}
+
+/**
  * Stage 1 helper: retry a puppeteer-backed call when it fails with the
  * transient "Execution context was destroyed" error. This happens when
  * WA Web navigates internally (post-auth, post-sync) while our pupPage
@@ -182,7 +214,7 @@ async function syncHistory(connectionId: string, client: Client) {
                     return !JID_LIKE.test(body)
                 })
 
-                const filtered = cleanedRaw.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+                const filtered = cleanedRaw.filter(m => clampMessageTs(m.timestamp) >= cutoff)
 
                 // If no survivors, skip — no orphan chat row created.
                 if (filtered.length === 0) continue
@@ -227,7 +259,7 @@ async function syncHistory(connectionId: string, client: Client) {
                 let maxTimestamp: Date | null = null
                 for (const msg of filtered) {
                     try {
-                        const ts = new Date(msg.timestamp * 1000)
+                        const ts = clampMessageTs(msg.timestamp)
                         if (!maxTimestamp || ts > maxTimestamp) maxTimestamp = ts
 
                         const msgType = mapMsgType(msg.type)
@@ -530,7 +562,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
         // CUTOFF: skip messages older than configured cutoff ("last N days" mode)
         const cutoff = connectionSyncCutoffs.get(connectionId)
-        if (cutoff && msg.timestamp && new Date(msg.timestamp * 1000) < cutoff) {
+        if (cutoff && msg.timestamp && clampMessageTs(msg.timestamp) < cutoff) {
             return
         }
 
@@ -545,7 +577,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         try { fs.appendFileSync(path.join(process.cwd(), 'wa-incoming.log'), logLine); } catch(e) {}
         try {
             let rawChatId = partnerJid  // e.g. '79221853150@c.us'
-            const ts = new Date(msg.timestamp * 1000)
+            const ts = clampMessageTs(msg.timestamp)
 
             // If the partner JID is a LID, attempt to get their real phone number.
             // For inbound: msg.getContact() = sender. For outbound: use chat.getContact() to get recipient.
@@ -1084,7 +1116,7 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
     const sendInstanceId = instanceIds.get(connectionId)
     if (sendInstanceId) registry.touch(connectionId, sendInstanceId)
 
-    const ts = new Date(msg.timestamp * 1000)
+    const ts = clampMessageTs(msg.timestamp)
     
     // Ensure WhatsAppChat exists so Prisma does not throw validation/FK errors
     await prisma.whatsAppChat.upsert({
@@ -1260,7 +1292,7 @@ export async function sendMedia(
     const sendInstanceId = instanceIds.get(connectionId)
     if (sendInstanceId) registry.touch(connectionId, sendInstanceId)
 
-    const ts = new Date(msg.timestamp * 1000)
+    const ts = clampMessageTs(msg.timestamp)
 
     // Ensure WhatsAppChat exists
     await prisma.whatsAppChat.upsert({
@@ -1412,7 +1444,7 @@ export async function importWhatsAppHistory(
                     return !JID_LIKE.test(body)
                 })
 
-                const filtered = cleanedRaw.filter(m => new Date(m.timestamp * 1000) >= cutoff)
+                const filtered = cleanedRaw.filter(m => clampMessageTs(m.timestamp) >= cutoff)
 
                 // If nothing survives the cutoff, skip this chat entirely —
                 // no orphan chat rows left behind.
@@ -1452,7 +1484,7 @@ export async function importWhatsAppHistory(
                 let chatMaxTs: Date | null = null
                 for (const msg of filtered) {
                     try {
-                        const ts = new Date(msg.timestamp * 1000)
+                        const ts = clampMessageTs(msg.timestamp)
                         if (!chatMaxTs || ts > chatMaxTs) chatMaxTs = ts
                         if (!minDate || ts < minDate) minDate = ts
                         if (!maxDate || ts > maxDate) maxDate = ts
