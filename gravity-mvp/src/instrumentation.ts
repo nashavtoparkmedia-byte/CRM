@@ -63,6 +63,23 @@ export async function register() {
             opsLog('error', 'telegram_init_failed', { operation: 'startup', error: err.message })
         }
 
+        // ── WhatsApp zombie cleanup (runs BEFORE warmup) ─────────────────
+        // Reclaims state from zombie puppeteer chromes + stale lock files
+        // left behind by an unclean previous exit (taskkill, crash, sleep).
+        // Without this, warmup fails with "browser is already running for userDataDir".
+        try {
+            const { cleanupStaleWhatsAppSessions } = await import('@/lib/whatsapp/WhatsAppCleanup')
+            const result = await cleanupStaleWhatsAppSessions()
+            opsLog('info', 'whatsapp_cleanup_done', {
+                operation: 'startup',
+                killedChromeCount: result.killedChromeCount,
+                removedLockCount: result.removedLockCount,
+            })
+        } catch (err: any) {
+            // Don't block startup — log and continue to warmup.
+            opsLog('error', 'whatsapp_cleanup_error', { operation: 'startup', error: err.message })
+        }
+
         // ── WhatsApp warmup ──────────────────────────────────────────────
         try {
             const { prisma } = await import('@/lib/prisma')
@@ -277,4 +294,43 @@ export async function register() {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'))
     process.on('SIGINT', () => shutdown('SIGINT'))
+
+    // ── Last-resort handlers ────────────────────────────────────────────
+    // Without these, an uncaught error in puppeteer / WA listeners crashes
+    // Node.js instantly, leaving zombie chrome processes holding userDataDir
+    // locks. We attempt best-effort cleanup, then exit.
+    process.on('uncaughtException', async (err: Error) => {
+        try {
+            const { opsLog } = await import('@/lib/opsLog')
+            opsLog('error', 'uncaught_exception', { error: err.message, stack: err.stack })
+        } catch {
+            // opsLog itself failed — fall back to console
+            console.error('[UNCAUGHT]', err)
+        }
+        try {
+            // Best-effort: close WA clients cleanly so their chromes don't linger.
+            // 5s cap — we're already in a bad state, don't block exit further.
+            const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
+            await Promise.race([
+                destroyAllClients(),
+                new Promise(resolve => setTimeout(resolve, 5000)),
+            ])
+        } catch {
+            // ignore — we're exiting anyway
+        }
+        process.exit(1)
+    })
+
+    process.on('unhandledRejection', async (reason: unknown) => {
+        // Don't exit on unhandled rejection — just log. These are typically
+        // benign (lost network call, late timeout) and crashing the whole
+        // server for one of them is overkill.
+        const msg = reason instanceof Error ? reason.message : String(reason)
+        try {
+            const { opsLog } = await import('@/lib/opsLog')
+            opsLog('error', 'unhandled_rejection', { reason: msg })
+        } catch {
+            console.error('[UNHANDLED]', msg)
+        }
+    })
 }

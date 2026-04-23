@@ -38,6 +38,45 @@ const globalForResetLocks = global as unknown as { _waResetLocks?: Map<string, P
 const forceResetLocks: Map<string, Promise<void>> = globalForResetLocks._waResetLocks || new Map()
 if (process.env.NODE_ENV !== 'production') globalForResetLocks._waResetLocks = forceResetLocks
 
+/**
+ * Stage 1 helper: retry a puppeteer-backed call when it fails with the
+ * transient "Execution context was destroyed" error. This happens when
+ * WA Web navigates internally (post-auth, post-sync) while our pupPage
+ * evaluate is mid-flight. Waiting a few seconds and retrying almost
+ * always works — the new context is ready by then.
+ */
+function isCdpContextDestroyed(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err)
+    return /Execution context was destroyed|Protocol error \(Runtime\.|Target closed/i.test(msg)
+}
+
+async function retryOnCdpError<T>(
+    fn: () => Promise<T>,
+    opts: { retries: number; delayMs: number; op: string },
+    connectionId: string,
+): Promise<T> {
+    let lastErr: unknown
+    for (let attempt = 1; attempt <= opts.retries + 1; attempt++) {
+        try {
+            return await fn()
+        } catch (err) {
+            lastErr = err
+            if (!isCdpContextDestroyed(err) || attempt > opts.retries) {
+                throw err
+            }
+            opsLog('warn', 'wa_cdp_retry', {
+                connectionId,
+                op: opts.op,
+                attempt,
+                delayMs: opts.delayMs,
+                errorMessage: err instanceof Error ? err.message : String(err),
+            })
+            await new Promise(resolve => setTimeout(resolve, opts.delayMs))
+        }
+    }
+    throw lastErr
+}
+
 // Pause flag + message buffer (pause/resume with flush/drop)
 const globalForPaused = global as unknown as { _waPaused?: Set<string> }
 const pausedSet: Set<string> = globalForPaused._waPaused || new Set()
@@ -804,9 +843,77 @@ export async function destroyAllClients(): Promise<void> {
 /**
  * Watchdog: check all ready WA clients for health.
  * Only checks connections in 'ready' state. Cooldown: 60s per connection.
+ *
+ * When a client is found unhealthy, we schedule a HARD RESTART:
+ *   1. Kill zombie chromes + remove stale locks for this session
+ *   2. Re-run initializeClient()
+ * Hard restart has its own cooldown (5 min) so a permanently dead
+ * connection doesn't DDoS WhatsApp with reconnect attempts.
  */
 const watchdogLastAction = new Map<string, number>()
 const WATCHDOG_COOLDOWN_MS = 60000
+
+const hardRestartLastAt = new Map<string, number>()
+const HARD_RESTART_COOLDOWN_MS = 5 * 60 * 1000 // 5 min
+
+/**
+ * Fire-and-forget: after a short delay, clean up zombie state for this
+ * session and try re-initializing. Called by watchdog when it detects
+ * client_missing / client_info_null / similar conditions.
+ */
+async function scheduleHardRestart(connectionId: string, reason: string): Promise<void> {
+    const { opsLog } = await import('@/lib/opsLog')
+
+    const last = hardRestartLastAt.get(connectionId) || 0
+    if (Date.now() - last < HARD_RESTART_COOLDOWN_MS) {
+        opsLog('info', 'wa_hard_restart_skipped', {
+            connectionId,
+            reason: 'cooldown',
+            sinceLastMs: Date.now() - last,
+        })
+        return
+    }
+    hardRestartLastAt.set(connectionId, Date.now())
+
+    opsLog('warn', 'wa_hard_restart_scheduled', { connectionId, reason })
+
+    // 5s delay: gives in-flight promises/listeners a moment to finish
+    setTimeout(async () => {
+        try {
+            // Only restart if the user still wants this connection active.
+            // If they disconnected it manually (status != ready/authenticated),
+            // respect that.
+            const { prisma } = await import('@/lib/prisma')
+            const conn = await prisma.whatsAppConnection.findUnique({
+                where: { id: connectionId },
+                select: { status: true },
+            })
+            if (!conn || !['ready', 'authenticated'].includes(conn.status)) {
+                opsLog('info', 'wa_hard_restart_abort', {
+                    connectionId,
+                    reason: 'conn_inactive',
+                    status: conn?.status ?? 'missing',
+                })
+                return
+            }
+
+            // Clean up zombie state for this session specifically
+            const { cleanupStaleWhatsAppSessions } = await import('./WhatsAppCleanup')
+            const cleanup = await cleanupStaleWhatsAppSessions(connectionId)
+            opsLog('info', 'wa_hard_restart_cleanup', {
+                connectionId,
+                killedChromeCount: cleanup.killedChromeCount,
+                removedLockCount: cleanup.removedLockCount,
+            })
+
+            opsLog('info', 'wa_hard_restart_init_start', { connectionId })
+            await initializeClient(connectionId)
+            opsLog('info', 'wa_hard_restart_success', { connectionId })
+        } catch (err: any) {
+            opsLog('error', 'wa_hard_restart_failed', { connectionId, error: err.message })
+        }
+    }, 5000)
+}
 
 export async function checkAllClientsHealth(): Promise<{ checkedCount: number; unhealthyCount: number; details: Array<{ connectionId: string; healthy: boolean; reason?: string }> }> {
     const { opsLog } = await import('@/lib/opsLog')
@@ -831,6 +938,8 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
                 registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: client missing from map')
             }
             instanceIds.delete(entry.connectionId) // FIX 5: drop stale instanceId
+            // Stage 1 addition: attempt automatic recovery
+            scheduleHardRestart(entry.connectionId, 'client_missing').catch(() => {})
             unhealthyCount++
             details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_missing' })
             continue
@@ -852,6 +961,8 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
             try { client.removeAllListeners() } catch { /* ignore */ } // FIX 4 extension: drop listeners on dead client
             clients.delete(entry.connectionId)
             instanceIds.delete(entry.connectionId) // FIX 5: drop stale instanceId
+            // Stage 1 addition: attempt automatic recovery
+            scheduleHardRestart(entry.connectionId, 'client_info_null').catch(() => {})
             unhealthyCount++
             details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_info_null' })
             continue
@@ -1216,7 +1327,14 @@ export async function importWhatsAppHistory(
     let maxDate: Date | null = null
 
     try {
-        const chatsRaw = await client.getChats()
+        // Retry getChats() on "Execution context was destroyed" — WA Web
+        // occasionally navigates internally right after ready, invalidating
+        // puppeteer's evaluate context. Give it a few seconds to stabilize.
+        const chatsRaw = await retryOnCdpError(
+            () => client.getChats(),
+            { retries: 4, delayMs: 5000, op: 'getChats' },
+            connId!,
+        )
 
         for (const chatRaw of chatsRaw) {
             try {
@@ -1675,15 +1793,52 @@ async function doForceResetSession(connectionId: string): Promise<void> {
     await destroyClient(connectionId)
     syncDoneSet.delete(connectionId)
 
+    // Stage 1: kill zombie chromes + remove singleton locks for this session.
+    // Without this, the wipe below hits EBUSY on first_party_sets.db because
+    // puppeteer's Chrome is still flushing to disk even after client.destroy().
+    try {
+        const { cleanupStaleWhatsAppSessions } = await import('./WhatsAppCleanup')
+        const result = await cleanupStaleWhatsAppSessions(connectionId)
+        opsLog('info', 'wa_force_reset_cleanup', {
+            connectionId,
+            killedChromeCount: result.killedChromeCount,
+            removedLockCount: result.removedLockCount,
+        })
+    } catch (err: any) {
+        opsLog('warn', 'wa_force_reset_cleanup_error', {
+            connectionId, error: err?.message ?? String(err),
+        })
+    }
+
     const sessionDir = path.join(
         process.cwd(), 'node_modules', '.wwebjs_auth', `session-${connectionId}`
     )
-    try {
-        await fs.promises.rm(sessionDir, { recursive: true, force: true })
-        opsLog('info', 'wa_force_reset_session_wiped', { connectionId, path: sessionDir })
-    } catch (err: any) {
+
+    // Retry wipe up to 3 times — Windows sometimes needs an extra moment
+    // after Chrome process exits before it releases all DB/cache files.
+    let wiped = false
+    let lastErr: any
+    for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+            await fs.promises.rm(sessionDir, { recursive: true, force: true })
+            opsLog('info', 'wa_force_reset_session_wiped', { connectionId, path: sessionDir, attempt })
+            wiped = true
+            break
+        } catch (err: any) {
+            lastErr = err
+            if (attempt < 3) {
+                // EBUSY/EPERM on Windows: wait, then another cleanup pass, then retry
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+                try {
+                    const { cleanupStaleWhatsAppSessions } = await import('./WhatsAppCleanup')
+                    await cleanupStaleWhatsAppSessions(connectionId)
+                } catch { /* ignore */ }
+            }
+        }
+    }
+    if (!wiped) {
         opsLog('warn', 'wa_force_reset_wipe_failed', {
-            connectionId, error: err?.message ?? String(err),
+            connectionId, error: lastErr?.message ?? String(lastErr),
         })
     }
 
