@@ -71,6 +71,54 @@ function clampMessageTs(rawSeconds: unknown): Date {
 }
 
 /**
+ * Download media (image/video/voice/document/sticker) attached to a
+ * whatsapp-web.js Message and save it as a MessageAttachment row
+ * linked to our unified Message.
+ *
+ * Used in three places:
+ *   - client.on('message')     — live inbound/outbound
+ *   - importWhatsAppHistory    — UI backfill
+ *   - syncHistory              — auto sync on connect
+ *
+ * Errors are non-fatal: missing session keys are expected for cold
+ * re-fetched messages, and we'd rather keep the message text than
+ * fail the whole ingest on media.
+ */
+async function downloadAndSaveMedia(
+    msgObj: Message,
+    unifiedMessageId: string,
+    msgType: string,
+    logCtx: string,
+): Promise<boolean> {
+    try {
+        const media = await msgObj.downloadMedia()
+        if (!media || !media.data) return false
+        const base64Bytes = Buffer.byteLength(media.data, 'base64')
+        if (base64Bytes > MAX_MEDIA_SIZE_BYTES) {
+            console.warn(`[WA-MEDIA] ${logCtx} skipped: ${base64Bytes} bytes exceeds ${MAX_MEDIA_SIZE_BYTES}`)
+            return false
+        }
+        const dataUrl = `data:${media.mimetype};base64,${media.data}`
+        await prisma.messageAttachment.create({
+            data: {
+                messageId: unifiedMessageId,
+                type: msgType,
+                url: dataUrl,
+                fileName: media.filename || null,
+                fileSize: base64Bytes,
+                mimeType: media.mimetype || null,
+            },
+        })
+        console.log(`[WA-MEDIA] ${logCtx} saved: ${msgType} ${media.mimetype} (${base64Bytes}B)`)
+        return true
+    } catch (err: any) {
+        // "No session record", "Bad MAC" are expected on cold fetches
+        console.warn(`[WA-MEDIA] ${logCtx} download failed: ${err?.message ?? String(err)}`)
+        return false
+    }
+}
+
+/**
  * Stage 1 helper: retry a puppeteer-backed call when it fails with the
  * transient "Execution context was destroyed" error. This happens when
  * WA Web navigates internally (post-auth, post-sync) while our pupPage
@@ -183,10 +231,12 @@ async function syncHistory(connectionId: string, client: Client) {
                 // Fetch messages FIRST — only create Chat rows if there's
                 // actually something to store. Previously chat.upsert ran
                 // before fetch, leaving ~97% of rows empty as UI ghosts.
-                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
+                let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string; hasMedia: boolean }[] = []
+                const fetchedByJid = new Map<string, Message>()
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
-                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type }))
+                    for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
+                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type, hasMedia: !!m.hasMedia }))
                 } catch {
                     const page = (client as any).pupPage
                     if (page) {
@@ -199,7 +249,7 @@ async function syncHistory(connectionId: string, client: Client) {
                                 const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
                                 return models.map((m: any) => ({
                                     id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
-                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat',
+                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat', hasMedia: false,
                                 }))
                             }, chatRaw.id._serialized)
                         } catch {}
@@ -306,7 +356,7 @@ async function syncHistory(connectionId: string, client: Client) {
                                     })
                                 }
                             } else {
-                                await prisma.message.create({
+                                const savedMsg = await prisma.message.create({
                                     data: {
                                         chatId: unifiedChat.id,
                                         direction: msg.fromMe ? 'outbound' : 'inbound',
@@ -317,6 +367,14 @@ async function syncHistory(connectionId: string, client: Client) {
                                         sentAt: ts
                                     }
                                 })
+
+                                // Media download — backfill path.
+                                if (msg.hasMedia && msgType !== 'chat') {
+                                    const origMsg = fetchedByJid.get(msg.id)
+                                    if (origMsg) {
+                                        await downloadAndSaveMedia(origMsg, savedMsg.id, msgType, `sync ${msg.id.slice(-16)}`)
+                                    }
+                                }
                             }
                         }
                     } catch (msgErr) {
@@ -737,27 +795,10 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     }
                 })
 
-                // Download and save media attachment (image, voice, video, document, sticker)
+                // Download and save media attachment (image, voice, video, document, sticker).
+                // msgType here is unified ('text' | 'image' | ...), so exclude 'text'.
                 if (msg.hasMedia && msgType !== 'text') {
-                    try {
-                        const media = await msg.downloadMedia()
-                        if (media && media.data) {
-                            const dataUrl = `data:${media.mimetype};base64,${media.data}`
-                            await prisma.messageAttachment.create({
-                                data: {
-                                    messageId: savedMsg.id,
-                                    type: msgType,
-                                    url: dataUrl,
-                                    fileName: media.filename || null,
-                                    fileSize: Math.round(media.data.length * 0.75), // approx decoded size
-                                    mimeType: media.mimetype || null,
-                                }
-                            })
-                            console.log(`[WA-SERVICE] MEDIA saved: ${msgType} ${media.mimetype} for msg=${savedMsg.id}`)
-                        }
-                    } catch (mediaErr: any) {
-                        console.error(`[WA-SERVICE] Media download failed for msg=${savedMsg.id}:`, mediaErr.message)
-                    }
+                    await downloadAndSaveMedia(msg, savedMsg.id, msgType, `live ${msg.id._serialized.slice(-16)}`)
                 }
 
                 // Workflow: route by direction
@@ -1401,15 +1442,21 @@ export async function importWhatsAppHistory(
                 // Fetch messages FIRST — only create Chat rows if there's
                 // actually something to store. Previous order (chat.upsert
                 // before fetch) left 463/478 empty chats as UI ghosts.
-                let rawMessages: { id: string; body: string; timestamp: number; fromMe: boolean; type: string }[] = []
+                let rawMessages: { id: string; body: string; timestamp: number; fromMe: boolean; type: string; hasMedia: boolean }[] = []
+                // Keep original Message objects by id so we can downloadMedia()
+                // later. Store fallback path cannot produce these, so media
+                // download only works for the primary fetchMessages branch.
+                const fetchedByJid = new Map<string, Message>()
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
+                    for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
                     rawMessages = fetched.map(m => ({
                         id: m.id._serialized,
                         body: m.body || '',
                         timestamp: m.timestamp,
                         fromMe: m.fromMe,
                         type: m.type,
+                        hasMedia: !!m.hasMedia,
                     }))
                 } catch {
                     // fetchMessages fails for @lid chats — use Puppeteer Store directly
@@ -1428,6 +1475,7 @@ export async function importWhatsAppHistory(
                                     timestamp: m.t || 0,
                                     fromMe: !!m.id?.fromMe,
                                     type: m.type || 'chat',
+                                    hasMedia: false, // fallback can't download — safe default
                                 }))
                             }, chatRaw.id._serialized)
                         } catch {}
@@ -1523,7 +1571,7 @@ export async function importWhatsAppHistory(
 
                         totalMessages++
                         if (!existing) {
-                            await prisma.message.create({
+                            const savedMsg = await prisma.message.create({
                                 data: {
                                     chatId: unifiedChat.id,
                                     direction: msg.fromMe ? 'outbound' : 'inbound',
@@ -1535,6 +1583,16 @@ export async function importWhatsAppHistory(
                                 }
                             })
                             newMessages++
+
+                            // Media download (image/video/voice/document/sticker).
+                            // Only the primary fetchMessages branch populates
+                            // fetchedByJid — Store-fallback path can't download.
+                            if (msg.hasMedia && msgType !== 'chat') {
+                                const origMsg = fetchedByJid.get(msgId)
+                                if (origMsg) {
+                                    await downloadAndSaveMedia(origMsg, savedMsg.id, msgType, `import ${msgId.slice(-16)}`)
+                                }
+                            }
                         }
                     } catch (msgErr: any) {
                         console.error(`[WA-IMPORT] Msg error ${msg.id}: ${msgErr.message}`)
