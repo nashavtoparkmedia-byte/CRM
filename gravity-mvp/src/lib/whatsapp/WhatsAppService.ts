@@ -443,6 +443,12 @@ async function handleIncomingMessage(
     if (remoteJid === 'status@broadcast') return
     // Skip group messages for now (CRM is 1:1 focused)
     if (remoteJid.endsWith('@g.us')) return
+    // Skip @lid — WhatsApp privacy-preserving identifiers (not real phone numbers).
+    // WA generates these for new contacts not in your address book. The numeric
+    // portion is NOT a phone — treating it as such produces fake numbers like
+    // +76390999056, +77745344655 etc. Until we implement @lid → phone
+    // resolution (requires Baileys signal repository / usync), skip entirely.
+    if (remoteJid.endsWith('@lid')) return
 
     const isOutbound = !!m.key?.fromMe
     const waMsgId = m.key?.id
