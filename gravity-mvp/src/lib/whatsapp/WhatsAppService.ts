@@ -1096,44 +1096,44 @@ export async function importWhatsAppHistory(
         // Strategy depends on mode:
         //   last_n_days       — start from NEWEST msg, paginate backwards; stop when < cutoff
         //   available_history — start from OLDEST msg, paginate further into past; stop when no more
+        // IMPORTANT: Baileys fetchMessageHistory expects oldestMsgTimestampMs in
+        // MILLISECONDS (as field name suggests). Previously we passed seconds,
+        // which Baileys interpreted as ~1970 → returned oldest-ever messages.
         const processChat = async (entry: typeof roster[number]) => {
             try {
                 const startKey = isLastNDays
                     ? (entry.newestMsgKey as any)
                     : (entry.oldestMsgKey as any)
-                const startTs = isLastNDays
-                    ? entry.newestMsgTs!.getTime() / 1000
-                    : entry.oldestMsgTs!.getTime() / 1000
+                const startTsMs = isLastNDays
+                    ? entry.newestMsgTs!.getTime()
+                    : entry.oldestMsgTs!.getTime()
                 let anchorKey = startKey
-                let anchorTs: number | any = startTs
-                let prevOldestTs: number = isLastNDays ? startTs : startTs
+                let anchorTsMs: number = startTsMs
+                let prevOldestTsMs: number = startTsMs
 
                 for (let page = 0; page < MAX_PAGES_PER_CHAT; page++) {
                     try {
-                        // Baileys returns messages OLDER than (anchorKey, anchorTs).
-                        // For last_n_days: each page goes further into the past;
-                        //   stop when oldest seen < cutoff.
-                        // For available_history: same direction; stop when no new data.
-                        await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, anchorKey, anchorTs)
+                        // Baileys API: oldestMsgTimestampMs in MILLISECONDS.
+                        // Results arrive asynchronously via messaging-history.set
+                        // event (not messages.upsert), handled separately.
+                        await (sock as any).fetchMessageHistory(BATCH_PER_CHAT, anchorKey, anchorTsMs)
                         totalFetched += BATCH_PER_CHAT
                         consecutiveErrors = 0
-                        await new Promise(r => setTimeout(r, 250))
+                        // Give async messaging-history.set event + handler time to land in DB
+                        await new Promise(r => setTimeout(r, 1200))
 
                         const refreshed = await prisma.whatsAppChatRoster.findUnique({
                             where: { connectionId_jid: { connectionId, jid: entry.jid } },
                         })
                         if (!refreshed?.oldestMsgTs) break
-                        const refreshedOldestTs = refreshed.oldestMsgTs.getTime() / 1000
+                        const refreshedOldestTsMs = refreshed.oldestMsgTs.getTime()
                         // Progress detector: if oldestMsgTs didn't move older, Baileys gave us nothing new → stop
-                        if (refreshedOldestTs >= prevOldestTs) break
-                        prevOldestTs = refreshedOldestTs
+                        if (refreshedOldestTsMs >= prevOldestTsMs) break
+                        prevOldestTsMs = refreshedOldestTsMs
 
-                        // Next page anchor = current oldest (step further back)
                         anchorKey = refreshed.oldestMsgKey as any
-                        anchorTs = refreshedOldestTs
+                        anchorTsMs = refreshedOldestTsMs
 
-                        // Cutoff stop (last_n_days): if the oldest we now have is already
-                        // past cutoff, no need to go further.
                         if (activeCutoff && refreshed.oldestMsgTs < activeCutoff) break
                     } catch (pageErr: any) {
                         const msg = String(pageErr?.message || pageErr)
@@ -1183,8 +1183,9 @@ export async function importWhatsAppHistory(
             await new Promise(r => setTimeout(r, RATE_LIMIT_MS))
         }
 
-        // Allow a few seconds for last messages.upsert batches to finalize DB writes
-        await new Promise(r => setTimeout(r, 3000))
+        // Allow messaging-history.set events that are still in flight to land in DB.
+        // Baileys delivers these async and in batches — 8s is conservative but safe.
+        await new Promise(r => setTimeout(r, 8000))
 
         const finalMsgs = await prisma.whatsAppMessage.count({ where: { chat: { connectionId } } })
         const finalChats = await prisma.whatsAppChat.count({ where: { connectionId } })
