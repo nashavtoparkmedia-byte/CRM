@@ -495,7 +495,18 @@ export default function MessageFeed({
                         )}
 
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
-                            {msg.type !== 'image' && msg.content}
+                            {(() => {
+                                // Hide auto-generated media placeholders ("[Фото]", "[Видео]"
+                                // etc. from waContentWithFallback) — the attachment above
+                                // already shows the media. Real text / captions flow through.
+                                const PLACEHOLDERS = new Set([
+                                    '[Фото]', '[Видео]', '[Голосовое]',
+                                    '[Аудио]', '[Документ]', '[Стикер]', '[Контакт]',
+                                ])
+                                const trimmed = (msg.content || '').trim()
+                                if (PLACEHOLDERS.has(trimmed)) return null
+                                return msg.content
+                            })()}
                             <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]'}`} />
                         </div>
 
