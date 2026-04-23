@@ -39,35 +39,37 @@ const forceResetLocks: Map<string, Promise<void>> = globalForResetLocks._waReset
 if (process.env.NODE_ENV !== 'production') globalForResetLocks._waResetLocks = forceResetLocks
 
 /**
- * Clamp a WA timestamp (epoch seconds) into a sane range.
+ * Validate a WA timestamp (epoch seconds).
  *
- * WA Web occasionally hands us corrupted timestamps for outbound /
- * system / e2e messages — most notably year 2038 (Y2038-style Long
- * overflow). Unchecked, these break the 7-day backfill filter AND
- * crush sort order (a "2038" message shows up ahead of real recent
- * messages).
+ * WA Web occasionally hands us corrupted timestamps — most notably year
+ * 2038 (Y2038-style Long overflow) for outbound / system / e2e frames.
  *
- * Previously a version of this lived in the Baileys handleIncomingMessage
- * (commit a16417b) but was lost when we reverted to whatsapp-web.js. This
- * is the wa-web.js port, applied at every persistence site.
+ * Older behaviour clamped bad values to now(), but that turned ancient
+ * messages into "just now" entries that polluted chronology and
+ * confused the user ("why is this old message at the top?").
  *
- * Policy:
- *   - rawSeconds NaN / 0 / below 2015-01-01 → fallback to now()
- *   - rawSeconds more than 1h ahead of now   → fallback to now()
- *   - otherwise                              → use as-is
+ * New behaviour: return null for bad timestamps so the caller can SKIP
+ * the message entirely. No date means no place to put it in the
+ * timeline — better to drop than to mis-file.
  *
- * Returns a Date (ms-precision).
+ * Returns a Date for valid input, null for corrupted/missing.
  */
 const MIN_TS_MS = Date.UTC(2015, 0, 1)
 const FUTURE_TOLERANCE_MS = 60 * 60 * 1000 // 1h — clock skew budget
-function clampMessageTs(rawSeconds: unknown): Date {
+function validateMessageTs(rawSeconds: unknown): Date | null {
     const nowMs = Date.now()
     const maxMs = nowMs + FUTURE_TOLERANCE_MS
     const n = typeof rawSeconds === 'number' ? rawSeconds : Number(rawSeconds)
-    if (!Number.isFinite(n) || n <= 0) return new Date(nowMs)
+    if (!Number.isFinite(n) || n <= 0) return null
     const tsMs = n * 1000
-    if (tsMs < MIN_TS_MS || tsMs > maxMs) return new Date(nowMs)
+    if (tsMs < MIN_TS_MS || tsMs > maxMs) return null
     return new Date(tsMs)
+}
+
+/** Back-compat alias — returns a Date or falls back to now() for call sites
+ * that can't skip (live client.on handler where we want to always process). */
+function clampMessageTs(rawSeconds: unknown): Date {
+    return validateMessageTs(rawSeconds) ?? new Date()
 }
 
 /**
@@ -256,15 +258,21 @@ async function syncHistory(connectionId: string, client: Client) {
                     }
                 }
 
-                // Drop junk messages where body is a raw JID (system/e2e/gp2 frames).
+                // Drop junk messages: JID-body + empty text-only.
                 const JID_LIKE = /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i
                 const cleanedRaw = rawMsgs.filter(m => {
                     const body = (m.body || '').trim()
-                    if (!body) return true
-                    return !JID_LIKE.test(body)
+                    const isText = (m.type || 'chat') === 'chat'
+                    if (isText && !body) return false
+                    if (body && JID_LIKE.test(body)) return false
+                    return true
                 })
 
-                const filtered = cleanedRaw.filter(m => clampMessageTs(m.timestamp) >= cutoff)
+                // Skip corrupted timestamps entirely.
+                const filtered = cleanedRaw.filter(m => {
+                    const ts = validateMessageTs(m.timestamp)
+                    return ts !== null && ts >= cutoff
+                })
 
                 // If no survivors, skip — no orphan chat row created.
                 if (filtered.length === 0) continue
@@ -364,7 +372,9 @@ async function syncHistory(connectionId: string, client: Client) {
                                         content: waContentWithFallback(msg.body, msg.type),
                                         externalId: msg.id,
                                         channel: 'whatsapp',
-                                        sentAt: ts
+                                        sentAt: ts,
+                                        // Outbound came from phone — already delivered.
+                                        status: msg.fromMe ? 'delivered' : undefined,
                                     }
                                 })
 
@@ -1482,17 +1492,27 @@ export async function importWhatsAppHistory(
                     }
                 }
 
-                // Drop junk-body messages: some WA system/e2e/gp2 frames
-                // arrive with body = a JID literal (e.g. "252570316607633@lid").
-                // These aren't user text — filter them out regardless of type.
+                // Drop junk-body messages + empty text-only messages.
+                // - JID-body: WA system/e2e/gp2 frames (body = "252570...@lid")
+                // - Empty text (type=chat, body=""): protocol noise that
+                //   renders as an empty bubble in the UI.
                 const JID_LIKE = /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i
                 const cleanedRaw = rawMessages.filter(m => {
                     const body = (m.body || '').trim()
-                    if (!body) return true // empty body is fine (media, etc.) — keep
-                    return !JID_LIKE.test(body)
+                    const isText = (m.type || 'chat') === 'chat'
+                    // Keep media with empty body (caption may be absent);
+                    // drop text with empty body (nothing to show).
+                    if (isText && !body) return false
+                    if (body && JID_LIKE.test(body)) return false
+                    return true
                 })
 
-                const filtered = cleanedRaw.filter(m => clampMessageTs(m.timestamp) >= cutoff)
+                // Skip messages with corrupted timestamps entirely (was:
+                // clamped to now, which put ancient msgs at the top).
+                const filtered = cleanedRaw.filter(m => {
+                    const ts = validateMessageTs(m.timestamp)
+                    return ts !== null && ts >= cutoff
+                })
 
                 // If nothing survives the cutoff, skip this chat entirely —
                 // no orphan chat rows left behind.
@@ -1579,7 +1599,12 @@ export async function importWhatsAppHistory(
                                     content: waContentWithFallback(msg.body, msg.type),
                                     externalId: msgId,
                                     channel: 'whatsapp',
-                                    sentAt: ts
+                                    sentAt: ts,
+                                    // Backfilled outbound messages came from
+                                    // WA Web's own Store — they already shipped
+                                    // from the phone. Mark delivered so the UI
+                                    // doesn't flag them with "Повторить".
+                                    status: msg.fromMe ? 'delivered' : undefined,
                                 }
                             })
                             newMessages++

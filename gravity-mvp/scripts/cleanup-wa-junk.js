@@ -2,7 +2,12 @@
  * Targeted cleanup of WA junk in DB (keeps real chats/messages):
  *   1. Empty Chat rows — WA chats with zero messages (UI ghosts).
  *   2. Messages where content/body is a raw JID literal (protocol noise).
- *   3. Their corresponding legacy WhatsAppChat / WhatsAppMessage rows.
+ *   3. Empty text messages — type=text with empty content (renders as
+ *      blank bubbles in the UI).
+ *   4. Outbound backfill messages with missing/queued status — bump to
+ *      'delivered' (they already left the phone by the time we ingested
+ *      them; "Повторить" button is misleading).
+ *   5. Their corresponding legacy WhatsAppChat / WhatsAppMessage rows.
  */
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
@@ -47,6 +52,49 @@ async function main() {
     } else {
         console.log(`[CLEANUP] No junk legacy messages found`)
     }
+
+    // ── PART 1b — remove empty text messages (type=text, content="") ─
+    const emptyText = await prisma.message.findMany({
+        where: { channel: 'whatsapp', type: 'text' },
+        select: { id: true, content: true },
+    })
+    const emptyTextIds = emptyText.filter(m => !(m.content || '').trim()).map(m => m.id)
+    if (emptyTextIds.length > 0) {
+        const r = await prisma.message.deleteMany({ where: { id: { in: emptyTextIds } } })
+        console.log(`[CLEANUP] Deleted ${r.count} empty-text unified Messages`)
+    } else {
+        console.log(`[CLEANUP] No empty-text messages`)
+    }
+
+    const emptyTextLegacy = await prisma.whatsAppMessage.findMany({
+        where: { type: 'chat' },
+        select: { id: true, chatId: true, body: true },
+    })
+    const emptyTextLegacyPairs = emptyTextLegacy.filter(m => !(m.body || '').trim()).map(m => ({ id: m.id, chatId: m.chatId }))
+    if (emptyTextLegacyPairs.length > 0) {
+        for (const p of emptyTextLegacyPairs) {
+            await prisma.whatsAppMessage.delete({ where: { id_chatId: { id: p.id, chatId: p.chatId } } }).catch(() => {})
+        }
+        console.log(`[CLEANUP] Deleted ${emptyTextLegacyPairs.length} empty-text legacy WhatsAppMessages`)
+    } else {
+        console.log(`[CLEANUP] No empty-text legacy messages`)
+    }
+
+    // ── PART 1c — fix backfilled outbound that got "failed" by recovery ─
+    // MessageService.recoverStuckMessages marks outbound status='sent'
+    // older than 5min as 'failed', mistaking backfilled-from-WA-Store
+    // messages for stuck-in-delivery ones. Those have externalId !== null
+    // (came from WA Web, already delivered). Reset them to delivered.
+    const stuckOutbound = await prisma.message.updateMany({
+        where: {
+            channel: 'whatsapp',
+            direction: 'outbound',
+            externalId: { not: null },
+            status: { in: ['failed', 'sent', 'queued'] },
+        },
+        data: { status: 'delivered' },
+    })
+    console.log(`[CLEANUP] Updated ${stuckOutbound.count} backfilled outbound messages to status=delivered`)
 
     // ── PART 2 — remove empty unified Chat rows ──────────────────────
     const waChats = await prisma.chat.findMany({
