@@ -16,6 +16,8 @@ const CHURN_OPERATIONAL_COLUMNS = [
     'fullName',
     'licenseNumber',
     // Block 2 — Case management
+    'project',
+    'assignee',
     'stage',
     // Block 3 — Driver context
     'yandexActive',

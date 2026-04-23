@@ -82,7 +82,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         label: 'Проект',
         source: { kind: 'computed', id: 'projectPlaceholder' },
         valueType: 'string',
-        defaultVisible: false,
+        defaultVisible: true,
         defaultOrder: 4,
         defaultWidthPx: 110,
         filterable: false, // MVP: no driver.projectId migration yet
@@ -97,7 +97,7 @@ export const CHURN_COLUMNS: ListColumnDef[] = [
         label: 'Менеджер',
         source: { kind: 'derived', id: 'assigneeName' },
         valueType: 'string',
-        defaultVisible: false,
+        defaultVisible: true,
         defaultOrder: 5,
         defaultWidthPx: 140,
         filterable: true,
@@ -631,8 +631,12 @@ export function resolveLayout(
 
     // Apply density override as if it was baked into the view, so consumers
     // read layout.view.rowDensity without needing to know about overrides.
-    const effectiveView: ListViewDef = overrides?.rowDensity
-        ? { ...view, rowDensity: overrides.rowDensity }
+    // Legacy 'standard' is normalised to 'compact' — the standalone Standard
+    // density was retired (duplicated column labels with the header row).
+    const rawDensity = overrides?.rowDensity ?? view.rowDensity
+    const normalisedDensity = rawDensity === 'standard' ? 'compact' : rawDensity
+    const effectiveView: ListViewDef = normalisedDensity !== view.rowDensity
+        ? { ...view, rowDensity: normalisedDensity }
         : view
 
     return { view: effectiveView, blocks: resolvedBlocks }

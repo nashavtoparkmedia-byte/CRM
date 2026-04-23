@@ -20,6 +20,7 @@ import type { ResolvedLayout } from '@/lib/tasks/list-schema'
 import { ROW_DENSITY_PX } from '@/lib/tasks/list-schema'
 import TaskCaseBlock from './TaskCaseBlock'
 import TaskCaseInlineActions from './TaskCaseInlineActions'
+import { FULLNAME_COL_WIDTH_PX } from './TaskCaseBlockHeader'
 import { primarySignal, CONTROL_SIGNAL_TINT } from '@/lib/tasks/control-signals'
 import { Bell, Zap } from 'lucide-react'
 
@@ -36,12 +37,11 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
     const rowHeight = ROW_DENSITY_PX[density]
     // Block labels only belong in the table header / column settings, not in rows.
     const showBlockLabels = false
-    // Cell labels per density:
-    //   compact      — none (column headers do that)
-    //   standard     — tiny labels above each value (inline)
-    //   comfortable  — vertical stack with "label: value" inside block
-    //                  (handled inside TaskCaseBlock, this flag ignored there)
-    const showCellLabels  = density !== 'compact'
+    // Cell labels are never shown inline in data rows — the column header
+    // row above already labels every column. Dense rows (compact) show
+    // just the value; Полный (comfortable) stacks "label: value" inside
+    // the block cell (handled directly by TaskCaseBlock, ignores this flag).
+    const showCellLabels  = false
     const showAvatar      = density !== 'compact'
 
     // Control mode: highlight the row tint by its primary signal.
@@ -54,20 +54,81 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
         ? 'bg-[#EEF2FF]'
         : controlTint || 'bg-white hover:bg-[#F8FAFC]'
 
+    // Grid template: MUST mirror TaskCaseBlockHeader's gridTemplate so
+    // header bands/chips and data cells share the exact same column tracks.
+    // First track = fixed 235px ФИО column. Rest = fr-weighted per widthPx.
+    const otherCols = blocks.flatMap(b => b.visibleColumns.filter(c => c.id !== 'fullName'))
+    const gridTemplateColumns = `${FULLNAME_COL_WIDTH_PX}px ${
+        otherCols.length > 0
+            ? otherCols.map(c => `minmax(0, ${c.widthPx}fr)`).join(' ')
+            : ''
+    }`
+
+    // Table mode keeps its legacy fixed-pixel + horizontal-scroll layout.
+    if (view.mode === 'table') {
+        return (
+            <div
+                data-task-id={task.id}
+                onClick={onSelect}
+                className={`group flex items-stretch w-full border-b border-[#EEF2FF] cursor-pointer transition-colors relative ${baseBg}`}
+                style={{ minHeight: `${rowHeight}px` }}
+            >
+                <div className="flex items-center shrink-0 pr-3">
+                    <div className={`w-[3px] self-stretch shrink-0 ${stripeColor}`} />
+                    <div className="flex items-center gap-2 pl-2" style={{ width: '220px' }}>
+                        {showAvatar && (
+                            <div className="w-7 h-7 shrink-0 bg-[#EEF2FF] text-[#2AABEE] rounded-full flex items-center justify-center font-bold text-[11px]">
+                                {task.driverName.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                        <div className="min-w-0 flex-1 flex flex-col justify-center">
+                            <span className={`text-[${density === 'compact' ? 13 : 14}px] font-semibold text-[#0F172A] truncate leading-tight`}>
+                                {task.driverName}
+                            </span>
+                            {density === 'comfortable' && <SignalIcons task={task} />}
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-stretch flex-1 min-w-0 overflow-hidden">
+                    {blocks.map(block => (
+                        <TaskCaseBlock
+                            key={block.id}
+                            task={task}
+                            block={block}
+                            ctx={{ scenarioId: task.scenario, density, mode: view.mode }}
+                            showBlockLabel={showBlockLabels}
+                            showCellLabels={showCellLabels}
+                            excludeColumnIds={block.id === 'identification' ? ['fullName'] : undefined}
+                        />
+                    ))}
+                </div>
+                <div
+                    className="absolute right-0 top-0 bottom-0 flex items-center pl-2 pr-2 bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
+                    style={{ background: isSelected ? 'linear-gradient(to left, #EEF2FF, #EEF2FF, transparent)' : undefined }}
+                >
+                    <TaskCaseInlineActions task={task} />
+                </div>
+            </div>
+        )
+    }
+
+    // Non-table: single CSS Grid matching the header, so every band, chip
+    // label and data cell share identical column boundaries.
     return (
         <div
             data-task-id={task.id}
             onClick={onSelect}
-            className={`group flex items-stretch w-full border-b border-[#EEF2FF] cursor-pointer transition-colors relative ${baseBg}`}
-            style={{ minHeight: `${rowHeight}px` }}
+            className={`group grid w-full border-b border-[#EEF2FF] cursor-pointer transition-colors relative ${baseBg}`}
+            style={{ minHeight: `${rowHeight}px`, gridTemplateColumns }}
         >
-            {/* Left zone: stripe + avatar + ФИО.
-                Intentionally NOT sticky — 200+ sticky nodes per scroll frame
-                stalls the main thread. Horizontal scroll in operational is
-                rare; table mode users see the header for context. */}
-            <div className="flex items-center shrink-0 pr-3">
+            {/* ФИО cell = column 1. Stripe + avatar + name. Same 235px
+                width as the header's first grid track. */}
+            <div
+                className="flex items-center"
+                style={{ gridColumn: '1 / span 1' }}
+            >
                 <div className={`w-[3px] self-stretch shrink-0 ${stripeColor}`} />
-                <div className="flex items-center gap-2 pl-2" style={{ width: '220px' }}>
+                <div className="flex items-center gap-2 pl-2 pr-3 min-w-0 flex-1">
                     {showAvatar && (
                         <div className="w-7 h-7 shrink-0 bg-[#EEF2FF] text-[#2AABEE] rounded-full flex items-center justify-center font-bold text-[11px]">
                             {task.driverName.charAt(0).toUpperCase()}
@@ -77,31 +138,33 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
                         <span className={`text-[${density === 'compact' ? 13 : 14}px] font-semibold text-[#0F172A] truncate leading-tight`}>
                             {task.driverName}
                         </span>
-                        {density === 'comfortable' && (
-                            <SignalIcons task={task} />
-                        )}
+                        {density === 'comfortable' && <SignalIcons task={task} />}
                     </div>
                 </div>
             </div>
 
-            {/* Scrollable blocks */}
-            <div className="flex items-stretch flex-1 min-w-0 overflow-hidden">
-                {blocks.map(block => (
-                    <TaskCaseBlock
-                        key={block.id}
-                        task={task}
-                        block={block}
-                        ctx={{ scenarioId: task.scenario, density, mode: view.mode }}
-                        showBlockLabel={showBlockLabels}
-                        showCellLabels={showCellLabels}
-                        excludeColumnIds={block.id === 'identification' ? ['fullName'] : undefined}
-                    />
-                ))}
-            </div>
+            {/* Block data cells occupy columns 2..N of the same grid. */}
+            {blocks.map(block => (
+                <TaskCaseBlock
+                    key={block.id}
+                    task={task}
+                    block={block}
+                    ctx={{ scenarioId: task.scenario, density, mode: view.mode }}
+                    showBlockLabel={showBlockLabels}
+                    showCellLabels={showCellLabels}
+                    excludeColumnIds={block.id === 'identification' ? ['fullName'] : undefined}
+                />
+            ))}
 
-            {/* Hover inline actions — sticky on the right */}
+            {/* Hover inline actions — absolutely positioned overlay so it does
+                NOT consume flex-layout space. If this block is a flex child,
+                it steals ~120px from the block area, which makes row block
+                widths drift 120px away from the TaskCaseBlockHeader bands
+                above (the header has no such overlay). Absolute keeps the
+                actions pinned to the right edge of the row without shifting
+                the column flex distribution below. */}
             <div
-                className="sticky right-0 flex items-center pl-2 pr-2 bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute right-0 top-0 bottom-0 flex items-center pl-2 pr-2 bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
                 style={{ background: isSelected ? 'linear-gradient(to left, #EEF2FF, #EEF2FF, transparent)' : undefined }}
             >
                 <TaskCaseInlineActions task={task} />

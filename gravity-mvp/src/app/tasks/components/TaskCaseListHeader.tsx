@@ -12,7 +12,7 @@
 // nextActionAt. Click cycles: off → desc → asc → off.
 // ═══════════════════════════════════════════════════════════════════
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ResolvedLayout, ResolvedColumn } from '@/lib/tasks/list-schema'
 import type { TaskSortField, TaskSortDirection } from '@/lib/tasks/types'
 import { ChevronUp, ChevronDown, GripVertical, EyeOff } from 'lucide-react'
@@ -37,9 +37,13 @@ interface Props {
 
 export default function TaskCaseListHeader({ layout, viewId, sortField, sortDirection, onSortChange }: Props) {
     const setBlockOrder = useListViewStore(s => s.setBlockOrder)
+    const setColumnOrder = useListViewStore(s => s.setColumnOrder)
+    const setColumnBlock = useListViewStore(s => s.setColumnBlock)
     const setColumnVisibility = useListViewStore(s => s.setColumnVisibility)
     const [dragBlockId, setDragBlockId] = useState<string | null>(null)
     const [hoverBlockId, setHoverBlockId] = useState<string | null>(null)
+    const [dragColId, setDragColId] = useState<string | null>(null)
+    const [hoverColId, setHoverColId] = useState<string | null>(null)
 
     const cycleSort = (field: TaskSortField) => {
         if (sortField !== field) onSortChange(field, 'desc')
@@ -72,6 +76,41 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
     const hideColumn = (columnId: string) => {
         setColumnVisibility(viewId, columnId, false)
         void recordUsage('column_toggle', { viewId, columnId, visible: false, via: 'inline' })
+    }
+
+    // Global ordered list of visible columns (minus fullName, which is
+    // pinned to the sticky left zone). DnD target for row 2.
+    const orderedVisibleCols = useMemo(() => {
+        const out: ResolvedColumn[] = []
+        for (const b of layout.blocks) {
+            for (const c of b.visibleColumns) {
+                if (c.id !== 'fullName') out.push(c)
+            }
+        }
+        return out
+    }, [layout.blocks])
+
+    const handleColumnDrop = (targetColId: string) => {
+        if (!dragColId || dragColId === targetColId) {
+            setDragColId(null); setHoverColId(null); return
+        }
+        const ids = orderedVisibleCols.map(c => c.id)
+        const from = ids.indexOf(dragColId)
+        const to = ids.indexOf(targetColId)
+        if (from === -1 || to === -1) { setDragColId(null); setHoverColId(null); return }
+
+        const dragCol = orderedVisibleCols[from]
+        const targetCol = orderedVisibleCols[to]
+        // Cross-block drop — reassign the dragged column to target's block.
+        if (dragCol.block !== targetCol.block) {
+            setColumnBlock(viewId, dragColId, targetCol.block)
+        }
+        const next = [...ids]
+        const [moved] = next.splice(from, 1)
+        next.splice(to, 0, moved)
+        setColumnOrder(viewId, next)
+        void recordUsage('column_reorder', { viewId, dragId: dragColId, targetColId, via: 'inline-table' })
+        setDragColId(null); setHoverColId(null)
     }
 
     // Identification block owns fullName but fullName lives in the
@@ -157,11 +196,32 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
                             const isSortable = !!SORTABLE_IDS[col.id]
                             const field = SORTABLE_IDS[col.id]
                             const active = field && sortField === field
+                            const isDragging = dragColId === col.id
+                            const isDropTarget = hoverColId === col.id && dragColId !== null && dragColId !== col.id
                             return (
                                 <div
                                     key={col.id}
-                                    className={`group flex items-center px-2 ${i > 0 ? 'border-l border-[#E2E8F0]' : 'border-l border-[#CBD5E1]'}`}
+                                    draggable
+                                    onDragStart={(e) => {
+                                        e.stopPropagation()
+                                        e.dataTransfer.effectAllowed = 'move'
+                                        e.dataTransfer.setData('text/x-drag-kind', 'column')
+                                        setDragColId(col.id)
+                                    }}
+                                    onDragOver={(e) => {
+                                        if (!dragColId) return
+                                        e.preventDefault()
+                                        setHoverColId(col.id)
+                                    }}
+                                    onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleColumnDrop(col.id) }}
+                                    onDragEnd={() => { setDragColId(null); setHoverColId(null) }}
+                                    className={`group flex items-center px-2 cursor-grab select-none transition-all ${
+                                        i > 0 ? 'border-l border-[#E2E8F0]' : 'border-l border-[#CBD5E1]'
+                                    } ${isDragging ? 'opacity-40' : ''} ${
+                                        isDropTarget ? 'ring-2 ring-inset ring-[#4338CA]' : ''
+                                    }`}
                                     style={{ width: `${col.widthPx}px`, minWidth: `${col.widthPx}px` }}
+                                    title={`${col.label} — потяни, чтобы изменить порядок колонок`}
                                 >
                                     <HeaderButton
                                         label={col.labelShort ?? col.label}
@@ -173,6 +233,8 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
                                     />
                                     <button
                                         onClick={(e) => { e.stopPropagation(); hideColumn(col.id) }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        draggable={false}
                                         className="ml-auto p-0.5 opacity-0 group-hover:opacity-100 text-[#94A3B8] hover:text-[#DC2626] transition-opacity shrink-0"
                                         title="Скрыть колонку"
                                     >

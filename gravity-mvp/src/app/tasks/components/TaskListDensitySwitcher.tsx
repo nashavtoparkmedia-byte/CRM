@@ -1,22 +1,28 @@
 'use client'
 
 // ═══════════════════════════════════════════════════════════════════
-// TaskListDensitySwitcher — single dropdown button with 3 options
-// (Компактный / Стандартный / Полный). Matches the visual weight of
-// neighboring Excel / Massовая забота buttons in Row 1.
+// TaskListDensitySwitcher — single dropdown button with 2 options
+// (Компактный / Полный).
+//
+// The legacy 'standard' density used to show uppercase micro-labels
+// above every cell value. Once we added a proper column-labels row to
+// TaskCaseBlockHeader, those inline labels duplicate the header and
+// 'standard' became visually identical to 'compact' with +16px extra
+// row height. The option is removed from the UI; the type alias stays
+// in ListRowDensity so stored overrides keep parsing, but any
+// 'standard' value is normalised to 'compact' at read time.
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useRef, useEffect } from 'react'
-import { Rows2, Rows3, Rows4, ChevronDown, Check } from 'lucide-react'
+import { Rows2, Rows4, ChevronDown, Check } from 'lucide-react'
 import { useListViewStore } from '@/store/list-view-store'
 import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
 import { recordUsage } from '@/lib/tasks/usage'
 import type { ListRowDensity } from '@/lib/tasks/list-schema'
 
 const OPTIONS: { value: ListRowDensity; label: string; icon: typeof Rows2 }[] = [
-    { value: 'compact',     label: 'Компактный',   icon: Rows4 },
-    { value: 'standard',    label: 'Стандартный',  icon: Rows3 },
-    { value: 'comfortable', label: 'Полный',       icon: Rows2 },
+    { value: 'compact',     label: 'Компактный', icon: Rows4 },
+    { value: 'comfortable', label: 'Полный',     icon: Rows2 },
 ]
 
 interface Props {
@@ -44,8 +50,11 @@ export default function TaskListDensitySwitcher({ scenario }: Props) {
     const view = getSystemView(activeId)
     if (!view) return null
 
-    const current: ListRowDensity = overridesByViewId[activeId]?.rowDensity ?? view.rowDensity
-    const currentOpt = OPTIONS.find(o => o.value === current) ?? OPTIONS[2]
+    // Normalise legacy 'standard' → 'compact' so stored overrides still
+    // resolve to a visible option after the Standard density was retired.
+    const rawCurrent: ListRowDensity = overridesByViewId[activeId]?.rowDensity ?? view.rowDensity
+    const current: ListRowDensity = rawCurrent === 'standard' ? 'compact' : rawCurrent
+    const currentOpt = OPTIONS.find(o => o.value === current) ?? OPTIONS[0]
     const CurrentIcon = currentOpt.icon
 
     const pick = (value: ListRowDensity) => {
