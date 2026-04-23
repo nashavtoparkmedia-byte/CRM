@@ -103,6 +103,12 @@ async function syncHistory(connectionId: string, client: Client) {
         const chatsRaw = await client.getChats()
         for (const chatRaw of chatsRaw) {
             try {
+                // Skip groups and status broadcasts — CRM is 1:1 focused
+                const chatJid = chatRaw.id?._serialized || ''
+                if (chatJid.endsWith('@g.us')) continue
+                if (chatJid === 'status@broadcast') continue
+                if ((chatRaw as any).isGroup) continue
+
                 // Ensure chat exists in DB (legacy)
                 await prisma.whatsAppChat.upsert({
                     where: { id: chatRaw.id._serialized },
@@ -1214,6 +1220,12 @@ export async function importWhatsAppHistory(
 
         for (const chatRaw of chatsRaw) {
             try {
+                // Skip groups and status broadcasts — CRM is 1:1 focused
+                const chatJid = chatRaw.id?._serialized || ''
+                if (chatJid.endsWith('@g.us')) continue
+                if (chatJid === 'status@broadcast') continue
+                if ((chatRaw as any).isGroup) continue
+
                 totalChats++
 
                 // Upsert legacy WA chat
