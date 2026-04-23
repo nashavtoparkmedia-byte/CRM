@@ -95,7 +95,7 @@ export async function disconnectWhatsApp(connectionId: string, wipeAuth: boolean
             const path = await import('path')
             const fs = await import('fs')
             const sessionDir = path.join(
-                process.cwd(), 'node_modules', '.baileys_auth', `session-${connectionId}`
+                process.cwd(), 'node_modules', '.wwebjs_auth', `session-${connectionId}`
             )
             await fs.promises.rm(sessionDir, { recursive: true, force: true })
             console.log(`[WA-ACTIONS] Wiped auth folder: ${sessionDir}`)
