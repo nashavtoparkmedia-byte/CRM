@@ -365,8 +365,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
             registry.touch(connectionId, instanceId)
-            // 'notify' = live, 'append' = historical — process both for CRM inbox
-            if (type !== 'notify' && type !== 'append') return
+            // Accept all types for CRM ingest:
+            //   'notify'  — live incoming
+            //   'append'  — historical batch (messaging-history.set)
+            //   'prepend' — fetchMessageHistory result (paginating back)
+            opsLog('debug', 'wa_upsert_batch', {
+                connectionId, type, count: messages.length,
+            })
+            if (type !== 'notify' && type !== 'append' && type !== 'prepend') return
 
             for (const m of messages) {
                 try {
