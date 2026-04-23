@@ -228,11 +228,11 @@ async function syncHistory(connectionId: string, client: Client) {
         const chatsRaw = await client.getChats()
         for (const chatRaw of chatsRaw) {
             try {
-                // Skip groups and status broadcasts — CRM is 1:1 focused
+                // Skip only status broadcasts — groups go through with
+                // chatType='group' and live in the "Группы" UI tab.
                 const chatJid = chatRaw.id?._serialized || ''
-                if (chatJid.endsWith('@g.us')) continue
                 if (chatJid === 'status@broadcast') continue
-                if ((chatRaw as any).isGroup) continue
+                const isGroupChat = chatJid.endsWith('@g.us') || !!(chatRaw as any).isGroup
 
                 // Fetch messages FIRST — only create Chat rows if there's
                 // actually something to store. Previously chat.upsert ran
@@ -292,20 +292,23 @@ async function syncHistory(connectionId: string, client: Client) {
                     }
                 })
 
-                // Create/Update Unified Chat
+                // Create/Update Unified Chat. chatType drives the "Чаты"
+                // vs "Группы" UI tabs — groups go with chatType='group'.
                 const unifiedSyncChat = await prisma.chat.upsert({
                     where: { externalChatId: chatRaw.id._serialized },
-                    update: { name: chatRaw.name },
+                    update: { name: chatRaw.name, chatType: isGroupChat ? 'group' : 'private' },
                     create: {
                         externalChatId: chatRaw.id._serialized,
                         channel: 'whatsapp',
                         name: chatRaw.name,
+                        chatType: isGroupChat ? 'group' : 'private',
                         metadata: { connectionId }
                     }
                 })
 
-                // Contact resolution: extract phone from WA chat ID (e.g. "79221853150@c.us")
-                if (!unifiedSyncChat.contactId) {
+                // Contact resolution: only for private chats. For groups
+                // the JID is the group id, not a phone — no contact to link.
+                if (!isGroupChat && !unifiedSyncChat.contactId) {
                     try {
                         const rawPhone = chatRaw.id._serialized?.split('@')[0]
                         if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
@@ -613,12 +616,16 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
         registry.touch(connectionId, instanceId)
 
-        // Skip groups (@g.us) and status broadcasts — CRM is 1:1 focused.
-        // Without this filter groups pollute the chat list with JID-looking
-        // "phone numbers" and raw/empty content.
+        // Skip status broadcasts (protocol noise, not conversation).
         const fromJid = msg.from || ''
         const toJid = msg.to || ''
         if (fromJid === 'status@broadcast' || toJid === 'status@broadcast') return
+        // Live-receive path for groups is not supported yet: the partnerJid /
+        // contact-resolution logic below assumes a 1:1 phone chat. Groups
+        // still arrive through syncHistory / importWhatsAppHistory, so they
+        // DO appear on the "Группы" tab — just not updated in real-time from
+        // a running CRM. Lifting this requires a group-aware rewrite of the
+        // branch below (use msg.author as sender, msg.from as room JID).
         if (fromJid.endsWith('@g.us') || toJid.endsWith('@g.us')) return
 
         // Drop system/e2e/gp2 frames where body is a raw JID literal.
@@ -1460,11 +1467,11 @@ export async function importWhatsAppHistory(
 
         for (const chatRaw of chatsRaw) {
             try {
-                // Skip groups and status broadcasts — CRM is 1:1 focused
+                // Skip only status broadcasts — groups persist with
+                // chatType='group' for the "Группы" tab.
                 const chatJid = chatRaw.id?._serialized || ''
-                if (chatJid.endsWith('@g.us')) continue
                 if (chatJid === 'status@broadcast') continue
-                if ((chatRaw as any).isGroup) continue
+                const isGroupChat = chatJid.endsWith('@g.us') || !!(chatRaw as any).isGroup
 
                 // Fetch messages FIRST — only create Chat rows if there's
                 // actually something to store. Previous order (chat.upsert
@@ -1546,17 +1553,19 @@ export async function importWhatsAppHistory(
 
                 const unifiedChat = await prisma.chat.upsert({
                     where: { externalChatId: chatRaw.id._serialized },
-                    update: { name: chatRaw.name },
+                    update: { name: chatRaw.name, chatType: isGroupChat ? 'group' : 'private' },
                     create: {
                         externalChatId: chatRaw.id._serialized,
                         channel: 'whatsapp',
                         name: chatRaw.name,
+                        chatType: isGroupChat ? 'group' : 'private',
                         metadata: { connectionId: connId }
                     }
                 })
 
-                // Contact resolution
-                if (!unifiedChat.contactId) {
+                // Contact resolution: only for private (1:1) chats.
+                // Group JIDs are room ids, not phones.
+                if (!isGroupChat && !unifiedChat.contactId) {
                     try {
                         const rawPhone = chatRaw.id._serialized?.split('@')[0]
                         if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
