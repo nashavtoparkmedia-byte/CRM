@@ -219,9 +219,19 @@ export class MessageService {
 
     /**
      * Clean up outbound messages stuck in 'sent' status for longer than maxAgeMinutes.
-     * These are messages where delivery was attempted but status was never updated
-     * (e.g., server crash mid-delivery).
-     * Marks them as 'failed' with metadata.error explaining the reason.
+     * These are messages where OUR OWN send attempt never got acknowledged by
+     * the provider (server crash mid-delivery, WA/TG/MAX gateway timeout).
+     * Marks them 'failed' with a metadata.error explaining the reason.
+     *
+     * externalId IS NULL guard: messages that already have an externalId came
+     * back confirmed from the provider — they are not stuck. In particular,
+     * history-backfill paths (WA importWhatsAppHistory, TG importTelegramHistory,
+     * MAX webhook) store the provider's id in externalId. Without this guard,
+     * backfilled outbound (whose sentAt is legitimately old — hours, days, weeks)
+     * would be mis-flagged as failed after 5 min, producing spurious "Повторить"
+     * buttons on historical messages. The WA backfill works around this by
+     * writing status='delivered' directly, but that's defensive; the correct
+     * long-term fix is here in the recovery filter.
      */
     static async recoverStuckMessages(maxAgeMinutes = 5): Promise<number> {
         const cutoff = new Date(Date.now() - maxAgeMinutes * 60_000)
@@ -229,6 +239,7 @@ export class MessageService {
             where: {
                 direction: 'outbound',
                 status: 'sent',
+                externalId: null, // NEW — skip anything that already has a provider id
                 sentAt: { lt: cutoff },
             },
             data: {
