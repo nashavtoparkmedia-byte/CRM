@@ -243,6 +243,24 @@ const clientCache = new Map<string, TelegramClient>()
 const tgInstanceIds = new Map<string, string>()
 // Idempotency guard: track which connections already have listeners attached
 const initializedListeners = new Set<string>()
+// Validate a Telegram message timestamp (epoch seconds).
+// Telegram MTProto has had corrupted-date edge cases (mostly around
+// service / forwarded messages); guard matches the WA clampMessageTs
+// philosophy: a message without a sane date isn't worth keeping,
+// skip it rather than clamping to now and polluting the timeline.
+// Telegram launched in 2013, so anything before that is clearly bad.
+const TG_MIN_TS_MS = Date.UTC(2013, 0, 1)
+const TG_FUTURE_TOLERANCE_MS = 60 * 60 * 1000
+function validateTgDate(epochSec: unknown): Date | null {
+    const nowMs = Date.now()
+    const maxMs = nowMs + TG_FUTURE_TOLERANCE_MS
+    const n = typeof epochSec === 'number' ? epochSec : Number(epochSec)
+    if (!Number.isFinite(n) || n <= 0) return null
+    const tsMs = n * 1000
+    if (tsMs < TG_MIN_TS_MS || tsMs > maxMs) return null
+    return new Date(tsMs)
+}
+
 // Guard against concurrent initTelegramListeners calls
 let _initPromise: Promise<void> | null = null
 
@@ -283,7 +301,15 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 
         const externalChatId = `telegram:${senderId}`
         const externalMsgId = message.id?.toString()
-        const now = message.date ? new Date(message.date * 1000) : new Date()
+        // Validate message.date — corrupted timestamps (Y2038 overflow,
+        // pre-2013) would wreck chronology. If we can't trust the date,
+        // drop the message rather than file it under "now".
+        const validated = validateTgDate(message.date)
+        if (!validated) {
+            console.warn(`[${loggerPrefix}] skip bad-ts msgId=${externalMsgId} date=${message.date}`)
+            return
+        }
+        const now = validated
 
         console.log(`[${loggerPrefix}] INBOUND connId=${connectionId} senderId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
 
@@ -1116,7 +1142,8 @@ export async function importTelegramHistory(
                     const histMediaInfo = detectTgMediaType(msg)
                     const msgText = msg.message || (histMediaInfo ? histMediaInfo.fallback : '')
                     if (!msgText) continue // skip empty service messages
-                    const ts = msg.date ? new Date(msg.date * 1000) : new Date()
+                    const ts = validateTgDate(msg.date)
+                    if (!ts) continue // skip corrupted timestamps
                     if (ts < cutoff) continue
 
                     if (!minDate || ts < minDate) minDate = ts

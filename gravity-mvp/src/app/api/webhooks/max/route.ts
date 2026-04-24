@@ -18,14 +18,38 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
     }
 
+    // Reject empty text messages (pure protocol noise — ack / receipt
+    // frames shouldn't render as empty bubbles in the UI).
+    const trimmedText = typeof text === 'string' ? text.trim() : ''
+    const isTextType = !messageType || messageType === 'text'
+    if (isTextType && !trimmedText && (!attachments || attachments.length === 0)) {
+      return NextResponse.json({ ok: true, skipped: 'empty_text' })
+    }
+
+    // Validate timestamp — same pattern as WA/TG. MAX timestamps are
+    // ms since epoch (JS Date constructor input). Accept only values
+    // within [2015-01-01 .. now+1h]; reject corrupted/absent.
+    const MIN_TS_MS = Date.UTC(2015, 0, 1)
+    const FUTURE_TOLERANCE_MS = 60 * 60 * 1000
+    const nowMs = Date.now()
+    let sentAt: Date
+    if (timestamp) {
+      const ts = typeof timestamp === 'number' ? timestamp : Date.parse(String(timestamp))
+      if (!Number.isFinite(ts) || ts < MIN_TS_MS || ts > nowMs + FUTURE_TOLERANCE_MS) {
+        // Corrupted timestamp — skip rather than file under wrong date.
+        return NextResponse.json({ ok: true, skipped: 'bad_timestamp', value: timestamp })
+      }
+      sentAt = new Date(ts)
+    } else {
+      sentAt = new Date()
+    }
+
     const externalChatId = String(chatId)
 
     // Find or create Chat
     let chat = await prisma.chat.findUnique({
       where: { externalChatId },
     })
-
-    const sentAt = timestamp ? new Date(timestamp) : new Date()
 
     if (!chat) {
       chat = await prisma.chat.create({
@@ -99,7 +123,7 @@ export async function POST(request: Request) {
         channel:   'max',
         externalId: externalId || null,
         status:    'delivered',
-        sentAt:    timestamp ? new Date(timestamp) : new Date(),
+        sentAt,   // validated above
         metadata:  { senderId, maxChatId: chatId, attachments: attachments || [] },
       },
     })
