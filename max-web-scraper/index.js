@@ -17,6 +17,7 @@ const { MediaPipeline }            = require('./media/MediaPipeline')
 const { MessageSync }              = require('./sync/MessageSync')
 const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { ContactStore }             = require('./contacts/ContactStore')
+const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -342,12 +343,50 @@ async function shutdown(signal) {
   }
   if (isSending) console.warn('[App] Очередь отправки не завершена — принудительный выход')
 
+  // Close Playwright context so Chromium child processes don't linger
+  // and hold user_data file locks after we exit. Cap at 5s.
+  if (context) {
+    try {
+      await Promise.race([
+        context.close(),
+        new Promise(resolve => setTimeout(resolve, 5000)),
+      ])
+      console.log('[App] Playwright context closed')
+    } catch (err) {
+      console.warn('[App] context.close() failed:', err.message)
+    }
+  }
+
   console.log('[App] Завершение процесса')
   process.exit(0)
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 process.on('SIGINT',  () => shutdown('SIGINT'))
+
+// Last-resort handler: if something unhandled blows up inside the
+// event loop (browser crash, WS hook throw), at least give Chromium
+// a chance to close before we die — otherwise zombie Chrome keeps
+// holding user_data locks and the next restart is broken.
+process.on('uncaughtException', async (err) => {
+  console.error('[App] UNCAUGHT:', err && err.stack ? err.stack : err)
+  if (context) {
+    try {
+      await Promise.race([
+        context.close(),
+        new Promise(resolve => setTimeout(resolve, 3000)),
+      ])
+    } catch { /* best effort */ }
+  }
+  process.exit(1)
+})
+
+// Unhandled rejections are usually benign (late fetch, disconnected
+// WS event). Log but don't exit — killing the whole scraper over a
+// stale promise would cause more harm than the rejection itself.
+process.on('unhandledRejection', (reason) => {
+  console.warn('[App] UNHANDLED REJECTION:', reason && reason.stack ? reason.stack : reason)
+})
 
 // ─── Инициализация ───────────────────────────────────────────────────────────
 
@@ -359,6 +398,7 @@ const contactStore = new ContactStore()
 const chatCache = new Map()  // chatId → chat object (собирается из opcode 48 при старте)
 
 let page          = null
+let context       = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
 let mediaPipeline = null
 let initialSync   = null
 let isReady       = false
@@ -371,7 +411,16 @@ let _reconnectDelay    = 0
 async function init() {
   fs.mkdirSync(USER_DATA_DIR, { recursive: true })
 
-  const context = await chromium.launchPersistentContext(USER_DATA_DIR, {
+  // Startup cleanup: zombie Chrome + stale profile locks from a previous
+  // unclean exit. Without this, launchPersistentContext below hits
+  // "The browser is already running for <userDataDir>".
+  try {
+    await cleanupStaleMaxSession()
+  } catch (err) {
+    console.warn('[App] cleanupStaleMaxSession failed:', err.message)
+  }
+
+  context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless: true,
     viewport: { width: 1280, height: 720 },
     args: [
