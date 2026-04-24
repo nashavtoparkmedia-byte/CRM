@@ -141,10 +141,16 @@ export async function POST(request: Request) {
       },
     })
 
-    // Save attachments
+    // Save attachments. Dedup by url first — MAX scraper sometimes sends
+    // the same sticker/image twice (preview + full, or two frames of a
+    // protocol that we both flatten). Without this, the UI renders N
+    // copies of the same frog.
     if (attachments && attachments.length > 0) {
+      const seenUrls = new Set<string>()
       for (const att of attachments) {
         if (!att.url) continue
+        if (seenUrls.has(att.url)) continue
+        seenUrls.add(att.url)
         await prisma.messageAttachment.create({
           data: {
             messageId: message.id,
