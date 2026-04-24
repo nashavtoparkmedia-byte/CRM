@@ -500,6 +500,71 @@ export async function initTelegramListeners() {
 
 let _healthInterval: ReturnType<typeof setInterval> | null = null
 
+// TG hard-restart — tears down the cached client and re-inits from scratch.
+// Triggered by the health check when a connection sits in 'degraded' state
+// past the threshold. 5-min cooldown per connection so we don't DDoS
+// Telegram's MTProto if something upstream is broken.
+const tgHardRestartLastAt = new Map<string, number>()
+const TG_HARD_RESTART_COOLDOWN_MS = 5 * 60 * 1000
+
+async function scheduleTgHardRestart(connection: any, reason: string): Promise<void> {
+    const { opsLog } = await import('@/lib/opsLog')
+
+    const last = tgHardRestartLastAt.get(connection.id) || 0
+    if (Date.now() - last < TG_HARD_RESTART_COOLDOWN_MS) {
+        opsLog('info', 'tg_hard_restart_skipped', {
+            connectionId: connection.id,
+            reason: 'cooldown',
+            sinceLastMs: Date.now() - last,
+        })
+        return
+    }
+    tgHardRestartLastAt.set(connection.id, Date.now())
+
+    opsLog('warn', 'tg_hard_restart_scheduled', { connectionId: connection.id, reason })
+
+    // Don't resurrect a connection the user has explicitly disconnected.
+    try {
+        const fresh = await (prisma as any).telegramConnection.findUnique({
+            where: { id: connection.id },
+            select: { isActive: true, sessionString: true },
+        })
+        if (!fresh || !fresh.isActive || !fresh.sessionString) {
+            opsLog('info', 'tg_hard_restart_abort', {
+                connectionId: connection.id,
+                reason: 'conn_inactive',
+                isActive: fresh?.isActive ?? null,
+            })
+            return
+        }
+    } catch { /* best effort */ }
+
+    // Tear down the cached client so a fresh one can take over.
+    const cached = clientCache.get(connection.id)
+    if (cached) {
+        try {
+            await Promise.race([
+                (cached as any).disconnect?.() ?? Promise.resolve(),
+                new Promise(resolve => setTimeout(resolve, 3000)),
+            ])
+        } catch { /* dead client may throw on disconnect */ }
+    }
+    clientCache.delete(connection.id)
+    initializedListeners.delete(connection.id)
+    tgInstanceIds.delete(connection.id)
+
+    try {
+        opsLog('info', 'tg_hard_restart_init_start', { connectionId: connection.id })
+        await getTelegramClient(connection)
+        opsLog('info', 'tg_hard_restart_success', { connectionId: connection.id })
+    } catch (err: any) {
+        opsLog('error', 'tg_hard_restart_failed', {
+            connectionId: connection.id,
+            error: err?.message ?? String(err),
+        })
+    }
+}
+
 function startTelegramHealthCheck(connections: any[]) {
     if (_healthInterval) return // Already running
 
@@ -532,6 +597,10 @@ function startTelegramHealthCheck(connections: any[]) {
                     retryAttempt: entry?.retryAttempt,
                     error: entry?.lastError || undefined,
                 })
+                // Before this commit we only logged — connection would sit
+                // degraded indefinitely. Now trigger a hard restart (own
+                // cooldown, won't DDoS Telegram if the issue is upstream).
+                scheduleTgHardRestart(conn, 'prolonged_degradation').catch(() => {})
             }
         }
     }, 60_000)
