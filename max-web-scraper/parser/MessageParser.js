@@ -87,9 +87,13 @@ class MessageParser {
   static _detectMaxType(attaches) {
     if (!attaches || !attaches.length) return 'text'
     const t = (attaches[0]._type || '').toUpperCase()
-    if (t === 'PHOTO')                  return 'image'
-    if (t === 'VIDEO')                  return 'video'
-    if (t === 'AUDIO' || t === 'VOICE') return 'voice'
+    if (t === 'PHOTO')                     return 'image'
+    if (t === 'VIDEO')                     return 'video'
+    if (t === 'AUDIO' || t === 'VOICE')    return 'voice'
+    // STICKER covers both static and animated (smileType=4) MAX stickers.
+    // Without this branch they leaked into the default 'document' bucket
+    // and rendered as empty "Документ" chips.
+    if (t === 'STICKER' || t === 'SMILE')  return 'sticker'
     return 'document'
   }
 

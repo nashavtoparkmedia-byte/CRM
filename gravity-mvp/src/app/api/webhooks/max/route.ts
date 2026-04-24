@@ -93,7 +93,12 @@ export async function POST(request: Request) {
       await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
 
-    // Map messageType to Prisma MessageType enum
+    // Map messageType to Prisma MessageType enum.
+    // Defensive: if the scraper classified as 'document' but the first
+    // attachment is actually a sticker, override. MAX ships stickers
+    // with _type='STICKER' which older scraper versions bucketed as
+    // document — the new MessageParser branch already emits 'sticker',
+    // but this guard catches any in-flight or legacy frames.
     const typeMap: Record<string, string> = {
       text:     'text',
       image:    'image',
@@ -101,8 +106,16 @@ export async function POST(request: Request) {
       voice:    'voice',
       audio:    'audio',
       document: 'document',
+      sticker:  'sticker',
     }
-    const msgType = typeMap[messageType] || 'text'
+    let effectiveMessageType = messageType
+    if (attachments && attachments.length > 0) {
+      const firstAttType = String(attachments[0]?.type || '').toLowerCase()
+      if (firstAttType === 'sticker' || firstAttType === 'smile') {
+        effectiveMessageType = 'sticker'
+      }
+    }
+    const msgType = typeMap[effectiveMessageType] || 'text'
 
     // For non-text messages without text, use a readable placeholder
     const contentFallbacks: Record<string, string> = {
