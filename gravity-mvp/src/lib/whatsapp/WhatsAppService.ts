@@ -77,6 +77,51 @@ function clampMessageTs(rawSeconds: unknown): Date {
 }
 
 /**
+ * Recover Message objects for rows that came through the Store-fallback
+ * branch (triggered for @lid chats where chatRaw.fetchMessages throws).
+ * Store gives us ids but no Message instance, so downloadMedia can't be
+ * called. Here we re-hydrate via client.getMessageById for each id that
+ * looks like it carries media. Best-effort: getMessageById can return
+ * null or throw for messages not in Store cache — those stay without
+ * media, same outcome as before the fix.
+ *
+ * Mutates fetchedByJid and rawMessages[i].hasMedia in place.
+ */
+async function enrichStoreFallbackMedia(
+    client: Client,
+    rawMessages: Array<{ id: string; hasMedia: boolean; type: string }>,
+    fetchedByJid: Map<string, Message>,
+): Promise<number> {
+    let enriched = 0
+    for (const raw of rawMessages) {
+        if (!raw.id) continue
+        // Skip if we already have it (primary fetchMessages path).
+        if (fetchedByJid.has(raw.id)) continue
+        // Only bother for types that plausibly carry media. For text we'd
+        // waste a roundtrip and getMessageById hits Puppeteer.
+        const isMediaType = raw.type === 'image' || raw.type === 'video'
+            || raw.type === 'audio' || raw.type === 'ptt' || raw.type === 'voice'
+            || raw.type === 'document' || raw.type === 'sticker'
+        if (!isMediaType) continue
+
+        try {
+            const msgObj = await (client as any).getMessageById(raw.id)
+            if (msgObj && msgObj.hasMedia) {
+                fetchedByJid.set(raw.id, msgObj)
+                raw.hasMedia = true
+                enriched++
+            }
+        } catch {
+            // Not in Store cache / older than keys — leave without media.
+        }
+    }
+    if (enriched > 0) {
+        console.log(`[WA-SERVICE] enriched ${enriched} @lid messages with media via getMessageById`)
+    }
+    return enriched
+}
+
+/**
  * Live-handle a group message (@g.us). Minimal pipeline:
  *   - upsert WhatsAppChat + unified Chat with chatType='group'
  *   - write WhatsAppMessage + unified Message (status='delivered' for
@@ -372,11 +417,13 @@ async function syncHistory(connectionId: string, client: Client) {
                 // before fetch, leaving ~97% of rows empty as UI ghosts.
                 let rawMsgs: { id: string; body: string; timestamp: number; fromMe: boolean; type: string; hasMedia: boolean }[] = []
                 const fetchedByJid = new Map<string, Message>()
+                let usedFallback = false
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
                     for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
                     rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type, hasMedia: !!m.hasMedia }))
                 } catch {
+                    usedFallback = true
                     const page = (client as any).pupPage
                     if (page) {
                         try {
@@ -388,11 +435,20 @@ async function syncHistory(connectionId: string, client: Client) {
                                 const models = chat.msgs.getModelsArray ? chat.msgs.getModelsArray() : Array.from(chat.msgs)
                                 return models.map((m: any) => ({
                                     id: m.id?._serialized || '', body: m.body || '', timestamp: m.t || 0,
-                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat', hasMedia: false,
+                                    fromMe: !!m.id?.fromMe, type: m.type || 'chat',
+                                    // Report real hasMedia — needed to kick off getMessageById
+                                    // lookup in enrichStoreFallbackMedia below.
+                                    hasMedia: !!(m as any).hasMedia || (m.type && m.type !== 'chat'),
                                 }))
                             }, chatRaw.id._serialized)
                         } catch {}
                     }
+                }
+
+                // If we came through Store-fallback (@lid), try to recover
+                // Message objects for media types so downloadMedia works.
+                if (usedFallback && rawMsgs.length > 0) {
+                    await enrichStoreFallbackMedia(client, rawMsgs, fetchedByJid)
                 }
 
                 // Drop junk messages: JID-body + empty text-only.
@@ -1618,9 +1674,11 @@ export async function importWhatsAppHistory(
                 // before fetch) left 463/478 empty chats as UI ghosts.
                 let rawMessages: { id: string; body: string; timestamp: number; fromMe: boolean; type: string; hasMedia: boolean }[] = []
                 // Keep original Message objects by id so we can downloadMedia()
-                // later. Store fallback path cannot produce these, so media
-                // download only works for the primary fetchMessages branch.
+                // later. Store fallback populates this via enrichStoreFallbackMedia
+                // below — previously it was empty for @lid chats, now media
+                // can also be downloaded for them when Store has the message.
                 const fetchedByJid = new Map<string, Message>()
+                let usedFallback = false
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
                     for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
@@ -1633,6 +1691,7 @@ export async function importWhatsAppHistory(
                         hasMedia: !!m.hasMedia,
                     }))
                 } catch {
+                    usedFallback = true
                     // fetchMessages fails for @lid chats — use Puppeteer Store directly
                     const page = (client as any).pupPage
                     if (page) {
@@ -1649,11 +1708,20 @@ export async function importWhatsAppHistory(
                                     timestamp: m.t || 0,
                                     fromMe: !!m.id?.fromMe,
                                     type: m.type || 'chat',
-                                    hasMedia: false, // fallback can't download — safe default
+                                    // Report real hasMedia so the enrichment step
+                                    // below knows which messages to re-hydrate.
+                                    hasMedia: !!(m as any).hasMedia || (m.type && m.type !== 'chat'),
                                 }))
                             }, chatRaw.id._serialized)
                         } catch {}
                     }
+                }
+
+                // @lid chats arrive via Store-fallback with no Message objects,
+                // which meant media was lost. Try getMessageById for each
+                // media-typed id to re-hydrate downloadMedia capability.
+                if (usedFallback && rawMessages.length > 0) {
+                    await enrichStoreFallbackMedia(client, rawMessages, fetchedByJid)
                 }
 
                 // Drop junk-body messages + empty text-only messages.
