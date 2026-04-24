@@ -77,6 +77,139 @@ function clampMessageTs(rawSeconds: unknown): Date {
 }
 
 /**
+ * Live-handle a group message (@g.us). Minimal pipeline:
+ *   - upsert WhatsAppChat + unified Chat with chatType='group'
+ *   - write WhatsAppMessage + unified Message (status='delivered' for
+ *     outbound, default for inbound)
+ *   - attempt media download if the message has media
+ *   - emitMessageReceived for the UI subscribers
+ *
+ * NOT done here (intentionally, because it's a group room, not a phone):
+ *   - phone normalization / LID translation
+ *   - DriverMatchService.linkChatToDriver
+ *   - ContactService.resolveContact (the sender in msg.author is not
+ *     the chat partner — a group has N members)
+ *
+ * Group outbound (you write to the group) arrives as msg.fromMe=true
+ * with msg.to = group JID. We key the chat on whichever side is @g.us.
+ */
+async function handleLiveGroupMessage(msg: Message, connectionId: string): Promise<void> {
+    const fromJid = msg.from || ''
+    const toJid = msg.to || ''
+    const isOutbound = !!msg.fromMe
+    const groupJid = fromJid.endsWith('@g.us') ? fromJid : toJid
+    if (!groupJid) return
+
+    // Reject corrupted timestamps — symmetric with the 1:1 path.
+    const ts = clampMessageTs(msg.timestamp)
+
+    // Cutoff (last-N-days sync mode filter)
+    const cutoff = connectionSyncCutoffs.get(connectionId)
+    if (cutoff && msg.timestamp && ts < cutoff) return
+
+    // Empty-text / JID-body guard (same as 1:1).
+    const body = (msg.body || '').trim()
+    if (body && /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i.test(body)) return
+    if ((msg.type === 'chat' || !msg.type) && !body && !msg.hasMedia) return
+
+    // Group name — best effort via msg.getChat(). Falls back to JID so we
+    // never fail the whole ingest on a chat-name lookup error.
+    let groupName: string | null = null
+    try {
+        const chatObj = await msg.getChat()
+        groupName = chatObj?.name || null
+    } catch { /* ignore */ }
+
+    console.log(`[WA-SERVICE] GROUP ${isOutbound ? 'OUTBOUND' : 'INBOUND'} group=${groupJid} author=${(msg as any).author || 'self'} body="${body.slice(0, 40)}"`)
+
+    // Legacy WhatsAppChat (raw JID).
+    await prisma.whatsAppChat.upsert({
+        where: { id: groupJid },
+        update: { lastMessageAt: ts, ...(groupName ? { name: groupName } : {}) },
+        create: {
+            id: groupJid,
+            connectionId,
+            name: groupName || groupJid,
+            lastMessageAt: ts,
+        },
+    })
+
+    // Unified Chat with chatType='group'. externalChatId is the raw JID
+    // so the "Группы" tab filter (chatType !== 'private') picks it up.
+    let unifiedChat = await (prisma.chat as any).findUnique({
+        where: { externalChatId: groupJid },
+    })
+    if (!unifiedChat) {
+        unifiedChat = await (prisma.chat as any).create({
+            data: {
+                externalChatId: groupJid,
+                channel: 'whatsapp',
+                name: groupName || groupJid,
+                chatType: 'group',
+                lastMessageAt: ts,
+                metadata: { connectionId },
+            },
+        })
+    } else {
+        await (prisma.chat as any).update({
+            where: { id: unifiedChat.id },
+            data: {
+                lastMessageAt: ts,
+                chatType: 'group',
+                ...(groupName ? { name: groupName } : {}),
+            },
+        })
+    }
+
+    // Legacy WhatsAppMessage
+    const msgType = mapMsgType(msg.type)
+    await prisma.whatsAppMessage.upsert({
+        where: { id_chatId: { id: msg.id._serialized, chatId: groupJid } },
+        update: {},
+        create: {
+            id: msg.id._serialized,
+            chatId: groupJid,
+            body: msg.body || '',
+            fromMe: isOutbound,
+            timestamp: ts,
+            type: msgType,
+        },
+    })
+
+    // Dedup on externalId — group messages from WA Web Store may arrive
+    // again via sync, we don't want doubles.
+    const existing = await prisma.message.findFirst({
+        where: { externalId: msg.id._serialized },
+        select: { id: true },
+    })
+    if (existing) return
+
+    const unifiedType = mapToUnifiedMessageType(msg.type)
+    const savedMsg = await prisma.message.create({
+        data: {
+            chatId: unifiedChat.id,
+            direction: isOutbound ? 'outbound' : 'inbound',
+            type: unifiedType,
+            content: waContentWithFallback(msg.body, msg.type),
+            externalId: msg.id._serialized,
+            channel: 'whatsapp',
+            sentAt: ts,
+            status: isOutbound ? 'delivered' : undefined,
+            metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
+        },
+    })
+
+    // Media — reuse the same helper the 1:1 path uses.
+    if (msg.hasMedia && unifiedType !== 'text') {
+        await downloadAndSaveMedia(msg, savedMsg.id, unifiedType, `group-live ${msg.id._serialized.slice(-16)}`)
+    }
+
+    emitMessageReceived(savedMsg).catch(e =>
+        console.error('[WA-SERVICE] group emitMessageReceived error:', e.message),
+    )
+}
+
+/**
  * Download media (image/video/voice/document/sticker) attached to a
  * whatsapp-web.js Message and save it as a MessageAttachment row
  * linked to our unified Message.
@@ -620,13 +753,20 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         const fromJid = msg.from || ''
         const toJid = msg.to || ''
         if (fromJid === 'status@broadcast' || toJid === 'status@broadcast') return
-        // Live-receive path for groups is not supported yet: the partnerJid /
-        // contact-resolution logic below assumes a 1:1 phone chat. Groups
-        // still arrive through syncHistory / importWhatsAppHistory, so they
-        // DO appear on the "Группы" tab — just not updated in real-time from
-        // a running CRM. Lifting this requires a group-aware rewrite of the
-        // branch below (use msg.author as sender, msg.from as room JID).
-        if (fromJid.endsWith('@g.us') || toJid.endsWith('@g.us')) return
+
+        // Group messages go through a separate, much simpler branch — the
+        // 1:1 logic below relies on partnerJid being a phone number, which
+        // it isn't for groups (msg.from is a room id, real sender is in
+        // msg.author). Returning at the end of handleLiveGroupMessage.
+        const isGroupMsg = fromJid.endsWith('@g.us') || toJid.endsWith('@g.us')
+        if (isGroupMsg) {
+            try {
+                await handleLiveGroupMessage(msg, connectionId)
+            } catch (err: any) {
+                console.error(`[WA-SERVICE] group live handler error: ${err?.message}`)
+            }
+            return
+        }
 
         // Drop system/e2e/gp2 frames where body is a raw JID literal.
         // User text never looks like "123456789@c.us" — it's protocol noise.
