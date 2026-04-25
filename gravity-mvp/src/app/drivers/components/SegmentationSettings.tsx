@@ -82,8 +82,16 @@ export function SegmentationSettings({ isOpen, onClose }: SegmentationSettingsPr
         try {
             await saveSegmentationSettings(settings)
             const result = await triggerRecalculation()
-            setToast({ message: `Пересчитано ${result.count} водителей`, type: 'success' })
-            setTimeout(onClose, 1500)
+            if (result.syncError) {
+                // Sync from Yandex failed — recalc still ran on local data, but warn user
+                setToast({
+                    message: `Пересчёт по локальным данным (${result.count}). Синхронизация Yandex Fleet недоступна — данные могут быть устаревшими.`,
+                    type: 'error'
+                })
+            } else {
+                setToast({ message: `Пересчитано ${result.count} водителей`, type: 'success' })
+                setTimeout(onClose, 1500)
+            }
         } catch (error) {
             setToast({ message: "Ошибка пересчета", type: 'error' })
         } finally {

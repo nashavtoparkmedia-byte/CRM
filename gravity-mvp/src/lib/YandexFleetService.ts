@@ -2,6 +2,32 @@
 import { prisma } from '@/lib/prisma'
 import { recalculateDriverScoring } from '@/lib/scoring'
 
+/**
+ * Fetch wrapper with retry on Yandex Fleet rate limits (HTTP 429).
+ * Uses exponential backoff: 2s, 4s, 8s, 16s, 32s.
+ * Also fires a small delay between successful calls to stay polite.
+ */
+async function yandexFetch(url: string, init: RequestInit, label: string): Promise<Response> {
+    const MAX_ATTEMPTS = 5
+    let attempt = 0
+    while (true) {
+        attempt++
+        const res = await fetch(url, init)
+        if (res.status !== 429) return res
+        if (attempt >= MAX_ATTEMPTS) return res
+
+        // Honor Retry-After header if present, else exponential backoff
+        const retryAfter = res.headers.get('retry-after')
+        const backoffMs = retryAfter
+            ? Math.min(60_000, parseInt(retryAfter, 10) * 1000 || 2000)
+            : Math.min(32_000, 2_000 * Math.pow(2, attempt - 1))
+        console.warn(`[${label}] 429 rate limit, retry ${attempt}/${MAX_ATTEMPTS} in ${backoffMs}ms`)
+        await new Promise(r => setTimeout(r, backoffMs))
+    }
+}
+
+const POLITE_DELAY_MS = 400  // small pause between Yandex calls
+
 export class YandexFleetService {
     /**
      * Syncs trip data from Yandex Fleet API for a specified number of days.
@@ -51,7 +77,7 @@ export class YandexFleetService {
                 payload.cursor = cursor
             }
 
-            const res = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/orders/list', {
+            const res = await yandexFetch('https://fleet-api.taxi.yandex.net/v1/parks/orders/list', {
                 method: 'POST',
                 headers: {
                     'X-Client-ID': connection.clid,
@@ -60,7 +86,7 @@ export class YandexFleetService {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(payload),
-            })
+            }, 'YandexFleetService.syncTrips')
 
             if (!res.ok) {
                 const errText = await res.text()
@@ -82,6 +108,9 @@ export class YandexFleetService {
                 break
             }
             cursor = data.cursor
+
+            // Polite pause between paginated calls to avoid hammering Yandex
+            await new Promise(r => setTimeout(r, POLITE_DELAY_MS))
         }
 
         // Timezone-aware formatter (UTC+5 for park local time)

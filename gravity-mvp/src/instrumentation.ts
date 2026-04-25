@@ -220,7 +220,31 @@ export async function register() {
         }, 90 * 1000)
         OperationalJobs.registerInterval(deviceOfflineInterval)
 
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'device_offline:90s'] })
+        // Yandex Fleet sync: target time 03:00 server time, daily.
+        // Strategy: tick every hour; only run if (current hour == 03) AND no
+        // successful run today. Cheap, robust to server restarts during the
+        // night, and idempotent if Next.js spins up multiple workers (the
+        // SyncStatus 'running' lock prevents concurrent runs).
+        const YANDEX_SYNC_HOUR = 3
+        let lastYandexSyncDay: string | null = null
+        const yandexSyncInterval = setInterval(async () => {
+            const now = new Date()
+            const today = now.toISOString().slice(0, 10)
+            if (now.getHours() !== YANDEX_SYNC_HOUR) return
+            if (lastYandexSyncDay === today) return  // already ran today
+
+            await OperationalJobs.run('yandex_fleet_sync', async () => {
+                const { runYandexSync } = await import('@/lib/yandexSync')
+                const result = await runYandexSync({ bypassCooldown: true })
+                if (result.ok) {
+                    lastYandexSyncDay = today
+                }
+                return result
+            })
+        }, 60 * 60 * 1000)  // every hour
+        OperationalJobs.registerInterval(yandexSyncInterval)
+
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'device_offline:90s', 'yandex_fleet_sync:24h@03:00'] })
 
     }, 5000) // 5 second delay after server start
 

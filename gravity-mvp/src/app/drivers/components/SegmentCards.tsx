@@ -24,13 +24,12 @@ export function SegmentCards({
     onSegmentClick
 }: SegmentCardsProps) {
     const segments = useMemo(() => [
-        { id: 'profitable', label: 'Прибыльные', color: 'bg-emerald-500', hover: 'hover:bg-emerald-50', active: 'ring-emerald-500 bg-emerald-50', textColor: 'text-emerald-700', icon: '🟢' },
-        { id: 'medium', label: 'Средние', color: 'bg-amber-400', hover: 'hover:bg-amber-50', active: 'ring-amber-400 bg-amber-50', textColor: 'text-amber-700', icon: '🟡' },
-        { id: 'small', label: 'Малые', color: 'bg-orange-500', hover: 'hover:bg-orange-50', active: 'ring-orange-500 bg-orange-50', textColor: 'text-orange-700', icon: '🟠' },
-        { id: 'dropped', label: 'Выпал', color: 'bg-blue-500', hover: 'hover:bg-blue-50', active: 'ring-blue-500 bg-blue-50', textColor: 'text-blue-700', icon: '🔵' },
+        { id: 'profitable', label: 'Прибыльные', dot: 'bg-emerald-500' },
+        { id: 'medium',     label: 'Средние',    dot: 'bg-amber-400' },
+        { id: 'small',      label: 'Малые',      dot: 'bg-orange-500' },
+        { id: 'dropped',    label: 'Выпавшие',   dot: 'bg-[#3390EC]' },
     ], [])
 
-    // Calculate fleet total as sum of active segments
     const fleetTotal = useMemo(() => {
         return (counts.profitable || 0) + (counts.medium || 0) + (counts.small || 0) + (counts.dropped || 0)
     }, [counts])
@@ -41,7 +40,7 @@ export function SegmentCards({
     }
 
     return (
-        <div className="flex flex-wrap items-center gap-2 p-1 bg-gray-50/50 rounded-2xl border border-gray-100 mb-4">
+        <div className="flex flex-wrap items-center gap-1">
             {segments.map((s) => {
                 const count = (counts as any)[s.id] || 0
                 const percent = calculatePercentage(count)
@@ -52,32 +51,32 @@ export function SegmentCards({
                         key={s.id}
                         onClick={() => onSegmentClick(isActive ? 'all' : s.id)}
                         className={cn(
-                            "flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 border border-transparent group relative overflow-hidden",
-                            s.hover,
-                            isActive ? cn("ring-2 ring-offset-0 shadow-sm border-white", s.active) : "bg-white shadow-sm hover:shadow-md"
+                            "h-[32px] px-3 rounded-lg flex items-center gap-2 text-[13px] font-semibold transition-colors",
+                            isActive
+                                ? "bg-[#3390EC] text-white"
+                                : "text-[#8A9099] hover:bg-[#F0F2F5]"
                         )}
                         title={`${s.label}: ${count} водит. (${percent}%)`}
                     >
-                        {/* Segment Icon/Dot */}
-                        <div className={cn("w-2 h-2 rounded-full", s.color)} />
-                        
-                        <div className="flex flex-col items-start leading-none">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-gray-400 group-hover:text-gray-500 transition-colors">
-                                {s.label}
+                        <span className={cn("w-[6px] h-[6px] rounded-full shrink-0", s.dot)} />
+                        <span>{s.label}</span>
+                        <span
+                            className={cn(
+                                "h-[18px] min-w-[18px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center leading-none",
+                                isActive ? "bg-white/25 text-white" : "bg-[#F0F2F5] text-[#8A9099]"
+                            )}
+                        >
+                            {count}
+                        </span>
+                        {count > 0 && (
+                            <span
+                                className={cn(
+                                    "text-[11px] font-medium",
+                                    isActive ? "text-white/70" : "text-[#B0B5BA]"
+                                )}
+                            >
+                                {percent}%
                             </span>
-                            <div className="flex items-baseline gap-1.5 mt-0.5">
-                                <span className={cn("text-sm font-black", isActive ? s.textColor : "text-gray-900")}>
-                                    {count}
-                                </span>
-                                <span className="text-[10px] font-bold text-gray-400">
-                                    ({percent}%)
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* Visual polish: accent bar */}
-                        {isActive && (
-                            <div className={cn("absolute left-0 top-0 bottom-0 w-1", s.color)} />
                         )}
                     </button>
                 )

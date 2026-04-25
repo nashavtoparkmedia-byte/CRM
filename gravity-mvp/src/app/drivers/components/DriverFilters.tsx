@@ -1,8 +1,6 @@
 "use client"
 
 import { Search, Calendar, RefreshCw } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { useState, useEffect, useRef } from "react"
 import { CustomDateRangePicker } from "./CustomDateRangePicker"
 
@@ -32,6 +30,8 @@ interface DriverFiltersProps {
         dropped: number
     }
 }
+
+const SELECT_CLASS = "h-[32px] rounded-lg bg-[#F4F5F7] hover:bg-[#EBEDF0] px-3 text-[13px] font-medium text-[#111] focus:outline-none focus:ring-2 focus:ring-[#3390EC]/40 cursor-pointer border-0 transition-colors"
 
 export function DriverFilters({
     search,
@@ -68,7 +68,7 @@ export function DriverFilters({
 
     const formatDateRange = (fromStr?: string, toStr?: string) => {
         if (!fromStr || !toStr) return "Выбрать даты"
-        
+
         const parseDateSafe = (s: string) => {
             const [y, m, d] = s.split('-').map(Number)
             return new Date(y, m - 1, d)
@@ -76,31 +76,33 @@ export function DriverFilters({
 
         const fromDate = parseDateSafe(fromStr)
         const toDate = parseDateSafe(toStr)
-        
+
         const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
-        
-        // If same month, format as "2–7 мар."
+
         if (fromDate.getMonth() === toDate.getMonth()) {
             const month = fromDate.toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '')
             return `${fromDate.getDate()}–${toDate.getDate()} ${month}.`
         }
-        
+
         const startFormatted = fromDate.toLocaleDateString('ru-RU', options).replace('.', '')
         const endFormatted = toDate.toLocaleDateString('ru-RU', options).replace('.', '')
         return `${startFormatted} – ${endFormatted}`
     }
 
+    const hasCustomRange = dateRange === -1 || (fromDate && toDate)
+
     return (
-        <div className="flex flex-col border-b bg-white p-3">
-            <div className="flex w-full items-center gap-2">
+        <div className="flex flex-col border-b border-[#E8E8E8] bg-white px-3 py-2">
+            <div className="flex w-full items-center gap-2 flex-wrap">
                 {/* Search */}
-                <div className="relative flex-1 max-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
-                    <Input
+                <div className="relative flex-1 min-w-[180px] max-w-[240px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9099]" size={14} />
+                    <input
                         placeholder="Поиск..."
                         value={search}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="h-9 w-full rounded-full bg-gray-100/80 border-transparent pl-9 text-xs focus:bg-white transition-all"
+                        onKeyDown={(e) => { if (e.key === 'Enter') onSubmit() }}
+                        className="w-full h-[32px] bg-[#F4F5F7] hover:bg-[#EBEDF0] focus:bg-white rounded-lg pl-9 pr-3 text-[13px] outline-none placeholder:text-[#8A9099] font-medium text-[#111] transition-colors focus:ring-2 focus:ring-[#3390EC]/40 border-0"
                     />
                 </div>
 
@@ -108,7 +110,7 @@ export function DriverFilters({
                 <select
                     value={segment}
                     onChange={(e) => onSegmentChange(e.target.value)}
-                    className="h-9 rounded-full bg-gray-100/80 px-4 text-xs font-medium focus:outline-none cursor-pointer border-transparent"
+                    className={SELECT_CLASS}
                 >
                     <option value="all">Все ({ (segmentCounts?.profitable || 0) + (segmentCounts?.medium || 0) + (segmentCounts?.small || 0) + (segmentCounts?.dropped || 0) })</option>
                     <option value="profitable">Прибыльные ({segmentCounts?.profitable || 0})</option>
@@ -121,7 +123,7 @@ export function DriverFilters({
                 <select
                     value={status}
                     onChange={(e) => onStatusChange(e.target.value)}
-                    className="h-9 rounded-full bg-gray-100/80 px-4 text-xs font-medium focus:outline-none cursor-pointer border-transparent"
+                    className={SELECT_CLASS}
                 >
                     <option value="all">Все статусы</option>
                     <option value="active">Активные</option>
@@ -130,7 +132,7 @@ export function DriverFilters({
                 </select>
 
                 {/* Period */}
-                <div className="relative flex items-center gap-2" ref={pickerRef}>
+                <div className="relative flex items-center gap-1.5" ref={pickerRef}>
                     <select
                         value={dateRange === -1 ? -1 : dateRange}
                         onChange={(e) => {
@@ -142,7 +144,7 @@ export function DriverFilters({
                                 setIsPickerOpen(true)
                             }
                         }}
-                        className="h-9 rounded-full bg-gray-100/80 px-4 text-xs font-medium focus:outline-none cursor-pointer border-transparent"
+                        className={SELECT_CLASS}
                     >
                         <option value={7}>7 дней</option>
                         <option value={14}>14 дней</option>
@@ -154,18 +156,13 @@ export function DriverFilters({
                     <button
                         type="button"
                         onClick={() => setIsPickerOpen(!isPickerOpen)}
-                        className={`
-                            flex h-9 items-center gap-2 px-4 rounded-full border transition-all text-xs font-medium
-                            ${dateRange === -1 || (fromDate && toDate)
-                                ? 'bg-gray-100/80 border-gray-300 text-gray-900' 
-                                : 'bg-gray-100/80 border-transparent text-gray-500 hover:bg-gray-200/80'}
-                        `}
+                        className={cn_btn(hasCustomRange)}
                     >
                         <Calendar size={14} />
                         <span className="whitespace-nowrap">
                             {fromDate && toDate ? formatDateRange(fromDate, toDate) : "Выбрать даты"}
                         </span>
-                        {(dateRange === -1 || (fromDate && toDate)) && <RefreshCw size={12} className="opacity-40" />}
+                        {hasCustomRange && <RefreshCw size={12} className="opacity-50" />}
                     </button>
 
                     {isPickerOpen && (
@@ -181,11 +178,11 @@ export function DriverFilters({
 
                 {/* Page Size */}
                 <div className="flex items-center gap-2 ml-auto">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Показывать:</span>
+                    <span className="text-[11px] font-semibold text-[#8A9099] whitespace-nowrap">Показывать:</span>
                     <select
                         value={pageSize}
                         onChange={(e) => onPageSizeChange(Number(e.target.value))}
-                        className="h-9 rounded-full bg-gray-100/80 px-4 text-xs font-medium focus:outline-none cursor-pointer border-transparent"
+                        className={SELECT_CLASS}
                     >
                         <option value={50}>50</option>
                         <option value={100}>100</option>
@@ -195,29 +192,43 @@ export function DriverFilters({
                     </select>
                 </div>
 
-                <Button 
-                    onClick={onSubmit} 
-                    className="h-9 w-9 p-0 rounded-full bg-gray-900 text-white hover:bg-black shadow-sm"
+                <button
+                    onClick={onSubmit}
                     disabled={isLoading}
+                    className="h-[32px] w-[32px] p-0 rounded-lg bg-[#3390EC] text-white hover:bg-[#2B7FD0] disabled:opacity-50 flex items-center justify-center transition-colors"
+                    title="Обновить"
                 >
-                    <Search size={16} />
-                </Button>
+                    {isLoading ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                        </svg>
+                    ) : (
+                        <Search size={14} />
+                    )}
+                </button>
 
                 {/* Exclude Inactive Toggle */}
-                <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                        <input
-                            type="checkbox"
-                            checked={excludeInactive}
-                            onChange={(e) => onExcludeInactiveChange?.(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
-                        />
-                        <span className="text-[10px] font-bold text-gray-500 whitespace-nowrap">
-                            Только активные
-                        </span>
-                    </label>
-                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none h-[32px] px-2 rounded-lg hover:bg-[#F4F5F7] transition-colors">
+                    <input
+                        type="checkbox"
+                        checked={excludeInactive}
+                        onChange={(e) => onExcludeInactiveChange?.(e.target.checked)}
+                        className="w-[14px] h-[14px] rounded border-[#B0B5BA] text-[#3390EC] focus:ring-[#3390EC]/40 accent-[#3390EC]"
+                    />
+                    <span className="text-[12px] font-medium text-[#8A9099] whitespace-nowrap">
+                        Только активные
+                    </span>
+                </label>
             </div>
         </div>
     )
+}
+
+function cn_btn(active: boolean) {
+    return [
+        "flex h-[32px] items-center gap-2 px-3 rounded-lg text-[13px] font-medium transition-colors",
+        active
+            ? "bg-[#3390EC]/10 text-[#3390EC] hover:bg-[#3390EC]/15"
+            : "bg-[#F4F5F7] hover:bg-[#EBEDF0] text-[#8A9099]",
+    ].join(" ")
 }
