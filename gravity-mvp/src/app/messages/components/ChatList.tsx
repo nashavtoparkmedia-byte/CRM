@@ -441,7 +441,9 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                             ? 'bg-white/20 text-white'
                             : isGroupChat ? 'bg-[#C8D6E5] text-[#546574]' : 'bg-[#DEE3E8] text-[#546574]'
                         }`}>
-                            {isGroupChat ? <Users size={20} /> : (chat.name?.substring(0, 1).toUpperCase() || "D")}
+                            {isGroupChat
+                                ? <Users size={20} />
+                                : ((chat.driver?.fullName || chat.contact?.displayName || chat.name)?.substring(0, 1).toUpperCase() || "D")}
                         </div>
                         <div className={`absolute -bottom-0.5 -right-0.5 rounded-full p-0.5 border ${isSelected ? 'bg-[#3390EC] border-[#3390EC]' : 'bg-white border-white'}`}>
                             {getChannelBadge(chat.channel)}
@@ -460,8 +462,14 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                     'bg-gray-300'
                                 }`} />
                                 <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
-                                    {chat.name
-                                        || chat.driver?.fullName
+                                    {/* Display priority: linked driver ФИО → resolved contact
+                                        displayName → raw chat.name (channel handle like "Check"
+                                        or TG username) → phone fallback. Same logic as
+                                        ChatHeader so list and conversation panel stay
+                                        consistent. */}
+                                    {chat.driver?.fullName
+                                        || chat.contact?.displayName
+                                        || chat.name
                                         || chat.driver?.phone
                                         || (() => {
                                             // Extract phone from externalChatId (e.g. "whatsapp:79221853150" → "+79221853150")
