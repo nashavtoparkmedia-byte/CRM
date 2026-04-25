@@ -156,9 +156,15 @@ export class ConversationWorkflowService {
   static async markRead(chatId: string): Promise<void> {
     const condition = await this._getGroupCondition(chatId)
 
+    // Per product policy: opening a chat counts as the manager having
+    // seen it — clears BOTH unreadCount and requiresResponse. Previously
+    // requiresResponse only cleared on outbound, which produced a
+    // permanent red marker on incoming-only conversations and confused
+    // operators ("ответил/не ответил не важно — увидел = норма").
     await prisma.$executeRaw`
       UPDATE "Chat"
       SET "unreadCount" = 0,
+          "requiresResponse" = false,
           "updatedAt" = NOW()
       WHERE ${condition}
     `

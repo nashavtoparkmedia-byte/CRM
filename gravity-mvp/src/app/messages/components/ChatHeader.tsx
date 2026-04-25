@@ -165,9 +165,6 @@ export default function ChatHeader({
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
                                 <h3 className="font-semibold text-[15px] text-[#111] leading-none shrink-0">{chat.name || "Водитель"}</h3>
-                                {chat.requiresResponse && (
-                                    <AlertCircle size={10} className="text-red-500 shrink-0" />
-                                )}
                                 <span className="text-[11px] text-gray-400">·</span>
                                 <span className="text-[11px] text-gray-500 font-mono truncate">{chat.driver?.phone || chat.externalChatId?.split(':')[1] || chat.externalChatId}</span>
                                 <span className="text-[11px] text-gray-400">·</span>

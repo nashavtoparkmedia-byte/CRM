@@ -474,11 +474,8 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                         </div>
                     )}
 
-                    {chat.requiresResponse && !isSelected && (
-                        <div className="absolute right-3 top-3">
-                            <AlertCircle size={12} className="text-[#FF5252]" />
-                        </div>
-                    )}
+                    {/* requiresResponse marker removed by request — unreadCount alone
+                        is enough; "manager opened the chat" already counts as read. */}
                 </button>
             </div>
         )

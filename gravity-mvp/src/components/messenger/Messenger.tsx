@@ -520,12 +520,7 @@ export default function Messenger() {
                                             {chat.name || "Водитель"}
                                         </span>
                                         <div className="flex items-center gap-1.5 shrink-0">
-                                            {chat.requiresResponse && (
-                                                <div className="flex items-center gap-1 bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded-lg border border-red-500/20">
-                                                    <AlertCircle size={8} />
-                                                    <span className="text-[8px] font-black uppercase tracking-tighter">Ждёт ответа</span>
-                                                </div>
-                                            )}
+                                            {/* "Ждёт ответа" badge removed — unreadCount is enough. */}
                                             <span className="text-[10px] font-medium opacity-40">
                                                 {chat.lastMessageAt ? new Date(chat.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                             </span>
@@ -581,11 +576,7 @@ export default function Messenger() {
                                         }`}>
                                             {getStatusLabel(selectedChat.status)}
                                         </Badge>
-                                        {selectedChat.requiresResponse && (
-                                            <Badge variant="outline" className="text-[9px] font-black tracking-tighter bg-red-500/10 text-red-500 border-none px-1.5 h-4 flex items-center gap-0.5">
-                                                <AlertCircle size={8} /> Ждёт ответа
-                                            </Badge>
-                                        )}
+                                        {/* "Ждёт ответа" badge removed. */}
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center gap-1.5">
