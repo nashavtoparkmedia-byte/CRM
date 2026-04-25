@@ -95,13 +95,42 @@ export async function POST(
       })
     }
 
-    // Find existing chat for this identity
+    // Find existing chat for this contact in this channel. Same lookup
+    // strategy as /api/contacts/start-conversation: try contactId,
+    // driverId (legacy chats), then phone-based externalChatId. The old
+    // unique-by-externalChatId lookup created a duplicate chat next to
+    // an existing history-rich row when those keys differed (e.g.
+    // legacy TG chat with externalChatId = telegram:<TG user id> and
+    // identity.externalId = <phone>).
     const externalChatId = `${channel}:${identity.externalId}`
-    let chat = await prisma.chat.findUnique({
-      where: { externalChatId },
+    let chat: any = null
+    let isNew = false
+
+    chat = await prisma.chat.findFirst({
+      where: { contactId: id, channel },
+      orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
     })
 
-    let isNew = false
+    if (!chat) {
+      // Try driverId (legacy)
+      const phone = await prisma.contactPhone.findFirst({
+        where: { contactId: id, isActive: true },
+        orderBy: { isPrimary: 'desc' },
+      })
+      if (phone) {
+        const driver = await prisma.driver.findFirst({ where: { phone: phone.phone } })
+        if (driver) {
+          chat = await prisma.chat.findFirst({
+            where: { driverId: driver.id, channel },
+            orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+          })
+        }
+      }
+    }
+
+    if (!chat) {
+      chat = await prisma.chat.findUnique({ where: { externalChatId } })
+    }
 
     if (!chat) {
       chat = await prisma.chat.create({
@@ -116,7 +145,7 @@ export async function POST(
       })
       isNew = true
     } else {
-      // Ensure contactId/contactIdentityId are set (never overwrite existing)
+      // Backfill contact link
       const updates: Record<string, string> = {}
       if (!chat.contactId) updates.contactId = id
       if (!chat.contactIdentityId) updates.contactIdentityId = identity.id

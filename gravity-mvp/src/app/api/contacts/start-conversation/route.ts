@@ -57,8 +57,38 @@ export async function POST(req: NextRequest) {
 
     // Find or create Chat
     const externalChatId = `${channel}:${externalId}`
-    let chat = await prisma.chat.findUnique({ where: { externalChatId } })
+    // Find or create Chat. Lookup order matters: legacy chats often
+    // have a channel-level externalChatId (e.g. telegram:<TG user id>,
+    // not telegram:<phone>) and may be linked only via driver, not
+    // contact. Without these fallbacks "+ search by phone" created a
+    // brand-new empty chat next to the existing history-rich one,
+    // and operators ended up writing into a separate row from the
+    // actual conversation log.
+    let chat: any = null
     let isNewChat = false
+
+    // 1. By contactId (the canonical link).
+    chat = await prisma.chat.findFirst({
+      where: { contactId: contact.id, channel },
+      orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+    })
+
+    // 2. By driverId — legacy Telegram listener / WA importer wrote
+    //    driverId before contactId was wired in.
+    if (!chat) {
+      const driver = await prisma.driver.findFirst({ where: { phone: normalized } })
+      if (driver) {
+        chat = await prisma.chat.findFirst({
+          where: { driverId: driver.id, channel },
+          orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+        })
+      }
+    }
+
+    // 3. By phone-as-externalChatId (the original lookup, last resort).
+    if (!chat) {
+      chat = await prisma.chat.findUnique({ where: { externalChatId } })
+    }
 
     if (!chat) {
       chat = await prisma.chat.create({
@@ -73,7 +103,8 @@ export async function POST(req: NextRequest) {
       })
       isNewChat = true
     } else {
-      // Ensure linked (never overwrite existing contactIdentityId)
+      // Backfill the contact link so future "+search" calls hit
+      // branch 1 directly and stay consistent.
       const updates: Record<string, string> = {}
       if (!chat.contactId) updates.contactId = contact.id
       if (!chat.contactIdentityId) updates.contactIdentityId = identity.id
