@@ -478,6 +478,10 @@ async function syncHistory(connectionId: string, client: Client) {
                 // Drop junk messages: JID-body + empty text-only.
                 const JID_LIKE = /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i
                 const cleanedRaw = rawMsgs.filter(m => {
+                    // Drop deletion markers — when the sender hits "Delete
+                    // for everyone" in WhatsApp, the Store keeps a stub with
+                    // id starting "d_" / no body. Useless in CRM.
+                    if (m.id && m.id.startsWith('d_')) return false
                     const body = (m.body || '').trim()
                     const isText = (m.type || 'chat') === 'chat'
                     if (isText && !body) return false
@@ -848,6 +852,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             } catch (err: any) {
                 console.error(`[WA-SERVICE] group live handler error: ${err?.message}`)
             }
+            return
+        }
+
+        // Drop deletion-marker frames ("d_..." ids — sender stub left
+        // after "Delete for everyone"). They have no body, no real
+        // type, useless in the chat view.
+        if (msg.id?._serialized?.startsWith('d_')) {
+            console.log(`[WA-SERVICE] skip deletion-marker id=${msg.id._serialized}`)
             return
         }
 
