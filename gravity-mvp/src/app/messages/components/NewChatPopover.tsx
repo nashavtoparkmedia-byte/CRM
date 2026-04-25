@@ -30,6 +30,9 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
     const [selectedChannel, setSelectedChannel] = useState(initialQuery ? "wa" : "tg")
     const [autoStarted, setAutoStarted] = useState(false)
     const [showSuggestions, setShowSuggestions] = useState(false)
+    // Phase: when the operator hovers a search result row, channel
+    // buttons below preview availability for THAT contact specifically.
+    const [hoveredContactId, setHoveredContactId] = useState<string | null>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const popoverRef = useRef<HTMLDivElement>(null)
 
@@ -225,6 +228,8 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                 <button
                                     key={contact.id}
                                     onClick={() => handleSelectContact(contact)}
+                                    onMouseEnter={() => setHoveredContactId(contact.id)}
+                                    onMouseLeave={() => setHoveredContactId(prev => prev === contact.id ? null : prev)}
                                     className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-gray-50 transition-colors text-left group"
                                 >
                                     <div className="w-[32px] h-[32px] rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
@@ -273,24 +278,28 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 )}
             </div>
 
-            {/* Channel selection — when search has narrowed to a single
-                contact we know which channels they actually have an
-                identity in. Channels they don't have are still clickable
-                (operator may want to start fresh) but rendered dimmer
-                with a warning subtitle so the operator notices. */}
+            {/* Channel selection. Availability comes from the focused
+                contact: hovered row > single result > none. Channels with
+                an identity get a green dot, channels without get a red
+                ⊘. The buttons stay clickable (operator may want to start
+                fresh in a new channel). */}
             {(() => {
-                // Pick the contact whose row is most likely "the one":
-                // if exactly one search result matches, treat it as
-                // selected; otherwise leave all channels neutral.
-                const focusedContact = results.length === 1 ? results[0] : null
+                const focusedContact =
+                    results.find(c => c.id === hoveredContactId) ||
+                    (results.length === 1 ? results[0] : null)
                 const focusedChannels = new Set<string>(focusedContact?.channels || [])
                 return (
                     <div className="px-3.5 pb-2.5">
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                             <span>Канал</span>
                             {focusedContact && (
-                                <span className="text-[9px] text-gray-400 font-medium normal-case">
-                                    серым — нет в этом мессенджере
+                                <span className="flex items-center gap-2 text-[9px] font-medium normal-case">
+                                    <span className="flex items-center gap-1 text-emerald-600">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />активен
+                                    </span>
+                                    <span className="flex items-center gap-1 text-red-500">
+                                        ⊘ нет
+                                    </span>
                                 </span>
                             )}
                         </div>
@@ -301,15 +310,19 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                     <button
                                         key={ch.id}
                                         onClick={() => setSelectedChannel(ch.id)}
-                                        title={hasIdentity ? ch.label : `Контакт не найден в ${ch.label} — будет создан новый`}
-                                        className={`flex-1 h-[30px] text-[11px] font-bold rounded-lg transition-all ${
+                                        title={hasIdentity ? `${ch.label}: канал активен у контакта` : `${ch.label}: контакт НЕ найден — будет создан новый, доставка не гарантирована`}
+                                        className={`flex-1 h-[34px] text-[11px] font-bold rounded-lg transition-all relative flex items-center justify-center gap-1 ${
                                             selectedChannel === ch.id
                                                 ? `${ch.activeBg} ring-1 ring-inset`
                                                 : ch.inactiveBg
-                                        } ${!hasIdentity ? 'opacity-40' : ''}`}
+                                        }`}
                                     >
-                                        {ch.label}
-                                        {!hasIdentity && <span className="ml-0.5 opacity-70">⊘</span>}
+                                        <span>{ch.label}</span>
+                                        {focusedContact && (
+                                            hasIdentity
+                                                ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="активен" />
+                                                : <span className="text-red-500 text-[12px] leading-none" title="нет">⊘</span>
+                                        )}
                                     </button>
                                 )
                             })}

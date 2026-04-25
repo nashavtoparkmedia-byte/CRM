@@ -110,16 +110,28 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
                 const hasFailed = ch.id !== 'all' && failedChannels?.has(ch.channelKey)
                 const isReachable = channelAlwaysAvailable(ch.channelKey) || availableChannels.has(ch.channelKey)
 
+                // Visual indicator priority: failed > unreachable > reachable
+                //   reachable+not-active   → green dot ("есть chat в этом канале")
+                //   unreachable+not-active → red ⊘   ("канал не активен у контакта")
+                //   active                 → no extra mark (full color speaks for itself)
+                const showGreenDot = !isActive && isReachable && !channelAlwaysAvailable(ch.channelKey)
+                const showRedBlocked = !isActive && !isReachable
                 return (
                     <div key={ch.id} className="relative flex items-center">
                         <button
                             onClick={() => handleChannelClick(ch.id)}
-                            title={isReachable ? ch.label : `${ch.label}: контакт не найден в этом канале — сообщение может не дойти`}
+                            title={
+                                isReachable
+                                    ? `${ch.label}${channelAlwaysAvailable(ch.channelKey) ? '' : ': канал активен у контакта'}`
+                                    : `${ch.label}: контакт НЕ найден в этом канале — сообщение может не дойти`
+                            }
                             className={`h-[32px] px-3 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                                 isActive
                                 ? 'bg-[#3390EC] text-white'
-                                : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
-                            } ${!isReachable && !isActive ? 'opacity-40' : ''}`}
+                                : showRedBlocked
+                                    ? 'text-red-400 hover:bg-red-50'
+                                    : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
+                            }`}
                         >
                             {ch.short}
                             {unread > 0 && (
@@ -132,10 +144,13 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
                                 </span>
                             )}
                             {hasFailed && !unread && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="последняя отправка не удалась" />
                             )}
-                            {!isReachable && !unread && !hasFailed && (
-                                <span className="text-[11px] opacity-60">⊘</span>
+                            {showGreenDot && !unread && !hasFailed && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="канал активен" />
+                            )}
+                            {showRedBlocked && !unread && !hasFailed && (
+                                <span className="text-red-400 text-[12px] leading-none" title="нет в этом канале">⊘</span>
                             )}
                         </button>
 
