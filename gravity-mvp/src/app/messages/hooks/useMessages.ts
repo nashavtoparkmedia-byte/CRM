@@ -63,6 +63,17 @@ export function prefetchMessages(chatId: string): Promise<void> {
     return p
 }
 
+/**
+ * Seed an empty message list for a chat. Call this right after creating
+ * a new chat via start-conversation — the user will switch to this id
+ * and useMessages will see a "warm" cache (empty array), so no spinner
+ * appears while the real fetch confirms it's still empty.
+ */
+export function seedEmptyChat(chatId: string): void {
+    if (!chatId || chatId.startsWith('empty:')) return
+    if (!messageCache.has(chatId)) messageCache.set(chatId, [])
+}
+
 export function useMessages(chatId: string | null) {
     // Sync cache: при remount (key change) сразу инициализируем из кэша.
     // Без этого первый рендер = messages=[] → пустой DOM → anchor restore невозможен.
@@ -106,9 +117,18 @@ export function useMessages(chatId: string | null) {
             if (now - lastFetchTime.current < 2000) return
             lastFetchTime.current = now
 
-            // Spinner only when we genuinely have nothing on screen.
+            // Defer the spinner: only show it if the fetch takes >300ms.
+            // For most opens the API responds in 20-50ms, well below the
+            // threshold, so the user sees a brief blank pane and then
+            // messages — never a flash of "Загрузка сообщений..." that
+            // appears just to disappear a tick later.
             const shouldShowSpinner = !opts.silent && !messageCache.get(chatId)
-            if (shouldShowSpinner) setIsLoading(true)
+            let spinnerTimer: ReturnType<typeof setTimeout> | null = null
+            if (shouldShowSpinner) {
+                spinnerTimer = setTimeout(() => {
+                    if (isMounted) setIsLoading(true)
+                }, 300)
+            }
 
             try {
                 const res = await fetch(`/api/messages?chatId=${chatId}`)
@@ -143,6 +163,7 @@ export function useMessages(chatId: string | null) {
             } catch (error) {
                 console.error("Failed to load messages", error)
             } finally {
+                if (spinnerTimer) clearTimeout(spinnerTimer)
                 if (isMounted && shouldShowSpinner) setIsLoading(false)
             }
         }

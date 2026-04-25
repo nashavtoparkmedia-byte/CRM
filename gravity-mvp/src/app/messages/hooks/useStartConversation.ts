@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { seedEmptyChat } from "./useMessages"
 
 interface StartResult {
   chatId: string
@@ -50,6 +51,9 @@ export function useStartConversation() {
       }
 
       setState({ loading: false, error: null })
+      // Warm the message cache so opening this chat doesn't flash a spinner.
+      // For freshly-created chats we know the message list is empty.
+      seedEmptyChat(data.chat.id)
       return {
         chatId: data.chat.id,
         channel: data.chat.channel,
@@ -81,6 +85,7 @@ export function useStartConversation() {
       }
 
       setState({ loading: false, error: null })
+      seedEmptyChat(data.chat.id)
       return {
         chatId: data.chat.id,
         channel: data.chat.channel,
