@@ -52,9 +52,22 @@ async function main() {
         // Skip rows we already decided to drop as junk (empty text)
         if (unifiedType === 'text' && !body) { skippedEmpty++; continue }
 
-        // Find the corresponding unified Chat
+        // Find the corresponding unified Chat. Legacy chatId is the raw
+        // JID (e.g. '79025095972@c.us'), but after the chat-dedup merge
+        // the unified externalChatId is the normalized form
+        // ('whatsapp:79025095972'). Try both, plus a suffix match in
+        // case neither variant is exact.
+        const digits = (lm.chatId || '').split('@')[0].replace(/\D/g, '')
+        const normalized = digits.length >= 10 ? `whatsapp:7${digits.slice(-10)}` : null
         const chat = await prisma.chat.findFirst({
-            where: { channel: 'whatsapp', externalChatId: lm.chatId },
+            where: {
+                channel: 'whatsapp',
+                OR: [
+                    { externalChatId: lm.chatId },
+                    ...(normalized ? [{ externalChatId: normalized }] : []),
+                    ...(digits.length >= 10 ? [{ externalChatId: { endsWith: digits.slice(-10) } }] : []),
+                ],
+            },
             select: { id: true },
         })
         if (!chat) { skippedNoChat++; continue }
