@@ -184,14 +184,15 @@ export async function recalculateAllSegments(): Promise<{ count: number }> {
 
     // Only process drivers who have been active in the analysis period
     // to avoid processing thousands of archived/old drivers
-    const drivers = await prisma.driver.findMany({ 
+    const drivers = await prisma.driver.findMany({
         where: {
             OR: [
                 { daySummaries: { some: { date: { gte: analysisDate }, tripCount: { gt: 0 } } } },
-                { hiredAt: { gte: analysisDate } }
+                { hiredAt: { gte: analysisDate } },
+                { lastOrderAt: { gte: analysisDate } }
             ]
         },
-        select: { id: true } 
+        select: { id: true }
     })
     
     for (const d of drivers) {
@@ -215,11 +216,13 @@ export async function getSharedSegmentationStats(
     const todayEnd = new Date()
     todayEnd.setHours(23, 59, 59, 999)
 
-    // Build base where clause for "Active" drivers
+    // Build base where clause for "Active" drivers.
+    // Includes lastOrderAt as a fallback when DriverDaySummary sync lags behind.
     const activeWhere: any = {
         OR: [
             { daySummaries: { some: { date: { gte: analysisDate }, tripCount: { gt: 0 } } } },
-            { hiredAt: { gte: analysisDate } }
+            { hiredAt: { gte: analysisDate } },
+            { lastOrderAt: { gte: analysisDate } }
         ]
     }
 
