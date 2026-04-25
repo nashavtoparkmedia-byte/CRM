@@ -8,6 +8,7 @@ import { useDebounce } from "use-debounce"
 import { Virtuoso } from "react-virtuoso"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, Conversation, markChatRead, releaseStickyUnread } from "../hooks/useConversations"
+import { prefetchMessages } from "../hooks/useMessages"
 import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
@@ -397,19 +398,18 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                         if (chat.unreadCount > 0) markChatRead(chat.id)
                     }}
                     onMouseEnter={() => {
-                        // Phase 3: prefetch messages on hover so the click feels
-                        // instant. Browser/HTTP cache de-dupes if the user
-                        // actually clicks within ~ms. Fire-and-forget — no UI
-                        // wait, no spinner. 200ms delay so a fast cursor
-                        // sweeping over the list doesn't fire 50 requests.
+                        // Phase 3: prefetch into the shared messageCache so
+                        // useMessages sees the data instantly when this row
+                        // is clicked. 150ms debounce: cursors sweeping over
+                        // the list don't fire dozens of requests.
                         if (typeof window === 'undefined') return
                         const w = window as unknown as { __chatPrefetchTimers?: Map<string, ReturnType<typeof setTimeout>> }
                         if (!w.__chatPrefetchTimers) w.__chatPrefetchTimers = new Map()
                         if (w.__chatPrefetchTimers.has(chat.id)) return
                         const timer = setTimeout(() => {
-                            fetch(`/api/messages?chatId=${chat.id}`).catch(() => {})
+                            prefetchMessages(chat.id)
                             w.__chatPrefetchTimers!.delete(chat.id)
-                        }, 200)
+                        }, 150)
                         w.__chatPrefetchTimers.set(chat.id, timer)
                     }}
                     onMouseLeave={() => {

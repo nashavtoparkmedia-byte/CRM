@@ -399,7 +399,7 @@ export class MessageService {
         const messageId = `msg_${Date.now()}`
         const now = new Date()
 
-        await (prisma.message as any).create({
+        const created = await (prisma.message as any).create({
             data: {
                 id: messageId,
                 clientMessageId: clientMessageId || null,
@@ -412,6 +412,13 @@ export class MessageService {
                 type: 'text'
             }
         })
+
+        // Phase 4 SSE: push outbound to other CRM tabs / operator-on-phone
+        // mirror so they see the reply without waiting for a poll tick.
+        try {
+            const { broadcastChatMessage } = await import('@/lib/messageStreamBus')
+            broadcastChatMessage(chatId, created)
+        } catch { /* bus must never break send */ }
 
         // 2. Deliver via Provider
         let deliveryStatus: MessageStatus = 'sent'

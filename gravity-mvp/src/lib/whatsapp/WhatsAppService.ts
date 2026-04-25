@@ -1078,11 +1078,15 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 }
 
                 console.log(`[WA-SERVICE] SAVED ${direction} msgId=${msg.id._serialized} to chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
-                if (!isOutbound) {
-                    emitMessageReceived(savedMsg).catch(e =>
-                        console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
-                    )
-                }
+                // emitMessageReceived now handles BOTH directions:
+                //   - inbound  → AI pipeline + bus broadcast
+                //   - outbound → bus broadcast only (no AI)
+                // Phase 4 SSE depends on this so an outbound from the
+                // operator's phone (msg.fromMe=true) reaches the CRM UI
+                // without waiting for the next polling tick.
+                emitMessageReceived(savedMsg).catch(e =>
+                    console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
+                )
             }
         } catch (err) {
             console.error(`[WA-SERVICE] Message event error for ${connectionId}:`, err)

@@ -33,6 +33,36 @@ export interface Message {
 
 const messageCache = new Map<string, Message[]>()
 
+// In-flight prefetch promises so two callers don't fire two requests
+// for the same chat on a fast hover. Cleared when the request settles.
+const prefetchInFlight = new Map<string, Promise<void>>()
+
+/**
+ * Prefetch messages for a chat into the shared messageCache. Called by
+ * ChatList on hover (Phase 3). Returns a promise but most callers ignore
+ * it — fire-and-forget. Safe to call repeatedly: dedupes via in-flight map.
+ */
+export function prefetchMessages(chatId: string): Promise<void> {
+    if (!chatId || chatId.startsWith('empty:')) return Promise.resolve()
+    if (messageCache.has(chatId)) return Promise.resolve() // already warm
+    const existing = prefetchInFlight.get(chatId)
+    if (existing) return existing
+
+    const p = fetch(`/api/messages?chatId=${chatId}`)
+        .then(r => r.json())
+        .then((data: any) => {
+            if (Array.isArray(data)) {
+                const enriched = data.map((m: any) => ({ ...m, channel: m.channel || 'whatsapp' }))
+                messageCache.set(chatId, enriched)
+            }
+        })
+        .catch(() => { /* fire-and-forget */ })
+        .finally(() => { prefetchInFlight.delete(chatId) })
+
+    prefetchInFlight.set(chatId, p)
+    return p
+}
+
 export function useMessages(chatId: string | null) {
     // Sync cache: при remount (key change) сразу инициализируем из кэша.
     // Без этого первый рендер = messages=[] → пустой DOM → anchor restore невозможен.
@@ -121,11 +151,49 @@ export function useMessages(chatId: string | null) {
         // otherwise spinner while we fetch the very first batch.
         loadMessages({ silent: !!cached })
 
-        // Polling: always silent — never spinner on background refresh.
-        const interval = setInterval(() => loadMessages({ silent: true }), 3000)
+        // Phase 4 SSE: subscribe to live message push for this chat.
+        // EventSource auto-reconnects on network blip, no manual retry.
+        let eventSource: EventSource | null = null
+        try {
+            eventSource = new EventSource(`/api/messages/stream/${chatId}`)
+            eventSource.onmessage = (e) => {
+                if (!isMounted) return
+                let payload: any
+                try { payload = JSON.parse(e.data) } catch { return }
+                if (!payload || payload.type !== 'message' || !payload.data) return
+                const incoming = payload.data
+                // Append (or replace by id) without forcing a refetch
+                setMessages(prev => {
+                    const existing = prev.findIndex(m => m.id === incoming.id)
+                    let next: Message[]
+                    if (existing >= 0) {
+                        next = [...prev]
+                        next[existing] = { ...next[existing], ...incoming, channel: incoming.channel || 'whatsapp' }
+                    } else {
+                        next = [...prev, { ...incoming, channel: incoming.channel || 'whatsapp' }]
+                        // Keep the list sorted by sentAt
+                        next.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
+                    }
+                    messageCache.set(chatId, next)
+                    return next
+                })
+            }
+            eventSource.onerror = () => {
+                // Auto-reconnect by EventSource. The 30s polling below covers
+                // any messages that landed during the outage.
+            }
+        } catch (err) {
+            console.warn('[useMessages] SSE init failed, polling-only:', err)
+        }
+
+        // Polling stays as a slow fallback (was 3s, now 30s) — covers
+        // anything SSE missed during reconnects, or environments where
+        // SSE is blocked by a corporate proxy.
+        const interval = setInterval(() => loadMessages({ silent: true }), 30000)
         return () => {
             isMounted = false
             clearInterval(interval)
+            if (eventSource) eventSource.close()
         }
     }, [chatId])
 
