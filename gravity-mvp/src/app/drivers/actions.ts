@@ -171,12 +171,17 @@ export async function getDriversWithCells(
     const todayEnd = new Date()
     todayEnd.setHours(23, 59, 59, 999)
 
-    // Build base "Active" query
+    // Build base "Active" query.
+    // Driver is "active" if any of these is within the analysis period:
+    //   - has a daySummary with trips
+    //   - was hired in the period
+    //   - lastOrderAt was in the period (resilient when daySummary sync lags)
     const activeWhere: any = {
         dismissedAt: filters.excludeGone ? null : undefined,
         OR: [
             { daySummaries: { some: { date: { gte: analysisDate }, tripCount: { gt: 0 } } } },
-            { hiredAt: { gte: analysisDate } }
+            { hiredAt: { gte: analysisDate } },
+            { lastOrderAt: { gte: analysisDate } }
         ]
     }
 
@@ -603,16 +608,38 @@ export async function getDriverCards(
 
 
 /**
- * Syncs archived (dismissed) drivers from Yandex Fleet API to the local database.
- * Supports pagination via cursor to fetch all records.
+ * Internal helper: syncs Yandex Fleet driver profiles for the given work_status set.
+ * Used by both syncArchivedDrivers (['dismissed']) and syncActiveDrivers (['working']).
+ * Pagination handled here. Retries on 429 rate limit.
  */
-export async function syncArchivedDrivers() {
+async function syncDriversByStatuses(
+    statuses: string[],
+    label: string
+): Promise<{ success: boolean; count: number }> {
     const connection = await prisma.apiConnection.findFirst({
         orderBy: { createdAt: 'desc' },
     })
 
     if (!connection) {
         throw new Error('No API connection configured')
+    }
+
+    // Local fetch wrapper with retry on 429 (matches YandexFleetService.yandexFetch).
+    async function yandexFetch(url: string, init: RequestInit): Promise<Response> {
+        const MAX_ATTEMPTS = 5
+        let attempt = 0
+        while (true) {
+            attempt++
+            const res = await fetch(url, init)
+            if (res.status !== 429) return res
+            if (attempt >= MAX_ATTEMPTS) return res
+            const retryAfter = res.headers.get('retry-after')
+            const backoffMs = retryAfter
+                ? Math.min(60_000, parseInt(retryAfter, 10) * 1000 || 2000)
+                : Math.min(32_000, 2_000 * Math.pow(2, attempt - 1))
+            console.warn(`[${label}] 429 rate limit, retry ${attempt}/${MAX_ATTEMPTS} in ${backoffMs}ms`)
+            await new Promise(r => setTimeout(r, backoffMs))
+        }
     }
 
     const yandexEndpoint = `https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list`
@@ -626,14 +653,14 @@ export async function syncArchivedDrivers() {
             const payload: any = {
                 query: {
                     park: { id: connection.parkId },
-                    driver: { status: ['dismissed'] }
+                    driver: { status: statuses }
                 },
                 fields: {
                     driver_profile: [
-                        "id", 
-                        "first_name", 
-                        "last_name", 
-                        "phones", 
+                        "id",
+                        "first_name",
+                        "last_name",
+                        "phones",
                         "work_status",
                         "created_date",
                         "driver_license"
@@ -647,7 +674,7 @@ export async function syncArchivedDrivers() {
                 offset
             }
 
-            const res = await fetch(yandexEndpoint, {
+            const res = await yandexFetch(yandexEndpoint, {
                 method: 'POST',
                 headers: {
                     'X-Client-ID': connection.clid,
@@ -666,40 +693,33 @@ export async function syncArchivedDrivers() {
             const data = await res.json()
             const profiles = data.driver_profiles || []
             totalInPark = data.total || 0
-            
-            console.log(`[syncArchivedDrivers] Fetched ${profiles.length} profiles (offset: ${offset}, total in park: ${totalInPark}).`)
 
-            // Process batch
+            console.log(`[${label}] Fetched ${profiles.length} profiles (offset: ${offset}, total in park: ${totalInPark}).`)
+
             for (const p of profiles) {
                 const profile = p.driver_profile
                 const currentStatus = p.current_status
                 const fullName = `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || 'No Name'
                 const phone = profile.phones?.[0] || null
 
-                // Dismissal date: use status_updated_at if work_status is fired/dismissed
                 const isDismissed = profile.work_status === 'fired' || currentStatus?.status === 'fired'
-                const dismissedAt = isDismissed && currentStatus?.status_updated_at 
-                    ? new Date(currentStatus.status_updated_at) 
+                const dismissedAt = isDismissed && currentStatus?.status_updated_at
+                    ? new Date(currentStatus.status_updated_at)
                     : null
-                
-                // Use created_date as hiredAt if available
-                const hiredAt = profile.created_date ? new Date(profile.created_date) : null
-                
-                // driver_license can be a string or an object with 'number' property
-                const licenseData = profile.driver_license
-                const licenseNumber = typeof licenseData === 'string' 
-                    ? licenseData 
-                    : (licenseData?.number || null)
 
-                console.log(`[syncArchivedDrivers] Processing driver: ${profile.id}, Name: ${fullName}, Status: ${profile.work_status}`)
+                const hiredAt = profile.created_date ? new Date(profile.created_date) : null
+
+                const licenseData = profile.driver_license
+                const licenseNumber = typeof licenseData === 'string'
+                    ? licenseData
+                    : (licenseData?.number || null)
 
                 const updateData: any = {
                     fullName,
                     phone,
                     dismissedAt,
                 }
-                
-                // Only update these if we got them, to avoid overwriting existing data with null
+
                 if (hiredAt) updateData.hiredAt = hiredAt
                 if (licenseNumber) updateData.licenseNumber = licenseNumber
 
@@ -717,15 +737,40 @@ export async function syncArchivedDrivers() {
             totalCount += profiles.length
             offset += limit
 
-            // If we've reached the total, or no more profiles, stop
             if (offset >= totalInPark || profiles.length === 0) break
+
+            // Polite pause between paginated calls
+            await new Promise(r => setTimeout(r, 400))
 
         } while (true)
 
-        revalidatePath('/drivers/archive')
         return { success: true, count: totalCount }
     } catch (err: any) {
-        console.error('syncArchivedDrivers error:', err)
+        console.error(`${label} error:`, err)
+        throw err
+    }
+}
+
+/**
+ * Syncs ACTIVE (working) drivers from Yandex Fleet API.
+ * New drivers will be created; existing drivers will have name/phone/etc updated.
+ */
+export async function syncActiveDrivers() {
+    const result = await syncDriversByStatuses(['working'], 'syncActiveDrivers')
+    revalidatePath('/drivers')
+    return result
+}
+
+/**
+ * Syncs archived (dismissed) drivers from Yandex Fleet API to the local database.
+ * Supports pagination via cursor to fetch all records.
+ */
+export async function syncArchivedDrivers() {
+    try {
+        const result = await syncDriversByStatuses(['dismissed'], 'syncArchivedDrivers')
+        revalidatePath('/drivers/archive')
+        return result
+    } catch (err: any) {
         throw err
     }
 }

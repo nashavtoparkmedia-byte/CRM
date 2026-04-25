@@ -30,6 +30,18 @@ model ApiLog {
   connection   ApiConnection @relation(fields: [connectionId], references: [id])
 }
 
+/// Tracks the latest sync status for each external service (Yandex Fleet, etc).
+/// One row per service. Updated each time a sync runs (auto cron or manual).
+model SyncStatus {
+  service        String   @id            // e.g. "yandex_fleet"
+  lastRunAt      DateTime                // when the sync most recently finished (success or error)
+  status         String                  // "success" | "error" | "running"
+  errorMessage   String?                 // populated when status = "error"
+  driversUpdated Int?                    // optional metric — drivers upserted
+  ordersProcessed Int?                   // optional metric — trip orders processed
+  updatedAt      DateTime @updatedAt
+}
+
 model TelegramConnection {
   id            String   @id @default(cuid())
   apiId         Int
