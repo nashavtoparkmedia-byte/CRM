@@ -273,25 +273,50 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 )}
             </div>
 
-            {/* Channel selection */}
-            <div className="px-3.5 pb-2.5">
-                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Канал</div>
-                <div className="flex gap-1.5">
-                    {CHANNELS.map(ch => (
-                        <button
-                            key={ch.id}
-                            onClick={() => setSelectedChannel(ch.id)}
-                            className={`flex-1 h-[30px] text-[11px] font-bold rounded-lg transition-all ${
-                                selectedChannel === ch.id
-                                    ? `${ch.activeBg} ring-1 ring-inset`
-                                    : ch.inactiveBg
-                            }`}
-                        >
-                            {ch.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
+            {/* Channel selection — when search has narrowed to a single
+                contact we know which channels they actually have an
+                identity in. Channels they don't have are still clickable
+                (operator may want to start fresh) but rendered dimmer
+                with a warning subtitle so the operator notices. */}
+            {(() => {
+                // Pick the contact whose row is most likely "the one":
+                // if exactly one search result matches, treat it as
+                // selected; otherwise leave all channels neutral.
+                const focusedContact = results.length === 1 ? results[0] : null
+                const focusedChannels = new Set<string>(focusedContact?.channels || [])
+                return (
+                    <div className="px-3.5 pb-2.5">
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                            <span>Канал</span>
+                            {focusedContact && (
+                                <span className="text-[9px] text-gray-400 font-medium normal-case">
+                                    серым — нет в этом мессенджере
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex gap-1.5">
+                            {CHANNELS.map(ch => {
+                                const hasIdentity = !focusedContact || focusedChannels.has(ch.dbChannel)
+                                return (
+                                    <button
+                                        key={ch.id}
+                                        onClick={() => setSelectedChannel(ch.id)}
+                                        title={hasIdentity ? ch.label : `Контакт не найден в ${ch.label} — будет создан новый`}
+                                        className={`flex-1 h-[30px] text-[11px] font-bold rounded-lg transition-all ${
+                                            selectedChannel === ch.id
+                                                ? `${ch.activeBg} ring-1 ring-inset`
+                                                : ch.inactiveBg
+                                        } ${!hasIdentity ? 'opacity-40' : ''}`}
+                                    >
+                                        {ch.label}
+                                        {!hasIdentity && <span className="ml-0.5 opacity-70">⊘</span>}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )
+            })()}
 
             {/* Reachability warning */}
             {reachability && !reachability.reachable && (

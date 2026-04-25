@@ -93,22 +93,33 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
         return accs.find(a => a.id === selectedAccounts[chId]) || accs[0]
     }
 
+    // Channels where this contact actually has an identity / chat. We
+    // dim tabs for the others so the operator instantly sees "TG yes, WA
+    // no" — they can still click (the system will route by phone) but
+    // visual cue prevents the "messages aren't going through" surprise.
+    const availableChannels = new Set<string>(chat.allChannels || [])
+    // 'all' is always available. 'phone' is technically always available
+    // (any phone can be called) — keep it neutral.
+    const channelAlwaysAvailable = (key: string) => key === '' || key === 'phone'
+
     return (
         <div className="h-[40px] flex items-center px-4 shrink-0 bg-white border-b border-[#E8E8E8] gap-1 relative" ref={dropdownRef}>
             {channels.map((ch) => {
                 const isActive = activeChannelTab === ch.id
                 const unread = getChannelUnread(ch.channelKey)
                 const hasFailed = ch.id !== 'all' && failedChannels?.has(ch.channelKey)
+                const isReachable = channelAlwaysAvailable(ch.channelKey) || availableChannels.has(ch.channelKey)
 
                 return (
                     <div key={ch.id} className="relative flex items-center">
                         <button
                             onClick={() => handleChannelClick(ch.id)}
+                            title={isReachable ? ch.label : `${ch.label}: контакт не найден в этом канале — сообщение может не дойти`}
                             className={`h-[32px] px-3 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                                 isActive
                                 ? 'bg-[#3390EC] text-white'
                                 : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
-                            }`}
+                            } ${!isReachable && !isActive ? 'opacity-40' : ''}`}
                         >
                             {ch.short}
                             {unread > 0 && (
@@ -122,6 +133,9 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
                             )}
                             {hasFailed && !unread && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                            )}
+                            {!isReachable && !unread && !hasFailed && (
+                                <span className="text-[11px] opacity-60">⊘</span>
                             )}
                         </button>
 
