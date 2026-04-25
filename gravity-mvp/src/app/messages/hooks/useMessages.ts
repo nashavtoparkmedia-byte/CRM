@@ -162,9 +162,39 @@ export function useMessages(chatId: string | null) {
                 try { payload = JSON.parse(e.data) } catch { return }
                 if (!payload || payload.type !== 'message' || !payload.data) return
                 const incoming = payload.data
-                // Append (or replace by id) without forcing a refetch
+                // Append (or REPLACE existing entry without forcing a refetch).
+                // Replace happens on three keys to avoid the optimistic /
+                // server "mirror" effect:
+                //   1. id match              — second SSE push for same row
+                //   2. clientMessageId       — optimistic UI message has
+                //                              id="cmid-<clientMessageId>" or
+                //                              an internal cuid; server's
+                //                              broadcast carries the real
+                //                              clientMessageId field. Either
+                //                              flavor of optimistic row gets
+                //                              swapped for the canonical one.
+                //   3. content + direction + ±10s sentAt window — last-resort
+                //      match for outbound that went through MessageService
+                //      without a clientMessageId (legacy paths).
                 setMessages(prev => {
-                    const existing = prev.findIndex(m => m.id === incoming.id)
+                    const cmid = (incoming as any).clientMessageId as string | undefined
+                    let existing = prev.findIndex(m => m.id === incoming.id)
+                    if (existing < 0 && cmid) {
+                        existing = prev.findIndex(m =>
+                            (m as any).clientMessageId === cmid ||
+                            m.id === `cmid-${cmid}` ||
+                            m.id === cmid
+                        )
+                    }
+                    if (existing < 0 && incoming.direction === 'outbound') {
+                        const incTs = new Date(incoming.sentAt).getTime()
+                        existing = prev.findIndex(m =>
+                            m.direction === 'outbound' &&
+                            m.id.startsWith('cmid-') &&
+                            m.content === incoming.content &&
+                            Math.abs(new Date(m.sentAt).getTime() - incTs) < 10_000
+                        )
+                    }
                     let next: Message[]
                     if (existing >= 0) {
                         next = [...prev]
