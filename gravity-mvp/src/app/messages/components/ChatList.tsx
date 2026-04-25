@@ -396,6 +396,31 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                         handleChatSelect(chat.id, chat.channel)
                         if (chat.unreadCount > 0) markChatRead(chat.id)
                     }}
+                    onMouseEnter={() => {
+                        // Phase 3: prefetch messages on hover so the click feels
+                        // instant. Browser/HTTP cache de-dupes if the user
+                        // actually clicks within ~ms. Fire-and-forget — no UI
+                        // wait, no spinner. 200ms delay so a fast cursor
+                        // sweeping over the list doesn't fire 50 requests.
+                        if (typeof window === 'undefined') return
+                        const w = window as unknown as { __chatPrefetchTimers?: Map<string, ReturnType<typeof setTimeout>> }
+                        if (!w.__chatPrefetchTimers) w.__chatPrefetchTimers = new Map()
+                        if (w.__chatPrefetchTimers.has(chat.id)) return
+                        const timer = setTimeout(() => {
+                            fetch(`/api/messages?chatId=${chat.id}`).catch(() => {})
+                            w.__chatPrefetchTimers!.delete(chat.id)
+                        }, 200)
+                        w.__chatPrefetchTimers.set(chat.id, timer)
+                    }}
+                    onMouseLeave={() => {
+                        if (typeof window === 'undefined') return
+                        const w = window as unknown as { __chatPrefetchTimers?: Map<string, ReturnType<typeof setTimeout>> }
+                        const timer = w.__chatPrefetchTimers?.get(chat.id)
+                        if (timer) {
+                            clearTimeout(timer)
+                            w.__chatPrefetchTimers!.delete(chat.id)
+                        }
+                    }}
                     onContextMenu={(e) => {
                         if (isGroupChat) {
                             e.preventDefault()

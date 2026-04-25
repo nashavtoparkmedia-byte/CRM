@@ -5,7 +5,13 @@ import { patchConversation } from "./useConversations"
 export interface MessageAttachment {
     id: string
     type: string
-    url: string
+    /**
+     * Phase 2: API no longer returns url here. UI fetches the binary from
+     * /api/attachments/{id} on demand. Kept as optional only for the few
+     * legacy callsites that still reference it; new code should derive
+     * the URL from id.
+     */
+    url?: string
     fileName?: string | null
     fileSize?: number | null
     mimeType?: string | null
@@ -55,26 +61,36 @@ export function useMessages(chatId: string | null) {
 
         let isMounted = true
 
-        const loadMessages = async () => {
+        // Phase 1: stale-while-revalidate.
+        // - On chat open, if we have anything in messageCache, the chat
+        //   renders INSTANTLY from it (already done above + initial state).
+        // - The fetch below runs WITHOUT setIsLoading(true) on first load
+        //   when cache exists, so the UI never flashes a spinner over
+        //   already-shown content.
+        // - We dropped the `_t=${now}` cache buster so the browser HTTP
+        //   cache + any future ETag/Last-Modified can de-duplicate
+        //   identical responses.
+        const loadMessages = async (opts: { silent?: boolean } = {}) => {
             // Avoid overlapping requests
             const now = Date.now()
             if (now - lastFetchTime.current < 2000) return
             lastFetchTime.current = now
 
-            setIsLoading(true)
-            
+            // Spinner only when we genuinely have nothing on screen.
+            const shouldShowSpinner = !opts.silent && !messageCache.get(chatId)
+            if (shouldShowSpinner) setIsLoading(true)
+
             try {
-                // Fetch fresh messages with cache busting
-                const res = await fetch(`/api/messages?chatId=${chatId}&_t=${now}`)
+                const res = await fetch(`/api/messages?chatId=${chatId}`)
                 const data = await res.json()
-                
+
                 if (isMounted && Array.isArray(data)) {
                     // Enrich messages with channel fallback
                     const enrichedData = data.map((m: any) => ({
                         ...m,
                         channel: m.channel || 'whatsapp'
                     }))
-                    
+
                     // MERGE: Keep optimistic messages that server doesn't know about yet
                     // Optimistic IDs start with 'cmid-' (clientMessageId)
                     const existingOptimistic = (messageCache.get(chatId) || [])
@@ -97,13 +113,16 @@ export function useMessages(chatId: string | null) {
             } catch (error) {
                 console.error("Failed to load messages", error)
             } finally {
-                if (isMounted) setIsLoading(false)
+                if (isMounted && shouldShowSpinner) setIsLoading(false)
             }
         }
 
-        loadMessages()
-        
-        const interval = setInterval(loadMessages, 3000) // Poll every 3s
+        // First load: silent=true if we already have cache (instant render),
+        // otherwise spinner while we fetch the very first batch.
+        loadMessages({ silent: !!cached })
+
+        // Polling: always silent — never spinner on background refresh.
+        const interval = setInterval(() => loadMessages({ silent: true }), 3000)
         return () => {
             isMounted = false
             clearInterval(interval)

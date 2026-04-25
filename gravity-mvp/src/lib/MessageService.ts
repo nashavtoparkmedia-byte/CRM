@@ -211,7 +211,23 @@ export class MessageService {
             where: { chatId: { in: ids } },
             orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
             take: limit,
-            include: { attachments: true }
+            // Phase 2: do NOT return MessageAttachment.url here. Each
+            // attachment.url can be a base64 data URL up to 25MB; multiple
+            // such rows in one chat ballooned JSON to >1MB and made every
+            // chat-open feel sluggish. We now return only id + meta and
+            // let the UI lazy-load each binary via /api/attachments/[id]
+            // (browser caches it after first request).
+            include: {
+                attachments: {
+                    select: {
+                        id: true,
+                        type: true,
+                        mimeType: true,
+                        fileName: true,
+                        fileSize: true,
+                    },
+                },
+            },
         })
         // Return in ASC order for UI display
         return serialize(messages.reverse())

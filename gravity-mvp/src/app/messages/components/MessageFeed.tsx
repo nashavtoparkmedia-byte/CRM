@@ -321,13 +321,15 @@ export default function MessageFeed({
     }
 
     // ──────────────────────────────────────────────────────────
-    // Collect all image URLs for lightbox navigation
-    // ──────────────────────────────────────────────────────────
+    // Collect all image URLs for lightbox navigation. Phase 2: attachments
+    // arrive with only id+meta, the binary is fetched lazily via
+    // /api/attachments/{id} — so we build that URL here too.
+    const attachmentUrl = (id: string) => `/api/attachments/${id}`
     const allImageUrls: string[] = []
     for (const item of uiItems) {
         if (item.type === 'message' && item.message.type === 'image' && item.message.attachments) {
             for (const att of item.message.attachments) {
-                if (att.url) allImageUrls.push(att.url)
+                if (att.id) allImageUrls.push(attachmentUrl(att.id))
             }
         }
     }
@@ -467,13 +469,15 @@ export default function MessageFeed({
                         {/* Изображения */}
                         {msg.type === 'image' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
-                                {msg.attachments.filter(a => a.url).map(att => {
-                                    const imgIndex = allImageUrls.indexOf(att.url)
+                                {msg.attachments.filter(a => a.id).map(att => {
+                                    const url = attachmentUrl(att.id)
+                                    const imgIndex = allImageUrls.indexOf(url)
                                     return (
                                         <img
                                             key={att.id}
-                                            src={att.url}
+                                            src={url}
                                             alt="фото"
+                                            loading="lazy"
                                             className="max-w-[280px] max-h-[320px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
                                             onClick={() => setLightboxIndex(imgIndex >= 0 ? imgIndex : 0)}
                                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -486,9 +490,9 @@ export default function MessageFeed({
                         {/* Аудио / Голосовые */}
                         {(msg.type === 'voice' || msg.type === 'audio') && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
-                                {msg.attachments.filter(a => a.url).map(att => (
-                                    <audio key={att.id} controls className="max-w-[260px] h-10" style={{ minWidth: 200 }}>
-                                        <source src={att.url} />
+                                {msg.attachments.filter(a => a.id).map(att => (
+                                    <audio key={att.id} controls preload="none" className="max-w-[260px] h-10" style={{ minWidth: 200 }}>
+                                        <source src={attachmentUrl(att.id)} />
                                     </audio>
                                 ))}
                             </div>
@@ -497,10 +501,10 @@ export default function MessageFeed({
                         {/* Видео */}
                         {msg.type === 'video' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
-                                {msg.attachments.filter(a => a.url).map(att => (
+                                {msg.attachments.filter(a => a.id).map(att => (
                                     <video
                                         key={att.id}
-                                        src={att.url}
+                                        src={attachmentUrl(att.id)}
                                         controls
                                         className="max-w-[280px] max-h-[320px] rounded-lg"
                                         preload="metadata"
@@ -512,11 +516,12 @@ export default function MessageFeed({
                         {/* Стикер */}
                         {msg.type === 'sticker' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
-                                {msg.attachments.filter(a => a.url).map(att => (
+                                {msg.attachments.filter(a => a.id).map(att => (
                                     <img
                                         key={att.id}
-                                        src={att.url}
+                                        src={attachmentUrl(att.id)}
                                         alt="стикер"
+                                        loading="lazy"
                                         className="w-[140px] h-[140px] object-contain"
                                     />
                                 ))}
@@ -526,10 +531,10 @@ export default function MessageFeed({
                         {/* Документ */}
                         {msg.type === 'document' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
-                                {msg.attachments.filter(a => a.url).map(att => (
+                                {msg.attachments.filter(a => a.id).map(att => (
                                     <a
                                         key={att.id}
-                                        href={att.url}
+                                        href={attachmentUrl(att.id)}
                                         download={att.fileName || 'document'}
                                         className="inline-flex items-center gap-2 rounded-lg bg-[#F1F5FD] px-3 py-2 text-[13px] hover:bg-[#E4ECFC] transition-colors"
                                     >
@@ -551,7 +556,7 @@ export default function MessageFeed({
                             (e.g., file too big, download failed, cold session). Without this,
                             the PLACEHOLDERS-hider below would produce an empty bubble. */}
                         {['image', 'video', 'voice', 'audio', 'sticker', 'document'].includes(msg.type) &&
-                         (!msg.attachments || msg.attachments.length === 0 || !msg.attachments.some(a => a.url)) && (
+                         (!msg.attachments || msg.attachments.length === 0) && (
                             <div className="mb-1 text-[13px] italic text-[#64748B] flex items-center gap-1.5">
                                 <span>📎</span>
                                 <span>Медиа недоступно (файл слишком большой или не загружен)</span>
