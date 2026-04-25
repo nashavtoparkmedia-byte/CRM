@@ -41,6 +41,17 @@ export class MessageService {
                             segment: true
                         }
                     },
+                    // Contact info — used in the chat header when the chat
+                    // has no driver linked (e.g. brand-new contacts created
+                    // via "+ search by phone"). Without this the header
+                    // showed the raw chat.name (often a Telegram username
+                    // like "Check") instead of the human-readable ФИО.
+                    contact: {
+                        select: {
+                            id: true,
+                            displayName: true,
+                        },
+                    },
                     messages: {
                         orderBy: { sentAt: 'desc' },
                         take: 1

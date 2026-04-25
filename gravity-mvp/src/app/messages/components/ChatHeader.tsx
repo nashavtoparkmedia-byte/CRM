@@ -164,7 +164,13 @@ export default function ChatHeader({
                         <div className="h-[48px] flex items-center justify-between">
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
-                                <h3 className="font-semibold text-[15px] text-[#111] leading-none shrink-0">{chat.name || "Водитель"}</h3>
+                                <h3 className="font-semibold text-[15px] text-[#111] leading-none shrink-0">
+                                    {/* Header priority: linked driver ФИО → resolved contact displayName
+                                        → raw chat.name (channel username) → fallback. Contact is the
+                                        right answer for chats opened from "+ search by phone" where
+                                        chat.name is just the messenger handle ("Check"). */}
+                                    {chat.driver?.fullName || chat.contact?.displayName || chat.name || "Водитель"}
+                                </h3>
                                 <span className="text-[11px] text-gray-400">·</span>
                                 <span className="text-[11px] text-gray-500 font-mono truncate">{chat.driver?.phone || chat.externalChatId?.split(':')[1] || chat.externalChatId}</span>
                                 <span className="text-[11px] text-gray-400">·</span>

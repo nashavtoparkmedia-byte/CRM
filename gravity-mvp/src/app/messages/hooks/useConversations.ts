@@ -19,6 +19,10 @@ export interface Conversation {
         phone: string | null
         segment: string
     }
+    contact?: {
+        id: string
+        displayName: string | null
+    }
     messages?: { content: string; type?: string; metadata?: Record<string, any> | null }[]
     metadata?: Record<string, any> | null
     // Contact Model (MVP)
