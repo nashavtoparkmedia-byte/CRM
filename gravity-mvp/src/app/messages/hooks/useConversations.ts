@@ -18,6 +18,8 @@ export interface Conversation {
         fullName: string
         phone: string | null
         segment: string
+        lastOrderAt?: string | null
+        dismissedAt?: string | null
     }
     contact?: {
         id: string

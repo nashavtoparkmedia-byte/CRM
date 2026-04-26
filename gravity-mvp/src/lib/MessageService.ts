@@ -38,7 +38,13 @@ export class MessageService {
                             id: true,
                             fullName: true,
                             phone: true,
-                            segment: true
+                            segment: true,
+                            // Нужны для compute "Водитель · Avito" vs
+                            // "Отток · Avito" в LeadStatusBadge — без них
+                            // в списке невозможно отличить активного от
+                            // ушедшего.
+                            lastOrderAt: true,
+                            dismissedAt: true,
                         }
                     },
                     // Contact info — used in the chat header when the chat

@@ -6,6 +6,7 @@ import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, Che
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
+import { LeadStatusBadge } from "./LeadStatusBadge"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
@@ -152,7 +153,10 @@ export default function ChatHeader({
         churned: 'bg-red-50 text-red-600',
     }
 
-    const hasMetadata = !!(segment || masterSource || channelCount > 0)
+    // Метадата-строка показывается всегда, как только у чата есть channel —
+    // там теперь живёт LeadStatusBadge (Лид/Водитель/Отток · Канал),
+    // который актуален для каждого чата, даже без segment/masterSource.
+    const hasMetadata = !!(chat.channel || segment || masterSource || channelCount > 0)
 
     return (
         <div className="border-b border-[#E8E8E8] shrink-0 flex justify-center bg-white z-20 relative">
@@ -329,6 +333,14 @@ export default function ChatHeader({
                         {/* Line 2: contact metadata */}
                         {hasMetadata && (
                             <div className="h-[24px] flex items-center gap-2 pb-1">
+                                {/* Бейдж этапа жизни: Лид · Канал /
+                                    Водитель · Канал / Отток · Канал.
+                                    contact.driver приходит из useContact —
+                                    содержит lastOrderAt и dismissedAt. */}
+                                <LeadStatusBadge
+                                    channel={chat.channel}
+                                    driver={contact?.driver ?? chat.driver}
+                                />
                                 {segment && (
                                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${SEGMENT_STYLE[segment] || 'bg-gray-100 text-gray-500'}`}>
                                         {segment === 'vip' ? 'VIP' : segment === 'active' ? 'Активный' : segment === 'new' ? 'Новый' : segment === 'inactive' ? 'Неактивный' : segment === 'churned' ? 'Ушёл' : segment}

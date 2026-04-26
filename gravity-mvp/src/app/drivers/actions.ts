@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { getThresholds, Thresholds, recalculateAllSegments, getSharedSegmentationStats, calculateDriverStatus, calculateSegment } from '@/lib/scoring'
+import { linkContactToBestDriver } from '@/lib/contacts/yandex-link'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -732,6 +733,21 @@ async function syncDriversByStatuses(
                         segment: 'unknown',
                     }
                 })
+
+                // Сразу после upsert — попытаться связать Contact с
+                // этим телефоном с лучшим из существующих Driver
+                // (активный приоритет). Идемпотентно. Не валим весь
+                // sync если matcher ошибся на одной строке.
+                if (phone) {
+                    try {
+                        await linkContactToBestDriver(phone)
+                    } catch (e: any) {
+                        console.warn(
+                            `[${label}] linkContactToBestDriver failed for phone=${phone} driver=${profile.id}:`,
+                            e?.message ?? e,
+                        )
+                    }
+                }
             }
 
             totalCount += profiles.length

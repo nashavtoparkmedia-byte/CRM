@@ -92,7 +92,7 @@ export default async function MessagesPage({
 
     // Normalize channel tab (default to 'all')
     const channelParam = typeof resolvedParams.channel === 'string' ? resolvedParams.channel : 'all'
-    const allowedChannels = ['all', 'wa', 'tg', 'max', 'ypro', 'gost']
+    const allowedChannels = ['all', 'wa', 'tg', 'max', 'av', 'ypro', 'phone', 'gost']
     const activeChannelTab = allowedChannels.includes(channelParam) ? channelParam : 'all'
 
     // Normalize message deep link

@@ -12,6 +12,7 @@ import { prefetchMessages } from "../hooks/useMessages"
 import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
+import { LeadStatusBadge } from "./LeadStatusBadge"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat, initialPhone }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void, initialPhone?: string | null }) {
@@ -41,7 +42,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         } else if (fallbackChannel) {
             // Map full channel names to short tab ids used by MessagesShell
             const channelToTab: Record<string, string> = {
-                whatsapp: 'wa', telegram: 'tg', max: 'max', yandex_pro: 'ypro', phone: 'phone',
+                whatsapp: 'wa', telegram: 'tg', max: 'max', yandex_pro: 'ypro', phone: 'phone', avito: 'av',
             }
             baseChatSelect(id, channelToTab[fallbackChannel] || fallbackChannel)
         } else {
@@ -308,6 +309,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             case 'max': return <span className="text-[8px] font-bold text-purple-600 bg-purple-50 px-1 py-px rounded leading-none">MAX</span>
             case 'yandex_pro': return <span className="text-[8px] font-bold text-yellow-600 bg-yellow-50 px-1 py-px rounded leading-none">YP</span>
             case 'phone': return <span className="text-[8px] font-bold text-orange-600 bg-orange-50 px-1 py-px rounded leading-none">ТЕЛ</span>
+            case 'avito': return <span className="text-[8px] font-bold text-green-700 bg-green-50 px-1 py-px rounded leading-none">AV</span>
             default: return null
         }
     }
@@ -335,12 +337,13 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         const channelsWithAccounts = new Set(
             Object.entries(channelAccounts)
                 .filter(([, accs]) => (accs as any[]).length > 0)
-                .map(([ch]) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch)
+                .map(([ch]) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch === 'av' ? 'avito' : ch)
         )
         const all: { id: string; label: string; channel: string; dotColor?: string; alwaysShow?: boolean }[] = [
             { id: 'wa', label: 'WA', dotColor: 'bg-emerald-500', channel: 'whatsapp' },
             { id: 'tg', label: 'TG', dotColor: 'bg-blue-500', channel: 'telegram' },
             { id: 'max', label: 'MAX', dotColor: 'bg-purple-500', channel: 'max' },
+            { id: 'av', label: 'AV', dotColor: 'bg-green-500', channel: 'avito' },
             { id: 'ypro', label: 'YP', dotColor: 'bg-yellow-500', channel: 'yandex_pro', alwaysShow: true },
             { id: 'phone', label: 'Тел', dotColor: 'bg-orange-500', channel: 'phone', alwaysShow: true },
         ]
@@ -494,6 +497,18 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                             </div>
                         </div>
                         
+                        {/* Лид/Водитель/Отток · Канал — компактный бейдж
+                            с tooltip-описанием. Скрыт на выбранной строке
+                            чтобы не дублировать информацию из ChatHeader. */}
+                        {!isSelected && (
+                            <div className="flex items-center gap-1 mt-0.5">
+                                <LeadStatusBadge
+                                    channel={chat.channel}
+                                    driver={chat.driver}
+                                    size="xs"
+                                />
+                            </div>
+                        )}
                         <p className={`text-[13px] leading-[16px] truncate pr-6 mt-0.5 font-medium ${isSelected ? 'text-white/80' : 'text-[#8A9099]'}`}>
                             {snippet}
                         </p>
