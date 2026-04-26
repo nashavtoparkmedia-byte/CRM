@@ -622,7 +622,7 @@ model ContactMerge {
 
 model Task {
   id                    String       @id @default(cuid())
-  driverId              String
+  driverId              String?
   source                TaskSource   @default(manual)
   type                  String
   title                 String
@@ -659,7 +659,7 @@ model Task {
   scenarioData          Json?        @default("{}")
   events                TaskEvent[]
   contact               Contact?     @relation(fields: [contactId], references: [id])
-  driver                Driver       @relation(fields: [driverId], references: [id])
+  driver                Driver?      @relation(fields: [driverId], references: [id])
 
   @@index([driverId])
   @@index([contactId])
@@ -999,6 +999,247 @@ model stability_check_log {
   @@index([checked_at(sort: Desc)], map: "idx_stability_check_log_time")
 }
 
+// =====================================================================
+// Avito Leads MVP — модели из абсорбированного сервиса (был D:\A5).
+// Префикс avito_* — чтобы не конфликтовать с CRM-таблицами и сразу
+// видеть что это «внешний» модуль, перенесённый из standalone-сервиса.
+// =====================================================================
+
+model avito_accounts {
+  id                               Int                  @id @default(autoincrement())
+  name                             String
+  login_phone                      String?
+  notes                            String?
+  profile_path                     String
+  status                           avito_account_status @default(new)
+  last_auth_at                     DateTime?            @db.Timestamptz(6)
+  last_scan_at                     DateTime?            @db.Timestamptz(6)
+  last_success_at                  DateTime?            @db.Timestamptz(6)
+  reauth_required_at               DateTime?            @db.Timestamptz(6)
+  last_error                       String?
+  created_at                       DateTime             @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime             @default(now()) @db.Timestamptz(6)
+  stable_id                        String?
+  stable_id_source                 String?
+  stable_id_updated_at             DateTime?            @db.Timestamptz(6)
+  retry_required                   Boolean              @default(false)
+  last_scan_page_kind              String?
+  last_scan_reason                 String?
+  last_scan_next_action            String?
+  last_manual_retry_at             DateTime?            @db.Timestamptz(6)
+  last_manual_retry_job_id         Int?
+  last_manual_retry_outcome        String?
+  acknowledged_at                  DateTime?            @db.Timestamptz(6)
+  attention_severity               String?
+  operator_note                    String?
+  responses_poll_interval_sec      Int?
+  last_collect_responses_at        DateTime?            @db.Timestamptz(6)
+  auto_reply_text                  String?
+  last_collect_page_kind           String?
+  last_collect_duration_ms         Int?
+  last_collect_new_count           Int?
+  last_collect_refreshed_count     Int?
+  last_collect_phone_success_count Int?
+  last_collect_phone_failed_count  Int?
+  collect_fail_count_24h           Int                  @default(0)
+  ip_blocked_count_24h             Int                  @default(0)
+  login_required_count_24h         Int                  @default(0)
+  collect_fail_count_updated_at    DateTime?            @db.Timestamptz(6)
+  ip_blocked_count_updated_at      DateTime?            @db.Timestamptz(6)
+  login_required_count_updated_at  DateTime?            @db.Timestamptz(6)
+  auto_paused_at                   DateTime?            @db.Timestamptz(6)
+  auto_pause_reason                String?
+  responses                        avito_responses[]
+}
+
+model avito_responses {
+  id                          Int                            @id @default(autoincrement())
+  account_id                  Int
+  external_id                 String
+  external_id_source          String
+  chat_href                   String?
+  chat_url                    String?
+  candidate_name              String?
+  vacancy_title               String?
+  phone                       String?
+  received_at                 DateTime?                      @db.Timestamptz(6)
+  detected_at                 DateTime                       @default(now()) @db.Timestamptz(6)
+  is_unread_detected          Boolean                        @default(false)
+  status                      avito_response_status          @default(new)
+  raw_data_json               Json?
+  created_at                  DateTime                       @default(now()) @db.Timestamptz(6)
+  updated_at                  DateTime                       @default(now()) @db.Timestamptz(6)
+  preview                     String?
+  phone_revealed_at           DateTime?                      @db.Timestamptz(6)
+  phone_reveal_failure_reason String?
+  processed_at                DateTime?                      @db.Timestamptz(6)
+  processed_by                String?
+  auto_reply_sent_at          DateTime?                      @db.Timestamptz(6)
+  auto_reply_status           String?
+  auto_reply_error            String?
+  telegram_message_id         Int?
+  // Связи с CRM-сущностями. Заполняет LeadIntake-сервис при появлении
+  // отклика. Витрина /leads/new читает эти поля чтобы показать ссылки
+  // «Chat / Task», catchup-sync ищет строки где crm_chat_id IS NULL.
+  crm_contact_id              String?
+  crm_chat_id                 String?
+  crm_task_id                 String?
+  phone_reveal_attempts       avito_phone_reveal_attempts[]
+  account                     avito_accounts                 @relation(fields: [account_id], references: [id], onDelete: Cascade)
+
+  @@unique([account_id, external_id], map: "uq_avito_responses_account_external")
+  @@index([crm_chat_id])
+  @@index([crm_contact_id])
+}
+
+model avito_jobs {
+  id           Int              @id @default(autoincrement())
+  type         avito_job_type
+  payload_json Json             @default("{}")
+  status       avito_job_status @default(pending)
+  attempt      Int              @default(0)
+  run_at       DateTime         @default(now()) @db.Timestamptz(6)
+  last_error   String?
+  created_at   DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime         @default(now()) @db.Timestamptz(6)
+
+  @@index([status, run_at], map: "idx_avito_jobs_status_run_at")
+}
+
+model avito_activity_log {
+  id           Int      @id @default(autoincrement())
+  entity_type  String
+  entity_id    String?
+  action       String
+  details_json Json?
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at], map: "idx_avito_activity_created_at")
+  @@index([entity_type, entity_id], map: "idx_avito_activity_entity")
+}
+
+model avito_phone_reveal_attempts {
+  id                 Int                                @id @default(autoincrement())
+  response_id        Int
+  attempt_no         Int
+  status             avito_phone_reveal_attempt_status
+  clicked_reveal     Boolean                            @default(false)
+  error_message      String?
+  screenshot_path    String?
+  html_snapshot_path String?
+  created_at         DateTime                           @default(now()) @db.Timestamptz(6)
+  response           avito_responses                    @relation(fields: [response_id], references: [id], onDelete: Cascade)
+
+  @@unique([response_id, attempt_no], map: "uq_avito_phone_reveal_response_attempt")
+}
+
+model avito_account_snapshot {
+  id           Int      @id @default(autoincrement())
+  account_id   Int
+  captured_at  DateTime @db.Timestamp(6)
+  page_kind    String
+  heading      String
+  next_action  String
+  items_count  Int?
+  account_name String   @default("")
+  profile_type String   @default("unknown")
+
+  @@index([account_id, captured_at], map: "idx_avito_snapshot_account_captured")
+}
+
+model avito_app_settings {
+  key        String   @id
+  value      String
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+}
+
+// auth_users / auth_sessions / crm_outbox_events — служебные таблицы
+// worker'а из standalone-режима. В CRM-mode auth наследуется от
+// crm_user_id, webhook не используется (CRM напрямую читает avito_*).
+// Оставлены для совместимости с существующим кодом worker'а: он их
+// инициализирует на старте, но не пишет если webhook URL не задан.
+
+model avito_auth_users {
+  id            Int       @id @default(autoincrement())
+  username      String
+  password_hash String
+  updated_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_by    String?
+  disabled_at   DateTime? @db.Timestamptz(6)
+}
+
+model avito_auth_sessions {
+  id           String   @id
+  username     String
+  created_at   DateTime @default(now()) @db.Timestamptz(6)
+  last_seen_at DateTime @default(now()) @db.Timestamptz(6)
+  expires_at   DateTime @db.Timestamptz(6)
+  user_agent   String?
+  ip           String?
+
+  @@index([expires_at])
+}
+
+model avito_crm_outbox_events {
+  id            Int       @id @default(autoincrement())
+  event_id      String    @unique @db.Uuid
+  event_type    String
+  payload       Json
+  sent_status   String    @default("pending")
+  retry_count   Int       @default(0)
+  last_error    String?
+  sent_at       DateTime? @db.Timestamptz(6)
+  next_retry_at DateTime? @db.Timestamptz(6)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([created_at])
+  @@index([sent_status, next_retry_at])
+}
+
+enum avito_account_status {
+  new
+  auth_pending
+  active
+  reauth_required
+  paused
+  error
+}
+
+enum avito_job_status {
+  pending
+  processing
+  done
+  failed
+}
+
+enum avito_job_type {
+  scan_account
+  fetch_phone
+  open_login_window
+  check_session
+  collect_responses
+}
+
+enum avito_phone_reveal_attempt_status {
+  started
+  success
+  technical_error_before_click
+  technical_error_after_click
+  technical_error_unknown_state
+  no_phone_found
+  blocked
+  ui_changed
+}
+
+enum avito_response_status {
+  new
+  phone_pending
+  phone_received
+  phone_failed
+  ready_for_manager
+  duplicate
+}
+
 enum MaxHistoryImportMode {
   none
   from_connection_time
@@ -1039,6 +1280,7 @@ enum ChatChannel {
   max
   yandex_pro
   phone
+  avito
 }
 
 enum MessageStatus {
@@ -1109,6 +1351,7 @@ enum ContactPhoneSource {
   max
   manual
   phone
+  avito
 }
 
 enum ContactIdentitySource {

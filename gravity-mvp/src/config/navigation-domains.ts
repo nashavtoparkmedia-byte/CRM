@@ -84,6 +84,10 @@ export const DOMAINS: NavigationDomain[] = [
             { label: 'Шаблоны', href: '/communications/templates', icon: FileText, sectionKey: 'msg_templates' }
         ]
     },
+    // Раньше тут был отдельный домен «Avito (профили)». После переезда
+    // в Settings → Integrations → Avito он удалён — Avito-профиль это
+    // такой же канал-интеграция как WhatsApp / Telegram, должен жить
+    // там же. Сами лиды живут в /leads/new (домен «Подключение»).
     {
         key: 'promotions',
         label: 'Акции',
@@ -145,7 +149,8 @@ export const DOMAINS: NavigationDomain[] = [
                     { label: "WhatsApp", href: "/settings/integrations/whatsapp", icon: Phone, sectionKey: "whatsapp" },
                     { label: "MAX", href: "/settings/integrations/max", icon: MessageSquare, sectionKey: "max" },
                     { label: "Bot", href: "/settings/integrations/bot", icon: Bot, sectionKey: "bot" },
-                    { label: "Телефония", href: "/settings/integrations/telephony", icon: Smartphone, sectionKey: "telephony" }
+                    { label: "Телефония", href: "/settings/integrations/telephony", icon: Smartphone, sectionKey: "telephony" },
+                    { label: "Avito", href: "/settings/integrations/avito", icon: Megaphone, sectionKey: "settings_integration_avito" }
                 ]
             }
         ]
