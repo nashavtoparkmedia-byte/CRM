@@ -1537,12 +1537,11 @@ export default function AccountsPage() {
 
   return (
     <TooltipProvider delayDuration={300}>
-      {/* PageContainer-эквивалент: padding + max-width + центровка.
-          Других интеграций (Telegram / WhatsApp) обёрнуты в <PageContainer>,
-          но он server-component — здесь page client-side, поэтому повторяем
-          его классы inline. Без этого top-bar CRM визуально накрывает
-          toolbar (контент прилипает к краям viewport'а). */}
-      <main className="px-6 py-6 max-w-[1400px] mx-auto w-full pb-12">
+      {/* Padding по краям без max-width — у нас 11-колоночная таблица,
+          на широких мониторах ей нужен весь viewport. Это сознательно
+          отличается от стандартного <PageContainer> (max-w-[1400px]) —
+          табличные интеграции выигрывают от полной ширины. */}
+      <main className="w-full px-6 py-6 pb-12">
       {/* ── WA-style шапка ──────────────────────────────────────── */}
       <div className="flex items-start gap-3 border-b pb-6 mb-6">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 mt-0.5">
