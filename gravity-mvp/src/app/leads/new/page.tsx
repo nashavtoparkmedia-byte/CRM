@@ -109,6 +109,46 @@ export default function LeadsInboxPage() {
     return () => clearInterval(t)
   }, [])
 
+  // Ручная пометка лида обработанным. Сейчас это «временный» путь —
+  // потом, когда прикрутим задачи, статус будет меняться автоматически
+  // когда оператор закроет связанный Task. А пока — напрямую тут, для
+  // лидов без телефона (которые не дойдут до auto-processing) или для
+  // ручной чистки inbox.
+  const [actingId, setActingId] = useState<string | null>(null)
+  async function markProcessed(lead: InboxLead) {
+    if (lead.source !== 'avito') {
+      // Для других источников endpoint mark-processed появится позже.
+      return
+    }
+    setActingId(lead.id)
+    try {
+      const res = await fetch(
+        `/api/avito/responses/${lead.sourceId}/mark-processed`,
+        { method: 'POST' },
+      )
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'mark-processed failed')
+      // Оптимистичное обновление: сразу проставляем processedAt и status
+      // в локальном state, чтобы UI не ждал следующего polling-тика.
+      setLeads((prev) =>
+        prev.map((l) =>
+          l.id === lead.id
+            ? {
+                ...l,
+                status: 'processed',
+                sourceStatus: 'обработан',
+                processedAt: json.processedAt ?? new Date().toISOString(),
+              }
+            : l,
+        ),
+      )
+    } catch (e) {
+      alert(`Не удалось обработать лид: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setActingId(null)
+    }
+  }
+
   // Catchup-sync — кнопка для оператора: «догнать» все исторические лиды,
   // которые ещё не привязаны к Chat (полезно при первом включении или
   // если webhook от Avito-worker не настроен).
@@ -182,12 +222,12 @@ export default function LeadsInboxPage() {
             size="sm"
             onClick={runSync}
             disabled={syncing}
-            title="Догнать существующие лиды Avito (intake) — Chat + Contact"
+            title="Проверить, что все отклики Avito появились в Чатах. Если что-то потерялось из-за выключенного робота-сборщика или сетевого сбоя — поднять сейчас. Безопасно нажимать сколько угодно раз — дублей не будет."
           >
             <RefreshCw
               className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
             />
-            {syncing ? 'Синхронизация…' : 'Догнать пропущенные'}
+            {syncing ? 'Сверяем…' : 'Сверка с Avito'}
           </Button>
         </div>
       </div>
@@ -309,7 +349,12 @@ export default function LeadsInboxPage() {
                 </tr>
               )}
               {filtered.map((lead) => (
-                <LeadRow key={lead.id} lead={lead} />
+                <LeadRow
+                  key={lead.id}
+                  lead={lead}
+                  acting={actingId === lead.id}
+                  onMarkProcessed={markProcessed}
+                />
               ))}
             </tbody>
           </table>
@@ -387,7 +432,19 @@ function SourceChip({
   )
 }
 
-function LeadRow({ lead }: { lead: InboxLead }) {
+function LeadRow({
+  lead,
+  acting,
+  onMarkProcessed,
+}: {
+  lead: InboxLead
+  acting: boolean
+  onMarkProcessed: (lead: InboxLead) => void
+}) {
+  // Бейдж статуса кликабельный только пока лид НЕ обработан и
+  // источник поддерживает action (сейчас только Avito; для будущих
+  // источников добавим аналогичные endpoint'ы).
+  const canMark = lead.status !== 'processed' && lead.source === 'avito'
   return (
     <tr className="border-t border-border hover:bg-muted/30">
       {/* Источник */}
@@ -434,19 +491,40 @@ function LeadRow({ lead }: { lead: InboxLead }) {
       >
         {truncate(lead.preview, 60)}
       </td>
-      {/* Статус (гибрид: общий + источниковый) */}
+      {/* Статус: кликабельный бейдж до обработки (клик = пометить
+          обработанным). Под бейджем для processed — timestamp нажатия
+          «Обработан», для остальных — источниковый статус мелким серым. */}
       <td className="px-4 py-3">
-        <Badge
-          variant="outline"
-          className={`border ${STATUS_BADGE_CLASS[lead.status]}`}
-        >
-          {LEAD_STATUS_LABEL_RU[lead.status]}
-        </Badge>
-        {lead.sourceStatus && (
+        {canMark ? (
+          <button
+            type="button"
+            disabled={acting}
+            onClick={() => onMarkProcessed(lead)}
+            title="Кликни чтобы пометить «Обработан»"
+            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-opacity hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed ${STATUS_BADGE_CLASS[lead.status]}`}
+          >
+            {acting ? '…' : LEAD_STATUS_LABEL_RU[lead.status]}
+          </button>
+        ) : (
+          <Badge
+            variant="outline"
+            className={`border ${STATUS_BADGE_CLASS[lead.status]}`}
+          >
+            {LEAD_STATUS_LABEL_RU[lead.status]}
+          </Badge>
+        )}
+        {lead.status === 'processed' && lead.processedAt ? (
+          <div
+            className="mt-1 text-xs text-muted-foreground"
+            title={`Обработан ${new Date(lead.processedAt).toLocaleString('ru-RU')}`}
+          >
+            ✓ {fmt(lead.processedAt)}
+          </div>
+        ) : lead.sourceStatus ? (
           <div className="mt-1 text-xs text-muted-foreground">
             {lead.sourceStatus}
           </div>
-        )}
+        ) : null}
       </td>
       {/* Получен */}
       <td className="px-4 py-3 text-sm text-muted-foreground">

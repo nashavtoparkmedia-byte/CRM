@@ -79,6 +79,24 @@ function toIsoNullable(d: Date | string | null | undefined): string | null {
   return typeof d === 'string' ? d : d.toISOString()
 }
 
+// Avito-парсер диалога склеивает телефон и время (`+7 (908) 404-85-8821:42`)
+// — это `textContent.trim()` в исходнике, между span с номером и span со
+// временем нет пробела. Если превью начинается с RU-номера (+7/8 + 10
+// цифр) и опционально времени HH:MM — переписываем в чистый E.164,
+// сохраняя любой текст после времени. Превью без ведущего номера —
+// возвращаем как есть.
+function normalizePreview(s: string | null): string | null {
+  if (!s) return s
+  const m = s.match(
+    /^\s*(?:\+7|8)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)[\s\-()]*(\d)(?:\s*(\d{1,2}:\d{2}))?\s*(.*)$/,
+  )
+  if (!m) return s
+  const digits = m.slice(1, 11).join('')
+  const rest = (m[12] ?? '').trim()
+  const e164 = `+7${digits}`
+  return rest.length > 0 ? `${e164} ${rest}` : e164
+}
+
 export function mapAvitoToInbox(
   row: AvitoResponseRow,
   account: AvitoAccountSummary | null,
@@ -91,7 +109,7 @@ export function mapAvitoToInbox(
     receivedAt: toIso(row.received_at ?? row.detected_at),
     name: row.candidate_name,
     phone: row.phone,
-    preview: row.preview,
+    preview: normalizePreview(row.preview),
     status: avitoStatusToInbox(row.status),
     sourceStatus: sourceStatusRu,
     processedAt: toIsoNullable(row.processed_at),

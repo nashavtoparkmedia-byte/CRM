@@ -1,9 +1,10 @@
 "use client";
 
-import { Search, Bell, User, LogOut, ChevronDown, Shield, Briefcase } from "lucide-react";
+import { User, LogOut, ChevronDown, Shield, Briefcase, Inbox } from "lucide-react";
+import Link from "next/link";
 import { useState, useEffect } from 'react';
 import { getUsers, getCurrentUser, login, logout } from '@/lib/users/user-service';
-import { Input } from "@/components/ui/input";
+import GlobalSearch from "@/components/layout/GlobalSearch";
 
 export default function TopBar() {
     const [users, setUsers] = useState<any[]>([]);
@@ -89,18 +90,15 @@ export default function TopBar() {
                         </button>
                     )}
                 </div>
-                <div className="relative w-48 md:w-64">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        type="search"
-                        placeholder="Поиск..."
-                        className="h-9 w-full rounded-full bg-secondary pl-9 text-sm focus-visible:ring-1"
-                    />
-                </div>
-                <button className="relative flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
-                    <Bell className="h-5 w-5" />
-                    <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-destructive" />
-                </button>
+                <Link
+                    href="/leads/new"
+                    title="Все новые лиды (Avito, Сайт, WhatsApp и т.д.)"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-secondary hover:bg-secondary/80 px-3 py-1 text-[13px] font-medium transition-colors"
+                >
+                    <Inbox className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>Новые лиды</span>
+                </Link>
+                <GlobalSearch />
             </div>
         </header>
     );

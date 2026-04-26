@@ -30,7 +30,9 @@ import {
   Eye,
   EyeOff,
   Info,
+  Inbox,
 } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -462,7 +464,9 @@ function GlobalSettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0">
+      {/* h-[80vh] фиксирует высоту → вкладки переключаются без прыжка
+          модалки. max-h-[90vh] оставляем как safety на маленьких экранах. */}
+      <DialogContent className="max-w-2xl h-[80vh] max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-3">
           <DialogTitle className="flex items-center gap-2">
             <SettingsIcon className="h-5 w-5" /> Глобальные настройки
@@ -470,10 +474,28 @@ function GlobalSettingsModal({
         </DialogHeader>
 
         <Tabs defaultValue="general" className="flex flex-col flex-1 min-h-0">
-          <TabsList className="mx-6 mb-2 grid w-auto grid-cols-3">
-            <TabsTrigger value="general">Общие</TabsTrigger>
-            <TabsTrigger value="telegram">Telegram</TabsTrigger>
-            <TabsTrigger value="activity">Журнал</TabsTrigger>
+          {/* TabsList: явные классы для фона/текста, потому что в темах
+              CRM --muted и --muted-foreground слишком близкие → дефолтный
+              shadcn-стиль делает неактивные табы нечитаемыми. */}
+          <TabsList className="mx-6 mb-2 grid w-auto grid-cols-3 bg-slate-100">
+            <TabsTrigger
+              value="general"
+              className="text-slate-700 data-[state=active]:bg-white data-[state=active]:text-foreground"
+            >
+              Общие
+            </TabsTrigger>
+            <TabsTrigger
+              value="telegram"
+              className="text-slate-700 data-[state=active]:bg-white data-[state=active]:text-foreground"
+            >
+              Telegram
+            </TabsTrigger>
+            <TabsTrigger
+              value="activity"
+              className="text-slate-700 data-[state=active]:bg-white data-[state=active]:text-foreground"
+            >
+              Журнал
+            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">
@@ -485,7 +507,7 @@ function GlobalSettingsModal({
                 </Label>
                 <div className="flex items-center gap-2">
                   <Input
-                    className="w-24"
+                    className="!w-40 !min-w-[10rem] shrink-0 text-base h-11"
                     value={minutes}
                     placeholder="10"
                     onChange={(e) => setMinutes(e.target.value)}
@@ -726,14 +748,14 @@ function GlobalSettingsModal({
                   <div className="font-semibold text-foreground">Как настроить:</div>
                   <ol className="list-decimal pl-5 space-y-0.5">
                     <li>
-                      Напиши <code className="rounded bg-muted px-1">@BotFather</code>{' '}
-                      в Telegram → <code className="rounded bg-muted px-1">/newbot</code>{' '}
-                      → получи <code className="rounded bg-muted px-1">bot_token</code>.
+                      Напиши <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">@BotFather</code>{' '}
+                      в Telegram → <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">/newbot</code>{' '}
+                      → получи <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">bot_token</code>.
                     </li>
                     <li>Найди своего бота в TG, отправь ему любое сообщение.</li>
                     <li>
-                      Узнай свой <code className="rounded bg-muted px-1">chat_id</code>:
-                      напиши <code className="rounded bg-muted px-1">@userinfobot</code>.
+                      Узнай свой <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">chat_id</code>:
+                      напиши <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">@userinfobot</code>.
                     </li>
                     <li>Вставь оба значения сюда, жми «Сохранить», потом «Тест».</li>
                   </ol>
@@ -962,7 +984,7 @@ function EditIntervalModal({
                 placeholder={`${globalMin} (глобальный)`}
                 onChange={(e) => setMinutes(e.target.value)}
                 disabled={saving}
-                className="w-28"
+                className="!w-40 !min-w-[10rem] shrink-0 text-base h-11"
               />
               <span className="text-sm text-muted-foreground">мин</span>
             </div>
@@ -1620,24 +1642,42 @@ export default function AccountsPage() {
           </div>
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex flex-wrap gap-2">
-              <Chip className="bg-emerald-100 text-emerald-800 border-emerald-200">
+              <Chip
+                className="bg-emerald-100 text-emerald-800 border-emerald-200"
+                title="Аккаунты, которые работают нормально и собирают отклики по расписанию. Никаких действий не требуется."
+              >
                 Норма: <strong>{counts.healthy}</strong>
               </Chip>
-              <Chip className="bg-yellow-100 text-yellow-800 border-yellow-200">
+              <Chip
+                className="bg-yellow-100 text-yellow-800 border-yellow-200"
+                title="Аккаунты, у которых за последние 24 часа были ошибки при сборе откликов. Если цифра растёт — открой аккаунт и проверь, что не так."
+              >
                 Сбои: <strong>{counts.degraded}</strong>
               </Chip>
-              <Chip className="bg-red-100 text-red-800 border-red-200">
+              <Chip
+                className="bg-red-100 text-red-800 border-red-200"
+                title="Аккаунты, которые система сама приостановила после череды сбоев — чтобы не получить блокировку от Avito. Открой такой аккаунт и нажми «Снять авто-паузу» когда разберёшься с причиной."
+              >
                 Авто-пауза: <strong>{counts['auto-paused']}</strong>
               </Chip>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Chip className="bg-muted text-foreground border-border">
+              <Chip
+                className="bg-muted text-foreground border-border"
+                title="На последнем сборе что-то пошло не так и система запланировала повторную попытку. Снимется автоматически после успешного сбора — обычно через несколько минут."
+              >
                 Требует повтора: <strong>{signals.retry}</strong>
               </Chip>
-              <Chip className="bg-muted text-foreground border-border">
+              <Chip
+                className="bg-muted text-foreground border-border"
+                title="Avito временно ограничил доступ с твоего IP-адреса — это защита от ботов. Помогает смена сети, перезапуск роутера или ожидание (1-3 часа). После — нажми «Обновить статус» в строке аккаунта."
+              >
                 IP заблокирован: <strong>{signals.ip}</strong>
               </Chip>
-              <Chip className="bg-muted text-foreground border-border">
+              <Chip
+                className="bg-muted text-foreground border-border"
+                title="Сессия в Chromium-профиле истекла — Avito хочет, чтобы ты залогинился заново. Нажми «Открыть профиль» в строке аккаунта и войди в Avito вручную."
+              >
                 Нужен вход: <strong>{signals.login}</strong>
               </Chip>
             </div>
@@ -1939,14 +1979,18 @@ function Td({
 function Chip({
   children,
   className,
+  title,
 }: {
   children: React.ReactNode;
   className?: string;
+  title?: string;
 }) {
   return (
     <span
+      title={title}
       className={cn(
         'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs',
+        title && 'cursor-help',
         className,
       )}
     >
