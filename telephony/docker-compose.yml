@@ -41,10 +41,52 @@ services:
       - ./conf/dialplan/default/02_megafon_inbound.xml:/etc/freeswitch/dialplan/default/02_megafon_inbound.xml:ro
       - ./conf/dialplan/default/03_user_outbound.xml:/etc/freeswitch/dialplan/default/03_user_outbound.xml:ro
       - ./conf/autoload_configs/event_socket.conf.xml:/etc/freeswitch/autoload_configs/event_socket.conf.xml:ro
-      # Persistent recordings + logs (Stage 3 will use this)
-      - freeswitch-recordings:/var/lib/freeswitch/recordings
+      # Recordings: bind-mounted so gravity-mvp (on the host) can read raw WAV
+      # files immediately after FreeSWITCH finishes writing them, convert to
+      # MP3, and upload to MinIO. WAV is the FS native format with no codec
+      # transcoding loss; MP3 is for storage/playback.
+      - ./recordings:/var/lib/freeswitch/recordings
       - freeswitch-logs:/var/log/freeswitch
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  # MinIO: S3-compatible object storage for call recordings (Stage 3).
+  # In dev runs locally; in prod replace MINIO_* env in gravity-mvp/.env
+  # with Yandex Object Storage credentials and point S3_ENDPOINT there.
+  minio:
+    image: minio/minio:latest
+    container_name: crm-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:9000:9000"     # S3 API
+      - "127.0.0.1:9001:9001"     # MinIO web console (http://localhost:9001)
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-crmadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-crmpassword123}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot init: create the recordings bucket on first run if it doesn't exist
+  minio-init:
+    image: minio/mc:latest
+    container_name: crm-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-crmadmin} ${MINIO_ROOT_PASSWORD:-crmpassword123} &&
+        mc mb -p local/${MINIO_RECORDINGS_BUCKET:-recordings} || true &&
+        echo 'MinIO bucket ready'
+      "
 
 volumes:
-  freeswitch-recordings:
+  minio-data:
   freeswitch-logs:

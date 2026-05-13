@@ -4,17 +4,19 @@ Self-hosted SIP stack for the CRM. Connects to Megafon's "MultiFon Business"
 trunk and exposes Event Socket Layer (ESL) for `gravity-mvp` to receive
 call events and originate calls.
 
-## What's in (Stages 1 & 2)
+## What's in (Stages 1–3)
 
 - **Stage 1** — FreeSWITCH registered to Megafon, outbound calls work
 - **Stage 2** — Prisma `Call` model, ESL listener writing call lifecycle to DB,
   React WebRTC softphone in CRM browser, incoming call popup, click-to-call
   from driver / contact cards, calls history list, internal extensions (101, 102),
   forking dialplan (rings every registered manager simultaneously)
+- **Stage 3** — Stereo call recording (WAV → MP3, libmp3lame 64kbps),
+  MinIO object storage as part of this compose, audio player in calls list
+  with presigned URLs (1h TTL)
 
 Coming next:
 
-- **Stage 3** — Call recording (WAV → MP3 → MinIO), audio player in lead/driver card
 - **Stage 4** — Whisper transcription + Claude AI dialog analysis
 - **Stage 5** — Stats dashboard per manager / lead
 
@@ -86,6 +88,29 @@ docker logs -f crm-freeswitch
 | 7080 | TCP | WebSocket — browser WebRTC softphones (sip.js / JsSIP) |
 | 16384–16484 | UDP | RTP media (100 concurrent calls) |
 | 8021 | TCP | Event Socket (ESL) — bound to 127.0.0.1, used by gravity-mvp |
+| 9000 | TCP | MinIO S3 API — bound to 127.0.0.1, used by gravity-mvp |
+| 9001 | TCP | MinIO web console — bound to 127.0.0.1, open http://localhost:9001 |
+
+## Recordings & storage
+
+FreeSWITCH writes raw stereo WAV files to `telephony/recordings/` (bind-mounted
+into the container). On `CHANNEL_HANGUP_COMPLETE`, gravity-mvp's ESL handler
+converts the WAV to MP3 (libmp3lame, 64kbps stereo) via fluent-ffmpeg, uploads
+to MinIO under `recordings/YYYY/MM/<fsUuid>.mp3`, and stores the object key
+on `Call.recordingPath`. WAV is deleted after successful upload.
+
+To listen to a recording in the UI, click the play button next to the call in
+the calls list. The browser fetches a 1-hour presigned URL from
+`/api/calls/[id]/recording` and streams the MP3 directly from MinIO.
+
+**For prod on Linux VPS:** swap MinIO for Yandex Object Storage — same code,
+just change `S3_*` env vars in `gravity-mvp/.env`:
+```
+S3_ENDPOINT=https://storage.yandexcloud.net
+S3_ACCESS_KEY=<your YC key id>
+S3_SECRET_KEY=<your YC secret>
+S3_BUCKET=<your bucket name>
+```
 
 ## Manager extensions
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Loader2 } from "lucide-react"
 
 interface CallRow {
     id: string
@@ -11,16 +11,24 @@ interface CallRow {
     toNumber: string
     startedAt: string
     durationSec: number | null
+    recordingPath: string | null
 }
 
 /**
  * Compact list of recent calls for a driver / contact card. Polls /api/calls
  * once on mount; the SipProvider's SSE subscription keeps the floating
  * popup live, so this list intentionally stays simple.
+ *
+ * Recordings (Stage 3): if a call has recordingPath, an inline play button
+ * lazily fetches a presigned URL from /api/calls/[id]/recording on first
+ * click and plays via a single shared <audio> element (only one track at a time).
  */
 export default function CallsList({ driverId, contactId, limit = 10 }: { driverId?: string; contactId?: string; limit?: number }) {
     const [calls, setCalls] = useState<CallRow[]>([])
     const [loading, setLoading] = useState(true)
+    const [playingCallId, setPlayingCallId] = useState<string | null>(null)
+    const [loadingCallId, setLoadingCallId] = useState<string | null>(null)
+    const audioRef = useRef<HTMLAudioElement | null>(null)
 
     useEffect(() => {
         const params = new URLSearchParams()
@@ -33,19 +41,69 @@ export default function CallsList({ driverId, contactId, limit = 10 }: { driverI
             .catch(() => setLoading(false))
     }, [driverId, contactId, limit])
 
+    async function togglePlay(call: CallRow) {
+        if (!call.recordingPath) return
+        const audio = audioRef.current
+        if (!audio) return
+
+        if (playingCallId === call.id && !audio.paused) {
+            audio.pause()
+            setPlayingCallId(null)
+            return
+        }
+
+        setLoadingCallId(call.id)
+        try {
+            const res = await fetch(`/api/calls/${call.id}/recording`)
+            if (!res.ok) throw new Error(`status ${res.status}`)
+            const { url } = await res.json()
+            audio.src = url
+            await audio.play()
+            setPlayingCallId(call.id)
+        } catch (err) {
+            console.warn('recording play failed', err)
+            setPlayingCallId(null)
+        } finally {
+            setLoadingCallId(null)
+        }
+    }
+
     if (loading) return <div className="text-[13px] text-muted-foreground py-2">Загрузка…</div>
     if (calls.length === 0) {
         return <div className="text-[13px] text-muted-foreground py-2">Звонков пока нет</div>
     }
 
     return (
-        <ul className="divide-y divide-border">
-            {calls.map(c => <CallRowItem key={c.id} call={c}/>)}
-        </ul>
+        <>
+            <ul className="divide-y divide-border">
+                {calls.map(c => (
+                    <CallRowItem
+                        key={c.id}
+                        call={c}
+                        isPlaying={playingCallId === c.id}
+                        isLoading={loadingCallId === c.id}
+                        onTogglePlay={() => togglePlay(c)}
+                    />
+                ))}
+            </ul>
+            <audio
+                ref={audioRef}
+                onEnded={() => setPlayingCallId(null)}
+                preload="none"
+                className="hidden"
+            />
+        </>
     )
 }
 
-function CallRowItem({ call }: { call: CallRow }) {
+function CallRowItem({
+    call, isPlaying, isLoading, onTogglePlay,
+}: {
+    call: CallRow
+    isPlaying: boolean
+    isLoading: boolean
+    onTogglePlay: () => void
+}) {
     const Icon = iconFor(call)
     const peerNumber = call.direction === 'inbound' ? call.fromNumber : call.toNumber
     return (
@@ -60,6 +118,22 @@ function CallRowItem({ call }: { call: CallRow }) {
             <div className="text-[12px] tabular-nums text-muted-foreground">
                 {call.durationSec ? formatDuration(call.durationSec) : statusLabel(call.status)}
             </div>
+            {call.recordingPath && (
+                <button
+                    onClick={onTogglePlay}
+                    disabled={isLoading}
+                    title={isPlaying ? 'Пауза' : 'Прослушать запись'}
+                    className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white hover:bg-primary/90 disabled:bg-gray-300 transition-colors"
+                >
+                    {isLoading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin"/>
+                    ) : isPlaying ? (
+                        <Pause className="h-3.5 w-3.5"/>
+                    ) : (
+                        <Play className="h-3.5 w-3.5"/>
+                    )}
+                </button>
+            )}
         </li>
     )
 }

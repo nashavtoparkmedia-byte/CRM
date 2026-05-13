@@ -21,6 +21,7 @@ import { opsLog } from '@/lib/opsLog'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
+import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
@@ -218,6 +219,7 @@ async function handleChannelHangup(evt: any): Promise<void> {
 
     const cause = header(evt, 'Hangup-Cause') ?? 'UNKNOWN'
     const billsec = Number(header(evt, 'variable_billsec') ?? '0')
+    const recordingFile = header(evt, 'variable_recording_file')
 
     const status = mapHangupCauseToStatus(cause, billsec)
 
@@ -245,6 +247,15 @@ async function handleChannelHangup(evt: any): Promise<void> {
         type: 'ended',
         data: { callId: updated.id, endedAt: updated.endedAt!.toISOString(), durationSec: updated.durationSec, status },
     })
+
+    // Recording: only worth processing if the call was actually answered
+    // (billsec > 0). FreeSWITCH still creates a WAV for unanswered calls
+    // but it's just silence.
+    if (billsec > 0 && recordingFile) {
+        processRecording({ callId: updated.id, fsUuid, recordingFile }).catch(err =>
+            opsLog('error', 'recording_processor_threw', { operation: 'recording', callId: updated.id, error: err.message })
+        )
+    }
 }
 
 function mapHangupCauseToStatus(cause: string, billsec: number): 'completed' | 'missed' | 'no_answer' | 'busy' | 'failed' | 'rejected' {

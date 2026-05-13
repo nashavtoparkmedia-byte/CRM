@@ -15,6 +15,13 @@
       <action application="set" data="effective_caller_id_name=$${megafon_username}"/>
       <action application="set" data="hangup_after_bridge=true"/>
       <action application="set" data="continue_on_fail=true"/>
+
+      <!-- Same recording setup as inbound — see 02_megafon_inbound.xml -->
+      <action application="set" data="recording_follow_transfer=true"/>
+      <action application="set" data="RECORD_STEREO=true"/>
+      <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
+      <action application="record_session" data="${recording_file}"/>
+
       <action application="bridge" data="sofia/gateway/megafon/7$1"/>
     </condition>
   </extension>
