@@ -1,0 +1,18 @@
+<include>
+  <!--
+    Outbound calls via Megafon SIP trunk.
+    Stage 1: dial any 11-digit Russian number (7XXXXXXXXXX or 8XXXXXXXXXX)
+    or E.164 (+7XXXXXXXXXX) through the megafon gateway.
+
+    Test from fs_cli:
+      originate sofia/gateway/megafon/79221234567 &echo
+  -->
+  <extension name="megafon_outbound">
+    <condition field="destination_number" expression="^(?:\+7|7|8)(\d{10})$">
+      <action application="set" data="effective_caller_id_number=$${megafon_username}"/>
+      <action application="set" data="hangup_after_bridge=true"/>
+      <action application="set" data="continue_on_fail=true"/>
+      <action application="bridge" data="sofia/gateway/megafon/7$1"/>
+    </condition>
+  </extension>
+</include>

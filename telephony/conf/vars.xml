@@ -1,0 +1,18 @@
+<include>
+  <!--
+    Megafon MultiFon Business SIP trunk credentials.
+    Loaded from environment, defined in docker-compose.yml.
+  -->
+  <X-PRE-PROCESS cmd="set" data="megafon_username=$${MEGAFON_SIP_USERNAME}"/>
+  <X-PRE-PROCESS cmd="set" data="megafon_password=$${MEGAFON_SIP_PASSWORD}"/>
+  <X-PRE-PROCESS cmd="set" data="megafon_proxy=sbc.megafon.ru"/>
+  <X-PRE-PROCESS cmd="set" data="megafon_realm=multifon.ru"/>
+
+  <!-- RTP port range — must match docker-compose port mapping -->
+  <X-PRE-PROCESS cmd="set" data="rtp_start_port=16384"/>
+  <X-PRE-PROCESS cmd="set" data="rtp_end_port=16484"/>
+
+  <!-- Default codec preferences: G.711 A-law has priority per Megafon spec -->
+  <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMA,PCMU"/>
+  <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMA,PCMU"/>
+</include>

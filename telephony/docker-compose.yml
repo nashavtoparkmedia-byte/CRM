@@ -1,0 +1,38 @@
+services:
+  freeswitch:
+    image: safarov/freeswitch:latest
+    container_name: crm-freeswitch
+    restart: unless-stopped
+    ports:
+      # SIP signaling
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      # RTP media — narrow range for dev (100 concurrent calls is plenty)
+      - "16384-16484:16384-16484/udp"
+      # Event Socket Layer — for Node.js integration
+      - "8021:8021/tcp"
+    environment:
+      # Megafon SIP trunk credentials (from .env)
+      - MEGAFON_SIP_USERNAME=${MEGAFON_SIP_USERNAME}
+      - MEGAFON_SIP_PASSWORD=${MEGAFON_SIP_PASSWORD}
+      # ESL password — read by event_socket.conf.xml
+      - ESL_PASSWORD=${ESL_PASSWORD:-ClueCon}
+      # RTP port range — must match the port mapping above
+      - RTP_START_PORT=16384
+      - RTP_END_PORT=16484
+      # SIP external/internal IPs (auto-detect in dev)
+      - EXTERNAL_SIP_IP=auto
+      - EXTERNAL_RTP_IP=auto
+    volumes:
+      # Overlay our minimal config on top of the image's defaults
+      - ./conf/vars.xml:/etc/freeswitch/vars.xml:ro
+      - ./conf/sip_profiles/external/megafon.xml:/etc/freeswitch/sip_profiles/external/megafon.xml:ro
+      - ./conf/dialplan/default/01_megafon_outbound.xml:/etc/freeswitch/dialplan/default/01_megafon_outbound.xml:ro
+      - ./conf/autoload_configs/event_socket.conf.xml:/etc/freeswitch/autoload_configs/event_socket.conf.xml:ro
+      # Persistent recordings + logs (Stage 3 will use this)
+      - freeswitch-recordings:/var/lib/freeswitch/recordings
+      - freeswitch-logs:/var/log/freeswitch
+
+volumes:
+  freeswitch-recordings:
+  freeswitch-logs:

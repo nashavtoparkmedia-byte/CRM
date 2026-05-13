@@ -1,0 +1,31 @@
+<include>
+  <!--
+    Megafon MultiFon Business SIP trunk.
+    Registers as a user on multifon.ru, routed via sbc.megafon.ru.
+    Up to 3 simultaneous registrations per account — this gateway is the only one.
+  -->
+  <gateway name="megafon">
+    <param name="username" value="$${megafon_username}"/>
+    <param name="password" value="$${megafon_password}"/>
+    <param name="realm" value="$${megafon_realm}"/>
+    <param name="proxy" value="$${megafon_proxy}"/>
+    <param name="register-proxy" value="$${megafon_proxy}"/>
+
+    <!-- Caller-ID seen by called party (the Megafon number, E.164 with + or 7) -->
+    <param name="from-user" value="$${megafon_username}"/>
+    <param name="from-domain" value="$${megafon_realm}"/>
+
+    <!-- Register & keep alive -->
+    <param name="register" value="true"/>
+    <param name="expire-seconds" value="180"/>
+    <param name="register-transport" value="udp"/>
+    <param name="retry-seconds" value="30"/>
+
+    <!-- Send keep-alive OPTIONS so we know the trunk is up -->
+    <param name="ping" value="60"/>
+
+    <!-- Don't proxy media — RTP flows through our box -->
+    <param name="extension-in-contact" value="true"/>
+    <param name="caller-id-in-from" value="true"/>
+  </gateway>
+</include>
