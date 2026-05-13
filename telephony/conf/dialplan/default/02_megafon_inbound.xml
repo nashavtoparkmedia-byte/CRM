@@ -1,0 +1,23 @@
+<include>
+  <!--
+    Inbound call from Megafon SBC arrives via the external profile and is
+    routed into the default context. We fork: every registered manager
+    extension rings simultaneously. First to answer takes the call;
+    everyone else stops ringing.
+
+    Variable ${sip_to_user} contains the dialed Megafon number. We don't
+    branch on it here because we currently have a single Megafon number —
+    all incoming traffic goes to the same manager pool.
+  -->
+  <extension name="megafon_inbound_fork">
+    <condition field="${sip_h_X-FS-Support}" expression="^.*$" break="never"/>
+    <condition field="source" expression="mod_sofia">
+      <action application="set" data="hangup_after_bridge=true"/>
+      <action application="set" data="continue_on_fail=true"/>
+      <action application="set" data="ringback=${us-ring}"/>
+      <!-- Ring everyone for up to 30s. comma = fork in parallel. -->
+      <action application="bridge" data="{leg_timeout=30}user/101,user/102"/>
+      <!-- Stage 3 will plug recording here via record_session -->
+    </condition>
+  </extension>
+</include>

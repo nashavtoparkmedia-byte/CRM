@@ -4,11 +4,16 @@ Self-hosted SIP stack for the CRM. Connects to Megafon's "MultiFon Business"
 trunk and exposes Event Socket Layer (ESL) for `gravity-mvp` to receive
 call events and originate calls.
 
-## Stage 1 scope
+## What's in (Stages 1 & 2)
 
-This stage gets the trunk registered and outbound calls working. Coming next:
+- **Stage 1** — FreeSWITCH registered to Megafon, outbound calls work
+- **Stage 2** — Prisma `Call` model, ESL listener writing call lifecycle to DB,
+  React WebRTC softphone in CRM browser, incoming call popup, click-to-call
+  from driver / contact cards, calls history list, internal extensions (101, 102),
+  forking dialplan (rings every registered manager simultaneously)
 
-- **Stage 2** — Prisma `Call` model, WebRTC softphone in React, click-to-call, incoming-call popup
+Coming next:
+
 - **Stage 3** — Call recording (WAV → MP3 → MinIO), audio player in lead/driver card
 - **Stage 4** — Whisper transcription + Claude AI dialog analysis
 - **Stage 5** — Stats dashboard per manager / lead
@@ -76,9 +81,22 @@ docker logs -f crm-freeswitch
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
-| 5060 | UDP/TCP | SIP signaling |
+| 5060 | UDP/TCP | SIP signaling — internal profile (Linphone, IP phones) |
+| 5080 | UDP | SIP signaling — external profile (inbound from Megafon SBC) |
+| 7080 | TCP | WebSocket — browser WebRTC softphones (sip.js / JsSIP) |
 | 16384–16484 | UDP | RTP media (100 concurrent calls) |
-| 8021 | TCP | Event Socket (ESL) — internal use by gravity-mvp |
+| 8021 | TCP | Event Socket (ESL) — bound to 127.0.0.1, used by gravity-mvp |
+
+## Manager extensions
+
+Each manager gets one extension (101, 102, ...) defined in
+`conf/directory/default/NNN.xml`. They use the same credentials in both:
+
+- **CRM browser softphone** — auto-registered when they log into Yoko CRM
+- **Linphone on their phone** — manual setup, see [LINPHONE_SETUP.md](./LINPHONE_SETUP.md)
+
+Forking is configured in `conf/dialplan/default/02_megafon_inbound.xml`:
+every incoming call rings every registered extension simultaneously.
 
 ## Known limitations on Windows + Docker Desktop
 

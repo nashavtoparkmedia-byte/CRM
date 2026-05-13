@@ -8,6 +8,14 @@
   <X-PRE-PROCESS cmd="set" data="megafon_proxy=sbc.megafon.ru"/>
   <X-PRE-PROCESS cmd="set" data="megafon_realm=multifon.ru"/>
 
+  <!-- Manager SIP extension passwords. Each entry below is a single user -->
+  <X-PRE-PROCESS cmd="set" data="manager_101_password=$${MANAGER_101_PASSWORD}"/>
+  <X-PRE-PROCESS cmd="set" data="manager_102_password=$${MANAGER_102_PASSWORD}"/>
+
+  <!-- Domain for internal extensions. Local-only; menders enter this as SIP server. -->
+  <X-PRE-PROCESS cmd="set" data="domain=$${local_ip_v4}"/>
+  <X-PRE-PROCESS cmd="set" data="domain_name=crm.local"/>
+
   <!-- RTP port range — must match docker-compose port mapping -->
   <X-PRE-PROCESS cmd="set" data="rtp_start_port=16384"/>
   <X-PRE-PROCESS cmd="set" data="rtp_end_port=16484"/>

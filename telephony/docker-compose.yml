@@ -4,19 +4,26 @@ services:
     container_name: crm-freeswitch
     restart: unless-stopped
     ports:
-      # SIP signaling
+      # SIP signaling — internal profile (extensions: Linphone, IP phones)
       - "5060:5060/udp"
       - "5060:5060/tcp"
+      # SIP signaling — external profile (Megafon SBC inbound, if reachable)
+      - "5080:5080/udp"
+      # WebRTC WebSocket — browser softphone (sip.js / JsSIP)
+      - "7080:7080/tcp"
       # RTP media — narrow range for dev (100 concurrent calls is plenty)
       - "16384-16484:16384-16484/udp"
       # Event Socket Layer — for Node.js integration
-      - "8021:8021/tcp"
+      - "127.0.0.1:8021:8021/tcp"
     environment:
       # Megafon SIP trunk credentials (from .env)
       - MEGAFON_SIP_USERNAME=${MEGAFON_SIP_USERNAME}
       - MEGAFON_SIP_PASSWORD=${MEGAFON_SIP_PASSWORD}
       # ESL password — read by event_socket.conf.xml
       - ESL_PASSWORD=${ESL_PASSWORD:-ClueCon}
+      # Manager extension passwords (Linphone + browser WebRTC)
+      - MANAGER_101_PASSWORD=${MANAGER_101_PASSWORD:-changeme101}
+      - MANAGER_102_PASSWORD=${MANAGER_102_PASSWORD:-changeme102}
       # RTP port range — must match the port mapping above
       - RTP_START_PORT=16384
       - RTP_END_PORT=16484
@@ -26,8 +33,13 @@ services:
     volumes:
       # Overlay our minimal config on top of the image's defaults
       - ./conf/vars.xml:/etc/freeswitch/vars.xml:ro
+      - ./conf/sip_profiles/internal.xml:/etc/freeswitch/sip_profiles/internal.xml:ro
       - ./conf/sip_profiles/external/megafon.xml:/etc/freeswitch/sip_profiles/external/megafon.xml:ro
+      - ./conf/directory/default/101.xml:/etc/freeswitch/directory/default/101.xml:ro
+      - ./conf/directory/default/102.xml:/etc/freeswitch/directory/default/102.xml:ro
       - ./conf/dialplan/default/01_megafon_outbound.xml:/etc/freeswitch/dialplan/default/01_megafon_outbound.xml:ro
+      - ./conf/dialplan/default/02_megafon_inbound.xml:/etc/freeswitch/dialplan/default/02_megafon_inbound.xml:ro
+      - ./conf/dialplan/default/03_user_outbound.xml:/etc/freeswitch/dialplan/default/03_user_outbound.xml:ro
       - ./conf/autoload_configs/event_socket.conf.xml:/etc/freeswitch/autoload_configs/event_socket.conf.xml:ro
       # Persistent recordings + logs (Stage 3 will use this)
       - freeswitch-recordings:/var/lib/freeswitch/recordings

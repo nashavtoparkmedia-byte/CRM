@@ -308,6 +308,7 @@ model Driver {
   lastOrderAt          DateTime?
   customFields         Json?                @default("{}")
   primaryYandexId      String?              @unique
+  calls                Call[]
   chats                Chat[]
   communicationEvents  CommunicationEvent[]
   contactProfile       Contact?
@@ -544,6 +545,7 @@ model Contact {
   isArchived        Boolean           @default(false)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+  calls             Call[]
   chats             Chat[]
   driver            Driver?           @relation(fields: [yandexDriverId], references: [yandexDriverId])
   identities        ContactIdentity[]
@@ -694,6 +696,53 @@ model CrmUser {
   createdAt DateTime @default(now())
 
   @@map("crm_users")
+}
+
+/// SIP call session. Created by FreeSWITCH events via ESL.
+/// managerId is the CRM user id (string "u1"/"u2"/... from src/data/users.json),
+/// not a Prisma FK — CRM users live in JSON, not in the DB.
+model Call {
+  id            String        @id @default(cuid())
+  direction     CallDirection
+  status        CallStatus    @default(ringing)
+  fromNumber    String        // E.164
+  toNumber      String        // E.164
+
+  driverId      String?
+  contactId     String?
+  managerId     String?       // CRM user id (u1, u2, ...) — not a FK
+
+  // FreeSWITCH channel UUID — dedupes events for the same call
+  fsUuid        String?       @unique
+  sipCallId     String?       // SIP Call-ID header
+
+  startedAt     DateTime      @default(now())
+  answeredAt    DateTime?
+  endedAt       DateTime?
+  durationSec   Int?
+  hangupCause   String?       // FreeSWITCH cause: NORMAL_CLEARING, USER_BUSY, NO_ANSWER, ...
+
+  // Filled in by later stages
+  recordingUrl  String?       // public URL (MinIO/S3)
+  recordingPath String?       // path inside FreeSWITCH recordings volume
+  transcript    String?       // Whisper output
+  aiScore       Int?          // 1-10
+  aiSummary     String?
+  aiAnalysis    Json?
+
+  metadata      Json?         @default("{}")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  driver        Driver?       @relation(fields: [driverId], references: [id])
+  contact       Contact?      @relation(fields: [contactId], references: [id])
+
+  @@index([direction, startedAt(sort: Desc)])
+  @@index([driverId])
+  @@index([contactId])
+  @@index([managerId, startedAt(sort: Desc)])
+  @@index([fromNumber])
+  @@index([toNumber])
 }
 
 /// Единственная запись — настройки AI агента (upsert by id="singleton")
@@ -1349,5 +1398,21 @@ enum AiImportStatus {
   completed
   partial
   failed
+}
+
+enum CallDirection {
+  inbound
+  outbound
+}
+
+enum CallStatus {
+  ringing       // call placed, not answered yet
+  active        // bridged, conversation in progress
+  completed     // ended normally after a conversation
+  missed        // inbound, never answered
+  no_answer     // outbound, callee didn't pick up
+  busy
+  failed        // technical failure (no route, codec mismatch, etc.)
+  rejected      // explicitly declined
 }
 

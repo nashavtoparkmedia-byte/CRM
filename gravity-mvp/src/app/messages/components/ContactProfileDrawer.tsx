@@ -10,6 +10,7 @@ import { useChannelStatus } from "../hooks/useChannelStatus"
 import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
+import CallButton from "@/components/sip/CallButton"
 
 // Custom field types
 interface CustomField {
@@ -317,6 +318,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {phone.isPrimary && (
                                             <Star size={10} className="text-yellow-500 fill-yellow-500" />
                                         )}
+                                        <div className="ml-auto">
+                                            <CallButton phoneNumber={phone.phone} label="" />
+                                        </div>
                                     </div>
                                     <div className="ml-4 space-y-0.5">
                                         {/* Existing identities */}

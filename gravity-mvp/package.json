@@ -41,7 +41,9 @@
     "telegram": "^2.26.22",
     "use-debounce": "^10.1.0",
     "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
-    "zustand": "^5.0.12"
+    "zustand": "^5.0.12",
+    "esl": "^4.0.5",
+    "jssip": "^3.10.1"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.2",

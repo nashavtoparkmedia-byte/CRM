@@ -1,0 +1,28 @@
+<include>
+  <!--
+    Outbound calls from a registered manager extension (101, 102, ...)
+    to any external Russian number. Caller-ID is overwritten to the
+    Megafon number so the callee sees the corporate number, not the
+    extension number.
+
+    Matches 11-digit national format (7XXXXXXXXXX / 8XXXXXXXXXX) and
+    E.164 (+7XXXXXXXXXX). Strips the prefix, prepends 7, sends to gateway.
+  -->
+  <extension name="user_outbound_megafon">
+    <condition field="${user_exists}" expression="^true$"/>
+    <condition field="destination_number" expression="^(?:\+7|7|8)(\d{10})$">
+      <action application="set" data="effective_caller_id_number=$${megafon_username}"/>
+      <action application="set" data="effective_caller_id_name=$${megafon_username}"/>
+      <action application="set" data="hangup_after_bridge=true"/>
+      <action application="set" data="continue_on_fail=true"/>
+      <action application="bridge" data="sofia/gateway/megafon/7$1"/>
+    </condition>
+  </extension>
+
+  <!-- Internal extension-to-extension calls (101 <-> 102, etc.) -->
+  <extension name="user_internal">
+    <condition field="destination_number" expression="^(1\d{2})$">
+      <action application="bridge" data="user/$1"/>
+    </condition>
+  </extension>
+</include>

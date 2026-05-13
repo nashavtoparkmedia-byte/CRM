@@ -211,6 +211,15 @@ export async function register() {
             })
         }, 60000)
 
+        // ── Telephony: ESL listener to FreeSWITCH ─────────────────────────
+        try {
+            const { startEslListener } = await import('@/lib/freeswitch/EslClient')
+            await startEslListener()
+            opsLog('info', 'esl_listener_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'esl_listener_start_failed', { operation: 'startup', error: err.message })
+        }
+
         // Yandex Fleet sync: target time 03:00 server time, daily.
         // Strategy: tick every hour; only run if (current hour == 03) AND no
         // successful run today. Cheap, robust to server restarts during the

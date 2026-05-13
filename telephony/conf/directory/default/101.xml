@@ -1,0 +1,23 @@
+<include>
+  <!--
+    Extension 101 — manager #1.
+    Used in both Linphone (UDP) and CRM browser softphone (WebSocket) with
+    the same credentials. Forking is handled by the inbound dialplan, which
+    rings every available extension simultaneously.
+  -->
+  <user id="101">
+    <params>
+      <param name="password" value="$${manager_101_password}"/>
+      <param name="vm-password" value="101"/>
+    </params>
+    <variables>
+      <variable name="toll_allow" value="domestic,international"/>
+      <variable name="accountcode" value="101"/>
+      <variable name="user_context" value="default"/>
+      <variable name="effective_caller_id_name" value="Manager 101"/>
+      <variable name="effective_caller_id_number" value="101"/>
+      <variable name="outbound_caller_id_name" value="$${megafon_username}"/>
+      <variable name="outbound_caller_id_number" value="$${megafon_username}"/>
+    </variables>
+  </user>
+</include>

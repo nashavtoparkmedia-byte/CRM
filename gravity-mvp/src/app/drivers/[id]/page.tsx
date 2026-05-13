@@ -1,10 +1,12 @@
-import { ArrowLeft, User, CreditCard, Car, AlertTriangle, Clock } from 'lucide-react'
+import { ArrowLeft, User, CreditCard, Car, AlertTriangle, Clock, Phone as PhoneIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TelegramLinkClient from './TelegramLinkClient'
 import { DriverTimeline } from './DriverTimeline'
+import CallButton from '@/components/sip/CallButton'
+import CallsList from '@/components/sip/CallsList'
 import { prisma } from '@/lib/prisma'
 import { getDriverById, getCarById } from '@/app/actions'
 import { getDriverTimeline } from './timeline-actions'
@@ -23,12 +25,13 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
     }
 
     // Fetch real driver data from Yandex and stored TG link from DB in parallel
-    const [driver, tgLink, timeline, telegramConnections, maxConnections] = await Promise.all([
+    const [driver, tgLink, timeline, telegramConnections, maxConnections, prismaDriver] = await Promise.all([
         getDriverById(id),
         prisma.driverTelegram.findFirst({ where: { driverId: id } }),
         getDriverTimeline(id),
         getTelegramConnections(),
         getMaxConnections(),
+        prisma.driver.findUnique({ where: { yandexDriverId: id }, select: { id: true } }),
     ])
     const car = driver?.car_id ? await getCarById(driver.car_id, id) : null
 
@@ -58,9 +61,10 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
 
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
                 <Tabs defaultValue="profile" className="w-full">
-                    <TabsList className="mb-6 grid w-full grid-cols-5 bg-secondary/50 p-1.5 rounded-xl h-auto">
+                    <TabsList className="mb-6 grid w-full grid-cols-6 bg-secondary/50 p-1.5 rounded-xl h-auto">
                         <TabsTrigger value="profile" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><User size={16} className="mr-2" /> Профиль</TabsTrigger>
                         <TabsTrigger value="timeline" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><Clock size={16} className="mr-2" /> Хронология</TabsTrigger>
+                        <TabsTrigger value="calls" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><PhoneIcon size={16} className="mr-2" /> Звонки</TabsTrigger>
                         <TabsTrigger value="transactions" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><CreditCard size={16} className="mr-2" /> Транзакции</TabsTrigger>
                         <TabsTrigger value="fines" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><AlertTriangle size={16} className="mr-2" /> Штрафы</TabsTrigger>
                         <TabsTrigger value="cars" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><Car size={16} className="mr-2" /> Авто</TabsTrigger>
@@ -77,7 +81,12 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                             <span className="font-semibold text-foreground">{driverName}</span>
 
                                             <span className="text-muted-foreground font-medium">Телефон:</span>
-                                            <span className="font-semibold text-foreground">{driverPhone}</span>
+                                            <span className="font-semibold text-foreground flex items-center gap-2">
+                                                {driverPhone}
+                                                {driverPhone && driverPhone !== '—' && (
+                                                    <CallButton phoneNumber={driverPhone} label="Позвонить" />
+                                                )}
+                                            </span>
 
                                             <span className="text-muted-foreground font-medium">Статус:</span>
                                             <Badge variant={driverStatus === 'working' ? 'default' : 'secondary' as any} className="w-fit text-[10px] uppercase font-bold">
@@ -116,12 +125,23 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                     </TabsContent>
 
                     <TabsContent value="timeline" className="animate-in fade-in zoom-in-95 duration-300">
-                        <DriverTimeline 
-                            driverId={id} 
-                            events={timeline} 
+                        <DriverTimeline
+                            driverId={id}
+                            events={timeline}
                             telegramConnections={telegramConnections}
                             maxConnections={maxConnections}
                         />
+                    </TabsContent>
+
+                    <TabsContent value="calls" className="animate-in fade-in zoom-in-95 duration-300">
+                        <div className="rounded-xl border p-5 bg-secondary/20 shadow-inner">
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">История звонков</h3>
+                            {prismaDriver ? (
+                                <CallsList driverId={prismaDriver.id} limit={50} />
+                            ) : (
+                                <div className="text-[13px] text-muted-foreground py-2">Водитель ещё не зарегистрирован в CRM — звонков пока нет</div>
+                            )}
+                        </div>
                     </TabsContent>
 
                     <TabsContent value="transactions" className="animate-in fade-in zoom-in-95 duration-300">
