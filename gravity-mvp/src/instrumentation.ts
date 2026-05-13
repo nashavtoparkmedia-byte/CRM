@@ -211,15 +211,6 @@ export async function register() {
             })
         }, 60000)
 
-        // Device offline check: every 90 seconds
-        const deviceOfflineInterval = setInterval(async () => {
-            await OperationalJobs.run('device_offline_check', async () => {
-                const { TelephonyService } = await import('@/lib/TelephonyService')
-                await TelephonyService.markOfflineStaleDevices()
-            })
-        }, 90 * 1000)
-        OperationalJobs.registerInterval(deviceOfflineInterval)
-
         // Yandex Fleet sync: target time 03:00 server time, daily.
         // Strategy: tick every hour; only run if (current hour == 03) AND no
         // successful run today. Cheap, robust to server restarts during the
@@ -244,7 +235,7 @@ export async function register() {
         }, 60 * 60 * 1000)  // every hour
         OperationalJobs.registerInterval(yandexSyncInterval)
 
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'device_offline:90s', 'yandex_fleet_sync:24h@03:00'] })
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
 
     }, 5000) // 5 second delay after server start
 
