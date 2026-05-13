@@ -18,7 +18,6 @@ const URL_CHANNEL_TO_DB: Record<string, string> = {
   wa: 'whatsapp',
   tg: 'telegram',
   max: 'max',
-  ypro: 'yandex_pro',
 }
 
 /**

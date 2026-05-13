@@ -140,7 +140,7 @@ export interface TaskEventDTO {
 // ─── Input Types ───────────────────────────────────────────────────────────
 
 export interface CreateTaskInput {
-    driverId: string
+    driverId?: string
     source: TaskSource
     type: string
     title: string

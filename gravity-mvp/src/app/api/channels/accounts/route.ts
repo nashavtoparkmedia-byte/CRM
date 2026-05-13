@@ -43,9 +43,6 @@ export async function GET() {
                     label: c.name || 'MAX Bot',
                     isDefault: c.isDefault
                 }))
-            ],
-            ypro: [
-                { id: 'ypro-1', phone: 'Fleet', label: 'Парк (Диспетчерская)', isDefault: true },
             ]
         }
 

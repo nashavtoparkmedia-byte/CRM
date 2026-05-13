@@ -33,7 +33,6 @@ const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: strin
     whatsapp:   { label: 'WhatsApp',   icon: '📱', color: 'text-emerald-700 bg-emerald-50', dotColor: 'bg-emerald-500' },
     telegram:   { label: 'Telegram',   icon: '✈️',  color: 'text-blue-700 bg-blue-50',      dotColor: 'bg-blue-500' },
     max:        { label: 'MAX',        icon: '💬', color: 'text-purple-700 bg-purple-50',  dotColor: 'bg-purple-500' },
-    yandex_pro: { label: 'Яндекс.Про', icon: '🚕', color: 'text-yellow-700 bg-yellow-50', dotColor: 'bg-yellow-500' },
 }
 
 const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
@@ -150,11 +149,11 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         setNewFieldLabel(""); setNewFieldType('text'); setShowAddField(false)
     }
 
-    const CHANNEL_SHORT: Record<string, string> = { whatsapp: 'wa', telegram: 'tg', max: 'max', yandex_pro: 'yp' }
+    const CHANNEL_SHORT: Record<string, string> = { whatsapp: 'wa', telegram: 'tg', max: 'max' }
 
     // ── Handle "Написать" — works with identity OR phone+channel ──
     const handleWrite = async (channel: string, identityId?: string) => {
-        if (!contact || channel === 'yandex_pro') return
+        if (!contact) return
 
         // If identityId provided, check for existing chat
         if (identityId) {
@@ -326,7 +325,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {/* Existing identities */}
                                         {identities.map(identity => {
                                             const cfg = CHANNEL_CONFIG[identity.channel]
-                                            const isYandex = identity.channel === 'yandex_pro'
                                             const isWriting = writingIdentityId === identity.id
                                             const chStatus = channelStatus[identity.channel]
                                             const hasFailed = chStatus?.status === 'failed'
@@ -351,16 +349,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                             )}
                                                             {hasFailed && <AlertCircle size={10} className="text-red-500" />}
                                                         </div>
-                                                        {!isYandex && (
-                                                            <button
-                                                                onClick={() => handleWrite(identity.channel, identity.id)}
-                                                                disabled={isWriting}
-                                                                className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                                            >
-                                                                {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
-                                                                Написать
-                                                            </button>
-                                                        )}
+                                                        <button
+                                                            onClick={() => handleWrite(identity.channel, identity.id)}
+                                                            disabled={isWriting}
+                                                            className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                        >
+                                                            {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
+                                                            Написать
+                                                        </button>
                                                     </div>
                                                     {hasFailed && (
                                                         <div className="ml-5 mb-0.5 group/err relative inline-block">
@@ -413,7 +409,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {/* Identities without phone (e.g. MAX) */}
                         {orphanIdentities.map(identity => {
                             const cfg = CHANNEL_CONFIG[identity.channel]
-                            const isYandex = identity.channel === 'yandex_pro'
                             const isWriting = writingIdentityId === identity.id
                             return (
                                 <div key={identity.id} className="mb-2.5">
@@ -432,18 +427,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded">ручной</span>
                                         )}
                                     </div>
-                                    {!isYandex && (
-                                        <div className="ml-4">
-                                            <button
-                                                onClick={() => handleWrite(identity.channel, identity.id)}
-                                                disabled={isWriting}
-                                                className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                            >
-                                                {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
-                                                Написать
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="ml-4">
+                                        <button
+                                            onClick={() => handleWrite(identity.channel, identity.id)}
+                                            disabled={isWriting}
+                                            className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                        >
+                                            {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
+                                            Написать
+                                        </button>
+                                    </div>
                                 </div>
                             )
                         })}

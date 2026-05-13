@@ -14,7 +14,7 @@ import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/type
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 
 interface TaskCreateModalProps {
-    driverId: string
+    driverId?: string
     driverName: string
     source?: TaskSource
     chatContext?: {
@@ -60,11 +60,12 @@ export default function TaskCreateModal({
 
     // Check for similar tasks on type change
     useEffect(() => {
+        if (!driverId) return
         let isMounted = true
         async function check() {
             try {
                 setIsCheckingDedupe(true)
-                const hints = await checkSimilarTasks(driverId, type)
+                const hints = await checkSimilarTasks(driverId!, type)
                 if (isMounted) setSimilarTasks(hints)
             } catch (err) {
                 console.error('Dedupe check failed', err)

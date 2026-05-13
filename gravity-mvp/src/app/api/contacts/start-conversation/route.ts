@@ -25,13 +25,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (channel === 'yandex_pro') {
-      return NextResponse.json(
-        { error: 'CHANNEL_READONLY', message: 'Yandex Pro channel is read-only' },
-        { status: 400 }
-      )
-    }
-
     const validChannels: ChatChannel[] = ['telegram', 'whatsapp', 'max']
     if (!validChannels.includes(channel)) {
       return NextResponse.json({ error: 'Invalid channel' }, { status: 400 })

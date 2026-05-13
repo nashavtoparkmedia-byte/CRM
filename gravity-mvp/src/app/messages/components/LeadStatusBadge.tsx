@@ -20,7 +20,6 @@ const CHANNEL_LABEL: Record<string, string> = {
   whatsapp: 'WhatsApp',
   telegram: 'Telegram',
   max: 'MAX',
-  yandex_pro: 'Yandex',
   phone: 'Телефон',
   avito: 'Avito',
 }
@@ -29,7 +28,6 @@ const CHANNEL_SHORT: Record<string, string> = {
   whatsapp: 'WA',
   telegram: 'TG',
   max: 'MAX',
-  yandex_pro: 'YP',
   phone: 'Тел',
   avito: 'AV',
 }
@@ -40,7 +38,6 @@ const CHANNEL_TINT: Record<string, string> = {
   whatsapp: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   telegram: 'bg-sky-50 text-sky-700 border-sky-200',
   max: 'bg-purple-50 text-purple-700 border-purple-200',
-  yandex_pro: 'bg-amber-50 text-amber-800 border-amber-200',
   phone: 'bg-orange-50 text-orange-700 border-orange-200',
   avito: 'bg-green-50 text-green-700 border-green-200',
 }
