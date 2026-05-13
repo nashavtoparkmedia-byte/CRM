@@ -42,7 +42,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         } else if (fallbackChannel) {
             // Map full channel names to short tab ids used by MessagesShell
             const channelToTab: Record<string, string> = {
-                whatsapp: 'wa', telegram: 'tg', max: 'max', yandex_pro: 'ypro', phone: 'phone', avito: 'av',
+                whatsapp: 'wa', telegram: 'tg', max: 'max', phone: 'phone', avito: 'av',
             }
             baseChatSelect(id, channelToTab[fallbackChannel] || fallbackChannel)
         } else {
@@ -145,7 +145,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         // Merged conversations (e.g. driver with both MAX and WA chats) are shown under their
         // primary channel only — clicking the WA tab shows only WA chats.
         if (selectedChannels.size > 0) {
-            const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch
+            const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch
             const normalizedSet = new Set(Array.from(selectedChannels).map(normalizeChannel))
             list = list.filter(c => {
                 const isSelected = selectedChatId && (c.id === selectedChatId || c.allChatIds?.includes(selectedChatId))
@@ -307,7 +307,6 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             case 'whatsapp': return <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-px rounded leading-none">WA</span>
             case 'telegram': return <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1 py-px rounded leading-none">TG</span>
             case 'max': return <span className="text-[8px] font-bold text-purple-600 bg-purple-50 px-1 py-px rounded leading-none">MAX</span>
-            case 'yandex_pro': return <span className="text-[8px] font-bold text-yellow-600 bg-yellow-50 px-1 py-px rounded leading-none">YP</span>
             case 'phone': return <span className="text-[8px] font-bold text-orange-600 bg-orange-50 px-1 py-px rounded leading-none">ТЕЛ</span>
             case 'avito': return <span className="text-[8px] font-bold text-green-700 bg-green-50 px-1 py-px rounded leading-none">AV</span>
             default: return null
@@ -337,14 +336,13 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         const channelsWithAccounts = new Set(
             Object.entries(channelAccounts)
                 .filter(([, accs]) => (accs as any[]).length > 0)
-                .map(([ch]) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch === 'av' ? 'avito' : ch)
+                .map(([ch]) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'av' ? 'avito' : ch)
         )
         const all: { id: string; label: string; channel: string; dotColor?: string; alwaysShow?: boolean }[] = [
             { id: 'wa', label: 'WA', dotColor: 'bg-emerald-500', channel: 'whatsapp' },
             { id: 'tg', label: 'TG', dotColor: 'bg-blue-500', channel: 'telegram' },
             { id: 'max', label: 'MAX', dotColor: 'bg-purple-500', channel: 'max' },
             { id: 'av', label: 'AV', dotColor: 'bg-green-500', channel: 'avito' },
-            { id: 'ypro', label: 'YP', dotColor: 'bg-yellow-500', channel: 'yandex_pro', alwaysShow: true },
             { id: 'phone', label: 'Тел', dotColor: 'bg-orange-500', channel: 'phone', alwaysShow: true },
         ]
         return all.filter(ch => ch.alwaysShow || channelsWithData.has(ch.channel) || channelsWithAccounts.has(ch.channel))
@@ -597,8 +595,8 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
 
                 {/* Account selector — icon button + dropdown */}
                 {(() => {
-                    const channelDisplayName: Record<string, string> = { wa: 'WhatsApp', tg: 'Telegram', max: 'MAX', ypro: 'Yandex Pro' }
-                    const channelBadge: Record<string, string> = { wa: 'WA', tg: 'TG', max: 'MAX', ypro: 'YP' }
+                    const channelDisplayName: Record<string, string> = { wa: 'WhatsApp', tg: 'Telegram', max: 'MAX' }
+                    const channelBadge: Record<string, string> = { wa: 'WA', tg: 'TG', max: 'MAX' }
                     const dropdownAccounts: { id: string; label: string; phone?: string; channel?: string; channelKey?: string }[] = []
                     if (selectedChannels.size === 0) {
                         Object.entries(channelAccounts).forEach(([ch, accs]) => {

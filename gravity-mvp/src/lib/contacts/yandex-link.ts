@@ -110,29 +110,6 @@ export async function linkContactToBestDriver(
     data: update,
   })
 
-  // 5. ContactIdentity на yandex_pro — upsert (может быть от прошлого
-  // привязанного Driver; перезаписываем на лучшего).
-  await prisma.contactIdentity.upsert({
-    where: {
-      channel_externalId: {
-        channel: 'yandex_pro',
-        externalId: best.yandexDriverId,
-      },
-    },
-    create: {
-      contactId: contact.id,
-      channel: 'yandex_pro',
-      externalId: best.yandexDriverId,
-      phoneId: contactPhone.id,
-      source: 'yandex',
-      confidence: 1.0,
-    },
-    update: {
-      contactId: contact.id, // на случай если identity была у другого Contact
-      phoneId: contactPhone.id,
-    },
-  })
-
   const wasLinked = contact.yandexDriverId != null
   console.log(
     `[yandex-link] ${wasLinked ? 'switched' : 'linked'} contact=${contact.id} ` +

@@ -38,7 +38,7 @@ export default function ChatWorkspace({
         }
 
         if (activeChannelTab !== 'all' && chat.channelMap) {
-            const normalizedChannel = activeChannelTab === 'wa' ? 'whatsapp' : activeChannelTab === 'tg' ? 'telegram' : activeChannelTab === 'ypro' ? 'yandex_pro' : activeChannelTab
+            const normalizedChannel = activeChannelTab === 'wa' ? 'whatsapp' : activeChannelTab === 'tg' ? 'telegram' : activeChannelTab
             const channelChatId = chat.channelMap[normalizedChannel]
             if (channelChatId) return channelChatId
             return `empty:${normalizedChannel}`
@@ -260,10 +260,10 @@ function ChatWorkspaceInner({
                 onSendMessage={handleSendMessage}
             />
 
-            {(taskModalContext || isTaskModalOpenForChat) && chat.driver?.id && (
+            {(taskModalContext || isTaskModalOpenForChat) && (
                 <TaskCreateModal
-                    driverId={chat.driver.id}
-                    driverName={chat.name || 'Водитель'}
+                    driverId={chat.driver?.id}
+                    driverName={chat.driver?.fullName || chat.name || 'Контакт'}
                     source="chat"
                     chatContext={{
                         chatId,

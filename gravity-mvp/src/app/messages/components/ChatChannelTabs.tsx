@@ -51,7 +51,6 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
         { id: 'wa', label: 'WhatsApp', short: 'WhatsApp', dot: 'bg-emerald-500', channelKey: 'whatsapp' },
         { id: 'tg', label: 'Telegram', short: 'Telegram', dot: 'bg-blue-500', channelKey: 'telegram' },
         { id: 'max', label: 'MAX', short: 'MAX', dot: 'bg-purple-500', channelKey: 'max' },
-        { id: 'ypro', label: 'Yandex Pro', short: 'Yandex Pro', dot: 'bg-yellow-500', channelKey: 'yandex_pro' },
         { id: 'phone', label: 'Телефон', short: 'Телефон', dot: 'bg-orange-500', channelKey: 'phone' }
     ]
 
@@ -70,7 +69,7 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
             setExpandedChannel(null)
             return
         }
-        const normalizedChannel = chId === 'wa' ? 'whatsapp' : chId === 'tg' ? 'telegram' : chId === 'ypro' ? 'yandex_pro' : chId
+        const normalizedChannel = chId === 'wa' ? 'whatsapp' : chId === 'tg' ? 'telegram' : chId
         const targetChatId = chat.channelMap?.[normalizedChannel]
         const updates: Record<string, string | null> = { channel: chId }
         if (targetChatId && targetChatId !== chat.id) {

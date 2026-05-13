@@ -260,8 +260,8 @@ export function useMessages(chatId: string | null) {
     const sendMessage = async (content: string, channel: string) => {
         if (!chatId) return
 
-        // Normalize channel for API (wa→whatsapp, tg→telegram, ypro→yandex_pro)
-        const normalizeForApi = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch
+        // Normalize channel for API (wa→whatsapp, tg→telegram)
+        const normalizeForApi = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch
         const apiChannel = normalizeForApi(channel)
 
         // Generate stable idempotency key for duplicate prevention
