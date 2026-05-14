@@ -78,6 +78,15 @@
     <param name="enable-rtp-auto-adjust" value="true"/>
     <param name="liberal-dtmf" value="true"/>
 
+    <!-- rtp-secure-media=optional: tell FS to negotiate SRTP/DTLS-SRTP if the
+         peer offers it, otherwise plain RTP. Without this FS settled the
+         codecs on both legs at PCMA but then refused to build the a-leg
+         answer SDP because no crypto context could be built — leading to
+         "488 Incompatible Destination" right after Original read codec was
+         set. With "optional" sofia builds the proper DTLS-SRTP fingerprint
+         answer for the browser leg and plain-RTP for the Megafon leg. -->
+    <param name="rtp-secure-media" value="optional"/>
+
     <!-- NAT handling — keep for Linphone over UDP -->
     <param name="aggressive-nat-detection" value="true"/>
     <param name="apply-nat-acl" value="nat.auto"/>

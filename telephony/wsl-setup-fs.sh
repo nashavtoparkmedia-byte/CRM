@@ -31,8 +31,11 @@ cp "${CONF_SRC}/sip_profiles/external/megafon.xml" "${FS_PREFIX}/conf/sip_profil
 cp "${CONF_SRC}/directory/default/101.xml" "${FS_PREFIX}/conf/directory/default/101.xml"
 cp "${CONF_SRC}/directory/default/102.xml" "${FS_PREFIX}/conf/directory/default/102.xml"
 
-# dialplan (megafon inbound/outbound, user outbound)
-cp "${CONF_SRC}/dialplan/default/01_megafon_outbound.xml" "${FS_PREFIX}/conf/dialplan/default/01_megafon_outbound.xml"
+# dialplan (megafon inbound, user outbound). 01_megafon_outbound.xml is
+# DEPRECATED — it matched the same regex as 03_user_outbound.xml but came
+# first alphabetically, intercepting every outbound call before our
+# `rtp_secure_media=false` + recording setup could run. 03 fully replaces it.
+rm -f "${FS_PREFIX}/conf/dialplan/default/01_megafon_outbound.xml"
 cp "${CONF_SRC}/dialplan/default/02_megafon_inbound.xml" "${FS_PREFIX}/conf/dialplan/default/02_megafon_inbound.xml"
 cp "${CONF_SRC}/dialplan/default/03_user_outbound.xml" "${FS_PREFIX}/conf/dialplan/default/03_user_outbound.xml"
 

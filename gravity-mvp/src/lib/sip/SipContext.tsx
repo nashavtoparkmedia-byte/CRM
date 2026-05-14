@@ -16,6 +16,56 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 
+// Codecs we keep in outbound SDP offers.
+// Megafon SBC silently drops INVITEs whose first audio codec is opus (or anything
+// it doesn't recognise), and FreeSWITCH bridges a-leg codecs to the b-leg, so
+// opus from the browser ends up in the gateway INVITE and the call dies at 408.
+// Restricting the browser offer to G.711 + DTMF keeps the b-leg compatible.
+//
+// Order matters: codecs are matched against this list in order, so PCMA must
+// appear before PCMU. Megafon only offers PCMA (codec 8) on its b-leg, and FS
+// picks the FIRST codec from the browser's m=audio line for the a-leg. If
+// PCMU comes first the bridge gets PCMU↔PCMA and FS bails with
+// "INCOMPATIBLE_DESTINATION" even though both legs are G.711.
+const CODEC_PRIORITY = ['PCMA', 'PCMU', 'telephone-event', 'CN']
+const KEEPABLE_CODEC = /^(PCMA|PCMU|telephone-event|CN)\//i
+
+function transformSdpForMegafon(sdp: string): string {
+    const lines = sdp.split(/\r?\n/)
+    // pt → codec base name (e.g. "8" → "PCMA")
+    const ptToCodec = new Map<string, string>()
+    for (const line of lines) {
+        const m = line.match(/^a=rtpmap:(\d+)\s+([^\/]+)\/.+$/i)
+        if (m && KEEPABLE_CODEC.test(`${m[2]}/`)) ptToCodec.set(m[1], m[2])
+    }
+    if (ptToCodec.size === 0) return sdp
+
+    const keepPts = new Set(ptToCodec.keys())
+
+    const out: string[] = []
+    for (const line of lines) {
+        const mAudio = line.match(/^(m=audio\s+\d+\s+\S+)\s+(.+)$/)
+        if (mAudio) {
+            // Filter to allowed pts AND re-order so PCMA is the first match.
+            const pts = mAudio[2]
+                .split(/\s+/)
+                .filter(pt => keepPts.has(pt))
+                .sort((a, b) => {
+                    const ai = CODEC_PRIORITY.indexOf(ptToCodec.get(a) ?? '')
+                    const bi = CODEC_PRIORITY.indexOf(ptToCodec.get(b) ?? '')
+                    return ai - bi
+                })
+            if (pts.length === 0) return sdp
+            out.push(`${mAudio[1]} ${pts.join(' ')}`)
+            continue
+        }
+        const ptAttr = line.match(/^a=(?:rtpmap|fmtp|rtcp-fb):(\d+)\b/)
+        if (ptAttr && !keepPts.has(ptAttr[1])) continue
+        out.push(line)
+    }
+    return out.join('\r\n')
+}
+
 export type SipStatus = 'idle' | 'connecting' | 'registered' | 'unregistered' | 'failed'
 export type CallState = 'ringing' | 'connecting' | 'active' | 'ended'
 
@@ -208,6 +258,23 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     function handleOutgoingSession(session: any) {
+        // Strip opus (and any other non-G.711) from the local SDP offer before
+        // JsSIP serialises the INVITE. JsSIP's _createLocalDescription resolves
+        // with e.sdp from the 'sdp' event, so mutating data.sdp here propagates
+        // to the wire. See node_modules/jssip/lib/RTCSession.js around line 1434.
+        session.on('sdp', (data: any) => {
+            if (data.originator !== 'local' || data.type !== 'offer') return
+            const original = data.sdp as string
+            const rewritten = transformSdpForMegafon(original)
+            if (rewritten !== original) {
+                data.sdp = rewritten
+                console.info('[SIP] outbound SDP offer rewritten for Megafon', {
+                    before: original.match(/^m=audio.*/m)?.[0],
+                    after: rewritten.match(/^m=audio.*/m)?.[0],
+                })
+            }
+        })
+
         attachRemoteAudio(session)
         const remoteId = session.remote_identity
         const peerNumber = remoteId?.uri?.user ?? 'unknown'

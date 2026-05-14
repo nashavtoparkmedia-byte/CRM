@@ -10,8 +10,12 @@
     all incoming traffic goes to the same manager pool.
   -->
   <extension name="megafon_inbound_fork">
-    <condition field="${sip_h_X-FS-Support}" expression="^.*$" break="never"/>
-    <condition field="source" expression="mod_sofia">
+    <!-- Match ONLY calls coming from the Megafon SBC. The original
+         `source=mod_sofia` matched every sofia channel, including outbound
+         calls originated from the browser (user 101 → 79XXX...), which then
+         hit this "ring everyone" bridge and failed because 101 cannot bridge
+         to itself. Restrict by inbound profile = external. -->
+    <condition field="${sofia_profile_name}" expression="^external$">
       <action application="set" data="hangup_after_bridge=true"/>
       <action application="set" data="continue_on_fail=true"/>
       <action application="set" data="ringback=${us-ring}"/>
