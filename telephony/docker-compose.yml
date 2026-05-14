@@ -65,6 +65,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis: BullMQ queue backend (Stage 4 — transcription + AI analysis jobs).
+  # Bound to loopback so it isn't exposed on the LAN. Single-node, no auth —
+  # in prod replace with a managed Redis (Yandex Cloud Managed Redis, etc.)
+  # and pass REDIS_URL through gravity-mvp/.env.
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   # One-shot init: create the recordings bucket on first run if it doesn't exist
   minio-init:
     image: minio/mc:latest
