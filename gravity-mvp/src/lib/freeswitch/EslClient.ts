@@ -18,6 +18,7 @@
 // functional client() API) because our handler code is built around the
 // event-emitter pattern. createRequire bypasses Turbopack's CJS-mangling.
 import { createRequire } from 'module'
+import { randomUUID } from 'crypto'
 const _require = createRequire(import.meta.url)
 const modesl = _require('modesl') as { Connection: any }
 const Connection = modesl.Connection
@@ -347,13 +348,20 @@ export async function originateCall(args: {
     // popup (the client's number). The trunk's outbound caller-id is fixed
     // by the gateway itself (the Megafon DID).
     //
-    // Recording: RECORD_STEREO=true gives speaker separation (left=client,
-    // right=manager) which Stage 4's Whisper handles better. execute_on_answer
-    // starts the recording the moment the CLIENT picks up — before the bridge
-    // to the manager — so we capture the entire conversation, not just the
-    // post-bridge part.
-    const recPath = `/var/lib/freeswitch/recordings/\${uuid}.wav`
+    // Recording: pre-generate the channel UUID on this side so the file path
+    // is a literal — FreeSWITCH chokes on ${uuid} inside originate vars
+    // ("Invalid data ... contains a variable"), because it tries to expand
+    // BEFORE the channel exists. With origination_uuid=<uuid> FS adopts the
+    // UUID we give it, so the recording_file we precompute matches the
+    // Channel-Call-UUID the ESL handler sees.
+    //
+    // RECORD_STEREO=true keeps caller / callee on separate stereo channels —
+    // crucial for Stage 4 Whisper transcription, which gets much better
+    // speaker attribution that way.
+    const channelUuid = randomUUID()
+    const recPath = `/var/lib/freeswitch/recordings/${channelUuid}.wav`
     const vars = [
+        `origination_uuid=${channelUuid}`,
         `origination_caller_id_number=${dialNumber}`,
         `origination_caller_id_name='${dialNumber}'`,
         `crm_user_id=${args.userId}`,
