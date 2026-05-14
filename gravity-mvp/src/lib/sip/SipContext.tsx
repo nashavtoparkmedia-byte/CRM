@@ -244,26 +244,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         const digits = phoneNumber.replace(/\D/g, '')
         if (digits.length < 10) throw new Error('Invalid number')
 
-        // Probe microphone *before* handing off to JsSIP so we can show a
-        // useful message instead of a silent failure. JsSIP swallows
-        // getUserMedia errors inside ua.call() without surfacing them to
-        // the caller, which is how a permission-denied state hides as
-        // "click did nothing".
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-            stream.getTracks().forEach(t => t.stop())
-        } catch (err: any) {
-            const msg = err?.name === 'NotAllowedError'
-                ? 'Браузер не дал доступ к микрофону. Разрешите его слева от адресной строки и попробуйте снова.'
-                : err?.name === 'NotFoundError'
-                    ? 'Микрофон не найден. Подключите устройство и обновите страницу.'
-                    : `Не удалось получить доступ к микрофону: ${err?.message ?? err?.name ?? err}`
-            console.error('[SIP] getUserMedia failed:', err)
-            // Lazy-import sonner so SSR doesn't pull it in.
-            try { (await import('sonner')).toast.error(msg) } catch {}
-            throw new Error(msg)
-        }
-
+        // Hand straight to JsSIP. It calls getUserMedia internally; Chrome
+        // surfaces the mic prompt because this runs inside a real user
+        // gesture handler (button onClick). The pre-call probe we used to
+        // have here interfered with the AudioContext flow elsewhere — the
+        // outbound call sets up its own AudioContext per RTCSession.
+        console.info('[SIP] call() → ua.call', { digits })
         const target = `sip:${digits}@crm.local`
         ua.call(target, {
             mediaConstraints: { audio: true, video: false },

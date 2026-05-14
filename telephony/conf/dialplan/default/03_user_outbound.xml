@@ -9,7 +9,11 @@
     E.164 (+7XXXXXXXXXX). Strips the prefix, prepends 7, sends to gateway.
   -->
   <extension name="user_outbound_megafon">
-    <condition field="${user_exists}" expression="^true$"/>
+    <!-- Note: dropped the ${user_exists} condition. It was checking whether the
+         DESTINATION exists as a directory user, which is false for any external
+         phone number — so dialplan never matched. The destination-number regex
+         already restricts this to Russian 10-digit numbers, which is the
+         security boundary we actually want. -->
     <condition field="destination_number" expression="^(?:\+7|7|8)(\d{10})$">
       <action application="set" data="effective_caller_id_number=$${megafon_username}"/>
       <action application="set" data="effective_caller_id_name=$${megafon_username}"/>
