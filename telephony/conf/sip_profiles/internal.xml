@@ -25,10 +25,21 @@
     <param name="context" value="default"/>
     <param name="dialplan" value="XML"/>
 
-    <!-- RTP -->
+    <!-- RTP. ext-rtp-ip=127.0.0.1 is critical for Windows-Docker: the
+         browser on the host can only reach FreeSWITCH RTP through the port
+         mapping (host 127.0.0.1:NNNN → container :NNNN). Without ext-rtp-ip
+         FS advertises its docker bridge IP (172.20.0.3) in SDP, which the
+         host browser can't route to → both sides hear silence even though
+         signalling and the trunk leg are healthy. -->
     <param name="rtp-ip" value="$${local_ip_v4}"/>
+    <param name="ext-rtp-ip" value="127.0.0.1"/>
     <param name="rtp-timer-name" value="soft"/>
     <param name="rtp-hold-timeout-sec" value="1800"/>
+    <!-- Restrict RTP port range to match docker-compose mapping
+         (16384-16484/udp). FS otherwise picks any port from its global pool,
+         most of which aren't forwarded into the container. -->
+    <param name="rtp-port-min" value="16384"/>
+    <param name="rtp-port-max" value="16484"/>
 
     <!-- SIP signaling -->
     <param name="sip-ip" value="$${local_ip_v4}"/>
@@ -41,10 +52,13 @@
     <param name="wss-binding" value=":7443"/>
     -->
 
-    <!-- Authentication — managers must register with a password -->
+    <!-- Authentication — managers must register with a password. We disable
+         the "domains" ACL because in dev all clients come from the docker
+         bridge (172.20.0.0/16 from the host's perspective) and that ACL
+         rejects them BEFORE the 401 challenge has a chance to fire,
+         producing the 403 Forbidden we were chasing. Auth-calls=true is
+         still on, so a real password is required to register. -->
     <param name="auth-calls" value="true"/>
-    <param name="apply-inbound-acl" value="domains"/>
-    <param name="apply-register-acl" value="domains"/>
 
     <!-- Codec preferences — G.711 A-law (Megafon priority) + Opus for WebRTC -->
     <param name="inbound-codec-prefs" value="opus,PCMA,PCMU"/>

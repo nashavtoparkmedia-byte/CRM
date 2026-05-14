@@ -1,19 +1,31 @@
 <include>
   <!--
     Megafon MultiFon Business SIP trunk credentials.
-    Loaded from environment, defined in docker-compose.yml.
+    Loaded from container env vars at FreeSWITCH start time via exec-set,
+    so we don't depend on the image's vars.xml sed-substitution (which only
+    rewrites the single `default_password` line).
   -->
-  <X-PRE-PROCESS cmd="set" data="megafon_username=$${MEGAFON_SIP_USERNAME}"/>
-  <X-PRE-PROCESS cmd="set" data="megafon_password=$${MEGAFON_SIP_PASSWORD}"/>
+  <!-- exec-set with `printenv` doesn't work — printenv is not in the alpine
+       FreeSWITCH image. We had `sh: printenv: not found` errors that made
+       $${ESL_PASSWORD} stay literal and ESL auth fail. For dev we hardcode
+       these here. Prod should mount secrets via a config volume. -->
+  <X-PRE-PROCESS cmd="set" data="megafon_username=79221853150"/>
+  <X-PRE-PROCESS cmd="set" data="megafon_password=QktspvGj"/>
   <X-PRE-PROCESS cmd="set" data="megafon_proxy=sbc.megafon.ru"/>
   <X-PRE-PROCESS cmd="set" data="megafon_realm=multifon.ru"/>
 
-  <!-- Manager SIP extension passwords. Each entry below is a single user -->
-  <X-PRE-PROCESS cmd="set" data="manager_101_password=$${MANAGER_101_PASSWORD}"/>
-  <X-PRE-PROCESS cmd="set" data="manager_102_password=$${MANAGER_102_PASSWORD}"/>
+  <!-- Manager SIP extension passwords. Hardcoded — same reason. -->
+  <X-PRE-PROCESS cmd="set" data="manager_101_password=changeme101"/>
+  <X-PRE-PROCESS cmd="set" data="manager_102_password=changeme102"/>
 
-  <!-- Domain for internal extensions. Local-only; menders enter this as SIP server. -->
-  <X-PRE-PROCESS cmd="set" data="domain=$${local_ip_v4}"/>
+  <!-- ESL password — consumed by autoload_configs/event_socket.conf.xml -->
+  <X-PRE-PROCESS cmd="set" data="ESL_PASSWORD=ClueCon"/>
+
+  <!-- Domain for internal extensions. Must match the realm clients send in
+       REGISTER, otherwise FreeSWITCH directory lookup fails with 403.
+       gravity-mvp's sip-credentials API hands out `sip:NNN@crm.local`, so
+       the domain is literally "crm.local" — not the container's IP. -->
+  <X-PRE-PROCESS cmd="set" data="domain=crm.local"/>
   <X-PRE-PROCESS cmd="set" data="domain_name=crm.local"/>
 
   <!-- RTP port range — must match docker-compose port mapping -->
@@ -23,4 +35,21 @@
   <!-- Default codec preferences: G.711 A-law has priority per Megafon spec -->
   <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMA,PCMU"/>
   <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMA,PCMU"/>
+
+  <!-- vanilla FreeSWITCH defines these in its vars.xml; we overlay our own
+       so we must keep them or the default external.xml / verto profile
+       refuses to start ("Invalid ext-rtp-ip"). For dev we point both at the
+       auto-detected local IP — fine while everything's on one host. -->
+  <X-PRE-PROCESS cmd="set" data="external_rtp_ip=$${local_ip_v4}"/>
+  <X-PRE-PROCESS cmd="set" data="external_sip_ip=$${local_ip_v4}"/>
+  <X-PRE-PROCESS cmd="set" data="internal_sip_ip=$${local_ip_v4}"/>
+  <X-PRE-PROCESS cmd="set" data="internal_sip_port=5060"/>
+  <X-PRE-PROCESS cmd="set" data="internal_ssl_port=5061"/>
+  <X-PRE-PROCESS cmd="set" data="internal_tls_port=5061"/>
+  <X-PRE-PROCESS cmd="set" data="external_sip_port=5080"/>
+  <X-PRE-PROCESS cmd="set" data="external_ssl_port=5081"/>
+  <X-PRE-PROCESS cmd="set" data="external_tls_port=5081"/>
+  <X-PRE-PROCESS cmd="set" data="default_password=changeme"/>
+  <X-PRE-PROCESS cmd="set" data="hold_music=local_stream://moh"/>
+  <X-PRE-PROCESS cmd="set" data="bind_server_ip=auto"/>
 </include>

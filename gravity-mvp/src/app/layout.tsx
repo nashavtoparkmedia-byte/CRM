@@ -7,6 +7,7 @@ import { QueryProvider } from "@/providers/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { SipProvider } from "@/lib/sip/SipContext";
 import IncomingCallPopup from "@/components/sip/IncomingCallPopup";
+import ActiveCallPopup from "@/components/sip/ActiveCallPopup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,6 +44,7 @@ export default function RootLayout({
               </div>
             </div>
             <IncomingCallPopup />
+            <ActiveCallPopup />
           </SipProvider>
         </QueryProvider>
         <Toaster />

@@ -21,6 +21,8 @@ import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { uploadFile, S3_BUCKET } from '@/lib/storage/minio'
+import { broadcastCall } from '@/lib/callStreamBus'
+import { enqueueTranscribe } from '@/lib/queue/queues'
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 
@@ -77,6 +79,25 @@ export async function processRecording(args: {
             callId: args.callId,
             objectKey,
         })
+
+        // Notify any open SSE listeners that the recording is ready to play.
+        broadcastCall({
+            type: 'updated',
+            data: { callId: args.callId, recordingPath: objectKey },
+        })
+
+        // Hand off to the transcription queue (Stage 4). If Redis is down or
+        // the queue can't accept the job, log and continue — the recording
+        // itself is already safely in S3, so the user can still listen to it.
+        try {
+            await enqueueTranscribe(args.callId)
+        } catch (err: any) {
+            opsLog('error', 'transcribe_enqueue_failed', {
+                operation: 'recording',
+                callId: args.callId,
+                error: err.message,
+            })
+        }
 
         // Cleanup local copies. Best-effort — failure here is not fatal.
         await fs.unlink(wavHostPath).catch(() => {})

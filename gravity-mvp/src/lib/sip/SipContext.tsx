@@ -93,8 +93,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
             setExtension(creds.extension)
 
-            const JsSIP = (await import('jssip')).default
-            // JsSIP.debug.enable('JsSIP:*')  // uncomment when debugging registration
+            // Turbopack sometimes wraps CJS in an ESM namespace with the real
+            // module under .default, sometimes not — handle both shapes.
+            const jssipModule = await import('jssip')
+            const JsSIP: any = (jssipModule as any).default ?? jssipModule
+            if (!JsSIP?.WebSocketInterface || !JsSIP?.UA) {
+                console.error('[SIP] JsSIP module shape unexpected:', Object.keys(jssipModule), Object.keys(JsSIP ?? {}))
+                setStatus('failed')
+                return
+            }
+            // Dev-mode logging — comment out for production noise reduction.
+            try { JsSIP.debug?.enable('JsSIP:*') } catch {}
 
             const socket = new JsSIP.WebSocketInterface(creds.wsUrl)
             const ua = new JsSIP.UA({
@@ -107,9 +116,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 session_timers: false,
             })
 
-            ua.on('registered', () => setStatus('registered'))
-            ua.on('unregistered', () => setStatus('unregistered'))
-            ua.on('registrationFailed', () => setStatus('failed'))
+            ua.on('registered', () => { console.info('[SIP] registered'); setStatus('registered') })
+            ua.on('unregistered', () => { console.info('[SIP] unregistered'); setStatus('unregistered') })
+            ua.on('registrationFailed', (e: any) => { console.error('[SIP] registrationFailed', e?.cause, e); setStatus('failed') })
+            ua.on('connecting', () => console.info('[SIP] ua connecting'))
+            ua.on('connected', () => console.info('[SIP] ua connected'))
+            ua.on('disconnected', (e: any) => console.warn('[SIP] ua disconnected', e?.code, e?.reason))
 
             ua.on('newRTCSession', (data: any) => {
                 const session = data.session
@@ -231,6 +243,13 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         if (!ua || status !== 'registered') throw new Error('SIP not registered')
         const digits = phoneNumber.replace(/\D/g, '')
         if (digits.length < 10) throw new Error('Invalid number')
+
+        // Hand straight to JsSIP. It calls getUserMedia internally; Chrome
+        // surfaces the mic prompt because this runs inside a real user
+        // gesture handler (button onClick). The pre-call probe we used to
+        // have here interfered with the AudioContext flow elsewhere — the
+        // outbound call sets up its own AudioContext per RTCSession.
+        console.info('[SIP] call() → ua.call', { digits })
         const target = `sip:${digits}@crm.local`
         ua.call(target, {
             mediaConstraints: { audio: true, video: false },
@@ -239,8 +258,28 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     function answer() {
-        if (!incomingCall) return
-        incomingCall.session.answer({ mediaConstraints: { audio: true, video: false }, pcConfig: { iceServers: [] } })
+        if (!incomingCall) {
+            console.warn('[SIP] answer() called with no incomingCall')
+            return
+        }
+        // Hand the session straight to JsSIP — it does its own getUserMedia
+        // and emits "failed" on the session if the mic is denied. Probing
+        // up-front turned out to silently abort the whole answer flow when
+        // it failed (e.g. because of an active AudioContext for ringtone),
+        // leaving the popup stuck and the call timing out at FS.
+        console.info('[SIP] answer() — calling session.answer()', {
+            sessionStatus: incomingCall.session?.status,
+        })
+        try {
+            incomingCall.session.answer({
+                mediaConstraints: { audio: true, video: false },
+                pcConfig: { iceServers: [] },
+            })
+            console.info('[SIP] session.answer() returned (waiting for accepted/failed event)')
+        } catch (err: any) {
+            console.error('[SIP] session.answer() threw:', err)
+            import('sonner').then(s => s.toast.error(`Не удалось принять: ${err?.message ?? err}`)).catch(() => {})
+        }
     }
 
     function decline() {
