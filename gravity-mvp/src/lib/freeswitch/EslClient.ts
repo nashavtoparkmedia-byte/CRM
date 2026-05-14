@@ -334,10 +334,20 @@ export async function originateCall(args: {
     // Strip +; dialplan expects national format (7XXXXXXXXXX)
     const dialNumber = normalized.replace(/^\+/, '')
 
-    // Pre-set the CRM user id as a channel variable so CHANNEL_CREATE handler
-    // can attribute the outbound call to the right manager.
-    const vars = `[origination_caller_id_number=${ext.extension},origination_caller_id_name='${ext.extension}',crm_user_id=${args.userId}]`
-    const cmd = `originate ${vars}user/${ext.extension} ${dialNumber} XML default`
+    // Click-to-call pattern: dial the client through the Megafon trunk FIRST,
+    // bridge to the manager's extension only after the client picks up. This
+    // means the manager needs microphone permission only on the *incoming*
+    // popup (when they click "Принять"), not at click time. Avoids the silent
+    // NotAllowedError that hit us when ua.call() probed getUserMedia upfront.
+    //
+    // A-leg = sofia/gateway/megafon/<dialNumber>  — outbound trunk call
+    // B-leg = user/${ext.extension}              — manager's WebRTC/Linphone
+    //
+    // origination_caller_id_* sets what the *manager* sees on the incoming
+    // popup (the client's number). The trunk's outbound caller-id is fixed
+    // by the gateway itself (the Megafon DID).
+    const vars = `[origination_caller_id_number=${dialNumber},origination_caller_id_name='${dialNumber}',crm_user_id=${args.userId},ignore_early_media=true]`
+    const cmd = `originate ${vars}sofia/gateway/megafon/${dialNumber} &bridge(user/${ext.extension})`
 
     return new Promise((resolve, reject) => {
         conn.bgapi(cmd, (res: any) => {
