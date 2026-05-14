@@ -36,6 +36,15 @@ cp "${CONF_SRC}/dialplan/default/01_megafon_outbound.xml" "${FS_PREFIX}/conf/dia
 cp "${CONF_SRC}/dialplan/default/02_megafon_inbound.xml" "${FS_PREFIX}/conf/dialplan/default/02_megafon_inbound.xml"
 cp "${CONF_SRC}/dialplan/default/03_user_outbound.xml" "${FS_PREFIX}/conf/dialplan/default/03_user_outbound.xml"
 
+# Remove vanilla demo dialplan files. `01_example.com.xml` matches ANY
+# 11-digit number first (alphabetic order — 01_* before 03_*) and bridges
+# to a non-existent gateway, producing "484 Address Incomplete" before
+# our outbound extension is even tried.
+rm -f "${FS_PREFIX}/conf/dialplan/default/00_ladspa.xml"
+rm -f "${FS_PREFIX}/conf/dialplan/default/00_pizza_demo.xml"
+rm -f "${FS_PREFIX}/conf/dialplan/default/01_Talking_Clock.xml"
+rm -f "${FS_PREFIX}/conf/dialplan/default/01_example.com.xml"
+
 # Recordings directory (Megafon bridge writes here)
 mkdir -p /var/lib/freeswitch/recordings
 chmod 755 /var/lib/freeswitch/recordings

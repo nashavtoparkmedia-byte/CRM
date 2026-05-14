@@ -20,12 +20,21 @@
       <action application="set" data="hangup_after_bridge=true"/>
       <action application="set" data="continue_on_fail=true"/>
 
+
       <!-- Same recording setup as inbound — see 02_megafon_inbound.xml -->
       <action application="set" data="recording_follow_transfer=true"/>
       <action application="set" data="RECORD_STEREO=true"/>
       <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
       <action application="record_session" data="${recording_file}"/>
 
+      <!-- pre_answer: finalize a-leg media negotiation (browser SDP) BEFORE
+           building the b-leg offer. This breaks the codec-list inheritance
+           chain that was leaking opus into the Megafon INVITE.
+           After pre_answer the a-leg has its own concrete codec context
+           (opus), and the b-leg builds an INDEPENDENT offer from the
+           external profile's outbound-codec-prefs ($${global_codec_prefs}
+           = PCMA,PCMU). FS transcodes opus⇄PCMA between the two legs. -->
+      <action application="pre_answer"/>
       <action application="bridge" data="sofia/gateway/megafon/7$1"/>
     </condition>
   </extension>
