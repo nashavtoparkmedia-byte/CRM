@@ -41,10 +41,13 @@
     <param name="wss-binding" value=":7443"/>
     -->
 
-    <!-- Authentication — managers must register with a password -->
+    <!-- Authentication — managers must register with a password. We disable
+         the "domains" ACL because in dev all clients come from the docker
+         bridge (172.20.0.0/16 from the host's perspective) and that ACL
+         rejects them BEFORE the 401 challenge has a chance to fire,
+         producing the 403 Forbidden we were chasing. Auth-calls=true is
+         still on, so a real password is required to register. -->
     <param name="auth-calls" value="true"/>
-    <param name="apply-inbound-acl" value="domains"/>
-    <param name="apply-register-acl" value="domains"/>
 
     <!-- Codec preferences — G.711 A-law (Megafon priority) + Opus for WebRTC -->
     <param name="inbound-codec-prefs" value="opus,PCMA,PCMU"/>

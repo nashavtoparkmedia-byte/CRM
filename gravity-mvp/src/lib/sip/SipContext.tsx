@@ -93,8 +93,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
             setExtension(creds.extension)
 
-            const JsSIP = (await import('jssip')).default
-            // JsSIP.debug.enable('JsSIP:*')  // uncomment when debugging registration
+            // Turbopack sometimes wraps CJS in an ESM namespace with the real
+            // module under .default, sometimes not — handle both shapes.
+            const jssipModule = await import('jssip')
+            const JsSIP: any = (jssipModule as any).default ?? jssipModule
+            if (!JsSIP?.WebSocketInterface || !JsSIP?.UA) {
+                console.error('[SIP] JsSIP module shape unexpected:', Object.keys(jssipModule), Object.keys(JsSIP ?? {}))
+                setStatus('failed')
+                return
+            }
+            // Dev-mode logging — comment out for production noise reduction.
+            try { JsSIP.debug?.enable('JsSIP:*') } catch {}
 
             const socket = new JsSIP.WebSocketInterface(creds.wsUrl)
             const ua = new JsSIP.UA({
@@ -107,9 +116,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 session_timers: false,
             })
 
-            ua.on('registered', () => setStatus('registered'))
-            ua.on('unregistered', () => setStatus('unregistered'))
-            ua.on('registrationFailed', () => setStatus('failed'))
+            ua.on('registered', () => { console.info('[SIP] registered'); setStatus('registered') })
+            ua.on('unregistered', () => { console.info('[SIP] unregistered'); setStatus('unregistered') })
+            ua.on('registrationFailed', (e: any) => { console.error('[SIP] registrationFailed', e?.cause, e); setStatus('failed') })
+            ua.on('connecting', () => console.info('[SIP] ua connecting'))
+            ua.on('connected', () => console.info('[SIP] ua connected'))
+            ua.on('disconnected', (e: any) => console.warn('[SIP] ua disconnected', e?.code, e?.reason))
 
             ua.on('newRTCSession', (data: any) => {
                 const session = data.session
@@ -231,6 +243,27 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         if (!ua || status !== 'registered') throw new Error('SIP not registered')
         const digits = phoneNumber.replace(/\D/g, '')
         if (digits.length < 10) throw new Error('Invalid number')
+
+        // Probe microphone *before* handing off to JsSIP so we can show a
+        // useful message instead of a silent failure. JsSIP swallows
+        // getUserMedia errors inside ua.call() without surfacing them to
+        // the caller, which is how a permission-denied state hides as
+        // "click did nothing".
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            stream.getTracks().forEach(t => t.stop())
+        } catch (err: any) {
+            const msg = err?.name === 'NotAllowedError'
+                ? 'Браузер не дал доступ к микрофону. Разрешите его слева от адресной строки и попробуйте снова.'
+                : err?.name === 'NotFoundError'
+                    ? 'Микрофон не найден. Подключите устройство и обновите страницу.'
+                    : `Не удалось получить доступ к микрофону: ${err?.message ?? err?.name ?? err}`
+            console.error('[SIP] getUserMedia failed:', err)
+            // Lazy-import sonner so SSR doesn't pull it in.
+            try { (await import('sonner')).toast.error(msg) } catch {}
+            throw new Error(msg)
+        }
+
         const target = `sip:${digits}@crm.local`
         ua.call(target, {
             mediaConstraints: { audio: true, video: false },

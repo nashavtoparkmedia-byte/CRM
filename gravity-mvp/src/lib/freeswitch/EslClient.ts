@@ -14,7 +14,13 @@
  * to the requested manager extension.
  */
 
-import { Connection } from 'esl'
+// We use `modesl` (Connection-class API) rather than `esl` (shimaore/esl,
+// functional client() API) because our handler code is built around the
+// event-emitter pattern. createRequire bypasses Turbopack's CJS-mangling.
+import { createRequire } from 'module'
+const _require = createRequire(import.meta.url)
+const modesl = _require('modesl') as { Connection: any }
+const Connection = modesl.Connection
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
@@ -33,12 +39,30 @@ const EVENTS_OF_INTEREST = [
     'CHANNEL_HANGUP_COMPLETE',
 ] as const
 
-let connection: Connection | null = null
-let reconnectTimer: NodeJS.Timeout | null = null
-let reconnectDelay = 2000
+// Next.js dev-mode webpack loads this module separately per route, so
+// `let connection` would be a different instance for instrumentation vs.
+// /api/calls/originate. Pin shared state to globalThis (same trick prisma
+// uses) so both views see the same ESL connection.
+declare global {
+    // eslint-disable-next-line no-var
+    var __eslConnection: any
+    // eslint-disable-next-line no-var
+    var __eslReconnectTimer: NodeJS.Timeout | null
+    // eslint-disable-next-line no-var
+    var __eslReconnectDelay: number | undefined
+}
+
+function getConnection(): Connection | null {
+    return (globalThis as any).__eslConnection ?? null
+}
+function setConnection(c: Connection | null): void {
+    ;(globalThis as any).__eslConnection = c
+}
+
+let reconnectDelay = (globalThis as any).__eslReconnectDelay ?? 2000
 
 export async function startEslListener(): Promise<void> {
-    if (connection) return
+    if (getConnection()) return
     connect()
 }
 
@@ -71,22 +95,28 @@ function connect(): void {
 
     conn.on('esl::end', () => {
         opsLog('warn', 'esl_disconnected', { operation: 'esl', retryInMs: reconnectDelay })
-        connection = null
+        setConnection(null)
         scheduleReconnect()
     })
 
     conn.on('error', (err: Error) => {
         opsLog('error', 'esl_error', { operation: 'esl', error: err.message })
+        // ECONNREFUSED on a TCP connect does NOT fire esl::end — only this
+        // error event. Without manually scheduling a retry here, the listener
+        // dies silently after the first failed connect during FS restart.
+        setConnection(null)
+        scheduleReconnect()
     })
 
-    connection = conn
+    setConnection(conn)
 }
 
 function scheduleReconnect(): void {
-    if (reconnectTimer) return
-    reconnectTimer = setTimeout(() => {
-        reconnectTimer = null
+    if ((globalThis as any).__eslReconnectTimer) return
+    ;(globalThis as any).__eslReconnectTimer = setTimeout(() => {
+        ;(globalThis as any).__eslReconnectTimer = null
         reconnectDelay = Math.min(reconnectDelay * 2, 30000)
+        ;(globalThis as any).__eslReconnectDelay = reconnectDelay
         connect()
     }, reconnectDelay)
 }
@@ -292,7 +322,8 @@ export async function originateCall(args: {
     userId: string
     toNumber: string
 }): Promise<{ fsUuid: string }> {
-    if (!connection) throw new Error('ESL not connected')
+    const conn = getConnection()
+    if (!conn) throw new Error('ESL not connected')
 
     const ext = getSipExtensionForUser(args.userId)
     if (!ext) throw new Error(`No SIP extension mapped for user ${args.userId}`)
@@ -309,7 +340,7 @@ export async function originateCall(args: {
     const cmd = `originate ${vars}user/${ext.extension} ${dialNumber} XML default`
 
     return new Promise((resolve, reject) => {
-        connection!.bgapi(cmd, (res: any) => {
+        conn.bgapi(cmd, (res: any) => {
             const body = typeof res?.getBody === 'function' ? res.getBody() : String(res)
             const match = /\+OK\s+([0-9a-f-]+)/i.exec(body)
             if (match) {
