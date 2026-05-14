@@ -1,6 +1,9 @@
 services:
   freeswitch:
-    image: safarov/freeswitch:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: crm-freeswitch:latest
     container_name: crm-freeswitch
     restart: unless-stopped
     ports:
@@ -27,24 +30,13 @@ services:
       # RTP port range — must match the port mapping above
       - RTP_START_PORT=16384
       - RTP_END_PORT=16484
-      # SIP external/internal IPs (auto-detect in dev)
-      - EXTERNAL_SIP_IP=auto
-      - EXTERNAL_RTP_IP=auto
+      # SIP external/internal IPs: FreeSWITCH auto-detects $${local_ip_v4}
+      # from sip_profiles when these env vars are absent. The literal string
+      # "auto" makes sofia.c reject the profile (Invalid ext-rtp-ip).
     volumes:
-      # Overlay our minimal config on top of the image's defaults
-      - ./conf/vars.xml:/etc/freeswitch/vars.xml:ro
-      - ./conf/sip_profiles/internal.xml:/etc/freeswitch/sip_profiles/internal.xml:ro
-      - ./conf/sip_profiles/external/megafon.xml:/etc/freeswitch/sip_profiles/external/megafon.xml:ro
-      - ./conf/directory/default/101.xml:/etc/freeswitch/directory/default/101.xml:ro
-      - ./conf/directory/default/102.xml:/etc/freeswitch/directory/default/102.xml:ro
-      - ./conf/dialplan/default/01_megafon_outbound.xml:/etc/freeswitch/dialplan/default/01_megafon_outbound.xml:ro
-      - ./conf/dialplan/default/02_megafon_inbound.xml:/etc/freeswitch/dialplan/default/02_megafon_inbound.xml:ro
-      - ./conf/dialplan/default/03_user_outbound.xml:/etc/freeswitch/dialplan/default/03_user_outbound.xml:ro
-      - ./conf/autoload_configs/event_socket.conf.xml:/etc/freeswitch/autoload_configs/event_socket.conf.xml:ro
-      # Recordings: bind-mounted so gravity-mvp (on the host) can read raw WAV
-      # files immediately after FreeSWITCH finishes writing them, convert to
-      # MP3, and upload to MinIO. WAV is the FS native format with no codec
-      # transcoding loss; MP3 is for storage/playback.
+      # Config files are now baked into the image via Dockerfile (replacing
+      # the vanilla files the entrypoint copies into /etc/freeswitch). Only
+      # recordings + logs need to be mounted at runtime.
       - ./recordings:/var/lib/freeswitch/recordings
       - freeswitch-logs:/var/log/freeswitch
     depends_on:

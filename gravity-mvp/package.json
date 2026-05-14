@@ -12,6 +12,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1035.0",
+    "@aws-sdk/s3-request-presigner": "^3.1035.0",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -24,12 +27,19 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.95.2",
+    "bullmq": "^5.34.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "esl": "^4.0.5",
     "exceljs": "^4.4.0",
+    "fluent-ffmpeg": "^2.1.3",
+    "ioredis": "^5.7.0",
+    "jssip": "^3.10.1",
     "lucide-react": "^0.576.0",
+    "modesl": "^1.2.1",
     "next": "16.1.6",
     "node-fetch": "^2.7.0",
+    "openai": "^4.95.0",
     "qrcode": "^1.5.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -41,19 +51,14 @@
     "telegram": "^2.26.22",
     "use-debounce": "^10.1.0",
     "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main",
-    "zustand": "^5.0.12",
-    "esl": "^4.0.5",
-    "jssip": "^3.10.1",
-    "@aws-sdk/client-s3": "^3.1035.0",
-    "@aws-sdk/s3-request-presigner": "^3.1035.0",
-    "fluent-ffmpeg": "^2.1.3",
-    "@ffmpeg-installer/ffmpeg": "^1.1.0"
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@prisma/client": "^6.19.2",
     "@tailwindcss/postcss": "^4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
+    "@types/fluent-ffmpeg": "^2.1.27",
     "@types/node": "^20",
     "@types/node-fetch": "^2.6.13",
     "@types/qrcode": "^1.5.6",
@@ -67,7 +72,6 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.2",
-    "xlsx": "^0.18.5",
-    "@types/fluent-ffmpeg": "^2.1.27"
+    "xlsx": "^0.18.5"
   }
 }

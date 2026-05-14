@@ -220,6 +220,18 @@ export async function register() {
             opsLog('error', 'esl_listener_start_failed', { operation: 'startup', error: err.message })
         }
 
+        // ── Call processing pipeline (BullMQ): transcribe + analyze ──────
+        // Stage 4. Workers pick up jobs enqueued by recordingProcessor and
+        // by each other (transcribe → analyze). Safe to start before Redis
+        // is up; the workers will retry on connect.
+        try {
+            const { startCallProcessingWorkers } = await import('@/lib/queue')
+            startCallProcessingWorkers()
+            opsLog('info', 'call_workers_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'call_workers_start_failed', { operation: 'startup', error: err.message })
+        }
+
         // Yandex Fleet sync: target time 03:00 server time, daily.
         // Strategy: tick every hour; only run if (current hour == 03) AND no
         // successful run today. Cheap, robust to server restarts during the
@@ -296,6 +308,18 @@ export async function register() {
                 }
             } catch (e: any) {
                 log('info', 'shutdown_tg_skip', { error: e.message })
+            }
+
+            // 3a. Stop BullMQ workers + close Redis
+            try {
+                const queueModule = await import('@/lib/queue')
+                await queueModule.stopTranscribeWorker()
+                await queueModule.stopAnalyzeWorker()
+                await queueModule.closeQueues()
+                await queueModule.closeRedisConnection()
+                log('info', 'shutdown_queues_closed')
+            } catch (e: any) {
+                log('error', 'shutdown_queues_error', { error: e.message })
             }
 
             // 4. Disconnect Prisma

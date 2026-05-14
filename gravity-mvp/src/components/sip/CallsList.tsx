@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Loader2, Sparkles } from "lucide-react"
 
 interface CallRow {
     id: string
@@ -12,6 +13,7 @@ interface CallRow {
     startedAt: string
     durationSec: number | null
     recordingPath: string | null
+    aiScore?: number | null
 }
 
 /**
@@ -106,24 +108,45 @@ function CallRowItem({
 }) {
     const Icon = iconFor(call)
     const peerNumber = call.direction === 'inbound' ? call.fromNumber : call.toNumber
+    // The row links to /calls/[id]; the play button stops propagation so a
+    // click on the play icon doesn't navigate away while audio is loading.
     return (
-        <li className="flex items-center gap-3 py-2">
-            <Icon className={`h-4 w-4 flex-shrink-0 ${colorFor(call)}`}/>
-            <div className="min-w-0 flex-1">
-                <div className="text-[13px] text-foreground">{formatPhone(peerNumber)}</div>
-                <div className="text-[11px] text-muted-foreground">
-                    {new Date(call.startedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+        <li className="flex items-center gap-3 py-2 rounded-md transition-colors hover:bg-surface">
+            <Link
+                href={`/calls/${call.id}`}
+                className="flex flex-1 items-center gap-3 min-w-0 outline-none"
+            >
+                <Icon className={`h-4 w-4 flex-shrink-0 ${colorFor(call)}`}/>
+                <div className="min-w-0 flex-1">
+                    <div className="text-[13px] text-foreground">{formatPhone(peerNumber)}</div>
+                    <div className="text-[11px] text-muted-foreground">
+                        {new Date(call.startedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+                    </div>
                 </div>
-            </div>
-            <div className="text-[12px] tabular-nums text-muted-foreground">
-                {call.durationSec ? formatDuration(call.durationSec) : statusLabel(call.status)}
-            </div>
+                {typeof call.aiScore === 'number' && (
+                    <span
+                        title={`AI-оценка ${call.aiScore}/10`}
+                        className={[
+                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                            call.aiScore >= 8 ? 'bg-accent/10 text-accent'
+                            : call.aiScore >= 5 ? 'bg-primary/10 text-primary'
+                            : 'bg-destructive/10 text-destructive',
+                        ].join(' ')}
+                    >
+                        <Sparkles className="h-3 w-3"/>
+                        {call.aiScore}
+                    </span>
+                )}
+                <div className="text-[12px] tabular-nums text-muted-foreground">
+                    {call.durationSec ? formatDuration(call.durationSec) : statusLabel(call.status)}
+                </div>
+            </Link>
             {call.recordingPath && (
                 <button
-                    onClick={onTogglePlay}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePlay() }}
                     disabled={isLoading}
                     title={isPlaying ? 'Пауза' : 'Прослушать запись'}
-                    className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white hover:bg-primary/90 disabled:bg-gray-300 transition-colors"
+                    className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white hover:bg-primary-dark disabled:bg-gray-300 transition-colors"
                 >
                     {isLoading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin"/>
