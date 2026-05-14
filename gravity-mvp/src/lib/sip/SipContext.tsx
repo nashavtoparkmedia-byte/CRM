@@ -271,8 +271,24 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         })
     }
 
-    function answer() {
+    async function answer() {
         if (!incomingCall) return
+        // Probe mic up-front so we can show a useful error instead of an
+        // "answered but silent" call — the latter looks like the network is
+        // broken when it's really a permission issue.
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            stream.getTracks().forEach(t => t.stop())
+        } catch (err: any) {
+            const msg = err?.name === 'NotAllowedError'
+                ? 'Браузер не дал доступ к микрофону. Разрешите его слева от адресной строки и нажмите Принять ещё раз.'
+                : err?.name === 'NotFoundError'
+                    ? 'Микрофон не найден. Подключите устройство и обновите страницу.'
+                    : `Не удалось получить доступ к микрофону: ${err?.message ?? err?.name ?? err}`
+            console.error('[SIP] answer getUserMedia failed:', err)
+            try { (await import('sonner')).toast.error(msg) } catch {}
+            return
+        }
         incomingCall.session.answer({ mediaConstraints: { audio: true, video: false }, pcConfig: { iceServers: [] } })
     }
 

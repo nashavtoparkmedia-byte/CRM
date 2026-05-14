@@ -346,8 +346,24 @@ export async function originateCall(args: {
     // origination_caller_id_* sets what the *manager* sees on the incoming
     // popup (the client's number). The trunk's outbound caller-id is fixed
     // by the gateway itself (the Megafon DID).
-    const vars = `[origination_caller_id_number=${dialNumber},origination_caller_id_name='${dialNumber}',crm_user_id=${args.userId},ignore_early_media=true]`
-    const cmd = `originate ${vars}sofia/gateway/megafon/${dialNumber} &bridge(user/${ext.extension})`
+    //
+    // Recording: RECORD_STEREO=true gives speaker separation (left=client,
+    // right=manager) which Stage 4's Whisper handles better. execute_on_answer
+    // starts the recording the moment the CLIENT picks up — before the bridge
+    // to the manager — so we capture the entire conversation, not just the
+    // post-bridge part.
+    const recPath = `/var/lib/freeswitch/recordings/\${uuid}.wav`
+    const vars = [
+        `origination_caller_id_number=${dialNumber}`,
+        `origination_caller_id_name='${dialNumber}'`,
+        `crm_user_id=${args.userId}`,
+        `ignore_early_media=true`,
+        `RECORD_STEREO=true`,
+        `recording_follow_transfer=true`,
+        `recording_file=${recPath}`,
+        `execute_on_answer='record_session ${recPath}'`,
+    ].join(',')
+    const cmd = `originate {${vars}}sofia/gateway/megafon/${dialNumber} &bridge(user/${ext.extension})`
 
     return new Promise((resolve, reject) => {
         conn.bgapi(cmd, (res: any) => {
