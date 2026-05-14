@@ -271,25 +271,29 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         })
     }
 
-    async function answer() {
-        if (!incomingCall) return
-        // Probe mic up-front so we can show a useful error instead of an
-        // "answered but silent" call — the latter looks like the network is
-        // broken when it's really a permission issue.
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-            stream.getTracks().forEach(t => t.stop())
-        } catch (err: any) {
-            const msg = err?.name === 'NotAllowedError'
-                ? 'Браузер не дал доступ к микрофону. Разрешите его слева от адресной строки и нажмите Принять ещё раз.'
-                : err?.name === 'NotFoundError'
-                    ? 'Микрофон не найден. Подключите устройство и обновите страницу.'
-                    : `Не удалось получить доступ к микрофону: ${err?.message ?? err?.name ?? err}`
-            console.error('[SIP] answer getUserMedia failed:', err)
-            try { (await import('sonner')).toast.error(msg) } catch {}
+    function answer() {
+        if (!incomingCall) {
+            console.warn('[SIP] answer() called with no incomingCall')
             return
         }
-        incomingCall.session.answer({ mediaConstraints: { audio: true, video: false }, pcConfig: { iceServers: [] } })
+        // Hand the session straight to JsSIP — it does its own getUserMedia
+        // and emits "failed" on the session if the mic is denied. Probing
+        // up-front turned out to silently abort the whole answer flow when
+        // it failed (e.g. because of an active AudioContext for ringtone),
+        // leaving the popup stuck and the call timing out at FS.
+        console.info('[SIP] answer() — calling session.answer()', {
+            sessionStatus: incomingCall.session?.status,
+        })
+        try {
+            incomingCall.session.answer({
+                mediaConstraints: { audio: true, video: false },
+                pcConfig: { iceServers: [] },
+            })
+            console.info('[SIP] session.answer() returned (waiting for accepted/failed event)')
+        } catch (err: any) {
+            console.error('[SIP] session.answer() threw:', err)
+            import('sonner').then(s => s.toast.error(`Не удалось принять: ${err?.message ?? err}`)).catch(() => {})
+        }
     }
 
     function decline() {

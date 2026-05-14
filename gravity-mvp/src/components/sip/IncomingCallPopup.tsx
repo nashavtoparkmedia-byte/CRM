@@ -6,15 +6,15 @@ import { useEffect, useRef, useState } from "react"
 import { useSip } from "@/lib/sip/SipContext"
 
 /**
- * Modal-style incoming-call card. Designed to be impossible to miss:
- *  - Dimmed full-page backdrop (z-50)
- *  - Centered ~440px card with pulsing avatar
- *  - Ringtone loop via WebAudio (no asset needed; double-frequency tone)
- *  - Browser tab title flashes "📞 Входящий..." so it's visible in the favicon area
- *  - Native browser Notification (asks permission once) — fires even when the
- *    CRM tab is in the background, so the manager won't miss a call while on
- *    another tab
- *  - Visible ring-duration counter (FS hangs up at ~30s anyway)
+ * Compact incoming-call card (bottom-right). Visual style intentionally close
+ * to the original Telegram-like toast — full-screen modal was over-bearing.
+ *
+ * Cross-cutting attention boosters kept from the modal version:
+ *  - WebAudio ringtone (440Hz + 480Hz, 2s on / 2s off)
+ *  - Tab title flashes "📞 Входящий…" so it's visible from another tab
+ *  - Native Notification API (asks permission once, requireInteraction so it
+ *    stays visible until the user clicks)
+ *  - Visible ring-duration counter, autoFocus on "Принять" (Enter accepts)
  */
 export default function IncomingCallPopup() {
     const { incomingCall, answer, decline } = useSip()
@@ -22,10 +22,8 @@ export default function IncomingCallPopup() {
     const ringtoneRef = useRef<{ stop: () => void } | null>(null)
     const originalTitleRef = useRef<string>('')
 
-    // Side effects when an incoming call appears
     useEffect(() => {
         if (!incomingCall) {
-            // Cleanup on disappearance
             ringtoneRef.current?.stop()
             ringtoneRef.current = null
             if (originalTitleRef.current) {
@@ -36,12 +34,12 @@ export default function IncomingCallPopup() {
             return
         }
 
-        // 1. Start a WebAudio ringtone (no external file required).
+        // WebAudio ringtone — 440/480Hz sine, NA cadence
         try {
             const Ctx: typeof AudioContext = (window.AudioContext ?? (window as any).webkitAudioContext)
             const ctx = new Ctx()
             const gain = ctx.createGain()
-            gain.gain.value = 0.08            // soft but audible
+            gain.gain.value = 0.08
             gain.connect(ctx.destination)
             const o1 = ctx.createOscillator()
             const o2 = ctx.createOscillator()
@@ -49,7 +47,6 @@ export default function IncomingCallPopup() {
             o2.type = 'sine'; o2.frequency.value = 480
             o1.connect(gain); o2.connect(gain)
             o1.start(); o2.start()
-            // North-American-style ring cadence: 2s on, 4s off, repeat
             let on = true
             const pulse = setInterval(() => {
                 on = !on
@@ -65,7 +62,7 @@ export default function IncomingCallPopup() {
             console.warn('[SIP] ringtone playback failed', err)
         }
 
-        // 2. Flash tab title
+        // Tab title flash
         if (!originalTitleRef.current) originalTitleRef.current = document.title
         const titles = ['📞 Входящий…', `📞 ${incomingCall.displayName ?? incomingCall.fromNumber}`]
         let i = 0
@@ -73,7 +70,7 @@ export default function IncomingCallPopup() {
             document.title = titles[i++ % titles.length]
         }, 700)
 
-        // 3. Native browser notification (best-effort)
+        // Native browser notification
         let notification: Notification | null = null
         ;(async () => {
             try {
@@ -83,9 +80,9 @@ export default function IncomingCallPopup() {
                     if (perm === 'granted') {
                         notification = new Notification('Входящий звонок', {
                             body: `${incomingCall.displayName ?? incomingCall.fromNumber}`,
-                            tag: 'crm-call',                // collapses duplicates
-                            requireInteraction: true,       // don't auto-dismiss
-                            silent: true,                   // ringtone handles audio
+                            tag: 'crm-call',
+                            requireInteraction: true,
+                            silent: true,
                         })
                         notification.onclick = () => { window.focus(); notification?.close() }
                     }
@@ -93,7 +90,7 @@ export default function IncomingCallPopup() {
             } catch { /* ignore */ }
         })()
 
-        // 4. Elapsed-time counter
+        // Elapsed counter
         const startedAt = Date.now()
         const tick = setInterval(() => setElapsed(Math.floor((Date.now() - startedAt) / 1000)), 1000)
 
@@ -110,66 +107,50 @@ export default function IncomingCallPopup() {
     const subtitle = incomingCall.displayName ? formatPhone(incomingCall.fromNumber) : 'Неизвестный номер'
 
     return (
-        <>
-            {/* Full-screen dimmed backdrop so the call is impossible to miss */}
-            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"/>
-
-            {/* Centered call card */}
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-                <div className="pointer-events-auto w-[440px] max-w-[92vw] rounded-md border border-border bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-                    {/* Header with pulsing avatar */}
-                    <div className="flex flex-col items-center gap-3 px-6 pt-7 pb-4">
-                        <div className="relative">
-                            <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"/>
-                            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 text-primary">
-                                <User className="h-10 w-10"/>
-                            </div>
-                        </div>
-                        <div className="text-center">
-                            <div className="text-[18px] font-semibold text-foreground">{name}</div>
-                            <div className="text-[14px] text-muted-foreground mt-0.5">{subtitle}</div>
-                        </div>
-                        <div className="flex items-center gap-2 text-[12px] text-primary">
-                            <span className="relative flex h-2 w-2">
-                                <span className="absolute inset-0 animate-ping rounded-full bg-primary/60"/>
-                                <span className="relative h-2 w-2 rounded-full bg-primary"/>
-                            </span>
-                            Входящий звонок · {elapsed}s
-                        </div>
-                    </div>
-
-                    {incomingCall.driverId && (
-                        <div className="px-6 pb-2 text-center">
-                            <Link
-                                href={`/drivers/${incomingCall.driverId}`}
-                                className="text-[13px] text-primary hover:underline"
-                            >
-                                Открыть карточку водителя →
-                            </Link>
-                        </div>
-                    )}
-
-                    {/* Big action buttons */}
-                    <div className="flex gap-3 px-6 pb-6 pt-2">
-                        <button
-                            onClick={decline}
-                            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-destructive py-3 text-white hover:bg-destructive/90 transition-colors text-[15px] font-medium h-12"
-                        >
-                            <PhoneOff className="h-5 w-5"/>
-                            Отклонить
-                        </button>
-                        <button
-                            onClick={answer}
-                            className="flex flex-1 items-center justify-center gap-2 rounded-md bg-accent py-3 text-white hover:bg-accent/90 transition-colors text-[15px] font-medium h-12 shadow-lg"
-                            autoFocus
-                        >
-                            <Phone className="h-5 w-5"/>
-                            Принять
-                        </button>
+        <div className="fixed bottom-6 right-6 z-50 w-[360px] rounded-md border border-border bg-white shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-200">
+            <div className="flex items-center gap-3 px-4 pt-4">
+                <div className="relative">
+                    <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"/>
+                    <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <User className="h-6 w-6"/>
                     </div>
                 </div>
+                <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-semibold text-foreground truncate">{name}</div>
+                    <div className="text-[12px] text-muted-foreground">{subtitle}</div>
+                </div>
+                <span className="text-[11px] text-primary animate-pulse">{elapsed}s</span>
             </div>
-        </>
+
+            {incomingCall.driverId && (
+                <div className="px-4 pt-2">
+                    <Link
+                        href={`/drivers/${incomingCall.driverId}`}
+                        className="text-[12px] text-primary hover:underline"
+                    >
+                        Открыть карточку водителя →
+                    </Link>
+                </div>
+            )}
+
+            <div className="flex gap-2 px-4 py-4">
+                <button
+                    onClick={decline}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md bg-destructive py-2 text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium"
+                >
+                    <PhoneOff className="h-4 w-4"/>
+                    Отклонить
+                </button>
+                <button
+                    onClick={answer}
+                    autoFocus
+                    className="flex flex-1 items-center justify-center gap-2 rounded-md bg-emerald-600 py-2 text-white hover:bg-emerald-700 transition-colors text-[14px] font-medium shadow"
+                >
+                    <Phone className="h-4 w-4"/>
+                    Принять
+                </button>
+            </div>
+        </div>
     )
 }
 
