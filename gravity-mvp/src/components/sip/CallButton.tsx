@@ -8,24 +8,24 @@ import { toast } from "sonner"
 /**
  * Click-to-call button for driver / contact / lead cards.
  *
- * Flow: useSip().call(phoneNumber) → JsSIP issues INVITE through the
- * registered WebSocket → FS sofia dial-plan bridges to the Megafon trunk.
- * The browser is the originator, so the call shows up in ActiveCallPopup
- * with statuses "Дозваниваюсь…" → "Идёт вызов…" → "Разговор · MM:SS" —
- * no Accept/Decline confusion, no popup that pretends it's an incoming call.
+ * Flow: POST /api/calls/originate → server runs FS `bgapi originate` that
+ * places two independent legs:
+ *   1) sofia/gateway/megafon/<phone>  ← plain RTP / PCMA, dials the client
+ *   2) user/<ext>                     ← DTLS-SRTP, rings the browser softphone
+ * FS bridges them once both answer. The B-leg INVITE carries a custom SIP
+ * header `X-CRM-Outbound-Bridge=true` so SipContext.handleIncomingSession
+ * recognises it as the callback half of THIS click-to-call (not a real
+ * incoming call) and auto-answers without showing the Accept/Decline popup.
  *
- * Why not /api/calls/originate? Server-side originate then re-INVITEs the
- * manager's extension, which JsSIP correctly sees as a NEW INCOMING call —
- * triggering IncomingCallPopup with Accept/Decline buttons. From the user's
- * perspective that's wrong: "I clicked Call — why am I being asked to
- * accept it?". Direct JsSIP keeps the originator role on the browser side.
- *
- * Chrome only shows the microphone prompt on this onClick (real user
- * gesture), not on a delayed answer step, which avoids the silent
- * NotAllowedError we hit before.
+ * Why not direct useSip().call()? The browser-originated WebRTC INVITE
+ * inherits DTLS-SRTP into the B-leg offer, but Megafon's SBC only accepts
+ * plain RTP. FreeSWITCH 1.10.12 can't bridge SRTP↔plain when the b-leg
+ * inherits codec context from the a-leg — every attempt died with 488
+ * INCOMPATIBLE_DESTINATION ~3s after the bridge action. The two-leg
+ * originate sidesteps that entirely.
  */
 export default function CallButton({ phoneNumber, label = 'Позвонить' }: { phoneNumber: string; label?: string }) {
-    const { status, activeCall, call } = useSip()
+    const { status, activeCall } = useSip()
     const [busy, setBusy] = useState(false)
 
     const disabled = status !== 'registered' || !!activeCall || busy
@@ -41,9 +41,21 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
             onClick={async () => {
                 setBusy(true)
                 try {
-                    await call(phoneNumber)
+                    const res = await fetch('/api/calls/originate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ phoneNumber }),
+                    })
+                    const body = await res.json().catch(() => ({}))
+                    if (!res.ok) {
+                        toast.error(body?.error ?? `Не удалось инициировать звонок (HTTP ${res.status})`)
+                    }
+                    // Don't show a "dialing" toast here — within ~1s FS will
+                    // call back to user/101 (the browser), SipContext picks it
+                    // up via newRTCSession + X-CRM-Outbound-Bridge header and
+                    // auto-answers, displaying the proper ActiveCallPopup.
                 } catch (err: any) {
-                    toast.error(`Не удалось набрать: ${err?.message ?? err}`)
+                    toast.error(`Ошибка сети: ${err?.message ?? err}`)
                 }
                 setBusy(false)
             }}

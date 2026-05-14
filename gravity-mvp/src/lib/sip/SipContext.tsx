@@ -220,10 +220,57 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     function handleIncomingSession(session: any) {
+        // Server-originated click-to-call routes through here too. /api/calls/originate
+        // tells FS: "dial Megafon → when answered, bridge to user/<ext>". The bridge()
+        // creates an outbound INVITE from FS to the browser, which JsSIP sees as a NEW
+        // incoming session — same code path as a real Megafon inbound. To distinguish
+        // them, EslClient.ts stamps X-CRM-Outbound-Bridge: true on the bridge dialstring.
+        // When present: skip Accept/Decline popup, auto-answer, surface as outbound
+        // ActiveCallPopup. Without this, the manager would click "Call" and immediately
+        // get an "Incoming call" popup for their own outbound — very confusing.
+        const isOutboundBridge = (() => {
+            try { return session.request?.getHeader?.('X-CRM-Outbound-Bridge') === 'true' }
+            catch { return false }
+        })()
+
         attachRemoteAudio(session)
         const remoteId = session.remote_identity
         const fromNumber = remoteId?.uri?.user ?? 'unknown'
         const displayName = remoteId?.display_name ?? null
+
+        if (isOutboundBridge) {
+            console.info('[SIP] outbound-bridge callback detected — auto-answering', { fromNumber })
+            setActiveCall({
+                direction: 'outbound',
+                peerNumber: fromNumber,
+                displayName,
+                state: 'connecting',
+                startedAt: Date.now(),
+                answeredAt: null,
+                session,
+                isMuted: false,
+            })
+            session.on('accepted', () => {
+                setActiveCall(prev => (prev?.session === session ? { ...prev, state: 'active', answeredAt: Date.now() } : prev))
+            })
+            session.on('ended', () => {
+                setActiveCall(prev => (prev?.session === session ? null : prev))
+            })
+            session.on('failed', () => {
+                setActiveCall(prev => (prev?.session === session ? null : prev))
+            })
+            try {
+                session.answer({
+                    mediaConstraints: { audio: true, video: false },
+                    pcConfig: { iceServers: [] },
+                })
+            } catch (err: any) {
+                console.error('[SIP] auto-answer threw:', err)
+                setActiveCall(null)
+                import('sonner').then(s => s.toast.error(`Не удалось ответить: ${err?.message ?? err}`)).catch(() => {})
+            }
+            return
+        }
 
         setIncomingCall({
             callId: null,

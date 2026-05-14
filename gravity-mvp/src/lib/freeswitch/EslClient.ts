@@ -130,17 +130,47 @@ function header(evt: any, name: string): string | null {
     return null
 }
 
+/**
+ * One FS call produces two legs:
+ *   - internal: sofia/internal/<ext>@<domain>   (manager's softphone)
+ *   - trunk:    sofia/external/<num>@<host>     (Megafon SIP trunk)
+ *              or sofia/gateway/<gw>/<num>      (originate dialstring form)
+ *
+ * Both legs share Channel-Call-UUID, but they fire CHANNEL_CREATE /
+ * CHANNEL_ANSWER / CHANNEL_HANGUP_COMPLETE independently. We treat the
+ * trunk leg as the canonical source of truth: its Call-Direction matches
+ * the user-perceived call direction, and its caller/destination numbers
+ * point at the external party (the "peer"). Processing only the trunk
+ * leg's CHANNEL_CREATE keeps the journal at one row per real call.
+ */
+function isTrunkLeg(evt: any): boolean {
+    const name = header(evt, 'Channel-Name') ?? ''
+    if (name.startsWith('sofia/internal/')) return false
+    if (name.startsWith('sofia/external/')) return true
+    if (name.startsWith('sofia/gateway/')) return true
+    return false
+}
+
 async function handleChannelCreate(evt: any): Promise<void> {
-    const fsUuid = header(evt, 'Channel-Call-UUID') || header(evt, 'Unique-ID')
+    if (!isTrunkLeg(evt)) return
+
+    const fsUuid = header(evt, 'Channel-Call-UUID')
     if (!fsUuid) return
 
-    // Only process originating leg, not the secondary forked legs to extensions
-    const direction = header(evt, 'Call-Direction') // "inbound" (from outside) or "outbound" (from extension)
+    // On the trunk leg, Call-Direction matches the user-perceived direction:
+    //   inbound  = Megafon → us (peer = Caller-Caller-ID-Number)
+    //   outbound = us → Megafon (peer = Caller-Destination-Number)
+    const direction = header(evt, 'Call-Direction')
     if (direction !== 'inbound' && direction !== 'outbound') return
 
     const callerNumber = header(evt, 'Caller-Caller-ID-Number') ?? ''
     const calleeNumber = header(evt, 'Caller-Destination-Number') ?? ''
     const sipCallId = header(evt, 'variable_sip_call_id')
+    // originate() stamps the initiating manager onto the trunk leg so we
+    // know the owner immediately. For softphone-initiated outbound and
+    // inbound calls this stays null until the internal leg's ANSWER tells
+    // us which extension picked up.
+    const crmUserIdFromVar = header(evt, 'variable_crm_user_id')
 
     // Determine who is the "remote" party — we look them up to attach driver/contact
     const remoteNumber = direction === 'inbound' ? callerNumber : calleeNumber
@@ -172,8 +202,9 @@ async function handleChannelCreate(evt: any): Promise<void> {
         }
     }
 
-    // For outbound, managerId is set later via originate() variable.
-    // For inbound, it's filled on CHANNEL_ANSWER when we know which extension picked up.
+    // managerId: for originate() click-to-call we have it now from the
+    // channel variable; for everything else it's filled on the internal
+    // leg's CHANNEL_ANSWER when we learn which extension picked up.
     try {
         const call = await prisma.call.upsert({
             where: { fsUuid },
@@ -184,6 +215,7 @@ async function handleChannelCreate(evt: any): Promise<void> {
                 toNumber: normalizePhoneE164(calleeNumber) ?? calleeNumber,
                 driverId,
                 contactId,
+                managerId: crmUserIdFromVar ?? undefined,
                 fsUuid,
                 sipCallId: sipCallId ?? undefined,
                 metadata: { remoteNumber: e164, localNumber } as Prisma.JsonObject,
@@ -219,43 +251,70 @@ async function handleChannelCreate(evt: any): Promise<void> {
 }
 
 async function handleChannelAnswer(evt: any): Promise<void> {
-    const fsUuid = header(evt, 'Channel-Call-UUID') || header(evt, 'Unique-ID')
+    const fsUuid = header(evt, 'Channel-Call-UUID')
     if (!fsUuid) return
-
-    const answeringExtension = header(evt, 'Caller-Callee-ID-Number') // the extension that picked up
 
     const call = await prisma.call.findUnique({ where: { fsUuid } })
     if (!call) return
 
+    if (isTrunkLeg(evt)) {
+        // Trunk leg answered → the call media path is now end-to-end live.
+        // This is the canonical "answered" moment for both inbound (manager
+        // picked up, FS sends 200 OK back to Megafon) and outbound (Megafon
+        // peer answered) calls.
+        const updated = await prisma.call.update({
+            where: { fsUuid },
+            data: { status: 'active', answeredAt: new Date() },
+        })
+        broadcastCall({
+            type: 'answered',
+            data: { callId: updated.id, answeredAt: updated.answeredAt!.toISOString(), managerId: updated.managerId },
+        })
+        return
+    }
+
+    // Internal leg answered — its only purpose here is telling us which
+    // manager extension was bridged to. On the internal leg, the dialed
+    // extension lives in Caller-Callee-ID-Number (FS → user/<ext>).
+    // We don't broadcast 'answered' from this branch — the trunk leg's
+    // ANSWER carries the canonical answeredAt timestamp.
+    const answeringExtension = header(evt, 'Caller-Callee-ID-Number')
     const managerId = answeringExtension ? extensionToUserId(answeringExtension) : null
+    if (!managerId || managerId === call.managerId) return
 
-    const updated = await prisma.call.update({
+    await prisma.call.update({
         where: { fsUuid },
-        data: {
-            status: 'active',
-            answeredAt: new Date(),
-            managerId: managerId ?? call.managerId,
-        },
-    })
-
-    broadcastCall({
-        type: 'answered',
-        data: { callId: updated.id, answeredAt: updated.answeredAt!.toISOString(), managerId: updated.managerId },
+        data: { managerId },
     })
 }
 
 async function handleChannelHangup(evt: any): Promise<void> {
-    const fsUuid = header(evt, 'Channel-Call-UUID') || header(evt, 'Unique-ID')
+    const fsUuid = header(evt, 'Channel-Call-UUID')
     if (!fsUuid) return
-
-    const cause = header(evt, 'Hangup-Cause') ?? 'UNKNOWN'
-    const billsec = Number(header(evt, 'variable_billsec') ?? '0')
-    const recordingFile = header(evt, 'variable_recording_file')
-
-    const status = mapHangupCauseToStatus(cause, billsec)
 
     const call = await prisma.call.findUnique({ where: { fsUuid } })
     if (!call) return
+
+    const recordingFile = header(evt, 'variable_recording_file')
+    const billsec = Number(header(evt, 'variable_billsec') ?? '0')
+
+    if (!isTrunkLeg(evt)) {
+        // Internal leg hangup. We don't touch the Call row from here —
+        // the trunk leg owns the lifecycle fields. The one thing we may
+        // need: in the softphone-initiated outbound dialplan, record_session
+        // runs on this leg, so variable_recording_file lives here and is
+        // not propagated to the trunk leg. Trigger processing if the trunk
+        // leg's hangup didn't already do it (recordingPath still null).
+        if (recordingFile && billsec > 0 && !call.recordingPath) {
+            processRecording({ callId: call.id, fsUuid, recordingFile }).catch(err =>
+                opsLog('error', 'recording_processor_threw', { operation: 'recording', callId: call.id, error: err.message })
+            )
+        }
+        return
+    }
+
+    const cause = header(evt, 'Hangup-Cause') ?? 'UNKNOWN'
+    const status = mapHangupCauseToStatus(cause, billsec)
 
     const updated = await prisma.call.update({
         where: { fsUuid },
@@ -358,6 +417,14 @@ export async function originateCall(args: {
     // RECORD_STEREO=true keeps caller / callee on separate stereo channels —
     // crucial for Stage 4 Whisper transcription, which gets much better
     // speaker attribution that way.
+    //
+    // B-leg auto-answer marker: bridge dialstring uses [var=val]endpoint
+    // syntax to set channel vars on the user/<ext> leg only. sip_h_X-...
+    // becomes an outbound SIP header on FS's INVITE to the browser. The
+    // browser detects it in handleIncomingSession() and skips the
+    // Accept/Decline popup — calls session.answer() right away. From the
+    // user's POV they clicked "Call" and the call connects, never seeing
+    // an "incoming call" popup for their own outbound.
     const channelUuid = randomUUID()
     const recPath = `/var/lib/freeswitch/recordings/${channelUuid}.wav`
     const vars = [
@@ -371,7 +438,8 @@ export async function originateCall(args: {
         `recording_file=${recPath}`,
         `execute_on_answer='record_session ${recPath}'`,
     ].join(',')
-    const cmd = `originate {${vars}}sofia/gateway/megafon/${dialNumber} &bridge(user/${ext.extension})`
+    const blegVars = `sip_h_X-CRM-Outbound-Bridge=true`
+    const cmd = `originate {${vars}}sofia/gateway/megafon/${dialNumber} &bridge([${blegVars}]user/${ext.extension})`
 
     return new Promise((resolve, reject) => {
         conn.bgapi(cmd, (res: any) => {
