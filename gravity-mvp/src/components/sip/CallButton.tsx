@@ -13,7 +13,7 @@ import { toast } from "sonner"
  *   1) sofia/gateway/megafon/<phone>  ← plain RTP / PCMA, dials the client
  *   2) user/<ext>                     ← DTLS-SRTP, rings the browser softphone
  * FS bridges them once both answer. The B-leg INVITE carries a custom SIP
- * header `X-CRM-Outbound-Bridge=true` so SipContext.handleIncomingSession
+ * header `P-CRM-Outbound-Bridge=true` so SipContext.handleIncomingSession
  * recognises it as the callback half of THIS click-to-call (not a real
  * incoming call) and auto-answers without showing the Accept/Decline popup.
  *
@@ -52,7 +52,7 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
                     }
                     // Don't show a "dialing" toast here — within ~1s FS will
                     // call back to user/101 (the browser), SipContext picks it
-                    // up via newRTCSession + X-CRM-Outbound-Bridge header and
+                    // up via newRTCSession + P-CRM-Outbound-Bridge header and
                     // auto-answers, displaying the proper ActiveCallPopup.
                 } catch (err: any) {
                     toast.error(`Ошибка сети: ${err?.message ?? err}`)

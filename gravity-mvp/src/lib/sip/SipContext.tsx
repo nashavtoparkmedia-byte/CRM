@@ -224,12 +224,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         // tells FS: "dial Megafon → when answered, bridge to user/<ext>". The bridge()
         // creates an outbound INVITE from FS to the browser, which JsSIP sees as a NEW
         // incoming session — same code path as a real Megafon inbound. To distinguish
-        // them, EslClient.ts stamps X-CRM-Outbound-Bridge: true on the bridge dialstring.
+        // them, EslClient.ts stamps P-CRM-Outbound-Bridge: true on the bridge dialstring.
         // When present: skip Accept/Decline popup, auto-answer, surface as outbound
         // ActiveCallPopup. Without this, the manager would click "Call" and immediately
         // get an "Incoming call" popup for their own outbound — very confusing.
         const isOutboundBridge = (() => {
-            try { return session.request?.getHeader?.('X-CRM-Outbound-Bridge') === 'true' }
+            try { return session.request?.getHeader?.('P-CRM-Outbound-Bridge') === 'true' }
             catch { return false }
         })()
 

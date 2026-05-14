@@ -419,12 +419,17 @@ export async function originateCall(args: {
     // speaker attribution that way.
     //
     // B-leg auto-answer marker: bridge dialstring uses [var=val]endpoint
-    // syntax to set channel vars on the user/<ext> leg only. sip_h_X-...
+    // syntax to set channel vars on the user/<ext> leg only. sip_h_P-...
     // becomes an outbound SIP header on FS's INVITE to the browser. The
     // browser detects it in handleIncomingSession() and skips the
     // Accept/Decline popup — calls session.answer() right away. From the
     // user's POV they clicked "Call" and the call connects, never seeing
     // an "incoming call" popup for their own outbound.
+    //
+    // Why P- prefix (not X-): FreeSWITCH 1.10.12 internal profile drops
+    // unknown X-* headers from outbound INVITEs by default. P-* headers
+    // (RFC-style) are passed through unmodified. Renaming back to X- would
+    // require extra-pass-headers tweaks in sip_profiles/internal.xml.
     const channelUuid = randomUUID()
     const recPath = `/var/lib/freeswitch/recordings/${channelUuid}.wav`
     const vars = [
@@ -438,7 +443,7 @@ export async function originateCall(args: {
         `recording_file=${recPath}`,
         `execute_on_answer='record_session ${recPath}'`,
     ].join(',')
-    const blegVars = `sip_h_X-CRM-Outbound-Bridge=true`
+    const blegVars = `sip_h_P-CRM-Outbound-Bridge=true`
     const cmd = `originate {${vars}}sofia/gateway/megafon/${dialNumber} &bridge([${blegVars}]user/${ext.extension})`
 
     return new Promise((resolve, reject) => {
