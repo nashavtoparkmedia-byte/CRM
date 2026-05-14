@@ -84,6 +84,18 @@ export const DOMAINS: NavigationDomain[] = [
             { label: 'Шаблоны', href: '/communications/templates', icon: FileText, sectionKey: 'msg_templates' }
         ]
     },
+    // Звонки — отдельный домен по образцу messenger'a. Лента — общий список
+    // звонков с записями/транскриптами; Аналитика — дашборд из Stage 5.
+    // Иконка Phone reused — она уже в импортах для resources/numbers.
+    {
+        key: 'calls',
+        label: 'Звонки',
+        icon: Phone,
+        items: [
+            { label: 'Лента', href: '/calls', icon: Phone, sectionKey: 'calls_feed' },
+            { label: 'Аналитика', href: '/calls/stats', icon: BarChart3, sectionKey: 'calls_stats' },
+        ]
+    },
     // Раньше тут был отдельный домен «Avito (профили)». После переезда
     // в Settings → Integrations → Avito он удалён — Avito-профиль это
     // такой же канал-интеграция как WhatsApp / Telegram, должен жить
