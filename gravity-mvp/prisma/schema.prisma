@@ -749,6 +749,15 @@ model Call {
   nextActionType  String?     // type of follow-up: "call_back" / "office_visit" / "send_docs" / ...
   nextActionDue   DateTime?   // when follow-up is due; null if no follow-up agreed
 
+  // AI-initiated outbound calls (voice agent talks to a lead via mod_audio_fork).
+  // For ordinary click-to-call rows these are null/false.
+  isAi             Boolean              @default(false)
+  aiScenarioId     String?
+  aiSessionStatus  AiCallSessionStatus?
+  aiTransferReason String?
+  aiScenario       AiCallScenario?      @relation(fields: [aiScenarioId], references: [id])
+  aiMessages       AiCallMessage[]
+
   metadata      Json?         @default("{}")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -762,6 +771,47 @@ model Call {
   @@index([managerId, startedAt(sort: Desc)])
   @@index([fromNumber])
   @@index([toNumber])
+  @@index([isAi, startedAt(sort: Desc)])
+}
+
+/// Per-utterance transcript of an AI-driven call: each row is one finalized
+/// chunk of speech (user — STT output; assistant — LLM reply; tool — function call).
+/// Used for live UI transcript and post-hoc review.
+model AiCallMessage {
+  id          String            @id @default(cuid())
+  callId      String
+  role        AiCallMessageRole
+  content     String
+  /// 0–1 from STT (user role only)
+  confidence  Float?
+  /// Function-call name when role=tool (e.g. transfer_to_manager)
+  toolName    String?
+  toolPayload Json?
+  /// Object key in MinIO for the per-utterance audio clip, if stored.
+  audioPath   String?
+  startedAt   DateTime          @default(now())
+  durationMs  Int?
+  call        Call              @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId, startedAt])
+  @@index([role])
+}
+
+/// Reusable AI-call scenario: system prompt + ordered questions. Manager picks
+/// one when initiating an AI call. Soft-deleted via isActive.
+model AiCallScenario {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  systemPrompt  String
+  /// Array of { text, intentKeywords?, branches? } — see AiCallScenarioQuestion type
+  questions     Json     @default("[]")
+  /// Soft target call length in seconds — informs LLM about pacing.
+  targetDurationSec Int?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  calls         Call[]
 }
 
 /// Единственная запись — настройки AI агента (upsert by id="singleton")
@@ -1458,5 +1508,21 @@ enum CallStatus {
   busy
   failed        // technical failure (no route, codec mismatch, etc.)
   rejected      // explicitly declined
+}
+
+enum AiCallMessageRole {
+  user        // lead speech (STT output)
+  assistant   // AI reply (LLM → TTS)
+  system      // system prompt / scenario injection
+  tool        // function call (transfer_to_manager, end_call, save_lead_data)
+}
+
+enum AiCallSessionStatus {
+  starting       // FreeSWITCH originating, AI not yet engaged
+  greeting       // AI playing the opening line
+  active         // dialog in progress
+  transferring   // SIP REFER in flight — connecting to manager
+  ended          // hangup, normal completion
+  failed         // STT/LLM/TTS error or bridge dropped
 }
 
