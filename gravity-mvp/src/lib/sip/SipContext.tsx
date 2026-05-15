@@ -30,6 +30,23 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 const CODEC_PRIORITY = ['PCMA', 'PCMU', 'telephone-event', 'CN']
 const KEEPABLE_CODEC = /^(PCMA|PCMU|telephone-event|CN)\//i
 
+// WebRTC ICE config — route ALL media through coturn TURN relay running in
+// WSL2 on 127.0.0.1:3478. Chrome on Windows reaches it via mirrored networking,
+// FreeSWITCH (also WSL2) receives relayed RTP at 127.0.0.1:relay-port.
+// `iceTransportPolicy: 'relay'` is critical: it disables host candidate
+// gathering so Chrome can't pick a candidate-pair that doesn't actually work
+// across the WSL2 UDP namespace boundary. Browser only ever exposes the relay
+// candidate, FS's symmetric-RTP / auto-adjust handles the return path.
+const TURN_PC_CONFIG = {
+    iceServers: [
+        // TCP transport — UDP through WSL2 mirrored networking loopback
+        // doesn't deliver to coturn (Chrome on Windows ↔ WSL2 UDP namespace).
+        // TCP works reliably and coturn relays via internal-only UDP to FS.
+        { urls: 'turn:127.0.0.1:3478?transport=tcp', username: 'crm', credential: 'turnpass' },
+    ],
+    iceTransportPolicy: 'relay' as const,
+}
+
 function transformSdpForMegafon(sdp: string): string {
     const lines = sdp.split(/\r?\n/)
     // pt → codec base name (e.g. "8" → "PCMA")
@@ -128,6 +145,34 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         return () => { el.remove() }
     }, [])
 
+    // --- Debug DOM stats overlay (opt-in via NEXT_PUBLIC_SIP_DEBUG=1) ---
+    // Renders getStats() output into a fixed <pre> at the bottom-right for
+    // diagnostics when the JS console isn't reachable. Off by default; the
+    // overlay is intrusive in regular UI use. Re-enable by setting the env
+    // flag in `.env` and restarting the dev server.
+    useEffect(() => {
+        if (process.env.NEXT_PUBLIC_SIP_DEBUG !== '1') return
+        const dbg = document.createElement('pre')
+        dbg.id = 'sip-debug-stats'
+        dbg.style.cssText = 'position:fixed;bottom:0;right:0;max-width:520px;max-height:240px;overflow:auto;font:11px monospace;background:#000c;color:#0f0;padding:4px;z-index:99999;white-space:pre-wrap;'
+        document.body.appendChild(dbg)
+        const timer = setInterval(async () => {
+            const pc: any = (window as any).__lastPc
+            if (!pc) { dbg.textContent = 'sip-debug-stats: no active pc'; return }
+            try {
+                const stats = await pc.getStats()
+                const rows: any[] = []
+                stats.forEach((r: any) => {
+                    if (['inbound-rtp', 'outbound-rtp', 'candidate-pair', 'local-candidate', 'remote-candidate'].includes(r.type)) {
+                        rows.push({ t: r.type, bR: r.bytesReceived, bS: r.bytesSent, st: r.state, ct: r.candidateType, ip: r.ip ?? r.address, p: r.port, pr: r.protocol, nominated: r.nominated })
+                    }
+                })
+                dbg.textContent = JSON.stringify({ ts: new Date().toISOString().slice(11, 19), iceState: pc.iceConnectionState, sigState: pc.signalingState, rows }, null, 1)
+            } catch (e: any) { dbg.textContent = 'getStats threw: ' + e?.message }
+        }, 1000)
+        return () => { clearInterval(timer); dbg.remove() }
+    }, [])
+
     // --- Register UA on mount ---
     useEffect(() => {
         let cancelled = false
@@ -214,6 +259,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     function attachRemoteAudio(session: any) {
         session.on('peerconnection', () => {
             const pc = session.connection
+            // Debug exposure for media diagnostics — getStats() probes
+            // from devtools / automated tests. Safe to keep enabled because
+            // exposing the PC object doesn't change any behaviour.
+            ;(window as any).__lastPc = pc
+            ;(window as any).__lastSession = session
+            console.info('[SIP] peerconnection — exposed window.__lastPc / __lastSession')
             pc.addEventListener('track', (ev: RTCTrackEvent) => {
                 const el = audioRef.current
                 if (!el || !ev.streams[0]) return
@@ -243,40 +294,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         // When present: skip Accept/Decline popup, auto-answer, surface as outbound
         // ActiveCallPopup. Without this, the manager would click "Call" and immediately
         // get an "Incoming call" popup for their own outbound — very confusing.
-        // Multiple ways to read the header — JsSIP versions vary in API
+        // Read the P-CRM-Outbound-Bridge marker. JsSIP 3.13 doesn't populate
+        // session.request synchronously inside the newRTCSession event — fall
+        // back to event.data.request (passed in as eventRequest).
         const isOutboundBridge = (() => {
             try {
-                // session.request is undefined inside the newRTCSession event in
-                // JsSIP 3.13. Use the request from the event payload instead;
-                // fall back to session.request for older flows.
                 const req = eventRequest ?? session.request
-                // Try every reasonable accessor in order
-                const v1 = req?.getHeader?.('P-CRM-Outbound-Bridge')
-                const v2 = req?.getHeader?.('p-crm-outbound-bridge')
-                const v3 = req?.headers?.['P-CRM-Outbound-Bridge']
-                const v4 = req?.headers?.['p-crm-outbound-bridge']
-                // headers may be array of {raw} objects in some JsSIP versions
-                const v5 = Array.isArray(req?.headers?.['P-CRM-Outbound-Bridge'])
-                    ? req.headers['P-CRM-Outbound-Bridge'][0]?.raw
-                    : undefined
-                const probeJson = JSON.stringify({
-                    v1: typeof v1 === 'string' ? v1 : (v1 ? 'truthy-nonstring' : null),
-                    v2: typeof v2 === 'string' ? v2 : (v2 ? 'truthy-nonstring' : null),
-                    v3: typeof v3 === 'string' ? v3 : (v3 ? 'truthy-nonstring' : null),
-                    v4: typeof v4 === 'string' ? v4 : (v4 ? 'truthy-nonstring' : null),
-                    v5,
-                    hasRequest: !!req,
-                    hasGetHeader: typeof req?.getHeader === 'function',
-                    headerKeys: req?.headers ? Object.keys(req.headers) : null,
-                    headersType: req?.headers ? typeof req.headers : null,
-                    headersSample: req?.headers ? JSON.stringify(req.headers).slice(0, 500) : null,
-                })
-                console.info('[SIP] P-CRM probe JSON:', probeJson)
-                const value = v1 || v2 || v3 || v4 || v5
+                const value = req?.getHeader?.('P-CRM-Outbound-Bridge')
+                    ?? req?.headers?.['P-CRM-Outbound-Bridge']
                 const str = typeof value === 'string' ? value : value?.raw ?? String(value ?? '')
                 return /true/i.test(str.trim())
-            } catch (err) {
-                console.warn('[SIP] header probe threw', err)
+            } catch {
                 return false
             }
         })()
@@ -310,7 +338,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             try {
                 session.answer({
                     mediaConstraints: { audio: true, video: false },
-                    pcConfig: { iceServers: [] },
+                    pcConfig: TURN_PC_CONFIG,
                 })
             } catch (err: any) {
                 console.error('[SIP] auto-answer threw:', err)
@@ -415,7 +443,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         const target = `sip:${digits}@crm.local`
         ua.call(target, {
             mediaConstraints: { audio: true, video: false },
-            pcConfig: { iceServers: [] },
+            pcConfig: TURN_PC_CONFIG,
         })
     }
 
@@ -435,7 +463,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         try {
             incomingCall.session.answer({
                 mediaConstraints: { audio: true, video: false },
-                pcConfig: { iceServers: [] },
+                pcConfig: TURN_PC_CONFIG,
             })
             console.info('[SIP] session.answer() returned (waiting for accepted/failed event)')
         } catch (err: any) {
