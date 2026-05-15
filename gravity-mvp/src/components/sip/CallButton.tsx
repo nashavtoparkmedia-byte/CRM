@@ -42,29 +42,19 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
                 setBusy(true)
                 try {
                     // Pre-warm microphone permission INSIDE the user-gesture
-                    // context. Auto-answer fires from a WebSocket event without
-                    // transient activation, so Chrome would block its later
-                    // getUserMedia() prompt. Warming here saves the grant in
-                    // the page's permission store.
-                    //
-                    // Non-blocking + timeout: if the user has permanently denied
-                    // mic for localhost, OR Chrome silently hangs the prompt
-                    // (no dialog appears), we don't want to spin forever.
-                    // We log/toast the failure but still fire the originate —
-                    // JsSIP's session.answer() will try its own getUserMedia
-                    // and at least the signalling round-trip will complete so
-                    // the UI doesn't get stuck on the spinner.
-                    try {
-                        const micPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                        const timeout = new Promise<MediaStream>((_, rej) =>
-                            setTimeout(() => rej(new Error('mic prompt timeout 4s')), 4000),
-                        )
-                        const stream = await Promise.race([micPromise, timeout])
-                        stream.getTracks().forEach(t => t.stop())
-                    } catch (micErr: any) {
-                        console.warn('[CallButton] mic pre-warm skipped:', micErr?.message ?? micErr)
-                        toast.warning(`Микрофон: ${micErr?.message ?? 'не доступен'} — звонок продолжается`)
-                    }
+                    // context. Fire-and-forget — do NOT await. If Chrome shows
+                    // a prompt the user may grant or deny; if Chrome silently
+                    // never shows the dialog (rare bug or extension policy),
+                    // we don't want to block the actual outbound originate.
+                    // JsSIP's session.answer() will fire its own getUserMedia
+                    // when the bridge callback arrives; by then the permission
+                    // grant from this prompt (if any) is already in the store.
+                    navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                        .then(stream => {
+                            stream.getTracks().forEach(t => t.stop())
+                            console.info('[CallButton] mic pre-warm: granted')
+                        })
+                        .catch(err => console.warn('[CallButton] mic pre-warm failed:', err?.message ?? err))
                     // Same trick for audio playback: prime the <audio> sink
                     // with a silent user-gesture-driven play() so the later
                     // auto-attached remote stream isn't blocked by Chrome's
