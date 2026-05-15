@@ -42,22 +42,28 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
                 setBusy(true)
                 try {
                     // Pre-warm microphone permission INSIDE the user-gesture
-                    // context of this click. The auto-answer that fires when
-                    // FS bridges back to user/101 runs from a WebSocket event
-                    // (no transient activation), so Chrome would block its
-                    // getUserMedia() prompt and JsSIP's session.answer() would
-                    // get NotAllowedError → no local audio track → silent call.
-                    // Pre-warming here saves the prompt grant in the page's
-                    // permission store; the later getUserMedia() in
-                    // session.answer() returns instantly without prompt.
+                    // context. Auto-answer fires from a WebSocket event without
+                    // transient activation, so Chrome would block its later
+                    // getUserMedia() prompt. Warming here saves the grant in
+                    // the page's permission store.
+                    //
+                    // Non-blocking + timeout: if the user has permanently denied
+                    // mic for localhost, OR Chrome silently hangs the prompt
+                    // (no dialog appears), we don't want to spin forever.
+                    // We log/toast the failure but still fire the originate —
+                    // JsSIP's session.answer() will try its own getUserMedia
+                    // and at least the signalling round-trip will complete so
+                    // the UI doesn't get stuck on the spinner.
                     try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-                        // Stop immediately — we just wanted the permission grant.
+                        const micPromise = navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                        const timeout = new Promise<MediaStream>((_, rej) =>
+                            setTimeout(() => rej(new Error('mic prompt timeout 4s')), 4000),
+                        )
+                        const stream = await Promise.race([micPromise, timeout])
                         stream.getTracks().forEach(t => t.stop())
                     } catch (micErr: any) {
-                        toast.error(`Микрофон недоступен: ${micErr?.message ?? micErr}`)
-                        setBusy(false)
-                        return
+                        console.warn('[CallButton] mic pre-warm skipped:', micErr?.message ?? micErr)
+                        toast.warning(`Микрофон: ${micErr?.message ?? 'не доступен'} — звонок продолжается`)
                     }
                     // Same trick for audio playback: prime the <audio> sink
                     // with a silent user-gesture-driven play() so the later
