@@ -794,7 +794,7 @@ export default function Messenger() {
                         </div>
                         <h3 className="text-4xl font-black tracking-tight text-foreground leading-tight">Ваш Unified Inbox</h3>
                         <p className="text-muted-foreground/60 max-w-sm mt-4 text-lg font-medium leading-relaxed">
-                            Выберите водителя слева, чтобы начать продуктивное общение через Telegram, WhatsApp или Yandex.Pro.
+                            Выберите водителя слева, чтобы начать продуктивное общение через Telegram, WhatsApp или MAX.
                         </p>
                         <div className="mt-12 grid grid-cols-2 gap-4">
                             <div className="flex items-center gap-3 bg-muted/40 border border-border/40 rounded-3xl px-6 py-4 shadow-sm grayscale opacity-50"><Phone size={20} className="text-emerald-500" /> WhatsApp</div>

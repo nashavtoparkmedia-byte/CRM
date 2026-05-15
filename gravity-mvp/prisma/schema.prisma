@@ -1278,7 +1278,6 @@ enum ChatChannel {
   telegram
   whatsapp
   max
-  yandex_pro
   phone
   avito
 }
