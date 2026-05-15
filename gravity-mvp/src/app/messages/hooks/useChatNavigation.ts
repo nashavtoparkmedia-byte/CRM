@@ -38,7 +38,7 @@ export function useChatNavigation() {
         updateQuery({ list: listTab === 'all' ? null : listTab })
     }, [updateQuery])
 
-    const setChannel = useCallback((channel: 'all' | 'wa' | 'tg' | 'max' | 'ypro' | 'gost') => {
+    const setChannel = useCallback((channel: 'all' | 'wa' | 'tg' | 'max' | 'gost') => {
         updateQuery({ channel: channel === 'all' ? null : channel })
     }, [updateQuery])
 

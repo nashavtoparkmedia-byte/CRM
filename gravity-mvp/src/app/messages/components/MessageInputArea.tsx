@@ -41,7 +41,6 @@ const CHANNELS = [
     { id: 'whatsapp', label: 'WhatsApp', short: 'WA', color: 'text-emerald-600', bg: 'bg-emerald-50', activeBg: 'bg-emerald-500' },
     { id: 'telegram', label: 'Telegram', short: 'TG', color: 'text-blue-600', bg: 'bg-blue-50', activeBg: 'bg-blue-500' },
     { id: 'max', label: 'MAX', short: 'MAX', color: 'text-purple-600', bg: 'bg-purple-50', activeBg: 'bg-purple-500' },
-    { id: 'yandex_pro', label: 'Yandex Pro', short: 'YP', color: 'text-yellow-600', bg: 'bg-yellow-50', activeBg: 'bg-yellow-500' },
 ]
 
 export default function MessageInputArea({
@@ -115,7 +114,7 @@ export default function MessageInputArea({
                                  || manualSendChannelMode 
                                  || 'whatsapp'
 
-    const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch
+    const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch
     const effectiveNormalized = normalizeChannel(effectiveSendChannel)
     const currentChannelInfo = CHANNELS.find(c => c.id === effectiveNormalized) || CHANNELS[0]
 

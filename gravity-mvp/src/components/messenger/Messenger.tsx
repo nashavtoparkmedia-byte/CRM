@@ -68,15 +68,15 @@ export default function Messenger() {
     const [isLoading, setIsLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
     const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'requires_response' | 'mine'>('all')
-    const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'telegram' | 'max' | 'yandex_pro'>('all')
+    const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'telegram' | 'max'>('all')
     const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false)
     const [searchDriverQuery, setSearchDriverQuery] = useState("")
     const [foundDrivers, setFoundDrivers] = useState<any[]>([])
     const [selectedDriverForNewChat, setSelectedDriverForNewChat] = useState<any | null>(null)
     const [availableChannels, setAvailableChannels] = useState<any[]>([])
     const [isStartingChat, setIsStartingChat] = useState(false)
-    const [selectedChannelForOutbound, setSelectedChannelForOutbound] = useState<'whatsapp' | 'telegram' | 'max' | 'yandex_pro' | null>(null)
-    const [availableProfiles, setAvailableProfiles] = useState<Record<string, any[]>>({whatsapp: [], telegram: [], max: [], yandex_pro: []})
+    const [selectedChannelForOutbound, setSelectedChannelForOutbound] = useState<'whatsapp' | 'telegram' | 'max' | null>(null)
+    const [availableProfiles, setAvailableProfiles] = useState<Record<string, any[]>>({whatsapp: [], telegram: [], max: []})
     const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
     const [selectedProfileFilter, setSelectedProfileFilter] = useState<string | 'all'>('all')
     const lastInitializedChatId = useRef<string | null>(null)
@@ -265,7 +265,7 @@ export default function Messenger() {
     useEffect(() => {
         if (selectedChatId && selectedChat) {
             console.log(`[Messenger] Chat selection changed to ${selectedChatId}, defaulting channel to ${selectedChat.channel}`)
-            setSelectedChannelForOutbound(selectedChat.channel as 'whatsapp' | 'telegram' | 'max' | 'yandex_pro')
+            setSelectedChannelForOutbound(selectedChat.channel as 'whatsapp' | 'telegram' | 'max')
         }
     }, [selectedChatId, !!selectedChat])
 
@@ -391,7 +391,6 @@ export default function Messenger() {
             case 'whatsapp': return <span className="flex items-center gap-1.5 text-[10px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full">🟢 WA</span>
             case 'telegram': return <span className="flex items-center gap-1.5 text-[10px] font-black text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full">🔵 TG</span>
             case 'max': return <span className="flex items-center gap-1.5 text-[10px] font-black text-purple-500 bg-purple-500/10 px-2 py-0.5 rounded-full">🟣 MAX</span>
-            case 'yandex_pro': return <span className="flex items-center gap-1.5 text-[10px] font-black text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded-full">🟡 YP</span>
             default: return null
         }
     }
@@ -795,7 +794,7 @@ export default function Messenger() {
                         </div>
                         <h3 className="text-4xl font-black tracking-tight text-foreground leading-tight">Ваш Unified Inbox</h3>
                         <p className="text-muted-foreground/60 max-w-sm mt-4 text-lg font-medium leading-relaxed">
-                            Выберите водителя слева, чтобы начать продуктивное общение через Telegram, WhatsApp или Yandex.Pro.
+                            Выберите водителя слева, чтобы начать продуктивное общение через Telegram, WhatsApp или MAX.
                         </p>
                         <div className="mt-12 grid grid-cols-2 gap-4">
                             <div className="flex items-center gap-3 bg-muted/40 border border-border/40 rounded-3xl px-6 py-4 shadow-sm grayscale opacity-50"><Phone size={20} className="text-emerald-500" /> WhatsApp</div>

@@ -775,6 +775,19 @@ model AiAgentConfig {
   updatedAt             DateTime       @updatedAt
 }
 
+/// Настройки AI-анализа звонков (Stage 4). Singleton, id = "singleton".
+/// Админ меняет модель и промт через /settings/integrations/telephony-ai.
+/// Промт остаётся стабильным между звонками — OpenAI автоматически
+/// кэширует префикс ≥1024 токенов на ~5 минут, экономия ~50% на input.
+model TelephonyAiConfig {
+  id           String   @id @default("singleton")
+  enabled      Boolean  @default(true)
+  model        String   @default("gpt-4o")
+  systemPrompt String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 /// FAQ / База знаний агента
 model KnowledgeBaseEntry {
   id              String    @id @default(cuid())
@@ -1249,7 +1262,6 @@ enum ChatChannel {
   telegram
   whatsapp
   max
-  yandex_pro
   phone
   avito
 }

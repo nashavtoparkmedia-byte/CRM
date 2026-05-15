@@ -5,22 +5,22 @@
  *   recordingProcessor.processRecording (post-hangup)
  *     └── enqueueTranscribe(callId)            [call-transcribe queue]
  *           └── Whisper API → Call.transcript
- *                 └── Stage 4b will enqueue analyze → Claude analysis
+ *                 └── enqueueAnalyze(callId)   [call-analyze queue]
+ *                       └── GPT-4o → Call.aiScore / aiSummary / aiAnalysis
  *
  * Workers are started from instrumentation.ts on server boot.
  */
 
 export { enqueueTranscribe, enqueueAnalyze, closeQueues } from '@/lib/queue/queues'
 export { startTranscribeWorker, stopTranscribeWorker } from '@/lib/queue/transcribeWorker'
+export { startAnalyzeWorker, stopAnalyzeWorker } from '@/lib/queue/analyzeWorker'
 export { closeRedisConnection } from '@/lib/queue/connection'
 
 import { startTranscribeWorker } from '@/lib/queue/transcribeWorker'
+import { startAnalyzeWorker } from '@/lib/queue/analyzeWorker'
 import { opsLog } from '@/lib/opsLog'
 
 let started = false
-
-// Stub: extended in Stage 4b to also start the analyze worker.
-export async function stopAnalyzeWorker(): Promise<void> { /* no-op in 4a */ }
 
 /**
  * Idempotent: safe to call multiple times. Logs and swallows individual
@@ -36,5 +36,11 @@ export function startCallProcessingWorkers(): void {
         startTranscribeWorker()
     } catch (err: any) {
         opsLog('error', 'transcribe_worker_start_failed', { operation: 'queue', error: err.message })
+    }
+
+    try {
+        startAnalyzeWorker()
+    } catch (err: any) {
+        opsLog('error', 'analyze_worker_start_failed', { operation: 'queue', error: err.message })
     }
 }

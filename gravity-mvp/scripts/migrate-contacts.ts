@@ -53,7 +53,7 @@ function parseExternalChatId(externalChatId: string): { channel: string; externa
   }
   const channel = externalChatId.slice(0, colonIndex)
   const externalId = externalChatId.slice(colonIndex + 1)
-  const known = ['whatsapp', 'telegram', 'max', 'yandex_pro']
+  const known = ['whatsapp', 'telegram', 'max']
   if (known.includes(channel)) {
     return { channel, externalId }
   }
@@ -563,7 +563,7 @@ async function step4_linkChats() {
       } else {
         try {
           const channelEnum = parsed.channel as ChatChannel
-          const validChannels: string[] = ['telegram', 'whatsapp', 'max', 'yandex_pro']
+          const validChannels: string[] = ['telegram', 'whatsapp', 'max']
           if (!validChannels.includes(parsed.channel)) {
             warn(`Unknown channel "${parsed.channel}" for chat=${chat.id}`)
           } else {

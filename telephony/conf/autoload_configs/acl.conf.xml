@@ -1,0 +1,25 @@
+<configuration name="acl.conf" description="Network Lists">
+  <network-lists>
+    <!-- Custom ACL for ESL: allow loopback + RFC1918 (docker bridge falls
+         here). gravity-mvp connects from the Windows host via the
+         127.0.0.1:8021 port mapping, but inside the container packets surface
+         as either 127.0.0.1 (fs_cli, healthcheck) or 172.20.0.1 (docker
+         bridge gateway). Both need to be allowed. -->
+    <list name="esl_clients" default="deny">
+      <node type="allow" cidr="127.0.0.0/8"/>
+      <node type="allow" cidr="10.0.0.0/8"/>
+      <node type="allow" cidr="172.16.0.0/12"/>
+      <node type="allow" cidr="192.168.0.0/16"/>
+    </list>
+
+    <!-- Vanilla lists kept for reference -->
+    <list name="lan" default="allow">
+      <node type="deny" cidr="192.168.42.0/24"/>
+      <node type="allow" cidr="192.168.42.42/32"/>
+    </list>
+
+    <list name="domains" default="deny">
+      <node type="allow" domain="$${domain}"/>
+    </list>
+  </network-lists>
+</configuration>

@@ -40,15 +40,10 @@ export async function GET(
                 available: !!tgConnection || !!driver.phone, 
                 existingChatId: driver.chats.find(c => c.channel === 'telegram')?.externalChatId 
             },
-            { 
-                type: 'max', 
-                available: !!driver.phone, // Assuming MAX can be reached via phone
-                existingChatId: driver.chats.find(c => c.channel === 'max')?.externalChatId 
-            },
             {
-                type: 'yandex_pro',
-                available: !!driver.yandexDriverId,
-                existingChatId: driver.chats.find(c => c.channel === 'yandex_pro')?.externalChatId
+                type: 'max',
+                available: !!driver.phone, // Assuming MAX can be reached via phone
+                existingChatId: driver.chats.find(c => c.channel === 'max')?.externalChatId
             }
         ]
 

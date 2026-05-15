@@ -13,7 +13,6 @@
  */
 
 import { Worker, type Job } from 'bullmq'
-import OpenAI from 'openai'
 import { File } from 'node:buffer'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
@@ -21,20 +20,12 @@ import { getRedisConnection } from '@/lib/queue/connection'
 import { TRANSCRIBE_QUEUE, type TranscribeJobData, enqueueAnalyze } from '@/lib/queue/queues'
 import { getObject } from '@/lib/storage/minio'
 import { broadcastCall } from '@/lib/callStreamBus'
+import { getOpenAI } from '@/lib/openaiClient'
 
 const WHISPER_MODEL = process.env.OPENAI_WHISPER_MODEL ?? 'whisper-1'
 const TRANSCRIBE_LANGUAGE = process.env.OPENAI_WHISPER_LANGUAGE ?? 'ru'
 
 let worker: Worker<TranscribeJobData> | null = null
-let openaiClient: OpenAI | null = null
-
-function getOpenAI(): OpenAI {
-    if (openaiClient) return openaiClient
-    const apiKey = process.env.OPENAI_API_KEY
-    if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
-    openaiClient = new OpenAI({ apiKey })
-    return openaiClient
-}
 
 export function startTranscribeWorker(): void {
     if (worker) return

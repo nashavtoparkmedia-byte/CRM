@@ -65,4 +65,4 @@ Core entities: Contact, ContactIdentity, Chat, Message, Driver.
 - **WhatsApp** — whatsapp-web.js + Puppeteer
 - **Telegram** — GramJS + SOCKS5 proxy
 - **MAX** — web scraper (CDP + WebSocket intercept)
-- **Yandex.Pro** — read-only fleet data
+- **Avito** — webhook-based lead intake

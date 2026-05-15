@@ -11,7 +11,6 @@ import { ChatChannel } from '@prisma/client'
  * Spec: unified-contact-spec.md v1.1 §6.4, §12.2
  *
  * Errors:
- *   CHANNEL_READONLY — yandex_pro
  *   NO_IDENTITY — нет identity и нет phone для создания
  *   NO_ACCOUNT — нет подключённого аккаунта (future)
  */
@@ -26,13 +25,6 @@ export async function POST(
 
     if (!channel) {
       return NextResponse.json({ error: 'channel is required' }, { status: 400 })
-    }
-
-    if (channel === 'yandex_pro') {
-      return NextResponse.json(
-        { error: 'CHANNEL_READONLY', message: 'Yandex Pro channel is read-only' },
-        { status: 400 }
-      )
     }
 
     const validChannels: ChatChannel[] = ['telegram', 'whatsapp', 'max']

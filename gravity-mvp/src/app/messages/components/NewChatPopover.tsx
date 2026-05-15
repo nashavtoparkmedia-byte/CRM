@@ -9,14 +9,12 @@ const CHANNELS = [
     { id: 'wa', label: 'WA', dbChannel: 'whatsapp', color: 'bg-emerald-500', activeBg: 'bg-emerald-50 ring-emerald-500 text-emerald-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
     { id: 'tg', label: 'TG', dbChannel: 'telegram', color: 'bg-blue-500', activeBg: 'bg-blue-50 ring-blue-500 text-blue-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
     { id: 'max', label: 'MAX', dbChannel: 'max', color: 'bg-purple-500', activeBg: 'bg-purple-50 ring-purple-500 text-purple-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-    { id: 'ypro', label: 'YP', dbChannel: 'yandex_pro', color: 'bg-yellow-500', activeBg: 'bg-yellow-50 ring-yellow-500 text-yellow-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
 ]
 
 const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
     whatsapp: { label: 'WA', cls: 'bg-emerald-50 text-emerald-600' },
     telegram: { label: 'TG', cls: 'bg-blue-50 text-blue-600' },
     max: { label: 'MAX', cls: 'bg-purple-50 text-purple-600' },
-    yandex_pro: { label: 'YP', cls: 'bg-yellow-50 text-yellow-600' },
 }
 
 interface NewChatPopoverProps {

@@ -91,6 +91,21 @@
     <param name="aggressive-nat-detection" value="true"/>
     <param name="apply-nat-acl" value="nat.auto"/>
 
+    <!-- ICE candidate filtering. The browser on Windows offers only its
+         LAN IP (e.g. 192.168.0.100) as a host candidate; Chrome strips
+         the 127.0.0.1 candidate from WebRTC offers by default. FS's
+         default `wan.auto` candidate ACL only allows non-private (WAN)
+         IPs, so it rejects 192.168.0.100 with "no suitable candidates
+         found" → INCOMPATIBLE_DESTINATION right after codec negotiation.
+         Apply `rfc1918.auto` so FS accepts RFC1918 candidates from the
+         browser. Reachability is provided by WSL2 mirrored networking:
+         FS on WSL2 can reach 192.168.0.100 via the host route. -->
+    <param name="apply-candidate-acl" value="rfc1918.auto"/>
+    <!-- Also accept loopback candidates: coturn relays via 127.0.0.1 because
+         WSL2 mirrored networking only exposes loopback to Chrome on Windows.
+         Multiple apply-candidate-acl params are OR'd together. -->
+    <param name="apply-candidate-acl" value="loopback.auto"/>
+
     <!-- No blind registrations -->
     <param name="accept-blind-reg" value="false"/>
     <param name="accept-blind-auth" value="false"/>

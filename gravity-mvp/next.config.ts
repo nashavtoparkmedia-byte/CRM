@@ -2,6 +2,24 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /**
+   * Server-only packages that Turbopack must NOT try to bundle. These either:
+   *  - load native binaries at runtime via dynamic require (ffmpeg installer,
+   *    esl uses node net), or
+   *  - target Node.js APIs (fs, child_process, dgram) that Webpack/Turbopack
+   *    bundling can't rewrite for the browser anyway.
+   * Without this list, builds fail with "Module not found" pointing at
+   * server-relative paths inside platform-specific subdirectories.
+   */
+  serverExternalPackages: [
+    '@ffmpeg-installer/ffmpeg',
+    'fluent-ffmpeg',
+    'esl',
+    'modesl',
+    '@prisma/client',
+    'prisma',
+  ],
+
+  /**
    * Legacy URL redirects.
    *
    * Раздел /avito был расщеплён на две части:

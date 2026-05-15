@@ -352,4 +352,33 @@ export async function register() {
             const { opsLog } = await import('@/lib/opsLog')
             opsLog('error', 'uncaught_exception', { error: err.message, stack: err.stack })
         } catch {
-            // opsLog itself failed —
+            // opsLog itself failed — fall back to console
+            console.error('[UNCAUGHT]', err)
+        }
+        try {
+            // Best-effort: close WA clients cleanly so their chromes don't linger.
+            // 5s cap — we're already in a bad state, don't block exit further.
+            const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
+            await Promise.race([
+                destroyAllClients(),
+                new Promise(resolve => setTimeout(resolve, 5000)),
+            ])
+        } catch {
+            // ignore — we're exiting anyway
+        }
+        process.exit(1)
+    })
+
+    process.on('unhandledRejection', async (reason: unknown) => {
+        // Don't exit on unhandled rejection — just log. These are typically
+        // benign (lost network call, late timeout) and crashing the whole
+        // server for one of them is overkill.
+        const msg = reason instanceof Error ? reason.message : String(reason)
+        try {
+            const { opsLog } = await import('@/lib/opsLog')
+            opsLog('error', 'unhandled_rejection', { reason: msg })
+        } catch {
+            console.error('[UNHANDLED]', msg)
+        }
+    })
+}

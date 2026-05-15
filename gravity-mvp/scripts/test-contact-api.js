@@ -99,17 +99,6 @@ async function main() {
     assert(res.status === 400, `Expected 400, got ${res.status}`)
   })
 
-  await test('Yandex Pro returns CHANNEL_READONLY', async () => {
-    const res = await fetch(`${BASE}/api/contacts/start-conversation`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: '+79221234567', channel: 'yandex_pro' }),
-    })
-    assert(res.status === 400, `Expected 400, got ${res.status}`)
-    const data = await res.json()
-    assert(data.error === 'CHANNEL_READONLY', `Expected CHANNEL_READONLY, got ${data.error}`)
-  })
-
   await test('Invalid phone returns INVALID_PHONE', async () => {
     const res = await fetch(`${BASE}/api/contacts/start-conversation`, {
       method: 'POST',
@@ -126,15 +115,6 @@ async function main() {
 
   if (searchResults && searchResults.length > 0) {
     const contactId = searchResults[0].id
-    await test('CHANNEL_READONLY for yandex_pro', async () => {
-      const res = await fetch(`${BASE}/api/contacts/${contactId}/chats`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel: 'yandex_pro' }),
-      })
-      assert(res.status === 400, `Expected 400, got ${res.status}`)
-    })
-
     await test('Missing channel returns 400', async () => {
       const res = await fetch(`${BASE}/api/contacts/${contactId}/chats`, {
         method: 'POST',

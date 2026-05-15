@@ -28,9 +28,11 @@
   <X-PRE-PROCESS cmd="set" data="domain=crm.local"/>
   <X-PRE-PROCESS cmd="set" data="domain_name=crm.local"/>
 
-  <!-- RTP port range — must match docker-compose port mapping -->
+  <!-- RTP port range. With WSL2 mirrored networking we don't need a tiny
+       window like in Docker — pick a standard range that gives plenty of
+       headroom for concurrent calls + DTLS handshakes. -->
   <X-PRE-PROCESS cmd="set" data="rtp_start_port=16384"/>
-  <X-PRE-PROCESS cmd="set" data="rtp_end_port=16484"/>
+  <X-PRE-PROCESS cmd="set" data="rtp_end_port=32768"/>
 
   <!-- Default codec preferences: G.711 A-law has priority per Megafon spec -->
   <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMA,PCMU"/>

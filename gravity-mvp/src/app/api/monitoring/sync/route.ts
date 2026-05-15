@@ -139,20 +139,6 @@ async function syncContactForDriver(
                 },
             });
 
-            // Create yandex_pro identity if not exists
-            await prisma.contactIdentity.upsert({
-                where: { channel_externalId: { channel: 'yandex_pro', externalId: yandexDriverId } },
-                create: {
-                    contactId: phoneRecord.contactId,
-                    channel: 'yandex_pro',
-                    externalId: yandexDriverId,
-                    phoneId: phoneRecord.id,
-                    source: 'yandex',
-                    confidence: 1.0,
-                },
-                update: {},
-            });
-
             console.log(`[sync] Linked Contact ${phoneRecord.contactId} to Yandex ${yandexDriverId} via phone ${normalizedE164}`);
             return { action: 'linked', phonesDeactivated: 0, phonesCreated: 0 };
         }
@@ -194,18 +180,6 @@ async function syncContactForDriver(
             console.log(`[sync] Phone ${normalizedE164} already belongs to contact ${existingPhone.contactId}, skipping phone creation for new contact ${contact.id}`);
         }
     }
-
-    // Create yandex_pro identity
-    await prisma.contactIdentity.create({
-        data: {
-            contactId: contact.id,
-            channel: 'yandex_pro',
-            externalId: yandexDriverId,
-            phoneId: newPhoneId,
-            source: 'yandex',
-            confidence: 1.0,
-        },
-    });
 
     return { action: 'created', phonesDeactivated: 0, phonesCreated: normalizedE164 ? 1 : 0 };
 }

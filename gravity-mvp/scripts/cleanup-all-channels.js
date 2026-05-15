@@ -1,7 +1,7 @@
 /**
  * Channel-agnostic junk cleanup. Removes the same class of mess the
  * WA cleanup script handles — now across whatsapp / telegram / max /
- * yandex_pro / phone. Safe to re-run.
+ * phone. Safe to re-run.
  *
  * Removes:
  *   1. Messages with type='text' and empty content (protocol noise)
@@ -15,7 +15,7 @@
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
-const CHANNELS = ['whatsapp', 'telegram', 'max', 'yandex_pro', 'phone']
+const CHANNELS = ['whatsapp', 'telegram', 'max', 'phone']
 const MIN_TS = new Date('2015-01-01T00:00:00Z')
 const MAX_ALLOWED = () => new Date(Date.now() + 60 * 60 * 1000)
 
