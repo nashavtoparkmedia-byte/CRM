@@ -104,6 +104,12 @@ export interface ActiveCallInfo {
     answeredAt: number | null
     session: any
     isMuted: boolean
+    // FreeSWITCH channel UUID of the a-leg trunk call. Set as soon as
+    // /api/calls/originate returns (placeholder phase, before the b-leg
+    // INVITE upgrades session). Needed so hangup() can POST /api/calls/cancel
+    // → uuid_kill to stop Megafon ringing the callee when the manager hangs
+    // up before the b-leg ever arrives.
+    fsUuid: string | null
 }
 
 interface SipApi {
@@ -116,6 +122,17 @@ interface SipApi {
     decline(): void
     hangup(): void
     toggleMute(): void
+    // Opens a placeholder outbound call (state='connecting', session=null) so the
+    // ActiveCallPopup shows "Дозваниваюсь…" the instant the user clicks Позвонить,
+    // before FS rings back the b-leg INVITE. The real session upgrades the
+    // placeholder in handleIncomingSession when the bridge callback arrives.
+    startPlaceholderOutbound(phoneNumber: string, displayName?: string | null): void
+    // Tears down a placeholder if /api/calls/originate failed or the user hung up
+    // before the b-leg INVITE arrived. No-op once the real session has attached.
+    cancelPlaceholderOutbound(): void
+    // Attach the FS channel UUID returned from /api/calls/originate to the
+    // current placeholder so a subsequent hangup() can target it via uuid_kill.
+    setActiveCallFsUuid(fsUuid: string): void
 }
 
 const SipContext = createContext<SipApi | null>(null)
@@ -135,6 +152,64 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     const uaRef = useRef<any>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
 
+    // --- Ringback tone (RU ГОСТ: 425 Hz, 1s on / 4s off) ---
+    // JsSIP doesn't play SIP 180 Ringing progress media for us — and in the
+    // click-to-call flow there isn't even a 180 to play, the b-leg INVITE
+    // arrives already in-progress. So we synthesise the local ringback in
+    // the browser via WebAudio so the user hears something between clicking
+    // "Позвонить" and the remote party picking up.
+    const ringbackRef = useRef<{
+        ctx: AudioContext
+        gain: GainNode
+        osc: OscillatorNode
+        interval: ReturnType<typeof setInterval>
+    } | null>(null)
+
+    function startRingback() {
+        if (ringbackRef.current) return
+        try {
+            const AC: typeof AudioContext = (window as any).AudioContext ?? (window as any).webkitAudioContext
+            if (!AC) return
+            const ctx = new AC()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.frequency.value = 425
+            osc.type = 'sine'
+            gain.gain.value = 0
+            osc.connect(gain).connect(ctx.destination)
+            osc.start()
+            const tick = () => {
+                const now = ctx.currentTime
+                gain.gain.cancelScheduledValues(now)
+                // Quick fade in/out (10 ms) prevents the click artifact that a
+                // hard 0→0.1 jump on a sine wave produces.
+                gain.gain.setValueAtTime(0, now)
+                gain.gain.linearRampToValueAtTime(0.1, now + 0.01)
+                gain.gain.setValueAtTime(0.1, now + 1)
+                gain.gain.linearRampToValueAtTime(0, now + 1.01)
+            }
+            tick()
+            const interval = setInterval(tick, 5000)
+            ringbackRef.current = { ctx, osc, gain, interval }
+        } catch (err) {
+            console.warn('[SIP] ringback start failed:', err)
+        }
+    }
+
+    function stopRingback() {
+        const r = ringbackRef.current
+        if (!r) return
+        ringbackRef.current = null
+        clearInterval(r.interval)
+        try {
+            const now = r.ctx.currentTime
+            r.gain.gain.cancelScheduledValues(now)
+            r.gain.gain.setValueAtTime(0, now)
+            r.osc.stop()
+            r.ctx.close()
+        } catch {}
+    }
+
     // --- Audio sink ---
     useEffect(() => {
         const el = document.createElement('audio')
@@ -145,13 +220,13 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         return () => { el.remove() }
     }, [])
 
-    // --- Debug DOM stats (TURN-relay verification) ---
-    // Renders getStats() output into a hidden <pre> element so that an external
-    // tester that can't use the JS isolate (e.g. Chrome MCP with eval blocked)
-    // can still scrape `bytesReceived / bytesSent / candidate-pair state` from
-    // the DOM. Polls every 1s while a PC is live; idle when window.__lastPc
-    // is unset. Safe in production (hidden element, tiny payload).
+    // --- Debug DOM stats overlay (opt-in via NEXT_PUBLIC_SIP_DEBUG=1) ---
+    // Renders getStats() output into a fixed <pre> at the bottom-right for
+    // diagnostics when the JS console isn't reachable. Off by default; the
+    // overlay is intrusive in regular UI use. Re-enable by setting the env
+    // flag in `.env` and restarting the dev server.
     useEffect(() => {
+        if (process.env.NEXT_PUBLIC_SIP_DEBUG !== '1') return
         const dbg = document.createElement('pre')
         dbg.id = 'sip-debug-stats'
         dbg.style.cssText = 'position:fixed;bottom:0;right:0;max-width:520px;max-height:240px;overflow:auto;font:11px monospace;background:#000c;color:#0f0;padding:4px;z-index:99999;white-space:pre-wrap;'
@@ -164,23 +239,10 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 const rows: any[] = []
                 stats.forEach((r: any) => {
                     if (['inbound-rtp', 'outbound-rtp', 'candidate-pair', 'local-candidate', 'remote-candidate'].includes(r.type)) {
-                        rows.push({
-                            t: r.type,
-                            bR: r.bytesReceived,
-                            bS: r.bytesSent,
-                            st: r.state,
-                            ct: r.candidateType,
-                            ip: r.ip ?? r.address,
-                            p: r.port,
-                            pr: r.protocol,
-                            nominated: r.nominated,
-                            id: r.id,
-                            local: r.localCandidateId,
-                            remote: r.remoteCandidateId,
-                        })
+                        rows.push({ t: r.type, bR: r.bytesReceived, bS: r.bytesSent, st: r.state, ct: r.candidateType, ip: r.ip ?? r.address, p: r.port, pr: r.protocol, nominated: r.nominated })
                     }
                 })
-                dbg.textContent = JSON.stringify({ts: new Date().toISOString().slice(11,19), iceState: pc.iceConnectionState, sigState: pc.signalingState, rows}, null, 1)
+                dbg.textContent = JSON.stringify({ ts: new Date().toISOString().slice(11, 19), iceState: pc.iceConnectionState, sigState: pc.signalingState, rows }, null, 1)
             } catch (e: any) { dbg.textContent = 'getStats threw: ' + e?.message }
         }, 1000)
         return () => { clearInterval(timer); dbg.remove() }
@@ -307,40 +369,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         // When present: skip Accept/Decline popup, auto-answer, surface as outbound
         // ActiveCallPopup. Without this, the manager would click "Call" and immediately
         // get an "Incoming call" popup for their own outbound — very confusing.
-        // Multiple ways to read the header — JsSIP versions vary in API
+        // Read the P-CRM-Outbound-Bridge marker. JsSIP 3.13 doesn't populate
+        // session.request synchronously inside the newRTCSession event — fall
+        // back to event.data.request (passed in as eventRequest).
         const isOutboundBridge = (() => {
             try {
-                // session.request is undefined inside the newRTCSession event in
-                // JsSIP 3.13. Use the request from the event payload instead;
-                // fall back to session.request for older flows.
                 const req = eventRequest ?? session.request
-                // Try every reasonable accessor in order
-                const v1 = req?.getHeader?.('P-CRM-Outbound-Bridge')
-                const v2 = req?.getHeader?.('p-crm-outbound-bridge')
-                const v3 = req?.headers?.['P-CRM-Outbound-Bridge']
-                const v4 = req?.headers?.['p-crm-outbound-bridge']
-                // headers may be array of {raw} objects in some JsSIP versions
-                const v5 = Array.isArray(req?.headers?.['P-CRM-Outbound-Bridge'])
-                    ? req.headers['P-CRM-Outbound-Bridge'][0]?.raw
-                    : undefined
-                const probeJson = JSON.stringify({
-                    v1: typeof v1 === 'string' ? v1 : (v1 ? 'truthy-nonstring' : null),
-                    v2: typeof v2 === 'string' ? v2 : (v2 ? 'truthy-nonstring' : null),
-                    v3: typeof v3 === 'string' ? v3 : (v3 ? 'truthy-nonstring' : null),
-                    v4: typeof v4 === 'string' ? v4 : (v4 ? 'truthy-nonstring' : null),
-                    v5,
-                    hasRequest: !!req,
-                    hasGetHeader: typeof req?.getHeader === 'function',
-                    headerKeys: req?.headers ? Object.keys(req.headers) : null,
-                    headersType: req?.headers ? typeof req.headers : null,
-                    headersSample: req?.headers ? JSON.stringify(req.headers).slice(0, 500) : null,
-                })
-                console.info('[SIP] P-CRM probe JSON:', probeJson)
-                const value = v1 || v2 || v3 || v4 || v5
+                const value = req?.getHeader?.('P-CRM-Outbound-Bridge')
+                    ?? req?.headers?.['P-CRM-Outbound-Bridge']
                 const str = typeof value === 'string' ? value : value?.raw ?? String(value ?? '')
                 return /true/i.test(str.trim())
-            } catch (err) {
-                console.warn('[SIP] header probe threw', err)
+            } catch {
                 return false
             }
         })()
@@ -352,23 +391,36 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
         if (isOutboundBridge) {
             console.info('[SIP] outbound-bridge callback detected — auto-answering', { fromNumber })
-            setActiveCall({
-                direction: 'outbound',
-                peerNumber: fromNumber,
-                displayName,
-                state: 'connecting',
-                startedAt: Date.now(),
-                answeredAt: null,
-                session,
-                isMuted: false,
+            setActiveCall(prev => {
+                // Upgrade in place if CallButton already opened a placeholder for
+                // this outbound — preserves startedAt, peerNumber AND the fsUuid
+                // we got from /api/calls/originate so hangup mid-call can still
+                // uuid_kill the a-leg. No popup flicker.
+                if (prev && !prev.session && prev.direction === 'outbound') {
+                    return { ...prev, session, displayName: prev.displayName ?? displayName }
+                }
+                return {
+                    direction: 'outbound',
+                    peerNumber: fromNumber,
+                    displayName,
+                    state: 'connecting',
+                    startedAt: Date.now(),
+                    answeredAt: null,
+                    session,
+                    isMuted: false,
+                    fsUuid: null,
+                }
             })
             session.on('accepted', () => {
+                stopRingback()
                 setActiveCall(prev => (prev?.session === session ? { ...prev, state: 'active', answeredAt: Date.now() } : prev))
             })
             session.on('ended', () => {
+                stopRingback()
                 setActiveCall(prev => (prev?.session === session ? null : prev))
             })
             session.on('failed', () => {
+                stopRingback()
                 setActiveCall(prev => (prev?.session === session ? null : prev))
             })
             try {
@@ -377,6 +429,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                     pcConfig: TURN_PC_CONFIG,
                 })
             } catch (err: any) {
+                stopRingback()
                 console.error('[SIP] auto-answer threw:', err)
                 setActiveCall(null)
                 import('sonner').then(s => s.toast.error(`Не удалось ответить: ${err?.message ?? err}`)).catch(() => {})
@@ -412,6 +465,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 answeredAt: Date.now(),
                 session,
                 isMuted: false,
+                fsUuid: null,
             })
         })
     }
@@ -448,6 +502,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             answeredAt: null,
             session,
             isMuted: false,
+            fsUuid: null,
         })
 
         session.on('progress', () => {
@@ -515,12 +570,33 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     function hangup() {
-        if (activeCall) activeCall.session.terminate()
+        if (activeCall) {
+            if (activeCall.session) {
+                activeCall.session.terminate()
+            } else {
+                // Placeholder — no SIP session in the browser yet, but FS has
+                // an in-flight originate dialling Megafon → callee. We MUST
+                // tell the server to kill it, otherwise the callee's phone
+                // keeps ringing until Megafon's ~30 s timeout even though the
+                // manager already hit "Отбой". Fire-and-forget — UI clears
+                // immediately, server-side uuid_kill propagates back through
+                // CHANNEL_HANGUP_COMPLETE → SSE as a safety net.
+                if (activeCall.fsUuid) {
+                    fetch('/api/calls/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fsUuid: activeCall.fsUuid }),
+                    }).catch(err => console.warn('[SIP] cancel originate request failed:', err))
+                }
+                stopRingback()
+                setActiveCall(null)
+            }
+        }
         if (incomingCall) incomingCall.session.terminate()
     }
 
     function toggleMute() {
-        if (!activeCall) return
+        if (!activeCall || !activeCall.session) return
         const session = activeCall.session
         if (activeCall.isMuted) {
             session.unmute({ audio: true })
@@ -530,8 +606,36 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         setActiveCall({ ...activeCall, isMuted: !activeCall.isMuted })
     }
 
+    function startPlaceholderOutbound(phoneNumber: string, displayName?: string | null) {
+        // Don't clobber an already-running call.
+        if (activeCall) return
+        setActiveCall({
+            direction: 'outbound',
+            peerNumber: phoneNumber,
+            displayName: displayName ?? null,
+            state: 'connecting',
+            startedAt: Date.now(),
+            answeredAt: null,
+            session: null,
+            isMuted: false,
+            fsUuid: null,
+        })
+        startRingback()
+    }
+
+    function cancelPlaceholderOutbound() {
+        // Only tear down if it's still a placeholder. If FS already attached
+        // the real session, leave it alone — user can hang up via ActiveCallPopup.
+        setActiveCall(prev => (prev && !prev.session ? null : prev))
+        stopRingback()
+    }
+
+    function setActiveCallFsUuid(fsUuid: string) {
+        setActiveCall(prev => (prev ? { ...prev, fsUuid } : prev))
+    }
+
     return (
-        <SipContext.Provider value={{ status, extension, incomingCall, activeCall, call, answer, decline, hangup, toggleMute }}>
+        <SipContext.Provider value={{ status, extension, incomingCall, activeCall, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
             {children}
         </SipContext.Provider>
     )

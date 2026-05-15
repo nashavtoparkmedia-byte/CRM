@@ -20,5 +20,15 @@
     <param name="register-transport" value="udp"/>
     <param name="retry-seconds" value="30"/>
     <param name="ping" value="60"/>
+
+    <!-- Statically constrain the codecs this gateway will offer/accept.
+         Channel-level overrides (absolute_codec_string, export
+         nolocal:..., [var=val] inline prefix) all leaked through during
+         bridge from a WebRTC a-leg — Megafon's SBC silently dropped the
+         opus/multi-codec offer. Pinning it at the gateway is the only
+         place sofia honours it before building the INVITE SDP. -->
+    <param name="codec-prefs" value="PCMA"/>
+    <param name="inbound-codec-prefs" value="PCMA"/>
+    <param name="outbound-codec-prefs" value="PCMA"/>
   </gateway>
 </include>
