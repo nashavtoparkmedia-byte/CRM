@@ -1,0 +1,109 @@
+services:
+  freeswitch:
+    image: safarov/freeswitch:latest
+    container_name: crm-freeswitch
+    restart: unless-stopped
+    ports:
+      # SIP signaling — internal profile (extensions: Linphone, IP phones)
+      - "5060:5060/udp"
+      - "5060:5060/tcp"
+      # SIP signaling — external profile (Megafon SBC inbound, if reachable)
+      - "5080:5080/udp"
+      # WebRTC WebSocket — browser softphone (sip.js / JsSIP)
+      - "7080:7080/tcp"
+      # RTP media — narrow range for dev (100 concurrent calls is plenty)
+      - "16384-16484:16384-16484/udp"
+      # Event Socket Layer — for Node.js integration
+      - "127.0.0.1:8021:8021/tcp"
+    environment:
+      # Megafon SIP trunk credentials (from .env)
+      - MEGAFON_SIP_USERNAME=${MEGAFON_SIP_USERNAME}
+      - MEGAFON_SIP_PASSWORD=${MEGAFON_SIP_PASSWORD}
+      # ESL password — read by event_socket.conf.xml
+      - ESL_PASSWORD=${ESL_PASSWORD:-ClueCon}
+      # Manager extension passwords (Linphone + browser WebRTC)
+      - MANAGER_101_PASSWORD=${MANAGER_101_PASSWORD:-changeme101}
+      - MANAGER_102_PASSWORD=${MANAGER_102_PASSWORD:-changeme102}
+      # RTP port range — must match the port mapping above
+      - RTP_START_PORT=16384
+      - RTP_END_PORT=16484
+      # SIP external/internal IPs (auto-detect in dev)
+      - EXTERNAL_SIP_IP=auto
+      - EXTERNAL_RTP_IP=auto
+    volumes:
+      # Overlay our minimal config on top of the image's defaults
+      - ./conf/vars.xml:/etc/freeswitch/vars.xml:ro
+      - ./conf/sip_profiles/internal.xml:/etc/freeswitch/sip_profiles/internal.xml:ro
+      - ./conf/sip_profiles/external/megafon.xml:/etc/freeswitch/sip_profiles/external/megafon.xml:ro
+      - ./conf/directory/default/101.xml:/etc/freeswitch/directory/default/101.xml:ro
+      - ./conf/directory/default/102.xml:/etc/freeswitch/directory/default/102.xml:ro
+      - ./conf/dialplan/default/01_megafon_outbound.xml:/etc/freeswitch/dialplan/default/01_megafon_outbound.xml:ro
+      - ./conf/dialplan/default/02_megafon_inbound.xml:/etc/freeswitch/dialplan/default/02_megafon_inbound.xml:ro
+      - ./conf/dialplan/default/03_user_outbound.xml:/etc/freeswitch/dialplan/default/03_user_outbound.xml:ro
+      - ./conf/autoload_configs/event_socket.conf.xml:/etc/freeswitch/autoload_configs/event_socket.conf.xml:ro
+      # Recordings: bind-mounted so gravity-mvp (on the host) can read raw WAV
+      # files immediately after FreeSWITCH finishes writing them, convert to
+      # MP3, and upload to MinIO. WAV is the FS native format with no codec
+      # transcoding loss; MP3 is for storage/playback.
+      - ./recordings:/var/lib/freeswitch/recordings
+      - freeswitch-logs:/var/log/freeswitch
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  # MinIO: S3-compatible object storage for call recordings (Stage 3).
+  # In dev runs locally; in prod replace MINIO_* env in gravity-mvp/.env
+  # with Yandex Object Storage credentials and point S3_ENDPOINT there.
+  minio:
+    image: minio/minio:latest
+    container_name: crm-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:9000:9000"     # S3 API
+      - "127.0.0.1:9001:9001"     # MinIO web console (http://localhost:9001)
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-crmadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-crmpassword123}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis: BullMQ queue backend (Stage 4 — transcription + AI analysis jobs).
+  # Bound to loopback so it isn't exposed on the LAN. Single-node, no auth —
+  # in prod replace with a managed Redis (Yandex Cloud Managed Redis, etc.)
+  # and pass REDIS_URL through gravity-mvp/.env.
+  redis:
+    image: redis:7-alpine
+    container_name: crm-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # One-shot init: create the recordings bucket on first run if it doesn't exist
+  minio-init:
+    image: minio/mc:latest
+    container_name: crm-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-crmadmin} ${MINIO_ROOT_PASSWORD:-crmpassword123} &&
+        mc mb -p local/${MINIO_RECORDINGS_BUCKET:-recordings} || true &&
+        echo 'MinIO bucket ready'
+      "
+
+volumes:
+  minio-data:
+  freeswitch-logs:

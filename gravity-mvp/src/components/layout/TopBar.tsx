@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useEffect } from 'react';
 import { getUsers, getCurrentUser, login, logout } from '@/lib/users/user-service';
 import GlobalSearch from "@/components/layout/GlobalSearch";
+import CallToolbar from "@/components/sip/CallToolbar";
 
 export default function TopBar() {
     const [users, setUsers] = useState<any[]>([]);
@@ -98,6 +99,7 @@ export default function TopBar() {
                     <Inbox className="h-3.5 w-3.5 text-muted-foreground" />
                     <span>Новые лиды</span>
                 </Link>
+                <CallToolbar />
                 <GlobalSearch />
             </div>
         </header>

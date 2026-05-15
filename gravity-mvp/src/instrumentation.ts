@@ -211,14 +211,26 @@ export async function register() {
             })
         }, 60000)
 
-        // Device offline check: every 90 seconds
-        const deviceOfflineInterval = setInterval(async () => {
-            await OperationalJobs.run('device_offline_check', async () => {
-                const { TelephonyService } = await import('@/lib/TelephonyService')
-                await TelephonyService.markOfflineStaleDevices()
-            })
-        }, 90 * 1000)
-        OperationalJobs.registerInterval(deviceOfflineInterval)
+        // ── Telephony: ESL listener to FreeSWITCH ─────────────────────────
+        try {
+            const { startEslListener } = await import('@/lib/freeswitch/EslClient')
+            await startEslListener()
+            opsLog('info', 'esl_listener_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'esl_listener_start_failed', { operation: 'startup', error: err.message })
+        }
+
+        // ── Call processing pipeline (BullMQ): transcribe + analyze ──────
+        // Stage 4. Workers pick up jobs enqueued by recordingProcessor and
+        // by each other (transcribe → analyze). Safe to start before Redis
+        // is up; the workers will retry on connect.
+        try {
+            const { startCallProcessingWorkers } = await import('@/lib/queue')
+            startCallProcessingWorkers()
+            opsLog('info', 'call_workers_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'call_workers_start_failed', { operation: 'startup', error: err.message })
+        }
 
         // Yandex Fleet sync: target time 03:00 server time, daily.
         // Strategy: tick every hour; only run if (current hour == 03) AND no
@@ -244,7 +256,7 @@ export async function register() {
         }, 60 * 60 * 1000)  // every hour
         OperationalJobs.registerInterval(yandexSyncInterval)
 
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'device_offline:90s', 'yandex_fleet_sync:24h@03:00'] })
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
 
     }, 5000) // 5 second delay after server start
 
@@ -298,6 +310,18 @@ export async function register() {
                 log('info', 'shutdown_tg_skip', { error: e.message })
             }
 
+            // 3a. Stop BullMQ workers + close Redis
+            try {
+                const queueModule = await import('@/lib/queue')
+                await queueModule.stopTranscribeWorker()
+                await queueModule.stopAnalyzeWorker()
+                await queueModule.closeQueues()
+                await queueModule.closeRedisConnection()
+                log('info', 'shutdown_queues_closed')
+            } catch (e: any) {
+                log('error', 'shutdown_queues_error', { error: e.message })
+            }
+
             // 4. Disconnect Prisma
             try {
                 const { prisma } = await import('@/lib/prisma')
@@ -328,33 +352,4 @@ export async function register() {
             const { opsLog } = await import('@/lib/opsLog')
             opsLog('error', 'uncaught_exception', { error: err.message, stack: err.stack })
         } catch {
-            // opsLog itself failed — fall back to console
-            console.error('[UNCAUGHT]', err)
-        }
-        try {
-            // Best-effort: close WA clients cleanly so their chromes don't linger.
-            // 5s cap — we're already in a bad state, don't block exit further.
-            const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
-            await Promise.race([
-                destroyAllClients(),
-                new Promise(resolve => setTimeout(resolve, 5000)),
-            ])
-        } catch {
-            // ignore — we're exiting anyway
-        }
-        process.exit(1)
-    })
-
-    process.on('unhandledRejection', async (reason: unknown) => {
-        // Don't exit on unhandled rejection — just log. These are typically
-        // benign (lost network call, late timeout) and crashing the whole
-        // server for one of them is overkill.
-        const msg = reason instanceof Error ? reason.message : String(reason)
-        try {
-            const { opsLog } = await import('@/lib/opsLog')
-            opsLog('error', 'unhandled_rejection', { reason: msg })
-        } catch {
-            console.error('[UNHANDLED]', msg)
-        }
-    })
-}
+            // opsLog itself failed —

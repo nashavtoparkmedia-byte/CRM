@@ -1,0 +1,21 @@
+<include>
+  <!--
+    Extension 102 — manager #2.
+    Same idea as 101.xml — see comments there.
+  -->
+  <user id="102">
+    <params>
+      <param name="password" value="$${manager_102_password}"/>
+      <param name="vm-password" value="102"/>
+    </params>
+    <variables>
+      <variable name="toll_allow" value="domestic,international"/>
+      <variable name="accountcode" value="102"/>
+      <variable name="user_context" value="default"/>
+      <variable name="effective_caller_id_name" value="Manager 102"/>
+      <variable name="effective_caller_id_number" value="102"/>
+      <variable name="outbound_caller_id_name" value="$${megafon_username}"/>
+      <variable name="outbound_caller_id_number" value="$${megafon_username}"/>
+    </variables>
+  </user>
+</include>

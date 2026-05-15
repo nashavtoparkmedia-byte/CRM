@@ -1,0 +1,24 @@
+<configuration name="event_socket.conf" description="Socket Client">
+  <settings>
+    <!--
+      Event Socket Layer — TCP API for Node.js integration.
+      Stage 2 of the SIP rollout will connect from gravity-mvp here to
+      receive call events (CHANNEL_CREATE, ANSWER, HANGUP) and originate
+      outbound calls (click-to-call).
+
+      Bind to all interfaces inside the container — port 8021 is mapped
+      to localhost on the host via docker-compose.
+    -->
+    <param name="nat-map" value="false"/>
+    <param name="listen-ip" value="0.0.0.0"/>
+    <param name="listen-port" value="8021"/>
+    <param name="password" value="$${ESL_PASSWORD}"/>
+    <!-- Custom ACL "esl_clients" defined in acl.conf.xml — allows both
+         127.0.0.0/8 (for fs_cli, healthcheck) and RFC1918 (for the docker
+         bridge gateway 172.20.0.1 where Windows-host packets surface).
+         The docker port is bound to 127.0.0.1 by compose, so this is
+         still LAN-safe. -->
+    <param name="apply-inbound-acl" value="esl_clients"/>
+
+  </settings>
+</configuration>

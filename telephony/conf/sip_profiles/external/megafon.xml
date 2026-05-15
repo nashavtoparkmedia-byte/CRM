@@ -1,0 +1,34 @@
+<include>
+  <!--
+    Megafon MultiFon Business SIP trunk.
+    Hardcoded for smoke test until exec-set env→FreeSWITCH global var
+    substitution is verified. Move back to $${megafon_username} /
+    $${megafon_password} from vars.xml once trunk is REGED.
+
+    ⚠️ Rotate password in lk.megafon.ru after deploy verification —
+    it was shared in chat during setup.
+  -->
+  <gateway name="megafon">
+    <param name="username" value="79221853150"/>
+    <param name="password" value="QktspvGj"/>
+    <param name="realm" value="multifon.ru"/>
+    <param name="proxy" value="sbc.megafon.ru"/>
+    <param name="from-user" value="79221853150"/>
+    <param name="from-domain" value="multifon.ru"/>
+    <param name="register" value="true"/>
+    <param name="expire-seconds" value="180"/>
+    <param name="register-transport" value="udp"/>
+    <param name="retry-seconds" value="30"/>
+    <param name="ping" value="60"/>
+
+    <!-- Statically constrain the codecs this gateway will offer/accept.
+         Channel-level overrides (absolute_codec_string, export
+         nolocal:..., [var=val] inline prefix) all leaked through during
+         bridge from a WebRTC a-leg — Megafon's SBC silently dropped the
+         opus/multi-codec offer. Pinning it at the gateway is the only
+         place sofia honours it before building the INVITE SDP. -->
+    <param name="codec-prefs" value="PCMA"/>
+    <param name="inbound-codec-prefs" value="PCMA"/>
+    <param name="outbound-codec-prefs" value="PCMA"/>
+  </gateway>
+</include>

@@ -9,8 +9,6 @@ import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
-import { useCallEvents } from "../hooks/useCallEvents"
-import CallNotificationBanner from "./CallNotificationBanner"
 
 export default function ChatWorkspace({
     chatId,
@@ -98,7 +96,6 @@ function ChatWorkspaceInner({
     conversations: any[]
 }) {
     const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
-    const { activeCall } = useCallEvents()
 
     // A3: Compute channels that have failed outbound messages
     const failedChannels = useMemo(() => {
@@ -215,7 +212,6 @@ function ChatWorkspaceInner({
             />
 
             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />
-            <CallNotificationBanner activeCall={activeCall} />
 
             {isEmptyChannel ? (
                 <div className="flex-1 flex flex-col items-center justify-center messenger-bg">

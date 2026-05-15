@@ -308,6 +308,7 @@ model Driver {
   lastOrderAt          DateTime?
   customFields         Json?                @default("{}")
   primaryYandexId      String?              @unique
+  calls                Call[]
   chats                Chat[]
   communicationEvents  CommunicationEvent[]
   contactProfile       Contact?
@@ -342,7 +343,6 @@ model Chat {
   lastInboundAt     DateTime?
   lastOutboundAt    DateTime?
   chatType          String            @default("private")
-  CallSession       CallSession[]
   contact           Contact?          @relation(fields: [contactId], references: [id])
   contactIdentity   ContactIdentity?  @relation(fields: [contactIdentityId], references: [id])
   driver            Driver?           @relation(fields: [driverId], references: [id])
@@ -374,7 +374,6 @@ model Message {
   channel         ChatChannel?        @default(whatsapp)
   aiStatus        AiStatus?
   clientMessageId String?             @unique
-  CallSession     CallSession?
   chat            Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
   attachments     MessageAttachment[]
   eventLogs       MessageEventLog[]
@@ -546,7 +545,7 @@ model Contact {
   isArchived        Boolean           @default(false)
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
-  CallSession       CallSession[]
+  calls             Call[]
   chats             Chat[]
   driver            Driver?           @relation(fields: [yandexDriverId], references: [yandexDriverId])
   identities        ContactIdentity[]
@@ -699,6 +698,53 @@ model CrmUser {
   @@map("crm_users")
 }
 
+/// SIP call session. Created by FreeSWITCH events via ESL.
+/// managerId is the CRM user id (string "u1"/"u2"/... from src/data/users.json),
+/// not a Prisma FK — CRM users live in JSON, not in the DB.
+model Call {
+  id            String        @id @default(cuid())
+  direction     CallDirection
+  status        CallStatus    @default(ringing)
+  fromNumber    String        // E.164
+  toNumber      String        // E.164
+
+  driverId      String?
+  contactId     String?
+  managerId     String?       // CRM user id (u1, u2, ...) — not a FK
+
+  // FreeSWITCH channel UUID — dedupes events for the same call
+  fsUuid        String?       @unique
+  sipCallId     String?       // SIP Call-ID header
+
+  startedAt     DateTime      @default(now())
+  answeredAt    DateTime?
+  endedAt       DateTime?
+  durationSec   Int?
+  hangupCause   String?       // FreeSWITCH cause: NORMAL_CLEARING, USER_BUSY, NO_ANSWER, ...
+
+  // Filled in by later stages
+  recordingUrl  String?       // public URL (MinIO/S3)
+  recordingPath String?       // path inside FreeSWITCH recordings volume
+  transcript    String?       // Whisper output
+  aiScore       Int?          // 1-10
+  aiSummary     String?
+  aiAnalysis    Json?
+
+  metadata      Json?         @default("{}")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  driver        Driver?       @relation(fields: [driverId], references: [id])
+  contact       Contact?      @relation(fields: [contactId], references: [id])
+
+  @@index([direction, startedAt(sort: Desc)])
+  @@index([driverId])
+  @@index([contactId])
+  @@index([managerId, startedAt(sort: Desc)])
+  @@index([fromNumber])
+  @@index([toNumber])
+}
+
 /// Единственная запись — настройки AI агента (upsert by id="singleton")
 model AiAgentConfig {
   id                    String         @id @default("singleton")
@@ -799,39 +845,6 @@ model HistoryImportJob {
   @@index([status, createdAt(sort: Desc)])
 }
 
-model CallSession {
-  id              String           @id
-  deviceId        String
-  chatId          String?
-  messageId       String?          @unique
-  contactId       String?
-  direction       MessageDirection
-  callerNumber    String
-  calleeNumber    String
-  status          CallStatus       @default(ringing)
-  startedAt       DateTime         @default(now())
-  answeredAt      DateTime?
-  endedAt         DateTime?
-  duration        Int?
-  disposition     CallDisposition?
-  androidCallId   String?
-  metadata        Json?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime
-  Chat            Chat?            @relation(fields: [chatId], references: [id])
-  Contact         Contact?         @relation(fields: [contactId], references: [id])
-  TelephonyDevice TelephonyDevice  @relation(fields: [deviceId], references: [id])
-  Message         Message?         @relation(fields: [messageId], references: [id])
-
-  @@index([calleeNumber])
-  @@index([callerNumber])
-  @@index([chatId])
-  @@index([contactId])
-  @@index([deviceId, androidCallId])
-  @@index([deviceId, startedAt(sort: Desc)])
-  @@index([deviceId, status])
-}
-
 model GroupVisibility {
   id         String   @id
   userId     String
@@ -843,48 +856,6 @@ model GroupVisibility {
 
   @@unique([userId, chatId])
   @@index([userId])
-}
-
-model TelephonyCommand {
-  id              String          @id
-  deviceId        String
-  type            String
-  payload         Json
-  status          CommandStatus   @default(pending)
-  deliveredAt     DateTime?
-  executedAt      DateTime?
-  failedAt        DateTime?
-  failReason      String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime
-  TelephonyDevice TelephonyDevice @relation(fields: [deviceId], references: [id])
-
-  @@index([deviceId, status])
-  @@index([status, createdAt])
-}
-
-model TelephonyDevice {
-  id               String             @id
-  androidId        String             @unique
-  name             String
-  phoneNumber      String?
-  simOperator      String?
-  status           DeviceStatus       @default(offline)
-  isActive         Boolean            @default(true)
-  revokedAt        DateTime?
-  lastHeartbeat    DateTime?
-  appVersion       String?
-  deviceSecret     String             @unique
-  fcmToken         String?
-  metadata         Json?
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime
-  CallSession      CallSession[]
-  TelephonyCommand TelephonyCommand[]
-
-  @@index([isActive])
-  @@index([lastHeartbeat])
-  @@index([status])
 }
 
 model config_change_log {
@@ -1429,29 +1400,19 @@ enum AiImportStatus {
   failed
 }
 
-enum CallDisposition {
-  answered
-  missed
-  busy
-  rejected
-  no_answer
+enum CallDirection {
+  inbound
+  outbound
 }
 
 enum CallStatus {
-  ringing
-  active
-  completed
-  failed
+  ringing       // call placed, not answered yet
+  active        // bridged, conversation in progress
+  completed     // ended normally after a conversation
+  missed        // inbound, never answered
+  no_answer     // outbound, callee didn't pick up
+  busy
+  failed        // technical failure (no route, codec mismatch, etc.)
+  rejected      // explicitly declined
 }
 
-enum CommandStatus {
-  pending
-  delivered
-  executed
-  failed
-}
-
-enum DeviceStatus {
-  online
-  offline
-}
