@@ -55,7 +55,11 @@ declare global {
     var __eslReconnectDelay: number | undefined
 }
 
-function getConnection(): Connection | null {
+// modesl is a CJS module — its `Connection` import is a runtime value, not a
+// TypeScript type. Type accessor expressions like `Connection | null` thus
+// fail tsc strict mode. We expose the live conn as `any`; callers don't need
+// type-level safety here since the only operations are conn.api / conn.bgapi.
+function getConnection(): any {
     return (globalThis as any).__eslConnection ?? null
 }
 
@@ -65,10 +69,10 @@ function getConnection(): Connection | null {
  * files. Returns null if the listener isn't connected yet (callers should
  * fall through to "not connected" UI state rather than retrying).
  */
-export function getEslConnection(): Connection | null {
+export function getEslConnection(): any {
     return getConnection()
 }
-function setConnection(c: Connection | null): void {
+function setConnection(c: any): void {
     ;(globalThis as any).__eslConnection = c
 }
 
@@ -261,7 +265,7 @@ async function handleChannelCreate(evt: any): Promise<void> {
             direction,
             from: callerNumber,
             to: calleeNumber,
-            contactId,
+            contactId: contactId ?? undefined,
         })
 
         broadcastCall({
