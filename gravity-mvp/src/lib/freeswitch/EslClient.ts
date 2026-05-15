@@ -27,8 +27,10 @@ import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { broadcastCall } from '@/lib/callStreamBus'
+import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
+import { ContactService } from '@/lib/ContactService'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
@@ -55,6 +57,16 @@ declare global {
 
 function getConnection(): Connection | null {
     return (globalThis as any).__eslConnection ?? null
+}
+
+/**
+ * Public accessor for the live ESL connection — used by settings APIs that
+ * need to run `sofia` / `uuid_*` commands after editing FreeSWITCH config
+ * files. Returns null if the listener isn't connected yet (callers should
+ * fall through to "not connected" UI state rather than retrying).
+ */
+export function getEslConnection(): Connection | null {
+    return getConnection()
 }
 function setConnection(c: Connection | null): void {
     ;(globalThis as any).__eslConnection = c
@@ -200,6 +212,26 @@ async function handleChannelCreate(evt: any): Promise<void> {
                 displayName = displayName ?? driver.fullName
             }
         }
+
+        // Auto-create Contact if neither phone-lookup nor driver-lookup found one.
+        // This is the merge anchor for the chat-channel resolver: once a Contact
+        // with this phone exists, any subsequent MAX/TG/WA message from the same
+        // person will land on resolveContact()'s "phone match" branch and attach
+        // a fresh ContactIdentity to this Contact. The history (call ↔ chat)
+        // unifies under one card automatically.
+        if (!contactId) {
+            try {
+                const resolved = await ContactService.resolveByPhone(e164, displayName)
+                if (resolved) {
+                    contactId = resolved.contact.id
+                    displayName = displayName ?? resolved.contact.displayName
+                }
+            } catch (err: any) {
+                // Don't block call processing on contact-create failure — the
+                // Call row still lands with contactId=null and the journal works.
+                opsLog('error', 'contact_auto_create_failed', { operation: 'call', error: err.message, phone: e164 })
+            }
+        }
     }
 
     // managerId: for originate() click-to-call we have it now from the
@@ -338,6 +370,16 @@ async function handleChannelHangup(evt: any): Promise<void> {
         data: { callId: updated.id, endedAt: updated.endedAt!.toISOString(), durationSec: updated.durationSec, status },
     })
 
+    // Mirror the call into the contact's phone-channel chat timeline so it
+    // shows up between Telegram / WhatsApp / MAX messages. Best-effort —
+    // a sync failure must not block the rest of the hangup pipeline (the
+    // call still lands in the journal page either way).
+    try {
+        await syncCallToChat(updated)
+    } catch (err: any) {
+        opsLog('error', 'call_chat_sync_failed', { operation: 'call', callId: updated.id, error: err.message })
+    }
+
     // Recording: only worth processing if the call was actually answered
     // (billsec > 0). FreeSWITCH still creates a WAV for unanswered calls
     // but it's just silence.
@@ -346,6 +388,107 @@ async function handleChannelHangup(evt: any): Promise<void> {
             opsLog('error', 'recording_processor_threw', { operation: 'recording', callId: updated.id, error: err.message })
         )
     }
+}
+
+/**
+ * Mirror a finished Call into the contact's "phone"-channel Chat as a
+ * Message{type:'call'}. This is what makes a call appear inline in the
+ * chat timeline — alongside Telegram / WhatsApp / MAX messages — without
+ * having to leave the chat screen to look at the call journal.
+ *
+ * Idempotent on Call.id via metadata.callId. Chat row is auto-created
+ * on first call per peer-number with externalChatId="phone:<E.164>".
+ */
+export async function syncCallToChat(call: any): Promise<void> {
+    if (!call.contactId) return
+
+    const peer = call.direction === 'inbound' ? call.fromNumber : call.toNumber
+    if (!peer) return
+    const externalChatId = `phone:${peer}`
+
+    let chat = await prisma.chat.findUnique({ where: { externalChatId } })
+    if (!chat) {
+        chat = await prisma.chat.create({
+            data: {
+                channel: 'phone',
+                externalChatId,
+                contactId: call.contactId,
+                driverId: call.driverId ?? undefined,
+                name: peer,
+            },
+        })
+    } else if (!chat.contactId || (call.driverId && !chat.driverId)) {
+        chat = await prisma.chat.update({
+            where: { id: chat.id },
+            data: {
+                contactId: chat.contactId ?? call.contactId,
+                driverId: chat.driverId ?? call.driverId ?? undefined,
+            },
+        })
+    }
+
+    // Idempotency: don't double-insert if this Call was already synced.
+    const existing = await prisma.message.findFirst({
+        where: {
+            chatId: chat.id,
+            type: 'call',
+            metadata: { path: ['callId'], equals: call.id } as any,
+        },
+    })
+    if (existing) return
+
+    const disposition =
+        call.status === 'completed' ? 'answered' :
+        call.status === 'rejected' || call.status === 'busy' ? 'rejected' :
+        'missed'
+
+    const sec: number = call.durationSec ?? 0
+    const mm = Math.floor(sec / 60).toString().padStart(2, '0')
+    const ss = (sec % 60).toString().padStart(2, '0')
+    const dirLabel = call.direction === 'inbound' ? 'Входящий' : 'Исходящий'
+    const content = sec > 0 ? `${dirLabel} · ${mm}:${ss}` : (disposition === 'missed' ? 'Пропущенный звонок' : dirLabel)
+
+    const created = await prisma.message.create({
+        data: {
+            chatId: chat.id,
+            channel: 'phone',
+            type: 'call',
+            direction: call.direction,
+            content,
+            sentAt: call.startedAt,
+            // 'delivered' — calls aren't text messages awaiting delivery,
+            // they're historical records. This also keeps them safe from
+            // MessageService.recoverStuckMessages which scans status='sent'.
+            status: 'delivered',
+            metadata: {
+                callId: call.id,
+                disposition,
+                durationSec: call.durationSec ?? null,
+            } as any,
+        },
+    })
+
+    await prisma.chat.update({
+        where: { id: chat.id },
+        data: {
+            lastMessageAt: call.endedAt ?? new Date(),
+            lastInboundAt: call.direction === 'inbound' ? (call.endedAt ?? new Date()) : undefined,
+            lastOutboundAt: call.direction === 'outbound' ? (call.endedAt ?? new Date()) : undefined,
+        },
+    })
+
+    // Push the new message to /api/messages/stream subscribers so the open
+    // chat tab paints it without a refresh.
+    broadcastChatMessage(chat.id, {
+        id: created.id,
+        chatId: chat.id,
+        channel: 'phone',
+        type: 'call',
+        direction: call.direction,
+        content,
+        sentAt: created.sentAt,
+        metadata: created.metadata,
+    })
 }
 
 function mapHangupCauseToStatus(cause: string, billsec: number): 'completed' | 'missed' | 'no_answer' | 'busy' | 'failed' | 'rejected' {

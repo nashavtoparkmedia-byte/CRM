@@ -37,7 +37,7 @@ export async function PUT(req: NextRequest) {
 
     try {
         const body = await req.json().catch(() => ({}))
-        const patch: { enabled?: boolean; model?: string; systemPrompt?: string } = {}
+        const patch: Parameters<typeof updateTelephonyAiConfig>[0] = {}
 
         if (typeof body.enabled === 'boolean') patch.enabled = body.enabled
         if (typeof body.model === 'string' && body.model.trim().length > 0) {
@@ -49,6 +49,35 @@ export async function PUT(req: NextRequest) {
                 return NextResponse.json({ error: 'systemPrompt cannot be empty' }, { status: 400 })
             }
             patch.systemPrompt = trimmed
+        }
+
+        const validCriterion = (x: any) =>
+            x && typeof x.key === 'string' && x.key.trim().length > 0 &&
+            typeof x.label === 'string' && typeof x.description === 'string' &&
+            typeof x.scaleMax === 'number' && x.scaleMax >= 2 && x.scaleMax <= 100 &&
+            typeof x.weight === 'number' && x.weight >= 0 &&
+            typeof x.isActive === 'boolean' &&
+            typeof x.order === 'number'
+
+        const validOption = (x: any) =>
+            x && typeof x.key === 'string' && x.key.trim().length > 0 &&
+            typeof x.label === 'string' &&
+            typeof x.isActive === 'boolean' &&
+            typeof x.order === 'number'
+
+        if (Array.isArray(body.criteria)) {
+            if (!body.criteria.every(validCriterion)) {
+                return NextResponse.json({ error: 'criteria: invalid item shape' }, { status: 400 })
+            }
+            patch.criteria = body.criteria
+        }
+        for (const k of ['outcomeOptions', 'sentimentOptions', 'nextActionOptions'] as const) {
+            if (Array.isArray(body[k])) {
+                if (!body[k].every(validOption)) {
+                    return NextResponse.json({ error: `${k}: invalid item shape` }, { status: 400 })
+                }
+                ;(patch as any)[k] = body[k]
+            }
         }
 
         if (Object.keys(patch).length === 0) {

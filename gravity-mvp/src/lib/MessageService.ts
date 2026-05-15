@@ -274,6 +274,12 @@ export class MessageService {
                 status: 'sent',
                 externalId: null, // NEW — skip anything that already has a provider id
                 sentAt: { lt: cutoff },
+                // Call-type messages are NOT outbound text we're trying to deliver —
+                // they're historical records of phone calls synced from FreeSWITCH.
+                // Recovery is for stuck text messages only; touching calls clobbers
+                // metadata.{callId,disposition,durationSec} which the chat timeline
+                // and call-card renderer rely on.
+                type: { not: 'call' },
             },
             data: {
                 status: 'failed',

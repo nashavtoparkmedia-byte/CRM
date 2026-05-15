@@ -20,14 +20,24 @@
 
 import { Worker, type Job } from 'bullmq'
 import type { Prisma } from '@prisma/client'
+import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { getRedisConnection } from '@/lib/queue/connection'
 import { ANALYZE_QUEUE, type AnalyzeJobData } from '@/lib/queue/queues'
 import { broadcastCall } from '@/lib/callStreamBus'
-import { getOpenAI } from '@/lib/openaiClient'
 import { getTelephonyAiConfig } from '@/lib/aiCallAnalysis/config'
-import { parseAnalysisResponse, averageScore } from '@/lib/aiCallAnalysis/prompt'
+import { parseAnalysisResponse, averageScore, buildSystemPrompt } from '@/lib/aiCallAnalysis/prompt'
+
+// Why a hand-rolled fetch instead of the OpenAI SDK: the SDK's outgoing
+// fingerprint (User-Agent OpenAI/JS + x-stainless-* headers) is enough for
+// OpenAI's edge to flip our VPN exit IP into 403 unsupported_country, while
+// a curl-equivalent POST with the SAME key + SAME IP + SAME body sails
+// through. Mirrors the same workaround in transcribeWorker.ts.
+function getProxyDispatcher() {
+    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy
+    return proxy ? new ProxyAgent(proxy) : undefined
+}
 
 const MAX_OUTPUT_TOKENS = 1024
 
@@ -67,6 +77,16 @@ export function startAnalyzeWorker(): void {
     opsLog('info', 'analyze_worker_started', { operation: 'queue' })
 }
 
+/**
+ * Run one AI analysis synchronously. Exposed so admin / recovery tools can
+ * trigger the analysis pipeline without going through BullMQ. The function
+ * itself is idempotent — re-running on a Call that already has aiAnalysis
+ * is a no-op (avoids double-billing).
+ */
+export async function processAnalyze(callId: string): Promise<void> {
+    return processOne(callId)
+}
+
 async function processOne(callId: string): Promise<void> {
     const call = await prisma.call.findUnique({
         where: { id: callId },
@@ -92,38 +112,67 @@ async function processOne(callId: string): Promise<void> {
         return
     }
 
-    const startedAt = Date.now()
-    const completion = await getOpenAI().chat.completions.create({
-        model: config.model,
-        // JSON-mode — the model is required to emit a valid JSON object, so
-        // we don't have to defensively unfence ```json blocks etc.
-        response_format: { type: 'json_object' },
-        // Low temperature: we want repeatable rubric scoring, not creativity.
-        temperature: 0,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        messages: [
-            { role: 'system', content: config.systemPrompt },
-            {
-                role: 'user',
-                content: `Расшифровка звонка:\n\n${call.transcript}`,
-            },
-        ],
-    })
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
 
-    const content = completion.choices[0]?.message?.content
+    // Dynamic system prompt assembled from config.criteria + option lists.
+    // Falls back to config.systemPrompt only if no active criteria — gives
+    // admins a "raw textarea" escape hatch while keeping the structured UI
+    // as the primary path.
+    const hasCriteria = Array.isArray(config.criteria) && config.criteria.some((c: any) => c.isActive)
+    const systemPrompt = hasCriteria ? buildSystemPrompt(config) : config.systemPrompt
+
+    const startedAt = Date.now()
+    const r = await undiciFetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        dispatcher: getProxyDispatcher(),
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+            'User-Agent': 'curl/8.10.1',
+            Accept: '*/*',
+        },
+        body: JSON.stringify({
+            model: config.model,
+            // JSON-mode — the model is required to emit a valid JSON object,
+            // so we don't have to defensively unfence ```json blocks etc.
+            response_format: { type: 'json_object' },
+            // Low temperature: we want repeatable rubric scoring, not creativity.
+            temperature: 0,
+            max_tokens: MAX_OUTPUT_TOKENS,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `Расшифровка звонка:\n\n${call.transcript}` },
+            ],
+        }),
+    })
+    if (!r.ok) {
+        const errBody = await r.text().catch(() => '')
+        throw new Error(`chat_http_${r.status}: ${errBody.slice(0, 500)}`)
+    }
+    const completion = await r.json() as any
+
+    const content = completion.choices?.[0]?.message?.content
     if (!content) {
         throw new Error('analyze: openai returned empty content')
     }
 
-    const parsed = parseAnalysisResponse(JSON.parse(content))
-    const aiScore = averageScore(parsed.scores)
+    const parsed = parseAnalysisResponse(JSON.parse(content), config)
+    const aiScore = averageScore(parsed.scores, config)
 
-    await prisma.call.update({
+    // Persist new categorical fields (outcome/sentiment/nextAction). They live
+    // as new Call columns after the v2 schema migration; we cast through any
+    // because the generated Prisma client on Windows can lag behind schema.
+    await (prisma as any).call.update({
         where: { id: callId },
         data: {
             aiScore,
             aiSummary: parsed.summary,
             aiAnalysis: parsed as unknown as Prisma.InputJsonValue,
+            outcome: parsed.outcome,
+            clientSentiment: parsed.client_sentiment,
+            nextActionType: parsed.next_action_type,
+            nextActionDue: parsed.next_action_due ? new Date(parsed.next_action_due) : null,
         },
     })
 

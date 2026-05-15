@@ -184,6 +184,27 @@ export async function register() {
         }, 60 * 1000)
         OperationalJobs.registerInterval(watchdogInterval)
 
+        // Avito temporary phone expiration: every hour mark expired temp
+        // phones inactive. Avito rotates the disposable proxy numbers, so
+        // a temp ContactPhone older than its expiresAt is no longer reachable
+        // and would only confuse ContactService.resolveByPhone if it stuck
+        // around (Avito would reissue the same number to a different lead).
+        const tempPhoneExpInterval = setInterval(async () => {
+            await OperationalJobs.run('temp_phone_expire', async () => {
+                const { prisma } = await import('@/lib/prisma')
+                const res = await (prisma.contactPhone as any).updateMany({
+                    where: {
+                        isTemporary: true,
+                        isActive: true,
+                        expiresAt: { lt: new Date() },
+                    },
+                    data: { isActive: false, isPrimary: false },
+                })
+                return { deactivated: res.count, at: new Date().toISOString() }
+            })
+        }, 60 * 60 * 1000)  // every hour
+        OperationalJobs.registerInterval(tempPhoneExpInterval)
+
         // Retention cleanup: every 24 hours
         const cleanupInterval = setInterval(async () => {
             await OperationalJobs.run('retention_cleanup', async () => {

@@ -19,6 +19,7 @@ export interface SipExtension {
 const EXTENSIONS: Record<string, SipExtension> = {
     u1: { extension: '101', password: process.env.MANAGER_101_PASSWORD ?? '' },
     u2: { extension: '102', password: process.env.MANAGER_102_PASSWORD ?? '' },
+    u3: { extension: '103', password: process.env.MANAGER_103_PASSWORD ?? '' },
 }
 
 export function getSipExtensionForUser(userId: string): SipExtension | null {

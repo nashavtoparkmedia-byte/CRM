@@ -559,21 +559,31 @@ model Contact {
 }
 
 /// Телефонный номер контакта. Хранится в E.164 (+79221234567).
+///
+/// isTemporary + expiresAt — для Авито-номеров. С 28.05.2026 Авито показывает
+/// в чате временный номер вместо настоящего ("вскоре он изменится"). Парсер
+/// avito-worker создаёт такой номер с isTemporary:true, expiresAt:+14дней;
+/// когда worker раскроет настоящий — LeadIntake добавит новый номер и
+/// деактивирует все временные у этого Contact. Если настоящий так и не
+/// пришёл за 14 дней — background-job выставит isActive:false.
 model ContactPhone {
-  id         String             @id @default(cuid())
-  contactId  String
-  phone      String
-  label      String?
-  isPrimary  Boolean            @default(false)
-  source     ContactPhoneSource @default(manual)
-  isActive   Boolean            @default(true)
-  verifiedAt DateTime?
-  createdAt  DateTime           @default(now())
-  identities ContactIdentity[]
-  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  id          String             @id @default(cuid())
+  contactId   String
+  phone       String
+  label       String?
+  isPrimary   Boolean            @default(false)
+  source      ContactPhoneSource @default(manual)
+  isActive    Boolean            @default(true)
+  verifiedAt  DateTime?
+  isTemporary Boolean            @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime           @default(now())
+  identities  ContactIdentity[]
+  contact     Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@unique([contactId, phone])
   @@index([phone])
+  @@index([isTemporary, expiresAt])
 }
 
 /// Идентификатор контакта в канале (telegramId, WA JID, maxUserId и т.д.)
@@ -726,9 +736,18 @@ model Call {
   recordingUrl  String?       // public URL (MinIO/S3)
   recordingPath String?       // path inside FreeSWITCH recordings volume
   transcript    String?       // Whisper output
-  aiScore       Int?          // 1-10
+  aiScore       Int?          // 1-10 (weighted average of TelephonyAiConfig.criteria)
   aiSummary     String?
   aiAnalysis    Json?
+
+  // Categorical outcome fields filled by AI analysis using
+  // TelephonyAiConfig.outcomeOptions / sentimentOptions / nextActionOptions.
+  // Values are the `key` of the chosen option (e.g. "scheduled_visit") so
+  // option labels can be re-translated without rewriting historical rows.
+  outcome         String?     // result of the call: "closed_won" / "scheduled_visit" / "no_interest" / ...
+  clientSentiment String?     // "positive" / "neutral" / "negative" / ...
+  nextActionType  String?     // type of follow-up: "call_back" / "office_visit" / "send_docs" / ...
+  nextActionDue   DateTime?   // when follow-up is due; null if no follow-up agreed
 
   metadata      Json?         @default("{}")
   createdAt     DateTime      @default(now())
@@ -784,6 +803,19 @@ model TelephonyAiConfig {
   enabled      Boolean  @default(true)
   model        String   @default("gpt-4o")
   systemPrompt String
+  /// Rubric criteria — admin-editable list:
+  /// [{ key, label, description, scaleMax, weight, isActive, order }]
+  /// Empty/null means "use legacy hard-coded systemPrompt".
+  criteria          Json @default("[]")
+  /// Outcome options for AI to choose from:
+  /// [{ key, label, isActive, order }]
+  outcomeOptions    Json @default("[]")
+  /// Sentiment options:
+  /// [{ key, label, isActive, order }]
+  sentimentOptions  Json @default("[]")
+  /// Next-action types:
+  /// [{ key, label, isActive, order }]
+  nextActionOptions Json @default("[]")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

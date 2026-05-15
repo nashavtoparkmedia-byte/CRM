@@ -71,7 +71,8 @@ export async function enqueueTranscribe(callId: string): Promise<void> {
     await getTranscribeQueue().add(
         'transcribe',
         { callId },
-        { jobId: `transcribe:${callId}` },
+        // BullMQ disallows ':' in custom job ids — use '-' as separator.
+        { jobId: `transcribe-${callId}` },
     )
 }
 
@@ -83,7 +84,8 @@ export async function enqueueAnalyze(callId: string): Promise<void> {
     await getAnalyzeQueue().add(
         'analyze',
         { callId },
-        { jobId: `analyze:${callId}` },
+        // BullMQ disallows ':' in custom job ids — use '-' as separator.
+        { jobId: `analyze-${callId}` },
     )
 }
 

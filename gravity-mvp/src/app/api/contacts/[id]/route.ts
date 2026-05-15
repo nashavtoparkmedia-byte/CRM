@@ -29,6 +29,8 @@ export async function GET(
             source: true,
             isActive: true,
             verifiedAt: true,
+            isTemporary: true,
+            expiresAt: true,
             createdAt: true,
           },
         },

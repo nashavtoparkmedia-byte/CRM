@@ -20,10 +20,29 @@ import { getRedisConnection } from '@/lib/queue/connection'
 import { TRANSCRIBE_QUEUE, type TranscribeJobData, enqueueAnalyze } from '@/lib/queue/queues'
 import { getObject } from '@/lib/storage/minio'
 import { broadcastCall } from '@/lib/callStreamBus'
-import { getOpenAI } from '@/lib/openaiClient'
+import { ProxyAgent, fetch as undiciFetch, FormData as UndiciFormData } from 'undici'
 
-const WHISPER_MODEL = process.env.OPENAI_WHISPER_MODEL ?? 'whisper-1'
-const TRANSCRIBE_LANGUAGE = process.env.OPENAI_WHISPER_LANGUAGE ?? 'ru'
+// OpenAI Whisper. Two non-obvious requirements live here:
+//
+// 1) HTTPS_PROXY=http://127.0.0.1:10809 must be set on the Node process
+//    so it exits via our xray VPN node, not the system "geoip:ru→direct"
+//    route. /v1/audio/transcriptions geo-blocks our public IP otherwise.
+//
+// 2) The audio endpoint rejects the OpenAI SDK's outgoing fingerprint
+//    (User-Agent: OpenAI/JS + x-stainless-* headers and some additional
+//    body framing we couldn't fully strip via SDK config) from our VPN
+//    exit IP with 403 unsupported_country, while a plain curl-equivalent
+//    POST with the SAME key + SAME IP + SAME body passes cleanly. So we
+//    bypass the SDK entirely for audio and use undici fetch with a
+//    ProxyAgent + curl-like headers. analyzeWorker.ts does the same for
+//    chat completions for the same reason.
+const WHISPER_MODEL = process.env.WHISPER_MODEL ?? 'whisper-1'
+const TRANSCRIBE_LANGUAGE = process.env.WHISPER_LANGUAGE ?? 'ru'
+
+function getProxyDispatcher() {
+    const proxy = process.env.HTTPS_PROXY || process.env.https_proxy
+    return proxy ? new ProxyAgent(proxy) : undefined
+}
 
 let worker: Worker<TranscribeJobData> | null = null
 
@@ -61,6 +80,16 @@ export function startTranscribeWorker(): void {
     opsLog('info', 'transcribe_worker_started', { operation: 'queue' })
 }
 
+/**
+ * Run one transcription synchronously. Exposed so admin / recovery tools can
+ * trigger the Whisper pipeline without going through the BullMQ queue —
+ * useful when the worker isn't running (e.g. a one-shot CLI script) or when
+ * we already have the callId in hand and don't want enqueue latency.
+ */
+export async function processTranscribe(callId: string): Promise<void> {
+    return processOne(callId)
+}
+
 async function processOne(callId: string): Promise<void> {
     const call = await prisma.call.findUnique({
         where: { id: callId },
@@ -84,20 +113,32 @@ async function processOne(callId: string): Promise<void> {
     }
 
     const mp3 = await getObject(call.recordingPath)
-    // Whisper SDK accepts File / Blob — we wrap the Buffer to keep types happy
-    // and to give the upload a recognisable filename (extension matters for MIME).
-    const file = new File([new Uint8Array(mp3)], `${callId}.mp3`, { type: 'audio/mpeg' })
+
+    const apiKey = process.env.OPENAI_API_KEY
+    if (!apiKey) throw new Error('OPENAI_API_KEY is not set')
+
+    const fd = new UndiciFormData()
+    fd.set('file', new Blob([new Uint8Array(mp3)], { type: 'audio/mpeg' }), `${callId}.mp3`)
+    fd.set('model', WHISPER_MODEL)
+    fd.set('language', TRANSCRIBE_LANGUAGE)
+    fd.set('response_format', 'text')
 
     const startedAt = Date.now()
-    const response = await getOpenAI().audio.transcriptions.create({
-        file: file as any,  // OpenAI types want browser File but Node 20+ has a compatible one
-        model: WHISPER_MODEL,
-        language: TRANSCRIBE_LANGUAGE,
-        response_format: 'text',
+    const r = await undiciFetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        dispatcher: getProxyDispatcher(),
+        headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'User-Agent': 'curl/8.10.1',
+            Accept: '*/*',
+        },
+        body: fd,
     })
-
-    // response_format:'text' returns a plain string; with json it's an object
-    const transcript = typeof response === 'string' ? response.trim() : (response as any).text?.trim() ?? ''
+    if (!r.ok) {
+        const errBody = await r.text().catch(() => '')
+        throw new Error(`whisper_http_${r.status}: ${errBody.slice(0, 500)}`)
+    }
+    const transcript = (await r.text()).trim()
 
     if (!transcript) {
         opsLog('warn', 'transcribe_empty_result', { operation: 'transcribe', callId })
