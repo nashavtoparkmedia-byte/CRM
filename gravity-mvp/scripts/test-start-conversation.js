@@ -37,7 +37,7 @@ function assert(name, condition, detail) {
 async function test1() {
   console.log('\n=== Test 1: Existing contact, new channel ===')
 
-  // Find a contact with yandex_pro identity but no telegram chat
+  // Find a contact without a telegram chat to provision one
   const search = await api('GET', '/api/contacts/search?q=%D0%91%D0%B0%D0%B4%D1%8C%D0%B8%D0%BD') // Бадьин
   const contact = search.data?.contacts?.[0]
   if (!contact) {
