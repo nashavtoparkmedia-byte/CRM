@@ -1,0 +1,10 @@
+# Build output
+dist/
+*.tsbuildinfo
+
+# Runtime logs
+storage/logs/
+
+# Env / secrets (also covered by root .gitignore, listed here for clarity)
+.env
+.env.local
