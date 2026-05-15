@@ -86,6 +86,7 @@ export const NAVIGATION: NavigationGroup[] = [
           { name: "TG Бот", href: "/bot-admin", icon: Bot, sectionKey: "settings_bot" },
           { name: "WhatsApp", href: "/whatsapp", icon: Phone, sectionKey: "settings_whatsapp" },
           { name: "Телефония", href: "/settings/integrations/telephony", icon: Phone, sectionKey: "settings_telephony" },
+          { name: "Сценарии ИИ-обзвона", href: "/settings/integrations/ai-call-scenarios", icon: Bot, sectionKey: "settings_ai_call_scenarios" },
         ]
       },
     ]
