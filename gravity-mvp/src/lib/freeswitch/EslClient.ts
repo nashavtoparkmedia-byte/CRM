@@ -467,15 +467,42 @@ export async function originateCall(args: {
     const blegVars = `sip_h_P-CRM-Outbound-Bridge=true`
     const cmd = `originate {${vars}}sofia/gateway/megafon/${dialNumber} &bridge([${blegVars}]user/${ext.extension})`
 
-    return new Promise((resolve, reject) => {
-        conn.bgapi(cmd, (res: any) => {
+    // Fire bgapi and resolve IMMEDIATELY with the channel UUID we pre-generated.
+    // The frontend needs that UUID right away so it can later POST /api/calls/cancel
+    // to interrupt the originate (uuid_kill) if the manager hangs up the
+    // placeholder popup before Megafon picks up. If we awaited the bgapi
+    // callback we'd wait until Megafon answers/rejects (3–30 s), so the cancel
+    // path would arrive too late or with no UUID to target.
+    //
+    // The eventual bgapi result still gets logged for diagnostics — failures
+    // surface through the normal ESL lifecycle (CHANNEL_HANGUP_COMPLETE →
+    // broadcastCall('ended')) so the UI clears even on synchronous bgapi errors.
+    conn.bgapi(cmd, (res: any) => {
+        const body = typeof res?.getBody === 'function' ? res.getBody() : String(res)
+        if (!/\+OK/.test(body)) {
+            opsLog('warn', 'originate_bgapi_result_err', { operation: 'call', fsUuid: channelUuid, body: body.trim() })
+        }
+    })
+    return { fsUuid: channelUuid }
+}
+
+/**
+ * Cancel an in-flight outbound originate before either leg has answered.
+ * Used by /api/calls/cancel when the manager hits "Отбой" on the placeholder
+ * ActiveCallPopup. FS sends CANCEL to the a-leg (Megafon → stops ringing the
+ * callee's phone), the channel hangs up with ORIGINATOR_CANCEL, our regular
+ * CHANNEL_HANGUP_COMPLETE handler broadcasts 'ended' and the UI clears.
+ *
+ * Idempotent: uuid_kill on a non-existent UUID returns -ERR which we ignore.
+ */
+export async function cancelOriginate(fsUuid: string): Promise<void> {
+    const conn = getConnection()
+    if (!conn) throw new Error('ESL not connected')
+    return new Promise((resolve) => {
+        conn.api(`uuid_kill ${fsUuid} ORIGINATOR_CANCEL`, (res: any) => {
             const body = typeof res?.getBody === 'function' ? res.getBody() : String(res)
-            const match = /\+OK\s+([0-9a-f-]+)/i.exec(body)
-            if (match) {
-                resolve({ fsUuid: match[1] })
-            } else {
-                reject(new Error(`originate failed: ${body.trim()}`))
-            }
+            opsLog('info', 'originate_cancelled', { operation: 'call', fsUuid, body: body.trim() })
+            resolve()
         })
     })
 }

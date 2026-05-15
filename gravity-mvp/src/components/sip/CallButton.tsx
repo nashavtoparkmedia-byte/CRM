@@ -25,7 +25,7 @@ import { toast } from "sonner"
  * originate sidesteps that entirely.
  */
 export default function CallButton({ phoneNumber, label = 'Позвонить' }: { phoneNumber: string; label?: string }) {
-    const { status, activeCall } = useSip()
+    const { status, activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid } = useSip()
     const [busy, setBusy] = useState(false)
 
     const disabled = status !== 'registered' || !!activeCall || busy
@@ -40,6 +40,14 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
             title={title}
             onClick={async () => {
                 setBusy(true)
+                // Open the popup + start the ringback tone NOW, before we even
+                // call /api/calls/originate. Otherwise the user sees a frozen
+                // button with no feedback for 1–2s until FS's b-leg INVITE
+                // arrives, with no audible "дозвон" between click and answer.
+                // SipContext upgrades this placeholder into a real session
+                // when handleIncomingSession sees the P-CRM-Outbound-Bridge
+                // INVITE — startedAt is preserved, popup doesn't re-mount.
+                startPlaceholderOutbound(phoneNumber)
                 try {
                     // Pre-warm microphone permission INSIDE the user-gesture
                     // context. Fire-and-forget — do NOT await. If Chrome shows
@@ -76,12 +84,20 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
                     })
                     const body = await res.json().catch(() => ({}))
                     if (!res.ok) {
+                        cancelPlaceholderOutbound()
                         toast.error(body?.error ?? `Не удалось инициировать звонок (HTTP ${res.status})`)
+                    } else if (body?.fsUuid) {
+                        // Stamp the FS channel UUID onto the placeholder so a
+                        // subsequent "Отбой" before the b-leg arrives can
+                        // POST /api/calls/cancel and uuid_kill the a-leg.
+                        // Without this the callee's phone keeps ringing.
+                        setActiveCallFsUuid(body.fsUuid)
                     }
                     // Within ~1s FS will call back to user/101, SipContext
                     // picks it up via newRTCSession + P-CRM-Outbound-Bridge
                     // header and auto-answers, displaying ActiveCallPopup.
                 } catch (err: any) {
+                    cancelPlaceholderOutbound()
                     toast.error(`Ошибка сети: ${err?.message ?? err}`)
                 }
                 setBusy(false)

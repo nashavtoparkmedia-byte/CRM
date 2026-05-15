@@ -104,6 +104,12 @@ export interface ActiveCallInfo {
     answeredAt: number | null
     session: any
     isMuted: boolean
+    // FreeSWITCH channel UUID of the a-leg trunk call. Set as soon as
+    // /api/calls/originate returns (placeholder phase, before the b-leg
+    // INVITE upgrades session). Needed so hangup() can POST /api/calls/cancel
+    // → uuid_kill to stop Megafon ringing the callee when the manager hangs
+    // up before the b-leg ever arrives.
+    fsUuid: string | null
 }
 
 interface SipApi {
@@ -116,6 +122,17 @@ interface SipApi {
     decline(): void
     hangup(): void
     toggleMute(): void
+    // Opens a placeholder outbound call (state='connecting', session=null) so the
+    // ActiveCallPopup shows "Дозваниваюсь…" the instant the user clicks Позвонить,
+    // before FS rings back the b-leg INVITE. The real session upgrades the
+    // placeholder in handleIncomingSession when the bridge callback arrives.
+    startPlaceholderOutbound(phoneNumber: string, displayName?: string | null): void
+    // Tears down a placeholder if /api/calls/originate failed or the user hung up
+    // before the b-leg INVITE arrived. No-op once the real session has attached.
+    cancelPlaceholderOutbound(): void
+    // Attach the FS channel UUID returned from /api/calls/originate to the
+    // current placeholder so a subsequent hangup() can target it via uuid_kill.
+    setActiveCallFsUuid(fsUuid: string): void
 }
 
 const SipContext = createContext<SipApi | null>(null)
@@ -134,6 +151,64 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
     const uaRef = useRef<any>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
+
+    // --- Ringback tone (RU ГОСТ: 425 Hz, 1s on / 4s off) ---
+    // JsSIP doesn't play SIP 180 Ringing progress media for us — and in the
+    // click-to-call flow there isn't even a 180 to play, the b-leg INVITE
+    // arrives already in-progress. So we synthesise the local ringback in
+    // the browser via WebAudio so the user hears something between clicking
+    // "Позвонить" and the remote party picking up.
+    const ringbackRef = useRef<{
+        ctx: AudioContext
+        gain: GainNode
+        osc: OscillatorNode
+        interval: ReturnType<typeof setInterval>
+    } | null>(null)
+
+    function startRingback() {
+        if (ringbackRef.current) return
+        try {
+            const AC: typeof AudioContext = (window as any).AudioContext ?? (window as any).webkitAudioContext
+            if (!AC) return
+            const ctx = new AC()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.frequency.value = 425
+            osc.type = 'sine'
+            gain.gain.value = 0
+            osc.connect(gain).connect(ctx.destination)
+            osc.start()
+            const tick = () => {
+                const now = ctx.currentTime
+                gain.gain.cancelScheduledValues(now)
+                // Quick fade in/out (10 ms) prevents the click artifact that a
+                // hard 0→0.1 jump on a sine wave produces.
+                gain.gain.setValueAtTime(0, now)
+                gain.gain.linearRampToValueAtTime(0.1, now + 0.01)
+                gain.gain.setValueAtTime(0.1, now + 1)
+                gain.gain.linearRampToValueAtTime(0, now + 1.01)
+            }
+            tick()
+            const interval = setInterval(tick, 5000)
+            ringbackRef.current = { ctx, osc, gain, interval }
+        } catch (err) {
+            console.warn('[SIP] ringback start failed:', err)
+        }
+    }
+
+    function stopRingback() {
+        const r = ringbackRef.current
+        if (!r) return
+        ringbackRef.current = null
+        clearInterval(r.interval)
+        try {
+            const now = r.ctx.currentTime
+            r.gain.gain.cancelScheduledValues(now)
+            r.gain.gain.setValueAtTime(0, now)
+            r.osc.stop()
+            r.ctx.close()
+        } catch {}
+    }
 
     // --- Audio sink ---
     useEffect(() => {
@@ -316,23 +391,36 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
         if (isOutboundBridge) {
             console.info('[SIP] outbound-bridge callback detected — auto-answering', { fromNumber })
-            setActiveCall({
-                direction: 'outbound',
-                peerNumber: fromNumber,
-                displayName,
-                state: 'connecting',
-                startedAt: Date.now(),
-                answeredAt: null,
-                session,
-                isMuted: false,
+            setActiveCall(prev => {
+                // Upgrade in place if CallButton already opened a placeholder for
+                // this outbound — preserves startedAt, peerNumber AND the fsUuid
+                // we got from /api/calls/originate so hangup mid-call can still
+                // uuid_kill the a-leg. No popup flicker.
+                if (prev && !prev.session && prev.direction === 'outbound') {
+                    return { ...prev, session, displayName: prev.displayName ?? displayName }
+                }
+                return {
+                    direction: 'outbound',
+                    peerNumber: fromNumber,
+                    displayName,
+                    state: 'connecting',
+                    startedAt: Date.now(),
+                    answeredAt: null,
+                    session,
+                    isMuted: false,
+                    fsUuid: null,
+                }
             })
             session.on('accepted', () => {
+                stopRingback()
                 setActiveCall(prev => (prev?.session === session ? { ...prev, state: 'active', answeredAt: Date.now() } : prev))
             })
             session.on('ended', () => {
+                stopRingback()
                 setActiveCall(prev => (prev?.session === session ? null : prev))
             })
             session.on('failed', () => {
+                stopRingback()
                 setActiveCall(prev => (prev?.session === session ? null : prev))
             })
             try {
@@ -341,6 +429,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                     pcConfig: TURN_PC_CONFIG,
                 })
             } catch (err: any) {
+                stopRingback()
                 console.error('[SIP] auto-answer threw:', err)
                 setActiveCall(null)
                 import('sonner').then(s => s.toast.error(`Не удалось ответить: ${err?.message ?? err}`)).catch(() => {})
@@ -376,6 +465,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 answeredAt: Date.now(),
                 session,
                 isMuted: false,
+                fsUuid: null,
             })
         })
     }
@@ -412,6 +502,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             answeredAt: null,
             session,
             isMuted: false,
+            fsUuid: null,
         })
 
         session.on('progress', () => {
@@ -479,12 +570,33 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     function hangup() {
-        if (activeCall) activeCall.session.terminate()
+        if (activeCall) {
+            if (activeCall.session) {
+                activeCall.session.terminate()
+            } else {
+                // Placeholder — no SIP session in the browser yet, but FS has
+                // an in-flight originate dialling Megafon → callee. We MUST
+                // tell the server to kill it, otherwise the callee's phone
+                // keeps ringing until Megafon's ~30 s timeout even though the
+                // manager already hit "Отбой". Fire-and-forget — UI clears
+                // immediately, server-side uuid_kill propagates back through
+                // CHANNEL_HANGUP_COMPLETE → SSE as a safety net.
+                if (activeCall.fsUuid) {
+                    fetch('/api/calls/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fsUuid: activeCall.fsUuid }),
+                    }).catch(err => console.warn('[SIP] cancel originate request failed:', err))
+                }
+                stopRingback()
+                setActiveCall(null)
+            }
+        }
         if (incomingCall) incomingCall.session.terminate()
     }
 
     function toggleMute() {
-        if (!activeCall) return
+        if (!activeCall || !activeCall.session) return
         const session = activeCall.session
         if (activeCall.isMuted) {
             session.unmute({ audio: true })
@@ -494,8 +606,36 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         setActiveCall({ ...activeCall, isMuted: !activeCall.isMuted })
     }
 
+    function startPlaceholderOutbound(phoneNumber: string, displayName?: string | null) {
+        // Don't clobber an already-running call.
+        if (activeCall) return
+        setActiveCall({
+            direction: 'outbound',
+            peerNumber: phoneNumber,
+            displayName: displayName ?? null,
+            state: 'connecting',
+            startedAt: Date.now(),
+            answeredAt: null,
+            session: null,
+            isMuted: false,
+            fsUuid: null,
+        })
+        startRingback()
+    }
+
+    function cancelPlaceholderOutbound() {
+        // Only tear down if it's still a placeholder. If FS already attached
+        // the real session, leave it alone — user can hang up via ActiveCallPopup.
+        setActiveCall(prev => (prev && !prev.session ? null : prev))
+        stopRingback()
+    }
+
+    function setActiveCallFsUuid(fsUuid: string) {
+        setActiveCall(prev => (prev ? { ...prev, fsUuid } : prev))
+    }
+
     return (
-        <SipContext.Provider value={{ status, extension, incomingCall, activeCall, call, answer, decline, hangup, toggleMute }}>
+        <SipContext.Provider value={{ status, extension, incomingCall, activeCall, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
             {children}
         </SipContext.Provider>
     )
