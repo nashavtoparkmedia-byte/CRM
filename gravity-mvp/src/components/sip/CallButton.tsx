@@ -55,16 +55,17 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
                             console.info('[CallButton] mic pre-warm: granted')
                         })
                         .catch(err => console.warn('[CallButton] mic pre-warm failed:', err?.message ?? err))
-                    // Same trick for audio playback: prime the <audio> sink
-                    // with a silent user-gesture-driven play() so the later
-                    // auto-attached remote stream isn't blocked by Chrome's
-                    // autoplay policy.
+                    // Audio playback prime — also fire-and-forget. Calling
+                    // play() on an audio element without srcObject can hang
+                    // forever inside `await`, even though it would normally
+                    // reject. The remote stream is attached later in
+                    // SipContext.attachRemoteAudio() which has its own
+                    // explicit play() — this prime is best-effort only.
                     try {
                         const audioEl = document.querySelector('audio') as HTMLAudioElement | null
                         if (audioEl) {
                             audioEl.muted = true
-                            await audioEl.play().catch(() => {})
-                            audioEl.muted = false
+                            audioEl.play().catch(() => {}).finally(() => { audioEl.muted = false })
                         }
                     } catch {}
 
