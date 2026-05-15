@@ -3,12 +3,26 @@
     Internal SIP profile — where CRM managers register from Linphone (UDP)
     and the browser softphone (WebSocket).
 
-    UDP: 5060
-    WS:  7080 (insecure WebSocket — for dev only; switch to WSS in prod)
+    Based on vanilla FS 1.10 sample, trimmed to what we actually use.
 
-    Stage 1 (this stack on Windows): browser uses ws://localhost:7080 — Chrome
-    permits insecure WS to localhost. For deployment, terminate WSS at a
-    reverse proxy or replace this binding with wss-binding + a real cert.
+    Key insight: in FS 1.10, DTLS-SRTP for WebRTC is automatic. You do NOT
+    set `dtls-srtp=true` or `rtp-secure-media=...` — those are for forcing
+    secure mode on plain-UDP peers, and adding them blocks the auto-DTLS
+    code path so FS replies "488 Not Acceptable Here" to WebRTC INVITEs
+    (m=audio ... UDP/TLS/RTP/SAVPF) because it tries to answer with plain
+    RTP/AVP. The single switch that turns WebRTC ON is:
+
+       inbound-late-negotiation = true
+
+    This lets sofia defer the media answer until after it has seen the
+    DTLS fingerprint + AVPF transport, then auto-answer with matching
+    UDP/TLS/RTP/SAVPF + its own fingerprint.
+
+    Bind addresses are all 127.0.0.1 because WSL2 mirrored networking only
+    forwards Windows-host ↔ WSL2 traffic via loopback. (Connections to the
+    shared 192.168.x.x IP from Windows hit the physical NIC, not the WSL2
+    vNIC.) The Megafon trunk runs on the separate `external` profile which
+    keeps the real interface.
   -->
   <aliases/>
   <gateways/>
@@ -21,61 +35,74 @@
     <param name="debug" value="0"/>
     <param name="sip-trace" value="no"/>
 
-    <!-- Context for calls originated by registered users -->
+    <!-- Calls from registered users land in `default` dialplan -->
     <param name="context" value="default"/>
     <param name="dialplan" value="XML"/>
 
-    <!-- RTP. ext-rtp-ip=127.0.0.1 is critical for Windows-Docker: the
-         browser on the host can only reach FreeSWITCH RTP through the port
-         mapping (host 127.0.0.1:NNNN → container :NNNN). Without ext-rtp-ip
-         FS advertises its docker bridge IP (172.20.0.3) in SDP, which the
-         host browser can't route to → both sides hear silence even though
-         signalling and the trunk leg are healthy. -->
-    <param name="rtp-ip" value="$${local_ip_v4}"/>
-    <param name="ext-rtp-ip" value="127.0.0.1"/>
-    <param name="rtp-timer-name" value="soft"/>
-    <param name="rtp-hold-timeout-sec" value="1800"/>
-    <!-- Restrict RTP port range to match docker-compose mapping
-         (16384-16484/udp). FS otherwise picks any port from its global pool,
-         most of which aren't forwarded into the container. -->
-    <param name="rtp-port-min" value="16384"/>
-    <param name="rtp-port-max" value="16484"/>
+    <!-- THE WebRTC switch. Without this FS pre-answers media with plain
+         RTP/AVP and rejects WebRTC SDP with 488. -->
+    <param name="inbound-late-negotiation" value="true"/>
 
-    <!-- SIP signaling -->
-    <param name="sip-ip" value="$${local_ip_v4}"/>
-    <param name="sip-port" value="5060"/>
-
-    <!-- WebSocket binding for browser softphones (sip.js / JsSIP).
-         Format: "ip:port". Use 7080 in dev; deploy reverse-proxy WSS for prod. -->
-    <param name="ws-binding" value=":7080"/>
-    <!-- TLS WSS is disabled in dev — uncomment + provide cert in prod
-    <param name="wss-binding" value=":7443"/>
-    -->
-
-    <!-- Authentication — managers must register with a password. We disable
-         the "domains" ACL because in dev all clients come from the docker
-         bridge (172.20.0.0/16 from the host's perspective) and that ACL
-         rejects them BEFORE the 401 challenge has a chance to fire,
-         producing the 403 Forbidden we were chasing. Auth-calls=true is
-         still on, so a real password is required to register. -->
-    <param name="auth-calls" value="true"/>
-
-    <!-- Codec preferences — G.711 A-law (Megafon priority) + Opus for WebRTC -->
+    <!-- Codec preferences.
+         inbound  = what we ACCEPT from the browser → must include opus
+                    (WebRTC default) or the browser INVITE is rejected
+                    with "Incompatible SDP".
+         outbound = what FS OFFERS when it originates a call → PCMA only,
+                    so the b-leg INVITE to Megafon doesn't leak opus
+                    (Megafon's SBC silently drops mixed-codec offers).
+         FS will transcode opus⇄PCMA between the two legs. -->
     <param name="inbound-codec-prefs" value="opus,PCMA,PCMU"/>
-    <param name="outbound-codec-prefs" value="opus,PCMA,PCMU"/>
+    <param name="outbound-codec-prefs" value="PCMA"/>
     <param name="inbound-codec-negotiation" value="generous"/>
 
-    <!-- NAT handling (essential for WebRTC) -->
-    <param name="aggressive-nat-detection" value="true"/>
-    <param name="enable-3pcc" value="true"/>
-    <param name="apply-nat-acl" value="nat.auto"/>
+    <!-- RTP / SIP bind addresses — loopback only, see header comment -->
+    <param name="rtp-ip" value="127.0.0.1"/>
+    <param name="ext-rtp-ip" value="127.0.0.1"/>
+    <param name="sip-ip" value="127.0.0.1"/>
+    <param name="sip-port" value="5060"/>
+    <param name="rtp-timer-name" value="soft"/>
+    <param name="rtp-hold-timeout-sec" value="1800"/>
+    <param name="rtp-port-min" value="16384"/>
+    <param name="rtp-port-max" value="32768"/>
 
-    <!-- WebRTC niceties -->
+    <!-- WebSocket binding for browser softphones (sip.js / JsSIP).
+         Plain ws:// is fine on localhost — Chrome treats loopback as a
+         secure context, so getUserMedia + WebRTC still work. -->
+    <param name="ws-binding" value="127.0.0.1:7080"/>
+
+    <!-- Authentication — managers must register with a password. -->
+    <param name="auth-calls" value="true"/>
+
+    <!-- WebRTC niceties — rtcp-mux must be true for browser-compatible RTP -->
     <param name="rtcp-mux" value="true"/>
     <param name="enable-rtp-auto-adjust" value="true"/>
     <param name="liberal-dtmf" value="true"/>
 
-    <!-- Allow non-registered numbers to call (when CRM originates click-to-call) -->
+    <!-- rtp-secure-media=optional: tell FS to negotiate SRTP/DTLS-SRTP if the
+         peer offers it, otherwise plain RTP. Without this FS settled the
+         codecs on both legs at PCMA but then refused to build the a-leg
+         answer SDP because no crypto context could be built — leading to
+         "488 Incompatible Destination" right after Original read codec was
+         set. With "optional" sofia builds the proper DTLS-SRTP fingerprint
+         answer for the browser leg and plain-RTP for the Megafon leg. -->
+    <param name="rtp-secure-media" value="optional"/>
+
+    <!-- NAT handling — keep for Linphone over UDP -->
+    <param name="aggressive-nat-detection" value="true"/>
+    <param name="apply-nat-acl" value="nat.auto"/>
+
+    <!-- ICE candidate filtering. The browser on Windows offers only its
+         LAN IP (e.g. 192.168.0.100) as a host candidate; Chrome strips
+         the 127.0.0.1 candidate from WebRTC offers by default. FS's
+         default `wan.auto` candidate ACL only allows non-private (WAN)
+         IPs, so it rejects 192.168.0.100 with "no suitable candidates
+         found" → INCOMPATIBLE_DESTINATION right after codec negotiation.
+         Apply `rfc1918.auto` so FS accepts RFC1918 candidates from the
+         browser. Reachability is provided by WSL2 mirrored networking:
+         FS on WSL2 can reach 192.168.0.100 via the host route. -->
+    <param name="apply-candidate-acl" value="rfc1918.auto"/>
+
+    <!-- No blind registrations -->
     <param name="accept-blind-reg" value="false"/>
     <param name="accept-blind-auth" value="false"/>
 
