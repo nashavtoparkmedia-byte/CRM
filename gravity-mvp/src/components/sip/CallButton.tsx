@@ -41,6 +41,37 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
             onClick={async () => {
                 setBusy(true)
                 try {
+                    // Pre-warm microphone permission INSIDE the user-gesture
+                    // context of this click. The auto-answer that fires when
+                    // FS bridges back to user/101 runs from a WebSocket event
+                    // (no transient activation), so Chrome would block its
+                    // getUserMedia() prompt and JsSIP's session.answer() would
+                    // get NotAllowedError → no local audio track → silent call.
+                    // Pre-warming here saves the prompt grant in the page's
+                    // permission store; the later getUserMedia() in
+                    // session.answer() returns instantly without prompt.
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                        // Stop immediately — we just wanted the permission grant.
+                        stream.getTracks().forEach(t => t.stop())
+                    } catch (micErr: any) {
+                        toast.error(`Микрофон недоступен: ${micErr?.message ?? micErr}`)
+                        setBusy(false)
+                        return
+                    }
+                    // Same trick for audio playback: prime the <audio> sink
+                    // with a silent user-gesture-driven play() so the later
+                    // auto-attached remote stream isn't blocked by Chrome's
+                    // autoplay policy.
+                    try {
+                        const audioEl = document.querySelector('audio') as HTMLAudioElement | null
+                        if (audioEl) {
+                            audioEl.muted = true
+                            await audioEl.play().catch(() => {})
+                            audioEl.muted = false
+                        }
+                    } catch {}
+
                     const res = await fetch('/api/calls/originate', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -50,10 +81,9 @@ export default function CallButton({ phoneNumber, label = 'Позвонить' }
                     if (!res.ok) {
                         toast.error(body?.error ?? `Не удалось инициировать звонок (HTTP ${res.status})`)
                     }
-                    // Don't show a "dialing" toast here — within ~1s FS will
-                    // call back to user/101 (the browser), SipContext picks it
-                    // up via newRTCSession + P-CRM-Outbound-Bridge header and
-                    // auto-answers, displaying the proper ActiveCallPopup.
+                    // Within ~1s FS will call back to user/101, SipContext
+                    // picks it up via newRTCSession + P-CRM-Outbound-Bridge
+                    // header and auto-answers, displaying ActiveCallPopup.
                 } catch (err: any) {
                     toast.error(`Ошибка сети: ${err?.message ?? err}`)
                 }

@@ -215,9 +215,21 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         session.on('peerconnection', () => {
             const pc = session.connection
             pc.addEventListener('track', (ev: RTCTrackEvent) => {
-                if (audioRef.current && ev.streams[0]) {
-                    audioRef.current.srcObject = ev.streams[0]
-                }
+                const el = audioRef.current
+                if (!el || !ev.streams[0]) return
+                el.srcObject = ev.streams[0]
+                console.info('[SIP] audio track attached', {
+                    tracks: ev.streams[0].getAudioTracks().length,
+                    muted: ev.streams[0].getAudioTracks()[0]?.muted,
+                })
+                // Explicit play() — Chrome's autoplay policy blocks silent
+                // start when srcObject is assigned from a non-user-gesture
+                // context (e.g. JsSIP `newRTCSession` event firing from a
+                // WebSocket message). The `autoplay` attribute alone isn't
+                // enough; we must invoke play() and catch the rejection.
+                el.play()
+                    .then(() => console.info('[SIP] remote audio playing'))
+                    .catch(err => console.error('[SIP] audio.play() rejected:', err?.name, err?.message))
             })
         })
     }

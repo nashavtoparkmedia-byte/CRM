@@ -438,6 +438,14 @@ export async function originateCall(args: {
         `origination_caller_id_name='${dialNumber}'`,
         `crm_user_id=${args.userId}`,
         `ignore_early_media=true`,
+        // rtp_secure_media=false overrides vanilla default.xml's global
+        // <action set rtp_secure_media=true> which auto-fires whenever the
+        // channel has DTLS-SRTP crypto. Without this override, when the
+        // b-leg (browser, DTLS-SRTP) auto-answers, FS demands SRTP on the
+        // a-leg (Megafon, plain RTP) too — call dies INCOMPATIBLE_DESTINATION
+        // right at media setup. With false, FS terminates SRTP on the
+        // browser side and bridges plain RTP to Megafon.
+        `rtp_secure_media=false`,
         `RECORD_STEREO=true`,
         `recording_follow_transfer=true`,
         `recording_file=${recPath}`,
