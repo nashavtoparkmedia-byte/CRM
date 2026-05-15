@@ -30,6 +30,23 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 const CODEC_PRIORITY = ['PCMA', 'PCMU', 'telephone-event', 'CN']
 const KEEPABLE_CODEC = /^(PCMA|PCMU|telephone-event|CN)\//i
 
+// WebRTC ICE config — route ALL media through coturn TURN relay running in
+// WSL2 on 127.0.0.1:3478. Chrome on Windows reaches it via mirrored networking,
+// FreeSWITCH (also WSL2) receives relayed RTP at 127.0.0.1:relay-port.
+// `iceTransportPolicy: 'relay'` is critical: it disables host candidate
+// gathering so Chrome can't pick a candidate-pair that doesn't actually work
+// across the WSL2 UDP namespace boundary. Browser only ever exposes the relay
+// candidate, FS's symmetric-RTP / auto-adjust handles the return path.
+const TURN_PC_CONFIG = {
+    iceServers: [
+        // TCP transport — UDP through WSL2 mirrored networking loopback
+        // doesn't deliver to coturn (Chrome on Windows ↔ WSL2 UDP namespace).
+        // TCP works reliably and coturn relays via internal-only UDP to FS.
+        { urls: 'turn:127.0.0.1:3478?transport=tcp', username: 'crm', credential: 'turnpass' },
+    ],
+    iceTransportPolicy: 'relay' as const,
+}
+
 function transformSdpForMegafon(sdp: string): string {
     const lines = sdp.split(/\r?\n/)
     // pt → codec base name (e.g. "8" → "PCMA")
@@ -126,6 +143,47 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         document.body.appendChild(el)
         audioRef.current = el
         return () => { el.remove() }
+    }, [])
+
+    // --- Debug DOM stats (TURN-relay verification) ---
+    // Renders getStats() output into a hidden <pre> element so that an external
+    // tester that can't use the JS isolate (e.g. Chrome MCP with eval blocked)
+    // can still scrape `bytesReceived / bytesSent / candidate-pair state` from
+    // the DOM. Polls every 1s while a PC is live; idle when window.__lastPc
+    // is unset. Safe in production (hidden element, tiny payload).
+    useEffect(() => {
+        const dbg = document.createElement('pre')
+        dbg.id = 'sip-debug-stats'
+        dbg.style.cssText = 'position:fixed;bottom:0;right:0;max-width:520px;max-height:240px;overflow:auto;font:11px monospace;background:#000c;color:#0f0;padding:4px;z-index:99999;white-space:pre-wrap;'
+        document.body.appendChild(dbg)
+        const timer = setInterval(async () => {
+            const pc: any = (window as any).__lastPc
+            if (!pc) { dbg.textContent = 'sip-debug-stats: no active pc'; return }
+            try {
+                const stats = await pc.getStats()
+                const rows: any[] = []
+                stats.forEach((r: any) => {
+                    if (['inbound-rtp', 'outbound-rtp', 'candidate-pair', 'local-candidate', 'remote-candidate'].includes(r.type)) {
+                        rows.push({
+                            t: r.type,
+                            bR: r.bytesReceived,
+                            bS: r.bytesSent,
+                            st: r.state,
+                            ct: r.candidateType,
+                            ip: r.ip ?? r.address,
+                            p: r.port,
+                            pr: r.protocol,
+                            nominated: r.nominated,
+                            id: r.id,
+                            local: r.localCandidateId,
+                            remote: r.remoteCandidateId,
+                        })
+                    }
+                })
+                dbg.textContent = JSON.stringify({ts: new Date().toISOString().slice(11,19), iceState: pc.iceConnectionState, sigState: pc.signalingState, rows}, null, 1)
+            } catch (e: any) { dbg.textContent = 'getStats threw: ' + e?.message }
+        }, 1000)
+        return () => { clearInterval(timer); dbg.remove() }
     }, [])
 
     // --- Register UA on mount ---
@@ -316,7 +374,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             try {
                 session.answer({
                     mediaConstraints: { audio: true, video: false },
-                    pcConfig: { iceServers: [] },
+                    pcConfig: TURN_PC_CONFIG,
                 })
             } catch (err: any) {
                 console.error('[SIP] auto-answer threw:', err)
@@ -421,7 +479,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         const target = `sip:${digits}@crm.local`
         ua.call(target, {
             mediaConstraints: { audio: true, video: false },
-            pcConfig: { iceServers: [] },
+            pcConfig: TURN_PC_CONFIG,
         })
     }
 
@@ -441,7 +499,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         try {
             incomingCall.session.answer({
                 mediaConstraints: { audio: true, video: false },
-                pcConfig: { iceServers: [] },
+                pcConfig: TURN_PC_CONFIG,
             })
             console.info('[SIP] session.answer() returned (waiting for accepted/failed event)')
         } catch (err: any) {

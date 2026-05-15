@@ -101,6 +101,10 @@
          browser. Reachability is provided by WSL2 mirrored networking:
          FS on WSL2 can reach 192.168.0.100 via the host route. -->
     <param name="apply-candidate-acl" value="rfc1918.auto"/>
+    <!-- Also accept loopback candidates: coturn relays via 127.0.0.1 because
+         WSL2 mirrored networking only exposes loopback to Chrome on Windows.
+         Multiple apply-candidate-acl params are OR'd together. -->
+    <param name="apply-candidate-acl" value="loopback.auto"/>
 
     <!-- No blind registrations -->
     <param name="accept-blind-reg" value="false"/>
