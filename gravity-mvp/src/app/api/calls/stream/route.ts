@@ -36,7 +36,6 @@ export async function GET(_req: NextRequest) {
         },
         cancel() {
             if (unsubscribe) unsubscribe()
-            // @ts-expect-error — keepalive stashed in start()
             const ka = (this as any)._keepalive
             if (ka) clearInterval(ka)
         },

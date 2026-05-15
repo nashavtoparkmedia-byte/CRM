@@ -8,6 +8,8 @@ import { enqueueTranscribe } from '@/lib/queue/queues'
 import { syncCallToChat } from '@/lib/freeswitch/EslClient'
 import { opsLog } from '@/lib/opsLog'
 
+export const runtime = 'nodejs'
+
 /**
  * POST /api/admin/reprocess-recordings
  *
