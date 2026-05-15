@@ -176,7 +176,10 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             ua.on('newRTCSession', (data: any) => {
                 const session = data.session
                 if (data.originator === 'remote') {
-                    handleIncomingSession(session)
+                    // Pass `data.request` explicitly — JsSIP 3.13 doesn't populate
+                    // `session.request` synchronously at this point; the event
+                    // payload is the only reliable place to read incoming headers.
+                    handleIncomingSession(session, data.request)
                 } else {
                     handleOutgoingSession(session)
                 }
@@ -219,7 +222,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         })
     }
 
-    function handleIncomingSession(session: any) {
+    function handleIncomingSession(session: any, eventRequest?: any) {
         // Server-originated click-to-call routes through here too. /api/calls/originate
         // tells FS: "dial Megafon → when answered, bridge to user/<ext>". The bridge()
         // creates an outbound INVITE from FS to the browser, which JsSIP sees as a NEW
@@ -228,9 +231,42 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         // When present: skip Accept/Decline popup, auto-answer, surface as outbound
         // ActiveCallPopup. Without this, the manager would click "Call" and immediately
         // get an "Incoming call" popup for their own outbound — very confusing.
+        // Multiple ways to read the header — JsSIP versions vary in API
         const isOutboundBridge = (() => {
-            try { return session.request?.getHeader?.('P-CRM-Outbound-Bridge') === 'true' }
-            catch { return false }
+            try {
+                // session.request is undefined inside the newRTCSession event in
+                // JsSIP 3.13. Use the request from the event payload instead;
+                // fall back to session.request for older flows.
+                const req = eventRequest ?? session.request
+                // Try every reasonable accessor in order
+                const v1 = req?.getHeader?.('P-CRM-Outbound-Bridge')
+                const v2 = req?.getHeader?.('p-crm-outbound-bridge')
+                const v3 = req?.headers?.['P-CRM-Outbound-Bridge']
+                const v4 = req?.headers?.['p-crm-outbound-bridge']
+                // headers may be array of {raw} objects in some JsSIP versions
+                const v5 = Array.isArray(req?.headers?.['P-CRM-Outbound-Bridge'])
+                    ? req.headers['P-CRM-Outbound-Bridge'][0]?.raw
+                    : undefined
+                const probeJson = JSON.stringify({
+                    v1: typeof v1 === 'string' ? v1 : (v1 ? 'truthy-nonstring' : null),
+                    v2: typeof v2 === 'string' ? v2 : (v2 ? 'truthy-nonstring' : null),
+                    v3: typeof v3 === 'string' ? v3 : (v3 ? 'truthy-nonstring' : null),
+                    v4: typeof v4 === 'string' ? v4 : (v4 ? 'truthy-nonstring' : null),
+                    v5,
+                    hasRequest: !!req,
+                    hasGetHeader: typeof req?.getHeader === 'function',
+                    headerKeys: req?.headers ? Object.keys(req.headers) : null,
+                    headersType: req?.headers ? typeof req.headers : null,
+                    headersSample: req?.headers ? JSON.stringify(req.headers).slice(0, 500) : null,
+                })
+                console.info('[SIP] P-CRM probe JSON:', probeJson)
+                const value = v1 || v2 || v3 || v4 || v5
+                const str = typeof value === 'string' ? value : value?.raw ?? String(value ?? '')
+                return /true/i.test(str.trim())
+            } catch (err) {
+                console.warn('[SIP] header probe threw', err)
+                return false
+            }
         })()
 
         attachRemoteAudio(session)

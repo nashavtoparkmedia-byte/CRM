@@ -443,6 +443,19 @@ export async function originateCall(args: {
         `recording_file=${recPath}`,
         `execute_on_answer='record_session ${recPath}'`,
     ].join(',')
+    // FLOW: dial Megafon first, bridge to the manager's browser once trunk
+    // answers. Reverse order ("user first, bridge megafon") triggers
+    // INCOMPATIBLE_DESTINATION on the user-leg INVITE in JsSIP — FS builds
+    // its offer from the originate channel-vars (PCMA), and the browser's
+    // PeerConnection rejects when there's no opus / crypto fallback. With
+    // this order FS handshakes plain RTP+PCMA with the trunk on a-leg, then
+    // builds a fresh DTLS-SRTP/PCMA offer for the b-leg → browser, which
+    // JsSIP accepts cleanly.
+    //
+    // The P-CRM-Outbound-Bridge marker on the b-leg INVITE tells
+    // SipContext.handleIncomingSession that this is OUR own outbound, so it
+    // auto-answers and surfaces as an ActiveCallPopup instead of showing
+    // an Accept/Decline incoming popup.
     const blegVars = `sip_h_P-CRM-Outbound-Bridge=true`
     const cmd = `originate {${vars}}sofia/gateway/megafon/${dialNumber} &bridge([${blegVars}]user/${ext.extension})`
 
