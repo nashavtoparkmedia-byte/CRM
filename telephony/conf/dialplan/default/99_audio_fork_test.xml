@@ -1,16 +1,41 @@
 <!--
-  Day 1 test extension: dial 9999 to forward call audio (mixed both legs,
-  bidirectional) into the Node AudioBridge WebSocket. No AI, no playback
-  is triggered from dialplan — playback is initiated externally via
-  uuid_broadcast (ESL) for the duration of Day 1 testing.
+  Day 1 test extensions for the AI-call audio bridge.
+
+  9999  — minimal: answer + audio_fork + park
+          Use when calling from a live SIP client (Linphone / CRM softphone).
+          External party speaks → mod_audio_fork streams PCM to bridge.
+          uuid_broadcast played back via ESL from outside.
+
+  9998  — loopback-friendly: answer + audio_fork + playback (Callie IVR
+          welcome) + park. Lets you trigger the call without a live SIP
+          client via `originate ... loopback/9998/default &park()` — FS
+          plays a built-in WAV through the channel, which mod_audio_fork
+          (mixed both) forks to the bridge. This proves PCM frames are
+          flowing without a microphone in the loop.
+
+  Notes:
+   - audio_fork application params (drachtio mod v0.5+):
+       start <ws-url> <mixing: mono|mixed|stereo> <sample-rate> <direction: both|listen|speak>
+   - XML attributes use &quot; rather than C-style \" for JSON metadata.
 -->
 <include>
   <extension name="audio_fork_test">
     <condition field="destination_number" expression="^9999$">
       <action application="answer"/>
       <action application="sleep" data="500"/>
-      <action application="set" data="fork_meta={\"callId\":\"${uuid}\",\"test\":true}"/>
-      <action application="audio_fork" data="ws://127.0.0.1:3030/audio mixed both"/>
+      <action application="set" data="fork_meta={&quot;callId&quot;:&quot;${uuid}&quot;,&quot;test&quot;:true,&quot;ext&quot;:9999}"/>
+      <action application="audio_fork" data="start ws://127.0.0.1:3030/audio mixed 8000 both"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+
+  <extension name="audio_fork_test_with_playback">
+    <condition field="destination_number" expression="^9998$">
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+      <action application="set" data="fork_meta={&quot;callId&quot;:&quot;${uuid}&quot;,&quot;test&quot;:true,&quot;ext&quot;:9998}"/>
+      <action application="audio_fork" data="start ws://127.0.0.1:3030/audio mixed 8000 both"/>
+      <action application="playback" data="/usr/local/freeswitch/sounds/en/us/callie/ivr/8000/ivr-welcome.wav"/>
       <action application="park"/>
     </condition>
   </extension>

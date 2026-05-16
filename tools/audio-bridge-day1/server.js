@@ -28,7 +28,7 @@ const AUDIO_DIR = path.join(__dirname, 'audio')
 
 const httpServer = http.createServer((req, res) => {
     if (req.method === 'GET' && req.url.startsWith('/play/')) {
-        const name = path.basename(req.url)
+        const name = path.basename(req.url.split('?')[0])
         const file = path.join(AUDIO_DIR, name)
         if (!fs.existsSync(file)) {
             res.statusCode = 404
@@ -60,6 +60,9 @@ const httpServer = http.createServer((req, res) => {
     res.end('not found')
 })
 
+// /play strips query string before basename (avoid `test.wav?x=1` becoming a 404)
+// — applied inside the /play handler above via req.url.split('?')[0].
+
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[http] listening on :${PORT}`)
 })
@@ -78,7 +81,7 @@ wss.on('connection', (ws, req) => {
     let firstFrameAt = null
     let lastFrameAt = null
     let lastLogAt = Date.now()
-    let warnedSlow = false
+    let slowFramesInWindow = 0
 
     ws.on('message', (data, isBinary) => {
         if (!isBinary) {
@@ -96,24 +99,28 @@ wss.on('connection', (ws, req) => {
         if (!firstFrameAt) {
             firstFrameAt = now
             console.log(`[ws] first PCM frame: ${data.length} bytes`)
-        } else if (!warnedSlow && lastFrameAt && now - lastFrameAt > 50) {
-            console.warn(`[ws] WARN slow frame: ${now - lastFrameAt}ms gap (expected ~20ms)`)
-            warnedSlow = true
+        } else if (lastFrameAt && now - lastFrameAt > 50) {
+            // Count every slow gap; log aggregated per second below.
+            slowFramesInWindow++
         }
         lastFrameAt = now
         frames++
         bytes += data.length
 
-        // Throttle stats to ~1/sec
+        // Throttle stats to ~1/sec, include slow-frame count for the window.
         if (now - lastLogAt >= 1000) {
             const elapsedSec = (now - firstFrameAt) / 1000
+            const slowSuffix = slowFramesInWindow > 0
+                ? ` slowFrames=${slowFramesInWindow}`
+                : ''
             console.log(
                 `[ws] frames=${frames} bytes=${bytes} ` +
                 `fps=${(frames / elapsedSec).toFixed(1)} ` +
                 `avg=${(bytes / frames).toFixed(0)}B/frame ` +
-                `elapsed=${elapsedSec.toFixed(1)}s`,
+                `elapsed=${elapsedSec.toFixed(1)}s${slowSuffix}`,
             )
             lastLogAt = now
+            slowFramesInWindow = 0
         }
     })
 
@@ -156,21 +163,35 @@ function eslApi(command, timeoutMs = 5000) {
                 return
             }
 
-            if (stage === 'authenticating' && buf.includes('+OK accepted')) {
-                stage = 'sending'
-                buf = ''
-                sock.write(`api ${command}\n\n`)
-                return
+            if (stage === 'authenticating') {
+                if (buf.includes('+OK accepted')) {
+                    stage = 'sending'
+                    buf = ''
+                    sock.write(`api ${command}\n\n`)
+                    return
+                }
+                if (buf.includes('-ERR')) {
+                    clearTimeout(timer)
+                    sock.destroy()
+                    reject(new Error(`esl auth failed: ${buf.split('\n').filter(l => l.includes('-ERR'))[0] || 'unknown'}`))
+                    return
+                }
             }
 
-            if (stage === 'sending' && buf.includes('Content-Type: api/response')) {
-                // Body comes after Content-Length header + blank line; we wait for it.
-                const m = buf.match(/Content-Length: (\d+)\r?\n\r?\n([\s\S]*)/)
+            if (stage === 'sending') {
+                // Trim buffer to start at api/response to avoid matching a stray
+                // Content-Length: header from an unrelated event preceding it.
+                const respIdx = buf.indexOf('Content-Type: api/response')
+                if (respIdx === -1) return
+                const respBuf = buf.substring(respIdx)
+                const m = respBuf.match(/Content-Length: (\d+)\r?\n\r?\n([\s\S]*)/)
                 if (m) {
                     const expectedLen = Number(m[1])
                     const body = m[2]
                     if (Buffer.byteLength(body, 'utf8') >= expectedLen) {
                         clearTimeout(timer)
+                        stage = 'done'
+                        sock.removeAllListeners('data')
                         sock.end()
                         resolve(body.trim())
                     }
@@ -188,7 +209,10 @@ function eslApi(command, timeoutMs = 5000) {
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
 
 function shutdown(signal) {
-    console.log(`[main] ${signal} — shutting down`)
+    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size})`)
+    for (const client of wss.clients) {
+        try { client.terminate() } catch {}
+    }
     wss.close(() => {})
     httpServer.close(() => process.exit(0))
     setTimeout(() => process.exit(1), 3000).unref()
