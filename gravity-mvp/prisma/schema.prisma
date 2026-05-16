@@ -778,21 +778,45 @@ model AiCallMessage {
   @@index([role])
 }
 
+/// Top-level grouping for AI-call scenarios. Lets the UI organise scripts
+/// by business purpose (lead qualification, churn winback, NPS survey, …).
+/// Seeded with 3 defaults — see prisma/seed/ai-call-projects.ts.
+model AiCallProject {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  slug        String           @unique
+  description String?
+  /// Soft-delete via isActive. Existing scenarios keep their projectId
+  /// even if the project is deactivated — they just don't show in the picker.
+  isActive    Boolean          @default(true)
+  /// Display order in the settings UI grouping.
+  sortOrder   Int              @default(100)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  scenarios   AiCallScenario[]
+}
+
 /// Reusable AI-call scenario: system prompt + ordered questions. Manager picks
-/// one when initiating an AI call. Soft-deleted via isActive.
+/// one when initiating an AI call. Soft-deleted via isActive. Belongs to one
+/// AiCallProject (nullable for backfill — pre-project scenarios will be
+/// auto-assigned to the "Квалификация лида" default project on first read).
 model AiCallScenario {
-  id            String   @id @default(cuid())
-  name          String
-  description   String?
-  systemPrompt  String
+  id                String         @id @default(cuid())
+  projectId         String?
+  name              String
+  description       String?
+  systemPrompt      String
   /// Array of { text, intentKeywords?, branches? } — see AiCallScenarioQuestion type
-  questions     Json     @default("[]")
+  questions         Json           @default("[]")
   /// Soft target call length in seconds — informs LLM about pacing.
   targetDurationSec Int?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  calls         Call[]
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  project           AiCallProject? @relation(fields: [projectId], references: [id])
+  calls             Call[]
+
+  @@index([projectId, isActive])
 }
 
 /// Единственная запись — настройки AI агента (upsert by id="singleton")

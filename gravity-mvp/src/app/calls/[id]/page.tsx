@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Same rationale as
+   src/lib/ai-call/scenarios.ts: Prisma client types for AI-call models
+   may not be regenerated on every dev box. */
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { getUsers } from '@/lib/users/user-service'

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- fetch error bodies
+   are unknown; lean cast keeps the handler tight. */
 "use client"
 
 import { useState } from 'react'
@@ -5,18 +7,49 @@ import {
     Sparkles, Save, AlertCircle, CheckCircle2, Loader2,
     Plus, Pencil, Trash2, X, GripVertical,
 } from 'lucide-react'
-import type { AiCallScenarioConfig, AiCallScenarioQuestion } from '@/lib/ai-call/types'
+import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
+
+interface ProjectRow {
+    id: string
+    name: string
+    slug: string
+    description?: string
+    sortOrder: number
+}
+
+interface ScenarioRow {
+    id: string
+    name: string
+    description?: string
+    systemPrompt: string
+    questions: AiCallScenarioQuestion[]
+    targetDurationSec?: number
+    projectId: string | null
+    projectName: string | null
+}
 
 interface Props {
-    initialScenarios: AiCallScenarioConfig[]
+    initialProjects: ProjectRow[]
+    initialScenarios: ScenarioRow[]
     canEdit: boolean
 }
 
-type EditorMode = { kind: 'closed' } | { kind: 'edit'; id: string } | { kind: 'create' }
+type EditorMode = { kind: 'closed' } | { kind: 'edit'; id: string } | { kind: 'create'; projectId: string }
 
-export default function AiCallScenariosClient({ initialScenarios, canEdit }: Props) {
-    const [scenarios, setScenarios] = useState<AiCallScenarioConfig[]>(initialScenarios)
+export default function AiCallScenariosClient({ initialProjects, initialScenarios, canEdit }: Props) {
+    const [projects] = useState<ProjectRow[]>(initialProjects)
+    const [scenarios, setScenarios] = useState<ScenarioRow[]>(initialScenarios)
     const [editor, setEditor] = useState<EditorMode>({ kind: 'closed' })
+
+    // Group scenarios by project, preserving project sort order; unassigned
+    // (shouldn't happen after backfill, but defensive) go last.
+    const byProject = new Map<string, ScenarioRow[]>()
+    for (const p of projects) byProject.set(p.id, [])
+    const orphans: ScenarioRow[] = []
+    for (const s of scenarios) {
+        if (s.projectId && byProject.has(s.projectId)) byProject.get(s.projectId)!.push(s)
+        else orphans.push(s)
+    }
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
@@ -30,16 +63,6 @@ export default function AiCallScenariosClient({ initialScenarios, canEdit }: Pro
                         Скрипты для голосового ассистента, который звонит лидам по кнопке «Звонок ИИ» из карточки.
                     </p>
                 </div>
-                {canEdit && editor.kind === 'closed' && (
-                    <button
-                        type="button"
-                        onClick={() => setEditor({ kind: 'create' })}
-                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-4 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark"
-                    >
-                        <Plus className="h-4 w-4" />
-                        Создать
-                    </button>
-                )}
             </header>
 
             {!canEdit && (
@@ -51,7 +74,8 @@ export default function AiCallScenariosClient({ initialScenarios, canEdit }: Pro
 
             {editor.kind === 'create' && (
                 <ScenarioEditor
-                    initial={emptyScenario()}
+                    initial={emptyScenario(editor.projectId)}
+                    projects={projects}
                     onCancel={() => setEditor({ kind: 'closed' })}
                     onSaved={(s) => {
                         setScenarios([...scenarios, s])
@@ -61,36 +85,83 @@ export default function AiCallScenariosClient({ initialScenarios, canEdit }: Pro
                 />
             )}
 
-            <div className="flex flex-col gap-3">
-                {scenarios.length === 0 && editor.kind === 'closed' && (
-                    <div className="rounded-md border border-border bg-surface p-6 text-center text-[14px] text-muted-foreground">
-                        Сценариев пока нет
-                    </div>
-                )}
+            {/* Render one section per project, in sortOrder. Each section
+                shows its scenarios + per-project "Create" button (canEdit). */}
+            <div className="flex flex-col gap-6">
+                {projects.map((proj) => {
+                    const list = byProject.get(proj.id) ?? []
+                    return (
+                        <section key={proj.id} className="flex flex-col gap-3">
+                            <div className="flex items-baseline justify-between">
+                                <div>
+                                    <h2 className="text-[16px] font-semibold text-foreground">{proj.name}</h2>
+                                    {proj.description && (
+                                        <p className="text-[12px] text-muted-foreground mt-0.5">{proj.description}</p>
+                                    )}
+                                </div>
+                                {canEdit && editor.kind === 'closed' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditor({ kind: 'create', projectId: proj.id })}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface"
+                                    >
+                                        <Plus className="h-3 w-3" />
+                                        Сценарий
+                                    </button>
+                                )}
+                            </div>
 
-                {scenarios.map((s) =>
-                    editor.kind === 'edit' && editor.id === s.id ? (
-                        <ScenarioEditor
-                            key={s.id}
-                            initial={s}
-                            onCancel={() => setEditor({ kind: 'closed' })}
-                            onSaved={(updated) => {
-                                setScenarios(scenarios.map((x) => (x.id === updated.id ? updated : x)))
-                                setEditor({ kind: 'closed' })
-                            }}
-                            onDeleted={(id) => {
-                                setScenarios(scenarios.filter((x) => x.id !== id))
-                                setEditor({ kind: 'closed' })
-                            }}
-                        />
-                    ) : (
-                        <ScenarioCard
-                            key={s.id}
-                            scenario={s}
-                            canEdit={canEdit}
-                            onEdit={() => setEditor({ kind: 'edit', id: s.id })}
-                        />
-                    ),
+                            {list.length === 0 ? (
+                                <div className="rounded-md border border-dashed border-border bg-surface/40 p-4 text-center text-[13px] text-muted-foreground">
+                                    В этом проекте пока нет сценариев
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-2">
+                                    {list.map((s) =>
+                                        editor.kind === 'edit' && editor.id === s.id ? (
+                                            <ScenarioEditor
+                                                key={s.id}
+                                                initial={s}
+                                                projects={projects}
+                                                onCancel={() => setEditor({ kind: 'closed' })}
+                                                onSaved={(updated) => {
+                                                    setScenarios(scenarios.map((x) => (x.id === updated.id ? updated : x)))
+                                                    setEditor({ kind: 'closed' })
+                                                }}
+                                                onDeleted={(id) => {
+                                                    setScenarios(scenarios.filter((x) => x.id !== id))
+                                                    setEditor({ kind: 'closed' })
+                                                }}
+                                            />
+                                        ) : (
+                                            <ScenarioCard
+                                                key={s.id}
+                                                scenario={s}
+                                                canEdit={canEdit}
+                                                onEdit={() => setEditor({ kind: 'edit', id: s.id })}
+                                            />
+                                        ),
+                                    )}
+                                </div>
+                            )}
+                        </section>
+                    )
+                })}
+
+                {orphans.length > 0 && (
+                    <section className="flex flex-col gap-3">
+                        <h2 className="text-[16px] font-semibold text-muted-foreground">Без проекта</h2>
+                        <div className="flex flex-col gap-2">
+                            {orphans.map((s) => (
+                                <ScenarioCard
+                                    key={s.id}
+                                    scenario={s}
+                                    canEdit={canEdit}
+                                    onEdit={() => setEditor({ kind: 'edit', id: s.id })}
+                                />
+                            ))}
+                        </div>
+                    </section>
                 )}
             </div>
         </div>
@@ -102,7 +173,7 @@ function ScenarioCard({
     canEdit,
     onEdit,
 }: {
-    scenario: AiCallScenarioConfig
+    scenario: ScenarioRow
     canEdit: boolean
     onEdit: () => void
 }) {
@@ -137,14 +208,16 @@ function ScenarioCard({
 
 function ScenarioEditor({
     initial,
+    projects,
     onCancel,
     onSaved,
     onDeleted,
     isNew = false,
 }: {
-    initial: AiCallScenarioConfig
+    initial: ScenarioRow
+    projects: ProjectRow[]
     onCancel: () => void
-    onSaved: (s: AiCallScenarioConfig) => void
+    onSaved: (s: ScenarioRow) => void
     onDeleted?: (id: string) => void
     isNew?: boolean
 }) {
@@ -153,6 +226,7 @@ function ScenarioEditor({
     const [systemPrompt, setSystemPrompt] = useState(initial.systemPrompt)
     const [questions, setQuestions] = useState<AiCallScenarioQuestion[]>(initial.questions)
     const [targetDurationSec, setTargetDurationSec] = useState<number | undefined>(initial.targetDurationSec)
+    const [projectId, setProjectId] = useState<string>(initial.projectId ?? projects[0]?.id ?? '')
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [status, setStatus] = useState<{ kind: 'ok' | 'error'; message: string } | null>(null)
@@ -175,7 +249,7 @@ function ScenarioEditor({
             const res = await fetch(url, {
                 method: isNew ? 'POST' : 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, description, systemPrompt, questions, targetDurationSec }),
+                body: JSON.stringify({ name, description, systemPrompt, questions, targetDurationSec, projectId }),
             })
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}))
@@ -231,6 +305,22 @@ function ScenarioEditor({
                     <X className="h-4 w-4" />
                 </button>
             </div>
+
+            <section className="flex flex-col gap-2">
+                <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-project">
+                    Проект
+                </label>
+                <select
+                    id="scen-project"
+                    value={projectId}
+                    onChange={(e) => setProjectId(e.target.value)}
+                    className="h-11 rounded-md border border-border bg-background px-3 text-[15px] text-foreground outline-none transition-colors focus:border-primary"
+                >
+                    {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
+            </section>
 
             <section className="flex flex-col gap-2">
                 <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-name">
@@ -404,7 +494,7 @@ function ScenarioEditor({
     )
 }
 
-function emptyScenario(): AiCallScenarioConfig {
+function emptyScenario(projectId: string): ScenarioRow {
     return {
         id: '',
         name: '',
@@ -412,5 +502,7 @@ function emptyScenario(): AiCallScenarioConfig {
         systemPrompt: '',
         questions: [],
         targetDurationSec: 120,
+        projectId,
+        projectName: null,
     }
 }

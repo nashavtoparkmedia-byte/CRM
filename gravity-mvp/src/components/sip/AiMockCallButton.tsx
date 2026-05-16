@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- thrown errors are
+   unknown by design; pragmatic cast for the UI. */
 "use client"
 
 import { useState } from "react"
