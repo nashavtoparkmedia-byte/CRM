@@ -18,6 +18,11 @@ const path = require('path')
 const net = require('net')
 const os = require('os')
 const { WebSocketServer } = require('ws')
+const { YandexSttSession } = require('./yandex-stt')
+
+const YANDEX_API_KEY = process.env.YANDEX_API_KEY
+const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID
+const STT_ENABLED = !!YANDEX_API_KEY
 
 const PORT = Number(process.env.AUDIO_BRIDGE_PORT ?? 3030)
 const ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
@@ -89,6 +94,7 @@ const httpServer = http.createServer((req, res) => {
 
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[http] listening on :${PORT}`)
+    console.log(`[stt] ${STT_ENABLED ? 'enabled (Yandex SpeechKit v3)' : 'DISABLED — set YANDEX_API_KEY to turn on'}`)
 })
 
 // ── WebSocket server: receives PCM from mod_audio_fork ─────────────────────────
@@ -107,6 +113,26 @@ wss.on('connection', (ws, req) => {
     let lastLogAt = Date.now()
     let slowFramesInWindow = 0
 
+    // STT session — created per WS connection if API key present.
+    let sttSession = null
+    if (STT_ENABLED) {
+        sttSession = new YandexSttSession({
+            apiKey: YANDEX_API_KEY,
+            folderId: YANDEX_FOLDER_ID,
+            onPartial: (text, conf) => {
+                if (text.trim()) console.log(`[stt] partial: ${text}  (conf=${conf.toFixed?.(2) ?? '?'})`)
+            },
+            onFinal: text => {
+                if (text.trim()) console.log(`[stt] FINAL: ${text}`)
+            },
+            onError: err => console.error(`[stt] error: ${err.message}`),
+        })
+        sttSession.start().catch(err => {
+            console.error(`[stt] start failed: ${err.message}`)
+            sttSession = null
+        })
+    }
+
     ws.on('message', (data, isBinary) => {
         if (!isBinary) {
             // mod_audio_fork sends a JSON metadata frame as the first text message.
@@ -122,7 +148,7 @@ wss.on('connection', (ws, req) => {
         const now = Date.now()
         if (!firstFrameAt) {
             firstFrameAt = now
-            console.log(`[ws] first PCM frame: ${data.length} bytes`)
+            console.log(`[ws] first PCM frame: ${data.length} bytes (stt=${STT_ENABLED ? 'on' : 'off'})`)
         } else if (lastFrameAt && now - lastFrameAt > 50) {
             // Count every slow gap; log aggregated per second below.
             slowFramesInWindow++
@@ -130,6 +156,9 @@ wss.on('connection', (ws, req) => {
         lastFrameAt = now
         frames++
         bytes += data.length
+
+        // Feed PCM to Yandex STT
+        if (sttSession) sttSession.send(data)
 
         // Throttle stats to ~1/sec, include slow-frame count for the window.
         if (now - lastLogAt >= 1000) {
@@ -154,6 +183,7 @@ wss.on('connection', (ws, req) => {
             `[ws] closed code=${code} frames=${frames} bytes=${bytes} ` +
             `dur=${elapsedSec.toFixed(1)}s`,
         )
+        if (sttSession) sttSession.stop()
     })
 
     ws.on('error', err => {

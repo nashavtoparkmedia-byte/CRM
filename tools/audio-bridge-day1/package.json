@@ -9,6 +9,8 @@
     "gen-wav": "node gen-test-wav.js"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.13.0",
+    "@yandex-cloud/nodejs-sdk": "^3.0.6",
     "ws": "^8.18.0"
   }
 }
