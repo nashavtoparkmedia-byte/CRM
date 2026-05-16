@@ -342,9 +342,13 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                 </div>
             )}
             {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
-                <div className="flex items-center justify-end pt-3 mt-auto border-t border-dashed">
-                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }} disabled={loading} className="h-8 px-3 text-xs">
-                        {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
+                <div className="flex items-center justify-end pt-4 mt-auto border-t border-dashed">
+                    <Button
+                        onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }}
+                        disabled={loading}
+                        className="h-11 px-5 text-base font-semibold"
+                    >
+                        {loading ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Wifi size={18} className="mr-2" />} Переподключить
                     </Button>
                 </div>
             )}

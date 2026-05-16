@@ -19,6 +19,10 @@ class MessageParser {
       messageType: msg.type || 'text',
       attachments: msg.attachments || [],
       isOutgoing:  msg.isOutgoing || false,
+      // Native reply support — null when the message isn't a reply.
+      // The CRM stores it in Message.metadata.replyTo so the UI can render
+      // a quote-block linking to the source message in the same chat.
+      replyToMessageId: msg.replyToMessageId || null,
     }
   }
 

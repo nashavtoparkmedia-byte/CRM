@@ -158,6 +158,23 @@ class TransportInterceptor {
 
     const hasAttaches = Array.isArray(m.attaches) && m.attaches.length > 0
 
+    // Native MAX reply lives at m.link with type='REPLY'. Field names vary
+    // slightly across builds (some emit message.id, some replyToMessageId),
+    // so we try every shape we've seen. Returned value is just the source
+    // message id — the CRM stores it as metadata.replyTo.externalId and
+    // resolves the snippet via its own Message table.
+    let replyToMessageId = null
+    if (m.link && (m.link.type === 'REPLY' || m.link.type === 'reply')) {
+      replyToMessageId = m.link.message?.id
+        || m.link.messageId
+        || m.link.replyToMessageId
+        || null
+    }
+    // Some MAX builds emit a flat `replyTo` field at the message root.
+    if (!replyToMessageId && m.replyTo) {
+      replyToMessageId = m.replyTo.id || m.replyTo.messageId || null
+    }
+
     return {
       id:          m.id    || null,
       chatId:      payload.chatId || null,
@@ -167,6 +184,7 @@ class TransportInterceptor {
       type:        hasAttaches ? this._detectMaxType(m.attaches) : 'text',
       attachments: this._extractMaxAttachments(m.attaches || []),
       isOutgoing:  this._myUserId ? String(m.sender) === this._myUserId : false,
+      replyToMessageId: replyToMessageId ? String(replyToMessageId) : null,
       raw:         payload,
     }
   }

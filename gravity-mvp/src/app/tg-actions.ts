@@ -293,7 +293,18 @@ function detectTgMediaType(message: any): { type: string; fallback: string } | n
 }
 
 async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
-    if (message && !message.out) {
+    if (message) {
+        // Direction: MTProto ставит message.out=true когда сообщение
+        // отправлено С НАШЕГО аккаунта (через Telegram Web/Desktop или
+        // через нашу CRM). Раньше тут был фильтр !message.out и
+        // исходящие из веб-Telegram оператора игнорировались. Теперь
+        // обрабатываем оба направления.
+        // (См. importTelegramHistory ниже — там тот же подход.)
+        const direction: 'inbound' | 'outbound' = message.out ? 'outbound' : 'inbound'
+
+        // peerId = собеседник в диалоге, в обоих направлениях:
+        //   inbound:  peerId.userId = sender (собеседник)
+        //   outbound: peerId.userId = recipient (тоже собеседник)
         const senderId = message.peerId?.userId?.toString() || message.fromId?.userId?.toString();
         const mediaInfo = detectTgMediaType(message)
         const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
@@ -311,7 +322,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         }
         const now = validated
 
-        console.log(`[${loggerPrefix}] INBOUND connId=${connectionId} senderId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
+        console.log(`[${loggerPrefix}] ${direction.toUpperCase()} connId=${connectionId} partnerId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
 
         // 1. Resolve or CREATE unified chat
         let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
@@ -348,11 +359,19 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         }
 
         // ── Contact Model dual write ──────────────────────────────
+        // gramJS attaches a User on `message.sender` for private dialogs.
+        // `.phone` is present iff the peer's privacy lets us see it (or
+        // they're in our contacts). When available, passing it through
+        // means Scenario 2 phone-match will fire — TG identity attaches
+        // to whatever Contact already owns that phone (Yandex driver,
+        // WA-side contact, etc.) and yandex-link/cron can chain further.
         try {
+            const rawSenderPhone = (message.sender as any)?.phone
+            const senderPhone = rawSenderPhone ? String(rawSenderPhone) : null
             const contactResult = await ContactService.resolveContact(
                 'telegram',
                 senderId,
-                null,  // TG GramJS не передаёт номер телефона
+                senderPhone,
                 message.sender?.firstName || message.sender?.username || null,
             )
             await ContactService.ensureChatLinked(
@@ -365,7 +384,12 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         }
         // ──────────────────────────────────────────────────────────
 
-        // 3. DE-DUPLICATION: by externalId or content+time
+        // 3. DE-DUPLICATION: by externalId or content+time.
+        // Для outbound из CRM: MessageService.send сначала optimistic-
+        // записывает Message без externalId, потом обновляет externalId
+        // после ответа Telegram. Если live-listener успевает раньше —
+        // второй OR-блок найдёт нашу запись по content+chatId+direction
+        // и не создаст дубль.
         const existing = await (prisma.message as any).findFirst({
             where: {
                 OR: [
@@ -373,7 +397,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                     {
                         chatId: unifiedChat.id,
                         content: text,
-                        direction: 'inbound',
+                        direction,
                         sentAt: {
                             gte: new Date(now.getTime() - 5000),
                             lte: new Date(now.getTime() + 5000)
@@ -384,19 +408,32 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         })
 
         if (existing) {
-            console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
+            console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id} ${direction})`)
         } else {
             const msgType = mediaInfo?.type || 'text'
+            // Capture native TG reply for UI quote-block. gramJS attaches a
+            // MessageReplyHeader at `message.replyTo`, with `replyToMsgId` as
+            // the peer-scoped TG msgId of the source — same value the UI
+            // looks up via Message.externalId. We store only externalId
+            // (no internal id yet because the source might predate this row
+            // and we don't want to do a join on every inbound).
+            const replyToHeader: any = (message as any).replyTo
+            const replyToMsgIdRaw: any = replyToHeader?.replyToMsgId
+            const replyMeta = replyToMsgIdRaw
+                ? { replyTo: { externalId: String(replyToMsgIdRaw), channel: 'telegram' as const } }
+                : null
+
             const savedMsg = await (prisma.message as any).create({
                 data: {
                     chatId: unifiedChat.id,
-                    direction: 'inbound',
+                    direction,
                     content: text,
                     channel: 'telegram',
                     type: msgType,
                     sentAt: now,
                     status: 'delivered',
-                    externalId: externalMsgId
+                    externalId: externalMsgId,
+                    ...(replyMeta ? { metadata: replyMeta } : {}),
                 }
             })
 
@@ -429,7 +466,10 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 }
             }
 
-            console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
+            console.log(`[${loggerPrefix}] SAVED ${direction} msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
+            // emitMessageReceived нужен и для outbound — UI live-update
+            // должен сразу подхватить «оператор написал с другого
+            // клиента → строка чата всплывает наверх с новым preview».
             emitMessageReceived(savedMsg).catch(e =>
                 console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
             )
@@ -695,7 +735,7 @@ async function getTelegramClient(connection: any) {
     return client
 }
 
-export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string }) {
+export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, replyToExternalId?: string }) {
     console.log(`[TG-SEND] START: phone=${phoneNumber}, connectionId=${connectionId}, metadata=${JSON.stringify(metadata)}`)
     let connection
     
@@ -786,10 +826,25 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         }
 
         console.log(`[TG-SEND] Sending message to entity...`)
-        
+
+        // gramJS replyTo expects a number (peer-scoped TG message id).
+        // metadata.replyToExternalId comes from MessageService as a string
+        // (DB-side externalId column). Parse defensively — bad input means
+        // "no reply" rather than send-failure.
+        const sendOptions: { message: string; replyTo?: number } = { message }
+        if (metadata?.replyToExternalId) {
+            const parsed = parseInt(String(metadata.replyToExternalId), 10)
+            if (Number.isFinite(parsed) && parsed > 0) {
+                sendOptions.replyTo = parsed
+                console.log(`[TG-SEND] replyTo=${parsed}`)
+            } else {
+                console.warn(`[TG-SEND] replyToExternalId="${metadata.replyToExternalId}" did not parse to a number — sending without reply`)
+            }
+        }
+
         // Add a safety timeout for the actual sending
         const result = await Promise.race([
-            client.sendMessage(entity || target, { message }),
+            client.sendMessage(entity || target, sendOptions),
             new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Telegram sendMessage timeout (25s)')), 25000))
         ])
         
@@ -1120,10 +1175,16 @@ export async function importTelegramHistory(
                     })
                 }
 
-                // Contact resolution
+                // Contact resolution. gramJS exposes `entity.phone` on private-
+                // dialog User objects when the peer's privacy permits it (we're
+                // in their contacts, or "Anybody can see my phone"). Pass it
+                // through so Scenario 2 phone-match merges fire and the
+                // identity attaches to an existing Yandex Contact.
                 if (!unifiedChat.contactId) {
                     try {
-                        await ContactService.resolveContact('telegram', peerId, null, chatName)
+                        const rawPhone = (dialog.entity as any)?.phone
+                        const peerPhone = rawPhone ? String(rawPhone) : null
+                        await ContactService.resolveContact('telegram', peerId, peerPhone, chatName)
                         totalContacts++
                     } catch {}
                 }
@@ -1537,4 +1598,221 @@ async function resolveEntity(
     }
 
     return { reachable: false, error: 'Номер не найден в Telegram' }
+}
+
+/**
+ * One-shot backfill for TG ContactIdentity rows whose phoneId is NULL.
+ *
+ * Walks every orphan TG identity, asks the active gramJS client for the
+ * underlying User entity, and — when the peer's privacy lets us see it —
+ * attaches the discovered phone. The phone-attach logic mirrors the WA
+ * LID backfill:
+ *
+ *   - If a ContactPhone with that phone already exists on a DIFFERENT
+ *     Contact → merge our TG-only contact INTO that owner via
+ *     ContactMergeService.mergeContactToContact (driver-link survives).
+ *   - If a ContactPhone is already on OUR Contact → just attach identity.phoneId.
+ *   - If neither → create a fresh ContactPhone on our Contact, link
+ *     identity.phoneId, and (if Contact had no primary yet) set primaryPhoneId.
+ *
+ * Tg privacy permitting, this turns "TG identity floating without a number"
+ * into a real, merge-able contact node. Throttled to avoid gramJS flood-wait.
+ */
+export async function backfillTelegramPhonesForOrphanIdentities(
+    options: { dryRun?: boolean; limit?: number; throttleMs?: number } = {}
+): Promise<{
+    dryRun: boolean
+    scanned: number
+    translated: number
+    merged: number
+    phoneCreated: number
+    phoneLinked: number
+    skipped_no_phone: number
+    skipped_no_entity: number
+    errors: number
+    sample: any[]
+}> {
+    const dryRun = options.dryRun !== false  // default true
+    const limit = Number.isFinite(options.limit) && (options.limit as number) > 0 ? Number(options.limit) : 0
+    const throttleMs = Number.isFinite(options.throttleMs) ? Number(options.throttleMs) : 250
+
+    const { normalizePhoneE164 } = await import('@/lib/phoneUtils')
+    const { ContactMergeService } = await import('@/lib/ContactMergeService')
+
+    console.log(`[tg-backfill] start dryRun=${dryRun} limit=${limit || 'all'} throttleMs=${throttleMs}`)
+
+    // Pick the FIRST active connection — that's whose contacts list we'll
+    // probe. Probing through every connection ×186 identities would multiply
+    // gramJS load and risk flood-wait without much extra coverage.
+    const connection = await (prisma as any).telegramConnection.findFirst({
+        where: { isActive: true },
+        orderBy: { isDefault: 'desc' },
+    })
+    if (!connection || !connection.sessionString) {
+        console.warn('[tg-backfill] no active Telegram connection — abort')
+        return { dryRun, scanned: 0, translated: 0, merged: 0, phoneCreated: 0, phoneLinked: 0, skipped_no_phone: 0, skipped_no_entity: 0, errors: 0, sample: [] }
+    }
+
+    let client: TelegramClient
+    try {
+        client = await getTelegramClient(connection)
+    } catch (e: any) {
+        console.error(`[tg-backfill] failed to get TG client: ${e.message}`)
+        return { dryRun, scanned: 0, translated: 0, merged: 0, phoneCreated: 0, phoneLinked: 0, skipped_no_phone: 0, skipped_no_entity: 0, errors: 0, sample: [] }
+    }
+
+    type OrphanRow = { id: string; externalId: string; contactId: string }
+    const rows: OrphanRow[] = limit > 0
+        ? await prisma.$queryRaw<OrphanRow[]>`
+            SELECT id, "externalId", "contactId"
+            FROM "ContactIdentity"
+            WHERE channel = 'telegram'
+              AND "phoneId" IS NULL
+              AND "externalId" ~ '^[0-9]+$'
+            ORDER BY "createdAt" DESC
+            LIMIT ${limit}
+        `
+        : await prisma.$queryRaw<OrphanRow[]>`
+            SELECT id, "externalId", "contactId"
+            FROM "ContactIdentity"
+            WHERE channel = 'telegram'
+              AND "phoneId" IS NULL
+              AND "externalId" ~ '^[0-9]+$'
+            ORDER BY "createdAt" DESC
+        `
+
+    console.log(`[tg-backfill] candidates: ${rows.length}`)
+
+    // gramJS `getEntity(BigInt(userId))` fails when we never had a peer
+    // reference (no access_hash in cache). The reliable way to pull phones
+    // is to enumerate dialogs + contacts once — that's the path Telegram
+    // itself exposes phones through. We build a userId→phone map up front
+    // and look every orphan identity up in it.
+    const userPhoneById = new Map<string, string>()
+
+    try {
+        const dialogs = await client.getDialogs({ limit: 500 })
+        let dialogPhones = 0
+        for (const d of dialogs) {
+            const entity: any = d.entity
+            if (entity?.className === 'User' && entity.phone && entity.id) {
+                userPhoneById.set(entity.id.toString(), String(entity.phone))
+                dialogPhones++
+            }
+        }
+        console.log(`[tg-backfill] dialogs scanned: ${dialogs.length}, phones harvested: ${dialogPhones}`)
+    } catch (e: any) {
+        console.warn(`[tg-backfill] getDialogs failed: ${e.message}`)
+    }
+
+    try {
+        const contacts: any = await client.invoke(new Api.contacts.GetContacts({ hash: BigInt(0) as any }))
+        let contactPhones = 0
+        if (contacts && 'users' in contacts && Array.isArray(contacts.users)) {
+            for (const u of contacts.users) {
+                if (u?.phone && u?.id) {
+                    userPhoneById.set(u.id.toString(), String(u.phone))
+                    contactPhones++
+                }
+            }
+        }
+        console.log(`[tg-backfill] contacts API phones harvested: ${contactPhones}`)
+    } catch (e: any) {
+        console.warn(`[tg-backfill] GetContacts failed: ${e.message}`)
+    }
+
+    console.log(`[tg-backfill] total userId→phone map size: ${userPhoneById.size}`)
+
+    const counters = { scanned: 0, translated: 0, merged: 0, phoneCreated: 0, phoneLinked: 0, skipped_no_phone: 0, skipped_no_entity: 0, errors: 0 }
+    const sample: any[] = []
+
+    for (const row of rows) {
+        counters.scanned++
+
+        const rawPhone = userPhoneById.get(row.externalId)
+        if (!rawPhone) {
+            counters.skipped_no_phone++
+            continue
+        }
+
+        const normalized = normalizePhoneE164(String(rawPhone))
+        if (!normalized) {
+            counters.errors++
+            console.warn(`[tg-backfill] phone "${rawPhone}" failed normalization (identity ${row.id})`)
+            continue
+        }
+
+        counters.translated++
+
+        const existingPhone = await prisma.contactPhone.findFirst({
+            where: { phone: normalized, isActive: true },
+            select: { id: true, contactId: true },
+        })
+
+        const action = existingPhone
+            ? (existingPhone.contactId === row.contactId ? 'link_existing_phone' : 'merge')
+            : 'create_phone'
+
+        if (sample.length < 10) {
+            sample.push({
+                identity_id: row.id,
+                external_id: row.externalId,
+                translated: normalized,
+                contact_id: row.contactId,
+                action,
+                target_contact_id: existingPhone?.contactId || null,
+            })
+        }
+
+        if (!dryRun) {
+            try {
+                if (action === 'merge') {
+                    await ContactMergeService.mergeContactToContact(row.contactId, existingPhone!.contactId, 'system:tg-backfill')
+                    counters.merged++
+                    console.log(`[tg-backfill] merged contact=${row.contactId} → target=${existingPhone!.contactId} (TG ${row.externalId} → ${normalized})`)
+                } else if (action === 'link_existing_phone') {
+                    await prisma.contactIdentity.update({
+                        where: { id: row.id },
+                        data: { phoneId: existingPhone!.id },
+                    })
+                    counters.phoneLinked++
+                } else {
+                    const created = await prisma.contactPhone.create({
+                        data: {
+                            contactId: row.contactId,
+                            phone: normalized,
+                            source: 'telegram',
+                            isPrimary: true,
+                        },
+                    })
+                    await prisma.contactIdentity.update({
+                        where: { id: row.id },
+                        data: { phoneId: created.id },
+                    })
+                    // Only promote to primary if Contact has none yet.
+                    // updateMany lets us use non-unique fields in `where`.
+                    await prisma.contact.updateMany({
+                        where: { id: row.contactId, primaryPhoneId: null },
+                        data: { primaryPhoneId: created.id },
+                    })
+                    counters.phoneCreated++
+                    console.log(`[tg-backfill] phone created contact=${row.contactId} phone=${normalized} (TG ${row.externalId})`)
+                }
+            } catch (e: any) {
+                counters.errors++
+                console.warn(`[tg-backfill] action ${action} failed for identity=${row.id}: ${e.message}`)
+            }
+        }
+
+        if (counters.scanned % 20 === 0) {
+            console.log(`[tg-backfill] progress ${counters.scanned}/${rows.length} translated=${counters.translated} merged=${counters.merged} phoneCreated=${counters.phoneCreated} phoneLinked=${counters.phoneLinked}`)
+        }
+        // throttle no longer needed inside the loop: all phones are in the
+        // pre-fetched userPhoneById map, so each iteration only does local
+        // DB I/O. Kept the option (default 0 effect) for paranoia.
+        if (throttleMs > 0) await new Promise(r => setTimeout(r, throttleMs))
+    }
+
+    console.log('[tg-backfill] done', counters)
+    return { dryRun, ...counters, sample }
 }

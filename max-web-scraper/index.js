@@ -210,12 +210,37 @@ async function handleIncoming(msg, mediaPipeline, messageSync) {
 
 // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
 
-async function sendText(transport, chatId, text) {
+/**
+ * Send a text message.
+ * @param {object}  transport
+ * @param {number}  chatId
+ * @param {string}  text
+ * @param {object} [options]
+ * @param {string|number} [options.replyToMessageId] — MAX message id (m.id from
+ *   an incoming payload) to attach as a native quote. Wrapped into the
+ *   `link` field of the SEND_MESSAGE payload — the same field MAX itself
+ *   uses on the wire to mark "this is a reply to <id>". If the field name
+ *   turns out to be wrong on a given MAX build, this still falls through
+ *   to a plain send because MAX servers tolerate unknown payload keys.
+ */
+async function sendText(transport, chatId, text, options = {}) {
   const cid = -Date.now()
+  const message = { text, cid, elements: [], attaches: [] }
+
+  if (options.replyToMessageId) {
+    // MAX wire format for reply (observed in OK/MAX family WS frames):
+    // link: { type: 'REPLY', message: { id, ... } }
+    // We only know the id from the CRM side, MAX backend resolves the rest.
+    message.link = {
+      type:    'REPLY',
+      message: { id: String(options.replyToMessageId) },
+    }
+  }
+
   await transport.sendFrame(OP.SEND_MESSAGE, {
     chatId,
-    message: { text, cid, elements: [], attaches: [] },
-    notify:  true,
+    message,
+    notify: true,
   })
 }
 
@@ -560,10 +585,11 @@ app.get('/resolve-phone', (req, res) => {
 })
 
 // Отправить текст
-// Body: { chatId: number|string, message: string, phone?: string }
+// Body: { chatId: number|string, message: string, phone?: string, replyToMessageId?: string }
 // chatId может быть MAX internal ID или телефон — если телефон, автоматически резолвим
+// replyToMessageId — MAX message id оригинала, на который отвечаем (для нативной цитаты)
 app.post('/send-message', async (req, res) => {
-  let { chatId, message, phone } = req.body
+  let { chatId, message, phone, replyToMessageId } = req.body
   if (!message) {
     return res.status(400).json({ error: 'message is required' })
   }
@@ -599,7 +625,7 @@ app.post('/send-message', async (req, res) => {
   }
 
   try {
-    await enqueueSend(() => sendText(transport, Number(chatId), message))
+    await enqueueSend(() => sendText(transport, Number(chatId), message, { replyToMessageId }))
     res.json({ success: true, chatId: String(chatId) })
   } catch (e) {
     res.status(500).json({ error: e.message })

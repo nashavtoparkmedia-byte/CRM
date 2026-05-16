@@ -96,6 +96,13 @@ export class ContactService {
           },
         })
 
+        // Re-link orphan Chats that arrived before this identity existed.
+        // Without this, a TG chat created when the user first messaged us
+        // (contactId=null at creation time) stays orphan forever, even after
+        // a Yandex sync or another channel later attaches the same phone
+        // to a Contact. Fixed in 89 historical TG chats by backfill script.
+        await this._relinkOrphanChatsForIdentity(channel, externalId, phoneRecord.contactId, identity.id)
+
         console.log(`[ContactService] Created identity via phone match: contact=${phoneRecord.contactId} identity=${identity.id} phone=${normalized}`)
         return {
           contact: phoneRecord.contact,
@@ -154,6 +161,58 @@ export class ContactService {
       contact: { id: contact.id, displayName: contactDisplayName },
       identity: { id: identity.id, channel, externalId },
       isNew: true,
+    }
+  }
+
+  /**
+   * Best-effort: when a new ContactIdentity is created via phone-match
+   * (Scenario 2), attach any pre-existing orphan Chat for that channel
+   * + externalId to this Contact. Handles the race where a Chat was
+   * created with contactId=null (e.g. a TG inbound arrived before any
+   * identity existed) and only later did the Contact get an identity
+   * via a different path (Yandex sync, manual, etc.).
+   *
+   * Match rules mirror the relink migration:
+   *   whatsapp: externalChatId starts with `${externalId}@`
+   *   telegram: externalChatId equals `telegram:${externalId}`
+   *   else:     externalChatId equals `${externalId}` (exact)
+   *
+   * Failures here MUST NOT abort the identity creation — log and move on.
+   */
+  private static async _relinkOrphanChatsForIdentity(
+    channel: ChatChannel,
+    externalId: string,
+    contactId: string,
+    identityId: string,
+  ): Promise<void> {
+    try {
+      const whereOr: any[] = []
+      if (channel === 'whatsapp') {
+        whereOr.push({ externalChatId: { startsWith: `${externalId}@` } })
+      } else if (channel === 'telegram') {
+        whereOr.push({ externalChatId: `telegram:${externalId}` })
+      } else {
+        whereOr.push({ externalChatId: externalId })
+      }
+
+      const result = await prisma.chat.updateMany({
+        where: {
+          channel,
+          contactId: null,
+          OR: whereOr,
+        },
+        data: {
+          contactId,
+          contactIdentityId: identityId,
+        },
+      })
+
+      if (result.count > 0) {
+        console.log(`[ContactService] Relinked ${result.count} orphan ${channel} chat(s) to contact=${contactId} via identity=${identityId}`)
+      }
+    } catch (err: any) {
+      // Identity creation already succeeded — don't fail the caller.
+      console.warn(`[ContactService] _relinkOrphanChatsForIdentity failed for ${channel}:${externalId}: ${err.message}`)
     }
   }
 

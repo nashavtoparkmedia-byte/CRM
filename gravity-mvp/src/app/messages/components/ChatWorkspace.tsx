@@ -146,9 +146,9 @@ function ChatWorkspaceInner({
         }
     }
 
-    const handleSendMessage = (content: string, effectiveChannel: string) => {
+    const handleSendMessage = (content: string, effectiveChannel: string, replyToMessageId?: string) => {
         setLastSentAt(Date.now())
-        sendMessage(content, effectiveChannel)
+        sendMessage(content, effectiveChannel, replyToMessageId)
 
         // Auto-assign on first reply: if chat is unassigned, assign to current user
         if (!chat.assignedToUserId) {

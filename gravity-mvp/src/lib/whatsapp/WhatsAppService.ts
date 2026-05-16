@@ -254,6 +254,15 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
     if (existing) return
 
     const unifiedType = mapToUnifiedMessageType(msg.type)
+    // Quote capture mirrors the private-chat path. Plus groupAuthor stays
+    // around — both pieces live in the same metadata jsonb column.
+    const quotedKey: string | undefined = (msg as any).quotedMsgId
+        || (msg as any)._data?.quotedStanzaID
+        || ((msg as any).hasQuotedMsg && (msg as any)._data?.quotedMsg?.id?._serialized)
+    const groupMeta: any = {}
+    if ((msg as any).author) groupMeta.groupAuthor = (msg as any).author
+    if (quotedKey) groupMeta.replyTo = { externalId: String(quotedKey), channel: 'whatsapp' as const }
+
     const savedMsg = await prisma.message.create({
         data: {
             chatId: unifiedChat.id,
@@ -264,7 +273,7 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
             channel: 'whatsapp',
             sentAt: ts,
             status: isOutbound ? 'delivered' : undefined,
-            metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
+            metadata: Object.keys(groupMeta).length > 0 ? groupMeta : undefined,
         },
     })
 
@@ -528,11 +537,45 @@ async function syncHistory(connectionId: string, client: Client) {
 
                 // Contact resolution: only for private chats. For groups
                 // the JID is the group id, not a phone — no contact to link.
+                //
+                // JID shapes from whatsapp-web.js:
+                //   <digits>@c.us  — real phone (E.164 without '+')
+                //   <digits>@lid   — Linked ID for WA Business / privacy-hidden
+                //                     contacts. NOT a phone — opaque opaque opaque.
+                //   <digits>@g.us  — group room id, already filtered above.
+                //
+                // For @lid we first try to translate to a real phone via
+                // `chatRaw.getContact().number` — same trick the live handler
+                // uses. If WA hands us a real number, we pass it to
+                // ContactService as `phone` so Scenario 2 (phone-match
+                // auto-merge) fires and the LID-identity attaches to an
+                // existing Contact (or links to Driver via yandex-link on
+                // the next tick). If translation returns null, we still
+                // create the identity but with phone=null — no fabrication.
                 if (!isGroupChat && !unifiedSyncChat.contactId) {
                     try {
-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                        const jid: string = chatRaw.id._serialized || ''
+                        const rawDigits = jid.split('@')[0]
+                        const isPhoneJid = jid.endsWith('@c.us')
+                        const isLidJid = jid.endsWith('@lid')
+
+                        if (rawDigits && /^\d{10,15}$/.test(rawDigits) && (isPhoneJid || isLidJid)) {
+                            let phoneArg: string | null = isPhoneJid ? rawDigits : null
+
+                            if (isLidJid) {
+                                try {
+                                    const waContact = await (chatRaw as any).getContact?.()
+                                    const translated = waContact?.number
+                                    if (translated && /^\d{10,15}$/.test(String(translated))) {
+                                        phoneArg = String(translated)
+                                        console.log(`[WA-SERVICE] syncHistory translated LID ${rawDigits} → ${phoneArg}`)
+                                    }
+                                } catch (translateErr: any) {
+                                    console.warn(`[WA-SERVICE] syncHistory LID translation failed for ${rawDigits}: ${translateErr.message}`)
+                                }
+                            }
+
+                            const contactResult = await ContactService.resolveContact('whatsapp', rawDigits, phoneArg, chatRaw.name)
                             await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
                         }
                     } catch (contactErr: any) {
@@ -991,11 +1034,18 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             }
 
             // ── Contact Model dual write ──────────────────────────────
+            // If the LID-translation above failed, rawChatId is still
+            // `<digits>@lid` and phoneDigits is just the LID. Passing it
+            // as a phone to ContactService would create a phantom +7<last10>
+            // ContactPhone — bug #1 we just fixed. So we suppress phone
+            // for un-translated LIDs and let the identity stand alone.
             try {
+                const isStillLid = rawChatId.endsWith('@lid')
+                const contactPhoneArg = isStillLid ? null : phoneDigits
                 const contactResult = await ContactService.resolveContact(
                     'whatsapp',
                     normalizedPhone,
-                    phoneDigits,
+                    contactPhoneArg,
                     (msg as any).notifyName || unifiedChat.name || null,
                 )
                 await ContactService.ensureChatLinked(
@@ -1052,6 +1102,17 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 }
             } else {
                 const msgType = mapToUnifiedMessageType(msg.type)
+                // Capture native WA quote for UI quote-block. whatsapp-web.js
+                // sets hasQuotedMsg + exposes the source key on msg.quotedMsgId
+                // (or msg._data.quotedStanzaID on older builds). Matches the
+                // shape we store in `externalId` for outbound messages.
+                const quotedKey: string | undefined = (msg as any).quotedMsgId
+                    || (msg as any)._data?.quotedStanzaID
+                    || ((msg as any).hasQuotedMsg && (msg as any)._data?.quotedMsg?.id?._serialized)
+                const replyMeta = quotedKey
+                    ? { replyTo: { externalId: String(quotedKey), channel: 'whatsapp' as const } }
+                    : null
+
                 const savedMsg = await prisma.message.create({
                     data: {
                         chatId: unifiedChat.id,
@@ -1061,6 +1122,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                         externalId: msg.id._serialized,
                         sentAt: ts,
                         status: isOutbound ? 'delivered' : undefined,
+                        ...(replyMeta ? { metadata: replyMeta } : {}),
                     }
                 })
 
@@ -1345,7 +1407,7 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
     return { checkedCount: entries.length, unhealthyCount, details }
 }
 
-export async function sendMessage(connectionId: string, chatId: string, text: string): Promise<{ externalId: string }> {
+export async function sendMessage(connectionId: string, chatId: string, text: string, quotedMessageId?: string): Promise<{ externalId: string }> {
     let client = clients.get(connectionId)
 
     // Lightweight runtime validation: detect stale client (puppeteer dead but object in map)
@@ -1407,7 +1469,11 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
 
     let msg
     try {
-        msg = await client.sendMessage(targetChatId, text)
+        // whatsapp-web.js: MessageSendOptions.quotedMessageId is a string
+        // (the source message's id._serialized, e.g. "true_79221234567@c.us_XXXX").
+        // When absent, falls through to a plain send.
+        const sendOptions: any = quotedMessageId ? { quotedMessageId } : undefined
+        msg = await client.sendMessage(targetChatId, text, sendOptions)
     } catch (sendErr: any) {
         // Detect puppeteer crash: "detached Frame", "Protocol error", "Target closed"
         const errMsg = sendErr.message || ''
@@ -1817,12 +1883,34 @@ export async function importWhatsAppHistory(
                 })
 
                 // Contact resolution: only for private (1:1) chats.
-                // Group JIDs are room ids, not phones.
+                // Group JIDs are room ids, not phones. @lid JIDs are
+                // opaque Linked IDs — try to translate via WA API; if
+                // WA returns a real number, pass it through so Scenario 2
+                // phone-match merges fire. If it doesn't, identity stays
+                // standalone without a fabricated phone.
                 if (!isGroupChat && !unifiedChat.contactId) {
                     try {
-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                        const jid: string = chatRaw.id._serialized || ''
+                        const rawDigits = jid.split('@')[0]
+                        const isPhoneJid = jid.endsWith('@c.us')
+                        const isLidJid = jid.endsWith('@lid')
+                        if (rawDigits && /^\d{10,15}$/.test(rawDigits) && (isPhoneJid || isLidJid)) {
+                            let phoneArg: string | null = isPhoneJid ? rawDigits : null
+
+                            if (isLidJid) {
+                                try {
+                                    const waContact = await (chatRaw as any).getContact?.()
+                                    const translated = waContact?.number
+                                    if (translated && /^\d{10,15}$/.test(String(translated))) {
+                                        phoneArg = String(translated)
+                                        console.log(`[WA-SERVICE] importChats translated LID ${rawDigits} → ${phoneArg}`)
+                                    }
+                                } catch (translateErr: any) {
+                                    console.warn(`[WA-SERVICE] importChats LID translation failed for ${rawDigits}: ${translateErr.message}`)
+                                }
+                            }
+
+                            await ContactService.resolveContact('whatsapp', rawDigits, phoneArg, chatRaw.name)
                             totalContacts++
                         }
                     } catch {}

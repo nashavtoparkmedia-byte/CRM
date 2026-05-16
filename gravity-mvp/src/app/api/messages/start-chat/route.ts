@@ -67,8 +67,14 @@ export async function POST(request: Request) {
 
         // ── Contact Model dual write ──────────────────────────────
         try {
+            // Only WA and MAX use a phone-as-external-id format. Telegram's
+            // external id is a numeric user-id (e.g. "7169614093") that
+            // happens to be 10 digits — exactly the length normalizePhoneE164
+            // accepts. Treating it as a phone produced fakes like
+            // "+77169614093" (~21 such rows in Contact history pre-fix).
+            const isPhoneLikeChannel = channel === 'whatsapp' || channel === 'max'
             const phone = isUnsaved
-                ? normalizePhoneE164(finalExternalId)
+                ? (isPhoneLikeChannel ? normalizePhoneE164(finalExternalId) : null)
                 : normalizePhoneE164(driver?.phone)
             const displayName = chatName || null
 

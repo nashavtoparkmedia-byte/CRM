@@ -27,6 +27,11 @@ export interface Message {
     channel: string
     origin?: 'operator' | 'ai' | 'auto' | 'system'
     account?: string
+    // Provider-side message id (TG MsgId, WA key, MAX seq). Needed for the
+    // reply lookup path: when an inbound carries metadata.replyTo.externalId
+    // we look the source message up by externalId since we don't own its
+    // internal id.
+    externalId?: string | null
     metadata?: Record<string, any>
     attachments?: MessageAttachment[]
 }
@@ -257,7 +262,7 @@ export function useMessages(chatId: string | null) {
         setHasMoreHistory(false) 
     }
 
-    const sendMessage = async (content: string, channel: string) => {
+    const sendMessage = async (content: string, channel: string, replyToMessageId?: string) => {
         if (!chatId) return
 
         // Normalize channel for API (wa→whatsapp, tg→telegram)
@@ -298,7 +303,13 @@ export function useMessages(chatId: string | null) {
             const res = await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel, clientMessageId })
+                body: JSON.stringify({
+                    chatId: primaryChatId,
+                    content,
+                    channel: apiChannel,
+                    clientMessageId,
+                    ...(replyToMessageId ? { replyToMessageId } : {}),
+                })
             })
             
             if (res.ok) {

@@ -24,13 +24,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { chatId, content, profileId, channel, clientMessageId } = body
+        const { chatId, content, profileId, channel, clientMessageId, replyToMessageId } = body
 
         if (!chatId || !content) {
             return NextResponse.json({ error: 'chatId and content are required' }, { status: 400 })
         }
 
-        const result = await MessageService.send(chatId, content, channel, profileId, clientMessageId)
+        const result = await MessageService.send(chatId, content, channel, profileId, clientMessageId, replyToMessageId)
         return NextResponse.json(result)
     } catch (error: any) {
         console.error('[API-MESSAGES] POST Error:', error)

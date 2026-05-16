@@ -12,10 +12,15 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
 
-        // Structure expected from Bot's webhook payload
+        // Structure expected from Bot's webhook payload.
+        // contactPhone is optional — set by tg-bot when a user shares a
+        // contact card whose user_id matches the sender (i.e. it's their
+        // own phone). Bot API never reveals phone via plain text messages,
+        // only via /sendContact, so this is the one legitimate way to
+        // capture a TG bot user's number.
         const { telegramId, text, direction, username, timestamp,
                 chatType, chatId: tgChatId, chatTitle,
-                firstName, lastName } = body
+                firstName, lastName, contactPhone } = body
 
         if (!telegramId || !text) {
             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
@@ -127,11 +132,15 @@ export async function POST(req: NextRequest) {
             }
 
             // ── Contact Model dual write ──────────────────────────────
+            // contactPhone arrives only when tg-bot forwards a shared-
+            // contact event (KeyboardButton "Share number"). Plain text
+            // messages have it = undefined; that's fine — Scenario 2
+            // merging will fire later if any other channel brings the phone.
             try {
                 const contactResult = await ContactService.resolveContact(
                     'telegram',
                     telegramId.toString(),
-                    null,  // Bot webhook не передаёт номер телефона
+                    contactPhone ? String(contactPhone) : null,
                     username ? `@${username}` : null,
                 )
                 await ContactService.ensureChatLinked(

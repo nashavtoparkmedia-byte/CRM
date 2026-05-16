@@ -288,9 +288,16 @@ export class MessageService {
 
     /**
      * Sends a message through the appropriate channel.
+     *
+     * @param replyToMessageId — internal Message.id we're replying to.
+     *   The service resolves it to that message's externalId (Telegram msgId
+     *   or WhatsApp message key) and threads it to the provider so the
+     *   delivered message becomes a native reply/quote in the messenger.
+     *   Cross-channel replies are silently demoted to plain sends — gramJS
+     *   can't replyTo a WA message, and vice versa.
      */
-    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string) {
-        console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}`)
+    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, replyToMessageId?: string) {
+        console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}, replyToMessageId=${replyToMessageId || 'none'}`)
 
         const chat = await (prisma.chat as any).findUnique({
             where: { id: chatId },
@@ -412,6 +419,31 @@ export class MessageService {
             }
         }
 
+        // Resolve reply target: look up the source message's externalId for
+        // the native provider replyTo / quotedMessageId fields. Only useful
+        // when the source message's channel matches our outbound channel
+        // — gramJS can't natively reply to a WA message.
+        let replyToExternalId: string | null = null
+        let replyToMetadata: { messageId: string; externalId: string | null; channel: string } | null = null
+        if (replyToMessageId) {
+            const src = await (prisma.message as any).findUnique({
+                where: { id: replyToMessageId },
+                select: { id: true, externalId: true, channel: true },
+            })
+            if (src) {
+                replyToMetadata = { messageId: src.id, externalId: src.externalId, channel: src.channel }
+                if (src.channel === channel && src.externalId) {
+                    replyToExternalId = src.externalId
+                } else if (src.channel !== channel) {
+                    console.warn(`[MessageService] reply demoted to plain send — source channel=${src.channel} differs from outbound=${channel}`)
+                } else {
+                    console.warn(`[MessageService] reply target ${replyToMessageId} has no externalId yet (still optimistic?) — demoted to plain send`)
+                }
+            } else {
+                console.warn(`[MessageService] replyToMessageId=${replyToMessageId} not found — demoted to plain send`)
+            }
+        }
+
         // 2. Save message to DB first (Optimistic)
         const messageId = `msg_${Date.now()}`
         const now = new Date()
@@ -426,7 +458,13 @@ export class MessageService {
                 status: 'sent',
                 channel: channel,
                 sentAt: now,
-                type: 'text'
+                type: 'text',
+                // Persist reply linkage in metadata so the UI can render the
+                // quoted-message preview when the chat is reopened. We keep
+                // both internal id and externalId — the former survives a
+                // channel-prefix rename, the latter is needed for cross-
+                // device sync where only the provider id is stable.
+                ...(replyToMetadata ? { metadata: { replyTo: replyToMetadata } } : {}),
             }
         })
 
@@ -447,14 +485,14 @@ export class MessageService {
                 case 'whatsapp':
                     const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
                     const connId = profileId || (targetChat.metadata as any)?.connectionId
-                    console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
+                    console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}, replyTo=${replyToExternalId || 'none'}`)
                     if (connId) {
-                        await deliverWA(connId, rawExternalChatId, content)
+                        await deliverWA(connId, rawExternalChatId, content, replyToExternalId || undefined)
                     } else {
                         const conn = await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' } })
                         console.log(`[MessageService] WA Fallback: found ready conn=${conn?.id}`)
                         if (!conn) throw new Error('No ready WhatsApp connection available.')
-                        await deliverWA(conn.id, rawExternalChatId, content)
+                        await deliverWA(conn.id, rawExternalChatId, content, replyToExternalId || undefined)
                     }
                     deliveryStatus = 'delivered'
                     break
@@ -462,11 +500,12 @@ export class MessageService {
                 case 'max':
                     const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
                     const isPersonal = profileId === 'scraper' || !profileId
-                    console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}`)
-                    await deliverMax(rawExternalChatId, content, { 
+                    console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}, replyTo=${replyToExternalId || 'none'}`)
+                    await deliverMax(rawExternalChatId, content, {
                         isPersonal,
                         connectionId: isPersonal ? undefined : profileId,
-                        name: chat.driver?.fullName
+                        name: chat.driver?.fullName,
+                        replyToMessageId: replyToExternalId || undefined,
                     })
                     deliveryStatus = 'delivered'
                     break
@@ -489,13 +528,14 @@ export class MessageService {
                             const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
                             const target = rawExternalChatId || chat.driver?.phone?.replace(/\D/g, '')
                             if (!target) throw new Error('No target for TG')
-                            
+
                             try {
-                                const res = await deliverTG(target, content, activeProfileId, { 
+                                const res = await deliverTG(target, content, activeProfileId, {
                                     // @ts-ignore - dynamic type mismatch
                                     messageId: messageId,
                                     chatId: targetChat.id,
-                                    driverId: chat.driver?.id
+                                    driverId: chat.driver?.id,
+                                    replyToExternalId: replyToExternalId || undefined,
                                 })
                                 if (res.externalId) deliveryExternalId = res.externalId
                                 deliveryStatus = 'delivered'
@@ -638,18 +678,31 @@ export class MessageService {
             const rawExternalId = chat.externalChatId?.split(':').slice(1).join(':') || chat.externalChatId
             const connId = (chat.metadata as any)?.connectionId
 
+            // Preserve the reply quote across retries — without this a
+            // first-attempt failure followed by an automatic retry would
+            // re-send as a plain message, dropping the operator's intent.
+            const replyMeta = meta?.replyTo
+            const retryReplyExternalId: string | null =
+                replyMeta?.externalId && replyMeta?.channel === message.channel
+                    ? String(replyMeta.externalId)
+                    : null
+
             switch (message.channel) {
                 case 'whatsapp': {
                     const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
                     const waConn = connId || (await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' }, select: { id: true } }))?.id
                     if (!waConn) throw new Error('No ready WhatsApp connection available.')
-                    await deliverWA(waConn, rawExternalId, message.content)
+                    await deliverWA(waConn, rawExternalId, message.content, retryReplyExternalId || undefined)
                     deliveryStatus = 'delivered'
                     break
                 }
                 case 'max': {
                     const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
-                    await deliverMax(rawExternalId, message.content, { isPersonal: true, name: chat.driver?.fullName })
+                    await deliverMax(rawExternalId, message.content, {
+                        isPersonal: true,
+                        name: chat.driver?.fullName,
+                        replyToMessageId: retryReplyExternalId || undefined,
+                    })
                     deliveryStatus = 'delivered'
                     break
                 }
@@ -660,7 +713,9 @@ export class MessageService {
                     const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`
                     const profileId = defaultConns[0]?.id
                     if (!profileId) throw new Error('No active TG connection')
-                    const res = await deliverTG(target, message.content, profileId, {})
+                    const res = await deliverTG(target, message.content, profileId, {
+                        replyToExternalId: retryReplyExternalId || undefined,
+                    })
                     if (res.externalId) deliveryExternalId = res.externalId
                     deliveryStatus = 'delivered'
                     break

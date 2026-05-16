@@ -34,7 +34,7 @@ interface MessageInputAreaProps {
     onClearReply: () => void
     manualSendChannelMode: string | null
     setManualSendChannelMode: (channel: string) => void
-    onSendMessage: (content: string, effectiveChannel: string) => void
+    onSendMessage: (content: string, effectiveChannel: string, replyToMessageId?: string) => void
 }
 
 const CHANNELS = [
@@ -128,7 +128,10 @@ export default function MessageInputArea({
 
     const handleSend = () => {
         if (!text.trim()) return
-        onSendMessage(text.trim(), effectiveNormalized)
+        // replyContext.messageId is our internal Message.id; the backend
+        // resolves it to the provider-specific externalId before calling
+        // gramJS replyTo / wa-web quotedMessageId.
+        onSendMessage(text.trim(), effectiveNormalized, replyContext?.messageId)
         setText("")
         draftCache.delete(cacheKey)
         onClearReply()

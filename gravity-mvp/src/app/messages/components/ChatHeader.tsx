@@ -175,8 +175,34 @@ export default function ChatHeader({
                                         chat.name is just the messenger handle ("Check"). */}
                                     {chat.driver?.fullName || chat.contact?.displayName || chat.name || "Водитель"}
                                 </h3>
-                                <span className="text-[11px] text-gray-400">·</span>
-                                <span className="text-[11px] text-gray-500 font-mono truncate">{chat.driver?.phone || chat.externalChatId?.split(':')[1] || chat.externalChatId}</span>
+                                {(() => {
+                                    /* Header identifier (right of the name) priority:
+                                       1. Driver.phone — authoritative from Yandex
+                                       2. Primary ContactPhone — operator-visible E.164
+                                       3. externalChatId after the channel prefix (e.g.
+                                          "whatsapp:79993332211" → "79993332211")
+                                       4. Hide entirely if the only thing we have is a
+                                          raw WA JID suffix (@lid / @c.us / @g.us) —
+                                          showing "63068021227590@lid" leaks internal
+                                          identifiers to operators and is what bug #2
+                                          was about. */
+                                    const primaryPhone = contact?.phones?.find(p => p.isPrimary)?.phone
+                                        || contact?.phones?.[0]?.phone
+                                    const ext = chat.externalChatId || ''
+                                    const afterColon = ext.includes(':') ? ext.split(':')[1] : null
+                                    const isRawJid = /@(lid|c\.us|g\.us|s\.whatsapp\.net)$/i.test(ext)
+                                    const identifier = chat.driver?.phone
+                                        || primaryPhone
+                                        || afterColon
+                                        || (isRawJid ? null : ext || null)
+                                    if (!identifier) return null
+                                    return (
+                                        <>
+                                            <span className="text-[11px] text-gray-400">·</span>
+                                            <span className="text-[11px] text-gray-500 font-mono truncate">{identifier}</span>
+                                        </>
+                                    )
+                                })()}
                                 <span className="text-[11px] text-gray-400">·</span>
                                 <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
                             </div>

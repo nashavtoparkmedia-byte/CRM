@@ -6,6 +6,12 @@
 /**
  * Normalize any phone input to E.164 format (+7XXXXXXXXXX).
  * Returns null for invalid/unparseable input.
+ *
+ * NB. We refuse anything longer than 12 digits. WhatsApp Business hands
+ * us 14-15-digit LIDs (e.g. `63068021227590@lid`); blindly trimming
+ * the tail produced fake numbers like `+78021227590` that polluted
+ * ContactPhone for ~625 rows historically. If you ever need to accept
+ * longer inputs, do it at the call site after validating the shape.
  */
 export function normalizePhoneE164(raw: string | null | undefined): string | null {
   if (!raw || typeof raw !== 'string') return null
@@ -23,8 +29,12 @@ export function normalizePhoneE164(raw: string | null | undefined): string | nul
     }
   } else if (digits.length === 10) {
     normalized = '7' + digits
-  } else if (digits.length > 11) {
-    normalized = '7' + digits.slice(-10)
+  } else if (digits.length === 12 && digits.startsWith('7')) {
+    // Edge case: some sources emit a leading '+' that survived re.replace
+    // as a duplicate 7 (e.g. accidental "+7 +7..."). Accept iff first 12th
+    // char is 7 and the next 11 form a valid number.
+    normalized = digits.slice(-11)
+    if (!normalized.startsWith('7')) return null
   } else {
     return null
   }

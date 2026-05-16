@@ -194,7 +194,9 @@ export async function updateMaxConnectionSettings(id: string, name: string, isDe
 
 // Send a message via MAX Personal Account (Web Scraper)
 // target can be a MAX internal chatId (e.g. "201482140") or a phone number (e.g. "79222155750")
-export async function sendMaxPersonalMessage(target: string, message: string, name?: string) {
+// replyToMessageId — MAX message id (m.id) of the source we're replying to; the
+// scraper wraps it as `link.message.id` in the SEND_MESSAGE WS frame.
+export async function sendMaxPersonalMessage(target: string, message: string, name?: string, replyToMessageId?: string) {
     if (!target || !message) {
         throw new Error("Target (chatId or phone) and message are required")
     }
@@ -203,12 +205,16 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
     if (!cleanTarget) throw new Error("Invalid target")
 
     try {
-        console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}`)
+        console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}, replyTo=${replyToMessageId || 'none'}`)
         const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
         const response = await fetch(`${maxScraperUrl}/send-message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chatId: cleanTarget, message })
+            body: JSON.stringify({
+                chatId: cleanTarget,
+                message,
+                ...(replyToMessageId ? { replyToMessageId } : {}),
+            })
         })
 
         if (!response.ok) {
@@ -224,13 +230,13 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
 }
 
 // Send a message via MAX (Bot or Personal)
-export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean }) {
+export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, replyToMessageId?: string }) {
     if (!phone || !message) {
         throw new Error("Phone and message are required")
     }
 
     if (options?.isPersonal) {
-        return await sendMaxPersonalMessage(phone, message, options.name)
+        return await sendMaxPersonalMessage(phone, message, options.name, options.replyToMessageId)
     }
 
     try {

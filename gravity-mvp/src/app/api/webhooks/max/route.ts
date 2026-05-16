@@ -12,7 +12,7 @@ import { opsLog } from '@/lib/opsLog'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing } = body
+    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, replyToMessageId } = body
 
     if (!chatId) {
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
@@ -125,6 +125,17 @@ export async function POST(request: Request) {
     const content = text || contentFallbacks[messageType] || ''
 
     // Create Message (skip if already seen)
+    // Capture native MAX reply (m.link.message.id from the scraper). Stored
+    // alongside senderId/maxChatId in metadata; MessageFeed renders the
+    // quote-block from metadata.replyTo just like TG/WA.
+    const messageMetadata: any = {
+      senderId,
+      maxChatId: chatId,
+      attachments: attachments || [],
+    }
+    if (replyToMessageId) {
+      messageMetadata.replyTo = { externalId: String(replyToMessageId), channel: 'max' }
+    }
     const message = await prisma.message.upsert({
       where:  { externalId: externalId || `max-${chatId}-${Date.now()}` },
       update: {},
@@ -137,7 +148,7 @@ export async function POST(request: Request) {
         externalId: externalId || null,
         status:    'delivered',
         sentAt,   // validated above
-        metadata:  { senderId, maxChatId: chatId, attachments: attachments || [] },
+        metadata:  messageMetadata,
       },
     })
 
@@ -178,7 +189,22 @@ export async function POST(request: Request) {
       try {
         // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
         const maxExternalId = senderId ? String(senderId) : externalChatId
-        const maxPhone = senderPhone ? normalizePhoneE164(senderPhone) : null
+
+        // senderPhone defensive check: only pass through when it looks
+        // phone-shaped. Without this, a future MAX scraper change that
+        // dumps a user-id or LID-style identifier into senderPhone would
+        // produce phantom +7XXX phones the same way WA LIDs did.
+        // Accept either E.164 ("+7..."), bare RU ("7..."/"8..."), or any
+        // 10-12 digit string. Reject ≥13 digits (LID-shaped) and <10.
+        let maxPhone: string | null = null
+        if (senderPhone) {
+          const digits = String(senderPhone).replace(/\D/g, '')
+          if (digits.length >= 10 && digits.length <= 12) {
+            maxPhone = normalizePhoneE164(senderPhone)
+          } else {
+            console.warn(`[MAX Webhook] suspicious senderPhone "${senderPhone}" (${digits.length} digits) — skipped phone creation`)
+          }
+        }
 
         const contactResult = await ContactService.resolveContact(
           'max',

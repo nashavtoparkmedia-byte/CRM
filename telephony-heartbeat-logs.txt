@@ -1,0 +1,30 @@
+=== БЛОК 1: Успешный запрос (200) — реальное устройство samsung SM-N960F ===
+
+2026-04-09T19:41:22.159Z [telephony-auth] token len=64
+2026-04-09T19:41:22.161Z [telephony-auth] hash=d46be536a929
+2026-04-09T19:41:22.225Z [telephony-auth] success id=cmnqlozg000u8vpso1uzhz7mv
+2026-04-09T19:41:22.243Z POST /api/telephony/devices/heartbeat 200
+
+
+=== БЛОК 2: Успешный запрос (200) — реальное устройство samsung SM-N960F (повтор) ===
+
+2026-04-09T19:42:22.047Z [telephony-auth] token len=64
+2026-04-09T19:42:22.048Z [telephony-auth] hash=d46be536a929
+2026-04-09T19:42:22.051Z [telephony-auth] success id=cmnqlozg000u8vpso1uzhz7mv
+2026-04-09T19:42:22.056Z POST /api/telephony/devices/heartbeat 200
+
+
+=== БЛОК 3: Неуспешный запрос (401) — невалидный токен ===
+
+2026-04-09T19:42:47.851Z [telephony-auth] token len=24
+2026-04-09T19:42:47.852Z [telephony-auth] hash=bc0222b7851e
+2026-04-09T19:42:47.858Z [telephony-auth] not-found hash=bc0222b7851e
+2026-04-09T19:42:47.858Z POST /api/telephony/devices/heartbeat 401
+
+
+=== БЛОК 4: Успешный запрос (200) — тестовое устройство Debug Log Test Device ===
+
+2026-04-09T19:43:07.612Z [telephony-auth] token len=64
+2026-04-09T19:43:07.613Z [telephony-auth] hash=faf0b3a9440c
+2026-04-09T19:43:07.617Z [telephony-auth] success id=cmnrvwnsx00frvplktj3e2o3n
+2026-04-09T19:43:07.628Z POST /api/telephony/devices/heartbeat 200

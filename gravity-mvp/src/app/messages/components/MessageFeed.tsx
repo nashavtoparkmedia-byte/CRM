@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react"
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
 import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react"
@@ -64,6 +64,36 @@ export default function MessageFeed({
     // Всегда актуальная ссылка на uiItems (без добавления в deps useEffect)
     const uiItemsRef = useRef(uiItems)
     uiItemsRef.current = uiItems
+
+    // Reply quote lookup: messages in the current chat indexed two ways —
+    // outbound replies arrive with metadata.replyTo.messageId (our internal id),
+    // inbound replies arrive with metadata.replyTo.externalId (provider id).
+    // Both indexes are derived from the same uiItems pass.
+    const replyLookup = useMemo(() => {
+        const byId = new Map<string, Message>()
+        const byExternal = new Map<string, Message>()  // key: `${channel}:${externalId}`
+        for (const item of uiItems) {
+            if (item.type !== 'message') continue
+            const m = item.message
+            byId.set(m.id, m)
+            if (m.externalId) byExternal.set(`${m.channel}:${m.externalId}`, m)
+        }
+        return { byId, byExternal }
+    }, [uiItems])
+
+    const resolveReplySource = useCallback((replyTo: any, ownChannel: string): Message | null => {
+        if (!replyTo) return null
+        if (replyTo.messageId) {
+            const found = replyLookup.byId.get(replyTo.messageId)
+            if (found) return found
+        }
+        if (replyTo.externalId) {
+            const ch = replyTo.channel || ownChannel
+            const found = replyLookup.byExternal.get(`${ch}:${String(replyTo.externalId)}`)
+            if (found) return found
+        }
+        return null
+    }, [replyLookup])
 
     // Единый источник истины для текущей позиции скролла
     const currentScrollTopRef = useRef(0)
@@ -562,6 +592,57 @@ export default function MessageFeed({
                                 <span>Медиа недоступно (файл слишком большой или не загружен)</span>
                             </div>
                         )}
+
+                        {/* Reply quote — shown above the content when this message
+                          * is a reply (operator-initiated via context menu, or
+                          * inbound captured from the provider's replyTo field).
+                          * Click scrolls to the source message. If we can't find
+                          * the source in the current view, fall back to a slim
+                          * "ответ на сообщение" stub without losing the visual
+                          * cue that this is a reply. */}
+                        {msg.metadata?.replyTo && (() => {
+                            const replyTo = msg.metadata.replyTo as { messageId?: string; externalId?: string | number; channel?: string }
+                            const source = resolveReplySource(replyTo, msg.channel)
+                            const srcText = (source?.content || '').trim()
+                            const TYPE_LABELS: Record<string, string> = {
+                                image: '📷 Фото', video: '🎬 Видео', voice: '🎤 Голосовое',
+                                audio: '🎵 Аудио', document: '📎 Документ', sticker: '🖼 Стикер',
+                            }
+                            const fallbackLabel = source?.type ? TYPE_LABELS[source.type] : null
+                            const preview = srcText || fallbackLabel || 'Сообщение'
+                            const authorLabel = source
+                                ? (source.direction === 'outbound' ? 'Вы' : (source.account || 'Собеседник'))
+                                : 'Сообщение'
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!source) return
+                                        const el = scrollerRef.current?.querySelector<HTMLElement>(`[data-msg-id="${source.id}"]`)
+                                        if (el) {
+                                            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                                            // brief highlight pulse
+                                            el.style.transition = 'background-color 0.4s'
+                                            el.style.backgroundColor = 'rgba(51, 144, 236, 0.18)'
+                                            setTimeout(() => { el.style.backgroundColor = '' }, 1200)
+                                        }
+                                    }}
+                                    className={`mb-1 flex items-stretch gap-2 w-full text-left rounded-md overflow-hidden transition-colors ${
+                                        source ? 'cursor-pointer hover:bg-black/5' : 'cursor-default'
+                                    } ${isOutbound ? 'bg-emerald-700/10' : 'bg-[#3390EC]/10'}`}
+                                >
+                                    <span className={`w-[3px] shrink-0 rounded-l-md ${isOutbound ? 'bg-emerald-700' : 'bg-[#3390EC]'}`} />
+                                    <div className="py-1 pr-2 min-w-0 flex-1">
+                                        <div className={`text-[11.5px] font-semibold leading-tight truncate ${isOutbound ? 'text-emerald-800' : 'text-[#3390EC]'}`}>
+                                            {authorLabel}
+                                        </div>
+                                        <div className="text-[12.5px] text-gray-700 truncate leading-tight">
+                                            {preview}
+                                        </div>
+                                    </div>
+                                </button>
+                            )
+                        })()}
 
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
                             {(() => {
