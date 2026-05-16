@@ -988,6 +988,43 @@ export async function checkSimilarTasks(
     }))
 }
 
+/**
+ * Look up an active main-scenario task for this driver. Used by
+ * TaskCreateModal to PROACTIVELY warn before submit if the operator picks a
+ * scenario the driver already has open — and to offer a link to open it
+ * instead of forcing them to dismiss a generic error and figure it out.
+ *
+ * Returns null if the driver has no active task in the same main-scenario
+ * family. Returns the single active task otherwise (the schema constraint
+ * already enforces at most one).
+ */
+export async function getActiveMainScenarioForDriver(
+    driverId: string,
+    scenarioId: string,
+): Promise<{ id: string; title: string; scenario: string; scenarioLabel: string; stage: string | null } | null> {
+    const scenarioConfig = getScenario(scenarioId)
+    if (!scenarioConfig?.isMainScenario) return null
+
+    const mainIds = getMainScenarioIds()
+    const existing = await prisma.task.findFirst({
+        where: {
+            driverId,
+            scenario: { in: mainIds },
+            isActive: true,
+        },
+        select: { id: true, title: true, scenario: true, stage: true },
+    })
+    if (!existing || !existing.scenario) return null
+
+    return {
+        id: existing.id,
+        title: existing.title,
+        scenario: existing.scenario,
+        scenarioLabel: getScenario(existing.scenario)?.label ?? existing.scenario,
+        stage: existing.stage,
+    }
+}
+
 // ─── Counts (for navigation badge) ────────────────────────────────────────
 
 export async function getActiveTaskCounts() {

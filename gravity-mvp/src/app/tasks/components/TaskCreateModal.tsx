@@ -9,9 +9,10 @@ import {
     Loader2
 } from 'lucide-react'
 import { useCreateTask } from '@/hooks/use-task-mutations'
-import { checkSimilarTasks } from '@/app/tasks/actions'
+import { checkSimilarTasks, getActiveMainScenarioForDriver } from '@/app/tasks/actions'
 import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/types'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
+import Link from 'next/link'
 
 interface TaskCreateModalProps {
     driverId?: string
@@ -56,6 +57,16 @@ export default function TaskCreateModal({
     const [similarTasks, setSimilarTasks] = useState<SimilarTaskHint[]>([])
     const [isCheckingDedupe, setIsCheckingDedupe] = useState(false)
 
+    // PROACTIVE main-scenario conflict: if the operator picks a main scenario
+    // (Подключение / Отток / Сопровождение) and the driver already has one
+    // active, surface it before they hit Submit so the path forward — open
+    // the existing task, or fall back to "Без сценария" — is one click.
+    const [scenarioConflict, setScenarioConflict] = useState<{
+        id: string
+        title: string
+        scenarioLabel: string
+    } | null>(null)
+
     const scenarioOptions = getAllScenarioOptions()
 
     // Check for similar tasks on type change
@@ -76,6 +87,23 @@ export default function TaskCreateModal({
         check()
         return () => { isMounted = false }
     }, [driverId, type])
+
+    // Proactive: on scenario change, check if the driver already has an
+    // active main scenario task. If yes, show the link before submit.
+    useEffect(() => {
+        if (!driverId || !scenario) {
+            setScenarioConflict(null)
+            return
+        }
+        let isMounted = true
+        getActiveMainScenarioForDriver(driverId, scenario)
+            .then(res => {
+                if (!isMounted) return
+                setScenarioConflict(res ? { id: res.id, title: res.title, scenarioLabel: res.scenarioLabel } : null)
+            })
+            .catch(err => console.error('Scenario conflict check failed', err))
+        return () => { isMounted = false }
+    }, [driverId, scenario])
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -161,7 +189,44 @@ export default function TaskCreateModal({
                             </select>
                         </div>
 
-                        {/* Error from server (e.g. duplicate scenario) */}
+                        {/* Proactive scenario conflict (found before submit).
+                            Offers two clean paths forward: open the existing task,
+                            or fall back to "Без сценария" with one click. Keeps
+                            the operator from being stuck staring at a generic
+                            error message. */}
+                        {scenarioConflict && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 animate-in fade-in">
+                                <div className="flex gap-2.5">
+                                    <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[13px] text-amber-900 font-semibold">
+                                            У водителя уже активен сценарий «{scenarioConflict.scenarioLabel}»
+                                        </p>
+                                        <p className="text-[12px] text-amber-800 mt-0.5 truncate">
+                                            Задача: {scenarioConflict.title}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            <Link
+                                                href={`/tasks/${scenarioConflict.id}`}
+                                                onClick={onClose}
+                                                className="inline-flex items-center px-3 h-[28px] rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-semibold"
+                                            >
+                                                Открыть существующую
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => setScenario('')}
+                                                className="inline-flex items-center px-3 h-[28px] rounded-md bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-[12px] font-semibold"
+                                            >
+                                                Создать без сценария
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Error from server (e.g. race-condition duplicate scenario) */}
                         {createError && (
                             <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-3 animate-in fade-in">
                                 <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
@@ -302,7 +367,8 @@ export default function TaskCreateModal({
                     <button
                         type="submit"
                         form="task-form"
-                        disabled={createTask.isPending}
+                        disabled={createTask.isPending || !!scenarioConflict}
+                        title={scenarioConflict ? 'Сначала откройте существующую задачу или выберите «Без сценария»' : undefined}
                         className="flex items-center justify-center gap-2 px-6 py-2 rounded-lg bg-[#4f46e5] hover:bg-[#4338ca] text-white text-[14px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {createTask.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
