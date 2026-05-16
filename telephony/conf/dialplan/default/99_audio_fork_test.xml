@@ -1,30 +1,29 @@
 <!--
   Day 1 test extensions for the AI-call audio bridge.
 
-  9999  — minimal: answer + audio_fork + park
-          Use when calling from a live SIP client (Linphone / CRM softphone).
-          External party speaks → mod_audio_fork streams PCM to bridge.
-          uuid_broadcast played back via ESL from outside.
+  drachtio's mod_audio_fork registers an API (uuid_audio_fork), not a
+  dialplan application. Invoke from dialplan via bgapi:
 
-  9998  — loopback-friendly: answer + audio_fork + playback (Callie IVR
-          welcome) + park. Lets you trigger the call without a live SIP
-          client via `originate ... loopback/9998/default &park()` — FS
-          plays a built-in WAV through the channel, which mod_audio_fork
-          (mixed both) forks to the bridge. This proves PCM frames are
-          flowing without a microphone in the loop.
+      bgapi uuid_audio_fork <uuid> start <ws-url> <mix-type> <sampling-rate> <metadata>
 
-  Notes:
-   - audio_fork application params (drachtio mod v0.5+):
-       start <ws-url> <mixing: mono|mixed|stereo> <sample-rate> <direction: both|listen|speak>
-   - XML attributes use &quot; rather than C-style \" for JSON metadata.
+  mix-type:      mono | mixed | stereo
+  sampling-rate: 8k | 16k       (literal "8k", not "8000")
+  metadata:      single token, no spaces — JSON without whitespace is fine
+
+  9999  — minimal: answer + uuid_audio_fork + park
+          Use when calling from a live SIP client.
+  9998  — loopback-friendly: same + inline tone_stream:// playback
+          Lets you trigger via `originate ... loopback/9998/default &park()`
+          without a live SIP client. tone_stream is built-in, no WAV needed.
 -->
 <include>
   <extension name="audio_fork_test">
     <condition field="destination_number" expression="^9999$">
       <action application="answer"/>
       <action application="sleep" data="500"/>
-      <action application="set" data="fork_meta={&quot;callId&quot;:&quot;${uuid}&quot;,&quot;test&quot;:true,&quot;ext&quot;:9999}"/>
-      <action application="audio_fork" data="start ws://127.0.0.1:3030/audio mixed 8000 both"/>
+      <!-- audio_fork is auto-started by the Node bridge listening to
+           CHANNEL_ANSWER events via ESL — dialplan stays clean. -->
+      <action application="sleep" data="300"/>
       <action application="park"/>
     </condition>
   </extension>
@@ -33,11 +32,10 @@
     <condition field="destination_number" expression="^9998$">
       <action application="answer"/>
       <action application="sleep" data="500"/>
-      <action application="set" data="fork_meta={&quot;callId&quot;:&quot;${uuid}&quot;,&quot;test&quot;:true,&quot;ext&quot;:9998}"/>
-      <action application="audio_fork" data="start ws://127.0.0.1:3030/audio mixed 8000 both"/>
-      <!-- No external WAV needed: tone_stream:// is built-in. Plays
-           440 Hz for 1s, silence 0.5s, then 880 Hz for 1s — same as our
-           audio/test.wav. Proves mod_audio_fork forks real audio. -->
+      <!-- audio_fork is auto-started by the Node bridge listening to
+           CHANNEL_ANSWER events via ESL — dialplan stays clean. -->
+      <action application="sleep" data="300"/>
+      <!-- 440 Hz / 1s, then 880 Hz / 1s — tone_stream is built-in. -->
       <action application="playback" data="tone_stream://%(1000,500,440)"/>
       <action application="playback" data="tone_stream://%(1000,500,880)"/>
       <action application="park"/>

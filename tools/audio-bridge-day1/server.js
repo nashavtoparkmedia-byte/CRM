@@ -16,6 +16,7 @@ const http = require('http')
 const fs = require('fs')
 const path = require('path')
 const net = require('net')
+const os = require('os')
 const { WebSocketServer } = require('ws')
 
 const PORT = Number(process.env.AUDIO_BRIDGE_PORT ?? 3030)
@@ -23,6 +24,29 @@ const ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
 const ESL_PASS = process.env.ESL_PASSWORD ?? 'ClueCon'
 const AUDIO_DIR = path.join(__dirname, 'audio')
+
+// IP that FreeSWITCH (in WSL2) uses to reach this bridge (on Windows host).
+// WSL2 mirrored networking lets WSL→Windows only via LAN IP, NOT 127.0.0.1.
+// Pin via env if needed; otherwise auto-detect first non-loopback IPv4.
+function detectLanIp() {
+    if (process.env.BRIDGE_LAN_IP) return process.env.BRIDGE_LAN_IP
+    const ifaces = os.networkInterfaces()
+    for (const name of Object.keys(ifaces)) {
+        for (const ni of ifaces[name] ?? []) {
+            if (ni.family === 'IPv4' && !ni.internal && !ni.address.startsWith('169.254.')) {
+                return ni.address
+            }
+        }
+    }
+    return '127.0.0.1'
+}
+const LAN_IP = detectLanIp()
+const FORK_WS_URL = `ws://${LAN_IP}:${PORT}/audio`
+
+// Trigger uuid_audio_fork on calls landing on these dialplan extensions.
+// Bridge listens to CHANNEL_ANSWER events and auto-invokes the API.
+const AUTO_FORK_EXTENSIONS = (process.env.AUTO_FORK_EXTENSIONS ?? '9999,9998')
+    .split(',').map(s => s.trim()).filter(Boolean)
 
 // ── HTTP server: serves WAV for uuid_broadcast + control endpoints ─────────────
 
@@ -205,6 +229,147 @@ function eslApi(command, timeoutMs = 5000) {
         })
     })
 }
+
+// ── ESL persistent event listener: auto-start audio_fork on CHANNEL_ANSWER ─────
+//
+// Subscribes once to CHANNEL_ANSWER. For each ANSWER event landing on an
+// extension listed in AUTO_FORK_EXTENSIONS, invokes uuid_audio_fork via a
+// separate one-shot ESL connection. Reconnects on disconnect with backoff.
+
+function startEslEventListener() {
+    let reconnectDelay = 2000
+    let buf = ''
+    let stage = 'connecting'
+
+    const sock = net.connect(ESL_PORT, ESL_HOST)
+    sock.setEncoding('utf8')
+
+    function onEvent(headersText) {
+        try {
+            // Parse "key: value" headers — keep raw values; decode lazily.
+            const headers = {}
+            for (const line of headersText.split('\n')) {
+                const idx = line.indexOf(': ')
+                if (idx > 0) headers[line.substring(0, idx)] = line.substring(idx + 2)
+            }
+            const eventName = headers['Event-Name']
+            // CHANNEL_ANSWER fires BEFORE dialplan exec — at that point
+            // destination_number is still the SIP URI piece (e.g. "aeasqqif")
+            // for `originate user/103 9999`. Use CHANNEL_PARK: after all
+            // dialplan actions land, destination_number is the parked
+            // extension (9999) and media is fully up.
+            if (eventName !== 'CHANNEL_PARK') return
+
+            const uuid = headers['Unique-ID'] || headers['Channel-Call-UUID']
+            if (!uuid) return
+
+            // For `originate user/103 9999 XML default`, the actually-dialed
+            // dialplan extension lands in variable_dialed_extension /
+            // variable_originate_called_number, while Caller-Destination-Number
+            // shows the SIP user URI piece. Check every plausible field.
+            const dialedExts = [
+                headers['variable_dialed_extension'],
+                headers['variable_originate_called_number'],
+                headers['variable_destination_number'],
+                headers['Caller-Destination-Number'],
+            ].filter(Boolean)
+
+            const matched = AUTO_FORK_EXTENSIONS.find(ext => dialedExts.includes(ext))
+            console.log(`[esl] CHANNEL_ANSWER uuid=${uuid} dialed=[${dialedExts.join(',')}] matched=${matched ?? 'none'}`)
+
+            if (!matched) return
+
+            console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched})`)
+            const cmd = `uuid_audio_fork ${uuid} start ${FORK_WS_URL} mixed 8000 day1bug`
+            eslApi(cmd)
+                .then(out => console.log(`[esl] auto-fork: ${out}`))
+                .catch(err => console.error(`[esl] auto-fork FAILED: ${err.message}`))
+        } catch (err) {
+            console.error(`[esl] onEvent error: ${err.message}`)
+        }
+    }
+
+    sock.on('data', chunk => {
+        buf += chunk
+        if (process.env.ESL_DEBUG === '1') {
+            console.log(`[esl-events] RAW(${stage}, ${chunk.length}B): ${JSON.stringify(String(chunk).slice(0, 200))}`)
+        }
+
+        if (stage === 'connecting' && buf.includes('Content-Type: auth/request')) {
+            stage = 'authenticating'
+            buf = ''
+            sock.write(`auth ${ESL_PASS}\n\n`)
+            return
+        }
+
+        if (stage === 'authenticating') {
+            if (buf.includes('+OK accepted')) {
+                stage = 'subscribing'
+                buf = ''
+                // Subscribe to ALL events — we filter by Event-Name in onEvent.
+                // Some FS builds gate per-name subscriptions; ALL is foolproof.
+                sock.write('event plain ALL\n\n')
+                return
+            }
+            if (buf.includes('-ERR')) {
+                console.error('[esl-events] auth failed, will retry')
+                sock.destroy()
+                return
+            }
+        }
+
+        if (stage === 'subscribing' && /\+OK event listener enabled/.test(buf)) {
+            stage = 'listening'
+            // Keep buf — there may already be queued events after the reply.
+            buf = buf.substring(buf.indexOf('+OK event listener enabled') + 'X'.length * 26)
+            console.log(`[esl-events] subscribed (auto-fork URL: ${FORK_WS_URL}, trigger: CHANNEL_PARK on ${AUTO_FORK_EXTENSIONS.join('/')})`)
+            // Fall through to listening parser
+        }
+
+        if (stage === 'listening') {
+            // ESL message framing:
+            //   <header-line>\n
+            //   ...
+            //   Content-Length: N\n
+            //   ...
+            //   \n            <- blank line ends headers
+            //   <N bytes body>
+            // Loop in case multiple frames arrived.
+            for (;;) {
+                const sepIdx = buf.indexOf('\n\n')
+                if (sepIdx === -1) break
+                const headerBlock = buf.substring(0, sepIdx)
+                const lenMatch = headerBlock.match(/Content-Length:\s*(\d+)/i)
+                if (!lenMatch) {
+                    // Header block with no Content-Length — skip past it
+                    buf = buf.substring(sepIdx + 2)
+                    continue
+                }
+                const bodyLen = Number(lenMatch[1])
+                const totalLen = sepIdx + 2 + bodyLen
+                if (Buffer.byteLength(buf, 'utf8') < totalLen) break  // wait for more
+                const body = buf.substr(sepIdx + 2, bodyLen)
+                buf = buf.substring(totalLen)
+                onEvent(body)
+            }
+        }
+    })
+
+    sock.on('close', () => {
+        console.log(`[esl-events] disconnected, reconnect in ${reconnectDelay}ms`)
+        stage = 'connecting'
+        buf = ''
+        setTimeout(startEslEventListener, reconnectDelay)
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000)
+    })
+
+    sock.on('error', err => {
+        console.error(`[esl-events] socket error: ${err.message}`)
+        // 'close' will fire next and handle reconnect
+    })
+}
+
+startEslEventListener()
 
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
 
