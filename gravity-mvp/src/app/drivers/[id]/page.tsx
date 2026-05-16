@@ -7,6 +7,7 @@ import TelegramLinkClient from './TelegramLinkClient'
 import { DriverTimeline } from './DriverTimeline'
 import CallButton from '@/components/sip/CallButton'
 import CallsList from '@/components/sip/CallsList'
+import AiMockCallButton from '@/components/sip/AiMockCallButton'
 import { prisma } from '@/lib/prisma'
 import { getDriverById, getCarById } from '@/app/actions'
 import { getDriverTimeline } from './timeline-actions'
@@ -81,10 +82,16 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                             <span className="font-semibold text-foreground">{driverName}</span>
 
                                             <span className="text-muted-foreground font-medium">Телефон:</span>
-                                            <span className="font-semibold text-foreground flex items-center gap-2">
+                                            <span className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
                                                 {driverPhone}
                                                 {driverPhone && driverPhone !== '—' && (
                                                     <CallButton phoneNumber={driverPhone} label="Позвонить" />
+                                                )}
+                                                {driverPhone && driverPhone !== '—' && prismaDriver && (
+                                                    <AiMockCallButton
+                                                        driverId={prismaDriver.id}
+                                                        phoneNumber={driverPhone}
+                                                    />
                                                 )}
                                             </span>
 

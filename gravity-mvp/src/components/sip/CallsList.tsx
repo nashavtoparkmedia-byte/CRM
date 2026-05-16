@@ -14,6 +14,9 @@ interface CallRow {
     durationSec: number | null
     recordingPath: string | null
     aiScore?: number | null
+    isAi?: boolean
+    aiSessionStatus?: 'starting' | 'greeting' | 'active' | 'transferring' | 'ended' | 'failed' | null
+    aiSummary?: string | null
 }
 
 /**
@@ -123,7 +126,16 @@ function CallRowItem({
                         {new Date(call.startedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
                     </div>
                 </div>
-                {typeof call.aiScore === 'number' && (
+                {call.isAi && (
+                    <span
+                        title={call.aiSummary ?? 'AI-обзвон'}
+                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
+                    >
+                        <Sparkles className="h-3 w-3"/>
+                        ИИ
+                    </span>
+                )}
+                {!call.isAi && typeof call.aiScore === 'number' && (
                     <span
                         title={`AI-оценка ${call.aiScore}/10`}
                         className={[
