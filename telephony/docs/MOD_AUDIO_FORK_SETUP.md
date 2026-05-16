@@ -8,13 +8,23 @@
 
 ## Где взять
 
-Открытый исходный код, активно поддерживается командой **drachtio / Jambonz**:
+⚠️ **Оригинальный `drachtio/drachtio-freeswitch-modules` репозиторий удалён с GitHub (404).** Используем активный форк, который держит идентичные исходники:
 
 ```
-https://github.com/drachtio/drachtio-freeswitch-modules
+https://github.com/mdslaney/drachtio-freeswitch-modules
 ```
 
 Конкретно нам нужен `modules/mod_audio_fork/` из этого репо.
+
+**Самый быстрый путь** — готовый script-инсталлер в этом проекте:
+
+```bash
+wsl bash /mnt/d/Github/CRM-day1/telephony/setup-mod-audio-fork.sh
+```
+
+Он сам ставит build-зависимости (включая `libwebsockets-dev`), клонирует исходники, собирает, устанавливает, регистрирует в `modules.conf.xml` и `load`-ит в running FreeSWITCH. Идемпотентен — безопасно перезапускать.
+
+Ниже — ручные шаги (если хочешь видеть процесс).
 
 ## Сборка в WSL2 Ubuntu 24.04
 
@@ -25,14 +35,17 @@ https://github.com/drachtio/drachtio-freeswitch-modules
 ```bash
 sudo apt update
 sudo apt install -y build-essential autoconf libtool pkg-config \
+                    libwebsockets-dev \
                     libspeex-dev libspeexdsp-dev libsndfile1-dev
 ```
+
+`libwebsockets-dev` обязательна — без неё `configure` падает.
 
 ### 2. Клонируем модули
 
 ```bash
 cd ~
-git clone https://github.com/drachtio/drachtio-freeswitch-modules.git
+git clone --depth 1 https://github.com/mdslaney/drachtio-freeswitch-modules.git
 cd drachtio-freeswitch-modules/modules/mod_audio_fork
 ```
 
