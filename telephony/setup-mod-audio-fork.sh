@@ -16,9 +16,18 @@ set -e
 
 FS_PREFIX=/usr/local/freeswitch
 SRC_DIR=/tmp/drachtio-freeswitch-modules
-# The original drachtio/drachtio-freeswitch-modules repo was deleted from
-# GitHub (404). Active fork containing the same sources:
+TARBALL=/tmp/drachtio-freeswitch-modules.tar.gz
+# Original drachtio/drachtio-freeswitch-modules repo was deleted from GitHub
+# (404). Active fork containing identical sources:
 REPO_URL="https://github.com/mdslaney/drachtio-freeswitch-modules.git"
+TARBALL_URL="https://codeload.github.com/mdslaney/drachtio-freeswitch-modules/tar.gz/refs/heads/main"
+
+# Force non-interactive everywhere — no credential prompts, no apt prompts.
+export GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS=/bin/true
+export GIT_CONFIG_NOSYSTEM=1
+export GIT_CONFIG_GLOBAL=/dev/null
+export DEBIAN_FRONTEND=noninteractive
 
 step() { echo; echo "===> $*"; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
@@ -29,21 +38,42 @@ command -v make >/dev/null || fail "make not installed"
 [ -f "${FS_PREFIX}/include/freeswitch/switch.h" ] || fail "FreeSWITCH headers not found at ${FS_PREFIX}/include/freeswitch/"
 [ -f "${FS_PREFIX}/lib/pkgconfig/freeswitch.pc" ] || fail "freeswitch.pc not found — FS not properly installed"
 
+step "Killing any stale git clones from previous runs"
+pkill -f 'git clone.*drachtio-freeswitch-modules' 2>/dev/null || true
+sleep 1
+
+step "Cleaning previous incomplete source dir"
+rm -rf "${SRC_DIR}" "${TARBALL}"
+
 step "Installing build dependencies (libwebsockets-dev + audio libs)"
-DEBIAN_FRONTEND=noninteractive apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends \
     build-essential autoconf libtool pkg-config \
     libwebsockets-dev \
-    libspeex-dev libspeexdsp-dev libsndfile1-dev
+    libspeex-dev libspeexdsp-dev libsndfile1-dev \
+    ca-certificates curl
 
-step "Cloning sources (or refreshing existing clone)"
-if [ -d "${SRC_DIR}" ]; then
-    cd "${SRC_DIR}"
-    git fetch --depth 1 origin
-    git reset --hard origin/HEAD
+step "Fetching sources — tarball first (no git auth needed)"
+HTTP_CODE=$(curl -sL -o "${TARBALL}" -w '%{http_code}' "${TARBALL_URL}" || echo "000")
+TARBALL_SIZE=$(stat -c %s "${TARBALL}" 2>/dev/null || echo 0)
+echo "tarball: HTTP ${HTTP_CODE}, ${TARBALL_SIZE} bytes"
+
+if [ "${HTTP_CODE}" = "200" ] && [ "${TARBALL_SIZE}" -gt 100000 ]; then
+    step "Extracting tarball"
+    mkdir -p "${SRC_DIR}"
+    tar -xzf "${TARBALL}" -C "${SRC_DIR}" --strip-components=1
 else
-    git clone --depth 1 "${REPO_URL}" "${SRC_DIR}"
+    step "Tarball failed (${HTTP_CODE}/${TARBALL_SIZE}B), falling back to git clone"
+    # GIT_TERMINAL_PROMPT=0 + GIT_ASKPASS=/bin/true blocks any credential
+    # prompt. Public repo doesn't need auth — if git still asks, it's
+    # misconfigured locally; this aborts instead of hanging.
+    if ! git clone --depth 1 "${REPO_URL}" "${SRC_DIR}"; then
+        fail "Both tarball and git clone failed. Check internet, DNS, and whether github.com is reachable from WSL: 'wsl curl -I https://github.com'"
+    fi
 fi
+
+# Sanity check
+[ -d "${SRC_DIR}/modules/mod_audio_fork" ] || fail "modules/mod_audio_fork not found in fetched sources"
 
 step "Building mod_audio_fork"
 cd "${SRC_DIR}/modules/mod_audio_fork"
