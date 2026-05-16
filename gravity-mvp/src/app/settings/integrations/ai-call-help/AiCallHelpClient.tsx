@@ -55,53 +55,88 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
 function ManagerHelp() {
     return (
         <div className="flex flex-col gap-5">
-            <Step number={1} title="Как запустить AI-звонок">
-                <p>Откройте карточку водителя или лида (раздел «Водители» или «Подключение»). На строке с телефоном — кнопка <Tag><Sparkles className="h-3 w-3" />AI-звонок (mock)</Tag> рядом с обычной «Позвонить».</p>
-                <p className="mt-2 text-[12px] text-muted-foreground">Mock-режим создаёт фейковый звонок с готовым транскриптом — для проверки UI и бизнес-флоу пока не подключены живые голосовые модели. Когда админ выключит mock и подключит ключи, кнопка станет «AI-звонок» и будет запускать настоящий голосовой обзвон.</p>
+            {/* Главный заголовок вкладки — соответствует «### 🤖 Как использовать
+                AI-обзвон» из финального текста инструкции. Эмодзи оставлен как
+                рендер текста (Unicode), без замены на иконку библиотеки. */}
+            <div className="flex items-center gap-2.5 rounded-md border border-primary/15 bg-primary/5 px-4 py-3">
+                <span aria-hidden className="text-[18px] leading-none">🤖</span>
+                <h2 className="text-[15px] font-semibold text-foreground">Как использовать AI-обзвон</h2>
+            </div>
+
+            <Step number={1} title="Запустить AI-звонок">
+                <ol className="ml-5 list-decimal space-y-1 text-[13px]">
+                    <li>Открой раздел <b>«Водители»</b></li>
+                    <li>Выбери нужного водителя и открой его карточку</li>
+                    <li>Найди кнопку <b>«AI-звонок»</b></li>
+                    <li>Нажми её</li>
+                </ol>
+                <p className="mt-3 text-[13px] text-muted-foreground">Готово — система сама сделает звонок и проанализирует разговор.</p>
             </Step>
 
-            <Step number={2} title="Где смотреть результат">
-                <p>После клика по кнопке вас перебросит на страницу звонка — <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">/calls/&lt;id&gt;</code>. В заголовке будет бейдж <Tag color="primary"><Sparkles className="h-3 w-3" />AI-обзвон</Tag>. Внутри:</p>
-                <ul className="mt-2 ml-5 list-disc space-y-1 text-[13px]">
-                    <li>Закладка <b>AI-анализ</b> — резюме разговора, ответы лида, итог квалификации</li>
-                    <li>Закладка <b>Транскрипт</b> — текст диалога целиком</li>
-                    <li>Закладка <b>Аудио</b> — запись (будет доступна после подключения live pipeline)</li>
+            <Step number={2} title="Что произойдёт дальше">
+                <p>После нажатия ты автоматически попадёшь на страницу звонка.</p>
+                <p className="mt-2">Тебе ничего не нужно делать — звонок уже завершён, результат готов.</p>
+            </Step>
+
+            <Step number={3} title="Где посмотреть результат">
+                <p>На странице звонка открой вкладку <b>«AI-анализ»</b>.</p>
+                <p className="mt-2">Там ты увидишь:</p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem>итог (подходит или нет)</DashItem>
+                    <DashItem>краткое резюме</DashItem>
+                    <DashItem>причину решения</DashItem>
+                    <DashItem>ответы лида на вопросы</DashItem>
+                    <DashItem>задачу для тебя (если нужна)</DashItem>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Также этот звонок появится в общей истории в разделе «Звонки» с пиллом <Tag><Sparkles className="h-3 w-3" />ИИ</Tag>.</p>
             </Step>
 
-            <Step number={3} title="Что значит итог квалификации">
-                <div className="grid gap-3 sm:grid-cols-3">
-                    <ResultCard
-                        icon={<CheckCircle2 className="h-4 w-4 text-accent" />}
-                        title="qualified"
-                        label="Целевой лид"
-                        desc="Подходит по критериям, готов работать. AI создаст задачу менеджеру: связаться и оформить."
-                    />
-                    <ResultCard
-                        icon={<XCircle className="h-4 w-4 text-destructive" />}
-                        title="not_qualified"
-                        label="Не подходит"
-                        desc="Не соответствует критериям или категорично отказался. Задача не создаётся — лид помечен как не-целевой."
-                    />
-                    <ResultCard
-                        icon={<HelpCircle className="h-4 w-4 text-muted-foreground" />}
-                        title="unclear"
-                        label="Нужен ручной звонок"
-                        desc="AI не смог получить однозначный ответ. Создаётся задача — менеджер перезванивает лично."
-                    />
-                </div>
-            </Step>
-
-            <Step number={4} title="Где найти задачу менеджеру">
-                <p>Когда AI создаёт задачу, она появляется в двух местах:</p>
-                <ul className="mt-2 ml-5 list-disc space-y-1 text-[13px]">
-                    <li>На странице звонка <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">/calls/&lt;id&gt;</code> в блоке AI-анализа — кнопка <Tag>Открыть задачу →</Tag></li>
-                    <li>В общем списке задач — <Link href="/tasks" className="text-primary underline-offset-2 hover:underline">Задачи</Link></li>
+            <Step number={4} title="Как понять — хороший лид или нет">
+                <p>Система показывает один из трёх вариантов:</p>
+                <ul className="mt-2 space-y-1.5 text-[13px]">
+                    <li className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent" />
+                        <span><b>Квалифицирован</b> — лид подходит → нужно связаться</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                        <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+                        <span><b>Не подходит</b> — лид нецелевой → ничего делать не нужно</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                        <HelpCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                        <span><b>Нужно уточнить</b> — не хватает данных → нужно позвонить вручную</span>
+                    </li>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Если в карточке звонка задачи нет — значит итог был <code>not_qualified</code> и задача не создавалась (это правильное поведение).</p>
             </Step>
+
+            <Step number={5} title="Что делать дальше">
+                <ul className="space-y-1 text-[13px]">
+                    <DashItem>Если <b>есть задача</b> → открой её и выполни</DashItem>
+                    <DashItem>Если <b>лид подходит</b> → свяжись с ним</DashItem>
+                    <DashItem>Если <b>не подходит</b> → переходи к следующему</DashItem>
+                </ul>
+            </Step>
+
+            <Step number={6} title="Где найти звонок позже">
+                <p>Открой <b>карточку водителя</b> → вкладка <b>«Звонки»</b>.</p>
+                <p className="mt-2 inline-flex flex-wrap items-center gap-1.5">
+                    AI-звонки отмечены значком
+                    <Tag><Sparkles className="h-3 w-3" />ИИ</Tag>
+                </p>
+            </Step>
+
+            <div className="rounded-md border border-border bg-surface/40 px-4 py-3 text-[13px] text-muted-foreground">
+                Если кнопки <b>«AI-звонок»</b> нет — обратись к администратору.
+            </div>
         </div>
+    )
+}
+
+function DashItem({ children }: { children: React.ReactNode }) {
+    return (
+        <li className="flex gap-2">
+            <span aria-hidden className="text-muted-foreground">—</span>
+            <span>{children}</span>
+        </li>
     )
 }
 
@@ -205,29 +240,6 @@ function Step({
             </div>
             <div className="text-[13px] text-foreground leading-relaxed">{children}</div>
         </section>
-    )
-}
-
-function ResultCard({
-    icon,
-    title,
-    label,
-    desc,
-}: {
-    icon: React.ReactNode
-    title: string
-    label: string
-    desc: string
-}) {
-    return (
-        <div className="rounded-md border border-border bg-background p-3">
-            <div className="mb-1 flex items-center gap-1.5">
-                {icon}
-                <code className="text-[12px] font-mono text-foreground">{title}</code>
-            </div>
-            <div className="text-[13px] font-semibold text-foreground">{label}</div>
-            <div className="mt-1 text-[12px] text-muted-foreground">{desc}</div>
-        </div>
     )
 }
 
