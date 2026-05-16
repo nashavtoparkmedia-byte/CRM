@@ -13,7 +13,7 @@ export type MockVariant = 'qualified' | 'not_qualified' | 'unclear'
 export interface MockAiCallResult {
     transcript: string
     aiSummary: string
-    aiSessionStatus: 'completed' | 'failed' | 'no_answer' | 'early_hangup'
+    aiSessionStatus: 'ended' | 'failed'
     durationSec: number
     qualificationResult: {
         qualification_status: 'qualified' | 'not_qualified' | 'unclear'
@@ -56,7 +56,7 @@ const VARIANTS: Record<MockVariant, MockAiCallResult> = {
         ].join('\n'),
         aiSummary:
             'Лид Иван, 7 лет стажа, категория B, интересуется арендой авто, готов на дневные смены в Москве (северный округ), готов оформиться в пятницу.',
-        aiSessionStatus: 'completed',
+        aiSessionStatus: 'ended',
         durationSec: 118,
         qualificationResult: {
             qualification_status: 'qualified',
@@ -89,7 +89,7 @@ const VARIANTS: Record<MockVariant, MockAiCallResult> = {
             '[AI] Понял, спасибо что уделили время.',
         ].join('\n'),
         aiSummary: 'Лид уже работает в другом парке, отказался продолжать разговор.',
-        aiSessionStatus: 'completed',
+        aiSessionStatus: 'ended',
         durationSec: 18,
         qualificationResult: {
             qualification_status: 'not_qualified',
@@ -120,7 +120,7 @@ const VARIANTS: Record<MockVariant, MockAiCallResult> = {
             '[AI] Извините, не слышу вас. Передаю менеджеру, он перезвонит.',
         ].join('\n'),
         aiSummary: 'Связь была плохая, лида не услышали. Передано менеджеру для ручного перезвона.',
-        aiSessionStatus: 'completed',
+        aiSessionStatus: 'ended',
         durationSec: 14,
         qualificationResult: {
             qualification_status: 'unclear',
