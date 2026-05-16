@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from 'react'
+import Link from 'next/link'
 import {
     KeyRound, CheckCircle2, AlertCircle, Loader2, PlugZap, Sparkles, Info, BadgeCheck,
 } from 'lucide-react'
@@ -105,19 +106,25 @@ export default function AiCallKeysClient({ initialStatus, canEdit }: Props) {
 
             <MockModeCard enabled={status.mockMode.enabled} envName={status.mockMode.envName} />
 
+            {/* Inline-подсказка «Как настроить» — короткий гайд на самой
+                странице, чтобы админ не уходил во вкладку «Инструкция» за
+                базовыми шагами. Полная справка живёт в /ai-call-help. */}
             <section className="rounded-md border border-border bg-surface/40 p-5">
                 <h2 className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-foreground">
                     <Info className="h-4 w-4 text-primary" />
-                    Как задать ключ
+                    Как настроить
                 </h2>
                 <ol className="ml-5 list-decimal space-y-1.5 text-[13px] text-foreground leading-relaxed">
                     <li>Открой файл <code className="rounded bg-background px-1 py-0.5 text-[12px] border border-border">gravity-mvp/.env</code></li>
-                    <li>Добавь или поправь строку, например: <code className="rounded bg-background px-1 py-0.5 text-[12px] border border-border">YANDEX_API_KEY=AQVN...</code></li>
-                    <li>Сохрани файл и перезапусти dev-сервер (<code className="rounded bg-background px-1 py-0.5 text-[12px] border border-border">npm run dev</code>) — Next.js перечитывает env только при старте</li>
-                    <li>Обнови эту страницу — статус ключа изменится на «настроено»</li>
+                    <li>Добавь нужную строку, например <code className="rounded bg-background px-1 py-0.5 text-[12px] border border-border">YANDEX_API_KEY=AQVN...</code></li>
+                    <li>Сохрани и перезапусти dev-сервер — Next.js перечитывает env только при старте</li>
+                    <li>Обнови эту страницу: статус сменится на «настроено», нажми <b>«Проверить подключение»</b>, чтобы убедиться, что ключ принят</li>
                 </ol>
                 <p className="mt-3 text-[12px] text-muted-foreground">
-                    Если у тебя пока нет ключей Yandex — оставь <code>AI_CALL_MOCK_MODE=true</code> в <code>.env</code>: бизнес-флоу можно тестировать на mock-сценариях без оплаты STT/LLM.
+                    Нет ключей Yandex/OpenAI — оставь <code>AI_CALL_MOCK_MODE=true</code>: бизнес-флоу будет работать на mock-сценариях без оплаты внешних сервисов.
+                </p>
+                <p className="mt-3 text-[12px] text-muted-foreground">
+                    Подробнее — <Link href="/settings/integrations/ai-call-help" className="text-primary underline-offset-2 hover:underline">Инструкция → Для администратора</Link>
                 </p>
             </section>
         </div>

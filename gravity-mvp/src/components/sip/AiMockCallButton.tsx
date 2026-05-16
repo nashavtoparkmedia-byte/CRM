@@ -4,7 +4,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Sparkles, Loader2 } from "lucide-react"
+import { Sparkles, Loader2, HelpCircle } from "lucide-react"
 
 /**
  * Mock-mode "AI call" trigger. Posts to /api/ai-calls/mock which creates
@@ -65,20 +65,39 @@ export default function AiMockCallButton({
         }
     }
 
+    // Текст подсказки для иконки «?» — короткое объяснение того, что
+    // произойдёт после клика. Видно при наведении (native tooltip).
+    const hint =
+        'Запускает голосовой обзвон лида. Через 1–2 минуты ассистент завершит ' +
+        'звонок, а на странице звонка появится анализ разговора и задача ' +
+        'менеджеру (если она нужна).'
+
     return (
         <div className="inline-flex flex-col gap-1">
-            <button
-                type="button"
-                onClick={trigger}
-                disabled={loading}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
-                title="Создаёт mock AI-звонок: транскрипт + квалификация + задача менеджеру"
-            >
-                {loading
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Sparkles className="h-3.5 w-3.5" />}
-                {label}
-            </button>
+            <div className="inline-flex items-center gap-1.5">
+                <button
+                    type="button"
+                    onClick={trigger}
+                    disabled={loading}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    title={hint}
+                >
+                    {loading
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Sparkles className="h-3.5 w-3.5" />}
+                    {label}
+                </button>
+                {/* Иконка «?» — inline-подсказка для менеджера прямо рядом с
+                    кнопкой. Native HTML-tooltip, никакого нового UI-стека. */}
+                <span
+                    role="img"
+                    aria-label="Что делает эта кнопка"
+                    title={hint}
+                    className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                >
+                    <HelpCircle className="h-3.5 w-3.5" />
+                </span>
+            </div>
             {error && (
                 <span className="text-[11px] text-destructive max-w-[260px]">{error}</span>
             )}

@@ -3,9 +3,10 @@
 "use client"
 
 import { useState } from 'react'
+import Link from 'next/link'
 import {
     Sparkles, Save, AlertCircle, CheckCircle2, Loader2,
-    Plus, Pencil, Trash2, X, GripVertical,
+    Plus, Pencil, Trash2, X, GripVertical, BookOpen,
 } from 'lucide-react'
 import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
 
@@ -71,6 +72,28 @@ export default function AiCallScenariosClient({ initialProjects, initialScenario
                     Только Администратор / Руководитель может редактировать сценарии.
                 </div>
             )}
+
+            {/* Inline-подсказка «Что это и как использовать» — короткий
+                контекст для админа на странице. Полная справка живёт в
+                Настройках → AI-обзвон → Инструкция. */}
+            <section className="rounded-md border border-border bg-surface/40 p-5">
+                <h2 className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-foreground">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    Что это и как использовать
+                </h2>
+                <p className="text-[13px] text-foreground leading-relaxed">
+                    <b>Проект</b> — это группа сценариев под одну бизнес-цель (квалификация лида, работа с оттоком, опрос качества). Внутри проекта — <b>сценарии</b>: скрипты разговора, по которым голосовой ассистент звонит водителю.
+                </p>
+                <p className="mt-2 text-[13px] text-foreground leading-relaxed">
+                    Чтобы добавить сценарий, нажми кнопку <b>+ Сценарий</b> в нужном проекте и заполни 4 поля: название, системный промт (роль и стиль ассистента), вопросы по порядку (3–5 штук) и целевую длительность звонка.
+                </p>
+                <p className="mt-3 text-[12px] text-muted-foreground">
+                    Менеджер не выбирает сценарий — система берёт нужный по контексту: новый лид → «Квалификация лида», давно нет заказов → «Работа с оттоком».
+                </p>
+                <p className="mt-3 text-[12px] text-muted-foreground">
+                    Подробнее — <Link href="/settings/integrations/ai-call-help" className="text-primary underline-offset-2 hover:underline">Инструкция → Для администратора</Link>
+                </p>
+            </section>
 
             {editor.kind === 'create' && (
                 <ScenarioEditor

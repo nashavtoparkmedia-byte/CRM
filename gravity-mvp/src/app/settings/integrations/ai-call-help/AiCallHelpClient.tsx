@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
     BookOpen, User, Wrench, Sparkles, CheckCircle2, XCircle, HelpCircle,
-    KeyRound, FolderTree, ToggleRight, AlertTriangle, ArrowRight, ListChecks,
+    KeyRound, FolderTree, AlertTriangle, ArrowRight,
 } from 'lucide-react'
 
 type Tab = 'manager' | 'admin'
@@ -143,75 +143,96 @@ function DashItem({ children }: { children: React.ReactNode }) {
 function AdminHelp() {
     return (
         <div className="flex flex-col gap-5">
-            <Step number={1} title="Настроить API ключи">
-                <p>Перейдите в <Link href="/settings/integrations/ai-call-keys" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><KeyRound className="h-3.5 w-3.5" />API ключи AI-обзвона<ArrowRight className="h-3 w-3" /></Link>. Что нужно:</p>
-                <ul className="mt-2 ml-5 list-disc space-y-1 text-[13px]">
-                    <li><code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">OPENAI_API_KEY</code> — для LLM-диалога (когда подключим)</li>
-                    <li><code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">YANDEX_API_KEY</code> + <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">YANDEX_FOLDER_ID</code> — для распознавания речи (Yandex SpeechKit)</li>
+            {/* Главный заголовок вкладки — зеркалит формат менеджерской
+                инструкции (эмодзи + короткое название), но с админ-семантикой. */}
+            <div className="flex items-center gap-2.5 rounded-md border border-primary/15 bg-primary/5 px-4 py-3">
+                <span aria-hidden className="text-[18px] leading-none">⚙️</span>
+                <h2 className="text-[15px] font-semibold text-foreground">Настройка AI-обзвона</h2>
+            </div>
+
+            <Step number={1} title="Как включить AI-обзвон">
+                <p>Раздел живёт в <b>Настройки → AI-обзвон</b> — это группа в боковом меню под группой «Интеграции».</p>
+                <p className="mt-2">Чтобы AI-обзвон работал, нужно одно из двух:</p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem><b>Включён mock-режим</b> — для тестового запуска без оплаты внешних сервисов</DashItem>
+                    <DashItem><b>Настроены API ключи</b> OpenAI и Yandex SpeechKit — для живых голосовых звонков (появится позже)</DashItem>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Секреты хранятся только в файле <code>gravity-mvp/.env</code>. UI показывает статус и последние 4 символа — для смены ключа правьте .env и перезапускайте dev-сервер.</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">Сейчас работает только mock-режим: менеджеры тестируют интерфейс на готовых сценариях разговора.</p>
             </Step>
 
-            <Step number={2} title="Настроить проекты">
-                <p>Перейдите в <Link href="/settings/integrations/ai-call-scenarios" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><FolderTree className="h-3.5 w-3.5" />Проекты и сценарии<ArrowRight className="h-3 w-3" /></Link>. По умолчанию 3 проекта:</p>
-                <ul className="mt-2 ml-5 list-disc space-y-1 text-[13px]">
-                    <li><b>Квалификация лида</b> — обзвон новых заявок</li>
-                    <li><b>Работа с оттоком</b> — возврат водителей, которые перестали брать заказы</li>
-                    <li><b>Опрос качества</b> — NPS-опрос среди активной базы</li>
+            <Step number={2} title="Как настроить API ключи">
+                <p>Открой <Link href="/settings/integrations/ai-call-keys" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><KeyRound className="h-3.5 w-3.5" />API ключи AI-обзвона<ArrowRight className="h-3 w-3" /></Link>. На странице 4 секции:</p>
+                <ul className="mt-2 space-y-1 text-[13px]">
+                    <DashItem><b>OpenAI</b> — ключ для будущего LLM-диалога</DashItem>
+                    <DashItem><b>Yandex SpeechKit</b> — ключ для распознавания речи</DashItem>
+                    <DashItem><b>Yandex Folder ID</b> — каталог в Yandex Cloud (не секрет)</DashItem>
+                    <DashItem><b>Mock-режим</b> — переключатель тестового запуска</DashItem>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Сейчас новые проекты создаются разработчиком через миграцию — UI добавления проектов появится в одной из следующих фаз.</p>
+                <p className="mt-3">Как заполнить:</p>
+                <ol className="mt-1.5 ml-5 list-decimal space-y-1 text-[13px]">
+                    <li>Открой файл <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">gravity-mvp/.env</code> в редакторе</li>
+                    <li>Добавь нужную строку — например, <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">YANDEX_API_KEY=AQVN...</code></li>
+                    <li>Сохрани файл и перезапусти dev-сервер</li>
+                    <li>Обнови страницу API ключей — статус должен поменяться с «не настроено» на «настроено»</li>
+                </ol>
+                <p className="mt-2">Чтобы проверить, что ключ принят сервисом — нажми кнопку <Tag>Проверить подключение</Tag>. Система отправит тестовый запрос и покажет результат справа от кнопки.</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">Секреты живут только в .env, в базу не пишутся, в браузер не уходят.</p>
             </Step>
 
-            <Step number={3} title="Настроить сценарии">
-                <p>В том же разделе <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">«Проекты и сценарии»</Link> внутри каждого проекта — кнопка <Tag>+ Сценарий</Tag>. Поля сценария:</p>
-                <ul className="mt-2 ml-5 list-disc space-y-1 text-[13px]">
-                    <li><b>Название</b> — что увидит менеджер в выпадающем списке</li>
-                    <li><b>Системный промт</b> — роль ассистента, тон, обработка возражений (он же отправится в LLM целиком)</li>
-                    <li><b>Вопросы по порядку</b> — обычно 3–5 чётких вопросов для квалификации</li>
-                    <li><b>Целевая длительность</b> — подсказка темпа модели, обычно 120 секунд</li>
+            <Step number={3} title="Как настроить проекты и сценарии">
+                <p>Открой <Link href="/settings/integrations/ai-call-scenarios" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><FolderTree className="h-3.5 w-3.5" />Проекты и сценарии<ArrowRight className="h-3 w-3" /></Link>.</p>
+                <p className="mt-2"><b>Проект</b> — это группа сценариев под одну бизнес-цель. По умолчанию 3 проекта:</p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem><b>Квалификация лида</b> — обзвон новых заявок</DashItem>
+                    <DashItem><b>Работа с оттоком</b> — возврат водителей</DashItem>
+                    <DashItem><b>Опрос качества</b> — NPS-опрос активной базы</DashItem>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Удаление — это soft-delete: сценарий просто перестаёт показываться менеджерам, история звонков по нему не теряется.</p>
+                <p className="mt-3">Внутри каждого проекта — кнопка <Tag>+ Сценарий</Tag>. У сценария 4 поля:</p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem><b>Название</b> — короткое имя для админа</DashItem>
+                    <DashItem><b>Системный промт</b> — роль ассистента и стиль разговора</DashItem>
+                    <DashItem><b>Вопросы по порядку</b> — обычно 3–5 чётких вопросов</DashItem>
+                    <DashItem><b>Целевая длительность</b> — обычно 120 секунд</DashItem>
+                </ul>
+                <p className="mt-2 text-[12px] text-muted-foreground">Менеджер не выбирает сценарий вручную — система берёт нужный по контексту (новый лид → «Квалификация лида» и т. д.).</p>
             </Step>
 
-            <Step number={4} title="Как включить mock-режим">
-                <p>В <code>gravity-mvp/.env</code> добавьте строку:</p>
-                <pre className="mt-2 rounded-md border border-border bg-surface p-3 font-mono text-[12px] text-foreground">AI_CALL_MOCK_MODE=true</pre>
-                <p className="mt-2 text-[13px]">Перезапустите dev-сервер (<code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">npm run dev</code>). На странице <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">API ключи</Link> карточка «Mock-режим» должна показать <Tag color="accent"><ToggleRight className="h-3 w-3" />включён</Tag>.</p>
-                <p className="mt-2 text-[12px] text-muted-foreground">В этом режиме кнопка «AI-звонок (mock)» создаёт фейковую запись Call(isAi=true) с готовым транскриптом — это безопасно тестировать без OpenAI/Yandex.</p>
+            <Step number={4} title="Как проверить что всё работает">
+                <p>Самый быстрый способ — сделать mock-звонок:</p>
+                <ol className="mt-1.5 ml-5 list-decimal space-y-1 text-[13px]">
+                    <li>Открой раздел <b>«Водители»</b></li>
+                    <li>Открой карточку любого водителя <b>с указанным телефоном</b></li>
+                    <li>Под телефоном должна быть синяя кнопка <Tag color="primary"><Sparkles className="h-3 w-3" />AI-звонок</Tag></li>
+                    <li>Нажми её — через секунду откроется страница звонка</li>
+                </ol>
+                <p className="mt-2">На странице звонка проверь, что всё на месте:</p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem>Бейдж <Tag color="primary"><Sparkles className="h-3 w-3" />AI-обзвон</Tag> в заголовке</DashItem>
+                    <DashItem>Вкладка <b>«AI-анализ»</b> открыта по умолчанию</DashItem>
+                    <DashItem>Видны: итог, резюме, причина решения, ответы лида, задача менеджеру</DashItem>
+                </ul>
+                <p className="mt-2 text-[12px] text-muted-foreground">Если всё это видно — AI-обзвон работает.</p>
             </Step>
 
-            <Step number={5} title="Что делать, если AI-звонок не создаётся" icon={<AlertTriangle className="h-4 w-4 text-destructive" />}>
-                <ul className="ml-5 list-decimal space-y-2 text-[13px]">
-                    <li>
-                        <b>Кнопка «AI-звонок (mock)» отдаёт ошибку «Mock-режим выключен»</b> — добавьте <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">AI_CALL_MOCK_MODE=true</code> в <code>.env</code> и перезапустите dev-сервер.
-                    </li>
-                    <li>
-                        <b>Кнопки вообще нет в карточке</b> — карточка открыта без <code>driverId</code>/<code>contactId</code>. Откройте карточку из списка водителей или лидов, чтобы у компонента были данные.
-                    </li>
-                    <li>
-                        <b>Звонок создаётся, но <code>/calls/&lt;id&gt;</code> 404</b> — проверьте, что миграции применены: <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">npx prisma migrate deploy</code>, потом <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">npx prisma generate</code>. После этого перезапустите dev-сервер.
-                    </li>
-                    <li>
-                        <b>Список сценариев пустой</b> — на первом просмотре страницы «Проекты и сценарии» CRM сам создаёт дефолтный сценарий «Квалификация водителя (по умолчанию)» в проекте «Квалификация лида». Если этого не произошло — проверьте подключение к БД и логи dev-сервера.
-                    </li>
-                    <li>
-                        <b>На карточке звонка нет блока AI-анализа</b> — это значит, что у записи Call нет <code>isAi=true</code>. Откройте звонок, созданный именно кнопкой «AI-звонок (mock)», обычные звонки таким бейджем не помечаются.
-                    </li>
+            <Step number={5} title="Что делать, если не работает" icon={<AlertTriangle className="h-4 w-4 text-destructive" />}>
+                <p><b>Нет кнопки «AI-звонок» в карточке водителя</b></p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem>У водителя пустой телефон → возьми водителя с заполненным номером</DashItem>
+                    <DashItem>Mock-режим выключен → проверь <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">страницу API ключей</Link>: карточка <b>«Mock-режим»</b> должна быть <Tag color="accent">включена</Tag></DashItem>
+                </ul>
+
+                <p className="mt-3"><b>Не создаётся звонок при клике</b></p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem>Появилась ошибка «Mock-режим выключен» → включи <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">AI_CALL_MOCK_MODE=true</code> в <code>.env</code> и перезапусти dev-сервер</DashItem>
+                    <DashItem>Страница звонка 404 → миграции не применены, выполни <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">npx prisma migrate deploy</code> и перезапусти сервер</DashItem>
+                </ul>
+
+                <p className="mt-3"><b>Нет результата на вкладке «AI-анализ»</b></p>
+                <ul className="mt-1.5 space-y-1 text-[13px]">
+                    <DashItem>Открыт обычный звонок, а не AI-звонок → в общей истории такие звонки отмечены пиллом <Tag><Sparkles className="h-3 w-3" />ИИ</Tag></DashItem>
+                    <DashItem>Список сценариев пустой → обнови страницу «Проекты и сценарии», CRM автоматически создаст дефолтный сценарий</DashItem>
                 </ul>
             </Step>
-
-            <section className="rounded-md border border-border bg-surface/40 p-5">
-                <h2 className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-foreground">
-                    <ListChecks className="h-4 w-4 text-primary" />
-                    Что НЕ работает в этой версии (Day 1)
-                </h2>
-                <ul className="ml-5 list-disc space-y-1 text-[13px] text-foreground leading-relaxed">
-                    <li>Живой голосовой обзвон — ключи Yandex/OpenAI можно настроить, но провайдеры ещё не подключены к dial-флоу. Сейчас работает только mock-режим.</li>
-                    <li>Аудио-запись AI-звонков (для mock-звонков записи нет; для живого — будет позже)</li>
-                    <li>Перевод на менеджера через SIP REFER (запланирован)</li>
-                    <li>Большой аналитический дашборд (метрики копятся в <code>Call.metadata</code>, но визуализации пока нет)</li>
-                </ul>
-            </section>
         </div>
     )
 }
