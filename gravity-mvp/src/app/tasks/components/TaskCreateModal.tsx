@@ -17,6 +17,13 @@ import DateTimePicker from '@/components/ui/DateTimePicker'
 
 interface TaskCreateModalProps {
     driverId?: string
+    // Some chats are bound to a Contact but have no linked Driver yet
+    // (e.g. a phone-only contact created from an inbound call before any
+    // matching driver record exists). Pass contactId so the scenario
+    // uniqueness check + the proactive conflict lookup target the right
+    // person — without it the server would treat "no driver" as "no
+    // filter" and trip false-positive duplicate-scenario rejections.
+    contactId?: string
     driverName: string
     source?: TaskSource
     chatContext?: {
@@ -38,6 +45,7 @@ const TASK_TYPES = [
 
 export default function TaskCreateModal({
     driverId,
+    contactId,
     driverName,
     source = 'manual',
     chatContext,
@@ -89,10 +97,11 @@ export default function TaskCreateModal({
         return () => { isMounted = false }
     }, [driverId, type])
 
-    // Proactive: on scenario change, check if the driver already has an
-    // active main scenario task. If yes, show the link before submit.
+    // Proactive: on scenario change, check if this person (driver and/or
+    // contact) already has an active main scenario task. If yes, show the
+    // link before submit so the operator gets a clean path forward.
     useEffect(() => {
-        if (!driverId || !scenario) {
+        if ((!driverId && !contactId) || !scenario) {
             setScenarioConflict(null)
             // Picking "Без сценария" also clears any stale server error from
             // a previous conflict submit, otherwise the red box lingers and
@@ -101,7 +110,7 @@ export default function TaskCreateModal({
             return
         }
         let isMounted = true
-        getActiveMainScenarioForDriver(driverId, scenario)
+        getActiveMainScenarioForDriver({ driverId, contactId }, scenario)
             .then(res => {
                 if (!isMounted) return
                 setScenarioConflict(res ? { id: res.id, title: res.title, scenarioLabel: res.scenarioLabel } : null)
@@ -109,7 +118,7 @@ export default function TaskCreateModal({
             })
             .catch(err => console.error('Scenario conflict check failed', err))
         return () => { isMounted = false }
-    }, [driverId, scenario])
+    }, [driverId, contactId, scenario])
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -132,6 +141,7 @@ export default function TaskCreateModal({
 
         createTask.mutate({
             driverId,
+            contactId,
             source: chatContext ? 'chat' : source,
             type: finalType,
             title: finalTitle,
@@ -156,9 +166,9 @@ export default function TaskCreateModal({
                 // the same nice link UI as the proactive check (the latter
                 // may miss when HMR hasn't reloaded the server action or
                 // when driverId arrives late).
-                if (/уже есть активный сценарий|main.scenario|already.*active.*scenario/i.test(msg) && driverId && scenario) {
+                if (/уже есть активный сценарий|активный сценарий|main.scenario|already.*active.*scenario/i.test(msg) && (driverId || contactId) && scenario) {
                     try {
-                        const conflict = await getActiveMainScenarioForDriver(driverId, scenario)
+                        const conflict = await getActiveMainScenarioForDriver({ driverId, contactId }, scenario)
                         if (conflict) {
                             setScenarioConflict({ id: conflict.id, title: conflict.title, scenarioLabel: conflict.scenarioLabel })
                         }

@@ -774,7 +774,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             {/* Task Create Modal */}
             {isTaskModalOpen && contactOrDriverId && (
                 <TaskCreateModal
-                    driverId={chat.driver?.id || contactOrDriverId}
+                    driverId={chat.driver?.id}
+                    contactId={contact?.id}
                     driverName={displayName}
                     source="chat"
                     chatContext={{ chatId: chat.id }}
