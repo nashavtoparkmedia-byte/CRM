@@ -13,6 +13,7 @@ import { checkSimilarTasks, getActiveMainScenarioForDriver } from '@/app/tasks/a
 import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/types'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 import Link from 'next/link'
+import DateTimePicker from '@/components/ui/DateTimePicker'
 
 interface TaskCreateModalProps {
     driverId?: string
@@ -318,12 +319,7 @@ export default function TaskCreateModal({
                                 <Calendar className="w-3.5 h-3.5" />
                                 Выполнить до
                             </label>
-                            <input
-                                type="datetime-local"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                                className="w-full h-[38px] bg-[#f9fafb] border border-[#d1d5db] rounded-lg px-3 text-[14px] outline-none focus:border-[#4f46e5]"
-                            />
+                            <DateTimePicker value={dueDate} onChange={setDueDate} />
                         </div>
 
                         {/* Description */}
