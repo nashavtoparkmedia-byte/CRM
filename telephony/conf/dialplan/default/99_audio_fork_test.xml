@@ -1,0 +1,17 @@
+<!--
+  Day 1 test extension: dial 9999 to forward call audio (mixed both legs,
+  bidirectional) into the Node AudioBridge WebSocket. No AI, no playback
+  is triggered from dialplan — playback is initiated externally via
+  uuid_broadcast (ESL) for the duration of Day 1 testing.
+-->
+<include>
+  <extension name="audio_fork_test">
+    <condition field="destination_number" expression="^9999$">
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+      <action application="set" data="fork_meta={\"callId\":\"${uuid}\",\"test\":true}"/>
+      <action application="audio_fork" data="ws://127.0.0.1:3030/audio mixed both"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+</include>
