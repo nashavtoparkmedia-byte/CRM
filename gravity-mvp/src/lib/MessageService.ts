@@ -163,9 +163,21 @@ export class MessageService {
                 // Ownership: use primary chat's assignee (most recent activity = authoritative)
                 const assignedToUserId = primary.assignedToUserId || driverChats.find((c: any) => c.assignedToUserId)?.assignedToUserId || null
                 const allChatIds = driverChats.map((c: any) => c.id)
-                const channelMap = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.id]))
-                const channelUnread = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.unreadCount || 0]))
-                
+                // Per-channel maps. driverChats is sorted by lastMessageAt DESC,
+                // so the FIRST occurrence per channel is the newest chat in that
+                // channel. With Object.fromEntries the LAST entry won, which on
+                // contacts that accidentally have two chats in the same channel
+                // (e.g. WhatsApp LID vs phone-number formats) routed clicks to
+                // the older empty one. Iterate-and-skip-if-set fixes this.
+                const channelMap: Record<string, string> = {}
+                const channelUnread: Record<string, number> = {}
+                for (const c of driverChats) {
+                    if (channelMap[c.channel] === undefined) channelMap[c.channel] = c.id
+                    // Sum unread across same-channel duplicates so the badge
+                    // doesn't undercount when a contact has split chats.
+                    channelUnread[c.channel] = (channelUnread[c.channel] ?? 0) + (c.unreadCount || 0)
+                }
+
                 // Aggregate profiles from all chats for this driver
                 const allProfiles = driverChats.map((c: any) => ({
                     channel: c.channel,
@@ -178,8 +190,12 @@ export class MessageService {
                 // channel's last message, timestamp and unread count instead of
                 // the primary chat's. Only the display-critical fields are
                 // copied to keep the payload small.
+                //
+                // Same dedup rule as channelMap above: keep the newest chat per
+                // channel, skip same-channel duplicates.
                 const channelChats: Record<string, any> = {}
                 for (const c of driverChats) {
+                    if (channelChats[c.channel]) continue
                     channelChats[c.channel] = {
                         id: c.id,
                         channel: c.channel,
