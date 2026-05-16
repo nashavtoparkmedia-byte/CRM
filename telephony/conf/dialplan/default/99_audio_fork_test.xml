@@ -35,7 +35,11 @@
       <action application="sleep" data="500"/>
       <action application="set" data="fork_meta={&quot;callId&quot;:&quot;${uuid}&quot;,&quot;test&quot;:true,&quot;ext&quot;:9998}"/>
       <action application="audio_fork" data="start ws://127.0.0.1:3030/audio mixed 8000 both"/>
-      <action application="playback" data="/usr/local/freeswitch/sounds/en/us/callie/ivr/8000/ivr-welcome.wav"/>
+      <!-- No external WAV needed: tone_stream:// is built-in. Plays
+           440 Hz for 1s, silence 0.5s, then 880 Hz for 1s — same as our
+           audio/test.wav. Proves mod_audio_fork forks real audio. -->
+      <action application="playback" data="tone_stream://%(1000,500,440)"/>
+      <action application="playback" data="tone_stream://%(1000,500,880)"/>
       <action application="park"/>
     </condition>
   </extension>
