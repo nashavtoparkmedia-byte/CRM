@@ -417,6 +417,12 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                 return (
                                     <button
                                         key={ch.id}
+                                        // Prevent the button from stealing focus on click — keeps
+                                        // the cursor in the phone/name input so the operator can
+                                        // keep typing without an extra click to re-focus the field.
+                                        // The click still fires on mouseup; we only swallow the
+                                        // implicit focus that mousedown would cause.
+                                        onMouseDown={(e) => e.preventDefault()}
                                         onClick={() => {
                                             setSelectedChannel(ch.id)
                                             // Re-normalise whatever's already in the input when
@@ -426,6 +432,10 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                                 const normalised = normalizeRuPhoneInput(query)
                                                 if (normalised !== query) setQuery(normalised)
                                             }
+                                            // Belt-and-suspenders: keyboard activation (Enter/Space
+                                            // on a focused button) doesn't go through mousedown,
+                                            // so explicitly re-focus the input.
+                                            inputRef.current?.focus()
                                         }}
                                         title={hasIdentity ? `${ch.label}: канал активен у контакта` : `${ch.label}: контакт НЕ найден — будет создан новый, доставка не гарантирована`}
                                         className={`flex-1 h-[34px] text-[11px] font-bold rounded-lg transition-all relative flex items-center justify-center gap-1 ${
