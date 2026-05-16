@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import {
-    Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed,
+    Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff,
     Play, Pause, Loader2, ArrowLeft, Sparkles, Headphones, FileText, AlertTriangle,
 } from "lucide-react"
 
@@ -151,7 +151,7 @@ function CallHeader({ call, peerName, peerNumber }: { call: CallDetail; peerName
                     )}
                 </div>
             </div>
-            <StatusBadge status={call.status} />
+            <StatusBadge status={call.status} direction={call.direction} />
         </div>
     )
 }
@@ -341,18 +341,24 @@ function ScoreCircle({ score }: { score: number | null }) {
     )
 }
 
-function StatusBadge({ status }: { status: string }) {
-    const map: Record<string, { label: string; cls: string }> = {
-        completed: { label: 'Завершён',      cls: 'bg-accent/10 text-accent' },
-        active:    { label: 'В разговоре',   cls: 'bg-primary/10 text-primary' },
-        ringing:   { label: 'Звонит',        cls: 'bg-primary/10 text-primary' },
-        missed:    { label: 'Пропущен',      cls: 'bg-destructive/10 text-destructive' },
-        no_answer: { label: 'Не ответил',    cls: 'bg-muted/10 text-muted-foreground' },
-        busy:      { label: 'Занято',        cls: 'bg-muted/10 text-muted-foreground' },
-        rejected:  { label: 'Отклонён',      cls: 'bg-destructive/10 text-destructive' },
-        failed:    { label: 'Сбой',          cls: 'bg-destructive/10 text-destructive' },
+function StatusBadge({ status, direction }: { status: string; direction: 'inbound' | 'outbound' }) {
+    // Direction-aware short labels for the journal badge. The longer per-pill
+    // label lives in callStatusLabel (lib/calls/status.ts).
+    const badgeFor = (s: string, d: 'inbound' | 'outbound') => {
+        if (s === 'completed') return { label: 'Завершён',         cls: 'bg-accent/10 text-accent' }
+        if (s === 'active')    return { label: 'В разговоре',      cls: 'bg-primary/10 text-primary' }
+        if (s === 'ringing')   return { label: 'Звонит',           cls: 'bg-primary/10 text-primary' }
+        if (s === 'missed')    return { label: 'Пропущен',         cls: 'bg-destructive/10 text-destructive' }
+        if (s === 'busy')      return { label: 'Занято',           cls: 'bg-muted/10 text-muted-foreground' }
+        if (s === 'rejected')  return { label: 'Отклонён',         cls: 'bg-destructive/10 text-destructive' }
+        if (s === 'cancelled') return { label: 'Отменён',          cls: 'bg-muted/10 text-muted-foreground' }
+        if (s === 'failed')    return { label: 'Сбой',             cls: 'bg-destructive/10 text-destructive' }
+        if (s === 'no_answer') return d === 'inbound'
+            ? { label: 'Пропущен',      cls: 'bg-destructive/10 text-destructive' }
+            : { label: 'Без ответа',    cls: 'bg-destructive/10 text-destructive' }
+        return { label: s, cls: 'bg-muted/10 text-muted-foreground' }
     }
-    const meta = map[status] ?? { label: status, cls: 'bg-muted/10 text-muted-foreground' }
+    const meta = badgeFor(status, direction)
     return (
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-medium ${meta.cls}`}>
             {meta.label}
@@ -371,21 +377,31 @@ function EmptyState({ icon: Icon, title, hint }: { icon: typeof Sparkles; title:
 }
 
 function iconFor(c: CallDetail) {
-    if (c.status === 'missed') return PhoneMissed
+    // Inbound that wasn't answered (missed / no_answer / rejected / busy /
+    // cancelled) = missed-style icon. Outbound failures keep the "outgoing"
+    // arrow — direction + color tells the user "you called and it didn't go
+    // through". Failed (technical) gets PhoneOff.
+    const s = c.status
+    if (s === 'failed') return PhoneOff as unknown as typeof PhoneOutgoing
+    if (c.direction === 'inbound' && s !== 'completed' && s !== 'active' && s !== 'ringing') return PhoneMissed
     if (c.direction === 'inbound') return PhoneIncoming
     return PhoneOutgoing
 }
 
 function colorFor(c: CallDetail): string {
-    if (c.status === 'missed') return 'text-destructive'
-    if (c.status === 'completed') return 'text-accent'
-    return 'text-primary'
+    if (c.status === 'completed' || c.status === 'active' || c.status === 'ringing') return 'text-accent'
+    if (c.direction === 'inbound' && (c.status === 'missed' || c.status === 'no_answer')) return 'text-destructive'
+    if (c.direction === 'outbound' && c.status === 'no_answer') return 'text-destructive'
+    if (c.status === 'busy') return 'text-destructive'
+    return 'text-muted-foreground'
 }
 
 function bgFor(c: CallDetail): string {
-    if (c.status === 'missed') return 'bg-destructive/10'
-    if (c.status === 'completed') return 'bg-accent/10'
-    return 'bg-primary/10'
+    if (c.status === 'completed' || c.status === 'active' || c.status === 'ringing') return 'bg-accent/10'
+    if (c.direction === 'inbound' && (c.status === 'missed' || c.status === 'no_answer')) return 'bg-destructive/10'
+    if (c.direction === 'outbound' && c.status === 'no_answer') return 'bg-destructive/10'
+    if (c.status === 'busy') return 'bg-destructive/10'
+    return 'bg-muted/10'
 }
 
 function formatDuration(sec: number): string {

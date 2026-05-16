@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
-import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, Play } from "lucide-react"
+import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
+import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/lib/calls/status"
 import { usePathname, useRouter } from "next/navigation"
 import MessageContextMenu from "./MessageContextMenu"
 import ImageLightbox from "./ImageLightbox"
@@ -366,28 +367,46 @@ export default function MessageFeed({
     const renderCallMessage = (item: MessageUIItem) => {
         const { message: msg, spacingTop } = item
         const meta = msg.metadata as Record<string, any> | undefined
-        const disposition = meta?.disposition || 'no_answer'
+        // Prefer the new `status` field (CallStatus enum). Fall back to
+        // legacy `disposition` so historical messages still render.
+        const rawStatus = (meta?.status as string | undefined) ?? null
+        const legacyDisposition = (meta?.disposition as string | undefined) ?? null
+        const status: CallStatusValue = (rawStatus as CallStatusValue) ?? (
+            legacyDisposition === 'answered' ? 'completed' :
+            legacyDisposition === 'rejected' ? 'rejected' :
+            legacyDisposition === 'missed'   ? (msg.direction === 'inbound' ? 'missed' : 'no_answer') :
+            'failed'
+        )
+        const direction = (msg.direction as CallDirection)
         const callId = meta?.callId as string | undefined
         const durationSec = (meta?.durationSec as number | null | undefined) ?? 0
-        const isInbound = msg.direction === 'inbound'
         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 
-        const colorClass = disposition === 'answered'
-            ? 'text-green-600 bg-green-50 border-green-100 hover:bg-green-100'
-            : (disposition === 'missed' || disposition === 'rejected')
-                ? 'text-red-600 bg-red-50 border-red-100 hover:bg-red-100'
-                : 'text-gray-500 bg-gray-50 border-gray-100 hover:bg-gray-100'
+        const color = callStatusColor(direction, status)
+        const colorClass =
+            color === 'green' ? 'text-green-600 bg-green-50 border-green-100 hover:bg-green-100' :
+            color === 'red'   ? 'text-red-600 bg-red-50 border-red-100 hover:bg-red-100' :
+                                'text-gray-500 bg-gray-50 border-gray-100 hover:bg-gray-100'
 
-        const CallIcon = disposition === 'missed' || disposition === 'rejected'
-            ? PhoneMissed
-            : isInbound ? PhoneIncoming : PhoneOutgoing
+        const iconKind = callStatusIcon(direction, status)
+        const CallIcon =
+            iconKind === 'missed'   ? PhoneMissed :
+            iconKind === 'failed'   ? PhoneOff :
+            iconKind === 'incoming' ? PhoneIncoming :
+                                      PhoneOutgoing
 
         // Recording exists when the call was answered AND lasted long enough
         // for record_session to capture audio. durationSec > 0 is a good proxy
         // — actual recordingPath is filled async by processRecording, so we
         // optimistically show the Play marker and trust /calls/[id] to render
         // "запись ещё обрабатывается" if the mp3 hasn't arrived yet.
-        const hasRecording = disposition === 'answered' && durationSec > 0
+        const hasRecording = status === 'completed' && durationSec > 0
+
+        // Always recompute the user-facing label from (direction, status,
+        // durationSec). The DB-stored msg.content is a fallback for legacy
+        // rows where metadata.status is missing AND callStatusLabel can't
+        // derive a sensible value.
+        const label = callStatusLabel(direction, status, durationSec) || msg.content
 
         const pillClass = `inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm border transition-colors ${colorClass}`
 
@@ -412,7 +431,7 @@ export default function MessageFeed({
                         title="Открыть детали звонка"
                     >
                         <CallIcon size={16} strokeWidth={2} />
-                        <span className="font-medium">{msg.content}</span>
+                        <span className="font-medium">{label}</span>
                         <span className="text-[11px] opacity-60">{timeString}</span>
                         {hasRecording && (
                             <button
@@ -428,7 +447,7 @@ export default function MessageFeed({
                 ) : (
                     <div className={pillClass}>
                         <CallIcon size={16} strokeWidth={2} />
-                        <span className="font-medium">{msg.content}</span>
+                        <span className="font-medium">{label}</span>
                         <span className="text-[11px] opacity-60">{timeString}</span>
                         {hasRecording && (
                             <Play size={13} strokeWidth={2.5} className="fill-current opacity-80" />

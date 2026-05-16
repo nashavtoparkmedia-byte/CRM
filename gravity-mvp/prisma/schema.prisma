@@ -1502,12 +1502,14 @@ enum CallDirection {
 enum CallStatus {
   ringing       // call placed, not answered yet
   active        // bridged, conversation in progress
-  completed     // ended normally after a conversation
-  missed        // inbound, never answered
-  no_answer     // outbound, callee didn't pick up
-  busy
-  failed        // technical failure (no route, codec mismatch, etc.)
-  rejected      // explicitly declined
+  completed     // ended normally after a conversation (billsec > 0)
+  missed        // inbound, callee (manager) never picked up — only for inbound direction
+  no_answer     // outbound, peer didn't pick up (NO_ANSWER / NO_USER_RESPONSE / dialplan timeout)
+  busy          // peer's line busy (USER_BUSY)
+  rejected      // peer explicitly declined (CALL_REJECTED) — for outbound only;
+                // for inbound manager-reject we use 'rejected' too
+  cancelled     // outbound, manager hit "Отбой" before peer answered (ORIGINATOR_CANCEL)
+  failed        // technical failure: no route, codec mismatch, gateway down, invalid number, etc.
 }
 
 enum AiCallMessageRole {

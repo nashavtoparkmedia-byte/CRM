@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import {
     X, Loader2, Headphones, FileText, Sparkles, AlertTriangle,
-    PhoneIncoming, PhoneOutgoing, PhoneMissed,
+    PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff,
 } from "lucide-react"
+import { callStatusIcon, type CallStatusValue, type CallDirection } from "@/lib/calls/status"
 
 /**
  * In-chat side-drawer with call details. Reads `?call=<id>` from the URL —
@@ -160,8 +161,12 @@ function CallDetailContent({ callId, autoPlay, onClose }: { callId: string; auto
 
     const peerName = call?.driver?.fullName ?? call?.contact?.displayName ?? null
     const peerNumber = call ? (call.direction === 'inbound' ? call.fromNumber : call.toNumber) : ''
-    const Icon = call?.status === 'missed' || call?.status === 'rejected' ? PhoneMissed
-        : call?.direction === 'inbound' ? PhoneIncoming : PhoneOutgoing
+    const iconKind = call ? callStatusIcon(call.direction as CallDirection, call.status as CallStatusValue) : 'outgoing'
+    const Icon =
+        iconKind === 'missed'   ? PhoneMissed :
+        iconKind === 'failed'   ? PhoneOff :
+        iconKind === 'incoming' ? PhoneIncoming :
+                                  PhoneOutgoing
 
     return (
         <>

@@ -31,6 +31,7 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 import { ContactService } from '@/lib/ContactService'
+import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
@@ -350,12 +351,12 @@ async function handleChannelHangup(evt: any): Promise<void> {
     }
 
     const cause = header(evt, 'Hangup-Cause') ?? 'UNKNOWN'
-    const status = mapHangupCauseToStatus(cause, billsec)
+    const status = mapHangupCauseToStatus(cause, billsec, call.direction as CallDirection)
 
     const updated = await prisma.call.update({
         where: { fsUuid },
         data: {
-            status,
+            status: status as any, // 'cancelled' is a fresh enum value — Prisma client may be cached
             endedAt: new Date(),
             durationSec: billsec > 0 ? billsec : null,
             hangupCause: cause,
@@ -432,6 +433,9 @@ export async function syncCallToChat(call: any): Promise<void> {
     }
 
     // Idempotency: don't double-insert if this Call was already synced.
+    // If the existing row's label/status doesn't match the latest Call state
+    // (e.g. we re-ran sync after status finalized), update it in place
+    // instead of skipping — keeps the chat label fresh.
     const existing = await prisma.message.findFirst({
         where: {
             chatId: chat.id,
@@ -439,18 +443,44 @@ export async function syncCallToChat(call: any): Promise<void> {
             metadata: { path: ['callId'], equals: call.id } as any,
         },
     })
-    if (existing) return
 
+    const direction = call.direction as 'inbound' | 'outbound'
+    const content = callStatusLabel(direction, call.status, call.durationSec)
+    // Keep `disposition` for one release for backward-compat with any
+    // consumers we missed; the new field is `status`.
     const disposition =
         call.status === 'completed' ? 'answered' :
         call.status === 'rejected' || call.status === 'busy' ? 'rejected' :
         'missed'
 
-    const sec: number = call.durationSec ?? 0
-    const mm = Math.floor(sec / 60).toString().padStart(2, '0')
-    const ss = (sec % 60).toString().padStart(2, '0')
-    const dirLabel = call.direction === 'inbound' ? 'Входящий' : 'Исходящий'
-    const content = sec > 0 ? `${dirLabel} · ${mm}:${ss}` : (disposition === 'missed' ? 'Пропущенный звонок' : dirLabel)
+    if (existing) {
+        const oldMeta = (existing.metadata ?? {}) as any
+        if (existing.content !== content || oldMeta.status !== call.status || oldMeta.durationSec !== (call.durationSec ?? null)) {
+            await prisma.message.update({
+                where: { id: existing.id },
+                data: {
+                    content,
+                    metadata: {
+                        callId: call.id,
+                        status: call.status,
+                        disposition,
+                        durationSec: call.durationSec ?? null,
+                    } as any,
+                },
+            })
+            broadcastChatMessage(chat.id, {
+                id: existing.id,
+                chatId: chat.id,
+                channel: 'phone',
+                type: 'call',
+                direction: call.direction,
+                content,
+                sentAt: existing.sentAt,
+                metadata: { callId: call.id, status: call.status, disposition, durationSec: call.durationSec ?? null },
+            })
+        }
+        return
+    }
 
     const created = await prisma.message.create({
         data: {
@@ -466,7 +496,8 @@ export async function syncCallToChat(call: any): Promise<void> {
             status: 'delivered',
             metadata: {
                 callId: call.id,
-                disposition,
+                status: call.status,
+                disposition, // legacy field, kept for one release
                 durationSec: call.durationSec ?? null,
             } as any,
         },
@@ -495,23 +526,8 @@ export async function syncCallToChat(call: any): Promise<void> {
     })
 }
 
-function mapHangupCauseToStatus(cause: string, billsec: number): 'completed' | 'missed' | 'no_answer' | 'busy' | 'failed' | 'rejected' {
-    if (billsec > 0) return 'completed'
-    switch (cause) {
-        case 'NORMAL_CLEARING':
-        case 'NO_ANSWER':
-        case 'NO_USER_RESPONSE':
-        case 'ORIGINATOR_CANCEL':
-            return 'no_answer'
-        case 'USER_BUSY':
-            return 'busy'
-        case 'CALL_REJECTED':
-        case 'NORMAL_TEMPORARY_FAILURE':
-            return 'rejected'
-        default:
-            return 'failed'
-    }
-}
+// Status mapping moved to src/lib/calls/status.ts — single source of truth
+// for the FS-cause → Call.status → UI label/color/icon pipeline.
 
 function extensionToUserId(extension: string): string | null {
     // Reverse mapping from sip/extensions.ts — small enough to inline
