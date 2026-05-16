@@ -4,7 +4,7 @@ import {
     IdCard, Activity, Archive, Clock, UserCheck, AlertCircle,
     TrendingDown, Ban, Eye, MessageCircle, Bot, FileText,
     Timer, History, BarChart2, Phone, Smartphone, Key, CarFront, Link2,
-    Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles
+    Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles, KeyRound, BookOpen,
 } from "lucide-react";
 
 export type NavigationItem = {
@@ -162,8 +162,18 @@ export const DOMAINS: NavigationDomain[] = [
                     { label: "MAX", href: "/settings/integrations/max", icon: MessageSquare, sectionKey: "max" },
                     { label: "Bot", href: "/settings/integrations/bot", icon: Bot, sectionKey: "bot" },
                     { label: "Телефония", href: "/settings/integrations/telephony", icon: Smartphone, sectionKey: "telephony" },
-                    { label: "Сценарии ИИ-обзвона", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
                     { label: "Avito", href: "/settings/integrations/avito", icon: Megaphone, sectionKey: "settings_integration_avito" }
+                ]
+            },
+            {
+                // AI-обзвон вынесён в отдельную группу — раздел растёт
+                // (API ключи + проекты/сценарии + инструкция), и держать его
+                // отдельно от обычных каналов-интеграций честнее.
+                title: "AI-обзвон",
+                items: [
+                    { label: "API ключи", href: "/settings/integrations/ai-call-keys", icon: KeyRound, sectionKey: "ai_call_keys" },
+                    { label: "Проекты и сценарии", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
+                    { label: "Инструкция", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
                 ]
             }
         ]
