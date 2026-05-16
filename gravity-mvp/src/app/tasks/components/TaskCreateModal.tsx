@@ -94,6 +94,10 @@ export default function TaskCreateModal({
     useEffect(() => {
         if (!driverId || !scenario) {
             setScenarioConflict(null)
+            // Picking "Без сценария" also clears any stale server error from
+            // a previous conflict submit, otherwise the red box lingers and
+            // confuses the next attempt.
+            setCreateError(null)
             return
         }
         let isMounted = true
@@ -101,6 +105,7 @@ export default function TaskCreateModal({
             .then(res => {
                 if (!isMounted) return
                 setScenarioConflict(res ? { id: res.id, title: res.title, scenarioLabel: res.scenarioLabel } : null)
+                if (res) setCreateError(null)
             })
             .catch(err => console.error('Scenario conflict check failed', err))
         return () => { isMounted = false }
@@ -143,8 +148,24 @@ export default function TaskCreateModal({
             onSuccess: () => {
                 onClose()
             },
-            onError: (err: any) => {
-                setCreateError(err?.message || 'Не удалось создать задачу')
+            onError: async (err: any) => {
+                const msg = err?.message || 'Не удалось создать задачу'
+                setCreateError(msg)
+                // If the server bounced us on the "main scenario already
+                // active" guard, fetch the existing task so we can render
+                // the same nice link UI as the proactive check (the latter
+                // may miss when HMR hasn't reloaded the server action or
+                // when driverId arrives late).
+                if (/уже есть активный сценарий|main.scenario|already.*active.*scenario/i.test(msg) && driverId && scenario) {
+                    try {
+                        const conflict = await getActiveMainScenarioForDriver(driverId, scenario)
+                        if (conflict) {
+                            setScenarioConflict({ id: conflict.id, title: conflict.title, scenarioLabel: conflict.scenarioLabel })
+                        }
+                    } catch (lookupErr) {
+                        console.error('Conflict lookup after failed submit failed', lookupErr)
+                    }
+                }
             },
         })
     }
@@ -227,8 +248,10 @@ export default function TaskCreateModal({
                             </div>
                         )}
 
-                        {/* Error from server (e.g. race-condition duplicate scenario) */}
-                        {createError && (
+                        {/* Error from server. Suppressed when the proactive
+                            conflict block above is already showing — that
+                            one carries the same info plus action links. */}
+                        {createError && !scenarioConflict && (
                             <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-3 animate-in fade-in">
                                 <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
                                 <p className="text-[13px] text-red-800">{createError}</p>
