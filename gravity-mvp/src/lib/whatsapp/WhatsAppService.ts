@@ -957,6 +957,39 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 orderBy: { driverId: 'desc' } // Prefer chat linked to a driver
             })
 
+            // Fallback: WhatsApp can issue a LID alias separately from the
+            // user's actual phone JID. The sync path creates chats with the
+            // LID-format externalChatId (e.g. "61603068305553@lid"). When a
+            // later message arrives in phone-format (e.g. "73068305553@c.us")
+            // the search above won't match the @lid row — endsWith on the
+            // last-10 phone digits doesn't hit a LID, which is its own
+            // unrelated number. Without this fallback we'd create a parallel
+            // chat and the operator sees the new "Привет" message in a
+            // separate thread from the marketing campaign that started the
+            // conversation. AmoCRM shows them as one thread; so do we.
+            //
+            // The fallback: look up the Contact by phone, then reuse that
+            // contact's existing WA chat if any. Only adds 1-2 cheap lookups
+            // and only when the primary search misses (uncommon).
+            if (!unifiedChat) {
+                const e164 = phoneDigits.length >= 10 ? '+7' + phoneDigits.slice(-10) : null
+                if (e164) {
+                    const phoneRow = await prisma.contactPhone.findFirst({
+                        where: { phone: e164, isActive: true },
+                        select: { contactId: true },
+                    })
+                    if (phoneRow?.contactId) {
+                        unifiedChat = await (prisma.chat as any).findFirst({
+                            where: { contactId: phoneRow.contactId, channel: 'whatsapp' },
+                            orderBy: { lastMessageAt: 'desc' },
+                        })
+                        if (unifiedChat) {
+                            console.log(`[WA-SERVICE] Recovered WA chat ${unifiedChat.id} (ext=${unifiedChat.externalChatId}) for ${e164} via contact ${phoneRow.contactId} — preventing LID/phone duplicate`)
+                        }
+                    }
+                }
+            }
+
             if (unifiedChat) {
                 // Always update potential variant IDs to the standardized format
                 await (prisma.chat as any).update({
