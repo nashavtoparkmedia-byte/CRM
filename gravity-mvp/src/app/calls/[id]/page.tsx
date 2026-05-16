@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Same rationale as
+   src/lib/ai-call/scenarios.ts: Prisma client types for AI-call models
+   may not be regenerated on every dev box. */
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { getUsers } from '@/lib/users/user-service'
@@ -32,6 +35,30 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
         if (u) managerName = `${u.firstName} ${u.lastName}`.trim()
     }
 
+    // AI-call specific data: scenario name and linked Task (for the
+    // "Перейти к задаче" link in the qualification panel).
+    const cAny = call as any
+    let aiScenarioName: string | null = null
+    if (cAny.isAi && cAny.aiScenarioId) {
+        const sc = await (prisma as any).aiCallScenario.findUnique({
+            where: { id: cAny.aiScenarioId },
+            select: { name: true },
+        })
+        aiScenarioName = sc?.name ?? null
+    }
+    let linkedTask: { id: string; title: string } | null = null
+    if (cAny.isAi) {
+        // Tasks created by the mock endpoint store callId in metadata.aiCallId
+        const task = await (prisma as any).task.findFirst({
+            where: { metadata: { path: ['aiCallId'], equals: call.id } as any },
+            select: { id: true, title: true },
+            orderBy: { createdAt: 'desc' },
+        })
+        if (task) linkedTask = task
+    }
+    const estimatedCostRub: number | null =
+        (call.metadata as any)?.estimatedCostRub ?? null
+
     // Serialise to plain JSON so it can cross the server→client boundary.
     const initial: CallDetail = {
         id: call.id,
@@ -53,6 +80,12 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
         managerName,
         driver: call.driver,
         contact: call.contact,
+        isAi: cAny.isAi ?? false,
+        aiSessionStatus: cAny.aiSessionStatus ?? null,
+        aiTransferReason: cAny.aiTransferReason ?? null,
+        aiScenarioName,
+        linkedTask,
+        estimatedCostRub,
     }
 
     return <CallDetailClient initial={initial} />

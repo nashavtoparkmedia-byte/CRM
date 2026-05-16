@@ -1,0 +1,16 @@
+{
+  "name": "audio-bridge-day1",
+  "version": "0.0.1",
+  "description": "Day 1 — audio roundtrip test for AI-call bridge (mod_audio_fork WS + ESL uuid_broadcast playback). No STT/LLM/TTS yet.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "gen-wav": "node gen-test-wav.js"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.13.0",
+    "@yandex-cloud/nodejs-sdk": "^3.0.6",
+    "ws": "^8.18.0"
+  }
+}
