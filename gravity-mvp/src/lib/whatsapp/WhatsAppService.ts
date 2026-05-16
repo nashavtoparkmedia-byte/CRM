@@ -905,6 +905,13 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         try {
             let rawChatId = partnerJid  // e.g. '79221853150@c.us'
             const ts = clampMessageTs(msg.timestamp)
+            // Whether we successfully resolved a LID to a real phone. Stays
+            // false if the JID arrives as a LID and getContact()/getChat()
+            // can't give us a real .number — in which case we MUST NOT
+            // pretend the LID's last 10 digits are a phone (older code did
+            // that and ended up with fake +73509372005 contacts whose real
+            // identity was something completely different).
+            let lidResolved = !rawChatId.includes('@lid')
 
             // If the partner JID is a LID, attempt to get their real phone number.
             // For inbound: msg.getContact() = sender. For outbound: use chat.getContact() to get recipient.
@@ -920,16 +927,28 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     if (contact && contact.number) {
                         console.log(`[WA-SERVICE] Translated LID ${rawChatId} to contact number ${contact.number}`)
                         rawChatId = `${contact.number}@c.us`
+                        lidResolved = true
+                    } else {
+                        console.warn(`[WA-SERVICE] LID ${rawChatId} has no .number — keeping JID as-is, will not invent a phone`)
                     }
                 } catch (e) {
                     console.error(`[WA-SERVICE] Failed to get contact for LID ${rawChatId}`, e)
                 }
             }
 
-            // Normalize to `whatsapp:7XXXXXXXXXX` format
+            // Normalize to `whatsapp:7XXXXXXXXXX` only if we have a real phone.
+            // For unresolved LIDs keep the raw LID JID as the externalChatId —
+            // it's better to show "@lid: 1653..." than to fabricate a fake
+            // Russian number from the LID's tail digits. Once a future
+            // message arrives via the same JID and resolves to a phone, the
+            // contact-lookup fallback (below) will recover and rename the chat.
             const phoneDigits = rawChatId.replace(/\D/g, '')
-            const normalizedPhone = phoneDigits.length >= 10 ? '7' + phoneDigits.slice(-10) : phoneDigits
-            const normalizedExternalId = `whatsapp:${normalizedPhone}`
+            const normalizedPhone = lidResolved && phoneDigits.length >= 10
+                ? '7' + phoneDigits.slice(-10)
+                : phoneDigits
+            const normalizedExternalId = lidResolved
+                ? `whatsapp:${normalizedPhone}`
+                : rawChatId // raw LID form, e.g. "165313509372005@lid"
 
             // Legacy WhatsApp (uses the raw @c.us format for its own table)
             await prisma.whatsAppChat.upsert({
@@ -971,7 +990,11 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             // The fallback: look up the Contact by phone, then reuse that
             // contact's existing WA chat if any. Only adds 1-2 cheap lookups
             // and only when the primary search misses (uncommon).
-            if (!unifiedChat) {
+            if (!unifiedChat && lidResolved) {
+                // Only attempt phone-based contact recovery when we actually
+                // have a real phone. For unresolved LIDs phoneDigits is the
+                // LID's tail and not a phone — looking it up would either
+                // miss or, worse, match an unrelated contact by coincidence.
                 const e164 = phoneDigits.length >= 10 ? '+7' + phoneDigits.slice(-10) : null
                 if (e164) {
                     const phoneRow = await prisma.contactPhone.findFirst({
@@ -1025,10 +1048,19 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
             // ── Contact Model dual write ──────────────────────────────
             try {
+                // For unresolved LIDs:
+                //   - externalId = the LID JID (preserves identity uniqueness
+                //     across @lid and phone formats so they don't collide)
+                //   - phone     = null (DO NOT fabricate a phone from LID digits;
+                //     normalizePhoneE164 would happily produce '+7XXXXXXXXXX'
+                //     from any 10+ digit blob and we'd create fake ContactPhone
+                //     rows that map LIDs onto real people's numbers by accident)
+                const identityExternalId = lidResolved ? normalizedPhone : rawChatId
+                const phoneForResolve   = lidResolved ? phoneDigits     : null
                 const contactResult = await ContactService.resolveContact(
                     'whatsapp',
-                    normalizedPhone,
-                    phoneDigits,
+                    identityExternalId,
+                    phoneForResolve,
                     (msg as any).notifyName || unifiedChat.name || null,
                 )
                 await ContactService.ensureChatLinked(

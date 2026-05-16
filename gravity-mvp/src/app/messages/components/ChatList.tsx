@@ -140,7 +140,15 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             )
         }
 
-        // 2. Channel Filter (multi-select) — but never filter out the currently selected chat.
+        // 2. Channel Filter (multi-select).
+        //
+        // Strict: rows are excluded if none of their chats sit in the selected
+        // channel. We intentionally do NOT keep the currently selected chat
+        // visible across channel tabs — clicking "TG" must show only TG, the
+        // operator's last selection is preserved in the right-side chat panel
+        // separately. (The looser keep-selected rule applies to status tabs
+        // below — see "Tab Filter" — because those are workflow filters, not
+        // channel filters.)
         //
         // Single channel selected:
         //   The merged conversation entry is REBASED onto that channel's
@@ -157,20 +165,16 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         if (selectedChannels.size > 0) {
             const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch
             const normalizedSet = new Set(Array.from(selectedChannels).map(normalizeChannel))
-            const isSelectedRow = (c: any) =>
-                !!selectedChatId && (c.id === selectedChatId || c.allChatIds?.includes(selectedChatId))
 
             if (selectedChannels.size === 1) {
                 const onlyCh = normalizeChannel(Array.from(selectedChannels)[0])
                 list = list
                     .filter(c => {
-                        if (isSelectedRow(c)) return true
                         // Conversation has a chat in this channel iff the
                         // channelChats / channelMap contains it.
                         return !!(c.channelChats?.[onlyCh] || c.channelMap?.[onlyCh])
                     })
                     .map(c => {
-                        if (isSelectedRow(c)) return c
                         const ch = c.channelChats?.[onlyCh]
                         if (!ch) return c
                         // Rebase: swap display fields with the channel-specific chat.
@@ -193,7 +197,6 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                     })
             } else {
                 list = list.filter(c => {
-                    if (isSelectedRow(c)) return true
                     if (c.allChannels && c.allChannels.length > 0) {
                         return c.allChannels.some((ch: string) => normalizedSet.has(ch))
                     }
