@@ -455,9 +455,19 @@ function startEslEventListener() {
                 .finally(() => {
                     // Pass call UUID via fork_meta so the WS handler can
                     // route incoming PCM to the right CallSession.
+                    //
+                    // mix-type: "mono" — caller audio ONLY. The previous
+                    // "mixed" mode included the callee's audio too, which
+                    // means our own TTS (broadcast back into the channel
+                    // via uuid_broadcast) was looping into STT as if the
+                    // lead were repeating us. With "mono" STT receives
+                    // only the lead's microphone. Per drachtio docs:
+                    //   mono   — single channel, caller only
+                    //   mixed  — single channel, caller + callee mixed
+                    //   stereo — two channels, caller L / callee R
                     const meta = `callUuid=${encodeURIComponent(uuid)}`
                     const forkUrl = `${FORK_WS_URL}?${meta}`
-                    const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} mixed 8000 ${meta}`
+                    const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} mono 8000 ${meta}`
                     console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched})`)
                     eslApi(cmd)
                         .then(out => console.log(`[esl] auto-fork: ${out}`))

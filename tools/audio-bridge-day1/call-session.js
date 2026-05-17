@@ -74,6 +74,15 @@ class CallSession {
         // Debounce timer for "user paused → process turn"
         this.userPauseTimer = null
         this.USER_PAUSE_MS = Number(process.env.USER_PAUSE_MS ?? 1200)
+        // Post-speak grace window: STT finals arriving immediately after our
+        // own TTS finished are almost always tail artefacts (room echo, slow
+        // RTP packets, codec ringing). 250 ms gives the line a moment to
+        // settle before we accept the lead's reply.
+        this.POST_SPEAK_GRACE_MS = Number(process.env.POST_SPEAK_GRACE_MS ?? 250)
+        // Timestamp after which STT finals are accepted again. While the bot
+        // is in 'speaking' state we keep this set to +∞ — only flipped back
+        // to a real epoch when speaking ends.
+        this.acceptSttAfter = 0
 
         this.sttSession = null
         // Counter for unique audio filenames per call.
@@ -127,6 +136,23 @@ class CallSession {
     _onSttFinal(text) {
         const trimmed = text.trim()
         if (!trimmed) return
+
+        // Turn-taking guard — drop STT finals while the bot is producing its
+        // own audio. With audio_fork in mono mode this is rare, but room
+        // acoustics + speakerphone echo + STT picking up our own filler
+        // tones still happens. Anything STT returns while we're 'greeting'
+        // or 'speaking' is treated as noise rather than user speech.
+        if (this.state === 'greeting' || this.state === 'speaking') {
+            console.log(`[call ${this.callUuid}] stt-drop (${this.state}): ${trimmed.slice(0, 60)}`)
+            return
+        }
+
+        // Post-speak grace window — see acceptSttAfter setup in _speak().
+        if (Date.now() < this.acceptSttAfter) {
+            console.log(`[call ${this.callUuid}] stt-drop (grace): ${trimmed.slice(0, 60)}`)
+            return
+        }
+
         this.pendingUserText = (this.pendingUserText + ' ' + trimmed).trim()
         this.onTranscriptItem('user', trimmed)
         // Reset debounce: each new final pushes back the "user is done" moment.
@@ -263,12 +289,22 @@ class CallSession {
     async _speak(text) {
         if (!tts.enabled() || !this.broadcastWav) return
         this._setState('speaking')
+        // Drop any pending user text that arrived while we were thinking —
+        // it's stale relative to what the bot is about to say.
+        this.pendingUserText = ''
+        if (this.userPauseTimer) {
+            clearTimeout(this.userPauseTimer)
+            this.userPauseTimer = null
+        }
         try {
             const wav = await tts.synthesize(text)
             await this.broadcastWav(wav)
         } catch (err) {
             console.error(`[call ${this.callUuid}] tts error: ${err.message}`)
         }
+        // Set the grace window — STT finals within this window are likely
+        // tail echo / codec artefacts and get dropped by _onSttFinal.
+        this.acceptSttAfter = Date.now() + this.POST_SPEAK_GRACE_MS
     }
 
     _end(reason) {
