@@ -33,6 +33,46 @@ Internal CRM for managing drivers and analytics (NashAvtoParkMedia).
 
 Порты: CRM → 3002, Scraper API → смотреть в .env yandex-fleet-scraper.
 
+### Команда "Запусти проект полностью"
+Расширение базовой команды — поверх 4 процессов поднимает телефонию.
+Использовать после открытия ноута, чтобы зелёная точка телефонии в шапке
+CRM сразу зажглась.
+
+Порядок строго такой (зависимости):
+1. **Проверить Docker Desktop** через `docker info`. Если демон недоступен —
+   попросить пользователя запустить Docker Desktop (значок в трее). Без него
+   `crm-redis` + `crm-minio` не работают, скрапер и AI-call воркеры
+   ломаются.
+2. **Дождаться Redis + MinIO** healthy: `docker exec crm-redis redis-cli ping`
+   → `PONG`, `curl http://127.0.0.1:9000/minio/health/live` → 200.
+   Compose запускает их с `restart: unless-stopped`, обычно подымаются сами
+   после старта Docker Desktop.
+3. **Запустить 4 базовых процесса** как в команде «Запусти проект СРМ».
+4. **AudioBridge:** `cd tools/audio-bridge-day1 && node server.js` в фоне.
+   Ждать `[http] listening on :3030`.
+5. **FreeSWITCH в WSL без sudo-промпта** через root-юзера:
+   `wsl -d Ubuntu-24.04 -u root /usr/local/freeswitch/bin/freeswitch -ncwait`.
+   FS форкается, родитель выходит, фоновый PID живёт в WSL. Команду удобнее
+   запускать через PowerShell-тул чтобы избежать Git-Bash mangling путей
+   `/usr/local/...` → `C:/Program Files/Git/usr/...`.
+6. **Smoke-проверка:**
+   - `fs_cli -x 'sofia status gateway megafon'` → `State REGED, Status UP`.
+   - В логе AudioBridge: `[esl-events] subscribed (auto-fork URL: ...)`.
+   - `curl -s http://127.0.0.1:3002/api/calls/sip-credentials` → 200 с
+     `wsUrl/sipUri/extension`. Если 403 `no_extension_for_user` — у юзера
+     нет mapping в `src/lib/sip/extensions.ts` (см. ниже).
+   - Сообщить пользователю: «обнови страницу CRM, иконка телефона
+     позеленеет». SipContext не делает автоматический retry после
+     первоначальной ошибки регистрации.
+
+**SIP extension mapping** для шапки CRM — `src/lib/sip/extensions.ts`:
+маппит `user.id` → SIP-расширение в FS. Сейчас покрыты `u1=101`, `u2=102`,
+`u3=103`. Если в `src/data/users.json` появится новый менеджер с `uN` —
+добавить запись в EXTENSIONS и создать `<N>.xml` в
+`/usr/local/freeswitch/conf/directory/default/` с тем же паролем, что в
+`.env` или хардкодом в xml. Без записи иконка телефонии у этого юзера
+останется красной.
+
 ---
 
 ## Rules for Claude
