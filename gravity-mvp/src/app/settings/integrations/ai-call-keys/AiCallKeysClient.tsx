@@ -105,6 +105,7 @@ export function AiCallKeysSection({ initialStatus, canEdit }: Props) {
         <div className="flex flex-col gap-3 animate-in fade-in duration-200">
             <KeyRow
                 title="OpenAI API key"
+                hint="LLM-диалог (gpt-4o-mini) + резервный STT/TTS, если ключи Yandex не настроены."
                 placeholder="sk-proj-..."
                 status={status.openai}
                 canEdit={canEdit}
@@ -119,6 +120,7 @@ export function AiCallKeysSection({ initialStatus, canEdit }: Props) {
 
             <KeyRow
                 title="Yandex SpeechKit API key"
+                hint="Нативное русское распознавание речи (STT v3) и синтез голоса (TTS). Приоритет над OpenAI для STT/TTS."
                 placeholder="AQVN..."
                 status={status.yandexSpeechkit}
                 canEdit={canEdit}
@@ -139,6 +141,7 @@ export function AiCallKeysSection({ initialStatus, canEdit }: Props) {
 
             <KeyRow
                 title="Yandex Folder ID"
+                hint="ID каталога Yandex Cloud — нужен SpeechKit для тарификации. Не секрет, поэтому показывается целиком."
                 placeholder="b1g..."
                 status={status.yandexFolderId}
                 canEdit={canEdit}
@@ -151,6 +154,7 @@ export function AiCallKeysSection({ initialStatus, canEdit }: Props) {
                 enabled={status.mockMode.enabled}
                 canEdit={canEdit}
                 onToggle={toggleMockMode}
+                hint="Когда включён — кнопка «AI-звонок (mock)» в карточке водителя создаёт фейковый звонок с готовым транскриптом, чтобы тестировать UI без оплаты внешних сервисов."
             />
         </div>
     )
@@ -160,6 +164,8 @@ export function AiCallKeysSection({ initialStatus, canEdit }: Props) {
 
 function KeyRow(props: {
     title: string
+    /** One-line tooltip + expanded hint on hover. Explains what the key does. */
+    hint?: string
     placeholder: string
     status: KeyStatus
     canEdit: boolean
@@ -173,7 +179,7 @@ function KeyRow(props: {
     masked?: boolean
 }) {
     const {
-        title, placeholder, status, canEdit,
+        title, hint, placeholder, status, canEdit,
         onSave, onDelete, onTest, testing = false, testResult, canTest = false, cantTestReason,
         masked = true,
     } = props
@@ -216,7 +222,12 @@ function KeyRow(props: {
     })()
 
     return (
-        <section className="rounded-md border border-border bg-card px-4 py-3">
+        <section
+            // Native title для tooltip + hover-подсветка фона + ring справа,
+            // чтобы было сразу видно «активную строку».
+            title={hint}
+            className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
+        >
             <div className="flex items-center gap-3">
                 <span
                     aria-hidden
@@ -233,6 +244,13 @@ function KeyRow(props: {
                             </code>
                         )}
                     </div>
+                    {/* Hint visible on hover (inline expand) so admin не лезет
+                        читать native tooltip ради простого пояснения. */}
+                    {hint && (
+                        <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-24 group-hover:opacity-100">
+                            {hint}
+                        </div>
+                    )}
                     {testResult && (
                         <div className={`mt-0.5 text-[11px] ${testResult.ok ? 'text-accent' : 'text-destructive'}`}>
                             {testResult.message}
@@ -348,10 +366,12 @@ function MockModeRow({
     enabled,
     canEdit,
     onToggle,
+    hint,
 }: {
     enabled: boolean
     canEdit: boolean
     onToggle: (enabled: boolean) => Promise<void>
+    hint?: string
 }) {
     const [busy, setBusy] = useState(false)
 
@@ -366,7 +386,10 @@ function MockModeRow({
         : { color: 'bg-muted-foreground/40', label: 'выключен' }
 
     return (
-        <section className="rounded-md border border-border bg-card px-4 py-3">
+        <section
+            title={hint}
+            className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
+        >
             <div className="flex items-center gap-3">
                 <span aria-hidden className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot.color}`} title={dot.label} />
                 <div className="flex-1 min-w-0">
@@ -374,6 +397,11 @@ function MockModeRow({
                         <span className="text-[14px] font-medium text-foreground">Mock-режим</span>
                         <span className="text-[12px] text-muted-foreground">{dot.label}</span>
                     </div>
+                    {hint && (
+                        <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-24 group-hover:opacity-100">
+                            {hint}
+                        </div>
+                    )}
                 </div>
                 {canEdit && (
                     <button
