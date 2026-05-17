@@ -89,7 +89,8 @@ async function processOne(callId: string): Promise<void> {
     const file = new File([new Uint8Array(mp3)], `${callId}.mp3`, { type: 'audio/mpeg' })
 
     const startedAt = Date.now()
-    const response = await getOpenAI().audio.transcriptions.create({
+    const openai = await getOpenAI()
+    const response = await openai.audio.transcriptions.create({
         file: file as any,  // OpenAI types want browser File but Node 20+ has a compatible one
         model: WHISPER_MODEL,
         language: TRANSCRIBE_LANGUAGE,

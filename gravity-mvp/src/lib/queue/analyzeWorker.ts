@@ -28,6 +28,11 @@ import { broadcastCall } from '@/lib/callStreamBus'
 import { getOpenAI } from '@/lib/openaiClient'
 import { getTelephonyAiConfig } from '@/lib/aiCallAnalysis/config'
 import { parseAnalysisResponse, averageScore } from '@/lib/aiCallAnalysis/prompt'
+import {
+    DEFAULT_QUALIFY_PROMPT,
+    parseQualifyResponse,
+    type QualificationResult,
+} from '@/lib/aiCallAnalysis/qualifyPrompt'
 
 const MAX_OUTPUT_TOKENS = 1024
 
@@ -70,7 +75,10 @@ export function startAnalyzeWorker(): void {
 async function processOne(callId: string): Promise<void> {
     const call = await prisma.call.findUnique({
         where: { id: callId },
-        select: { id: true, transcript: true, aiAnalysis: true },
+        // `isAi` decides which prompt/parser we use — manager evaluation
+        // (5-criterion rubric) for human inbound calls, qualification
+        // extraction (QualificationResult shape) for AI-bot outbound calls.
+        select: { id: true, transcript: true, aiAnalysis: true, isAi: true },
     })
     if (!call) {
         opsLog('warn', 'analyze_call_missing', { operation: 'analyze', callId })
@@ -82,6 +90,8 @@ async function processOne(callId: string): Promise<void> {
     }
     if (call.aiAnalysis) {
         // Skip if already analyzed. Avoids double-billing on accidental re-enqueue.
+        // Covers both paths: AI-call where bridge already wrote aiAnalysis via
+        // the `end_call` tool, and manager-call where the previous job finished.
         opsLog('info', 'analyze_skip_already_done', { operation: 'analyze', callId })
         return
     }
@@ -92,9 +102,28 @@ async function processOne(callId: string): Promise<void> {
         return
     }
 
+    if (call.isAi) {
+        await analyzeAiCall(callId, call.transcript, config.model)
+    } else {
+        await analyzeManagerCall(callId, call.transcript, config.model, config.systemPrompt)
+    }
+}
+
+/**
+ * Manager evaluation path: scores a human manager's call against the
+ * 5-criterion rubric and writes Call.aiScore + aiSummary + aiAnalysis
+ * (CallAnalysisShape).
+ */
+async function analyzeManagerCall(
+    callId: string,
+    transcript: string,
+    model: string,
+    systemPrompt: string,
+): Promise<void> {
     const startedAt = Date.now()
-    const completion = await getOpenAI().chat.completions.create({
-        model: config.model,
+    const openai = await getOpenAI()
+    const completion = await openai.chat.completions.create({
+        model,
         // JSON-mode — the model is required to emit a valid JSON object, so
         // we don't have to defensively unfence ```json blocks etc.
         response_format: { type: 'json_object' },
@@ -102,11 +131,8 @@ async function processOne(callId: string): Promise<void> {
         temperature: 0,
         max_tokens: MAX_OUTPUT_TOKENS,
         messages: [
-            { role: 'system', content: config.systemPrompt },
-            {
-                role: 'user',
-                content: `Расшифровка звонка:\n\n${call.transcript}`,
-            },
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Расшифровка звонка:\n\n${transcript}` },
         ],
     })
 
@@ -127,32 +153,91 @@ async function processOne(callId: string): Promise<void> {
         },
     })
 
-    // Cache hit visibility: prompt_tokens_details.cached_tokens is part of
-    // the new usage payload OpenAI rolled out alongside automatic prompt
-    // caching. Older SDK versions may not type this field, hence the cast.
-    const usage = completion.usage as
-        | (typeof completion.usage & { prompt_tokens_details?: { cached_tokens?: number } })
-        | undefined
+    logUsage(callId, 'analyze_saved', model, startedAt, completion.usage, { aiScore })
 
-    opsLog('info', 'analyze_saved', {
-        operation: 'analyze',
-        callId,
-        aiScore,
-        model: config.model,
-        latencyMs: Date.now() - startedAt,
-        promptTokens: usage?.prompt_tokens ?? 0,
-        cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? 0,
-        completionTokens: usage?.completion_tokens ?? 0,
+    broadcastCall({
+        type: 'updated',
+        data: { callId, aiScore, aiSummary: parsed.summary, aiAnalysis: parsed },
+    })
+}
+
+/**
+ * AI-call fallback path: extracts a QualificationResult from the live
+ * transcript the bridge already streamed in. Runs when the bridge
+ * finalized without an `end_call` tool result (lead hung up early).
+ *
+ * NOT a manager evaluation — we score lead readiness, not the AI's
+ * performance. aiScore stays null (the 1–10 rubric makes no sense here);
+ * aiSummary gets the lead_summary so list views still have a 1-line
+ * preview.
+ */
+async function analyzeAiCall(callId: string, transcript: string, model: string): Promise<void> {
+    const startedAt = Date.now()
+    const openai = await getOpenAI()
+    const completion = await openai.chat.completions.create({
+        model,
+        response_format: { type: 'json_object' },
+        temperature: 0,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        messages: [
+            { role: 'system', content: DEFAULT_QUALIFY_PROMPT },
+            { role: 'user', content: `Расшифровка звонка AI-ассистента с лидом:\n\n${transcript}` },
+        ],
+    })
+
+    const content = completion.choices[0]?.message?.content
+    if (!content) {
+        throw new Error('analyze (ai-call): openai returned empty content')
+    }
+
+    const parsed: QualificationResult = parseQualifyResponse(JSON.parse(content))
+
+    await prisma.call.update({
+        where: { id: callId },
+        data: {
+            // aiScore intentionally NOT set — the 1–10 rubric is for human
+            // manager evaluation, not for lead qualification.
+            aiSummary: parsed.lead_summary,
+            aiAnalysis: parsed as unknown as Prisma.InputJsonValue,
+        },
+    })
+
+    logUsage(callId, 'analyze_ai_call_saved', model, startedAt, completion.usage, {
+        qualification: parsed.qualification_status,
     })
 
     broadcastCall({
         type: 'updated',
-        data: {
-            callId,
-            aiScore,
-            aiSummary: parsed.summary,
-            aiAnalysis: parsed,
-        },
+        data: { callId, aiSummary: parsed.lead_summary, aiAnalysis: parsed },
+    })
+}
+
+/**
+ * Shared OpenAI usage-logging helper. cached_tokens visibility helps verify
+ * that the long stable system prompt is hitting OpenAI's automatic prompt
+ * cache (~50% input-token discount when warm).
+ */
+function logUsage(
+    callId: string,
+    event: string,
+    model: string,
+    startedAt: number,
+    usageIn: unknown,
+    extra: Record<string, unknown>,
+): void {
+    const usage = usageIn as
+        | { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } }
+        | undefined
+
+    opsLog('info', event, {
+        operation: 'analyze',
+        callId,
+        model,
+        latencyMs: Date.now() - startedAt,
+        promptTokens: usage?.prompt_tokens ?? 0,
+        cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? 0,
+        completionTokens: usage?.completion_tokens ?? 0,
+        ...extra,
     })
 }
 

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
+import { enqueueAnalyze } from '@/lib/queue/queues'
 
 export const dynamic = 'force-dynamic'
 
@@ -125,6 +126,34 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         qualification: aiAnalysisPayload?.qualification_status,
         taskId: createdTask?.id,
     })
+
+    // Fallback analysis path. The bridge only sends `result` when the LLM
+    // reached the `end_call` tool (or transferred). If the lead hung up
+    // before that — common on the very first turn — we still have a
+    // bridge-streamed transcript but no aiAnalysis. Enqueue a job so the
+    // analyzeWorker (isAi branch) can extract a QualificationResult from
+    // the transcript after the fact. The job is idempotent on callId, and
+    // the worker skips when aiAnalysis is already populated, so re-running
+    // finalize never double-bills.
+    if (!aiAnalysisPayload && call.transcript && call.transcript.trim().length > 0) {
+        try {
+            await enqueueAnalyze(id)
+            opsLog('info', 'ai_call_analyze_enqueued_on_finalize', {
+                callId: id,
+                reason: 'no_end_call_tool_result',
+                transcriptChars: call.transcript.length,
+            })
+        } catch (err: any) {
+            // Don't surface a 500 here — finalize already succeeded in the
+            // primary path (Call row is up to date). A failed enqueue means
+            // Redis is unhealthy; UI just won't show aiAnalysis until the
+            // operator retries via the manual re-analyze action.
+            opsLog('error', 'ai_call_analyze_enqueue_failed', {
+                callId: id,
+                error: err.message ?? String(err),
+            })
+        }
+    }
 
     return NextResponse.json({
         ok: true,
