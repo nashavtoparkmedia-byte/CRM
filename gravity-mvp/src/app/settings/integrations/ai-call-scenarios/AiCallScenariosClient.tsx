@@ -3,9 +3,10 @@
 "use client"
 
 import { useState } from 'react'
+import Link from 'next/link'
 import {
     Sparkles, Save, AlertCircle, CheckCircle2, Loader2,
-    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree,
+    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree, BookOpen,
 } from 'lucide-react'
 import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
 import type { AiCallKeysStatus } from '@/lib/ai-call/keys-status'
@@ -85,6 +86,16 @@ export default function AiCallScenariosClient({ initialProjects, initialScenario
                         Управление проектами, сценариями и настройками голосового ассистента
                     </p>
                 </div>
+                {/* Visible link to the full handbook — replaces the deleted
+                    «Что это и как использовать» info block. Sits in the header
+                    so it's reachable from both inner tabs. */}
+                <Link
+                    href="/settings/integrations/ai-call-help"
+                    className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-surface"
+                >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    Инструкция
+                </Link>
             </header>
 
             {!canEdit && (
