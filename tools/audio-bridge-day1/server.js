@@ -1,15 +1,26 @@
 /**
- * Day 1 AudioBridge — minimal audio roundtrip for AI-call MVP.
+ * AudioBridge — orchestrates AI-call dialog over FreeSWITCH.
  *
  *   FreeSWITCH (mod_audio_fork)  →  WS /audio  (binary PCM in, JSON metadata first)
  *   FreeSWITCH (uuid_broadcast)  ←  HTTP /play/<name>.wav   (playback source)
  *
- * Also exposes control endpoints to drive ESL from a browser/curl during the test:
+ * Modules layered on top of the original Day-1 audio roundtrip:
+ *   - stt-router (Yandex SpeechKit gRPC streaming OR OpenAI Whisper fallback)
+ *   - tts-router (Yandex SpeechKit REST OR OpenAI TTS fallback)
+ *   - llm-client (OpenAI Chat with function-calling: save_lead_data /
+ *                 end_call / transfer_to_manager)
+ *   - call-session (per-call orchestrator binding STT → LLM → TTS)
+ *   - crm-client (HTTP back to CRM: resolve scenario by call UUID,
+ *                 stream transcript items, finalize on hangup)
+ *
+ * Without any API keys the bridge stays in Day-1 behaviour: PCM in, no
+ * dialog out. With OPENAI_API_KEY alone it works end-to-end via Whisper +
+ * OpenAI TTS (russian voice quality is so-so but the pipeline runs).
+ * With Yandex keys it upgrades to native russian STT/TTS.
+ *
+ * Also exposes control endpoints to drive ESL from a browser/curl during tests:
  *   GET  /test-play/:uuid    — uuid_broadcast <uuid> http://127.0.0.1:3030/play/test.wav aleg
  *   GET  /test-break/:uuid   — uuid_break <uuid>
- *
- * No STT, LLM or TTS in Day 1. Goal: confirm PCM 8kHz mono frames arrive every
- * ~20 ms and that uuid_broadcast plays HTTP-WAV back into the call.
  */
 
 const http = require('http')
@@ -17,12 +28,18 @@ const fs = require('fs')
 const path = require('path')
 const net = require('net')
 const os = require('os')
+const crypto = require('crypto')
 const { WebSocketServer } = require('ws')
-const { YandexSttSession } = require('./yandex-stt')
 
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY
-const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID
-const STT_ENABLED = !!YANDEX_API_KEY
+const stt = require('./stt-router')
+const tts = require('./tts-router')
+const llm = require('./llm-client')
+const crm = require('./crm-client')
+const { CallSession } = require('./call-session')
+
+// Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
+// reference one of these by the `call-id` query string (set in fork_meta).
+const sessions = new Map()
 
 const PORT = Number(process.env.AUDIO_BRIDGE_PORT ?? 3030)
 const ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
@@ -94,7 +111,9 @@ const httpServer = http.createServer((req, res) => {
 
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[http] listening on :${PORT}`)
-    console.log(`[stt] ${STT_ENABLED ? 'enabled (Yandex SpeechKit v3)' : 'DISABLED — set YANDEX_API_KEY to turn on'}`)
+    console.log(`[stt] ${stt.enabled ? `enabled (${stt.describeProvider()})` : 'DISABLED — set YANDEX_API_KEY or OPENAI_API_KEY'}`)
+    console.log(`[tts] ${tts.enabled ? `enabled (${tts.describeProvider()})` : 'DISABLED — set YANDEX_API_KEY or OPENAI_API_KEY'}`)
+    console.log(`[llm] ${llm.enabled ? 'enabled (OpenAI Chat)' : 'DISABLED — set OPENAI_API_KEY'}`)
 })
 
 // ── WebSocket server: receives PCM from mod_audio_fork ─────────────────────────
@@ -103,7 +122,13 @@ const wss = new WebSocketServer({ server: httpServer, path: '/audio' })
 
 wss.on('connection', (ws, req) => {
     const remote = `${req.socket.remoteAddress}:${req.socket.remotePort}`
-    console.log(`[ws] connected from ${remote}`)
+    // mod_audio_fork passes our "fork_meta" tag in the URL query — we encode
+    // the FreeSWITCH call UUID there at auto-fork time so we can route the
+    // WS stream back to the right CallSession.
+    const urlObj = new URL(req.url, `http://${req.headers.host}`)
+    const callUuid = urlObj.searchParams.get('callUuid')
+    const session = callUuid ? sessions.get(callUuid) : null
+    console.log(`[ws] connected from ${remote} callUuid=${callUuid ?? '?'} session=${session ? 'YES' : 'no'}`)
 
     let metaSeen = false
     let frames = 0
@@ -112,26 +137,6 @@ wss.on('connection', (ws, req) => {
     let lastFrameAt = null
     let lastLogAt = Date.now()
     let slowFramesInWindow = 0
-
-    // STT session — created per WS connection if API key present.
-    let sttSession = null
-    if (STT_ENABLED) {
-        sttSession = new YandexSttSession({
-            apiKey: YANDEX_API_KEY,
-            folderId: YANDEX_FOLDER_ID,
-            onPartial: (text, conf) => {
-                if (text.trim()) console.log(`[stt] partial: ${text}  (conf=${conf.toFixed?.(2) ?? '?'})`)
-            },
-            onFinal: text => {
-                if (text.trim()) console.log(`[stt] FINAL: ${text}`)
-            },
-            onError: err => console.error(`[stt] error: ${err.message}`),
-        })
-        sttSession.start().catch(err => {
-            console.error(`[stt] start failed: ${err.message}`)
-            sttSession = null
-        })
-    }
 
     ws.on('message', (data, isBinary) => {
         if (!isBinary) {
@@ -148,7 +153,7 @@ wss.on('connection', (ws, req) => {
         const now = Date.now()
         if (!firstFrameAt) {
             firstFrameAt = now
-            console.log(`[ws] first PCM frame: ${data.length} bytes (stt=${STT_ENABLED ? 'on' : 'off'})`)
+            console.log(`[ws] first PCM frame: ${data.length} bytes (session=${session ? 'on' : 'audio-only'})`)
         } else if (lastFrameAt && now - lastFrameAt > 50) {
             // Count every slow gap; log aggregated per second below.
             slowFramesInWindow++
@@ -157,8 +162,10 @@ wss.on('connection', (ws, req) => {
         frames++
         bytes += data.length
 
-        // Feed PCM to Yandex STT
-        if (sttSession) sttSession.send(data)
+        // Forward to the live CallSession orchestrator (if a session is bound).
+        // No session → bridge is in Day-1 audio-only mode; PCM frames are
+        // still counted/logged for diagnostics.
+        if (session) session.onPcm(data)
 
         // Throttle stats to ~1/sec, include slow-frame count for the window.
         if (now - lastLogAt >= 1000) {
@@ -183,7 +190,7 @@ wss.on('connection', (ws, req) => {
             `[ws] closed code=${code} frames=${frames} bytes=${bytes} ` +
             `dur=${elapsedSec.toFixed(1)}s`,
         )
-        if (sttSession) sttSession.stop()
+        if (session) session.stop()
     })
 
     ws.on('error', err => {
@@ -260,6 +267,71 @@ function eslApi(command, timeoutMs = 5000) {
     })
 }
 
+// ── CallSession lifecycle ──────────────────────────────────────────────────────
+//
+// Bound to the FreeSWITCH call by the CRM-issued AI-call session row. CRM
+// stores `fsUuid` on the Call when /api/ai-calls/start originates; this
+// bridge looks the row up here and builds a CallSession around the
+// scenario.
+
+async function ensureSessionForCall(callUuid) {
+    if (sessions.has(callUuid)) return sessions.get(callUuid)
+    let resolved
+    try {
+        resolved = await crm.resolveCallByUuid(callUuid)
+    } catch (err) {
+        // 404 is expected for ad-hoc test calls (no CRM session row). Don't
+        // spam the log — the WS handler will note "session=no" anyway.
+        if (!err.message.includes('HTTP 404')) {
+            console.error(`[crm] resolve ${callUuid}: ${err.message}`)
+        }
+        return null
+    }
+    if (!resolved?.callId || !resolved?.scenario) return null
+
+    console.log(`[session] bind ${callUuid} → callId=${resolved.callId} scenario="${resolved.scenario.name}"`)
+    const session = new CallSession({
+        callUuid,
+        scenario: resolved.scenario,
+        broadcastWav: wav => broadcastWav(callUuid, wav),
+        onFinalize: payload => {
+            sessions.delete(callUuid)
+            crm.finalize(resolved.callId, payload).catch(err => {
+                console.error(`[crm] finalize ${resolved.callId} failed: ${err.message}`)
+            })
+        },
+        onTranscriptItem: (role, text) => {
+            crm.appendTranscript(resolved.callId, role, text).catch(() => {})
+        },
+        onState: s => console.log(`[session ${callUuid}] state=${s}`),
+    })
+    sessions.set(callUuid, session)
+    session.start().catch(err => {
+        console.error(`[session ${callUuid}] start failed: ${err.message}`)
+        sessions.delete(callUuid)
+    })
+    return session
+}
+
+// Save WAV to AUDIO_DIR with a unique name and trigger uuid_broadcast on
+// the aleg. The bridge already serves AUDIO_DIR via GET /play/<name>.
+async function broadcastWav(callUuid, wavBuffer) {
+    const name = `tts-${callUuid.slice(0, 8)}-${crypto.randomBytes(4).toString('hex')}.wav`
+    const file = path.join(AUDIO_DIR, name)
+    await fs.promises.writeFile(file, wavBuffer)
+    const url = `http://127.0.0.1:${PORT}/play/${name}`
+    try {
+        await eslApi(`uuid_broadcast ${callUuid} ${url} aleg`)
+    } catch (err) {
+        console.error(`[broadcast] ${callUuid} → ${name} failed: ${err.message}`)
+        return
+    }
+    // Tidy up the WAV after a generous delay — playback is async on the FS
+    // side so we can't delete immediately. 60 s covers anything plausible
+    // for a single TTS phrase.
+    setTimeout(() => fs.promises.unlink(file).catch(() => {}), 60_000).unref()
+}
+
 // ── ESL persistent event listener: auto-start audio_fork on CHANNEL_ANSWER ─────
 //
 // Subscribes once to CHANNEL_ANSWER. For each ANSWER event landing on an
@@ -309,11 +381,28 @@ function startEslEventListener() {
 
             if (!matched) return
 
-            console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched})`)
-            const cmd = `uuid_audio_fork ${uuid} start ${FORK_WS_URL} mixed 8000 day1bug`
-            eslApi(cmd)
-                .then(out => console.log(`[esl] auto-fork: ${out}`))
-                .catch(err => console.error(`[esl] auto-fork FAILED: ${err.message}`))
+            // Resolve the call to a CRM-side AI-call session (if any). For
+            // live AI-calls created via /api/ai-calls/start, CRM stores the
+            // mapping fsUuid → callId+scenario; the bridge fetches it here
+            // and constructs a CallSession to drive the dialog.
+            //
+            // For ad-hoc test calls (extension 9998/9999 without CRM-side
+            // session) resolveCallByUuid will return 404 — we still start
+            // audio_fork so the operator can verify the audio path, the
+            // session just stays null and PCM is logged-only.
+            ensureSessionForCall(uuid)
+                .catch(err => console.error(`[esl] session bind failed for ${uuid}: ${err.message}`))
+                .finally(() => {
+                    // Pass call UUID via fork_meta so the WS handler can
+                    // route incoming PCM to the right CallSession.
+                    const meta = `callUuid=${encodeURIComponent(uuid)}`
+                    const forkUrl = `${FORK_WS_URL}?${meta}`
+                    const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} mixed 8000 ${meta}`
+                    console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched})`)
+                    eslApi(cmd)
+                        .then(out => console.log(`[esl] auto-fork: ${out}`))
+                        .catch(err => console.error(`[esl] auto-fork FAILED: ${err.message}`))
+                })
         } catch (err) {
             console.error(`[esl] onEvent error: ${err.message}`)
         }
@@ -404,7 +493,11 @@ startEslEventListener()
 // ── Graceful shutdown ──────────────────────────────────────────────────────────
 
 function shutdown(signal) {
-    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size})`)
+    console.log(`[main] ${signal} — shutting down (active WS: ${wss.clients.size}, sessions: ${sessions.size})`)
+    for (const session of sessions.values()) {
+        try { session.stop() } catch {}
+    }
+    sessions.clear()
     for (const client of wss.clients) {
         try { client.terminate() } catch {}
     }
