@@ -235,19 +235,77 @@ function ProjectsPane(props: {
 
     return (
         <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-            {/* «Сейчас работает» status bar — admin видит на одну линию выше
-                сам ли активный проект открыт, или какой-то другой. */}
-            <div className="flex items-center gap-2 rounded-md border border-border bg-surface/40 px-3 py-2 text-[13px]">
-                <Radio className={`h-3.5 w-3.5 ${activeProjectId ? 'text-accent' : 'text-muted-foreground'}`} />
-                <span className="text-muted-foreground">Сейчас в работе:</span>
-                {activeProjectId ? (
-                    <span className="font-medium text-foreground">
-                        {projects.find(p => p.id === activeProjectId)?.name ?? '(удалён)'}
-                    </span>
-                ) : (
-                    <span className="text-muted-foreground italic">не выбрано — система не запустит звонок</span>
-                )}
-            </div>
+            {/* «Сейчас работает» status bar.
+                - Если активный есть и совпадает с открытым — зелёная плашка
+                  «активен сейчас».
+                - Если активный есть, но открыт другой — нейтральная +
+                  кнопка «Сделать "<открытый>" активным».
+                - Если активного нет — ярко-жёлтое предупреждение + кнопка
+                  «Использовать "<открытый>" как активный».
+                Это единственное место для смены режима — больше его никуда
+                не дублируем, чтобы не путать. */}
+            {(() => {
+                const isViewingActive = !!viewingProject && viewingProject.id === activeProjectId
+                if (isViewingActive && viewingProject) {
+                    return (
+                        <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[13px]">
+                            <Radio className="h-3.5 w-3.5 text-accent" />
+                            <span className="text-muted-foreground">Сейчас в работе:</span>
+                            <span className="font-medium text-foreground">{viewingProject.name}</span>
+                            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
+                                <CheckCircle2 className="h-3 w-3" />
+                                активен сейчас
+                            </span>
+                        </div>
+                    )
+                }
+                if (activeProjectId) {
+                    // Активный есть, но открыт не он.
+                    const activeName = projects.find(p => p.id === activeProjectId)?.name ?? '(удалён)'
+                    return (
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface/40 px-3 py-2 text-[13px]">
+                            <Radio className="h-3.5 w-3.5 text-accent" />
+                            <span className="text-muted-foreground">Сейчас в работе:</span>
+                            <span className="font-medium text-foreground">{activeName}</span>
+                            {canEdit && viewingProject && (
+                                <button
+                                    type="button"
+                                    onClick={() => setAsActive(viewingProject.id)}
+                                    disabled={activating === viewingProject.id}
+                                    className="ml-auto flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {activating === viewingProject.id
+                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                        : <Radio className="h-3.5 w-3.5" />}
+                                    Переключить на «{viewingProject.name}»
+                                </button>
+                            )}
+                        </div>
+                    )
+                }
+                // Активного нет вообще — заметное предупреждение.
+                return (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[13px]">
+                        <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
+                        <span className="text-amber-900">
+                            Активный проект не выбран — без этого система не запустит AI-звонок.
+                        </span>
+                        {canEdit && viewingProject && (
+                            <button
+                                type="button"
+                                onClick={() => setAsActive(viewingProject.id)}
+                                disabled={activating === viewingProject.id}
+                                className="ml-auto flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {activating === viewingProject.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Radio className="h-3.5 w-3.5" />}
+                                Использовать «{viewingProject.name}»
+                            </button>
+                        )}
+                    </div>
+                )
+            })()}
 
             {/* PROJECT TABS — chip-style. Bold border + green dot when this
                 project is the one the system currently uses. */}
@@ -310,32 +368,16 @@ function ProjectsPane(props: {
                             <p className="mt-0.5 text-[12px] text-muted-foreground">{viewingProject.description}</p>
                         )}
                     </div>
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                        {canEdit && !isViewingActive && (
-                            <button
-                                type="button"
-                                onClick={() => setAsActive(viewingProject.id)}
-                                disabled={activating === viewingProject.id}
-                                title="Назначить этот проект активным — кнопка «AI-звонок» будет использовать его сценарии"
-                                className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-accent/40 bg-accent/5 px-3 text-[13px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {activating === viewingProject.id
-                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    : <Radio className="h-3.5 w-3.5" />}
-                                Сделать активным
-                            </button>
-                        )}
-                        {canEdit && editor.kind === 'closed' && (
-                            <button
-                                type="button"
-                                onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
-                                className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                Новый сценарий
-                            </button>
-                        )}
-                    </div>
+                    {canEdit && editor.kind === 'closed' && (
+                        <button
+                            type="button"
+                            onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
+                            className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Новый сценарий
+                        </button>
+                    )}
                 </div>
 
                 {editor.kind === 'create' && editor.projectId === viewingProject.id && (
