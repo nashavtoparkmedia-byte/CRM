@@ -208,10 +208,13 @@ function ProjectsPane(props: {
                 })}
             </div>
 
-            {/* Active project: header + "+ Новый сценарий" + scenarios list */}
+            {/* Active project: header + "+ Новый сценарий" + scenarios list.
+                items-start (не baseline) — inline-flex кнопка в baseline-flex
+                съезжает по позиции; items-start выравнивает по верху и не
+                ломает форму кнопки. */}
             <section className="flex flex-col gap-3">
-                <div className="flex items-baseline justify-between gap-3">
-                    <div>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                         <h2 className="text-[15px] font-semibold text-foreground">
                             Сценарии проекта «{activeProject.name}»
                         </h2>
@@ -223,9 +226,9 @@ function ProjectsPane(props: {
                         <button
                             type="button"
                             onClick={() => setEditor({ kind: 'create', projectId: activeProject.id })}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark"
+                            className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
                         >
-                            <Plus className="h-3 w-3" />
+                            <Plus className="h-3.5 w-3.5" />
                             Новый сценарий
                         </button>
                     )}
