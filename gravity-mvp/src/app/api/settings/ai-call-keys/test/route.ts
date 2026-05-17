@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getValue, recordCheck } from '@/lib/ai-call/provider-settings'
+import { getCurrentUser } from '@/lib/users/user-service'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,15 @@ export const dynamic = 'force-dynamic'
  *     (including 400 "audio too short") → gateway accepted the auth.
  */
 export async function POST(req: NextRequest) {
+    // Admin / Руководитель only — the action both spends API quota and
+    // leaks "is the key valid?" signal, so it's gated identically to
+    // save/delete.
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+
     const body = await req.json().catch(() => ({}))
     const provider = body.provider as 'openai' | 'yandex' | undefined
 

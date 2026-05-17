@@ -18,22 +18,30 @@ export const dynamic = 'force-dynamic'
  *     mockMode: boolean
  *   }
  *
- * Access control (defence-in-depth):
- *   1. Localhost-only: rejects requests whose remote address isn't
- *      127.0.0.1 / ::1. Inside Docker / WSL2 you'd add the bridge's IP to
- *      BRIDGE_ALLOWED_IPS instead.
- *   2. Shared secret: if BRIDGE_SHARED_TOKEN is set, the bridge must send
- *      it via the X-Bridge-Token header. Disabled by default for the
- *      single-host MVP.
- *   3. Method: GET only — no body needed, prevents accidental CSRF-style
- *      misuse from a browser.
+ * Access control (defence-in-depth, ALL must pass):
+ *
+ *   1. Block browser-origin requests. Modern browsers always send the
+ *      `Sec-Fetch-Site` header on fetch/XHR/<script>/<a> navigation;
+ *      bridge (Node fetch) does not. Presence ⇒ reject. This stops the
+ *      most likely attack vector — a logged-in CRM user typing the URL
+ *      into the address bar.
+ *
+ *   2. Then EITHER:
+ *      - BRIDGE_SHARED_TOKEN env is set AND request has matching
+ *        X-Bridge-Token header (strongest channel — recommended for
+ *        any non-localhost deployment), OR
+ *      - request appears to come from loopback (remote IP 127.0.0.1 / ::1).
+ *        Hostnames are NOT trusted — Host header is attacker-controllable.
+ *
+ *   3. Method: GET only (no body, no CSRF surface).
  *
  * The bridge caches the response in-memory for 60 seconds, so this
  * endpoint is hit at most ~once per minute per session.
  */
 export async function GET(req: NextRequest) {
-    if (!isAllowed(req)) {
-        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    const denial = denyReason(req)
+    if (denial) {
+        return NextResponse.json({ error: 'forbidden', reason: denial }, { status: 403 })
     }
     const data = await getAllPlaintext()
     // Explicit no-cache headers — secrets should never sit in any
@@ -48,32 +56,34 @@ export async function GET(req: NextRequest) {
     })
 }
 
-function isAllowed(req: NextRequest): boolean {
-    // Shared-secret check — strongest signal when configured.
+function denyReason(req: NextRequest): string | null {
+    // Layer 1 — block browser-origin requests outright. Any request that
+    // came from a <fetch>, XHR, navigation, script, <img>, etc. gets a
+    // Sec-Fetch-Site header from the user agent. A Node-side fetch (used
+    // by the bridge) does not set it.
+    if (req.headers.get('sec-fetch-site') || req.headers.get('sec-fetch-mode')) {
+        return 'browser_origin'
+    }
+
+    // Layer 2 — auth signal.
     const expectedToken = process.env.BRIDGE_SHARED_TOKEN
     if (expectedToken) {
         const got = req.headers.get('x-bridge-token')
-        if (got !== expectedToken) return false
-        return true
+        return got === expectedToken ? null : 'bad_token'
     }
 
-    // Otherwise fall back to localhost-only. Next.js exposes the remote
-    // address via request.headers.get('x-forwarded-for') in some setups
-    // (proxy) or directly via req.ip in newer versions.
-    const xff = req.headers.get('x-forwarded-for')
-    const host = req.headers.get('host') ?? ''
-    const ip =
-        xff?.split(',')[0]?.trim() ||
-        (req as any).ip ||
+    // Layer 3 — without a configured token, require true loopback. We
+    // DELIBERATELY don't trust the Host header (attacker-controllable)
+    // or X-Forwarded-For (proxy-injected). Look at the actual TCP peer.
+    const remoteIp =
+        (req as any).ip ||  // Next.js edge runtime
+        // Node runtime — Next exposes the underlying request on a non-
+        // public field; we duck-type defensively.
+        ((req as any).socket?.remoteAddress as string | undefined) ||
         ''
-    // Allow common loopback forms + same-host requests (host includes
-    // localhost or 127.0.0.1 for dev). Anything coming through a proxy
-    // gets blocked here; the operator should set BRIDGE_SHARED_TOKEN
-    // in that case.
-    const allowedIps = ['127.0.0.1', '::1', '::ffff:127.0.0.1']
+    const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1']
     const extraAllowed = (process.env.BRIDGE_ALLOWED_IPS ?? '')
         .split(',').map(s => s.trim()).filter(Boolean)
-    if (allowedIps.includes(ip) || extraAllowed.includes(ip)) return true
-    if (host.startsWith('localhost') || host.startsWith('127.0.0.1')) return true
-    return false
+    if (loopback.includes(remoteIp) || extraAllowed.includes(remoteIp)) return null
+    return 'not_loopback'
 }

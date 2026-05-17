@@ -53,7 +53,7 @@ export default function AiMockCallButton({
             const data = await res.json()
             if (!res.ok) {
                 if (data.error === 'mock_mode_disabled') {
-                    throw new Error('Mock-режим выключен: установи AI_CALL_MOCK_MODE=true')
+                    throw new Error('Mock-режим выключен — включи его в Настройки → AI-обзвон → API ключи')
                 }
                 throw new Error(data.error ?? `status ${res.status}`)
             }

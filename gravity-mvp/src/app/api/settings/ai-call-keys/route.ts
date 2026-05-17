@@ -13,8 +13,17 @@ export const dynamic = 'force-dynamic'
  * Returns only the configuration STATUS for each AI-call key — never the
  * secret values. Status includes source ('db' | 'env' | 'none') so the UI
  * can tell admins whether they're still on a .env fallback.
+ *
+ * Admin / Руководитель only — even masks (last-4 chars) and source labels
+ * can be a useful signal for an attacker trying to reverse-engineer which
+ * provider/account a key belongs to.
  */
 export async function GET() {
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
     const status = await getAiCallKeysStatus()
     return NextResponse.json(status)
 }
@@ -55,6 +64,17 @@ export async function POST(req: NextRequest) {
     }
     if (provider === 'system' && key === 'mockMode' && value !== 'true' && value !== 'false') {
         return NextResponse.json({ error: 'mockMode_value_must_be_true_or_false' }, { status: 400 })
+    }
+
+    // Empty / whitespace value would silently drop the existing row via
+    // saveValue → deleteValue. That's surprising at the API surface (UI
+    // already blocks the case, but a stray curl shouldn't be able to
+    // erase a key without explicit DELETE). Reject it.
+    if (!value.trim()) {
+        return NextResponse.json(
+            { error: 'empty_value_not_allowed', hint: 'use DELETE to remove a key' },
+            { status: 400 },
+        )
     }
 
     // Secret iff it's an apiKey. folderId is public, mockMode is a boolean
