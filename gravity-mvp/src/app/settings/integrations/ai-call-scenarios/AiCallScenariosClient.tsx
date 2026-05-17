@@ -247,32 +247,40 @@ function ProjectsPane(props: {
             {(() => {
                 const isViewingActive = !!viewingProject && viewingProject.id === activeProjectId
                 if (isViewingActive && viewingProject) {
+                    // Зелёная плашка с пульсирующей точкой — однозначно ясно,
+                    // что система работает на этом проекте.
                     return (
-                        <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/5 px-3 py-2 text-[13px]">
-                            <Radio className="h-3.5 w-3.5 text-green-600" />
-                            <span className="text-muted-foreground">Сейчас в работе:</span>
-                            <span className="font-medium text-foreground">{viewingProject.name}</span>
-                            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-medium text-green-600">
-                                <CheckCircle2 className="h-3 w-3" />
-                                активен сейчас
+                        <div className="flex flex-wrap items-center gap-2 rounded-md border-2 border-green-500 bg-green-500/10 px-3 py-2.5 text-[13px]">
+                            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
+                                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
                             </span>
+                            <span className="font-semibold text-green-700">В работе:</span>
+                            <span className="font-semibold text-foreground">{viewingProject.name}</span>
+                            <span className="text-[12px] text-muted-foreground">— по этому проекту запускаются AI-звонки</span>
                         </div>
                     )
                 }
                 if (activeProjectId) {
-                    // Активный есть, но открыт не он.
+                    // Активный есть, но открыт не он. Стек: текст сверху,
+                    // кнопка снизу — не наезжают друг на друга.
                     const activeName = projects.find(p => p.id === activeProjectId)?.name ?? '(удалён)'
                     return (
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface/40 px-3 py-2 text-[13px]">
-                            <Radio className="h-3.5 w-3.5 text-green-600" />
-                            <span className="text-muted-foreground">Сейчас в работе:</span>
-                            <span className="font-medium text-foreground">{activeName}</span>
+                        <div className="flex flex-col gap-2 rounded-md border border-green-500/40 bg-green-500/5 px-3 py-2.5 text-[13px]">
+                            <div className="flex items-center gap-2">
+                                <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
+                                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
+                                </span>
+                                <span className="font-semibold text-green-700">В работе:</span>
+                                <span className="font-semibold text-foreground">{activeName}</span>
+                            </div>
                             {canEdit && viewingProject && (
                                 <button
                                     type="button"
                                     onClick={() => setAsActive(viewingProject.id)}
                                     disabled={activating === viewingProject.id}
-                                    className="ml-auto flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="flex h-8 self-start items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {activating === viewingProject.id
                                         ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -283,19 +291,22 @@ function ProjectsPane(props: {
                         </div>
                     )
                 }
-                // Активного нет вообще — заметное предупреждение.
+                // Активного нет вообще — ярко-жёлтое предупреждение, стек.
                 return (
-                    <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[13px]">
-                        <AlertCircle className="h-3.5 w-3.5 text-amber-600" />
-                        <span className="text-amber-900">
-                            Активный проект не выбран — без этого система не запустит AI-звонок.
-                        </span>
+                    <div className="flex flex-col gap-2 rounded-md border-2 border-amber-400 bg-amber-50 px-3 py-2.5 text-[13px]">
+                        <div className="flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                            <span className="font-semibold text-amber-900">
+                                Активный проект не выбран
+                            </span>
+                            <span className="text-amber-900/80">— без этого система не запустит AI-звонок</span>
+                        </div>
                         {canEdit && viewingProject && (
                             <button
                                 type="button"
                                 onClick={() => setAsActive(viewingProject.id)}
                                 disabled={activating === viewingProject.id}
-                                className="ml-auto flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex h-8 self-start items-center gap-1.5 rounded-md bg-amber-600 px-3 text-[12px] font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {activating === viewingProject.id
                                     ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
