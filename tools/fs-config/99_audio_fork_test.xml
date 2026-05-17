@@ -1,0 +1,62 @@
+<!--
+  AI-call dialplan extensions. Drop-in source for
+  /usr/local/freeswitch/conf/dialplan/default/99_audio_fork_test.xml
+
+  drachtio's mod_audio_fork registers an API (uuid_audio_fork), not a
+  dialplan application. The Node AudioBridge invokes it via bgapi over ESL
+  after listening to CHANNEL_PARK on these extensions. Dialplan stays
+  intentionally thin: answer, record, park.
+
+  9999 — production AI-call: answer + record + park.
+         Bridge takes over via ESL on CHANNEL_PARK.
+  9998 — loopback-friendly variant with inline tone_stream:// playback,
+         used when smoke-testing without a live SIP client.
+
+  After editing this file: copy to FreeSWITCH and reloadxml:
+    sudo cp tools/fs-config/99_audio_fork_test.xml \
+            /usr/local/freeswitch/conf/dialplan/default/99_audio_fork_test.xml
+    sudo /usr/local/freeswitch/bin/fs_cli -x 'reloadxml'
+-->
+<include>
+  <extension name="audio_fork_test">
+    <condition field="destination_number" expression="^9999$">
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+
+      <!-- Stereo recording so the eventual transcription has clean speaker
+           separation (caller on L, callee on R). The WAV lands in the FS
+           recordings dir; the CRM EslClient picks it up from
+           variable_recording_file on CHANNEL_HANGUP_COMPLETE and forwards
+           to recordingProcessor (WAV → MP3 → S3 → Call.recordingPath).
+
+           For Windows hosts with FreeSWITCH running natively in WSL2 set
+             RECORDINGS_HOST_PATH=\\wsl.localhost\Ubuntu-24.04\var\lib\freeswitch\recordings
+           in gravity-mvp/.env so the Node CRM process can read this file
+           via UNC. Default works out of the box when FS is in a Docker
+           container with ./telephony/recordings bind-mounted. -->
+      <action application="set" data="RECORD_STEREO=true"/>
+      <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
+      <action application="record_session" data="${recording_file}"/>
+
+      <!-- audio_fork is auto-started by the Node bridge listening to
+           CHANNEL_PARK events via ESL — dialplan stays clean. -->
+      <action application="sleep" data="300"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+
+  <extension name="audio_fork_test_with_playback">
+    <condition field="destination_number" expression="^9998$">
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+      <action application="set" data="RECORD_STEREO=true"/>
+      <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
+      <action application="record_session" data="${recording_file}"/>
+      <action application="sleep" data="300"/>
+      <!-- 440 Hz / 1s, then 880 Hz / 1s — tone_stream is built-in. -->
+      <action application="playback" data="tone_stream://%(1000,500,440)"/>
+      <action application="playback" data="tone_stream://%(1000,500,880)"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+</include>
