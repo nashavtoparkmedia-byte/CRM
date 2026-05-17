@@ -235,25 +235,19 @@ function ProjectsPane(props: {
     const activeProject = projects.find(p => p.id === activeProjectId) ?? null
 
     return (
-        <div className="flex flex-col gap-5 animate-in fade-in duration-200">
-            {/* Metadata line — read-only status. CTA для смены живёт в
-                карточке открытого проекта (Notion/Linear pattern: action
-                рядом с объектом, к которому относится). */}
-            <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px]">
-                <span className="text-muted-foreground">Активный сценарий обзвона</span>
-                <span className="text-muted-foreground/40">·</span>
-                {activeProject ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                        {activeProject.name}
+        <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+            {/* Только когда активного нет — короткое предупреждение. Когда
+                активный есть, его статус полностью передаёт зелёный chip
+                ниже + кнопка-действие в заголовке открытого проекта.
+                Дублирующий metadata-row убран — был лишний шум. */}
+            {!activeProject && (
+                <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[13px]">
+                    <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
+                    <span className="text-amber-900">
+                        Активный проект не выбран — без этого система не запустит AI-звонок.
                     </span>
-                ) : (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">
-                        <AlertCircle className="h-3.5 w-3.5" />
-                        не выбран
-                    </span>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* PROJECT CHIPS — Linear-style segmented control. Active chip is
                 the SOLE carrier of «which project the system uses»:
@@ -332,44 +326,36 @@ function ProjectsPane(props: {
                             <p className="mt-0.5 text-[12px] text-muted-foreground">{viewingProject.description}</p>
                         )}
                     </div>
-                    {canEdit && editor.kind === 'closed' && (
-                        <button
-                            type="button"
-                            onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
-                            className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            Новый сценарий
-                        </button>
-                    )}
-                </div>
-
-                {/* Activation banner — Stripe/Linear pattern: action lives
-                    next to the object it acts on. Sits between header and
-                    scenarios list, so admin parses the whole story top→
-                    bottom: «вот этот проект, он не активный, [кнопка]». */}
-                {canEdit && !isViewingActive && (
-                    <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-green-500/40 bg-green-50/50 px-3 py-2.5 text-[13px]">
-                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-600" />
-                        <div className="flex-1 min-w-0">
-                            <span className="font-medium text-foreground">Этот проект не активный.</span>{' '}
-                            <span className="text-muted-foreground">
-                                AI-звонки сейчас идут по «{activeProject?.name ?? 'не выбрано'}».
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setAsActive(viewingProject.id)}
-                            disabled={activating === viewingProject.id}
-                            className="flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-green-600 px-3 text-[12px] font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                            {activating === viewingProject.id
-                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                : <CheckCircle2 className="h-3.5 w-3.5" />}
-                            Сделать этот активным
-                        </button>
+                    {/* Toolbar — две кнопки: «Сделать активным» (когда нужно)
+                        + «Новый сценарий». Compact, без banner-плашек,
+                        flex-shrink-0 на обеих чтоб не наезжали. */}
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                        {canEdit && !isViewingActive && (
+                            <button
+                                type="button"
+                                onClick={() => setAsActive(viewingProject.id)}
+                                disabled={activating === viewingProject.id}
+                                title="Назначить этот проект активным — AI-звонки будут идти по нему"
+                                className="flex h-9 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-green-500/50 bg-white px-3 text-[13px] font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {activating === viewingProject.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <CheckCircle2 className="h-3.5 w-3.5" />}
+                                Сделать активным
+                            </button>
+                        )}
+                        {canEdit && editor.kind === 'closed' && (
+                            <button
+                                type="button"
+                                onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
+                                className="flex h-9 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Новый сценарий
+                            </button>
+                        )}
                     </div>
-                )}
+                </div>
 
                 {editor.kind === 'create' && editor.projectId === viewingProject.id && (
                     <ScenarioEditor
