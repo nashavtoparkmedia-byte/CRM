@@ -248,11 +248,11 @@ function ProjectsPane(props: {
                 const isViewingActive = !!viewingProject && viewingProject.id === activeProjectId
                 if (isViewingActive && viewingProject) {
                     return (
-                        <div className="flex items-center gap-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[13px]">
-                            <Radio className="h-3.5 w-3.5 text-accent" />
+                        <div className="flex items-center gap-2 rounded-md border border-green-500/30 bg-green-500/5 px-3 py-2 text-[13px]">
+                            <Radio className="h-3.5 w-3.5 text-green-600" />
                             <span className="text-muted-foreground">Сейчас в работе:</span>
                             <span className="font-medium text-foreground">{viewingProject.name}</span>
-                            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-medium text-accent">
+                            <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-medium text-green-600">
                                 <CheckCircle2 className="h-3 w-3" />
                                 активен сейчас
                             </span>
@@ -264,7 +264,7 @@ function ProjectsPane(props: {
                     const activeName = projects.find(p => p.id === activeProjectId)?.name ?? '(удалён)'
                     return (
                         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface/40 px-3 py-2 text-[13px]">
-                            <Radio className="h-3.5 w-3.5 text-accent" />
+                            <Radio className="h-3.5 w-3.5 text-green-600" />
                             <span className="text-muted-foreground">Сейчас в работе:</span>
                             <span className="font-medium text-foreground">{activeName}</span>
                             {canEdit && viewingProject && (
@@ -322,7 +322,7 @@ function ProjectsPane(props: {
                                 viewing
                                     ? 'bg-primary text-white'
                                     : isActive
-                                      ? 'border-2 border-accent bg-card text-foreground hover:bg-surface'
+                                      ? 'border-2 border-green-500 bg-card text-foreground hover:bg-surface'
                                       : 'border border-border bg-card text-foreground hover:bg-surface'
                             }`}
                             title={isActive ? 'Сейчас этот проект используется системой для AI-звонков' : undefined}
@@ -331,7 +331,7 @@ function ProjectsPane(props: {
                                 <span
                                     aria-hidden
                                     className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
-                                        viewing ? 'bg-white' : 'bg-accent'
+                                        viewing ? 'bg-white' : 'bg-green-500'
                                     }`}
                                 />
                             )}
@@ -358,7 +358,7 @@ function ProjectsPane(props: {
                                 Сценарии проекта «{viewingProject.name}»
                             </h2>
                             {isViewingActive && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-600">
                                     <Radio className="h-3 w-3" />
                                     активный
                                 </span>
@@ -711,7 +711,7 @@ function ScenarioEditor({
             <footer className="sticky bottom-4 z-10 flex items-center justify-between rounded-md border border-border bg-card px-4 py-3 shadow-sm">
                 <div className="text-[12px] text-muted-foreground">
                     {status?.kind === 'ok' && (
-                        <span className="inline-flex items-center gap-1 text-accent">
+                        <span className="inline-flex items-center gap-1 text-green-600">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             {status.message}
                         </span>

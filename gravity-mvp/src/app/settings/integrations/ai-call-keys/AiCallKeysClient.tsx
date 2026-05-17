@@ -213,12 +213,15 @@ function KeyRow(props: {
     }
 
     // Compact status indicator: dot color + short label.
+    // ВАЖНО: в проекте --accent определён как #f5f5f5 (нейтральный UI-серый),
+    // не как «success green». Поэтому статусные точки нужно красить явными
+    // Tailwind палитрами, а не bg-accent / bg-destructive.
     const dot = (() => {
-        if (!status.configured) return { color: 'bg-muted-foreground/40', label: 'не настроен' }
+        if (!status.configured) return { color: 'bg-gray-400', label: 'не настроен' }
         if (status.lastCheckStatus && status.lastCheckStatus !== 'ok') {
-            return { color: 'bg-destructive', label: 'ошибка проверки' }
+            return { color: 'bg-red-500', label: 'ошибка проверки' }
         }
-        return { color: 'bg-accent', label: 'настроен' }
+        return { color: 'bg-green-500', label: 'настроен' }
     })()
 
     return (
@@ -229,9 +232,11 @@ function KeyRow(props: {
             className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
         >
             <div className="flex items-center gap-3">
+                {/* Status dot — 10px, с тонким контрастным ring для лучшей
+                    видимости на белом фоне карточки. */}
                 <span
                     aria-hidden
-                    className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot.color}`}
+                    className={`inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ring-2 ring-white ${dot.color}`}
                 />
                 <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-baseline gap-2">
@@ -252,7 +257,7 @@ function KeyRow(props: {
                         </div>
                     )}
                     {testResult && (
-                        <div className={`mt-0.5 text-[11px] ${testResult.ok ? 'text-accent' : 'text-destructive'}`}>
+                        <div className={`mt-0.5 text-[11px] ${testResult.ok ? 'text-green-600' : 'text-red-600'}`}>
                             {testResult.message}
                         </div>
                     )}
@@ -381,16 +386,18 @@ function MockModeRow({
         try { await onToggle(!enabled) } finally { setBusy(false) }
     }
 
+    // Same colour rationale as KeyRow — explicit palette, not bg-accent
+    // (which is project-level neutral grey, not «success»).
     const dot = enabled
-        ? { color: 'bg-accent', label: 'включён' }
-        : { color: 'bg-muted-foreground/40', label: 'выключен' }
+        ? { color: 'bg-green-500', label: 'включён' }
+        : { color: 'bg-gray-400', label: 'выключен' }
 
     return (
         <section
             className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
         >
             <div className="flex items-center gap-3">
-                <span aria-hidden className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot.color}`} />
+                <span aria-hidden className={`inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ring-2 ring-white ${dot.color}`} />
                 <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
                         <span className="text-[14px] font-medium text-foreground">Mock-режим</span>
