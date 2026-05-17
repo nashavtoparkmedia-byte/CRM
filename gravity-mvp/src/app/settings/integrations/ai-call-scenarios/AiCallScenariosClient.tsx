@@ -315,46 +315,50 @@ function ProjectsPane(props: {
                             <h2 className="text-[15px] font-semibold text-foreground">
                                 Сценарии проекта «{viewingProject.name}»
                             </h2>
-                            {isViewingActive && (
+                            {/* Status токен PRO-стиля: рядом с заголовком
+                                проекта, как Linear/Notion status pill. Когда
+                                активный — read-only green pill. Когда нет —
+                                кликабельный ghost-pill «Сделать активным».
+                                В обоих случаях UI принадлежит «проекту», а
+                                не «сценариям» — поэтому слева, рядом с
+                                названием проекта. */}
+                            {isViewingActive ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-700">
                                     <CheckCircle2 className="h-3 w-3" />
                                     активный
                                 </span>
-                            )}
+                            ) : canEdit ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setAsActive(viewingProject.id)}
+                                    disabled={activating === viewingProject.id}
+                                    title="Назначить этот проект активным — AI-звонки будут идти по нему"
+                                    className="inline-flex items-center gap-1 rounded-full border border-green-500/50 px-2 py-0.5 text-[11px] font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {activating === viewingProject.id
+                                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                                        : <CheckCircle2 className="h-3 w-3" />}
+                                    Сделать активным
+                                </button>
+                            ) : null}
                         </div>
                         {viewingProject.description && (
                             <p className="mt-0.5 text-[12px] text-muted-foreground">{viewingProject.description}</p>
                         )}
                     </div>
-                    {/* Toolbar — две кнопки: «Сделать активным» (когда нужно)
-                        + «Новый сценарий». Compact, без banner-плашек,
-                        flex-shrink-0 на обеих чтоб не наезжали. */}
-                    <div className="flex flex-shrink-0 items-center gap-2">
-                        {canEdit && !isViewingActive && (
-                            <button
-                                type="button"
-                                onClick={() => setAsActive(viewingProject.id)}
-                                disabled={activating === viewingProject.id}
-                                title="Назначить этот проект активным — AI-звонки будут идти по нему"
-                                className="flex h-9 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-green-500/50 bg-white px-3 text-[13px] font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {activating === viewingProject.id
-                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    : <CheckCircle2 className="h-3.5 w-3.5" />}
-                                Сделать активным
-                            </button>
-                        )}
-                        {canEdit && editor.kind === 'closed' && (
-                            <button
-                                type="button"
-                                onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
-                                className="flex h-9 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                Новый сценарий
-                            </button>
-                        )}
-                    </div>
+                    {/* Toolbar — только CRUD-действия для дочерних сценариев.
+                        Статус самого проекта живёт в pill рядом с заголовком
+                        (см. выше), не путается с этими кнопками. */}
+                    {canEdit && editor.kind === 'closed' && (
+                        <button
+                            type="button"
+                            onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
+                            className="flex h-9 flex-shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Новый сценарий
+                        </button>
+                    )}
                 </div>
 
                 {editor.kind === 'create' && editor.projectId === viewingProject.id && (
