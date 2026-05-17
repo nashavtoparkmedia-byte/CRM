@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic'
  */
 export default async function AiCallKeysPage() {
     const user = await getCurrentUser()
-    const status = getAiCallKeysStatus()
+    const status = await getAiCallKeysStatus()
     const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
     return <AiCallKeysClient initialStatus={status} canEdit={canEdit} />
 }

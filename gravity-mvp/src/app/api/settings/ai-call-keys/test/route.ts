@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getValue, recordCheck } from '@/lib/ai-call/provider-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -6,23 +7,20 @@ export const dynamic = 'force-dynamic'
  * POST /api/settings/ai-call-keys/test
  * Body: { provider: 'openai' | 'yandex' }
  *
- * Performs a lightweight connectivity check for the requested provider
- * using the credentials in process.env. Returns ok/error + a short
- * message that's shown next to the provider card in the settings UI.
+ * Lightweight connectivity check for the requested provider using the
+ * currently-stored key (DB row first, .env fallback). The browser never
+ * sees the key — server issues the request and returns only the result.
  *
- * Why server-side (not client-side):
- *   - The keys must never reach the browser. The browser tells us which
- *     provider to test; the server uses its own env to issue the call
- *     and only the result (ok/error + masked diagnostics) is returned.
+ * Result is also written back to the AiProviderSetting row
+ * (lastCheckedAt / lastCheckStatus / lastCheckMessage) so it survives a
+ * page reload.
  *
  * Checks:
  *   - openai: GET https://api.openai.com/v1/models with Bearer auth.
- *     200 => ok. 401 => bad key. anything else => network/quota.
- *   - yandex: POST https://iam.api.cloud.yandex.net/iam/v1/tokens with
- *     { yandexPassportOauthToken: <key> } would fail for an API key, so
- *     we instead try the Yandex SpeechKit REST surface (HEAD on the
- *     short-audio endpoint with auth header) — a 4xx without 401 means
- *     the key is accepted by the gateway.
+ *     200 → ok. 401 → bad key. anything else → network/quota.
+ *   - yandex: POST https://stt.api.cloud.yandex.net/speech/v1/stt:recognize
+ *     with auth + minimal audio body. 401/403 → bad key. anything else
+ *     (including 400 "audio too short") → gateway accepted the auth.
  */
 export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
@@ -36,13 +34,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (provider === 'openai') {
-        const key = process.env.OPENAI_API_KEY
+        const key = await getValue('openai', 'apiKey')
         if (!key) {
-            return NextResponse.json({
-                ok: false,
-                error: 'no_key',
-                message: 'OPENAI_API_KEY не задан в .env',
-            })
+            const result = { ok: false as const, error: 'no_key' as const, message: 'OpenAI API key не задан — добавь его в форме сверху' }
+            await recordCheck('openai', 'apiKey', 'no_key', result.message)
+            return NextResponse.json(result)
         }
         try {
             const ac = new AbortController()
@@ -54,56 +50,42 @@ export async function POST(req: NextRequest) {
             })
             clearTimeout(t)
             if (res.ok) {
-                return NextResponse.json({
-                    ok: true,
-                    message: 'OpenAI принимает ключ (GET /v1/models — 200)',
-                })
+                const msg = 'OpenAI принимает ключ (GET /v1/models — 200)'
+                await recordCheck('openai', 'apiKey', 'ok', msg)
+                return NextResponse.json({ ok: true, message: msg })
             }
             if (res.status === 401) {
-                return NextResponse.json({
-                    ok: false,
-                    error: 'invalid_key',
-                    message: 'OpenAI вернул 401 — ключ невалиден',
-                })
+                const msg = 'OpenAI вернул 401 — ключ невалиден'
+                await recordCheck('openai', 'apiKey', 'invalid_key', msg)
+                return NextResponse.json({ ok: false, error: 'invalid_key', message: msg })
             }
-            return NextResponse.json({
-                ok: false,
-                error: 'http_error',
-                message: `OpenAI вернул HTTP ${res.status}`,
-            })
+            const msg = `OpenAI вернул HTTP ${res.status}`
+            await recordCheck('openai', 'apiKey', 'http_error', msg)
+            return NextResponse.json({ ok: false, error: 'http_error', message: msg })
         } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            return NextResponse.json({
-                ok: false,
-                error: 'network',
-                message: `Сетевая ошибка: ${msg}`,
-            })
+            const m = err instanceof Error ? err.message : String(err)
+            const msg = `Сетевая ошибка: ${m}`
+            await recordCheck('openai', 'apiKey', 'network', msg)
+            return NextResponse.json({ ok: false, error: 'network', message: msg })
         }
     }
 
     // provider === 'yandex'
-    const key = process.env.YANDEX_API_KEY
-    const folder = process.env.YANDEX_FOLDER_ID
+    const [key, folder] = await Promise.all([
+        getValue('yandex', 'apiKey'),
+        getValue('yandex', 'folderId'),
+    ])
     if (!key) {
-        return NextResponse.json({
-            ok: false,
-            error: 'no_key',
-            message: 'YANDEX_API_KEY не задан в .env',
-        })
+        const msg = 'Yandex API key не задан — добавь его в форме сверху'
+        await recordCheck('yandex', 'apiKey', 'no_key', msg)
+        return NextResponse.json({ ok: false, error: 'no_key', message: msg })
     }
     if (!folder) {
-        return NextResponse.json({
-            ok: false,
-            error: 'no_folder',
-            message: 'YANDEX_FOLDER_ID не задан — нужен для тарификации SpeechKit',
-        })
+        const msg = 'Yandex Folder ID не задан — нужен для тарификации SpeechKit'
+        await recordCheck('yandex', 'apiKey', 'no_folder', msg)
+        return NextResponse.json({ ok: false, error: 'no_folder', message: msg })
     }
     try {
-        // SpeechKit short-audio recognize REST. We send a single byte of audio
-        // (PCM 8 kHz mono — minimal valid request). The point isn't to recognize
-        // anything, but to see whether the gateway accepts the auth header.
-        //  - 401 => bad key
-        //  - 200 / 400 / 4xx with provider-specific code => key is accepted
         const url = `https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?folderId=${encodeURIComponent(folder)}&lang=ru-RU&sampleRateHertz=8000&format=lpcm`
         const ac = new AbortController()
         const t = setTimeout(() => ac.abort(), 10_000)
@@ -118,24 +100,17 @@ export async function POST(req: NextRequest) {
         })
         clearTimeout(t)
         if (res.status === 401 || res.status === 403) {
-            return NextResponse.json({
-                ok: false,
-                error: 'invalid_key',
-                message: `Yandex вернул ${res.status} — ключ невалиден или folder/scope не совпадает`,
-            })
+            const msg = `Yandex вернул ${res.status} — ключ невалиден или folder/scope не совпадает`
+            await recordCheck('yandex', 'apiKey', 'invalid_key', msg)
+            return NextResponse.json({ ok: false, error: 'invalid_key', message: msg })
         }
-        // Любой другой код (включая 400 "audio too short") означает что
-        // gateway принял авторизацию и достучался до SpeechKit.
-        return NextResponse.json({
-            ok: true,
-            message: `Yandex SpeechKit принимает ключ (HTTP ${res.status})`,
-        })
+        const msg = `Yandex SpeechKit принимает ключ (HTTP ${res.status})`
+        await recordCheck('yandex', 'apiKey', 'ok', msg)
+        return NextResponse.json({ ok: true, message: msg })
     } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return NextResponse.json({
-            ok: false,
-            error: 'network',
-            message: `Сетевая ошибка: ${msg}`,
-        })
+        const m = err instanceof Error ? err.message : String(err)
+        const msg = `Сетевая ошибка: ${m}`
+        await recordCheck('yandex', 'apiKey', 'network', msg)
+        return NextResponse.json({ ok: false, error: 'network', message: msg })
     }
 }

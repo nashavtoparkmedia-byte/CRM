@@ -163,20 +163,19 @@ function AdminHelp() {
             <Step number={2} title="Как настроить API ключи">
                 <p>Открой <Link href="/settings/integrations/ai-call-keys" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><KeyRound className="h-3.5 w-3.5" />API ключи AI-обзвона<ArrowRight className="h-3 w-3" /></Link>. На странице 4 секции:</p>
                 <ul className="mt-2 space-y-1 text-[13px]">
-                    <DashItem><b>OpenAI</b> — ключ для будущего LLM-диалога</DashItem>
-                    <DashItem><b>Yandex SpeechKit</b> — ключ для распознавания речи</DashItem>
+                    <DashItem><b>OpenAI</b> — ключ для LLM-диалога и резервного STT/TTS</DashItem>
+                    <DashItem><b>Yandex SpeechKit</b> — ключ для нативного русского STT/TTS</DashItem>
                     <DashItem><b>Yandex Folder ID</b> — каталог в Yandex Cloud (не секрет)</DashItem>
                     <DashItem><b>Mock-режим</b> — переключатель тестового запуска</DashItem>
                 </ul>
-                <p className="mt-3">Как заполнить:</p>
+                <p className="mt-3">Как заполнить — всё прямо в UI, без доступа к коду:</p>
                 <ol className="mt-1.5 ml-5 list-decimal space-y-1 text-[13px]">
-                    <li>Открой файл <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">gravity-mvp/.env</code> в редакторе</li>
-                    <li>Добавь нужную строку — например, <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">YANDEX_API_KEY=AQVN...</code></li>
-                    <li>Сохрани файл и перезапусти dev-сервер</li>
-                    <li>Обнови страницу API ключей — статус должен поменяться с «не настроено» на «настроено»</li>
+                    <li>Получи ключ у провайдера (ссылки указаны в каждой карточке)</li>
+                    <li>Вставь его в поле ввода и нажми <Tag>Сохранить</Tag></li>
+                    <li>Нажми <Tag>Проверить</Tag> — система отправит тестовый запрос и покажет, принял ли провайдер ключ</li>
+                    <li>Чтобы заменить ключ — сначала <Tag>Удалить</Tag>, потом сохрани новый</li>
                 </ol>
-                <p className="mt-2">Чтобы проверить, что ключ принят сервисом — нажми кнопку <Tag>Проверить подключение</Tag>. Система отправит тестовый запрос и покажет результат справа от кнопки.</p>
-                <p className="mt-2 text-[12px] text-muted-foreground">Секреты живут только в .env, в базу не пишутся, в браузер не уходят.</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">Ключи шифруются (AES-256-GCM) и хранятся в базе. В UI видна только маска последних 4 символов — полный секрет не возвращается даже администратору.</p>
             </Step>
 
             <Step number={3} title="Как настроить проекты и сценарии">
@@ -223,7 +222,7 @@ function AdminHelp() {
 
                 <p className="mt-3"><b>Не создаётся звонок при клике</b></p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
-                    <DashItem>Появилась ошибка «Mock-режим выключен» → включи <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">AI_CALL_MOCK_MODE=true</code> в <code>.env</code> и перезапусти dev-сервер</DashItem>
+                    <DashItem>Появилась ошибка «Mock-режим выключен» → открой <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">API ключи</Link> и нажми <Tag>Включить</Tag> в карточке «Mock-режим»</DashItem>
                     <DashItem>Страница звонка 404 → миграции не применены, выполни <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">npx prisma migrate deploy</code> и перезапусти сервер</DashItem>
                 </ul>
 

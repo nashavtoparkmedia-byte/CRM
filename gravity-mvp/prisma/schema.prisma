@@ -778,6 +778,40 @@ model AiCallMessage {
   @@index([role])
 }
 
+/// One configurable AI-call provider setting (API key, folder ID, mock-mode
+/// toggle, …). Stored in DB so admins can configure keys via the settings
+/// UI without redeploying. Secrets are AES-256-GCM encrypted at rest;
+/// `mask` keeps the last 4 chars for UX. Non-secret values (mockMode,
+/// yandexFolderId) go in plain `valuePlain` and `encryptedValue` is null.
+///
+/// (provider, key) is the natural primary key — there's at most one OpenAI
+/// API key, one Yandex Folder ID, etc. Soft semantics via `isConfigured`:
+/// rows are deleted when admin clicks "Удалить ключ"; `isConfigured`
+/// caches the row's status for fast filtering.
+model AiProviderSetting {
+  id              String   @id @default(cuid())
+  provider        String   /// 'openai' | 'yandex' | 'system'
+  key             String   /// 'apiKey' | 'folderId' | 'mockMode'
+  /// AES-256-GCM ciphertext for secret values (apiKey). null for plain values.
+  encryptedValue  String?
+  /// Plain-text storage for non-secrets (folderId — public; mockMode — boolean).
+  valuePlain      String?
+  /// Last 4 chars for "•••• ABCD" mask in the UI. Always safe to expose.
+  mask            String?
+  isConfigured    Boolean  @default(true)
+  /// Last time someone clicked "Проверить подключение" for this key.
+  lastCheckedAt   DateTime?
+  /// 'ok' | 'invalid_key' | 'no_folder' | 'network' | 'http_error' | …
+  lastCheckStatus String?
+  /// Free-text diagnostic from the last check (shown next to the badge).
+  lastCheckMessage String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([provider, key])
+  @@index([provider])
+}
+
 /// Top-level grouping for AI-call scenarios. Lets the UI organise scripts
 /// by business purpose (lead qualification, churn winback, NPS survey, …).
 /// Seeded with 3 defaults — see prisma/seed/ai-call-projects.ts.

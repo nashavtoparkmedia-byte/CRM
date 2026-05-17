@@ -18,7 +18,8 @@
  * Bridge logs `[llm] DISABLED` once on boot and routes around it.
  */
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const runtime = require('./runtime-config')
+
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS ?? 15000)
 
@@ -133,8 +134,9 @@ const TOOLS = [
  *                   {kind: 'empty'}>}
  */
 async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIMEOUT_MS }) {
-    if (!OPENAI_API_KEY) {
-        throw new Error('OPENAI_API_KEY is not set — llm-client is disabled')
+    const apiKey = runtime.getOpenAiKey()
+    if (!apiKey) {
+        throw new Error('OpenAI API key is not configured (DB or .env) — llm-client is disabled')
     }
 
     const ac = new AbortController()
@@ -146,7 +148,7 @@ async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIM
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${OPENAI_API_KEY}`,
+                Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
                 model,
@@ -215,9 +217,16 @@ function buildSystemMessage(scenario) {
     return promptParts.join('\n')
 }
 
+// `enabled` is now a function — the answer depends on runtime config
+// which can change at call time (admin saves a key via the UI). Code that
+// used to check `llm.enabled` should call `llm.enabled()` instead.
+function enabled() {
+    return !!runtime.getOpenAiKey()
+}
+
 module.exports = {
     chatTurn,
     buildSystemMessage,
     TOOLS,
-    enabled: !!OPENAI_API_KEY,
+    enabled,
 }
