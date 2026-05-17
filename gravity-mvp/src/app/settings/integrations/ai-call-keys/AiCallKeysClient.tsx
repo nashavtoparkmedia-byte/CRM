@@ -241,14 +241,16 @@ function KeyRow(props: {
                 </div>
 
                 {canEdit && !editing && (
-                    <div className="flex items-center gap-1">
+                    // flex-shrink-0 — иначе title-pane с flex-1 «съедает»
+                    // место и кнопки начинают наезжать друг на друга.
+                    <div className="flex flex-shrink-0 items-center gap-2">
                         {onTest && (
                             <button
                                 type="button"
                                 onClick={onTest}
                                 disabled={!canTest || testing}
                                 title={!canTest ? cantTestReason : 'Проверить подключение'}
-                                className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-2.5 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {testing ? <Loader2 className="h-3 w-3 animate-spin" /> : <PlugZap className="h-3 w-3" />}
                                 Проверить
@@ -257,7 +259,7 @@ function KeyRow(props: {
                         <button
                             type="button"
                             onClick={() => setEditing(true)}
-                            className="inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark"
+                            className="inline-flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark"
                         >
                             <Save className="h-3 w-3" />
                             {status.configured ? 'Изменить' : 'Сохранить'}
@@ -268,7 +270,7 @@ function KeyRow(props: {
                                 onClick={handleDelete}
                                 disabled={deleting}
                                 title="Удалить ключ"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background text-destructive transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border border-border bg-background text-destructive transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                             </button>
