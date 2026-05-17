@@ -23,6 +23,11 @@
  *   GET  /test-break/:uuid   — uuid_break <uuid>
  */
 
+// Load bridge-local .env (HTTPS_PROXY, BRIDGE_SHARED_TOKEN, CRM_BASE_URL,
+// optional per-bridge model overrides). Must run BEFORE init-proxy and the
+// runtime/crm modules so they see env values consistently.
+require('dotenv').config({ path: require('path').join(__dirname, '.env') })
+
 // Install undici global proxy dispatcher BEFORE any module that may
 // issue an outbound fetch is required. OpenAI / Yandex providers go
 // through this on geo-blocked networks (RU). Configure via HTTPS_PROXY.
@@ -53,19 +58,22 @@ const ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
 const ESL_PASS = process.env.ESL_PASSWORD ?? 'ClueCon'
 const AUDIO_DIR = path.join(__dirname, 'audio')
 
-// IP that FreeSWITCH (in WSL2) uses to reach this bridge (on Windows host).
-// WSL2 mirrored networking lets WSL→Windows only via LAN IP, NOT 127.0.0.1.
-// Pin via env if needed; otherwise auto-detect first non-loopback IPv4.
+// Address FreeSWITCH (in WSL2) uses to reach this bridge (on the Windows
+// host). We empirically tested both modes:
+//   - WSL2 *mirrored* networking (default on Win11): WSL shares the LAN IP
+//     with Windows, so a connect to 192.168.x.y from inside WSL routes to
+//     WSL's own stack first and gets ECONNREFUSED. The only address that
+//     actually crosses over is 127.0.0.1, which mirrored mode forwards
+//     transparently to a Windows-bound socket on the same port.
+//   - WSL2 *NAT* (legacy): 127.0.0.1 inside WSL is WSL itself; you must
+//     use the host's LAN IP (192.168.x.y) or the WSL host's gateway.
+//
+// We default to 127.0.0.1 because:
+//   a) Mirrored is the Win11 default, and
+//   b) NAT mode users typically already set BRIDGE_LAN_IP=192.168.x.y
+//      when wiring up FreeSWITCH the first time.
 function detectLanIp() {
     if (process.env.BRIDGE_LAN_IP) return process.env.BRIDGE_LAN_IP
-    const ifaces = os.networkInterfaces()
-    for (const name of Object.keys(ifaces)) {
-        for (const ni of ifaces[name] ?? []) {
-            if (ni.family === 'IPv4' && !ni.internal && !ni.address.startsWith('169.254.')) {
-                return ni.address
-            }
-        }
-    }
     return '127.0.0.1'
 }
 const LAN_IP = detectLanIp()
@@ -94,7 +102,9 @@ const httpServer = http.createServer((req, res) => {
     }
     if (req.method === 'GET' && req.url.startsWith('/test-play/')) {
         const uuid = decodeURIComponent(req.url.split('/').pop())
-        return eslApi(`uuid_broadcast ${uuid} http://127.0.0.1:${PORT}/play/test.wav aleg`)
+        // Use LAN IP, not 127.0.0.1: FreeSWITCH runs in WSL2 and loopback
+        // inside WSL is WSL itself, not the Windows host serving this HTTP.
+        return eslApi(`uuid_broadcast ${uuid} http://${LAN_IP}:${PORT}/play/test.wav aleg`)
             .then(out => res.end(`OK: ${out}`))
             .catch(err => { res.statusCode = 500; res.end(`ERR: ${err.message}`) })
     }
@@ -335,15 +345,43 @@ async function ensureSessionForCall(callUuid) {
     return session
 }
 
-// Save WAV to AUDIO_DIR with a unique name and trigger uuid_broadcast on
-// the aleg. The bridge already serves AUDIO_DIR via GET /play/<name>.
+// Translate the Windows AUDIO_DIR into the path FreeSWITCH (running in
+// WSL2) sees over the auto-mounted DrvFs. The bridge's AUDIO_DIR comes from
+// path.join(__dirname, 'audio') on Windows, e.g. "D:\\Github\\…\\audio";
+// from WSL the same dir is "/mnt/d/Github/…/audio". Override via env if
+// your bridge or FS layout differs (e.g. both on Linux, or FS on a remote
+// host with NFS-mounted audio).
+function defaultAudioDirForFs() {
+    if (process.env.BRIDGE_AUDIO_DIR_FS) return process.env.BRIDGE_AUDIO_DIR_FS
+    // "D:\Github\..." → "/mnt/d/Github/..." (Windows DrvFs convention)
+    const win = AUDIO_DIR
+    const m = /^([a-zA-Z]):[\\/](.*)$/.exec(win)
+    if (m) {
+        const drive = m[1].toLowerCase()
+        const rest = m[2].replace(/\\/g, '/')
+        return `/mnt/${drive}/${rest}`
+    }
+    return win
+}
+const AUDIO_DIR_FS = defaultAudioDirForFs()
+
+// Save WAV to AUDIO_DIR with a unique name and trigger uuid_broadcast on the
+// aleg. We pass a FILESYSTEM path that FreeSWITCH can read directly (file:
+// or bare path), not an HTTP URL — mod_httapi in our setup honours the WSL
+// env's http_proxy and fails to fetch loopback URLs through Xray. The
+// shared DrvFs mount under /mnt/<drive>/... is plenty for inter-process
+// audio handoff and skips the cache/network stack entirely.
 async function broadcastWav(callUuid, wavBuffer) {
     const name = `tts-${callUuid.slice(0, 8)}-${crypto.randomBytes(4).toString('hex')}.wav`
-    const file = path.join(AUDIO_DIR, name)
-    await fs.promises.writeFile(file, wavBuffer)
-    const url = `http://127.0.0.1:${PORT}/play/${name}`
+    const fileWin = path.join(AUDIO_DIR, name)
+    const t0 = Date.now()
+    await fs.promises.writeFile(fileWin, wavBuffer)
+    const fileFs = `${AUDIO_DIR_FS}/${name}`
+    const writeMs = Date.now() - t0
+    console.log(`[broadcast] ${callUuid} wrote ${wavBuffer.length} bytes in ${writeMs}ms → ${fileFs}`)
     try {
-        await eslApi(`uuid_broadcast ${callUuid} ${url} aleg`)
+        const reply = await eslApi(`uuid_broadcast ${callUuid} ${fileFs} aleg`)
+        console.log(`[broadcast] ${callUuid} fs reply: ${reply.trim().slice(0, 120)}`)
     } catch (err) {
         console.error(`[broadcast] ${callUuid} → ${name} failed: ${err.message}`)
         return
@@ -351,7 +389,7 @@ async function broadcastWav(callUuid, wavBuffer) {
     // Tidy up the WAV after a generous delay — playback is async on the FS
     // side so we can't delete immediately. 60 s covers anything plausible
     // for a single TTS phrase.
-    setTimeout(() => fs.promises.unlink(file).catch(() => {}), 60_000).unref()
+    setTimeout(() => fs.promises.unlink(fileWin).catch(() => {}), 60_000).unref()
 }
 
 // ── ESL persistent event listener: auto-start audio_fork on CHANNEL_ANSWER ─────
