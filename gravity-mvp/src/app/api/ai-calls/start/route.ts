@@ -94,10 +94,14 @@ export async function POST(req: NextRequest) {
 
     // Create the Call row first so the bridge can resolve it the moment
     // FreeSWITCH parks the channel.
+    //
+    // CallStatus enum doesn't have `initiated` — the closest dialed-but-
+    // not-yet-answered state is `ringing`. We flip to `active` from the
+    // bridge as soon as CHANNEL_ANSWER fires.
     const call = await prisma.call.create({
         data: {
             direction: 'outbound',
-            status: 'initiated',
+            status: 'ringing',
             fromNumber,
             toNumber,
             driverId,

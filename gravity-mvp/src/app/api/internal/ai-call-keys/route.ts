@@ -57,24 +57,34 @@ export async function GET(req: NextRequest) {
 }
 
 function denyReason(req: NextRequest): string | null {
-    // Layer 1 — block browser-origin requests outright. Any request that
-    // came from a <fetch>, XHR, navigation, script, <img>, etc. gets a
-    // Sec-Fetch-Site header from the user agent. A Node-side fetch (used
-    // by the bridge) does not set it.
+    // Layer 1 — strongest signal: shared token. If a token is configured AND
+    // matches, we accept regardless of any other header. Tokens are 32-byte
+    // hex secrets known only to bridge + CRM, so a match is full auth. We
+    // check this FIRST because spec-compliant Node fetches (undici 7+) add
+    // `sec-fetch-*` headers themselves, which would otherwise trip the
+    // browser-origin guard below.
+    const expectedToken = process.env.BRIDGE_SHARED_TOKEN
+    if (expectedToken) {
+        const got = req.headers.get('x-bridge-token')
+        if (got === expectedToken) return null
+        return 'bad_token'
+    }
+
+    // Layer 2 — no token configured: fall back to browser-origin sniff. Any
+    // request that came from a <fetch>/XHR/navigation/script/<img> carries a
+    // `Sec-Fetch-Site` header from the user agent. That stops the most
+    // likely attack vector — a logged-in CRM user opening the URL in the
+    // address bar — even without a token.
     if (req.headers.get('sec-fetch-site') || req.headers.get('sec-fetch-mode')) {
         return 'browser_origin'
     }
 
-    // Layer 2 — auth signal.
-    const expectedToken = process.env.BRIDGE_SHARED_TOKEN
-    if (expectedToken) {
-        const got = req.headers.get('x-bridge-token')
-        return got === expectedToken ? null : 'bad_token'
-    }
-
-    // Layer 3 — without a configured token, require true loopback. We
-    // DELIBERATELY don't trust the Host header (attacker-controllable)
-    // or X-Forwarded-For (proxy-injected). Look at the actual TCP peer.
+    // Layer 3 — also without a token: require true loopback. We DELIBERATELY
+    // don't trust the Host header (attacker-controllable) or
+    // X-Forwarded-For (proxy-injected). Look at the actual TCP peer.
+    // NOTE: in Next.js 16 NextRequest.socket is undefined in dev mode, so
+    // this fallback is best-effort only — running the bridge without a
+    // configured BRIDGE_SHARED_TOKEN is NOT recommended.
     const remoteIp =
         (req as any).ip ||  // Next.js edge runtime
         // Node runtime — Next exposes the underlying request on a non-
