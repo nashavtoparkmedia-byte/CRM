@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getValue, recordCheck } from '@/lib/ai-call/provider-settings'
 import { getCurrentUser } from '@/lib/users/user-service'
+import { withProxy, isProxyConfigured } from '@/lib/ai-call/proxy-fetch'
 
 export const dynamic = 'force-dynamic'
 
@@ -53,11 +54,11 @@ export async function POST(req: NextRequest) {
         try {
             const ac = new AbortController()
             const t = setTimeout(() => ac.abort(), 10_000)
-            const res = await fetch('https://api.openai.com/v1/models', {
+            const res = await fetch('https://api.openai.com/v1/models', await withProxy({
                 method: 'GET',
                 headers: { Authorization: `Bearer ${key}` },
                 signal: ac.signal,
-            })
+            }))
             clearTimeout(t)
             if (res.ok) {
                 const msg = 'OpenAI принимает ключ (GET /v1/models — 200)'
@@ -68,6 +69,16 @@ export async function POST(req: NextRequest) {
                 const msg = 'OpenAI вернул 401 — ключ невалиден'
                 await recordCheck('openai', 'apiKey', 'invalid_key', msg)
                 return NextResponse.json({ ok: false, error: 'invalid_key', message: msg })
+            }
+            if (res.status === 403) {
+                // OpenAI returns 403 for geo-blocked regions (RU, etc.).
+                // Tell admin exactly what to do.
+                const detail = isProxyConfigured()
+                    ? 'HTTPS_PROXY задан, но прокси, видимо, тоже из заблокированного региона. Попробуй другой VPN-сервер.'
+                    : 'OpenAI блокирует запросы из РФ. Задай HTTPS_PROXY в .env (например HTTPS_PROXY=http://127.0.0.1:8080 или socks5://127.0.0.1:1080) и перезапусти dev-сервер.'
+                const msg = `OpenAI вернул 403 — заблокировано по гео. ${detail}`
+                await recordCheck('openai', 'apiKey', 'http_error', msg)
+                return NextResponse.json({ ok: false, error: 'geo_blocked', message: msg })
             }
             const msg = `OpenAI вернул HTTP ${res.status}`
             await recordCheck('openai', 'apiKey', 'http_error', msg)

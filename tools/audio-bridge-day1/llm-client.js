@@ -19,6 +19,7 @@
  */
 
 const runtime = require('./runtime-config')
+const { withProxy } = require('./proxy-fetch')
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS ?? 15000)
@@ -144,7 +145,7 @@ async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIM
 
     let res
     try {
-        res = await fetch('https://api.openai.com/v1/chat/completions', {
+        res = await fetch('https://api.openai.com/v1/chat/completions', await withProxy({
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -160,7 +161,7 @@ async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIM
                 // tool_calls in one shot to dispatch the next action cleanly.
             }),
             signal: ac.signal,
-        })
+        }))
     } finally {
         clearTimeout(timer)
     }
