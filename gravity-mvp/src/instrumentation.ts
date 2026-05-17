@@ -6,6 +6,12 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+    // Install global undici proxy dispatcher BEFORE anything makes an
+    // outbound fetch. OpenAI / Whisper / other geo-blocked endpoints
+    // need this in RU; set HTTPS_PROXY=http://127.0.0.1:10809 in .env.
+    const { initProxy } = await import('@/lib/ai-call/init-proxy')
+    initProxy()
+
     const { opsLog } = await import('@/lib/opsLog')
     opsLog('info', 'server_starting', { operation: 'instrumentation' })
 
