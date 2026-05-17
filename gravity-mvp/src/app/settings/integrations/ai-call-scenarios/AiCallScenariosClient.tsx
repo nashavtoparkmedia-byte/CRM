@@ -6,7 +6,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
     Sparkles, Save, AlertCircle, CheckCircle2, Loader2,
-    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree, BookOpen,
+    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree, BookOpen, Radio,
 } from 'lucide-react'
 import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
 import type { AiCallKeysStatus } from '@/lib/ai-call/keys-status'
@@ -35,13 +35,20 @@ interface Props {
     initialProjects: ProjectRow[]
     initialScenarios: ScenarioRow[]
     initialKeysStatus: AiCallKeysStatus
+    initialActiveProjectId: string | null
     canEdit: boolean
 }
 
 type EditorMode = { kind: 'closed' } | { kind: 'edit'; id: string } | { kind: 'create'; projectId: string }
 type OuterTab = 'projects' | 'keys'
 
-export default function AiCallScenariosClient({ initialProjects, initialScenarios, initialKeysStatus, canEdit }: Props) {
+export default function AiCallScenariosClient({
+    initialProjects,
+    initialScenarios,
+    initialKeysStatus,
+    initialActiveProjectId,
+    canEdit,
+}: Props) {
     const [projects] = useState<ProjectRow[]>(initialProjects)
     const [scenarios, setScenarios] = useState<ScenarioRow[]>(initialScenarios)
     const [editor, setEditor] = useState<EditorMode>({ kind: 'closed' })
@@ -51,11 +58,35 @@ export default function AiCallScenariosClient({ initialProjects, initialScenario
     // sidebar can be quieter.
     const [outerTab, setOuterTab] = useState<OuterTab>('projects')
 
-    // Active project tab when on 'projects' outer tab.
-    const [activeProjectId, setActiveProjectId] = useState<string>(projects[0]?.id ?? '')
-    const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0] ?? null
+    // Two different "active project" notions:
+    //   - viewingProjectId  — which tab is open in this UI (local state)
+    //   - activeProjectId   — which project the system uses for AI-calls
+    //     (persisted in AiProviderSetting; admin clicks «Сделать активным»)
+    //
+    // If activeProjectId is set, default the view to it so admin lands on
+    // their working project. Otherwise default to the first project.
+    const [viewingProjectId, setViewingProjectId] = useState<string>(
+        initialActiveProjectId ?? projects[0]?.id ?? ''
+    )
+    const [activeProjectId, setActiveProjectId] = useState<string | null>(initialActiveProjectId)
+    const [activating, setActivating] = useState<string | null>(null)
 
-    const scenariosOfActive = scenarios.filter(s => s.projectId === activeProject?.id)
+    const viewingProject = projects.find(p => p.id === viewingProjectId) ?? projects[0] ?? null
+    const scenariosOfActive = scenarios.filter(s => s.projectId === viewingProject?.id)
+
+    async function setAsActive(projectId: string) {
+        setActivating(projectId)
+        try {
+            const res = await fetch('/api/settings/ai-call-keys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ provider: 'system', key: 'activeProjectId', value: projectId }),
+            })
+            if (res.ok) setActiveProjectId(projectId)
+        } finally {
+            setActivating(null)
+        }
+    }
 
     const tooltipText =
         'Проект — цель звонка. Сценарий — вопросы и логика разговора.\n\n' +
@@ -129,10 +160,13 @@ export default function AiCallScenariosClient({ initialProjects, initialScenario
                     editor={editor}
                     setEditor={setEditor}
                     canEdit={canEdit}
-                    activeProjectId={activeProjectId}
-                    setActiveProjectId={setActiveProjectId}
-                    activeProject={activeProject}
+                    viewingProjectId={viewingProjectId}
+                    setViewingProjectId={setViewingProjectId}
+                    viewingProject={viewingProject}
                     scenariosOfActive={scenariosOfActive}
+                    activeProjectId={activeProjectId}
+                    activating={activating}
+                    setAsActive={setAsActive}
                 />
             ) : (
                 <AiCallKeysSection initialStatus={initialKeysStatus} canEdit={canEdit} />
@@ -165,18 +199,24 @@ function ProjectsPane(props: {
     editor: EditorMode
     setEditor: React.Dispatch<React.SetStateAction<EditorMode>>
     canEdit: boolean
-    activeProjectId: string
-    setActiveProjectId: (id: string) => void
-    activeProject: ProjectRow | null
+    /** Which project tab is currently OPEN in the UI (local view state). */
+    viewingProjectId: string
+    setViewingProjectId: (id: string) => void
+    viewingProject: ProjectRow | null
     scenariosOfActive: ScenarioRow[]
+    /** Which project the SYSTEM uses for AI-calls (persisted in DB). */
+    activeProjectId: string | null
+    activating: string | null
+    setAsActive: (projectId: string) => Promise<void>
 }) {
     const {
         projects, scenarios, setScenarios,
         editor, setEditor, canEdit,
-        activeProjectId, setActiveProjectId, activeProject, scenariosOfActive,
+        viewingProjectId, setViewingProjectId, viewingProject, scenariosOfActive,
+        activeProjectId, activating, setAsActive,
     } = props
 
-    if (!activeProject) {
+    if (!viewingProject) {
         return (
             <div className="rounded-md border border-dashed border-border bg-surface/40 p-6 text-center text-[13px] text-muted-foreground">
                 Нет проектов
@@ -191,26 +231,55 @@ function ProjectsPane(props: {
         if (s.projectId) counts.set(s.projectId, (counts.get(s.projectId) ?? 0) + 1)
     }
 
+    const isViewingActive = viewingProject.id === activeProjectId
+
     return (
         <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-            {/* PROJECT TABS — chip-style, one active at a time */}
+            {/* «Сейчас работает» status bar — admin видит на одну линию выше
+                сам ли активный проект открыт, или какой-то другой. */}
+            <div className="flex items-center gap-2 rounded-md border border-border bg-surface/40 px-3 py-2 text-[13px]">
+                <Radio className={`h-3.5 w-3.5 ${activeProjectId ? 'text-accent' : 'text-muted-foreground'}`} />
+                <span className="text-muted-foreground">Сейчас в работе:</span>
+                {activeProjectId ? (
+                    <span className="font-medium text-foreground">
+                        {projects.find(p => p.id === activeProjectId)?.name ?? '(удалён)'}
+                    </span>
+                ) : (
+                    <span className="text-muted-foreground italic">не выбрано — система не запустит звонок</span>
+                )}
+            </div>
+
+            {/* PROJECT TABS — chip-style. Bold border + green dot when this
+                project is the one the system currently uses. */}
             <div className="flex flex-wrap gap-2">
                 {projects.map(p => {
-                    const active = p.id === activeProjectId
+                    const viewing = p.id === viewingProjectId
+                    const isActive = p.id === activeProjectId
                     return (
                         <button
                             key={p.id}
                             type="button"
-                            onClick={() => setActiveProjectId(p.id)}
+                            onClick={() => setViewingProjectId(p.id)}
                             className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
-                                active
+                                viewing
                                     ? 'bg-primary text-white'
-                                    : 'border border-border bg-card text-foreground hover:bg-surface'
+                                    : isActive
+                                      ? 'border-2 border-accent bg-card text-foreground hover:bg-surface'
+                                      : 'border border-border bg-card text-foreground hover:bg-surface'
                             }`}
+                            title={isActive ? 'Сейчас этот проект используется системой для AI-звонков' : undefined}
                         >
+                            {isActive && (
+                                <span
+                                    aria-hidden
+                                    className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
+                                        viewing ? 'bg-white' : 'bg-accent'
+                                    }`}
+                                />
+                            )}
                             {p.name}
                             <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
-                                active ? 'bg-white/20 text-white' : 'bg-surface text-muted-foreground'
+                                viewing ? 'bg-white/20 text-white' : 'bg-surface text-muted-foreground'
                             }`}>
                                 {counts.get(p.id) ?? 0}
                             </span>
@@ -226,26 +295,50 @@ function ProjectsPane(props: {
             <section className="flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                        <h2 className="text-[15px] font-semibold text-foreground">
-                            Сценарии проекта «{activeProject.name}»
-                        </h2>
-                        {activeProject.description && (
-                            <p className="mt-0.5 text-[12px] text-muted-foreground">{activeProject.description}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h2 className="text-[15px] font-semibold text-foreground">
+                                Сценарии проекта «{viewingProject.name}»
+                            </h2>
+                            {isViewingActive && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                                    <Radio className="h-3 w-3" />
+                                    активный
+                                </span>
+                            )}
+                        </div>
+                        {viewingProject.description && (
+                            <p className="mt-0.5 text-[12px] text-muted-foreground">{viewingProject.description}</p>
                         )}
                     </div>
-                    {canEdit && editor.kind === 'closed' && (
-                        <button
-                            type="button"
-                            onClick={() => setEditor({ kind: 'create', projectId: activeProject.id })}
-                            className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            Новый сценарий
-                        </button>
-                    )}
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                        {canEdit && !isViewingActive && (
+                            <button
+                                type="button"
+                                onClick={() => setAsActive(viewingProject.id)}
+                                disabled={activating === viewingProject.id}
+                                title="Назначить этот проект активным — кнопка «AI-звонок» будет использовать его сценарии"
+                                className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-accent/40 bg-accent/5 px-3 text-[13px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {activating === viewingProject.id
+                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    : <Radio className="h-3.5 w-3.5" />}
+                                Сделать активным
+                            </button>
+                        )}
+                        {canEdit && editor.kind === 'closed' && (
+                            <button
+                                type="button"
+                                onClick={() => setEditor({ kind: 'create', projectId: viewingProject.id })}
+                                className="flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md bg-primary px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-primary-dark"
+                            >
+                                <Plus className="h-3.5 w-3.5" />
+                                Новый сценарий
+                            </button>
+                        )}
+                    </div>
                 </div>
 
-                {editor.kind === 'create' && editor.projectId === activeProject.id && (
+                {editor.kind === 'create' && editor.projectId === viewingProject.id && (
                     <ScenarioEditor
                         initial={emptyScenario(editor.projectId)}
                         projects={projects}

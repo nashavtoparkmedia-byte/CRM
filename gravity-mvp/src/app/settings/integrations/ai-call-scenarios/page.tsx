@@ -1,6 +1,7 @@
 import { listScenarios, listProjects } from '@/lib/ai-call/scenarios'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
+import { getValue } from '@/lib/ai-call/provider-settings'
 import AiCallScenariosClient from './AiCallScenariosClient'
 
 export const dynamic = 'force-dynamic'
@@ -19,10 +20,14 @@ export const dynamic = 'force-dynamic'
  */
 export default async function AiCallScenariosPage() {
     const user = await getCurrentUser()
-    const [projects, scenarios, keysStatus] = await Promise.all([
+    const [projects, scenarios, keysStatus, activeProjectId] = await Promise.all([
         listProjects(),
         listScenarios(),
         getAiCallKeysStatus(),
+        // Which project is "live" — used by future AI-call dispatcher to pick
+        // the scenario when a manager presses the button. Stored as a regular
+        // AiProviderSetting row (provider=system, key=activeProjectId).
+        getValue('system', 'activeProjectId'),
     ])
     const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
@@ -31,6 +36,7 @@ export default async function AiCallScenariosPage() {
             initialProjects={projects}
             initialScenarios={scenarios}
             initialKeysStatus={keysStatus}
+            initialActiveProjectId={activeProjectId}
             canEdit={canEdit}
         />
     )

@@ -26,12 +26,15 @@ const ENV_NAMES: Record<`${Provider}/${Key}`, string> = {
     'openai/apiKey': 'OPENAI_API_KEY',
     'openai/folderId': 'N/A',
     'openai/mockMode': 'N/A',
+    'openai/activeProjectId': 'N/A',
     'yandex/apiKey': 'YANDEX_API_KEY',
     'yandex/folderId': 'YANDEX_FOLDER_ID',
     'yandex/mockMode': 'N/A',
+    'yandex/activeProjectId': 'N/A',
     'system/apiKey': 'N/A',
     'system/folderId': 'N/A',
     'system/mockMode': 'AI_CALL_MOCK_MODE',
+    'system/activeProjectId': 'N/A',
 }
 
 async function statusFor(provider: Provider, key: Key): Promise<KeyStatus> {
