@@ -1,5 +1,6 @@
 import { listScenarios, listProjects } from '@/lib/ai-call/scenarios'
 import { getCurrentUser } from '@/lib/users/user-service'
+import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
 import AiCallScenariosClient from './AiCallScenariosClient'
 
 export const dynamic = 'force-dynamic'
@@ -7,16 +8,30 @@ export const dynamic = 'force-dynamic'
 /**
  * /settings/integrations/ai-call-scenarios
  *
- * Admin page for managing AI-call scenarios — the scripts a voice agent
- * follows when a manager presses "Call with AI" in the lead card. Scenarios
- * are grouped by AiCallProject (lead qualification / churn winback /
- * NPS survey). On first visit, the page auto-seeds a default driver-lead
- * scenario into the "Квалификация лида" project.
+ * Hub page for AI-обзвон setup. Two inner tabs:
+ *   1. Проекты и сценарии — chip-tabs за проектам, скрипты разговора.
+ *   2. API ключи — раньше жил отдельно в /ai-call-keys; теперь складывается
+ *      сюда, чтобы не плодить sidebar-пункты. Прямой URL остался для legacy
+ *      ссылок (например, из инструкции).
+ *
+ * Scenarios + projects load on every request (force-dynamic); seed of default
+ * scenario happens lazily in listScenarios() if the table is empty.
  */
 export default async function AiCallScenariosPage() {
     const user = await getCurrentUser()
-    const [projects, scenarios] = await Promise.all([listProjects(), listScenarios()])
+    const [projects, scenarios, keysStatus] = await Promise.all([
+        listProjects(),
+        listScenarios(),
+        getAiCallKeysStatus(),
+    ])
     const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
-    return <AiCallScenariosClient initialProjects={projects} initialScenarios={scenarios} canEdit={canEdit} />
+    return (
+        <AiCallScenariosClient
+            initialProjects={projects}
+            initialScenarios={scenarios}
+            initialKeysStatus={keysStatus}
+            canEdit={canEdit}
+        />
+    )
 }

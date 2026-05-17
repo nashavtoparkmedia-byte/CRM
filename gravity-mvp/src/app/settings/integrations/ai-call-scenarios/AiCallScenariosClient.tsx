@@ -3,12 +3,13 @@
 "use client"
 
 import { useState } from 'react'
-import Link from 'next/link'
 import {
     Sparkles, Save, AlertCircle, CheckCircle2, Loader2,
-    Plus, Pencil, Trash2, X, GripVertical, BookOpen,
+    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree,
 } from 'lucide-react'
 import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
+import type { AiCallKeysStatus } from '@/lib/ai-call/keys-status'
+import { AiCallKeysSection } from '../ai-call-keys/AiCallKeysClient'
 
 interface ProjectRow {
     id: string
@@ -32,36 +33,56 @@ interface ScenarioRow {
 interface Props {
     initialProjects: ProjectRow[]
     initialScenarios: ScenarioRow[]
+    initialKeysStatus: AiCallKeysStatus
     canEdit: boolean
 }
 
 type EditorMode = { kind: 'closed' } | { kind: 'edit'; id: string } | { kind: 'create'; projectId: string }
+type OuterTab = 'projects' | 'keys'
 
-export default function AiCallScenariosClient({ initialProjects, initialScenarios, canEdit }: Props) {
+export default function AiCallScenariosClient({ initialProjects, initialScenarios, initialKeysStatus, canEdit }: Props) {
     const [projects] = useState<ProjectRow[]>(initialProjects)
     const [scenarios, setScenarios] = useState<ScenarioRow[]>(initialScenarios)
     const [editor, setEditor] = useState<EditorMode>({ kind: 'closed' })
 
-    // Group scenarios by project, preserving project sort order; unassigned
-    // (shouldn't happen after backfill, but defensive) go last.
-    const byProject = new Map<string, ScenarioRow[]>()
-    for (const p of projects) byProject.set(p.id, [])
-    const orphans: ScenarioRow[] = []
-    for (const s of scenarios) {
-        if (s.projectId && byProject.has(s.projectId)) byProject.get(s.projectId)!.push(s)
-        else orphans.push(s)
-    }
+    // Telegram-style segmented tabs at the top: Проекты | API ключи. Mock-mode
+    // / OpenAI / Yandex keys are now folded into this page as a sub-tab so the
+    // sidebar can be quieter.
+    const [outerTab, setOuterTab] = useState<OuterTab>('projects')
+
+    // Active project tab when on 'projects' outer tab.
+    const [activeProjectId, setActiveProjectId] = useState<string>(projects[0]?.id ?? '')
+    const activeProject = projects.find(p => p.id === activeProjectId) ?? projects[0] ?? null
+
+    const scenariosOfActive = scenarios.filter(s => s.projectId === activeProject?.id)
+
+    const tooltipText =
+        'Проект — цель звонка. Сценарий — вопросы и логика разговора.\n\n' +
+        'Менеджер не выбирает сценарий — система берёт нужный по контексту лида.'
 
     return (
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-6 animate-in fade-in duration-300">
+            {/* Compact header — only icon + title + (?) tooltip. The previous
+                large «Что это и как использовать» block lives in /ai-call-help
+                now; here we keep just the one-line hint. */}
             <header className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
                     <Sparkles className="h-5 w-5 text-primary" />
                 </div>
-                <div className="flex-1">
-                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">Сценарии ИИ-обзвона</h1>
-                    <p className="text-[13px] text-muted-foreground">
-                        Скрипты для голосового ассистента, который звонит лидам по кнопке «Звонок ИИ» из карточки.
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                        <h1 className="text-[20px] font-semibold leading-tight text-foreground">AI-обзвон</h1>
+                        <span
+                            role="img"
+                            aria-label="Что это"
+                            title={tooltipText}
+                            className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
+                        >
+                            <HelpCircle className="h-3.5 w-3.5" />
+                        </span>
+                    </div>
+                    <p className="text-[12px] text-muted-foreground mt-0.5">
+                        Управление проектами, сценариями и настройками голосового ассистента
                     </p>
                 </div>
             </header>
@@ -69,124 +90,194 @@ export default function AiCallScenariosClient({ initialProjects, initialScenario
             {!canEdit && (
                 <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-muted-foreground">
                     <AlertCircle className="h-3.5 w-3.5" />
-                    Только Администратор / Руководитель может редактировать сценарии.
+                    Только Администратор / Руководитель может редактировать.
                 </div>
             )}
 
-            {/* Inline-подсказка «Что это и как использовать» — короткий
-                контекст для админа на странице. Полная справка живёт в
-                Настройках → AI-обзвон → Инструкция. */}
-            <section className="rounded-md border border-border bg-surface/40 p-5">
-                <h2 className="mb-2 flex items-center gap-2 text-[15px] font-semibold text-foreground">
-                    <BookOpen className="h-4 w-4 text-primary" />
-                    Что это и как использовать
-                </h2>
-                <p className="text-[13px] text-foreground leading-relaxed">
-                    <b>Проект</b> — это группа сценариев под одну бизнес-цель (квалификация лида, работа с оттоком, опрос качества). Внутри проекта — <b>сценарии</b>: скрипты разговора, по которым голосовой ассистент звонит водителю.
-                </p>
-                <p className="mt-2 text-[13px] text-foreground leading-relaxed">
-                    Чтобы добавить сценарий, нажми кнопку <b>+ Сценарий</b> в нужном проекте и заполни 4 поля: название, системный промт (роль и стиль ассистента), вопросы по порядку (3–5 штук) и целевую длительность звонка.
-                </p>
-                <p className="mt-3 text-[12px] text-muted-foreground">
-                    Менеджер не выбирает сценарий — система берёт нужный по контексту: новый лид → «Квалификация лида», давно нет заказов → «Работа с оттоком».
-                </p>
-                <p className="mt-3 text-[12px] text-muted-foreground">
-                    Подробнее — <Link href="/settings/integrations/ai-call-help" className="text-primary underline-offset-2 hover:underline">Инструкция → Для администратора</Link>
-                </p>
-            </section>
-
-            {editor.kind === 'create' && (
-                <ScenarioEditor
-                    initial={emptyScenario(editor.projectId)}
-                    projects={projects}
-                    onCancel={() => setEditor({ kind: 'closed' })}
-                    onSaved={(s) => {
-                        setScenarios([...scenarios, s])
-                        setEditor({ kind: 'closed' })
-                    }}
-                    isNew
+            {/* OUTER TABS — Проекты | API ключи */}
+            <div className="inline-flex w-fit rounded-md border border-border bg-surface p-1">
+                <OuterTabBtn
+                    active={outerTab === 'projects'}
+                    onClick={() => setOuterTab('projects')}
+                    icon={<FolderTree className="h-4 w-4" />}
+                    label="Проекты и сценарии"
                 />
+                <OuterTabBtn
+                    active={outerTab === 'keys'}
+                    onClick={() => setOuterTab('keys')}
+                    icon={<KeyRound className="h-4 w-4" />}
+                    label="API ключи"
+                />
+            </div>
+
+            {outerTab === 'projects' ? (
+                <ProjectsPane
+                    projects={projects}
+                    scenarios={scenarios}
+                    setScenarios={setScenarios}
+                    editor={editor}
+                    setEditor={setEditor}
+                    canEdit={canEdit}
+                    activeProjectId={activeProjectId}
+                    setActiveProjectId={setActiveProjectId}
+                    activeProject={activeProject}
+                    scenariosOfActive={scenariosOfActive}
+                />
+            ) : (
+                <AiCallKeysSection initialStatus={initialKeysStatus} canEdit={canEdit} />
             )}
+        </div>
+    )
+}
 
-            {/* Render one section per project, in sortOrder. Each section
-                shows its scenarios + per-project "Create" button (canEdit). */}
-            <div className="flex flex-col gap-6">
-                {projects.map((proj) => {
-                    const list = byProject.get(proj.id) ?? []
+function OuterTabBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                active
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
+            }`}
+        >
+            {icon}
+            {label}
+        </button>
+    )
+}
+
+function ProjectsPane(props: {
+    projects: ProjectRow[]
+    scenarios: ScenarioRow[]
+    setScenarios: React.Dispatch<React.SetStateAction<ScenarioRow[]>>
+    editor: EditorMode
+    setEditor: React.Dispatch<React.SetStateAction<EditorMode>>
+    canEdit: boolean
+    activeProjectId: string
+    setActiveProjectId: (id: string) => void
+    activeProject: ProjectRow | null
+    scenariosOfActive: ScenarioRow[]
+}) {
+    const {
+        projects, scenarios, setScenarios,
+        editor, setEditor, canEdit,
+        activeProjectId, setActiveProjectId, activeProject, scenariosOfActive,
+    } = props
+
+    if (!activeProject) {
+        return (
+            <div className="rounded-md border border-dashed border-border bg-surface/40 p-6 text-center text-[13px] text-muted-foreground">
+                Нет проектов
+            </div>
+        )
+    }
+
+    // Count scenarios per project for the chip badges in project tabs.
+    const counts = new Map<string, number>()
+    for (const p of projects) counts.set(p.id, 0)
+    for (const s of scenarios) {
+        if (s.projectId) counts.set(s.projectId, (counts.get(s.projectId) ?? 0) + 1)
+    }
+
+    return (
+        <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+            {/* PROJECT TABS — chip-style, one active at a time */}
+            <div className="flex flex-wrap gap-2">
+                {projects.map(p => {
+                    const active = p.id === activeProjectId
                     return (
-                        <section key={proj.id} className="flex flex-col gap-3">
-                            <div className="flex items-baseline justify-between">
-                                <div>
-                                    <h2 className="text-[16px] font-semibold text-foreground">{proj.name}</h2>
-                                    {proj.description && (
-                                        <p className="text-[12px] text-muted-foreground mt-0.5">{proj.description}</p>
-                                    )}
-                                </div>
-                                {canEdit && editor.kind === 'closed' && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setEditor({ kind: 'create', projectId: proj.id })}
-                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface"
-                                    >
-                                        <Plus className="h-3 w-3" />
-                                        Сценарий
-                                    </button>
-                                )}
-                            </div>
-
-                            {list.length === 0 ? (
-                                <div className="rounded-md border border-dashed border-border bg-surface/40 p-4 text-center text-[13px] text-muted-foreground">
-                                    В этом проекте пока нет сценариев
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-2">
-                                    {list.map((s) =>
-                                        editor.kind === 'edit' && editor.id === s.id ? (
-                                            <ScenarioEditor
-                                                key={s.id}
-                                                initial={s}
-                                                projects={projects}
-                                                onCancel={() => setEditor({ kind: 'closed' })}
-                                                onSaved={(updated) => {
-                                                    setScenarios(scenarios.map((x) => (x.id === updated.id ? updated : x)))
-                                                    setEditor({ kind: 'closed' })
-                                                }}
-                                                onDeleted={(id) => {
-                                                    setScenarios(scenarios.filter((x) => x.id !== id))
-                                                    setEditor({ kind: 'closed' })
-                                                }}
-                                            />
-                                        ) : (
-                                            <ScenarioCard
-                                                key={s.id}
-                                                scenario={s}
-                                                canEdit={canEdit}
-                                                onEdit={() => setEditor({ kind: 'edit', id: s.id })}
-                                            />
-                                        ),
-                                    )}
-                                </div>
-                            )}
-                        </section>
+                        <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setActiveProjectId(p.id)}
+                            className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                                active
+                                    ? 'bg-primary text-white'
+                                    : 'border border-border bg-card text-foreground hover:bg-surface'
+                            }`}
+                        >
+                            {p.name}
+                            <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
+                                active ? 'bg-white/20 text-white' : 'bg-surface text-muted-foreground'
+                            }`}>
+                                {counts.get(p.id) ?? 0}
+                            </span>
+                        </button>
                     )
                 })}
+            </div>
 
-                {orphans.length > 0 && (
-                    <section className="flex flex-col gap-3">
-                        <h2 className="text-[16px] font-semibold text-muted-foreground">Без проекта</h2>
-                        <div className="flex flex-col gap-2">
-                            {orphans.map((s) => (
+            {/* Active project: header + "+ Новый сценарий" + scenarios list */}
+            <section className="flex flex-col gap-3">
+                <div className="flex items-baseline justify-between gap-3">
+                    <div>
+                        <h2 className="text-[15px] font-semibold text-foreground">
+                            Сценарии проекта «{activeProject.name}»
+                        </h2>
+                        {activeProject.description && (
+                            <p className="mt-0.5 text-[12px] text-muted-foreground">{activeProject.description}</p>
+                        )}
+                    </div>
+                    {canEdit && editor.kind === 'closed' && (
+                        <button
+                            type="button"
+                            onClick={() => setEditor({ kind: 'create', projectId: activeProject.id })}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-[12px] font-medium text-white transition-colors hover:bg-primary-dark"
+                        >
+                            <Plus className="h-3 w-3" />
+                            Новый сценарий
+                        </button>
+                    )}
+                </div>
+
+                {editor.kind === 'create' && editor.projectId === activeProject.id && (
+                    <ScenarioEditor
+                        initial={emptyScenario(editor.projectId)}
+                        projects={projects}
+                        onCancel={() => setEditor({ kind: 'closed' })}
+                        onSaved={(s) => {
+                            setScenarios([...scenarios, s])
+                            setEditor({ kind: 'closed' })
+                        }}
+                        isNew
+                    />
+                )}
+
+                {scenariosOfActive.length === 0 && editor.kind === 'closed' ? (
+                    <div className="rounded-md border border-dashed border-border bg-surface/40 p-6 text-center text-[13px] text-muted-foreground">
+                        В этом проекте пока нет сценариев
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        {scenariosOfActive.map((s) =>
+                            editor.kind === 'edit' && editor.id === s.id ? (
+                                <ScenarioEditor
+                                    key={s.id}
+                                    initial={s}
+                                    projects={projects}
+                                    onCancel={() => setEditor({ kind: 'closed' })}
+                                    onSaved={(updated) => {
+                                        setScenarios(scenarios.map((x) => (x.id === updated.id ? updated : x)))
+                                        setEditor({ kind: 'closed' })
+                                    }}
+                                    onDeleted={(id) => {
+                                        setScenarios(scenarios.filter((x) => x.id !== id))
+                                        setEditor({ kind: 'closed' })
+                                    }}
+                                />
+                            ) : (
                                 <ScenarioCard
                                     key={s.id}
                                     scenario={s}
                                     canEdit={canEdit}
                                     onEdit={() => setEditor({ kind: 'edit', id: s.id })}
                                 />
-                            ))}
-                        </div>
-                    </section>
+                            ),
+                        )}
+                    </div>
                 )}
-            </div>
+            </section>
         </div>
     )
 }
