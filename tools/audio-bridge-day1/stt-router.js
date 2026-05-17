@@ -1,58 +1,72 @@
 /**
  * STT provider selector.
  *
- * Picks the right SpeechToText backend at bridge boot time:
- *   1. Yandex SpeechKit gRPC streaming   — if YANDEX_API_KEY is set (best UX)
- *   2. OpenAI Whisper batch              — if OPENAI_API_KEY is set (fallback)
- *   3. Disabled                          — neither key present, bridge runs
- *                                          in audio-only mode (Day-1 behaviour)
+ * Picks the SpeechToText backend per call, based on the *current* runtime
+ * config (which can change between calls — admin saved a new key in the UI):
+ *   1. Yandex SpeechKit gRPC streaming   — Yandex API key + Folder ID present
+ *   2. OpenAI Whisper batch              — OpenAI key present (fallback)
+ *   3. Disabled                          — neither, bridge runs audio-only
  *
- * The CallSession code talks to one tiny session interface, common to both:
+ * The Yandex SDK is lazy-loaded once, the first time a Yandex-eligible
+ * session is requested — that way Day-1 boxes that never set Yandex keys
+ * never need `@yandex-cloud/nodejs-sdk` installed.
+ *
+ * Common per-session interface:
  *   session.start() : Promise<void>
  *   session.send(pcmBuffer : Buffer) : void
  *   session.stop() : void
- * Plus event callbacks {onPartial, onFinal, onError} passed via constructor.
+ * Plus {onPartial, onFinal, onError} callbacks in the constructor.
  */
 
-// Lazy-require yandex-stt: its @yandex-cloud/nodejs-sdk dependency may not
-// be installed on Day-1 boxes that only use Whisper fallback. We only pull
-// it in when a Yandex API key is actually present at boot.
+const runtime = require('./runtime-config')
 const { WhisperSttSession } = require('./whisper-stt')
 
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY
-const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+let YandexSttSessionCtor = null
+let yandexLoadAttempted = false
 
-let YandexSttSession = null
-if (YANDEX_API_KEY) {
+function loadYandexSdkLazy() {
+    if (yandexLoadAttempted) return
+    yandexLoadAttempted = true
     try {
-        YandexSttSession = require('./yandex-stt').YandexSttSession
+        YandexSttSessionCtor = require('./yandex-stt').YandexSttSession
     } catch (err) {
         console.error(`[stt-router] Yandex STT requested but SDK not installed: ${err.message}`)
         console.error('[stt-router] run: cd tools/audio-bridge-day1 && npm install @yandex-cloud/nodejs-sdk')
     }
 }
 
+function hasYandex() {
+    return !!runtime.getYandexApiKey()
+}
+
+function hasOpenAi() {
+    return !!runtime.getOpenAiKey()
+}
+
 function describeProvider() {
-    if (YandexSttSession) return 'yandex'
-    if (OPENAI_API_KEY) return 'whisper'
+    if (hasYandex()) return 'yandex'
+    if (hasOpenAi()) return 'whisper'
     return 'disabled'
 }
 
 /**
  * Create a new STT session for one call. Returns null if no provider is
- * available — callers should treat that as "audio-only mode" and skip
- * STT/LLM/TTS entirely (Day-1 behaviour).
+ * currently configured — callers should treat that as "audio-only mode"
+ * (PCM is recorded/logged, the dialog skipped).
  */
 function createSttSession({ onPartial, onFinal, onError } = {}) {
-    if (YandexSttSession) {
-        return new YandexSttSession({
-            apiKey: YANDEX_API_KEY,
-            folderId: YANDEX_FOLDER_ID,
-            onPartial, onFinal, onError,
-        })
+    if (hasYandex()) {
+        loadYandexSdkLazy()
+        if (YandexSttSessionCtor) {
+            return new YandexSttSessionCtor({
+                apiKey: runtime.getYandexApiKey(),
+                folderId: runtime.getYandexFolderId(),
+                onPartial, onFinal, onError,
+            })
+        }
+        // SDK missing — fall through to Whisper if available.
     }
-    if (OPENAI_API_KEY) {
+    if (hasOpenAi()) {
         return new WhisperSttSession({ onPartial, onFinal, onError })
     }
     return null
@@ -61,5 +75,5 @@ function createSttSession({ onPartial, onFinal, onError } = {}) {
 module.exports = {
     createSttSession,
     describeProvider,
-    enabled: !!YandexSttSession || !!OPENAI_API_KEY,
+    enabled: () => hasYandex() || hasOpenAi(),
 }

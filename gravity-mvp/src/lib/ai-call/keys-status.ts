@@ -1,75 +1,62 @@
 /**
- * Read-only access to AI-call API key configuration.
+ * Read-only access to AI-call API key configuration status, served to the
+ * settings UI.
  *
- * Secrets live in process.env — never in DB, never in client bundle. This
- * module returns only enough metadata for the settings UI to show a status
- * ("настроено" / "не настроено") and the last 4 characters of each key, so
- * the user can verify which key is loaded without exposing the secret.
+ * History: in the previous PR (#7) secrets lived in process.env. As of
+ * this PR they live in the AiProviderSetting DB table (encrypted), with
+ * .env kept only as a dev fallback. This module is the thin adapter that
+ * shapes the DB rows into the JSON the settings page already consumes.
  *
- * Why no setter / DB persistence:
- *   1. .env is the single source of truth across processes (CRM dev,
- *      audio bridge, future workers). Storing keys in DB would create a
- *      consistency problem.
- *   2. Encrypting + persisting secrets requires a KMS or master key, which
- *      is out of scope for MVP.
- *   3. Restarting the dev server to pick up a new key is acceptable for
- *      an internal CRM with a few admin users.
+ * Never returns plaintext secrets — only "configured / not configured",
+ * last-4 mask, and the source ('db' | 'env' | 'none') for UX.
  */
 
-export type KeyStatus =
-    | { configured: true; mask: string; envName: string }
-    | { configured: false; mask: null; envName: string }
+import { getStatus, type SettingStatus, type Provider, type Key } from './provider-settings'
+
+export type KeyStatus = SettingStatus & { envName: string }
 
 export interface AiCallKeysStatus {
     openai: KeyStatus
     yandexSpeechkit: KeyStatus
-    yandexFolderId: {
-        configured: boolean
-        // Folder ID is not a secret — full value is safe to expose.
-        value: string | null
-        envName: string
-    }
-    mockMode: {
-        enabled: boolean
-        envName: string
-    }
+    yandexFolderId: KeyStatus
+    mockMode: KeyStatus & { enabled: boolean }
 }
 
-/**
- * Mask a secret so the last 4 chars remain visible. Returns null for empty.
- * Examples:
- *   "sk-proj-aBcDeFgHiJk" -> "•••• HiJk"
- *   "ABC"                  -> "•••• ABC"   (whole value if shorter than 4)
- */
-export function maskSecret(value: string | undefined | null): string | null {
-    if (!value) return null
-    const trimmed = value.trim()
-    if (!trimmed) return null
-    const tail = trimmed.length >= 4 ? trimmed.slice(-4) : trimmed
-    return `•••• ${tail}`
+const ENV_NAMES: Record<`${Provider}/${Key}`, string> = {
+    'openai/apiKey': 'OPENAI_API_KEY',
+    'openai/folderId': 'N/A',
+    'openai/mockMode': 'N/A',
+    'yandex/apiKey': 'YANDEX_API_KEY',
+    'yandex/folderId': 'YANDEX_FOLDER_ID',
+    'yandex/mockMode': 'N/A',
+    'system/apiKey': 'N/A',
+    'system/folderId': 'N/A',
+    'system/mockMode': 'AI_CALL_MOCK_MODE',
 }
 
-export function getAiCallKeysStatus(): AiCallKeysStatus {
-    const openaiRaw = process.env.OPENAI_API_KEY
-    const yandexRaw = process.env.YANDEX_API_KEY
-    const folderRaw = process.env.YANDEX_FOLDER_ID
-    const mockRaw = process.env.AI_CALL_MOCK_MODE
+async function statusFor(provider: Provider, key: Key): Promise<KeyStatus> {
+    const status = await getStatus(provider, key)
+    return { ...status, envName: ENV_NAMES[`${provider}/${key}`] }
+}
 
+export async function getAiCallKeysStatus(): Promise<AiCallKeysStatus> {
+    const [openai, yandexSpeechkit, yandexFolderId, mockMode] = await Promise.all([
+        statusFor('openai', 'apiKey'),
+        statusFor('yandex', 'apiKey'),
+        statusFor('yandex', 'folderId'),
+        statusFor('system', 'mockMode'),
+    ])
     return {
-        openai: openaiRaw
-            ? { configured: true, mask: maskSecret(openaiRaw)!, envName: 'OPENAI_API_KEY' }
-            : { configured: false, mask: null, envName: 'OPENAI_API_KEY' },
-        yandexSpeechkit: yandexRaw
-            ? { configured: true, mask: maskSecret(yandexRaw)!, envName: 'YANDEX_API_KEY' }
-            : { configured: false, mask: null, envName: 'YANDEX_API_KEY' },
-        yandexFolderId: {
-            configured: !!folderRaw?.trim(),
-            value: folderRaw?.trim() || null,
-            envName: 'YANDEX_FOLDER_ID',
-        },
-        mockMode: {
-            enabled: mockRaw === 'true',
-            envName: 'AI_CALL_MOCK_MODE',
-        },
+        openai,
+        yandexSpeechkit,
+        yandexFolderId,
+        // mock-mode is a boolean toggle, not a key — surface `enabled` for
+        // the UI but keep the `configured` field for symmetry with the
+        // other cards.
+        mockMode: { ...mockMode, enabled: mockMode.configured },
     }
 }
+
+// Legacy named export kept for older imports — re-exports the helper from
+// crypto so existing callers don't break.
+export { maskSecret } from './crypto'

@@ -1,27 +1,24 @@
 /**
  * Thin HTTP client for talking back to the CRM from the bridge.
  *
- *   resolveCallByUuid(fsUuid)
- *     GET  /api/ai-calls/sessions/by-fs-uuid/<fsUuid>
- *     → { callId, scenarioId, scenario, driverId, contactId }
- *     The bridge calls this on CHANNEL_PARK to load the right scenario.
- *
+ *   resolveCallByUuid(fsUuid)         GET /api/ai-calls/sessions/by-fs-uuid/<fsUuid>
  *   appendTranscript(callId, role, text)
- *     POST /api/ai-calls/sessions/<callId>/transcript-item
- *     Fire-and-forget; failures are logged but don't break the call.
+ *                                     POST /api/ai-calls/sessions/<callId>/transcript-item
+ *   finalize(callId, payload)         POST /api/ai-calls/sessions/<callId>/finalize
+ *   fetchKeys()                       GET /api/internal/ai-call-keys
  *
- *   finalize(callId, payload)
- *     POST /api/ai-calls/sessions/<callId>/finalize
- *     Bridge sends the final result (qualification + manager task + leadData
- *     + full transcript). CRM writes Call.aiAnalysis / aiSummary /
- *     aiSessionStatus and creates the Task (if asked).
+ * fetchKeys returns the plaintext provider keys that admins configured via
+ * the CRM UI. Cached for 60 s in-process so the bridge doesn't hit Postgres
+ * via Next on every PCM frame; invalidateKeysCache() refreshes immediately
+ * (useful right after CHANNEL_PARK).
  *
  * All endpoints are unauthenticated for MVP. When CRM grows real auth we'll
- * gate them by a shared secret (BRIDGE_SHARED_TOKEN).
+ * gate them by a shared secret (BRIDGE_SHARED_TOKEN — already wired here).
  */
 
 const CRM_BASE_URL = process.env.CRM_BASE_URL ?? 'http://127.0.0.1:3002'
 const BRIDGE_SHARED_TOKEN = process.env.BRIDGE_SHARED_TOKEN
+const KEYS_CACHE_TTL_MS = Number(process.env.BRIDGE_KEYS_CACHE_TTL_MS ?? 60_000)
 
 function authHeaders() {
     return BRIDGE_SHARED_TOKEN ? { 'X-Bridge-Token': BRIDGE_SHARED_TOKEN } : {}
@@ -63,9 +60,47 @@ async function finalize(callId, payload) {
     return res.json().catch(() => ({}))
 }
 
+// ── Plaintext key cache, served from /api/internal/ai-call-keys ──────────────
+
+let keysCache = null  // { value, expiresAt }
+
+function emptyKeys() {
+    return { openaiApiKey: null, yandexApiKey: null, yandexFolderId: null, mockMode: false }
+}
+
+async function fetchKeys() {
+    const now = Date.now()
+    if (keysCache && keysCache.expiresAt > now) return keysCache.value
+    try {
+        const res = await fetch(`${CRM_BASE_URL}/api/internal/ai-call-keys`, {
+            headers: { ...authHeaders() },
+        })
+        if (!res.ok) {
+            console.error(`[crm] fetchKeys HTTP ${res.status}`)
+            // Cache the failure briefly so we don't hammer a misconfigured
+            // endpoint, but with a short TTL so it recovers quickly.
+            keysCache = { value: emptyKeys(), expiresAt: now + 5_000 }
+            return keysCache.value
+        }
+        const data = await res.json()
+        keysCache = { value: data, expiresAt: now + KEYS_CACHE_TTL_MS }
+        return data
+    } catch (err) {
+        console.error(`[crm] fetchKeys error: ${err.message}`)
+        keysCache = { value: emptyKeys(), expiresAt: now + 5_000 }
+        return keysCache.value
+    }
+}
+
+function invalidateKeysCache() {
+    keysCache = null
+}
+
 module.exports = {
     resolveCallByUuid,
     appendTranscript,
     finalize,
+    fetchKeys,
+    invalidateKeysCache,
     enabled: true, // CRM is always reachable in this deployment model
 }

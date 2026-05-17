@@ -90,13 +90,13 @@ class CallSession {
         // Build system prompt from scenario, push as the very first message.
         this.messages.push({
             role: 'system',
-            content: llm.enabled
+            content: llm.enabled()
                 ? llm.buildSystemMessage(this.scenario)
                 : 'STUB — no LLM',
         })
 
         // Initialise STT session if a provider is available.
-        if (stt.enabled) {
+        if (stt.enabled()) {
             this.sttSession = stt.createSttSession({
                 onPartial: () => {}, // ignore partials at orchestrator level
                 onFinal: text => this._onSttFinal(text),
@@ -112,7 +112,7 @@ class CallSession {
 
         // First greeting — only if LLM is enabled. Otherwise stay silent
         // and just record the call (Day-1 behaviour).
-        if (llm.enabled && tts.enabled) {
+        if (llm.enabled() && tts.enabled()) {
             this._setState('greeting')
             await this._doTurn(/* asGreeting */ true)
         } else {
@@ -139,7 +139,7 @@ class CallSession {
         const text = this.pendingUserText
         this.pendingUserText = ''
         this.messages.push({ role: 'user', content: text })
-        if (llm.enabled) await this._doTurn(false)
+        if (llm.enabled()) await this._doTurn(false)
     }
 
     /**
@@ -261,7 +261,7 @@ class CallSession {
     }
 
     async _speak(text) {
-        if (!tts.enabled || !this.broadcastWav) return
+        if (!tts.enabled() || !this.broadcastWav) return
         this._setState('speaking')
         try {
             const wav = await tts.synthesize(text)

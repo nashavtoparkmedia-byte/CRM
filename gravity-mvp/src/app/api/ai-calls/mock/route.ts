@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Prisma client types
+   for AI-call models may not be regenerated on every dev box. */
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { opsLog } from '@/lib/opsLog'
 import { getMockPayload, pickRandomVariant, type MockVariant } from '@/lib/ai-call/mock-payload'
+import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,9 +26,14 @@ export const dynamic = 'force-dynamic'
  *   variant: 'qualified' | 'not_qualified' | 'unclear' | 'random'
  */
 export async function POST(req: NextRequest) {
-    if (process.env.AI_CALL_MOCK_MODE !== 'true') {
+    // Mock-mode toggle now lives in DB (AiProviderSetting where provider=system,
+    // key=mockMode), with .env AI_CALL_MOCK_MODE as a dev fallback.
+    if (!(await isMockModeEnabled())) {
         return NextResponse.json(
-            { error: 'mock_mode_disabled', hint: 'set AI_CALL_MOCK_MODE=true' },
+            {
+                error: 'mock_mode_disabled',
+                hint: 'turn on Mock-режим on the API keys settings page',
+            },
             { status: 403 },
         )
     }

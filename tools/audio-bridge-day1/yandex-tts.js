@@ -12,8 +12,8 @@
  * Disabled when YANDEX_API_KEY is not set.
  */
 
-const YANDEX_API_KEY = process.env.YANDEX_API_KEY
-const YANDEX_FOLDER_ID = process.env.YANDEX_FOLDER_ID
+const runtime = require('./runtime-config')
+
 const YANDEX_TTS_VOICE = process.env.YANDEX_TTS_VOICE ?? 'jane'
 const YANDEX_TTS_LANG = process.env.YANDEX_TTS_LANG ?? 'ru-RU'
 const YANDEX_TTS_EMOTION = process.env.YANDEX_TTS_EMOTION ?? 'neutral'
@@ -43,8 +43,10 @@ function wavHeader(pcmByteLen, sampleRate = 8000) {
  * understand natively.
  */
 async function synthesize(text) {
-    if (!YANDEX_API_KEY) throw new Error('YANDEX_API_KEY is not set')
-    if (!YANDEX_FOLDER_ID) throw new Error('YANDEX_FOLDER_ID is required for SpeechKit TTS')
+    const apiKey = runtime.getYandexApiKey()
+    const folderId = runtime.getYandexFolderId()
+    if (!apiKey) throw new Error('Yandex API key is not configured')
+    if (!folderId) throw new Error('Yandex Folder ID is required for SpeechKit TTS')
 
     const params = new URLSearchParams({
         text,
@@ -53,7 +55,7 @@ async function synthesize(text) {
         emotion: YANDEX_TTS_EMOTION,
         format: 'lpcm',
         sampleRateHertz: '8000',
-        folderId: YANDEX_FOLDER_ID,
+        folderId,
     })
 
     const ac = new AbortController()
@@ -62,7 +64,7 @@ async function synthesize(text) {
         const res = await fetch('https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize', {
             method: 'POST',
             headers: {
-                Authorization: `Api-Key ${YANDEX_API_KEY}`,
+                Authorization: `Api-Key ${apiKey}`,
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
             body: params,
@@ -81,5 +83,5 @@ async function synthesize(text) {
 
 module.exports = {
     synthesize,
-    enabled: !!YANDEX_API_KEY && !!YANDEX_FOLDER_ID,
+    enabled: () => !!runtime.getYandexApiKey() && !!runtime.getYandexFolderId(),
 }

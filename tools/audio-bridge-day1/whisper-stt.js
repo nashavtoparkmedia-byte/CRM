@@ -15,7 +15,8 @@
  * yandex-stt.js instead.
  */
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const runtime = require('./runtime-config')
+
 const OPENAI_WHISPER_MODEL = process.env.OPENAI_WHISPER_MODEL ?? 'whisper-1'
 const WHISPER_CHUNK_MS = Number(process.env.WHISPER_CHUNK_MS ?? 3000)
 const WHISPER_LANG = process.env.WHISPER_LANG ?? 'ru'
@@ -64,7 +65,7 @@ class WhisperSttSession {
     }
 
     async start() {
-        if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set')
+        if (!runtime.getOpenAiKey()) throw new Error('OpenAI API key is not configured')
         this.stopped = false
         // Periodic flush — runs even with no audio (no-op on empty buffer).
         // We don't use silence detection in MVP; the timer is the cadence.
@@ -133,7 +134,7 @@ class WhisperSttSession {
             const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
                 method: 'POST',
                 headers: {
-                    Authorization: `Bearer ${OPENAI_API_KEY}`,
+                    Authorization: `Bearer ${runtime.getOpenAiKey()}`,
                     'Content-Type': `multipart/form-data; boundary=${boundary}`,
                     'Content-Length': body.length.toString(),
                 },
@@ -153,5 +154,5 @@ class WhisperSttSession {
 
 module.exports = {
     WhisperSttSession,
-    enabled: !!OPENAI_API_KEY,
+    enabled: () => !!runtime.getOpenAiKey(),
 }

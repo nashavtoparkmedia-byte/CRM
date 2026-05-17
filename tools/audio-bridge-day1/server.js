@@ -35,6 +35,7 @@ const stt = require('./stt-router')
 const tts = require('./tts-router')
 const llm = require('./llm-client')
 const crm = require('./crm-client')
+const runtime = require('./runtime-config')
 const { CallSession } = require('./call-session')
 
 // Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
@@ -111,9 +112,12 @@ const httpServer = http.createServer((req, res) => {
 
 httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`[http] listening on :${PORT}`)
-    console.log(`[stt] ${stt.enabled ? `enabled (${stt.describeProvider()})` : 'DISABLED — set YANDEX_API_KEY or OPENAI_API_KEY'}`)
-    console.log(`[tts] ${tts.enabled ? `enabled (${tts.describeProvider()})` : 'DISABLED — set YANDEX_API_KEY or OPENAI_API_KEY'}`)
-    console.log(`[llm] ${llm.enabled ? 'enabled (OpenAI Chat)' : 'DISABLED — set OPENAI_API_KEY'}`)
+    // Note: providers can become enabled later when admins save keys via the
+    // CRM UI — these booleans reflect only the .env state at boot. The
+    // per-call STT/LLM/TTS dispatch re-evaluates on every session start.
+    console.log(`[stt] boot: ${stt.enabled() ? `enabled (${stt.describeProvider()})` : 'DISABLED — configure key in CRM settings'}`)
+    console.log(`[tts] boot: ${tts.enabled() ? `enabled (${tts.describeProvider()})` : 'DISABLED — configure key in CRM settings'}`)
+    console.log(`[llm] boot: ${llm.enabled() ? 'enabled (OpenAI Chat)' : 'DISABLED — configure OpenAI key in CRM settings'}`)
 })
 
 // ── WebSocket server: receives PCM from mod_audio_fork ─────────────────────────
@@ -276,6 +280,19 @@ function eslApi(command, timeoutMs = 5000) {
 
 async function ensureSessionForCall(callUuid) {
     if (sessions.has(callUuid)) return sessions.get(callUuid)
+
+    // Refresh provider keys from CRM (DB-backed). The fetch is cached
+    // 60 s in crm-client, so back-to-back calls share one DB hit. The
+    // moment an admin saves a new key via the UI, the next call picks
+    // it up automatically.
+    try {
+        const keys = await crm.fetchKeys()
+        runtime.setKeys(keys)
+    } catch (err) {
+        console.error(`[session] runtime key refresh failed: ${err.message}`)
+        // Non-fatal — fall back to whatever runtime + .env already had.
+    }
+
     let resolved
     try {
         resolved = await crm.resolveCallByUuid(callUuid)

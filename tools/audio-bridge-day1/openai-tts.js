@@ -16,7 +16,8 @@
  *     adding a resampler dep.
  */
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY
+const runtime = require('./runtime-config')
+
 const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL ?? 'tts-1'
 const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE ?? 'alloy'
 const OPENAI_TTS_TIMEOUT_MS = Number(process.env.OPENAI_TTS_TIMEOUT_MS ?? 15000)
@@ -58,7 +59,8 @@ function downsample24To8(pcm24k) {
 }
 
 async function synthesize(text) {
-    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not set')
+    const apiKey = runtime.getOpenAiKey()
+    if (!apiKey) throw new Error('OpenAI API key is not configured')
 
     const ac = new AbortController()
     const timer = setTimeout(() => ac.abort(), OPENAI_TTS_TIMEOUT_MS)
@@ -67,7 +69,7 @@ async function synthesize(text) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${OPENAI_API_KEY}`,
+                Authorization: `Bearer ${apiKey}`,
             },
             body: JSON.stringify({
                 model: OPENAI_TTS_MODEL,
@@ -91,5 +93,5 @@ async function synthesize(text) {
 
 module.exports = {
     synthesize,
-    enabled: !!OPENAI_API_KEY,
+    enabled: () => !!runtime.getOpenAiKey(),
 }
