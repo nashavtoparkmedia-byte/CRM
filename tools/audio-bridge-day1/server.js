@@ -23,6 +23,11 @@
  *   GET  /test-break/:uuid   — uuid_break <uuid>
  */
 
+// Install undici global proxy dispatcher BEFORE any module that may
+// issue an outbound fetch is required. OpenAI / Yandex providers go
+// through this on geo-blocked networks (RU). Configure via HTTPS_PROXY.
+require('./init-proxy').initProxy()
+
 const http = require('http')
 const fs = require('fs')
 const path = require('path')

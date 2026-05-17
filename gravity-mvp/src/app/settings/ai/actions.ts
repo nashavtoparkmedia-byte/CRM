@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- file uses Prisma
+   $queryRaw which returns any[]; pragmatic over strict here. */
 'use server'
 
 import { prisma } from '@/lib/prisma'
@@ -43,7 +45,11 @@ export async function saveAiConfig(data: Record<string, any>) {
 }
 
 export async function testAiConnection(provider: string, apiKey: string, model: string) {
-    // Минимальный тест — попытка обратиться к API
+    // Минимальный тест — попытка обратиться к API провайдера. Outbound
+    // fetch уже идёт через undici globalDispatcher (см.
+    // src/lib/ai-call/init-proxy.ts, импортируется из instrumentation.ts),
+    // поэтому если HTTPS_PROXY задан — запросы идут через VPN. Никаких
+    // специальных опций в fetch() добавлять не нужно.
     try {
         if (provider === 'anthropic') {
             const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -60,12 +66,38 @@ export async function testAiConnection(provider: string, apiKey: string, model: 
                 }),
             })
             if (res.status === 401) return { ok: false, error: 'Неверный API ключ' }
+            if (res.status === 403) return { ok: false, error: 'Anthropic вернул 403 (гео-блок). Задай HTTPS_PROXY в .env и перезапусти dev.' }
             if (res.status === 404) return { ok: false, error: `Модель "${model}" не найдена` }
             if (!res.ok) {
                 const body = await res.json().catch(() => ({}))
                 return { ok: false, error: body?.error?.message || `HTTP ${res.status}` }
             }
-            // Обновляем статус в БД
+            await saveAiConfig({ connectionStatus: 'ok', lastConnectionCheckAt: new Date() })
+            return { ok: true }
+        }
+        if (provider === 'openai') {
+            // Лёгкая проверка через GET /v1/models — не тратит токены,
+            // достаточно убедиться что ключ принят OpenAI. Сам model в
+            // тесте не дёргаем — лишний расход.
+            const res = await fetch('https://api.openai.com/v1/models', {
+                method: 'GET',
+                headers: { Authorization: `Bearer ${apiKey}` },
+            })
+            if (res.status === 401) return { ok: false, error: 'Неверный API ключ' }
+            if (res.status === 403) return { ok: false, error: 'OpenAI вернул 403 (гео-блок). Задай HTTPS_PROXY в .env и перезапусти dev.' }
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}))
+                return { ok: false, error: body?.error?.message || `HTTP ${res.status}` }
+            }
+            // Опционально проверяем, что выбранная модель доступна в этом
+            // аккаунте. Не валим тест если не нашли — просто предупреждаем.
+            try {
+                const data = await res.json()
+                const ids: string[] = Array.isArray(data?.data) ? data.data.map((m: any) => m.id) : []
+                if (model && ids.length > 0 && !ids.includes(model)) {
+                    return { ok: false, error: `Модель "${model}" не доступна в этом OpenAI аккаунте` }
+                }
+            } catch { /* models list parsing — best-effort, не валим */ }
             await saveAiConfig({ connectionStatus: 'ok', lastConnectionCheckAt: new Date() })
             return { ok: true }
         }

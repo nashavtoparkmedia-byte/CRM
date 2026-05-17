@@ -27,9 +27,10 @@ const CACHE_TTL_MS = 30_000
 
 export type Provider = 'openai' | 'yandex' | 'system'
 export type Key =
-    | 'apiKey'    // for openai, yandex
-    | 'folderId'  // for yandex
-    | 'mockMode'  // for system (boolean stored as 'true'/'false')
+    | 'apiKey'           // for openai, yandex
+    | 'folderId'         // for yandex
+    | 'mockMode'         // for system (boolean stored as 'true'/'false')
+    | 'activeProjectId'  // for system — which AiCallProject is "live" right now
 
 interface SettingRow {
     provider: string

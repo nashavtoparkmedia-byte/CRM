@@ -4,7 +4,7 @@ import {
     IdCard, Activity, Archive, Clock, UserCheck, AlertCircle,
     TrendingDown, Ban, Eye, MessageCircle, Bot, FileText,
     Timer, History, BarChart2, Phone, Smartphone, Key, CarFront, Link2,
-    Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles, KeyRound, BookOpen,
+    Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles, BookOpen,
 } from "lucide-react";
 
 export type NavigationItem = {
@@ -166,12 +166,12 @@ export const DOMAINS: NavigationDomain[] = [
                 ]
             },
             {
-                // AI-обзвон вынесён в отдельную группу — раздел растёт
-                // (API ключи + проекты/сценарии + инструкция), и держать его
-                // отдельно от обычных каналов-интеграций честнее.
+                // AI-обзвон — продуктовая группа. API ключи теперь живут
+                // внутри страницы «Проекты и сценарии» как вкладка, чтобы
+                // меньше шуметь в боковом меню. Прямой URL /ai-call-keys
+                // остался работать (legacy ссылки из инструкции).
                 title: "AI-обзвон",
                 items: [
-                    { label: "API ключи", href: "/settings/integrations/ai-call-keys", icon: KeyRound, sectionKey: "ai_call_keys" },
                     { label: "Проекты и сценарии", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
                     { label: "Инструкция", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
                 ]

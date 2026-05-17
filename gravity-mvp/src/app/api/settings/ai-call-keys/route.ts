@@ -113,6 +113,6 @@ export async function DELETE(req: NextRequest) {
 function isValidPair(provider: Provider, key: Key): boolean {
     if (provider === 'openai' && key === 'apiKey') return true
     if (provider === 'yandex' && (key === 'apiKey' || key === 'folderId')) return true
-    if (provider === 'system' && key === 'mockMode') return true
+    if (provider === 'system' && (key === 'mockMode' || key === 'activeProjectId')) return true
     return false
 }

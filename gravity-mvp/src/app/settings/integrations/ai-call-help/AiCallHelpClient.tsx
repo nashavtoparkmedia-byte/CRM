@@ -21,7 +21,7 @@ export default function AiCallHelpClient() {
                 <div className="flex-1">
                     <h1 className="text-[20px] font-semibold leading-tight text-foreground">Инструкция по AI-обзвону</h1>
                     <p className="text-[13px] text-muted-foreground">
-                        Черновая справка. Финальная документация появится позже, когда будет подключён живой голосовой ассистент.
+                        Справочник. Подробности по шагам — ниже.
                     </p>
                 </div>
             </header>
@@ -32,8 +32,52 @@ export default function AiCallHelpClient() {
                 <TabButton active={tab === 'admin'} onClick={() => setTab('admin')} icon={<Wrench className="h-4 w-4" />} label="Для администратора" />
             </div>
 
+            {/* Quick-jump nav — let admins / managers go straight to the
+                right step without scrolling. Built from per-tab anchor maps
+                below. Cross-page shortcuts at the end. */}
+            <QuickNav tab={tab} />
+
             {tab === 'manager' ? <ManagerHelp /> : <AdminHelp />}
         </div>
+    )
+}
+
+const MANAGER_ANCHORS: Array<{ id: string; label: string }> = [
+    { id: 'm-start', label: 'Запустить звонок' },
+    { id: 'm-result', label: 'Где результат' },
+    { id: 'm-quality', label: 'Качество лида' },
+    { id: 'm-next', label: 'Что делать дальше' },
+    { id: 'm-history', label: 'История звонков' },
+]
+
+const ADMIN_ANCHORS: Array<{ id: string; label: string }> = [
+    { id: 'a-enable', label: 'Включить' },
+    { id: 'a-keys', label: 'API ключи' },
+    { id: 'a-scenarios', label: 'Проекты и сценарии' },
+    { id: 'a-verify', label: 'Проверить' },
+    { id: 'a-troubleshoot', label: 'Если не работает' },
+]
+
+function QuickNav({ tab }: { tab: Tab }) {
+    const anchors = tab === 'manager' ? MANAGER_ANCHORS : ADMIN_ANCHORS
+    return (
+        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-border bg-surface/40 px-3 py-2 text-[12px]">
+            <span className="text-muted-foreground">Перейти к:</span>
+            {anchors.map(a => (
+                <a key={a.id} href={`#${a.id}`} className="text-primary underline-offset-2 hover:underline">
+                    {a.label}
+                </a>
+            ))}
+            <span className="ml-auto inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+                Открыть:
+                <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">
+                    Проекты и сценарии
+                </Link>
+                <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">
+                    API ключи
+                </Link>
+            </span>
+        </nav>
     )
 }
 
@@ -63,7 +107,7 @@ function ManagerHelp() {
                 <h2 className="text-[15px] font-semibold text-foreground">Как использовать AI-обзвон</h2>
             </div>
 
-            <Step number={1} title="Запустить AI-звонок">
+            <Step number={1} id="m-start" title="Запустить AI-звонок">
                 <ol className="ml-5 list-decimal space-y-1 text-[13px]">
                     <li>Открой раздел <b>«Водители»</b></li>
                     <li>Выбери нужного водителя и открой его карточку</li>
@@ -78,7 +122,7 @@ function ManagerHelp() {
                 <p className="mt-2">Тебе ничего не нужно делать — звонок уже завершён, результат готов.</p>
             </Step>
 
-            <Step number={3} title="Где посмотреть результат">
+            <Step number={3} id="m-result" title="Где посмотреть результат">
                 <p>На странице звонка открой вкладку <b>«AI-анализ»</b>.</p>
                 <p className="mt-2">Там ты увидишь:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
@@ -90,7 +134,7 @@ function ManagerHelp() {
                 </ul>
             </Step>
 
-            <Step number={4} title="Как понять — хороший лид или нет">
+            <Step number={4} id="m-quality" title="Как понять — хороший лид или нет">
                 <p>Система показывает один из трёх вариантов:</p>
                 <ul className="mt-2 space-y-1.5 text-[13px]">
                     <li className="flex items-start gap-2">
@@ -108,7 +152,7 @@ function ManagerHelp() {
                 </ul>
             </Step>
 
-            <Step number={5} title="Что делать дальше">
+            <Step number={5} id="m-next" title="Что делать дальше">
                 <ul className="space-y-1 text-[13px]">
                     <DashItem>Если <b>есть задача</b> → открой её и выполни</DashItem>
                     <DashItem>Если <b>лид подходит</b> → свяжись с ним</DashItem>
@@ -116,7 +160,7 @@ function ManagerHelp() {
                 </ul>
             </Step>
 
-            <Step number={6} title="Где найти звонок позже">
+            <Step number={6} id="m-history" title="Где найти звонок позже">
                 <p>Открой <b>карточку водителя</b> → вкладка <b>«Звонки»</b>.</p>
                 <p className="mt-2 inline-flex flex-wrap items-center gap-1.5">
                     AI-звонки отмечены значком
@@ -150,7 +194,7 @@ function AdminHelp() {
                 <h2 className="text-[15px] font-semibold text-foreground">Настройка AI-обзвона</h2>
             </div>
 
-            <Step number={1} title="Как включить AI-обзвон">
+            <Step number={1} id="a-enable" title="Как включить AI-обзвон">
                 <p>Раздел живёт в <b>Настройки → AI-обзвон</b> — это группа в боковом меню под группой «Интеграции».</p>
                 <p className="mt-2">Чтобы AI-обзвон работал, нужно одно из двух:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
@@ -160,7 +204,7 @@ function AdminHelp() {
                 <p className="mt-2 text-[12px] text-muted-foreground">Сейчас работает только mock-режим: менеджеры тестируют интерфейс на готовых сценариях разговора.</p>
             </Step>
 
-            <Step number={2} title="Как настроить API ключи">
+            <Step number={2} id="a-keys" title="Как настроить API ключи">
                 <p>Открой <Link href="/settings/integrations/ai-call-keys" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><KeyRound className="h-3.5 w-3.5" />API ключи AI-обзвона<ArrowRight className="h-3 w-3" /></Link>. На странице 4 секции:</p>
                 <ul className="mt-2 space-y-1 text-[13px]">
                     <DashItem><b>OpenAI</b> — ключ для LLM-диалога и резервного STT/TTS</DashItem>
@@ -178,7 +222,7 @@ function AdminHelp() {
                 <p className="mt-2 text-[12px] text-muted-foreground">Ключи шифруются (AES-256-GCM) и хранятся в базе. В UI видна только маска последних 4 символов — полный секрет не возвращается даже администратору.</p>
             </Step>
 
-            <Step number={3} title="Как настроить проекты и сценарии">
+            <Step number={3} id="a-scenarios" title="Как настроить проекты и сценарии">
                 <p>Открой <Link href="/settings/integrations/ai-call-scenarios" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><FolderTree className="h-3.5 w-3.5" />Проекты и сценарии<ArrowRight className="h-3 w-3" /></Link>.</p>
                 <p className="mt-2"><b>Проект</b> — это группа сценариев под одну бизнес-цель. По умолчанию 3 проекта:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
@@ -196,7 +240,7 @@ function AdminHelp() {
                 <p className="mt-2 text-[12px] text-muted-foreground">Менеджер не выбирает сценарий вручную — система берёт нужный по контексту (новый лид → «Квалификация лида» и т. д.).</p>
             </Step>
 
-            <Step number={4} title="Как проверить что всё работает">
+            <Step number={4} id="a-verify" title="Как проверить что всё работает">
                 <p>Самый быстрый способ — сделать mock-звонок:</p>
                 <ol className="mt-1.5 ml-5 list-decimal space-y-1 text-[13px]">
                     <li>Открой раздел <b>«Водители»</b></li>
@@ -213,7 +257,7 @@ function AdminHelp() {
                 <p className="mt-2 text-[12px] text-muted-foreground">Если всё это видно — AI-обзвон работает.</p>
             </Step>
 
-            <Step number={5} title="Что делать, если не работает" icon={<AlertTriangle className="h-4 w-4 text-destructive" />}>
+            <Step number={5} id="a-troubleshoot" title="Что делать, если не работает" icon={<AlertTriangle className="h-4 w-4 text-destructive" />}>
                 <p><b>Нет кнопки «AI-звонок» в карточке водителя</b></p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>У водителя пустой телефон → возьми водителя с заполненным номером</DashItem>
@@ -241,14 +285,17 @@ function Step({
     title,
     children,
     icon,
+    id,
 }: {
     number?: number
     title: string
     children: React.ReactNode
     icon?: React.ReactNode
+    /** Anchor target for QuickNav links. scroll-mt-20 pads it under the header. */
+    id?: string
 }) {
     return (
-        <section className="rounded-md border border-border bg-card p-5">
+        <section id={id} className="scroll-mt-20 rounded-md border border-border bg-card p-5">
             <div className="mb-3 flex items-center gap-3">
                 {number !== undefined && (
                     <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-[13px] font-semibold text-primary">
