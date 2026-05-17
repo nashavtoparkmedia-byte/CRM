@@ -820,7 +820,47 @@ export default function AiControlCenterClient({
         }
     }
 
-    const ProviderTab = () => (
+    // Дефолты моделей и подсказки per provider. Когда админ переключает
+    // toggle Anthropic ↔ OpenAI, поля моделей должны меняться вместе —
+    // иначе классические Claude-имена остаются при OpenAI-ключе и проверка
+    // падает с «Модель "claude-haiku-4-5" не доступна в этом OpenAI аккаунте».
+    const ProviderTab = () => {
+    const PROVIDER_DEFAULTS: Record<string, { classification: string; response: string; keyPlaceholder: string }> = {
+        anthropic: {
+            classification: 'claude-haiku-4-5',
+            response: 'claude-sonnet-4-5',
+            keyPlaceholder: 'sk-ant-...',
+        },
+        openai: {
+            classification: 'gpt-4o-mini',
+            response: 'gpt-4o',
+            keyPlaceholder: 'sk-proj-...',
+        },
+    }
+
+    function switchProvider(newProvider: string) {
+        setConfig(c => {
+            const def = PROVIDER_DEFAULTS[newProvider]
+            if (!def) return { ...c, provider: newProvider }
+            // Только если текущие модели всё ещё дефолтные ДРУГОГО провайдера —
+            // подменяем на дефолты нового. Если админ уже руками задал имена,
+            // не трогаем (не хотим терять его выбор).
+            const allDefaults = Object.values(PROVIDER_DEFAULTS).flatMap(d => [d.classification, d.response])
+            const classIsKnownDefault = allDefaults.includes(c.classificationModel)
+            const responseIsKnownDefault = allDefaults.includes(c.responseModel)
+            return {
+                ...c,
+                provider: newProvider,
+                classificationModel: classIsKnownDefault ? def.classification : c.classificationModel,
+                responseModel: responseIsKnownDefault ? def.response : c.responseModel,
+            }
+        })
+        setTestStatus('idle')
+    }
+
+    const providerDef = PROVIDER_DEFAULTS[config.provider] ?? PROVIDER_DEFAULTS.anthropic
+
+    return (
         <div className="space-y-5">
             <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
                 <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Провайдер</h4>
@@ -829,7 +869,7 @@ export default function AiControlCenterClient({
                     {['anthropic', 'openai'].map(p => (
                         <button
                             key={p}
-                            onClick={() => setConfig(c => ({ ...c, provider: p }))}
+                            onClick={() => switchProvider(p)}
                             className={`px-4 h-[30px] rounded-lg text-[12px] font-semibold border transition-colors ${
                                 config.provider === p
                                     ? 'bg-[#3390EC] text-white border-[#3390EC]'
@@ -848,7 +888,7 @@ export default function AiControlCenterClient({
                             type="password"
                             value={apiKey}
                             onChange={e => { setApiKey(e.target.value); setTestStatus('idle') }}
-                            placeholder={config.apiKeyEncrypted ? '••••••••••••••••' : 'sk-ant-...'}
+                            placeholder={config.apiKeyEncrypted ? '••••••••••••••••' : providerDef.keyPlaceholder}
                             className="flex-1 h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
                         />
                         <button
@@ -877,18 +917,24 @@ export default function AiControlCenterClient({
                         <input
                             value={config.classificationModel}
                             onChange={e => setConfig(c => ({ ...c, classificationModel: e.target.value }))}
+                            placeholder={providerDef.classification}
                             className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
                         />
-                        <div className="text-[10px] text-gray-400 mt-0.5">Дешёвая — для intent</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                            Дешёвая — для intent. По умолчанию: <code className="font-mono">{providerDef.classification}</code>
+                        </div>
                     </div>
                     <div>
                         <label className="text-[12px] text-gray-500 block mb-1">Модель ответов</label>
                         <input
                             value={config.responseModel}
                             onChange={e => setConfig(c => ({ ...c, responseModel: e.target.value }))}
+                            placeholder={providerDef.response}
                             className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
                         />
-                        <div className="text-[10px] text-gray-400 mt-0.5">Для генерации ответов</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                            Для генерации ответов. По умолчанию: <code className="font-mono">{providerDef.response}</code>
+                        </div>
                     </div>
                 </div>
 
@@ -938,6 +984,7 @@ export default function AiControlCenterClient({
             </div>
         </div>
     )
+    }
 
     // ─── Вкладка: Правила ─────────────────────────────────────────
 
