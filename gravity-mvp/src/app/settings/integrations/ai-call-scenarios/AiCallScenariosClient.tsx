@@ -6,7 +6,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
     Sparkles, Save, AlertCircle, CheckCircle2, Loader2,
-    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree, BookOpen, Radio,
+    Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree, BookOpen,
 } from 'lucide-react'
 import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
 import type { AiCallKeysStatus } from '@/lib/ai-call/keys-status'
@@ -232,124 +232,92 @@ function ProjectsPane(props: {
     }
 
     const isViewingActive = viewingProject.id === activeProjectId
+    const activeProject = projects.find(p => p.id === activeProjectId) ?? null
 
     return (
-        <div className="flex flex-col gap-4 animate-in fade-in duration-200">
-            {/* «Сейчас работает» status bar.
-                - Если активный есть и совпадает с открытым — зелёная плашка
-                  «активен сейчас».
-                - Если активный есть, но открыт другой — нейтральная +
-                  кнопка «Сделать "<открытый>" активным».
-                - Если активного нет — ярко-жёлтое предупреждение + кнопка
-                  «Использовать "<открытый>" как активный».
-                Это единственное место для смены режима — больше его никуда
-                не дублируем, чтобы не путать. */}
-            {(() => {
-                const isViewingActive = !!viewingProject && viewingProject.id === activeProjectId
-                if (isViewingActive && viewingProject) {
-                    // Зелёная плашка с пульсирующей точкой — однозначно ясно,
-                    // что система работает на этом проекте.
-                    return (
-                        <div className="flex flex-wrap items-center gap-2 rounded-md border-2 border-green-500 bg-green-500/10 px-3 py-2.5 text-[13px]">
-                            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
-                                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
-                            </span>
-                            <span className="font-semibold text-green-700">В работе:</span>
-                            <span className="font-semibold text-foreground">{viewingProject.name}</span>
-                            <span className="text-[12px] text-muted-foreground">— по этому проекту запускаются AI-звонки</span>
-                        </div>
-                    )
-                }
-                if (activeProjectId) {
-                    // Активный есть, но открыт не он. Стек: текст сверху,
-                    // кнопка снизу — не наезжают друг на друга.
-                    const activeName = projects.find(p => p.id === activeProjectId)?.name ?? '(удалён)'
-                    return (
-                        <div className="flex flex-col gap-2 rounded-md border border-green-500/40 bg-green-500/5 px-3 py-2.5 text-[13px]">
-                            <div className="flex items-center gap-2">
-                                <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
-                                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white" />
-                                </span>
-                                <span className="font-semibold text-green-700">В работе:</span>
-                                <span className="font-semibold text-foreground">{activeName}</span>
-                            </div>
-                            {canEdit && viewingProject && (
-                                <button
-                                    type="button"
-                                    onClick={() => setAsActive(viewingProject.id)}
-                                    disabled={activating === viewingProject.id}
-                                    className="flex h-8 self-start items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                    {activating === viewingProject.id
-                                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                        : <Radio className="h-3.5 w-3.5" />}
-                                    Переключить на «{viewingProject.name}»
-                                </button>
-                            )}
-                        </div>
-                    )
-                }
-                // Активного нет вообще — ярко-жёлтое предупреждение, стек.
-                return (
-                    <div className="flex flex-col gap-2 rounded-md border-2 border-amber-400 bg-amber-50 px-3 py-2.5 text-[13px]">
-                        <div className="flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-600" />
-                            <span className="font-semibold text-amber-900">
-                                Активный проект не выбран
-                            </span>
-                            <span className="text-amber-900/80">— без этого система не запустит AI-звонок</span>
-                        </div>
-                        {canEdit && viewingProject && (
-                            <button
-                                type="button"
-                                onClick={() => setAsActive(viewingProject.id)}
-                                disabled={activating === viewingProject.id}
-                                className="flex h-8 self-start items-center gap-1.5 rounded-md bg-amber-600 px-3 text-[12px] font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {activating === viewingProject.id
-                                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                    : <Radio className="h-3.5 w-3.5" />}
-                                Использовать «{viewingProject.name}»
-                            </button>
-                        )}
-                    </div>
-                )
-            })()}
+        <div className="flex flex-col gap-5 animate-in fade-in duration-200">
+            {/* Linear/Stripe-style metadata line — subtle, one row, never
+                steals attention. Real status carrier is the chip itself
+                (filled green ring when active). */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
+                <div className="flex items-center gap-2 text-[13px]">
+                    <span className="text-muted-foreground">Активный сценарий обзвона</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    {activeProject ? (
+                        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                            {activeProject.name}
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            не выбран
+                        </span>
+                    )}
+                </div>
+                {canEdit && viewingProject && !isViewingActive && (
+                    <button
+                        type="button"
+                        onClick={() => setAsActive(viewingProject.id)}
+                        disabled={activating === viewingProject.id}
+                        className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {activating === viewingProject.id
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Использовать «{viewingProject.name}»
+                    </button>
+                )}
+            </div>
 
-            {/* PROJECT TABS — chip-style. Bold border + green dot when this
-                project is the one the system currently uses. */}
+            {/* PROJECT CHIPS — Linear-style segmented control. Active chip is
+                the SOLE carrier of «which project the system uses»:
+                  - filled green ring (border-green-500) when this is the
+                    system-active project AND it is being viewed
+                  - subtle green tint when active but not viewing
+                  - plain when neither
+                A small ✓ icon next to the name doubles down on it. */}
             <div className="flex flex-wrap gap-2">
                 {projects.map(p => {
                     const viewing = p.id === viewingProjectId
                     const isActive = p.id === activeProjectId
+                    const base = 'inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all'
+                    const style = (() => {
+                        if (viewing && isActive) {
+                            return 'bg-green-600 text-white shadow-sm'
+                        }
+                        if (viewing) {
+                            return 'bg-primary text-white shadow-sm'
+                        }
+                        if (isActive) {
+                            return 'border border-green-500/50 bg-green-50 text-green-900 hover:bg-green-100'
+                        }
+                        return 'border border-border bg-card text-foreground hover:bg-surface'
+                    })()
                     return (
                         <button
                             key={p.id}
                             type="button"
                             onClick={() => setViewingProjectId(p.id)}
-                            className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
-                                viewing
-                                    ? 'bg-primary text-white'
-                                    : isActive
-                                      ? 'border-2 border-green-500 bg-card text-foreground hover:bg-surface'
-                                      : 'border border-border bg-card text-foreground hover:bg-surface'
-                            }`}
-                            title={isActive ? 'Сейчас этот проект используется системой для AI-звонков' : undefined}
+                            className={`${base} ${style}`}
+                            title={isActive ? 'Активный сценарий обзвона' : undefined}
                         >
                             {isActive && (
-                                <span
+                                <CheckCircle2
                                     aria-hidden
-                                    className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${
-                                        viewing ? 'bg-white' : 'bg-green-500'
-                                    }`}
+                                    className={`h-3.5 w-3.5 ${viewing ? 'text-white' : 'text-green-600'}`}
                                 />
                             )}
                             {p.name}
-                            <span className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
-                                viewing ? 'bg-white/20 text-white' : 'bg-surface text-muted-foreground'
-                            }`}>
+                            <span
+                                className={`inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] ${
+                                    viewing
+                                        ? 'bg-white/20 text-white'
+                                        : isActive
+                                          ? 'bg-white/70 text-green-700'
+                                          : 'bg-surface text-muted-foreground'
+                                }`}
+                            >
                                 {counts.get(p.id) ?? 0}
                             </span>
                         </button>
@@ -369,8 +337,8 @@ function ProjectsPane(props: {
                                 Сценарии проекта «{viewingProject.name}»
                             </h2>
                             {isViewingActive && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-600">
-                                    <Radio className="h-3 w-3" />
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                                    <CheckCircle2 className="h-3 w-3" />
                                     активный
                                 </span>
                             )}
