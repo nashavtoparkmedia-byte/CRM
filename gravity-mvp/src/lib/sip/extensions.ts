@@ -19,6 +19,10 @@ export interface SipExtension {
 const EXTENSIONS: Record<string, SipExtension> = {
     u1: { extension: '101', password: process.env.MANAGER_101_PASSWORD ?? '' },
     u2: { extension: '102', password: process.env.MANAGER_102_PASSWORD ?? '' },
+    // Match the password configured in
+    // /usr/local/freeswitch/conf/directory/default/103.xml (the FS profile
+    // for this extension). On rotation update both — env here AND the xml.
+    u3: { extension: '103', password: process.env.MANAGER_103_PASSWORD ?? '' },
 }
 
 export function getSipExtensionForUser(userId: string): SipExtension | null {
