@@ -236,37 +236,22 @@ function ProjectsPane(props: {
 
     return (
         <div className="flex flex-col gap-5 animate-in fade-in duration-200">
-            {/* Linear/Stripe-style metadata line — subtle, one row, never
-                steals attention. Real status carrier is the chip itself
-                (filled green ring when active). */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-3">
-                <div className="flex items-center gap-2 text-[13px]">
-                    <span className="text-muted-foreground">Активный сценарий обзвона</span>
-                    <span className="text-muted-foreground/40">·</span>
-                    {activeProject ? (
-                        <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
-                            {activeProject.name}
-                        </span>
-                    ) : (
-                        <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            не выбран
-                        </span>
-                    )}
-                </div>
-                {canEdit && viewingProject && !isViewingActive && (
-                    <button
-                        type="button"
-                        onClick={() => setAsActive(viewingProject.id)}
-                        disabled={activating === viewingProject.id}
-                        className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        {activating === viewingProject.id
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Использовать «{viewingProject.name}»
-                    </button>
+            {/* Metadata line — read-only status. CTA для смены живёт в
+                карточке открытого проекта (Notion/Linear pattern: action
+                рядом с объектом, к которому относится). */}
+            <div className="flex items-center gap-2 border-b border-border pb-3 text-[13px]">
+                <span className="text-muted-foreground">Активный сценарий обзвона</span>
+                <span className="text-muted-foreground/40">·</span>
+                {activeProject ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-foreground">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                        {activeProject.name}
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-amber-700">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        не выбран
+                    </span>
                 )}
             </div>
 
@@ -358,6 +343,33 @@ function ProjectsPane(props: {
                         </button>
                     )}
                 </div>
+
+                {/* Activation banner — Stripe/Linear pattern: action lives
+                    next to the object it acts on. Sits between header and
+                    scenarios list, so admin parses the whole story top→
+                    bottom: «вот этот проект, он не активный, [кнопка]». */}
+                {canEdit && !isViewingActive && (
+                    <div className="flex flex-wrap items-center gap-3 rounded-md border border-dashed border-green-500/40 bg-green-50/50 px-3 py-2.5 text-[13px]">
+                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-green-600" />
+                        <div className="flex-1 min-w-0">
+                            <span className="font-medium text-foreground">Этот проект не активный.</span>{' '}
+                            <span className="text-muted-foreground">
+                                AI-звонки сейчас идут по «{activeProject?.name ?? 'не выбрано'}».
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setAsActive(viewingProject.id)}
+                            disabled={activating === viewingProject.id}
+                            className="flex h-8 flex-shrink-0 items-center gap-1.5 rounded-md bg-green-600 px-3 text-[12px] font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {activating === viewingProject.id
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <CheckCircle2 className="h-3.5 w-3.5" />}
+                            Сделать этот активным
+                        </button>
+                    </div>
+                )}
 
                 {editor.kind === 'create' && editor.projectId === viewingProject.id && (
                     <ScenarioEditor
