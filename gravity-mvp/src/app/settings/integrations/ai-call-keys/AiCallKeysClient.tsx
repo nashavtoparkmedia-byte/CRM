@@ -223,16 +223,15 @@ function KeyRow(props: {
 
     return (
         <section
-            // Native title для tooltip + hover-подсветка фона + ring справа,
-            // чтобы было сразу видно «активную строку».
-            title={hint}
+            // Inline-hint снизу — единственный канал подсказки. Native
+            // `title=` убрали, чтобы desktop-popup поверх окна не дублировал
+            // его и не закрывал кнопки.
             className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
         >
             <div className="flex items-center gap-3">
                 <span
                     aria-hidden
                     className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot.color}`}
-                    title={dot.label}
                 />
                 <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-baseline gap-2">
@@ -244,10 +243,11 @@ function KeyRow(props: {
                             </code>
                         )}
                     </div>
-                    {/* Hint visible on hover (inline expand) so admin не лезет
-                        читать native tooltip ради простого пояснения. */}
+                    {/* Inline expand при hover. max-h-40 чтобы трехстрочный
+                        текст «Mock-режим» влезал целиком (max-h-24 был
+                        слишком мал, текст обрезался). */}
                     {hint && (
-                        <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-24 group-hover:opacity-100">
+                        <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] leading-relaxed text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-40 group-hover:opacity-100">
                             {hint}
                         </div>
                     )}
@@ -387,18 +387,17 @@ function MockModeRow({
 
     return (
         <section
-            title={hint}
             className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
         >
             <div className="flex items-center gap-3">
-                <span aria-hidden className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot.color}`} title={dot.label} />
+                <span aria-hidden className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${dot.color}`} />
                 <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
                         <span className="text-[14px] font-medium text-foreground">Mock-режим</span>
                         <span className="text-[12px] text-muted-foreground">{dot.label}</span>
                     </div>
                     {hint && (
-                        <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-24 group-hover:opacity-100">
+                        <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] leading-relaxed text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-40 group-hover:opacity-100">
                             {hint}
                         </div>
                     )}
