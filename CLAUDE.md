@@ -132,6 +132,28 @@ callee, поэтому STT слышит собственный TTS бота ка
   работающими mono/pause, либо реализовать `stop`+`start` цикл (рвать
   WS соединение целиком).
 
+### Audio diagnostics — measurement harness (issue #23 baseline)
+
+Если возникает жалоба «робот звучит рвано / теряются буквы / micropauses»,
+**не идти в режим subjective listening loop**. В
+`tools/audio-bridge-day1/scripts/` лежит objective measurement infra —
+полный README там, шорт-список:
+
+| Хочется узнать | Команда |
+|---|---|
+| MOS / SNR одной пары WAV | `wsl python3 .../score_quality.py ref.wav deg.wav` |
+| Что юзер реально слышит в softphone | Browser snippet `webrtc_capture_auto.js` + `diag_upload_server.py` |
+| Сравнить N FS-конфигов | `node .../run_quality_matrix.js` (правит `CONFIGS`) |
+| RTP pacing FS-side | `bash .../capture_rtp_to_megafon.sh start/stop/analyze` + `analyze_rtp_pacing.js` |
+| Micro-gap pattern в любом WAV | `node .../analyze_local_wav.js <wav>` |
+| Bit-diff двух WAV (с alignment) | `node .../diff_wav_samples.js a.wav b.wav` |
+
+Issue #23 protocol установил **base MOS ~1.55** для текущего pipeline
+(PCMA + multiple resample stages — это codec-floor, не дефект).
+Изменения, которые **не двигают MOS относительно этого baseline'а на
+>0.1**, можно считать perceptually neutral. Возврат к "на слух
+лучше/хуже" без objective harness — не аргумент в этом проекте.
+
 ---
 
 ## Rules for Claude
