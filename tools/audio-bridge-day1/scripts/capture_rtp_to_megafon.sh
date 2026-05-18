@@ -12,13 +12,18 @@
 # active. SIP signalling is over a different transport (sip:sbc.megafon.ru
 # would need a separate filter), but we only care about RTP pacing here.
 set -e
-SBC_IP=193.201.229.35
-PCAP=/dev/shm/test-23/rtp.pcap
-PIDFILE=/dev/shm/test-23/tcpdump.pid
+# Megafon SBC signalling IP for the gateway named "megafon" in
+# tools/fs-config. Override SBC_IP if another trunk profile is being
+# diagnosed. PCAP_DIR is per-host scratch; defaults to /dev/shm
+# (WSL tmpfs) so writes don't hit DrvFs.
+SBC_IP="${SBC_IP:-193.201.229.35}"
+PCAP_DIR="${PCAP_DIR:-/dev/shm/test-23}"
+PCAP="$PCAP_DIR/rtp.pcap"
+PIDFILE="$PCAP_DIR/tcpdump.pid"
 
 case "${1:-}" in
     start)
-        mkdir -p /dev/shm/test-23
+        mkdir -p "$PCAP_DIR"
         rm -f "$PCAP" "$PIDFILE"
         # -B 4096 = 4 MB ring buffer, plenty for ~10 s of RTP @ 50 pps
         # -s 200 = snap 200 bytes per packet (RTP header is 12 B, payload

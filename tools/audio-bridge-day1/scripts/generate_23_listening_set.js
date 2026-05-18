@@ -19,9 +19,9 @@
 //
 // Run with: node scripts/generate_23_listening_set.js [phrase]
 //
-// Output: writes 3 WAVs to D:\Github\CRM\.claude\diag-23\<timestamp>\ and
-// prints absolute Windows paths so the user can open them directly in
-// Media Player / VLC.
+// Output dir defaults to `<repo>/.claude/diag-23/<timestamp>/` (resolved
+// relative to this script's location) so the user can open files
+// directly in Media Player / VLC. Override the parent via DIAG_OUT_DIR.
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
 require('../init-proxy').initProxy()
 
@@ -87,7 +87,13 @@ async function main() {
     if (!apiKey) throw new Error('OpenAI API key not configured')
 
     const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const outDir = path.join('D:\\Github\\CRM\\.claude', 'diag-23', ts)
+    // Default: repo root → .claude/diag-23/<ts>/. Override DIAG_OUT_DIR
+    // env to put it somewhere else (e.g. /tmp on a non-Windows host).
+    // Resolves relative to this script's location → portable across
+    // clones and worktrees.
+    const baseDir = process.env.DIAG_OUT_DIR
+        ?? path.resolve(__dirname, '..', '..', '..', '.claude', 'diag-23')
+    const outDir = path.join(baseDir, ts)
     fs.mkdirSync(outDir, { recursive: true })
 
     console.log(`\nphrase: ${phrase}`)

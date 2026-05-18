@@ -121,8 +121,18 @@ function findLatestUpload() {
     return r.stdout.trim()
 }
 
+// Translate the Windows path of this script to its WSL equivalent so
+// `wsl bash <path>` works without hardcoding a clone-specific prefix.
+//   D:\Github\…\score_browser_capture.sh → /mnt/d/Github/…/score_browser_capture.sh
+function toWslPath(winPath) {
+    const m = /^([a-zA-Z]):[\\/](.*)$/.exec(winPath)
+    if (!m) return winPath
+    return `/mnt/${m[1].toLowerCase()}/${m[2].replace(/\\/g, '/')}`
+}
+const SCORE_SH = toWslPath(path.join(__dirname, 'score_browser_capture.sh'))
+
 function scoreCapture(refWav, capWav) {
-    const r = callWslBash(`bash /mnt/d/Github/CRM/tools/audio-bridge-day1/scripts/score_browser_capture.sh ${refWav} ${capWav} 2>/dev/null`)
+    const r = callWslBash(`bash ${SCORE_SH} ${refWav} ${capWav} 2>/dev/null`)
     try { return JSON.parse(r.stdout) } catch { return { raw: r.stdout, stderr: r.stderr } }
 }
 

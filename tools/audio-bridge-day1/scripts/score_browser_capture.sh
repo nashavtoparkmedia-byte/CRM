@@ -21,11 +21,15 @@ REF="$1"
 CAP="$2"
 OUT_WAV="${CAP%.*}.converted-8k.wav"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# Prefer the WSL-native ffmpeg (sudo apt install ffmpeg). Falls back to
-# the Windows binary shipped with gravity-mvp's @ffmpeg-installer if not
-# available — but that .exe runs in Windows context and needs translated
-# paths, which is fragile.
-FFMPEG="${FFMPEG_BIN:-$(which ffmpeg 2>/dev/null || echo /mnt/d/Github/CRM/gravity-mvp/node_modules/@ffmpeg-installer/win32-x64/ffmpeg.exe)}"
+# WSL-native ffmpeg is required (sudo apt install ffmpeg). The Windows
+# .exe shipped with gravity-mvp's @ffmpeg-installer was tried as a
+# fallback but it runs in Windows context and needs translated paths,
+# which broke `bash` invocation in practice. Force the linux binary.
+FFMPEG="${FFMPEG_BIN:-$(which ffmpeg)}"
+if [ -z "$FFMPEG" ]; then
+    echo "ffmpeg not found on PATH — install: sudo apt install ffmpeg" >&2
+    exit 2
+fi
 
 # Detect: if input is already a wav at 8 kHz mono we can skip the ffmpeg step,
 # but the resample/format-normalise pass is cheap and idempotent, so always
