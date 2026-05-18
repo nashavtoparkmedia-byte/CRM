@@ -125,12 +125,29 @@ export async function POST(req: NextRequest) {
         ? process.env.AI_CALL_DIAL_STRING_TEMPLATE.replace('${number}', toNumber.replace(/\D/g, ''))
         : `sofia/gateway/megafon/${toNumber.replace(/\D/g, '')}`
 
+    // Record the AI-call leg the same way human outbound does so the
+    // recordingProcessor (triggered by CHANNEL_HANGUP_COMPLETE in EslClient)
+    // uploads an MP3 to MinIO. We need this artifact for issue #23
+    // diagnostics — analyze_call_audio.js compares the bridge-generated
+    // WAV (clean) against what FS actually rendered on the line (recorded
+    // here) to localise choppy playback between synth and trunk.
+    //
+    // RECORD_STEREO=true keeps caller / callee on separate channels —
+    // matches what human-outbound does and helps Whisper attribution if
+    // we ever wire AI-call transcription through the same pipeline.
+    const recPath = `/var/lib/freeswitch/recordings/${fsUuid}.wav`
     try {
         const fsResponse = await originateAiCall({
             fsUuid,
             dialString,
             extension: process.env.AI_CALL_PARK_EXT ?? '9999',
             callerIdName: 'AI Assistant',
+            vars: {
+                RECORD_STEREO: 'true',
+                recording_follow_transfer: 'true',
+                recording_file: recPath,
+                execute_on_answer: `'record_session ${recPath}'`,
+            },
         })
         opsLog('info', 'ai_call_originate_ok', { callId: call.id, fsUuid, fsResponse: fsResponse.slice(0, 200) })
     } catch (err) {
