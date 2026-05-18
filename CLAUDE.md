@@ -21,8 +21,15 @@ Internal CRM for managing drivers and analytics (NashAvtoParkMedia).
 
 Для запуска всего сразу: `start-all.bat` в корне проекта.
 
-### Команда "Запусти проект СРМ"
-При этой фразе запускать 4 фоновых процесса последовательно:
+### Команды запуска — три уровня
+
+Три ступени поднятия стека по нарастающей. Подбирай по тому, что человек
+просит.
+
+#### 1. «Запусти проект» / «Запусти проект СРМ»
+Базовая ступень — 4 фоновых процесса. **Без телефонии и без
+AudioBridge.** Этого достаточно для работы с лидами, скрапером, MAX и
+WhatsApp/Telegram.
 
 | Терминал | Папка | Команда |
 |----------|-------|---------|
@@ -31,47 +38,99 @@ Internal CRM for managing drivers and analytics (NashAvtoParkMedia).
 | 3 — Scraper Worker | `./yandex-fleet-scraper` | `npm run start:worker` |
 | 4 — MAX Scraper | `./max-web-scraper` | `node index.js` |
 
-Порты: CRM → 3002, Scraper API → смотреть в .env yandex-fleet-scraper.
+Порты: CRM → 3002, Scraper API → :3003, MAX Scraper → :3005.
 
-### Команда "Запусти проект полностью"
-Расширение базовой команды — поверх 4 процессов поднимает телефонию.
-Использовать после открытия ноута, чтобы зелёная точка телефонии в шапке
-CRM сразу зажглась.
+Перед стартом проверить `docker info`. Если Docker Desktop не запущен —
+сказать пользователю поднять иконкой в трее. `crm-redis` + `crm-minio`
+не критичны для UI, но скрапер упрётся в `ECONNREFUSED :6379`.
 
-Порядок строго такой (зависимости):
-1. **Проверить Docker Desktop** через `docker info`. Если демон недоступен —
-   попросить пользователя запустить Docker Desktop (значок в трее). Без него
-   `crm-redis` + `crm-minio` не работают, скрапер и AI-call воркеры
-   ломаются.
-2. **Дождаться Redis + MinIO** healthy: `docker exec crm-redis redis-cli ping`
-   → `PONG`, `curl http://127.0.0.1:9000/minio/health/live` → 200.
-   Compose запускает их с `restart: unless-stopped`, обычно подымаются сами
-   после старта Docker Desktop.
-3. **Запустить 4 базовых процесса** как в команде «Запусти проект СРМ».
-4. **AudioBridge:** `cd tools/audio-bridge-day1 && node server.js` в фоне.
-   Ждать `[http] listening on :3030`.
-5. **FreeSWITCH в WSL без sudo-промпта** через root-юзера:
-   `wsl -d Ubuntu-24.04 -u root /usr/local/freeswitch/bin/freeswitch -ncwait`.
-   FS форкается, родитель выходит, фоновый PID живёт в WSL. Команду удобнее
-   запускать через PowerShell-тул чтобы избежать Git-Bash mangling путей
-   `/usr/local/...` → `C:/Program Files/Git/usr/...`.
-6. **Smoke-проверка:**
-   - `fs_cli -x 'sofia status gateway megafon'` → `State REGED, Status UP`.
-   - В логе AudioBridge: `[esl-events] subscribed (auto-fork URL: ...)`.
-   - `curl -s http://127.0.0.1:3002/api/calls/sip-credentials` → 200 с
-     `wsUrl/sipUri/extension`. Если 403 `no_extension_for_user` — у юзера
-     нет mapping в `src/lib/sip/extensions.ts` (см. ниже).
-   - Сообщить пользователю: «обнови страницу CRM, иконка телефона
-     позеленеет». SipContext не делает автоматический retry после
-     первоначальной ошибки регистрации.
+#### 2. «Телефония» / «Зелёная точка телефонии» / «Телефония красная»
+**Не AudioBridge** — для зелёной точки в шапке нужен ТОЛЬКО FreeSWITCH.
+Иконка трекает WebRTC SIP-регистрацию браузерного софтфона к FS на :7080,
+к AudioBridge она отношения не имеет (тот только для AI-обзвона).
 
-**SIP extension mapping** для шапки CRM — `src/lib/sip/extensions.ts`:
-маппит `user.id` → SIP-расширение в FS. Сейчас покрыты `u1=101`, `u2=102`,
-`u3=103`. Если в `src/data/users.json` появится новый менеджер с `uN` —
-добавить запись в EXTENSIONS и создать `<N>.xml` в
-`/usr/local/freeswitch/conf/directory/default/` с тем же паролем, что в
-`.env` или хардкодом в xml. Без записи иконка телефонии у этого юзера
-останется красной.
+Команды:
+```
+# 1. Старт FS без sudo-промпта (через root-юзера WSL).
+#    Использовать PowerShell-тул чтобы Git-Bash не корёжил /usr/local/... пути.
+wsl -d Ubuntu-24.04 -u root /usr/local/freeswitch/bin/freeswitch -ncwait
+
+# 2. После каждого свежего старта FS догрузить mod_audio_fork —
+#    он НЕ в autoload.conf этой сборки. Без него AI-обзвон молчит,
+#    но обычная телефония работает.
+wsl -d Ubuntu-24.04 -u root /usr/local/freeswitch/bin/fs_cli -x "load mod_audio_fork"
+
+# 3. Проверить мегафон зарегистрирован:
+wsl -d Ubuntu-24.04 -u root /usr/local/freeswitch/bin/fs_cli -x "sofia status gateway megafon"
+#    Ожидаем: State REGED, Status UP
+```
+
+Дальше сказать пользователю: **«обнови страницу CRM (Ctrl+R)»**.
+SipContext в браузере не делает auto-retry — если на момент открытия
+страницы FS лежал, иконка останется красной до перезагрузки вкладки.
+
+WSL засыпает вместе с ноутом. После открытия крышки FS почти всегда
+надо стартовать заново — это норма, а не баг.
+
+#### 3. «Запусти проект полностью»
+Базовая ступень + телефония + AudioBridge (для AI-обзвона).
+
+Порядок:
+1. Базовая ступень (4 процесса) — пункт 1.
+2. Телефония — пункт 2 (FS + mod_audio_fork).
+3. AudioBridge: `cd tools/audio-bridge-day1 && node server.js`. Ждать
+   `[esl-events] subscribed (auto-fork URL: ws://192.168.0.102:3030/audio, ...)`.
+
+⚠️ **Сначала проверить рабочий tree:** если `git diff
+tools/audio-bridge-day1/server.js` показывает `uuid_audio_fork pause`
+вокруг `uuid_broadcast` — это сломанная Plan-B попытка, она убивает
+звонок (после pause медиа-bug не восстанавливается). Откатить ПЕРЕД
+стартом bridge:
+```
+git checkout tools/audio-bridge-day1/server.js tools/audio-bridge-day1/call-session.js
+```
+Или зафиксировать отдельным коммитом, если правки имеют смысл.
+
+**Force OpenAI STT + TTS.** В `tools/audio-bridge-day1/.env` должны
+быть **оба** env:
+```
+AI_CALL_STT_PROVIDER=whisper
+AI_CALL_TTS_PROVIDER=openai
+```
+Yandex SpeechKit в текущей сборке SDK падает на старте STT-сессии:
+`this.stream.on is not a function` — известная проблема (SDK ↔ runtime
+несовместимость в `@yandex-cloud/nodejs-sdk` / `recognizeStreaming()`).
+Без `AI_CALL_STT_PROVIDER` bridge выберет Yandex (он приоритетнее по
+умолчанию когда ключи есть в админке) и любой AI-звонок сразу
+крашит STT → лид слышит бот, бот слышит тишину.
+TTS-override симметричный: иначе как только Yandex API key появится
+в админке, TTS автомат переключится на Yandex (даже когда STT остался
+на Whisper), и пайплайн станет mismatched. Yandex SDK интеграция —
+отдельная follow-up задача после закрытия echo.
+
+### SIP extension mapping (шапка CRM)
+`src/lib/sip/extensions.ts` маппит `user.id` → SIP-расширение в FS.
+Сейчас: `u1=101`, `u2=102`, `u3=103`. Если в `src/data/users.json`
+появится новый менеджер `uN` — добавить запись EXTENSIONS и создать
+`<N>.xml` в `/usr/local/freeswitch/conf/directory/default/`. Без записи
+иконка останется красной с `403 no_extension_for_user` на
+`/api/calls/sip-credentials`.
+
+### Известный AudioBridge bug (echo)
+В режиме `mixed 8000` mod_audio_fork отдаёт STT смешанный поток caller +
+callee, поэтому STT слышит собственный TTS бота как «реплики лида».
+- `mono`/`stereo` mix-types в этой сборке mod_audio_fork **сломаны** —
+  возвращают `+OK Success`, но WebSocket не открывают (0 PCM frames).
+- `uuid_audio_fork pause/resume` тоже **сломаны** — pause возвращает
+  `+OK`, но bug продолжает стримить; resume не восстанавливает поток
+  (одно-направленный звонок после первого TTS).
+- Источник-гейт в `call-session.js onPcm()` (drop PCM при
+  `state==='speaking'` + `acceptSttAfter` window на длительность WAV +
+  grace) даёт **~10× уменьшение** эха, но не 0%. Это лучшее, что
+  удалось без пересборки mod_audio_fork.
+- Полное устранение требует либо пересобрать mod_audio_fork с
+  работающими mono/pause, либо реализовать `stop`+`start` цикл (рвать
+  WS соединение целиком).
 
 ---
 

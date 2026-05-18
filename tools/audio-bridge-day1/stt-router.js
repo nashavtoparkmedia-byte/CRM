@@ -36,6 +36,14 @@ function loadYandexSdkLazy() {
 }
 
 function hasYandex() {
+    // Allow operator to force a specific STT provider regardless of which
+    // keys are present. Useful when Yandex keys are configured in admin UI
+    // but the Yandex SDK in this build is broken (e.g.
+    // `this.stream.on is not a function` from a streaming API mismatch),
+    // and we want to stay on the Whisper fallback while debugging.
+    const force = (process.env.AI_CALL_STT_PROVIDER ?? '').toLowerCase()
+    if (force === 'whisper' || force === 'openai') return false
+    if (force === 'yandex') return !!runtime.getYandexApiKey()
     return !!runtime.getYandexApiKey()
 }
 

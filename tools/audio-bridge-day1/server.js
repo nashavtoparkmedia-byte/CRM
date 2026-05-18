@@ -181,9 +181,11 @@ wss.on('connection', (ws, req) => {
         frames++
         bytes += data.length
 
-        // Forward to the live CallSession orchestrator (if a session is bound).
-        // No session → bridge is in Day-1 audio-only mode; PCM frames are
-        // still counted/logged for diagnostics.
+        // mod_audio_fork "mixed" mode delivers a single mono channel — no
+        // deinterleaving needed. Forward to the live CallSession
+        // orchestrator (if a session is bound). No session → bridge is
+        // in Day-1 audio-only mode; PCM frames are still counted/logged
+        // for diagnostics.
         if (session) session.onPcm(data)
 
         // Throttle stats to ~1/sec, include slow-frame count for the window.
@@ -365,12 +367,44 @@ function defaultAudioDirForFs() {
 }
 const AUDIO_DIR_FS = defaultAudioDirForFs()
 
+// Parse a standard 44-byte RIFF/WAVE header and return playback duration
+// in milliseconds. Returns null if the buffer doesn't look like a WAV,
+// in which case the caller falls back to a conservative default.
+function wavDurationMs(wavBuffer) {
+    if (!wavBuffer || wavBuffer.length < 44) return null
+    if (wavBuffer.toString('ascii', 0, 4) !== 'RIFF') return null
+    if (wavBuffer.toString('ascii', 8, 12) !== 'WAVE') return null
+    // ByteRate at offset 28-31 (little-endian uint32). Equals
+    // sampleRate * channels * bitsPerSample / 8 → bytes of audio per second.
+    const byteRate = wavBuffer.readUInt32LE(28)
+    if (!byteRate) return null
+    const dataBytes = wavBuffer.length - 44
+    return Math.round((dataBytes / byteRate) * 1000)
+}
+
 // Save WAV to AUDIO_DIR with a unique name and trigger uuid_broadcast on the
 // aleg. We pass a FILESYSTEM path that FreeSWITCH can read directly (file:
 // or bare path), not an HTTP URL — mod_httapi in our setup honours the WSL
 // env's http_proxy and fails to fetch loopback URLs through Xray. The
 // shared DrvFs mount under /mnt/<drive>/... is plenty for inter-process
 // audio handoff and skips the cache/network stack entirely.
+//
+// Returns the estimated playback duration in ms (from the WAV header).
+// CallSession uses this to keep STT muted for the full TTS playback
+// window — uuid_broadcast is fire-and-forget on the FS side, so without
+// this estimate STT would un-mute halfway through playback and pick up
+// our own audio as "lead speech" (echo).
+//
+// Note on a tried-and-abandoned approach: we also tested wrapping the
+// broadcast with `uuid_audio_fork <uuid> pause` / `resume`. In this build
+// of mod_audio_fork both commands return `+OK Success` but neither has
+// the intended effect — pause does NOT stop PCM from streaming to the
+// bridge (we logged 45fps frames continuing for the full TTS playback),
+// and resume does NOT recover the stream after a fake-pause (zero PCM
+// frames for the remainder of the call, turning the call one-way). The
+// bug is in the mod itself; we mitigate the echo on the bridge side via
+// the source-gate in call-session.js _onSttFinal / onPcm — see CLAUDE.md
+// «Известный AudioBridge bug (echo)» for details and follow-up plans.
 async function broadcastWav(callUuid, wavBuffer) {
     const name = `tts-${callUuid.slice(0, 8)}-${crypto.randomBytes(4).toString('hex')}.wav`
     const fileWin = path.join(AUDIO_DIR, name)
@@ -378,18 +412,20 @@ async function broadcastWav(callUuid, wavBuffer) {
     await fs.promises.writeFile(fileWin, wavBuffer)
     const fileFs = `${AUDIO_DIR_FS}/${name}`
     const writeMs = Date.now() - t0
-    console.log(`[broadcast] ${callUuid} wrote ${wavBuffer.length} bytes in ${writeMs}ms → ${fileFs}`)
+    const durMs = wavDurationMs(wavBuffer)
+    console.log(`[broadcast] ${callUuid} wrote ${wavBuffer.length} bytes in ${writeMs}ms (duration≈${durMs}ms) → ${fileFs}`)
     try {
         const reply = await eslApi(`uuid_broadcast ${callUuid} ${fileFs} aleg`)
         console.log(`[broadcast] ${callUuid} fs reply: ${reply.trim().slice(0, 120)}`)
     } catch (err) {
         console.error(`[broadcast] ${callUuid} → ${name} failed: ${err.message}`)
-        return
+        return null
     }
     // Tidy up the WAV after a generous delay — playback is async on the FS
     // side so we can't delete immediately. 60 s covers anything plausible
     // for a single TTS phrase.
     setTimeout(() => fs.promises.unlink(fileWin).catch(() => {}), 60_000).unref()
+    return durMs
 }
 
 // ── ESL persistent event listener: auto-start audio_fork on CHANNEL_ANSWER ─────
@@ -415,6 +451,7 @@ function startEslEventListener() {
                 if (idx > 0) headers[line.substring(0, idx)] = line.substring(idx + 2)
             }
             const eventName = headers['Event-Name']
+
             // CHANNEL_ANSWER fires BEFORE dialplan exec — at that point
             // destination_number is still the SIP URI piece (e.g. "aeasqqif")
             // for `originate user/103 9999`. Use CHANNEL_PARK: after all
@@ -455,8 +492,28 @@ function startEslEventListener() {
                 .finally(() => {
                     // Pass call UUID via fork_meta so the WS handler can
                     // route incoming PCM to the right CallSession.
+                    //
+                    // mix-type "mixed". We tried "mono" and "stereo"
+                    // empirically — in this build of mod_audio_fork both
+                    // return `+OK Success` from FS but NEVER open the
+                    // WebSocket back to the bridge (0 frames over 30+
+                    // second calls). Only "mixed" actually streams PCM.
+                    //
+                    // Trade-off: "mixed" includes our own TTS audio in the
+                    // stream (caller + callee mixed), so STT would echo if
+                    // it consumed raw PCM. The echo guard lives in
+                    // call-session.js: PCM is gated at the source so STT
+                    // never receives our TTS audio while state ∈
+                    // {greeting, speaking}; on _speak completion an
+                    // `acceptSttAfter = now + playbackMs + grace` window
+                    // keeps STT muted for the full estimated TTS playback
+                    // plus a 2-s Whisper-finalization grace.
+                    // See CLAUDE.md «Известный AudioBridge bug (echo)» for
+                    // the wider context (mono/pause API also broken in
+                    // this fork, full elimination = follow-up).
                     const meta = `callUuid=${encodeURIComponent(uuid)}`
                     const forkUrl = `${FORK_WS_URL}?${meta}`
+                    // Those two guards approximate "STT only hears the lead".
                     const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} mixed 8000 ${meta}`
                     console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched})`)
                     eslApi(cmd)
