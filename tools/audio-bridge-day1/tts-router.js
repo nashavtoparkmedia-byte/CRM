@@ -14,15 +14,37 @@
 const yandex = require('./yandex-tts')
 const openai = require('./openai-tts')
 
+// Operator-level forced provider. Mirrors AI_CALL_STT_PROVIDER on the STT
+// side. Set to 'openai' to skip Yandex TTS while we're still in the
+// echo-fix phase (keeps the pipeline on the same provider the prior live
+// calls used, for apples-to-apples comparison). Auto-mode kicks in by
+// default when this env var is empty.
+function forcedProvider() {
+    return (process.env.AI_CALL_TTS_PROVIDER ?? '').toLowerCase()
+}
+
+function yandexEnabledEffective() {
+    const f = forcedProvider()
+    if (f === 'openai' || f === 'whisper') return false
+    if (f === 'yandex') return yandex.enabled()
+    return yandex.enabled()
+}
+
+function openaiEnabledEffective() {
+    const f = forcedProvider()
+    if (f === 'yandex') return false
+    return openai.enabled()
+}
+
 function describeProvider() {
-    if (yandex.enabled()) return 'yandex'
-    if (openai.enabled()) return 'openai'
+    if (yandexEnabledEffective()) return 'yandex'
+    if (openaiEnabledEffective()) return 'openai'
     return 'disabled'
 }
 
 async function synthesize(text) {
-    if (yandex.enabled()) return yandex.synthesize(text)
-    if (openai.enabled()) return openai.synthesize(text)
+    if (yandexEnabledEffective()) return yandex.synthesize(text)
+    if (openaiEnabledEffective()) return openai.synthesize(text)
     throw new Error('No TTS provider configured (save Yandex or OpenAI key in the settings UI)')
 }
 

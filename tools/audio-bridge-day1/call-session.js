@@ -74,11 +74,20 @@ class CallSession {
         // Debounce timer for "user paused → process turn"
         this.userPauseTimer = null
         this.USER_PAUSE_MS = Number(process.env.USER_PAUSE_MS ?? 1200)
-        // Post-speak grace window: STT finals arriving immediately after our
-        // own TTS finished are almost always tail artefacts (room echo, slow
-        // RTP packets, codec ringing). 250 ms gives the line a moment to
-        // settle before we accept the lead's reply.
-        this.POST_SPEAK_GRACE_MS = Number(process.env.POST_SPEAK_GRACE_MS ?? 250)
+        // Post-speak grace window: how long after estimated TTS playback
+        // ends we keep STT muted. Sized as a TRADE-OFF:
+        //   - Longer (2 s+) — kills more echo (catches Whisper finalizing
+        //     stale TTS audio), BUT eats fast lead replies that come
+        //     within ~1 s of the bot finishing. Users on a phone call
+        //     answer immediately; if their "да удобно" lands in the mute
+        //     window the bot stays silent and the call dies.
+        //   - Shorter (~500 ms) — preserves quick lead replies, BUT the
+        //     last 0.5–1 s of TTS may bleed into STT as a trailing
+        //     fragment ("...категории B?" -> "категории B" in transcript).
+        // 500 ms is the empirical sweet-spot for this build: bot's last
+        // word may occasionally leak as one fragment, but the call
+        // stays alive and conversational.
+        this.POST_SPEAK_GRACE_MS = Number(process.env.POST_SPEAK_GRACE_MS ?? 500)
         // Timestamp after which STT finals are accepted again. While the bot
         // is in 'speaking' state we keep this set to +∞ — only flipped back
         // to a real epoch when speaking ends.
@@ -130,7 +139,18 @@ class CallSession {
     }
 
     onPcm(pcmBuffer) {
-        if (this.sttSession) this.sttSession.send(pcmBuffer)
+        if (!this.sttSession) return
+        // Gate PCM at the SOURCE rather than only filtering STT finals
+        // downstream. Audio_fork "mixed" mode delivers our own TTS in the
+        // same stream as the lead's voice; if we let it reach the STT
+        // engine, Whisper finalizes our own words as if the lead said
+        // them. Dropping finals after the fact is too late — the STT
+        // buffer is already poisoned. Skipping PCM frames entirely while
+        // the bot is speaking (or in the post-speak grace window) means
+        // Whisper literally never sees the echo audio.
+        if (this.state === 'greeting' || this.state === 'speaking') return
+        if (Date.now() < this.acceptSttAfter) return
+        this.sttSession.send(pcmBuffer)
     }
 
     _onSttFinal(text) {
@@ -296,15 +316,30 @@ class CallSession {
             clearTimeout(this.userPauseTimer)
             this.userPauseTimer = null
         }
+        let estimatedPlaybackMs = 0
         try {
             const wav = await tts.synthesize(text)
-            await this.broadcastWav(wav)
+            // broadcastWav() is fire-and-forget on the FS side
+            // (uuid_broadcast doesn't block until playback completes).
+            // It returns the estimated playback duration parsed from the
+            // WAV header, which we use as the "how long is the bot
+            // talking" oracle to size the STT mute window below.
+            const ret = await this.broadcastWav(wav)
+            if (typeof ret === 'number' && ret > 0) estimatedPlaybackMs = ret
         } catch (err) {
             console.error(`[call ${this.callUuid}] tts error: ${err.message}`)
         }
-        // Set the grace window — STT finals within this window are likely
-        // tail echo / codec artefacts and get dropped by _onSttFinal.
-        this.acceptSttAfter = Date.now() + this.POST_SPEAK_GRACE_MS
+        // STT mute window. Must cover:
+        //   (a) the entire estimated TTS playback duration on the line —
+        //       FS keeps streaming our own audio through audio_fork the
+        //       whole time playback runs in "mixed" mode,
+        //   (b) the Whisper finalization lag — STT chunks accumulated
+        //       during playback get finalized a beat after audio ends.
+        // Sum is the floor before STT is allowed to listen again.
+        // Combined with the state==='speaking' source-gate in onPcm(),
+        // this gives a defence-in-depth against echo without requiring
+        // the (broken) uuid_audio_fork pause API.
+        this.acceptSttAfter = Date.now() + estimatedPlaybackMs + this.POST_SPEAK_GRACE_MS
     }
 
     _end(reason) {
