@@ -436,16 +436,15 @@ function wavDurationMs(wavBuffer) {
 // this estimate STT would un-mute halfway through playback and pick up
 // our own audio as "lead speech" (echo).
 //
-// Note on a tried-and-abandoned approach: we also tested wrapping the
-// broadcast with `uuid_audio_fork <uuid> pause` / `resume`. In this build
-// of mod_audio_fork both commands return `+OK Success` but neither has
-// the intended effect — pause does NOT stop PCM from streaming to the
-// bridge (we logged 45fps frames continuing for the full TTS playback),
-// and resume does NOT recover the stream after a fake-pause (zero PCM
-// frames for the remainder of the call, turning the call one-way). The
-// bug is in the mod itself; we mitigate the echo on the bridge side via
-// the source-gate in call-session.js _onSttFinal / onPcm — see CLAUDE.md
-// «Известный AudioBridge bug (echo)» for details and follow-up plans.
+// Note on echo prevention: we don't wrap broadcast with audio_fork
+// pause/resume any more. Since we switched the fork to mix-type=mono
+// (search `BRIDGE_FORK_MIX` in this file) the WS sees inbound caller
+// audio only — STT physically cannot hear our TTS. The prior comment
+// here claimed `pause`/`resume` were broken in this fork's build; that
+// assertion was based on a buggy test condition and was disproven by
+// `scripts/test_mod_audio_fork.js`. pause IS effective (frames stop
+// within 2 s) and resume IS effective (frames restart within 2 s).
+// We just don't need either under mono.
 async function broadcastWav(callUuid, wavBuffer) {
     const name = `tts-${callUuid.slice(0, 8)}-${crypto.randomBytes(4).toString('hex')}.wav`
     const fileWin = path.join(AUDIO_DIR, name)
@@ -713,18 +712,36 @@ function startEslEventListener() {
                 })()
             }
 
-            // Start audio_fork. mix-type "mixed" is the only one that
-            // empirically streams PCM in this build of mod_audio_fork
-            // (mono/stereo silently produce zero frames). The "mixed"
-            // stream contains caller + callee, so STT would echo our own
-            // TTS without a guard — CallSession.onPcm() drops PCM while
-            // state ∈ {greeting, speaking} and during the post-speak grace
-            // window (see acceptSttAfter math in _speak). See CLAUDE.md
-            // «Известный AudioBridge bug (echo)» for the wider context.
+            // Start audio_fork in `mono` mix-type. mono = SMBF_READ_STREAM
+            // only — the media bug taps ONLY the inbound (caller's)
+            // audio side of the channel, never the outbound side that
+            // playback() writes our TTS into. STT therefore physically
+            // CANNOT hear our own bot voice, regardless of timing —
+            // eliminating the entire class of "Whisper finalises stale
+            // TTS audio as if the lead said it" race conditions.
+            //
+            // Prior assertion in this codebase: «mono produces 0 PCM
+            // frames in this build of mod_audio_fork, only mixed works».
+            // That was wrong — the assertion was based on a transient
+            // test condition (loopback channel without active playback
+            // → mixed/stereo see no write-side audio → looks broken;
+            // but mono is unaffected because it reads only the inbound
+            // side, which always has at least silence frames). Verified
+            // empirically in scripts/test_mod_audio_fork.js (issue #20):
+            //   mono   → 46 fps, 320 B/frame, WS opens, PCM flows
+            //   mixed  → 46 fps, 320 B/frame (with audio on write side)
+            //   stereo → 46 fps, 640 B/frame
+            //   pause  → frames stop within 2 s
+            //   resume → frames restart within 2 s
+            //
+            // BRIDGE_FORK_MIX env overrides if a regression appears
+            // (`mixed` falls back to the source-gate echo workaround
+            // in call-session.js onPcm()). Default `mono`.
+            const mixType = process.env.BRIDGE_FORK_MIX ?? 'mono'
             const meta = `callUuid=${encodeURIComponent(uuid)}`
             const forkUrl = `${FORK_WS_URL}?${meta}`
-            const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} mixed 8000 ${meta}`
-            console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched})`)
+            const cmd = `uuid_audio_fork ${uuid} start ${forkUrl} ${mixType} 8000 ${meta}`
+            console.log(`[esl] auto-forking audio for ${uuid} (ext ${matched}, mix=${mixType})`)
             eslApi(cmd)
                 .then(out => console.log(`[esl] auto-fork: ${out}`))
                 .catch(err => console.error(`[esl] auto-fork FAILED: ${err.message}`))
