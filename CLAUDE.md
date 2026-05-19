@@ -116,21 +116,47 @@ TTS-override симметричный: иначе как только Yandex API
 иконка останется красной с `403 no_extension_for_user` на
 `/api/calls/sip-credentials`.
 
-### Известный AudioBridge bug (echo)
-В режиме `mixed 8000` mod_audio_fork отдаёт STT смешанный поток caller +
-callee, поэтому STT слышит собственный TTS бота как «реплики лида».
-- `mono`/`stereo` mix-types в этой сборке mod_audio_fork **сломаны** —
-  возвращают `+OK Success`, но WebSocket не открывают (0 PCM frames).
-- `uuid_audio_fork pause/resume` тоже **сломаны** — pause возвращает
-  `+OK`, но bug продолжает стримить; resume не восстанавливает поток
-  (одно-направленный звонок после первого TTS).
-- Источник-гейт в `call-session.js onPcm()` (drop PCM при
-  `state==='speaking'` + `acceptSttAfter` window на длительность WAV +
-  grace) даёт **~10× уменьшение** эха, но не 0%. Это лучшее, что
-  удалось без пересборки mod_audio_fork.
-- Полное устранение требует либо пересобрать mod_audio_fork с
-  работающими mono/pause, либо реализовать `stop`+`start` цикл (рвать
-  WS соединение целиком).
+### Echo elimination via mod_audio_fork mono (issue #20 — закрыто)
+
+**Состояние:** echo элиминирован физически. Bridge форкит в `mono`,
+который тапает только **inbound (caller's audio)** медиа канала.
+TTS живёт на outbound стороне и физически не попадает в WS.
+
+**Что было ошибочно**: ранний код-коммент утверждал что
+`mono`/`stereo` mix-types «сломаны в этой сборке» (0 PCM frames) и что
+`pause/resume` тоже не работают. Эти assertion были основаны на
+тесте на loopback-канале **без active playback** — естественно
+mixed/stereo не получали write-side audio (его не было), что
+выглядело как «модуль сломан». mono работал бы, но не был
+повторно проверен.
+
+**Что обнаружено повторным тестом** (`scripts/test_mod_audio_fork.js`,
+prerequisite: `mod_audio_fork` loaded + loopback-канал с
+continuous tone playback):
+
+| Mix-type | FPS | Bytes/frame | Verdict |
+|---|---|---|---|
+| `mono`   | 46.1 | 320 (8k×20ms) | ✅ WS opens, PCM flows |
+| `mixed`  | 46.1 | 320 | ✅ |
+| `stereo` | 46.1 | 640 (×2 ch) | ✅ |
+| `pause`  | — | — | ✅ frames stop в 2с |
+| `resume` | — | — | ✅ frames restart в 2с |
+
+Все 4 API surface работают.
+
+**Production-state** (`tools/audio-bridge-day1/server.js`):
+```js
+const mixType = process.env.BRIDGE_FORK_MIX ?? 'mono'
+```
+`mono` — дефолт. Override `BRIDGE_FORK_MIX=mixed` если когда-нибудь
+нужно вернуться на mixed (требует включить source-gate в
+call-session.js onPcm() для защиты от echo).
+
+**Backwards-compat**: source-gate в `call-session.js onPcm()` (drop
+PCM при `state==='speaking'` + `acceptSttAfter` window) сохранён как
+defense-in-depth. Под mono он dead code (state-гейт не срабатывает,
+т.к. в STT-поток TTS физически не попадает), под mixed — рабочий
+fallback. Удалять не нужно — он free safety net.
 
 ### Audio diagnostics — measurement harness (issue #23 baseline)
 
