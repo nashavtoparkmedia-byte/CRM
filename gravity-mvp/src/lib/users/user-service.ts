@@ -3,6 +3,10 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { cookies } from 'next/headers'
+// Pure user-resolution helper. Lives in a sibling `.js` so the
+// unit-test can require it directly via `node --test`, without a
+// TypeScript loader. See `./auth-helpers.js`.
+import { pickUserById } from './auth-helpers'
 
 const filePath = path.join(process.cwd(), 'src/data/users.json')
 
@@ -26,10 +30,25 @@ export async function getUsers(): Promise<UserItem[]> {
 
 export async function getCurrentUser(): Promise<UserItem | null> {
     const cookieStore = await cookies()
-    let id = cookieStore.get('crm_user_id')?.value
-    if (!id) id = 'u3' // Force fallback login for Supervisor
+    const id = cookieStore.get('crm_user_id')?.value
+
+    // Intentionally no fallback user.
+    // Anonymous requests must fail closed — every caller is responsible
+    // for an explicit `if (!user) return 401` guard. The previous
+    // `if (!id) id = 'u3'` fallback let any anonymous request inherit
+    // `Руководитель` privileges (see `.claude/knowledge/security_debt.md`).
+    //
+    // Temporary instrumentation: warn once per call so unexpected
+    // anonymous traffic surfaces in dev-server logs after deploy. Drop
+    // this log once the next-step `login(userId)` redesign lands and we
+    // confirm the auth surface is fully tightened.
+    if (!id) {
+        console.warn('[auth] anonymous request (no crm_user_id cookie)')
+        return null
+    }
+
     const users = await getUsers()
-    return users.find(u => u.id === id) || null
+    return (pickUserById(users, id) as UserItem | null)
 }
 
 export async function login(userId: string) {
