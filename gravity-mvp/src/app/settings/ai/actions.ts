@@ -385,3 +385,129 @@ export async function getAiRuntimeStats() {
         return { total: 0, autoReplied: 0, escalated: 0, errors: 0 }
     }
 }
+
+// ─── AiAgentProfile (стили общения) ──────────────────────────────
+//
+// Один профиль = один стиль (Роль / Тон / Разрешено / Запрещено).
+// Активный профиль выбирается через AiAgentConfig.activeProfileId.
+// При null активного — runtime fallback на legacy-поля в config'е
+// (см. ContextBuilder).
+
+export interface AiProfileData {
+    id: string
+    name: string
+    description: string | null
+    promptRole: string | null
+    promptTone: string | null
+    promptAllowed: string | null
+    promptForbidden: string | null
+    isDefault: boolean
+    sortOrder: number
+}
+
+export async function listAiProfiles(): Promise<AiProfileData[]> {
+    try {
+        return await prisma.$queryRaw<AiProfileData[]>`
+            SELECT id, name, description,
+                   "promptRole", "promptTone", "promptAllowed", "promptForbidden",
+                   "isDefault", "sortOrder"
+            FROM "AiAgentProfile"
+            ORDER BY "sortOrder" ASC, "createdAt" ASC
+        `
+    } catch { return [] }
+}
+
+export async function getActiveProfileId(): Promise<string | null> {
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT "activeProfileId" FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
+        `
+        return rows[0]?.activeProfileId ?? null
+    } catch { return null }
+}
+
+export async function createAiProfile(data: {
+    name: string
+    description?: string
+    promptRole?: string
+    promptTone?: string
+    promptAllowed?: string
+    promptForbidden?: string
+}) {
+    await assertCanEditAi()
+    if (!data.name?.trim()) throw new Error('Имя профиля обязательно')
+    // sortOrder = max+1 — новые профили идут в конец
+    const maxRow = await prisma.$queryRaw<any[]>`
+        SELECT COALESCE(MAX("sortOrder"), -1) AS max FROM "AiAgentProfile"
+    `
+    const sortOrder = Number(maxRow[0]?.max ?? -1) + 1
+    const row = await prisma.aiAgentProfile.create({
+        data: {
+            name: data.name.trim(),
+            description: data.description?.trim() || null,
+            promptRole: data.promptRole?.trim() || null,
+            promptTone: data.promptTone?.trim() || null,
+            promptAllowed: data.promptAllowed?.trim() || null,
+            promptForbidden: data.promptForbidden?.trim() || null,
+            isDefault: false,
+            sortOrder,
+        },
+    })
+    revalidatePath('/settings/ai')
+    return row
+}
+
+export async function updateAiProfile(id: string, data: Partial<{
+    name: string
+    description: string | null
+    promptRole: string | null
+    promptTone: string | null
+    promptAllowed: string | null
+    promptForbidden: string | null
+}>) {
+    await assertCanEditAi()
+    if (data.name !== undefined && !data.name.trim()) {
+        throw new Error('Имя профиля обязательно')
+    }
+    const patch: Record<string, any> = {}
+    if (data.name !== undefined)            patch.name = data.name.trim()
+    if (data.description !== undefined)     patch.description = data.description?.trim() || null
+    if (data.promptRole !== undefined)      patch.promptRole = data.promptRole?.trim() || null
+    if (data.promptTone !== undefined)      patch.promptTone = data.promptTone?.trim() || null
+    if (data.promptAllowed !== undefined)   patch.promptAllowed = data.promptAllowed?.trim() || null
+    if (data.promptForbidden !== undefined) patch.promptForbidden = data.promptForbidden?.trim() || null
+    const row = await prisma.aiAgentProfile.update({ where: { id }, data: patch })
+    revalidatePath('/settings/ai')
+    return row
+}
+
+export async function deleteAiProfile(id: string) {
+    await assertCanEditAi()
+    // Защита: дефолтные профили (seed) удалять нельзя — иначе админ
+    // может случайно остаться без активного при пустой таблице.
+    const profile = await prisma.aiAgentProfile.findUnique({ where: { id } })
+    if (!profile) throw new Error('Профиль не найден')
+    if (profile.isDefault) {
+        throw new Error('Системный профиль удалить нельзя. Создайте свой или измените существующий.')
+    }
+    // ON DELETE SET NULL в schema снимет activeProfileId, runtime
+    // вернётся на legacy-поля config'а.
+    await prisma.aiAgentProfile.delete({ where: { id } })
+    revalidatePath('/settings/ai')
+}
+
+export async function setActiveAiProfile(id: string | null) {
+    await assertCanEditAi()
+    if (id) {
+        const exists = await prisma.aiAgentProfile.findUnique({ where: { id }, select: { id: true } })
+        if (!exists) throw new Error('Профиль не найден')
+    }
+    // Используем upsert чтобы не упасть, если AiAgentConfig.singleton
+    // ещё не создан (свежий деплой без seed'а).
+    await prisma.aiAgentConfig.upsert({
+        where: { id: 'singleton' },
+        update: { activeProfileId: id },
+        create: { id: 'singleton', activeProfileId: id, activeChannels: [] },
+    })
+    revalidatePath('/settings/ai')
+}
