@@ -173,7 +173,14 @@ export const DOMAINS: NavigationDomain[] = [
                 title: "AI-обзвон",
                 items: [
                     { label: "Проекты и сценарии", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
-                    { label: "Инструкция", href: "/settings/integrations/ai-call-help/ai-call", icon: BookOpen, sectionKey: "ai_call_help" }
+                    // Пункт ведёт на hub-индекс инструкций
+                    // (/settings/integrations/ai-call-help), а не на
+                    // конкретную инструкцию AI-обзвона. Hub собирает
+                    // инструкции по всем AI-функциям CRM; пользователь
+                    // выбирает нужную карточкой. Раздел будет расти —
+                    // под группой AI-обзвон это исторический legacy от
+                    // момента, когда инструкция была одна.
+                    { label: "Инструкции", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
                 ]
             }
         ]
