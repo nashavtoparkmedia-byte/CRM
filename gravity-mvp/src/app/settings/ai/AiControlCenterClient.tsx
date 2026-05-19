@@ -937,19 +937,77 @@ export default function AiControlCenterClient({
                 </div>
 
                 <div>
-                    <label className="text-[12px] text-gray-500 block mb-1">
-                        API ключ{' '}
-                        {config.provider === 'anthropic' ? (
-                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
-                        ) : (
-                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
-                        )}
-                    </label>
+                    {/* Статус-точка рядом с label: «живой» ключ виден
+                        сразу, без клика «Проверить» и без отдельной
+                        строки текста ниже.
+
+                        Effective status — приоритет:
+                          1) testStatus (только что нажали «Проверить»)
+                          2) config.connectionStatus (последняя проверка
+                             из БД, set'ится в saveAiConfig() при успехе)
+                          3) есть apiKeyEncrypted без статуса → unchecked
+
+                        После любого изменения input testStatus → 'idle'
+                        и connectionStatus сбрасывается, потому что новый
+                        ключ заведомо не проверен. */}
+                    {(() => {
+                        const effective = (() => {
+                            if (testStatus === 'testing') return 'testing'
+                            if (testStatus === 'ok')      return 'ok'
+                            if (testStatus === 'error')   return 'error'
+                            if (config.connectionStatus === 'ok')    return 'ok'
+                            if (config.connectionStatus === 'error') return 'error'
+                            // Есть ключ, но не проверен ни разу:
+                            if (apiKey.trim() || config.apiKeyEncrypted) return 'unchecked'
+                            return 'empty'
+                        })()
+                        const dot: Record<string, { color: string; label: string; titleSuffix?: string }> = {
+                            ok:        { color: 'bg-green-500',              label: 'ключ активен' },
+                            error:     { color: 'bg-red-500',                label: 'ключ не работает', titleSuffix: testError },
+                            testing:   { color: 'bg-yellow-400 animate-pulse', label: 'проверяем…' },
+                            unchecked: { color: 'bg-gray-300',               label: 'ключ не проверен' },
+                            empty:     { color: '',                          label: '' },
+                        }
+                        const d = dot[effective]
+                        return (
+                            <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-2">
+                                <span>API ключ{' '}
+                                    {config.provider === 'anthropic' ? (
+                                        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
+                                    ) : (
+                                        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
+                                    )}
+                                </span>
+                                {d.label && (
+                                    <span
+                                        title={d.titleSuffix ? `${d.label}: ${d.titleSuffix}` : d.label}
+                                        className={`ml-auto inline-flex items-center gap-1.5 text-[11px] ${
+                                            effective === 'ok'    ? 'text-green-600'
+                                          : effective === 'error' ? 'text-red-500'
+                                          : effective === 'testing' ? 'text-yellow-700'
+                                          : 'text-gray-400'
+                                        }`}
+                                    >
+                                        <span className={`w-2 h-2 rounded-full ${d.color}`} />
+                                        {d.label}
+                                    </span>
+                                )}
+                            </label>
+                        )
+                    })()}
                     <div className="flex gap-2">
                         <input
                             type="password"
                             value={apiKey}
-                            onChange={e => { setApiKey(e.target.value); setTestStatus('idle') }}
+                            onChange={e => {
+                                setApiKey(e.target.value)
+                                setTestStatus('idle')
+                                // Сбрасываем statusDot — новый ключ
+                                // заведомо ещё не проверен.
+                                if (config.connectionStatus) {
+                                    setConfig(c => ({ ...c, connectionStatus: null }))
+                                }
+                            }}
                             placeholder={config.apiKeyEncrypted ? '••••••••••••••••' : providerDef.keyPlaceholder}
                             className="flex-1 h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
                         />
@@ -961,12 +1019,10 @@ export default function AiControlCenterClient({
                             {testStatus === 'testing' ? 'Проверка...' : 'Проверить'}
                         </button>
                     </div>
-                    {testStatus === 'ok' && (
-                        <div className="flex items-center gap-1 mt-1.5 text-[11px] text-green-600">
-                            <CheckCircle2 size={11} /> Подключено успешно
-                        </div>
-                    )}
-                    {testStatus === 'error' && (
+                    {/* Расшифровка ошибки — точка наверху уже сообщает
+                        «не работает», но текст ошибки от провайдера
+                        полезен (401 / 403 / wrong model / etc). */}
+                    {testStatus === 'error' && testError && (
                         <div className="flex items-center gap-1 mt-1.5 text-[11px] text-red-500">
                             <XCircle size={11} /> {testError}
                         </div>
