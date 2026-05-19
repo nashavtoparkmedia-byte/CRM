@@ -1,0 +1,11 @@
+# FreeSWITCH config (dialplan, autoload, sip_profiles, directory) is
+# consumed by FreeSWITCH running under Linux. CRLF endings break some
+# tools (e.g. `diff -q` flags every line as changed) and produce
+# spurious drift between repo and the deployed `/usr/local/freeswitch/conf/`
+# tree. Lock all FS config XML to LF regardless of host platform.
+tools/fs-config/**/*.xml          text eol=lf
+telephony/conf/**/*.xml           text eol=lf
+telephony/scripts/**/*.sh         text eol=lf
+
+# Shell scripts: LF everywhere — Windows host runs them via WSL.
+*.sh                              text eol=lf

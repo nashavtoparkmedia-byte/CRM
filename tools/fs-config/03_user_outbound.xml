@@ -1,0 +1,45 @@
+<include>
+  <!--
+    Outbound calls from a registered manager extension (101, 102, ...)
+    to any external Russian number. Caller-ID is overwritten to the
+    Megafon number so the callee sees the corporate number, not the
+    extension number.
+
+    Matches 11-digit national format (7XXXXXXXXXX / 8XXXXXXXXXX) and
+    E.164 (+7XXXXXXXXXX). Strips the prefix, prepends 7, sends to gateway.
+  -->
+  <extension name="user_outbound_megafon">
+    <!-- Note: dropped the ${user_exists} condition. It was checking whether the
+         DESTINATION exists as a directory user, which is false for any external
+         phone number — so dialplan never matched. The destination-number regex
+         already restricts this to Russian 10-digit numbers, which is the
+         security boundary we actually want. -->
+    <condition field="destination_number" expression="^(?:\+7|7|8)(\d{10})$">
+      <!-- Override vanilla global "set rtp_secure_media=true" — it would
+           force the Megafon b-leg to also be encrypted (Megafon does plain
+           RTP), causing 488 INCOMPATIBLE_DESTINATION right after codec
+           negotiation. With false, FS terminates DTLS-SRTP on the browser
+           leg and bridges plain RTP to Megafon. -->
+      <action application="set" data="rtp_secure_media=false"/>
+      <action application="set" data="effective_caller_id_number=$${megafon_username}"/>
+      <action application="set" data="effective_caller_id_name=$${megafon_username}"/>
+      <action application="set" data="hangup_after_bridge=true"/>
+      <action application="set" data="continue_on_fail=true"/>
+
+      <!-- record_session removed: it requires an answered channel, but with
+           inbound-late-negotiation=true the a-leg is still in late state,
+           so record_session caused an instant Hangup [INCOMPATIBLE_DESTINATION].
+           Stage 4 transcription will hook recording via the ESL CHANNEL_BRIDGE
+           event (server-side) instead of the dialplan. -->
+
+      <action application="bridge" data="sofia/gateway/megafon/7$1"/>
+    </condition>
+  </extension>
+
+  <!-- Internal extension-to-extension calls (101 <-> 102, etc.) -->
+  <extension name="user_internal">
+    <condition field="destination_number" expression="^(1\d{2})$">
+      <action application="bridge" data="user/$1"/>
+    </condition>
+  </extension>
+</include>

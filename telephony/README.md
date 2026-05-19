@@ -79,6 +79,42 @@ docker logs -f crm-freeswitch
    sbc.megafon.ru  (Megafon MultiFon Business)
 ```
 
+## Dialplan source-of-truth & drift checking
+
+FreeSWITCH dialplan XML lives in **two** repo locations on purpose — they
+target two different delivery paths:
+
+| Path | Used by | When you edit |
+|------|---------|---------------|
+| `tools/fs-config/` | Manual `sudo cp → /usr/local/freeswitch/conf/dialplan/default/` on the production host (WSL/Linux). | Edit when deploying to bare-metal FS. |
+| `telephony/conf/dialplan/default/` | Mounted into the docker-compose dev stack defined here. | Edit when running FS via `docker compose up`. |
+
+**Both copies must stay byte-identical.** Previously, hand-edits made
+directly on the production host drifted ahead of repo (added
+`record_session` directives, second `<condition>` inbound filter) — a
+clean redeploy from repo silently broke AI-call recording (issue #35).
+The fix has two parts: this README's mandate that you edit both copies
+together, and a drift-detection script you run before deploys:
+
+```bash
+# Run on the FS host (or any box with WSL access to it).
+bash telephony/scripts/check_dialplan_drift.sh
+# Exits 0 iff each file in both repo dirs is byte-identical to the
+# corresponding /usr/local/freeswitch/conf/dialplan/default/ file
+# (CRLF stripped — Windows clones get CRLF, FS reads LF).
+```
+
+If you need a custom deployed path:
+
+```bash
+DEPLOYED_DIALPLAN_DIR=/etc/freeswitch/dialplan/default \
+  bash telephony/scripts/check_dialplan_drift.sh
+```
+
+Line-ending policy: `.gitattributes` pins all dialplan XML to LF so
+Windows clones don't false-positive every file as drifted just because
+git's `core.autocrlf` rewrote `\n` to `\r\n` on checkout.
+
 ## Ports
 
 | Port | Protocol | Purpose |
