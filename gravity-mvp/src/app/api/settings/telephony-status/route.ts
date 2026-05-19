@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import net from 'net'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { getEslConnection } from '@/lib/freeswitch/EslClient'
+import { getStatus as getProviderStatus } from '@/lib/ai-call/provider-settings'
 
 /**
  * GET /api/settings/telephony-status
@@ -89,6 +90,7 @@ export async function GET() {
         redisReachable,
         minioReachable,
         gateway,
+        openaiKey,
     ] = await Promise.all([
         Promise.resolve(!!getEslConnection()),
         tcpProbe(wsHost, wsPort),
@@ -96,6 +98,9 @@ export async function GET() {
         tcpProbe(redisHost, redisPort),
         tcpProbe(minioHost, minioPort),
         sofiaGatewayStatus('megafon'),
+        // openaiKey lives in AiProviderSetting DB row (with .env as dev fallback).
+        // Probing process.env directly would miss keys added via the UI.
+        getProviderStatus('openai', 'apiKey'),
     ])
 
     return NextResponse.json({
@@ -115,7 +120,13 @@ export async function GET() {
             },
             redis: { ok: redisReachable, label: 'Redis (очередь BullMQ)', detail: redisReachable ? `${redisHost}:${redisPort}` : 'не доступен' },
             minio: { ok: minioReachable, label: 'MinIO (хранилище записей)', detail: minioReachable ? `${minioHost}:${minioPort}` : 'не доступен' },
-            openaiKey: { ok: !!process.env.OPENAI_API_KEY, label: 'API-ключ OpenAI', detail: process.env.OPENAI_API_KEY ? 'установлен' : 'отсутствует' },
+            openaiKey: {
+                ok: openaiKey.configured,
+                label: 'API-ключ OpenAI',
+                detail: openaiKey.configured
+                    ? `${openaiKey.source === 'db' ? 'через UI' : '.env'}${openaiKey.mask ? ' • ' + openaiKey.mask : ''}`
+                    : 'отсутствует',
+            },
         },
     })
 }

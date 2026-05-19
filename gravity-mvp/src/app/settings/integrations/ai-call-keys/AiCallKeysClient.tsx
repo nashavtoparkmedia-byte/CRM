@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import {
-    KeyRound, AlertCircle, Loader2, PlugZap, Save, Trash2, Eye, EyeOff,
+    AlertCircle, Loader2, PlugZap, Save, Trash2, Eye, EyeOff,
 } from 'lucide-react'
 import type { AiCallKeysStatus, KeyStatus } from '@/lib/ai-call/keys-status'
 import type { Provider, Key } from '@/lib/ai-call/provider-settings'
@@ -15,32 +15,6 @@ interface Props {
 type TestResult = { ok: boolean; message: string } | null
 type SaveState = { saving: boolean; error: string | null }
 
-/**
- * Standalone page wrapper (for /settings/integrations/ai-call-keys legacy URL).
- * The actual UI lives in the named export <AiCallKeysSection> so the same
- * block can be embedded as a tab inside /ai-call-scenarios.
- */
-export default function AiCallKeysClient({ initialStatus, canEdit }: Props) {
-    return (
-        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
-            <header className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                    <KeyRound className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">API ключи AI-обзвона</h1>
-                </div>
-            </header>
-            <AiCallKeysSection initialStatus={initialStatus} canEdit={canEdit} />
-        </div>
-    )
-}
-
-/**
- * Embeddable block — no page header, just the cards. Used by both the
- * standalone /ai-call-keys page and the «API ключи» tab inside
- * /ai-call-scenarios.
- */
 export function AiCallKeysSection({ initialStatus, canEdit }: Props) {
     const [status, setStatus] = useState<AiCallKeysStatus>(initialStatus)
     const [openaiTest, setOpenaiTest] = useState<TestResult>(null)

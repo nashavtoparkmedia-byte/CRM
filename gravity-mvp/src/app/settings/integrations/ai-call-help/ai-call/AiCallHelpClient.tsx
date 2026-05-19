@@ -82,7 +82,7 @@ function QuickNav({ tab }: { tab: Tab }) {
                 <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">
                     Проекты и сценарии
                 </Link>
-                <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">
+                <Link href="/settings/integrations/telephony#api-keys" className="text-primary underline-offset-2 hover:underline">
                     API ключи
                 </Link>
             </span>
@@ -214,7 +214,7 @@ function AdminHelp() {
             </Step>
 
             <Step number={2} id="a-keys" title="Как настроить API ключи">
-                <p>Открой <Link href="/settings/integrations/ai-call-keys" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><KeyRound className="h-3.5 w-3.5" />API ключи AI-обзвона<ArrowRight className="h-3 w-3" /></Link>. На странице 4 секции:</p>
+                <p>Открой <Link href="/settings/integrations/telephony#api-keys" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"><KeyRound className="h-3.5 w-3.5" />API ключи AI-обзвона<ArrowRight className="h-3 w-3" /></Link>. На странице 4 секции:</p>
                 <ul className="mt-2 space-y-1 text-[13px]">
                     <DashItem><b>OpenAI</b> — ключ для LLM-диалога и резервного STT/TTS</DashItem>
                     <DashItem><b>Yandex SpeechKit</b> — ключ для нативного русского STT/TTS</DashItem>
@@ -270,12 +270,12 @@ function AdminHelp() {
                 <p><b>Нет кнопки «AI-звонок» в карточке водителя</b></p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>У водителя пустой телефон → возьми водителя с заполненным номером</DashItem>
-                    <DashItem>Mock-режим выключен → проверь <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">страницу API ключей</Link>: карточка <b>«Mock-режим»</b> должна быть <Tag color="accent">включена</Tag></DashItem>
+                    <DashItem>Mock-режим выключен → проверь <Link href="/settings/integrations/telephony#api-keys" className="text-primary underline-offset-2 hover:underline">страницу API ключей</Link>: карточка <b>«Mock-режим»</b> должна быть <Tag color="accent">включена</Tag></DashItem>
                 </ul>
 
                 <p className="mt-3"><b>Не создаётся звонок при клике</b></p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
-                    <DashItem>Появилась ошибка «Mock-режим выключен» → открой <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">API ключи</Link> и нажми <Tag>Включить</Tag> в карточке «Mock-режим»</DashItem>
+                    <DashItem>Появилась ошибка «Mock-режим выключен» → открой <Link href="/settings/integrations/telephony#api-keys" className="text-primary underline-offset-2 hover:underline">API ключи</Link> и нажми <Tag>Включить</Tag> в карточке «Mock-режим»</DashItem>
                     <DashItem>Страница звонка 404 → миграции не применены, выполни <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">npx prisma migrate deploy</code> и перезапусти сервер</DashItem>
                 </ul>
 
