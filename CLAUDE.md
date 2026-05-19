@@ -288,6 +288,20 @@ auth) обязаны сохранить anonymous access на этот route.
 **Recommended ping cadence:** 10–60 сек, в зависимости от alert SLA
 монитора.
 
+### External monitoring
+
+Practical wire-up между `/api/health/infra` и external monitor
+(Uptime Kuma / cron / Task Scheduler / UptimeRobot) — отдельный
+documentation файл:
+- `docs/operations/health-monitoring.md` — endpoint contract, cadence,
+  hysteresis (alert после 3 подряд failures), runbook per dependency,
+  ready-to-paste рецепты для 4 monitor backends.
+- `scripts/check_health.sh` (POSIX) — однострочный wrapper для Linux
+  cron, без `jq`, exit-коды `0`/`1`/`2`/`3` для `ok`/`degraded`/`down`/
+  `unreachable`. URL/timeout через env `HEALTH_URL`, `HEALTH_TIMEOUT_S`.
+- `scripts/check_health.ps1` — parity для Windows Task Scheduler через
+  `Invoke-WebRequest` + `ConvertFrom-Json`. Те же exit-коды и env-vars.
+
 ### SIP extension mapping (шапка CRM)
 `src/lib/sip/extensions.ts` маппит `user.id` → SIP-расширение в FS.
 Сейчас: `u1=101`, `u2=102`, `u3=103`. Если в `src/data/users.json`
