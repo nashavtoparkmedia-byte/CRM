@@ -1,6 +1,7 @@
-import { Bot } from 'lucide-react'
+import Link from 'next/link'
+import { Bot, BookOpen } from 'lucide-react'
 import { PageContainer } from '@/components/ui/PageContainer'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { getCurrentUser } from '@/lib/users/user-service'
 import AiControlCenterClient from './AiControlCenterClient'
 import {
     getAiConfig,
@@ -14,13 +15,15 @@ export const dynamic   = 'force-dynamic'
 export const revalidate = 0
 
 export default async function AiControlCenterPage() {
-    const [config, kb, importJobs, logs, stats] = await Promise.all([
+    const [user, config, kb, importJobs, logs, stats] = await Promise.all([
+        getCurrentUser(),
         getAiConfig(),
         getKnowledgeBase(),
         getAllImportJobs(10),
         getDecisionLogs({ limit: 30 }),
         getAiRuntimeStats(),
     ])
+    const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
     return (
         <PageContainer>
@@ -30,14 +33,23 @@ export default async function AiControlCenterPage() {
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100/60 text-violet-600 border shadow-sm">
                             <Bot size={24} />
                         </div>
-                        <div>
+                        <div className="flex-1 min-w-0">
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">
                                 AI Control Center
                             </h1>
                             <p className="text-sm text-muted-foreground mt-1">
-                                Управление агентом, база знаний, правила эскалации, синхронизация истории
+                                {canEdit
+                                    ? 'Управление агентом, база знаний, правила эскалации, синхронизация истории'
+                                    : 'Журнал решений AI: посмотреть, как агент ответил, и оценить.'}
                             </p>
                         </div>
+                        <Link
+                            href="/settings/ai/help"
+                            className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-[#E0E0E0] bg-white px-3 text-[13px] font-medium text-[#111] transition-colors hover:bg-[#F8F9FA]"
+                        >
+                            <BookOpen className="h-3.5 w-3.5" />
+                            Инструкция
+                        </Link>
                     </div>
                 </div>
 
@@ -47,6 +59,7 @@ export default async function AiControlCenterPage() {
                     initialImportJobs={importJobs}
                     initialLogs={logs}
                     initialStats={stats}
+                    canEdit={canEdit}
                 />
             </div>
         </PageContainer>
