@@ -872,15 +872,46 @@ model AiAgentConfig {
   workingHours          Json?
   /// [{ condition, model }]
   routingRules          Json?
+  /// Промпт-поля legacy fallback. С момента введения профилей (см.
+  /// AiAgentProfile) реальный промпт берётся из активного профиля
+  /// через activeProfileId. Эти поля сохраняются для backward-compat:
+  /// если activeProfileId = null, runtime используется их.
   promptRole            String?
   promptTone            String?
   promptAllowed         String?
   promptForbidden       String?
+  /// Активный стиль AI-агента. FK на AiAgentProfile.id. При null —
+  /// runtime fallback на promptRole/Tone/Allowed/Forbidden выше.
+  activeProfileId       String?
+  activeProfile         AiAgentProfile? @relation(fields: [activeProfileId], references: [id], onDelete: SetNull)
   /// "ok" | "error" | "unchecked"
   connectionStatus      String?
   lastConnectionCheckAt DateTime?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
+}
+
+/// Стили общения AI-агента. Один профиль = один стиль (Роль / Тон /
+/// Разрешено / Запрещено). Админ создаёт несколько («Дружелюбный на ты»,
+/// «Официальный на вы»), переключает активный через AiAgentConfig.
+/// activeProfileId. UI: /settings/ai → таб «Правила» → блок «Стиль
+/// общения», по аналогии с /settings/integrations/ai-call-scenarios.
+model AiAgentProfile {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  promptRole      String?
+  promptTone      String?
+  promptAllowed   String?
+  promptForbidden String?
+  /// Системный профиль, защищён от удаления (default seed).
+  isDefault       Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // обратная связь: один профиль может быть активен в config'е.
+  configsAsActive AiAgentConfig[]
 }
 
 /// Настройки AI-анализа звонков (Stage 4). Singleton, id = "singleton".
