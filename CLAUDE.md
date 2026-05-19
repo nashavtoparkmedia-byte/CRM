@@ -191,6 +191,58 @@ processRecording → finalize HTTP → assertions) без живого звон�
 проверок PASS на текущем main, latency ~7s end-to-end (ffmpeg encode
 + MinIO upload — основное время).
 
+### Stale AI-session cleanup
+
+**Зачем:** finalize — единственное место, где `aiSessionStatus`
+переходит в terminal `ended`/`failed`. Если bridge упал (OOM, WS drop,
+node-процесс умер) или CRM был недоступен в момент finalize-запроса —
+запись Call залипает в non-terminal статусе навсегда, UI продолжает
+показывать «звонок идёт», дашборды врут.
+
+**Скрипт:** `gravity-mvp/scripts/cleanup_stale_ai_sessions.js` —
+standalone reaper. Сканирует Call с `isAi=true`,
+`aiSessionStatus IN (starting, greeting, active)` и
+`startedAt < NOW() - TTL`, ставит:
+- `aiSessionStatus='failed'`
+- `endedAt=now()`
+- `hangupCause='AI_SESSION_STALE_CLEANUP'`
+- `metadata.staleCleanupAt` / `staleCleanupPreviousStatus` /
+  `staleCleanupReason='bridge_timeout_or_finalize_missing'`
+  (merge-append, существующие ключи `metadata` сохраняются)
+
+**Что НЕ затрагивается** (намеренно): `transferring` — SIP REFER +
+human pickup может легитимно держать звонок несколько минут,
+false-positive дороже остаточного stale-риска. Также не трогает
+`ended`, `failed`, и любые не-AI звонки (`isAi=false`).
+
+**Env knobs**:
+- `STALE_AI_SESSION_TTL_MIN=30` (default; positive number)
+- `STALE_AI_SESSION_DRY_RUN=1` — scan-only, без записи (обязателен
+  для production first-run)
+
+**Запуск:**
+```
+# регрессия (zero deps, node:test)
+cd gravity-mvp && node --test scripts/__tests__/stale_ai_session_cleanup.test.js
+
+# dry-run (рекомендуется в первый раз на проде)
+STALE_AI_SESSION_DRY_RUN=1 npm --prefix gravity-mvp run cleanup:stale-ai-sessions
+
+# реальный cleanup
+npm --prefix gravity-mvp run cleanup:stale-ai-sessions
+```
+
+**Рекомендуемый cron**: каждые 5 минут (linux cron / systemd timer /
+любой external scheduler). BullMQ repeatable намеренно не использован —
+для MVP standalone-скрипт повторяет паттерн соседних `cleanup_*.js`
+без новой инфраструктуры.
+
+**Log line:**
+```
+[stale-ai-session-cleanup] scanned=N stale=K updated=K ttlMin=30
+[stale-ai-session-cleanup] dry-run scanned=N stale=K wouldUpdate=K ttlMin=30
+```
+
 ### SIP extension mapping (шапка CRM)
 `src/lib/sip/extensions.ts` маппит `user.id` → SIP-расширение в FS.
 Сейчас: `u1=101`, `u2=102`, `u3=103`. Если в `src/data/users.json`
