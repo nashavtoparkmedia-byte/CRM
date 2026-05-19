@@ -1,0 +1,13 @@
+-- Add 'cancelled' value to CallStatus enum.
+--
+-- History: this value was previously added ad-hoc on the telephony-deploy
+-- branch (commit 8c9b8f8) directly against the dev DB, but the migration
+-- file wasn't carried into main. Production / fresh-clone DBs need this
+-- migration to actually run; the existing dev DB has it already, so on
+-- that machine the operator runs `prisma migrate resolve --applied
+-- 20260520210000_add_cancelled_callstatus` once instead of `migrate deploy`.
+--
+-- IF NOT EXISTS keeps the statement transaction-safe on the dev DB
+-- (no-op = no schema change = no transaction problem); on a greenfield
+-- DB the value gets created.
+ALTER TYPE "CallStatus" ADD VALUE IF NOT EXISTS 'cancelled';

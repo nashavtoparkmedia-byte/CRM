@@ -559,21 +559,31 @@ model Contact {
 }
 
 /// Телефонный номер контакта. Хранится в E.164 (+79221234567).
+///
+/// isTemporary + expiresAt — для Авито-номеров. Avito показывает в чате
+/// временный номер вместо настоящего ("вскоре он изменится"). Парсер
+/// avito-worker создаёт такой номер с isTemporary:true и expiresAt:+14дней;
+/// когда worker раскроет настоящий — LeadIntake добавит новый номер и
+/// деактивирует временные у этого Contact. Если настоящий так и не пришёл
+/// за 14 дней — background-job выставит isActive:false.
 model ContactPhone {
-  id         String             @id @default(cuid())
-  contactId  String
-  phone      String
-  label      String?
-  isPrimary  Boolean            @default(false)
-  source     ContactPhoneSource @default(manual)
-  isActive   Boolean            @default(true)
-  verifiedAt DateTime?
-  createdAt  DateTime           @default(now())
-  identities ContactIdentity[]
-  contact    Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  id          String             @id @default(cuid())
+  contactId   String
+  phone       String
+  label       String?
+  isPrimary   Boolean            @default(false)
+  source      ContactPhoneSource @default(manual)
+  isActive    Boolean            @default(true)
+  verifiedAt  DateTime?
+  isTemporary Boolean            @default(false)
+  expiresAt   DateTime?
+  createdAt   DateTime           @default(now())
+  identities  ContactIdentity[]
+  contact     Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   @@unique([contactId, phone])
   @@index([phone])
+  @@index([isTemporary, expiresAt])
 }
 
 /// Идентификатор контакта в канале (telegramId, WA JID, maxUserId и т.д.)
@@ -1565,6 +1575,7 @@ enum CallStatus {
   busy
   failed        // technical failure (no route, codec mismatch, etc.)
   rejected      // explicitly declined
+  cancelled     // outbound, manager hit Отбой before peer picked up
 }
 
 enum AiCallMessageRole {
