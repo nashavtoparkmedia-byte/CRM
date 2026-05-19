@@ -6,7 +6,14 @@ import { cookies } from 'next/headers'
 // Pure user-resolution helpers. Live in a sibling `.js` so the
 // unit-tests can require them directly via `node --test`, without a
 // TypeScript loader. See `./auth-helpers.js`.
-import { pickUserById, canLogin } from './auth-helpers'
+import {
+    pickUserById,
+    canLogin,
+    canManageUsers,
+    isValidRole,
+    wouldDeleteLastPrivileged,
+    wouldDemoteLastPrivileged,
+} from './auth-helpers'
 
 const filePath = path.join(process.cwd(), 'src/data/users.json')
 
@@ -103,7 +110,60 @@ export async function logout() {
     cookieStore.delete('crm_user_id')
 }
 
+/**
+ * Server-side guard for user-CRUD server actions
+ * (`addUser` / `updateUser` / `deleteUser`).
+ *
+ * Mirrors the `canLogin` guard shape from PR #45: read the cookie,
+ * resolve the current user via `pickUserById`, ask the pure
+ * `canManageUsers` predicate, on denial emit a structured warning and
+ * throw. The `action` argument lands directly in the log line so an
+ * operator can grep for «what was the manager trying to do».
+ *
+ * Policy (matches `app/users/page.tsx` client-side guard):
+ *   anonymous     → forbidden
+ *   Менеджер      → forbidden
+ *   Руководитель  → allowed
+ *   Администратор → allowed
+ */
+async function assertCanManageUsers(action: string) {
+    const cookieStore = await cookies()
+    const currentId = cookieStore.get('crm_user_id')?.value
+    const allUsers = await getUsers()
+    const currentUser = currentId
+        ? (pickUserById(allUsers, currentId) as UserItem | null)
+        : null
+
+    if (!canManageUsers(currentUser)) {
+        console.warn(
+            `[auth] blocked user-management ` +
+            `current=${currentUser?.id ?? 'anonymous'} ` +
+            `role=${currentUser?.role ?? 'anonymous'} ` +
+            `action=${action}`,
+        )
+        throw new Error('forbidden')
+    }
+}
+
 export async function addUser(item: Omit<UserItem, 'id' | 'createdAt'>): Promise<UserItem> {
+    await assertCanManageUsers('addUser')
+
+    // Reject roles outside the allowlist before they can pollute
+    // users.json. Server actions accept arbitrary JSON from the wire —
+    // without this check a request body of `{ role: '__proto__' }`
+    // would silently land in the file and break subsequent guards
+    // (canManageUsers would see an «unknown role» and deny, which
+    // looks like a system bug rather than bad input).
+    if (!isValidRole(item.role)) {
+        console.warn(
+            `[auth] rejected user-management ` +
+            `action=addUser ` +
+            `reason=invalid_role ` +
+            `role=${JSON.stringify(item.role)}`,
+        )
+        throw new Error('invalid_role')
+    }
+
     const users = await getUsers()
     const id = "u" + (users.length + 1)
     const newItem = { ...item, id, createdAt: new Date().toISOString() }
@@ -113,7 +173,37 @@ export async function addUser(item: Omit<UserItem, 'id' | 'createdAt'>): Promise
 }
 
 export async function updateUser(id: string, patch: Partial<Omit<UserItem, 'id'>>): Promise<void> {
+    await assertCanManageUsers('updateUser')
+
+    // Same role-allowlist gate as addUser: a patch that touches `role`
+    // must pass an allowlist check before it can be written. Patches
+    // that leave role untouched skip this.
+    if (patch.role !== undefined && !isValidRole(patch.role)) {
+        console.warn(
+            `[auth] rejected user-management ` +
+            `action=updateUser ` +
+            `reason=invalid_role ` +
+            `role=${JSON.stringify(patch.role)}`,
+        )
+        throw new Error('invalid_role')
+    }
+
     const users = await getUsers()
+
+    // Operational safety invariant: don't let a role change strip the
+    // last privileged operator from the system. Without at least one
+    // Администратор or Руководитель the UI is unrecoverable (recovery
+    // would require hand-editing users.json on disk).
+    if (wouldDemoteLastPrivileged(users, id, patch.role)) {
+        console.warn(
+            `[auth] rejected user-management ` +
+            `action=updateUser ` +
+            `reason=last_privileged_demotion ` +
+            `target=${id}`,
+        )
+        throw new Error('last_privileged_demotion')
+    }
+
     const idx = users.findIndex(u => u.id === id)
     if (idx !== -1) {
         users[idx] = { ...users[idx], ...patch }
@@ -122,8 +212,23 @@ export async function updateUser(id: string, patch: Partial<Omit<UserItem, 'id'>
 }
 
 export async function deleteUser(id: string): Promise<void> {
+    await assertCanManageUsers('deleteUser')
+
     const users = await getUsers()
+
+    // Same invariant as updateUser: refuse to delete the last privileged
+    // operator. Even if the caller is currently privileged, the world
+    // after the delete may have zero privileged operators left.
+    if (wouldDeleteLastPrivileged(users, id)) {
+        console.warn(
+            `[auth] rejected user-management ` +
+            `action=deleteUser ` +
+            `reason=last_privileged_deletion ` +
+            `target=${id}`,
+        )
+        throw new Error('last_privileged_deletion')
+    }
+
     const filtered = users.filter(u => u.id !== id)
-    const filePath = path.join(process.cwd(), 'src/data/users.json')
     await fs.writeFile(filePath, JSON.stringify(filtered, null, 2))
 }
