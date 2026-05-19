@@ -29,7 +29,7 @@ export default function AiControlCenterHelpClient() {
                     <Bot className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">Инструкция по AI Control Center</h1>
+                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">Инструкция по AI в чатах</h1>
                     <p className="text-[13px] text-muted-foreground">
                         AI в чатах MAX, Telegram и WhatsApp.
                     </p>
@@ -80,7 +80,7 @@ function QuickNav({ tab }: { tab: Tab }) {
             <span className="ml-auto inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
                 Открыть:
                 <Link href="/settings/ai" className="text-primary underline-offset-2 hover:underline">
-                    AI Control Center
+                    AI в чатах
                 </Link>
             </span>
         </nav>
@@ -128,13 +128,13 @@ function ManagerHelp() {
             <Step number={3} id="m-mistake" title="Если AI ответил неправильно" icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}>
                 <ol className="ml-5 list-decimal space-y-1 text-[13px]">
                     <li>Напиши водителю правильный ответ обычным сообщением — поверх ответа AI.</li>
-                    <li>Открой <b>Журнал</b> в AI Control Center и поставь 👎 на этом решении.</li>
+                    <li>Открой <b>Журнал</b> в разделе «AI в чатах» и поставь 👎 на этом решении.</li>
                     <li>Расскажи администратору, какой ответ был неправильным — он поправит правила или базу знаний.</li>
                 </ol>
             </Step>
 
             <Step number={4} id="m-where" title="Где посмотреть решения AI" icon={<Search className="h-4 w-4 text-primary" />}>
-                <p>Раздел <Link href="/settings/ai" className="text-primary underline-offset-2 hover:underline">AI Control Center</Link> → вкладка <b>Журнал</b>.</p>
+                <p>Раздел <Link href="/settings/ai" className="text-primary underline-offset-2 hover:underline">AI в чатах</Link> → вкладка <b>Журнал</b>.</p>
                 <p className="mt-2">В журнале видно по каждому ответу:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>откуда сообщение (MAX / TG / WA)</DashItem>
@@ -175,7 +175,7 @@ function AdminHelp() {
                 <h2 className="text-[15px] font-semibold text-foreground">Настройка AI-агента</h2>
             </div>
 
-            <Step number={1} id="a-overview" title="Что настраивается в AI Control Center">
+            <Step number={1} id="a-overview" title="Что настраивается в разделе «AI в чатах»">
                 <p>Это <b>не AI-обзвон</b> (тот — в <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">отдельном разделе</Link>). Здесь — AI-агент, который отвечает в текстовых чатах MAX / Telegram / WhatsApp.</p>
                 <p className="mt-2">Пять вкладок:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
