@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
     BookOpen, User, Wrench, Sparkles, CheckCircle2, XCircle, HelpCircle,
-    KeyRound, FolderTree, AlertTriangle, ArrowRight,
+    KeyRound, FolderTree, AlertTriangle, ArrowRight, ArrowLeft,
 } from 'lucide-react'
 
 type Tab = 'manager' | 'admin'
@@ -14,14 +14,23 @@ export default function AiCallHelpClient() {
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
-            <header className="flex items-center gap-3">
+            {/* Back-link на hub — чтобы пользователь мог вернуться к
+                списку всех инструкций без обхода через sidebar. */}
+            <Link
+                href="/settings/integrations/ai-call-help"
+                className="inline-flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                К списку инструкций
+            </Link>
+            <header className="flex items-center gap-3 -mt-2">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                    <BookOpen className="h-5 w-5 text-primary" />
+                    <Sparkles className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">
                     <h1 className="text-[20px] font-semibold leading-tight text-foreground">Инструкция по AI-обзвону</h1>
                     <p className="text-[13px] text-muted-foreground">
-                        Справочник. Подробности по шагам — ниже.
+                        AI-звонки лидам по сценариям.
                     </p>
                 </div>
             </header>
@@ -73,7 +82,7 @@ function QuickNav({ tab }: { tab: Tab }) {
                 <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">
                     Проекты и сценарии
                 </Link>
-                <Link href="/settings/integrations/ai-call-scenarios" className="text-primary underline-offset-2 hover:underline">
+                <Link href="/settings/integrations/ai-call-keys" className="text-primary underline-offset-2 hover:underline">
                     API ключи
                 </Link>
             </span>

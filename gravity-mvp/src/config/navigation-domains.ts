@@ -173,7 +173,7 @@ export const DOMAINS: NavigationDomain[] = [
                 title: "AI-обзвон",
                 items: [
                     { label: "Проекты и сценарии", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
-                    { label: "Инструкция", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
+                    { label: "Инструкция", href: "/settings/integrations/ai-call-help/ai-call", icon: BookOpen, sectionKey: "ai_call_help" }
                 ]
             }
         ]

@@ -5,23 +5,33 @@ import Link from 'next/link'
 import {
     Bot, User, Wrench, MessageSquare, ThumbsUp, ThumbsDown, AlertTriangle,
     KeyRound, Settings, BookOpen, RefreshCw, Power, Search, ArrowRight,
+    ArrowLeft,
 } from 'lucide-react'
 
 type Tab = 'manager' | 'admin'
 
-export default function AiHelpClient() {
+export default function AiControlCenterHelpClient() {
     const [tab, setTab] = useState<Tab>('manager')
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
-            <header className="flex items-center gap-3">
+            {/* Back-link на hub — чтобы пользователь мог вернуться к
+                списку всех инструкций без обхода через sidebar. */}
+            <Link
+                href="/settings/integrations/ai-call-help"
+                className="inline-flex w-fit items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground transition-colors"
+            >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                К списку инструкций
+            </Link>
+            <header className="flex items-center gap-3 -mt-2">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-100/60 text-violet-600">
                     <Bot className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">Инструкция по AI-агенту</h1>
+                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">Инструкция по AI Control Center</h1>
                     <p className="text-[13px] text-muted-foreground">
-                        Справочник. Подробности по шагам — ниже.
+                        AI в чатах MAX, Telegram и WhatsApp.
                     </p>
                 </div>
             </header>

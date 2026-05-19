@@ -121,7 +121,7 @@ export default function AiCallScenariosClient({
                     «Что это и как использовать» info block. Sits in the header
                     so it's reachable from both inner tabs. */}
                 <Link
-                    href="/settings/integrations/ai-call-help"
+                    href="/settings/integrations/ai-call-help/ai-call"
                     className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-[13px] font-medium text-foreground transition-colors hover:bg-surface"
                 >
                     <BookOpen className="h-3.5 w-3.5" />

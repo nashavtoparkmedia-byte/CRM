@@ -44,7 +44,7 @@ export default async function AiControlCenterPage() {
                             </p>
                         </div>
                         <Link
-                            href="/settings/ai/help"
+                            href="/settings/integrations/ai-call-help/ai-control-center"
                             className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-[#E0E0E0] bg-white px-3 text-[13px] font-medium text-[#111] transition-colors hover:bg-[#F8F9FA]"
                         >
                             <BookOpen className="h-3.5 w-3.5" />
