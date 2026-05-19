@@ -88,8 +88,21 @@ function _createRetryFinalize(policy) {
         const _fetch = fetchImpl ?? fetch
         const start = Date.now()
         let lastError = null
+        // `lastStatus` is captured when the last failed attempt was a
+        // 5xx response; stays null when the last failure was a thrown
+        // network/timeout error (no HTTP status exists). It feeds the
+        // forensic `statusCode` field in the final failure log.
+        let lastStatus = null
 
         for (let attempt = 1; attempt <= policy.ATTEMPTS; attempt++) {
+            // Critical invariant for shutdown safety + bounded reliability:
+            //   after the LAST attempt fails, we MUST NOT sleep again.
+            //   The `if (attempt < policy.ATTEMPTS)` guards below enforce
+            //   that — a final 3rd-attempt failure falls straight through
+            //   to the terminal `crm_finalize_failed` log with zero extra
+            //   backoff. Total worst-case wall-clock is therefore:
+            //       3 × ATTEMPT_TIMEOUT_MS + sum(BACKOFFS_MS)
+            //   = 3 × 5 s + (500 + 1500) ms = ~17 s, bounded.
             let res
             try {
                 res = await fetchOnce(
@@ -106,17 +119,18 @@ function _createRetryFinalize(policy) {
             } catch (err) {
                 // Network failure or AbortController timeout.
                 lastError = err
+                lastStatus = null   // no HTTP status on a thrown fetch
                 if (attempt < policy.ATTEMPTS) {
                     opsLog('warn', 'crm_finalize_retry', {
                         callId,
                         attempt,
-                        reason: 'network_or_timeout',
+                        category: 'network_or_timeout',
                         error: err?.message ?? String(err),
                     })
                     await sleep(policy.BACKOFFS_MS[attempt - 1])
                     continue
                 }
-                break
+                break  // ← intentional: no sleep after final attempt
             }
 
             // 2xx — done.
@@ -125,9 +139,9 @@ function _createRetryFinalize(policy) {
                 try { body = await res.json() } catch { /* may be empty */ }
                 opsLog('info', 'crm_finalize_succeeded', {
                     callId,
-                    attempts: attempt,
+                    attemptCount: attempt,
                     totalMs: Date.now() - start,
-                    status: res.status,
+                    statusCode: res.status,
                 })
                 return {
                     ok: true,
@@ -141,17 +155,18 @@ function _createRetryFinalize(policy) {
             // 5xx — transient, retry.
             if (isRetryable5xx(res.status)) {
                 lastError = new Error(`HTTP ${res.status}`)
+                lastStatus = res.status
                 if (attempt < policy.ATTEMPTS) {
                     opsLog('warn', 'crm_finalize_retry', {
                         callId,
                         attempt,
-                        reason: '5xx',
-                        status: res.status,
+                        category: '5xx',
+                        statusCode: res.status,
                     })
                     await sleep(policy.BACKOFFS_MS[attempt - 1])
                     continue
                 }
-                break
+                break  // ← intentional: no sleep after final attempt
             }
 
             // 4xx — caller-side rejection. No retry — the next attempt
@@ -162,10 +177,10 @@ function _createRetryFinalize(policy) {
             const err4xx = new Error(`HTTP ${res.status} ${errText.slice(0, 200)}`)
             opsLog('error', 'crm_finalize_failed', {
                 callId,
-                attempts: attempt,
+                attemptCount: attempt,
                 totalMs: Date.now() - start,
-                reason: '4xx_no_retry',
-                status: res.status,
+                category: '4xx_no_retry',
+                statusCode: res.status,
                 // 4xx isn't a stale-cleanup case — the row WILL be
                 // updated by finalize-route if at all; bridge sent
                 // something the route rejected. Operator should look
@@ -175,12 +190,14 @@ function _createRetryFinalize(policy) {
             throw err4xx
         }
 
-        // All attempts exhausted on transient failures.
-        opsLog('error', 'crm_finalize_failed', {
+        // All attempts exhausted on transient failures. The forensic
+        // payload is minimal on purpose: enough for an operator to
+        // grep + correlate, but no stack dumps and no original payload.
+        const failureCtx = {
             callId,
-            attempts: policy.ATTEMPTS,
+            attemptCount: policy.ATTEMPTS,
             totalMs: Date.now() - start,
-            reason: 'attempts_exhausted',
+            category: 'attempts_exhausted',
             error: lastError?.message ?? 'unknown',
             // Existing stale-session reaper (PR #43) sweeps records
             // stuck > 30 min. After all 3 retries fail the Call row
@@ -189,7 +206,13 @@ function _createRetryFinalize(policy) {
             // operator «degraded, but eventual consistency will
             // self-heal».
             staleCleanupExpected: true,
-        })
+        }
+        // `statusCode` only present when the LAST failure was a 5xx
+        // response — never on network/timeout exhaustion. Keeps the
+        // log shape predictable for downstream filters.
+        if (lastStatus !== null) failureCtx.statusCode = lastStatus
+
+        opsLog('error', 'crm_finalize_failed', failureCtx)
         throw lastError ?? new Error('finalize failed (no diagnostic)')
     }
 }

@@ -17,6 +17,27 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 
+// Spy on opsLog by replacing the module's exports in require.cache
+// BEFORE retry-helpers loads. Lets us assert exact log shape (event
+// name, field names, presence of `staleCleanupExpected` etc.) and —
+// critically — the COUNT of `crm_finalize_retry` events: there must be
+// at most N-1 retry events for N attempts, because there's no backoff
+// (and therefore no retry log) after the final attempt.
+const opsLogPath = require.resolve('../opsLog')
+const _capturedEvents = []
+require.cache[opsLogPath] = {
+    id: opsLogPath,
+    filename: opsLogPath,
+    loaded: true,
+    exports: {
+        opsLog: (level, event, ctx) => _capturedEvents.push({ level, event, ctx }),
+    },
+    children: [],
+    paths: [],
+}
+function resetEvents() { _capturedEvents.length = 0 }
+function eventsOfType(name) { return _capturedEvents.filter(e => e.event === name) }
+
 const { _createRetryFinalize, PRODUCTION_POLICY } = require('../retry-helpers')
 
 // Fast policy: timers measured in ms not seconds. Real semantics
@@ -63,12 +84,18 @@ function sequentialFetch(seq) {
 // ── 1. happy path — first attempt succeeds ────────────────────────────
 
 test('first attempt 200 → succeeds, attempts=1', async () => {
+    resetEvents()
     const fetchImpl = sequentialFetch([okResponse({ ok: true })])
     const r = await retry({ url: 'http://crm/finalize', payload: {}, callId: 'c1', fetchImpl })
     assert.equal(r.ok, true)
     assert.equal(r.attempts, 1)
     assert.equal(fetchImpl.calls.length, 1)
     assert.equal(r.body.ok, true)
+    // No retry events on first-attempt success, exactly one success event.
+    assert.equal(eventsOfType('crm_finalize_retry').length, 0)
+    const ok = eventsOfType('crm_finalize_succeeded')
+    assert.equal(ok.length, 1)
+    assert.equal(ok[0].ctx.attemptCount, 1)
 })
 
 // ── 2. network throw → success on retry ───────────────────────────────
@@ -196,7 +223,96 @@ test('200 with non-JSON body → success with body={}', async () => {
     assert.deepEqual(r.body, {})
 })
 
-// ── 9. production policy is what we promise ───────────────────────────
+// ── 9. NO backoff sleep after final attempt (architectural invariant) ─
+// 3 attempts, all fail. We must emit exactly 2 `crm_finalize_retry`
+// events (before sleeping between attempts 1→2 and 2→3) and exactly 1
+// `crm_finalize_failed` event. Anything else means either a missing
+// retry log OR an erroneous post-final sleep.
+
+test('exhausted retries: exactly 2 retry events + 1 failed event (no post-final sleep)', async () => {
+    resetEvents()
+    const fetchImpl = sequentialFetch([
+        networkThrow('blip-1'),
+        networkThrow('blip-2'),
+        networkThrow('blip-3'),
+    ])
+    await assert.rejects(
+        () => retry({ url: 'http://crm/finalize', payload: {}, callId: 'no-extra-sleep', fetchImpl }),
+        /blip-3/,
+    )
+    const retryEvents = eventsOfType('crm_finalize_retry')
+    const failedEvents = eventsOfType('crm_finalize_failed')
+    assert.equal(retryEvents.length, 2,
+        'must NOT log retry after the final attempt; expected exactly N-1 retry events')
+    assert.equal(failedEvents.length, 1)
+    // Retry events fire only at the boundary between attempts:
+    // after #1 (attempt=1) and after #2 (attempt=2). Never after #3.
+    assert.equal(retryEvents[0].ctx.attempt, 1)
+    assert.equal(retryEvents[1].ctx.attempt, 2)
+})
+
+// ── 10. final failure log contract (forensic field set) ───────────────
+// Required-on-final-failure:
+//   attemptCount, category, staleCleanupExpected
+//   statusCode — present only when the LAST failure was a 5xx response;
+//                absent on network/timeout exhaustion.
+
+test('final failure log on network exhaustion: required forensic fields, no statusCode', async () => {
+    resetEvents()
+    const fetchImpl = sequentialFetch([
+        networkThrow('ECONNREFUSED'),
+        networkThrow('ECONNREFUSED'),
+        networkThrow('ECONNREFUSED'),
+    ])
+    await assert.rejects(() => retry({
+        url: 'http://crm/finalize', payload: {}, callId: 'fc1', fetchImpl,
+    }))
+    const failed = eventsOfType('crm_finalize_failed')[0]
+    assert.ok(failed, 'failure event emitted')
+    assert.equal(failed.ctx.attemptCount, 3)
+    assert.equal(failed.ctx.category, 'attempts_exhausted')
+    assert.equal(failed.ctx.staleCleanupExpected, true)
+    assert.equal(failed.ctx.callId, 'fc1')
+    assert.equal(failed.ctx.statusCode, undefined,
+        'network-throw exhaustion has no HTTP status to report')
+    assert.equal(typeof failed.ctx.totalMs, 'number')
+})
+
+test('final failure log on 5xx exhaustion: statusCode populated from last attempt', async () => {
+    resetEvents()
+    const fetchImpl = sequentialFetch([
+        httpResponse(503),
+        httpResponse(502),
+        httpResponse(504),
+    ])
+    await assert.rejects(() => retry({
+        url: 'http://crm/finalize', payload: {}, callId: 'fc2', fetchImpl,
+    }))
+    const failed = eventsOfType('crm_finalize_failed')[0]
+    assert.ok(failed)
+    assert.equal(failed.ctx.attemptCount, 3)
+    assert.equal(failed.ctx.category, 'attempts_exhausted')
+    assert.equal(failed.ctx.staleCleanupExpected, true)
+    assert.equal(failed.ctx.statusCode, 504,
+        'statusCode reflects the LAST 5xx response (504), not earlier ones')
+})
+
+test('4xx failure log: staleCleanupExpected=false, statusCode required', async () => {
+    resetEvents()
+    const fetchImpl = sequentialFetch([httpResponse(400)])
+    await assert.rejects(() => retry({
+        url: 'http://crm/finalize', payload: {}, callId: 'fc3', fetchImpl,
+    }))
+    const failed = eventsOfType('crm_finalize_failed')[0]
+    assert.ok(failed)
+    assert.equal(failed.ctx.attemptCount, 1)
+    assert.equal(failed.ctx.category, '4xx_no_retry')
+    assert.equal(failed.ctx.statusCode, 400)
+    assert.equal(failed.ctx.staleCleanupExpected, false,
+        '4xx is a caller bug, NOT a consistency case — operator must investigate, not wait for the reaper')
+})
+
+// ── 11. production policy is what we promise ──────────────────────────
 // Belt-and-suspenders: a refactor that accidentally widens the policy
 // (e.g. someone bumps ATTEMPTS to 5 «just to be safe») fails this test
 // and goes through PR review.
