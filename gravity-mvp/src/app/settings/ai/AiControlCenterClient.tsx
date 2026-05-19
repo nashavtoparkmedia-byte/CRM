@@ -5,7 +5,8 @@ import {
     Bot, Database, Settings, BookOpen, ClipboardList,
     Play, Pause, CheckCircle2, XCircle, AlertCircle,
     Plus, Trash2, Save, RefreshCw, ChevronDown, ChevronUp,
-    Zap, MessageSquare, Phone, Send, Square, X, HelpCircle
+    Zap, MessageSquare, Phone, Send, Square, X, HelpCircle,
+    Info,
 } from 'lucide-react'
 import {
     saveAiConfig, testAiConnection,
@@ -97,40 +98,50 @@ interface Props {
     initialImportJobs: ImportJob[]
     initialLogs: DecisionLog[]
     initialStats: RuntimeStats
+    /** Администратор/Руководитель видит все вкладки и может менять настройки.
+     *  Менеджеру оставлен только Журнал (read-only + 👍/👎). */
+    canEdit: boolean
+}
+
+// ─── Переиспользуемые UI-примитивы ────────────────────────────────
+
+/** Короткая подсказка в одну-две строки, рядом с действием. По стилю
+ *  совпадает с inline-info-блоками в /settings/integrations/ai-call-help. */
+function InlineInfo({ children }: { children: React.ReactNode }) {
+    return (
+        <div className="flex items-start gap-2 rounded-lg border border-[#3390EC]/15 bg-[#3390EC]/[0.04] px-3 py-2 text-[12px] text-[#111] leading-[1.5]">
+            <Info size={13} className="shrink-0 mt-0.5 text-[#3390EC]" />
+            <span>{children}</span>
+        </div>
+    )
+}
+
+/** «?»-иконка с native title-tooltip. Минималистичный паттерн из
+ *  ai-call-scenarios — без библиотечного popover, чтобы не утяжелять. */
+function Hint({ text }: { text: string }) {
+    return (
+        <span
+            role="img"
+            aria-label="Подсказка"
+            title={text}
+            className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full text-gray-300 hover:text-gray-500 transition-colors"
+        >
+            <HelpCircle size={13} />
+        </span>
+    )
 }
 
 // ─── Утилиты ──────────────────────────────────────────────────────
 
 const CHANNEL_LABELS: Record<string, string> = { max: 'MAX', telegram: 'TG', whatsapp: 'WA' }
-function StatHint({ label }: { label: string }) {
-    if (label === 'Сообщений') return (
-        <div className="text-left space-y-1">
-            <p className="text-white leading-[1.5]">Это количество всех сообщений, которые были импортированы из мессенджера.</p>
-            <p className="text-gray-300 leading-[1.5]">Сюда входят:</p>
-            <p className="text-gray-300 leading-[1.5]">— входящие сообщения от пользователей</p>
-            <p className="text-gray-300 leading-[1.5]">— исходящие сообщения из CRM</p>
-            <p className="text-gray-300 leading-[1.5]">— текст, фото, файлы и голосовые сообщения</p>
-            <p className="text-gray-400 leading-[1.5] mt-1">Количество зависит от выбранного периода импорта.</p>
-        </div>
-    )
-    if (label === 'Чатов') return (
-        <div className="text-left space-y-1">
-            <p className="text-white leading-[1.5]">Это количество всех чатов, которые были импортированы из мессенджера.</p>
-            <p className="text-gray-300 leading-[1.5]">Сюда входят:</p>
-            <p className="text-gray-300 leading-[1.5]">— входящие сообщения от пользователей</p>
-            <p className="text-gray-300 leading-[1.5]">— исходящие сообщения из CRM</p>
-            <p className="text-gray-300 leading-[1.5]">— текст, фото, файлы и голосовые сообщения</p>
-            <p className="text-gray-400 leading-[1.5] mt-1">Количество зависит от выбранного периода импорта.</p>
-        </div>
-    )
-    if (label === 'Контактов') return (
-        <div className="text-left space-y-1">
-            <p className="text-white leading-[1.5]">Это количество уникальных пользователей (контактов), с которыми есть переписка.</p>
-            <p className="text-gray-300 leading-[1.5]">Контакт — это человек или аккаунт в мессенджере.</p>
-            <p className="text-gray-300 leading-[1.5]">У одного контакта может быть несколько чатов: например, личный чат и групповой чат.</p>
-        </div>
-    )
-    return null
+
+// Однострочные подсказки к счётчикам импорта. Старый StatHint был портянкой
+// из 6 строк и одинаков для «Сообщений» / «Чатов» (copy-paste). По принципу
+// AI-обзвона: одна строка, рядом с действием.
+const STAT_HINT: Record<string, string> = {
+    'Сообщений': 'Все сообщения за выбранный период — входящие и исходящие, текст и медиа.',
+    'Чатов':     'Сколько чатов попало в импорт.',
+    'Контактов': 'Уникальные собеседники. У одного контакта может быть несколько чатов.',
 }
 const MODE_LABELS: Record<string, string> = {
     off:             'Выключен',
@@ -167,9 +178,13 @@ function StatusDot({ status, detail }: { status: string, detail?: React.ReactNod
 // ─── Главный компонент ─────────────────────────────────────────────
 
 export default function AiControlCenterClient({
-    initialConfig, initialKb, initialImportJobs, initialLogs, initialStats
+    initialConfig, initialKb, initialImportJobs, initialLogs, initialStats,
+    canEdit,
 }: Props) {
-    const [tab, setTab] = useState<'sync' | 'provider' | 'rules' | 'kb' | 'log'>('sync')
+    // Менеджеру открываем сразу Журнал — это единственная вкладка, где он
+    // что-то делает. Админ/Руководитель — начинают с Синхронизации, как и
+    // раньше.
+    const [tab, setTab] = useState<'sync' | 'provider' | 'rules' | 'kb' | 'log'>(canEdit ? 'sync' : 'log')
     const [config, setConfig] = useState<AiConfig>(initialConfig ?? {
         id: 'singleton', enabled: false, mode: 'off', provider: 'anthropic',
         classificationModel: 'claude-haiku-4-5', responseModel: 'claude-sonnet-4-5',
@@ -205,24 +220,28 @@ export default function AiControlCenterClient({
                 <span>24ч: <b className="text-green-600">{stats.autoReplied}</b> авто / <b className="text-yellow-600">{stats.escalated}</b> эскал. / <b className="text-red-500">{stats.errors}</b> ошибок</span>
             </div>
 
-            {/* Переключатель On/Off */}
-            <button
-                onClick={() => {
-                    const newEnabled = !config.enabled
-                    setConfig(c => ({ ...c, enabled: newEnabled }))
-                    startTransition(async () => {
-                        await saveAiConfig({ enabled: newEnabled })
-                        showToast(newEnabled ? 'AI включён' : 'AI выключен')
-                    })
-                }}
-                className={`h-[28px] px-3 rounded-lg text-[11px] font-semibold transition-colors ${
-                    config.enabled
-                        ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                        : 'bg-green-50 text-green-600 hover:bg-green-100'
-                }`}
-            >
-                {config.enabled ? 'Выключить' : 'Включить'}
-            </button>
+            {/* Переключатель On/Off — только для админа/руководителя.
+                Менеджер видит статус, но не может его менять. */}
+            {canEdit && (
+                <button
+                    onClick={() => {
+                        const newEnabled = !config.enabled
+                        if (config.enabled && !confirm('Выключить AI? Авто-ответы во всех каналах остановятся.')) return
+                        setConfig(c => ({ ...c, enabled: newEnabled }))
+                        startTransition(async () => {
+                            await saveAiConfig({ enabled: newEnabled })
+                            showToast(newEnabled ? 'AI включён' : 'AI выключен')
+                        })
+                    }}
+                    className={`h-[28px] px-3 rounded-lg text-[11px] font-semibold transition-colors ${
+                        config.enabled
+                            ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                            : 'bg-green-50 text-green-600 hover:bg-green-100'
+                    }`}
+                >
+                    {config.enabled ? 'Выключить' : 'Включить'}
+                </button>
+            )}
         </div>
     )
 
@@ -373,6 +392,11 @@ export default function AiControlCenterClient({
 
     const SyncTab = () => (
         <div className="space-y-5">
+            <InlineInfo>
+                Синхронизация загружает историю чатов из MAX / Telegram / WhatsApp,
+                чтобы AI понимал контекст диалогов. Запускается один раз на старте;
+                переписка остаётся в CRM, наружу ничего не отправляется.
+            </InlineInfo>
             {/* Индикатор состояния */}
             <div className={`border rounded-xl p-4 transition-colors ${
                 preflightState === 'unavailable' || preflightState === 'needs_auth'
@@ -409,9 +433,9 @@ export default function AiControlCenterClient({
                         importStatus === 'failed' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
                     }`}>
                         {preflightState === 'checking' ? 'Проверка…' :
-                         preflightState === 'unavailable' ? 'Транспорт недоступен' :
-                         preflightState === 'needs_auth' ? 'Требуется авторизация' :
-                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'Транспорт недоступен' :
+                         preflightState === 'unavailable' ? 'Сервис не запущен' :
+                         preflightState === 'needs_auth' ? 'Сервис ещё запускается' :
+                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'Сервис не запущен' :
                          (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'Запускается…' :
                          (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'unknown' ? 'Проверка…' :
                          importStatus === 'completed' ? 'Актуально' :
@@ -438,16 +462,16 @@ export default function AiControlCenterClient({
                             <div>
                                 <p className="font-semibold">
                                     {preflightState === 'needs_auth'
-                                        ? 'Скрапер запущен, но ещё не авторизован'
-                                        : 'Транспорт не отвечает — импорт не начат'}
+                                        ? 'Сервис ещё запускается'
+                                        : 'Сервис мессенджера не отвечает — импорт не начат'}
                                 </p>
                                 {preflightError && (
                                     <p className="text-red-500 text-[11px] mt-0.5">{preflightError}</p>
                                 )}
                                 <p className="text-gray-500 text-[11px] mt-1">
                                     {preflightState === 'needs_auth'
-                                        ? 'Дождитесь завершения инициализации или войдите в аккаунт, затем повторите.'
-                                        : 'Запустите сервис и повторите проверку.'}
+                                        ? 'Подождите 10-30 секунд или войдите в аккаунт мессенджера, затем повторите.'
+                                        : 'Включите MAX Web Scraper (иконка в трее или start-all.bat) и повторите.'}
                                 </p>
                             </div>
                         </div>
@@ -470,9 +494,9 @@ export default function AiControlCenterClient({
                                 <div className="flex items-start gap-2 text-[12px] text-red-700">
                                     <XCircle size={14} className="shrink-0 mt-0.5" />
                                     <div>
-                                        <p className="font-semibold">MAX transport не отвечает — импорт приостановлен</p>
+                                        <p className="font-semibold">MAX не отвечает — импорт приостановлен</p>
                                         <p className="text-gray-500 text-[11px] mt-1">
-                                            Скрапер не запущен или потерял соединение. Запустите сервис — импорт продолжится автоматически.
+                                            Сервис не запущен или потерял соединение. Включите MAX Web Scraper — импорт продолжится автоматически.
                                         </p>
                                     </div>
                                 </div>
@@ -568,15 +592,9 @@ export default function AiControlCenterClient({
                                         { label: 'Чатов',     value: liveProgress?.chatsScanned ?? lastJob.chatsScanned },
                                         { label: 'Контактов', value: liveProgress?.contactsFound ?? lastJob.contactsFound },
                                     ].map(s => (
-                                        <div key={s.label} className="bg-white/70 rounded-lg p-2.5 text-center relative group">
+                                        <div key={s.label} title={STAT_HINT[s.label]} className="bg-white/70 rounded-lg p-2.5 text-center cursor-help">
                                             <div className="text-[18px] font-bold text-yellow-700 tabular-nums">{s.value.toLocaleString()}</div>
-                                            <div className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
-                                                {s.label}
-                                                <HelpCircle size={10} className="text-gray-300 group-hover:text-gray-500 transition-colors cursor-help" />
-                                            </div>
-                                            <div style={{width: '220px'}} className="absolute top-full left-0 mt-2 px-3 py-2 bg-[#222] text-[11px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                                                <StatHint label={s.label} />
-                                            </div>
+                                            <div className="text-[10px] text-gray-500">{s.label}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -594,15 +612,9 @@ export default function AiControlCenterClient({
                                 { label: 'Чатов',     value: lastJob.chatsScanned },
                                 { label: 'Контактов', value: lastJob.contactsFound },
                             ].map(s => (
-                                <div key={s.label} className="bg-white rounded-lg p-2.5 text-center relative group">
+                                <div key={s.label} title={STAT_HINT[s.label]} className="bg-white rounded-lg p-2.5 text-center cursor-help">
                                     <div className="text-[18px] font-bold text-[#111]">{s.value.toLocaleString()}</div>
-                                    <div className="text-[10px] text-gray-500 flex items-center justify-center gap-1">
-                                        {s.label}
-                                        <HelpCircle size={10} className="text-gray-300 group-hover:text-gray-500 transition-colors cursor-help" />
-                                    </div>
-                                    <div style={{width: '220px'}} className="absolute top-full left-0 mt-2 px-3 py-2 bg-[#222] text-[11px] rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                                        <StatHint label={s.label} />
-                                    </div>
+                                    <div className="text-[10px] text-gray-500">{s.label}</div>
                                 </div>
                             ))}
                         </div>
@@ -628,7 +640,7 @@ export default function AiControlCenterClient({
 
             {/* Настройки импорта */}
             <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Новый импорт</h4>
+                <h4 className="text-[14px] font-semibold text-[#111]">Новый импорт</h4>
 
                 {/* Каналы */}
                 <div>
@@ -657,9 +669,9 @@ export default function AiControlCenterClient({
                     <label className="text-[12px] text-gray-500 mb-1.5 block">Режим импорта</label>
                     <div className="space-y-1.5">
                         {[
-                            { val: 'from_connection_time', label: 'С момента подключения' },
-                            { val: 'available_history',    label: 'Импортировать доступную историю' },
-                            { val: 'last_n_days',          label: 'За последние N дней' },
+                            { val: 'from_connection_time', label: 'С момента подключения', hint: 'Только сообщения, появившиеся после того, как мессенджер был подключён к CRM.' },
+                            { val: 'available_history',    label: 'Доступная история',     hint: 'Всё, что мессенджер отдаёт, — обычно последние ~3 месяца. Самый полный вариант.' },
+                            { val: 'last_n_days',          label: 'За последние N дней',   hint: 'Точный диапазон. Удобно для пере-синхронизации без полного импорта.' },
                         ].map(opt => (
                             <label key={opt.val} className="flex items-center gap-2 cursor-pointer">
                                 <input
@@ -671,6 +683,7 @@ export default function AiControlCenterClient({
                                     className="accent-[#3390EC]"
                                 />
                                 <span className="text-[12px] text-[#111]">{opt.label}</span>
+                                <Hint text={opt.hint} />
                                 {opt.val === 'last_n_days' && importMode === 'last_n_days' && (
                                     <input
                                         type="number"
@@ -699,7 +712,7 @@ export default function AiControlCenterClient({
             {importJobs.length > 0 && (
                 <div className="bg-white border border-[#E8E8E8] rounded-xl overflow-hidden">
                     <div className="px-4 py-2.5 border-b border-[#F0F0F0]">
-                        <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">История импортов</h4>
+                        <h4 className="text-[13px] font-semibold text-[#111]">История импортов</h4>
                     </div>
                     <div className="divide-y divide-[#F5F5F5]">
                         {importJobs.slice(0, 5).map(job => {
@@ -743,11 +756,12 @@ export default function AiControlCenterClient({
                                     {(job.status === 'completed' || job.status === 'failed') && (
                                         <button
                                             onClick={async () => {
+                                                if (!confirm('Удалить запись об этом импорте? Импортированные сообщения сохранятся — удалится только история запуска.')) return
                                                 await deleteImportJob(job.id)
                                                 const fresh = await getAllImportJobs(10)
                                                 setImportJobs(fresh)
                                             }}
-                                            title="Удалить"
+                                            title="Удалить запись о запуске"
                                             className="ml-1 p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
                                         ><X size={12} /></button>
                                     )}
@@ -862,8 +876,12 @@ export default function AiControlCenterClient({
 
     return (
         <div className="space-y-5">
+            <InlineInfo>
+                Anthropic (Claude) — лучше понимает русский. OpenAI (GPT) — дешевле и быстрее на коротких ответах.
+                Подключение и модели — без перезапуска, изменения применяются после «Сохранить».
+            </InlineInfo>
             <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Провайдер</h4>
+                <h4 className="text-[14px] font-semibold text-[#111]">Провайдер</h4>
 
                 <div className="flex gap-2">
                     {['anthropic', 'openai'].map(p => (
@@ -882,7 +900,14 @@ export default function AiControlCenterClient({
                 </div>
 
                 <div>
-                    <label className="text-[12px] text-gray-500 block mb-1">API ключ</label>
+                    <label className="text-[12px] text-gray-500 block mb-1">
+                        API ключ{' '}
+                        {config.provider === 'anthropic' ? (
+                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
+                        ) : (
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
+                        )}
+                    </label>
                     <div className="flex gap-2">
                         <input
                             type="password"
@@ -911,59 +936,77 @@ export default function AiControlCenterClient({
                     )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-[12px] text-gray-500 block mb-1">Модель классификации</label>
-                        <input
-                            value={config.classificationModel}
-                            onChange={e => setConfig(c => ({ ...c, classificationModel: e.target.value }))}
-                            placeholder={providerDef.classification}
-                            className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
-                        />
-                        <div className="text-[10px] text-gray-400 mt-0.5">
-                            Дешёвая — для intent. По умолчанию: <code className="font-mono">{providerDef.classification}</code>
+                {/* Расширенные настройки — в свёрнутом блоке, чтобы основной
+                    флоу «выбрал провайдера → вставил ключ → проверил → сохранил»
+                    не загромождался моделями и роутингом. */}
+                <details className="group rounded-lg border border-[#F0F0F0] bg-[#FAFAFA]">
+                    <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-2 text-[12px] font-medium text-gray-600 hover:text-[#111]">
+                        <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
+                        Дополнительно: модели и маршрутизация
+                    </summary>
+                    <div className="px-3 pb-3 space-y-3">
+                        <p className="text-[11px] text-gray-500 leading-[1.5]">
+                            AI использует две модели. Дешёвая определяет, о чём вопрос, и отвечает на простое;
+                            дорогая включается на сложных и длинных диалогах. Менять имена моделей не обязательно.
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[12px] text-gray-500 block mb-1">
+                                    Дешёвая модель <Hint text="Определяет тип вопроса (FAQ / жалоба / сложный) и отвечает на простое. Тратится в каждом сообщении." />
+                                </label>
+                                <input
+                                    value={config.classificationModel}
+                                    onChange={e => setConfig(c => ({ ...c, classificationModel: e.target.value }))}
+                                    placeholder={providerDef.classification}
+                                    className="w-full h-[32px] border border-[#E0E0E0] bg-white rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
+                                />
+                                <div className="text-[10px] text-gray-400 mt-0.5">
+                                    По умолчанию: <code className="font-mono">{providerDef.classification}</code>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[12px] text-gray-500 block mb-1">
+                                    Дорогая модель <Hint text="Генерирует финальный текст ответа на сложные и длинные вопросы." />
+                                </label>
+                                <input
+                                    value={config.responseModel}
+                                    onChange={e => setConfig(c => ({ ...c, responseModel: e.target.value }))}
+                                    placeholder={providerDef.response}
+                                    className="w-full h-[32px] border border-[#E0E0E0] bg-white rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
+                                />
+                                <div className="text-[10px] text-gray-400 mt-0.5">
+                                    По умолчанию: <code className="font-mono">{providerDef.response}</code>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div>
-                        <label className="text-[12px] text-gray-500 block mb-1">Модель ответов</label>
-                        <input
-                            value={config.responseModel}
-                            onChange={e => setConfig(c => ({ ...c, responseModel: e.target.value }))}
-                            placeholder={providerDef.response}
-                            className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
-                        />
-                        <div className="text-[10px] text-gray-400 mt-0.5">
-                            Для генерации ответов. По умолчанию: <code className="font-mono">{providerDef.response}</code>
-                        </div>
-                    </div>
-                </div>
 
-                {/* Routing rules */}
-                <div className="pt-2 border-t border-[#F0F0F0]">
-                    <h5 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">Routing моделей</h5>
-                    <div className="space-y-1.5 text-[11px] text-gray-600">
-                        <div className="flex items-center gap-2 bg-[#F8F9FA] rounded-lg px-3 py-2">
-                            <span className="w-[160px] text-gray-500">Intent classification</span>
-                            <span>→</span>
-                            <span className="font-mono font-semibold">{config.classificationModel}</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-[#F8F9FA] rounded-lg px-3 py-2">
-                            <span className="w-[160px] text-gray-500">FAQ / простой ответ</span>
-                            <span>→</span>
-                            <span className="font-mono font-semibold">{config.classificationModel}</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-[#F8F9FA] rounded-lg px-3 py-2">
-                            <span className="w-[160px] text-gray-500">Сложный / длинный</span>
-                            <span>→</span>
-                            <span className="font-mono font-semibold">{config.responseModel}</span>
-                        </div>
-                        <div className="flex items-center gap-2 bg-red-50 rounded-lg px-3 py-2 text-red-600">
-                            <span className="w-[160px]">Жалоба / конфликт</span>
-                            <span>→</span>
-                            <span className="font-semibold">Всегда оператор</span>
+                        <div className="pt-1">
+                            <h5 className="text-[12px] font-medium text-gray-600 mb-1.5">Что какая модель делает</h5>
+                            <div className="space-y-1.5 text-[11px] text-gray-600">
+                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
+                                    <span className="w-[140px] text-gray-500">Понять, о чём вопрос</span>
+                                    <span className="text-gray-300">→</span>
+                                    <span className="font-mono">{config.classificationModel}</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
+                                    <span className="w-[140px] text-gray-500">FAQ / простой ответ</span>
+                                    <span className="text-gray-300">→</span>
+                                    <span className="font-mono">{config.classificationModel}</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
+                                    <span className="w-[140px] text-gray-500">Сложный / длинный</span>
+                                    <span className="text-gray-300">→</span>
+                                    <span className="font-mono">{config.responseModel}</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-red-50 rounded-lg px-3 py-1.5 text-red-600">
+                                    <span className="w-[140px]">Жалоба / конфликт</span>
+                                    <span>→</span>
+                                    <span className="font-semibold">Всегда оператор</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                </details>
 
                 {config.lastConnectionCheckAt && (
                     <div className="text-[10px] text-gray-400">
@@ -1014,14 +1057,24 @@ export default function AiControlCenterClient({
 
     const RulesTab = () => (
         <div className="space-y-5">
+            <InlineInfo>
+                Начни с режима «Советует». Когда увидишь в Журнале, что AI отвечает правильно
+                — переключайся на «Автоответ». «Оператор» полностью передаёт диалоги менеджерам.
+            </InlineInfo>
             {/* Режим */}
             <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Режим работы</h4>
+                <h4 className="text-[14px] font-semibold text-[#111]">Режим работы</h4>
                 <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(MODE_LABELS).map(([val, label]) => (
+                    {([
+                        { val: 'off',             label: 'Выключен', hint: 'AI не работает совсем.' },
+                        { val: 'suggest_only',    label: 'Советует', hint: 'AI пишет ответ в подсказку. Отправляет менеджер вручную.' },
+                        { val: 'auto_reply',      label: 'Автоответ', hint: 'AI отвечает сам, если уверен. Иначе передаёт менеджеру.' },
+                        { val: 'operator_locked', label: 'Оператор', hint: 'AI не отвечает — все диалоги уходят менеджеру.' },
+                    ]).map(({ val, label, hint }) => (
                         <button
                             key={val}
                             onClick={() => setConfig(c => ({ ...c, mode: val }))}
+                            title={hint}
                             className={`h-[36px] rounded-lg text-[12px] font-semibold border transition-colors ${
                                 config.mode === val
                                     ? 'bg-[#3390EC] text-white border-[#3390EC]'
@@ -1061,38 +1114,55 @@ export default function AiControlCenterClient({
                 {/* Пороги */}
                 <div className="grid grid-cols-2 gap-3">
                     <div>
-                        <label className="text-[12px] text-gray-500 block mb-1">Confidence порог</label>
+                        <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
+                            Уверенность для автоответа
+                            <Hint text="Чем выше порог, тем реже AI отвечает сам и чаще передаёт менеджеру. 0.75 — рекомендуемое стартовое значение." />
+                            <span className="ml-auto text-[12px] font-mono font-semibold text-[#111]">{Math.round(config.confidenceThreshold * 100)}%</span>
+                        </label>
                         <input
-                            type="number" min={0} max={1} step={0.05}
+                            type="range" min={0} max={1} step={0.05}
                             value={config.confidenceThreshold}
                             onChange={e => setConfig(c => ({ ...c, confidenceThreshold: parseFloat(e.target.value) }))}
-                            className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC]"
+                            className="w-full h-[32px] accent-[#3390EC]"
                         />
-                        <div className="text-[10px] text-gray-400 mt-0.5">Ниже — всегда оператор</div>
+                        <div className="flex justify-between text-[10px] text-gray-400">
+                            <span>отвечает чаще</span>
+                            <span>отвечает реже</span>
+                        </div>
                     </div>
                     <div>
-                        <label className="text-[12px] text-gray-500 block mb-1">Макс. автоответов подряд</label>
+                        <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
+                            Макс. автоответов подряд
+                            <Hint text="После N автоответов в одном чате AI замолкает и передаёт диалог менеджеру — даже если уверен. Защита от бесконечного диалога с ботом." />
+                        </label>
                         <input
                             type="number" min={1} max={50}
                             value={config.maxAutoRepliesPerChat}
                             onChange={e => setConfig(c => ({ ...c, maxAutoRepliesPerChat: parseInt(e.target.value) }))}
                             className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC]"
                         />
+                        <div className="text-[10px] text-gray-400 mt-0.5">После — диалог уходит менеджеру</div>
                     </div>
                 </div>
             </div>
 
             {/* Промпт */}
             <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-wider">Системный промпт</h4>
+                <div className="flex items-center justify-between">
+                    <h4 className="text-[14px] font-semibold text-[#111]">Системный промпт</h4>
+                    <span className="text-[11px] text-gray-400">Можно оставить пустым — будут значения по умолчанию</span>
+                </div>
                 {[
-                    { key: 'promptRole',     label: 'Роль',       placeholder: 'Ассистент диспетчера таксопарка NashAvtoPark' },
-                    { key: 'promptTone',     label: 'Тон',        placeholder: 'Коротко, спокойно, без канцелярита' },
-                    { key: 'promptAllowed',  label: 'Разрешено',  placeholder: 'Отвечать на FAQ, подтверждать получение' },
-                    { key: 'promptForbidden',label: 'Запрещено',  placeholder: 'Обещать выплаты, спорить, придумывать факты' },
-                ].map(({ key, label, placeholder }) => (
+                    { key: 'promptRole',     label: 'Роль',       hint: 'Кто отвечает: должность, компания. Один абзац.',         placeholder: 'Ассистент диспетчера таксопарка NashAvtoPark' },
+                    { key: 'promptTone',     label: 'Тон',        hint: 'Как разговаривать: длина, формальность, эмодзи.',        placeholder: 'Коротко, спокойно, без канцелярита' },
+                    { key: 'promptAllowed',  label: 'Разрешено',  hint: 'Что AI может делать без согласования с менеджером.',     placeholder: 'Отвечать на FAQ, подтверждать получение' },
+                    { key: 'promptForbidden',label: 'Запрещено',  hint: 'Что нельзя ни при каких условиях — обещания, оценки и т.п.', placeholder: 'Обещать выплаты, спорить, придумывать факты' },
+                ].map(({ key, label, hint, placeholder }) => (
                     <div key={key}>
-                        <label className="text-[12px] text-gray-500 block mb-1">{label}</label>
+                        <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
+                            {label}
+                            <Hint text={hint} />
+                        </label>
                         <textarea
                             rows={2}
                             value={(config as any)[key] ?? ''}
@@ -1154,6 +1224,9 @@ export default function AiControlCenterClient({
     }
 
     const handleDeleteKb = async (id: string) => {
+        const entry = kb.find(e => e.id === id)
+        const label = entry?.title ? `«${entry.title}»` : 'эту запись'
+        if (!confirm(`Удалить ${label}? Действие нельзя отменить.`)) return
         await deleteKnowledgeEntry(id)
         setKb(prev => prev.filter(e => e.id !== id))
         showToast('Удалено')
@@ -1161,8 +1234,12 @@ export default function AiControlCenterClient({
 
     const KbTab = () => (
         <div className="space-y-4">
+            <InlineInfo>
+                База знаний — точные ответы, которые AI должен знать без выдумок: условия работы, цены, график, частые вопросы.
+                Чем больше записей, тем меньше AI «галлюцинирует».
+            </InlineInfo>
             <div className="flex items-center justify-between">
-                <span className="text-[12px] text-gray-500">{kb.length} записей</span>
+                <span className="text-[12px] text-gray-500">{kb.length} {kb.length === 1 ? 'запись' : kb.length >= 2 && kb.length <= 4 ? 'записи' : 'записей'}</span>
                 <button
                     onClick={() => setShowKbForm(v => !v)}
                     className="h-[28px] px-3 bg-[#3390EC] text-white text-[11px] font-semibold rounded-lg hover:bg-[#2B7FD4] transition-colors flex items-center gap-1"
@@ -1173,6 +1250,18 @@ export default function AiControlCenterClient({
 
             {showKbForm && (
                 <div className="bg-[#F8F9FA] border border-[#E8E8E8] rounded-xl p-4 space-y-2.5 animate-in fade-in duration-150">
+                    {/* Список существующих категорий — datalist подсказывает админу
+                        уже использованные значения, чтобы не плодить «general» /
+                        «General» / «общее» вариантов. Свободный ввод остаётся. */}
+                    <datalist id="kb-categories">
+                        {Array.from(new Set(kb.map(e => e.category).filter(Boolean))).map(c => (
+                            <option key={c} value={c} />
+                        ))}
+                        <option value="general" />
+                        <option value="driver" />
+                        <option value="payments" />
+                        <option value="docs" />
+                    </datalist>
                     <div className="grid grid-cols-2 gap-2">
                         <div>
                             <label className="text-[11px] text-gray-500 block mb-1">Заголовок *</label>
@@ -1180,13 +1269,18 @@ export default function AiControlCenterClient({
                                 placeholder="Как получить справку?" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
                         </div>
                         <div>
-                            <label className="text-[11px] text-gray-500 block mb-1">Категория</label>
-                            <input value={kbForm.category} onChange={e => setKbForm(f => ({ ...f, category: e.target.value }))}
+                            <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
+                                Категория <Hint text="Произвольная метка для группировки. Выпадающий список подсказывает уже использованные значения." />
+                            </label>
+                            <input list="kb-categories" value={kbForm.category} onChange={e => setKbForm(f => ({ ...f, category: e.target.value }))}
                                 placeholder="general" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
                         </div>
                     </div>
                     <div>
-                        <label className="text-[11px] text-gray-500 block mb-1">Примеры вопросов (по одному на строку)</label>
+                        <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
+                            Примеры вопросов (по одному на строку)
+                            <Hint text="Как водитель может спросить о том же самом. Помогает AI узнать запрос в живой переписке." />
+                        </label>
                         <textarea rows={2} value={kbForm.sampleQuestions} onChange={e => setKbForm(f => ({ ...f, sampleQuestions: e.target.value }))}
                             placeholder={"Как мне получить справку?\nГде взять документы?"} className="w-full border border-[#E0E0E0] bg-white rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#3390EC] resize-none" />
                     </div>
@@ -1195,18 +1289,30 @@ export default function AiControlCenterClient({
                         <textarea rows={3} value={kbForm.answer} onChange={e => setKbForm(f => ({ ...f, answer: e.target.value }))}
                             placeholder="Справки выдаются в офисе по адресу..." className="w-full border border-[#E0E0E0] bg-white rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#3390EC] resize-none" />
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <div>
-                            <label className="text-[11px] text-gray-500 block mb-1">Теги (через запятую)</label>
-                            <input value={kbForm.tags} onChange={e => setKbForm(f => ({ ...f, tags: e.target.value }))}
-                                placeholder="справка, документы" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                    {/* Расширенные поля: теги / приоритет — большинству админов
+                        не нужны на старте, поэтому скрыты в свёрнутом блоке. */}
+                    <details className="group rounded-lg border border-[#E8E8E8] bg-white">
+                        <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-1.5 text-[11px] font-medium text-gray-500 hover:text-[#111]">
+                            <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                            Дополнительно
+                        </summary>
+                        <div className="px-3 pb-3 grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                                <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
+                                    Теги <Hint text="Через запятую. Для поиска и фильтрации внутри базы знаний." />
+                                </label>
+                                <input value={kbForm.tags} onChange={e => setKbForm(f => ({ ...f, tags: e.target.value }))}
+                                    placeholder="справка, документы" className="w-full h-[30px] border border-[#E0E0E0] bg-[#F8F9FA] rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                            </div>
+                            <div>
+                                <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
+                                    Приоритет <Hint text="Если несколько записей подходят к одному вопросу — AI берёт ту, у которой число больше. 0 — обычная запись." />
+                                </label>
+                                <input type="number" min={0} max={100} value={kbForm.priority} onChange={e => setKbForm(f => ({ ...f, priority: +e.target.value }))}
+                                    className="w-full h-[30px] border border-[#E0E0E0] bg-[#F8F9FA] rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-[11px] text-gray-500 block mb-1">Приоритет</label>
-                            <input type="number" min={0} max={100} value={kbForm.priority} onChange={e => setKbForm(f => ({ ...f, priority: +e.target.value }))}
-                                className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
-                        </div>
-                    </div>
+                    </details>
                     <div className="flex gap-2 pt-1">
                         <button onClick={handleCreateKb} disabled={kbSaving}
                             className="h-[28px] px-3 bg-[#3390EC] text-white text-[11px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors">
@@ -1219,8 +1325,9 @@ export default function AiControlCenterClient({
 
             <div className="space-y-2">
                 {kb.length === 0 && (
-                    <div className="text-center py-8 text-gray-400 text-[13px]">
-                        База знаний пуста. Добавьте первую запись.
+                    <div className="text-center py-8 text-gray-500 text-[13px]">
+                        <div className="font-medium text-[#111] mb-1">Пока пусто</div>
+                        <div className="text-[12px]">Добавьте 3–5 базовых FAQ — без этого AI будет «фантазировать» по контексту.</div>
                     </div>
                 )}
                 {kb.map(entry => (
@@ -1230,7 +1337,10 @@ export default function AiControlCenterClient({
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-[13px] font-semibold text-[#111] truncate">{entry.title}</span>
                                     <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{entry.category}</span>
-                                    {entry.priority > 0 && <span className="text-[10px] text-[#3390EC]">p{entry.priority}</span>}
+                                    {entry.priority > 0 && (
+                                        <span title={`Приоритет ${entry.priority} из 100 — выше шанс быть выбранной AI`}
+                                              className="text-[10px] text-[#3390EC] cursor-help">★ {entry.priority}</span>
+                                    )}
                                 </div>
                                 <p className="text-[11px] text-gray-500 line-clamp-2">{entry.answer}</p>
                                 {entry.tags.length > 0 && (
@@ -1266,28 +1376,99 @@ export default function AiControlCenterClient({
         skip:       'bg-gray-100 text-gray-500',
     }
 
+    // ─── Локальные фильтры журнала ────────────────────────────────
+    // Серверный action `getDecisionLogs` уже принимает channel/decision —
+    // но текущая страница грузит логи один раз на mount. Чтобы не трогать
+    // backend и не плодить роутинг, фильтруем уже загруженные 30 записей
+    // в памяти. Когда понадобится больше — добавим серверную пагинацию.
+    const [logFilterChannel,  setLogFilterChannel]  = useState<string>('all')
+    const [logFilterDecision, setLogFilterDecision] = useState<string>('all')
+
+    const filteredLogs = logs.filter(l => {
+        if (logFilterChannel  !== 'all' && l.channel  !== logFilterChannel)  return false
+        if (logFilterDecision === 'errors'   ) return !!l.error
+        if (logFilterDecision === 'feedback' ) return l.reviewedByOperator
+        if (logFilterDecision !== 'all' && l.decision !== logFilterDecision) return false
+        return true
+    })
+
     const LogTab = () => (
         <div className="space-y-3">
-            {logs.length === 0 && (
-                <div className="text-center py-8 text-gray-400 text-[13px]">
-                    Журнал пуст. Решения появятся после первых сообщений.
+            <InlineInfo>
+                👍 / 👎 рядом с ответом AI помогает администратору понять, где агент работает хорошо,
+                а где нужно поправить правила или базу знаний. Оценка обратима — поставьте ту, которой нет.
+            </InlineInfo>
+
+            {/* Простые фильтры — клиентские, по уже загруженной странице */}
+            {logs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="text-gray-400">Канал:</span>
+                    {(['all', 'max', 'telegram', 'whatsapp'] as const).map(c => (
+                        <button key={c} onClick={() => setLogFilterChannel(c)}
+                            className={`h-[24px] px-2.5 rounded-full font-semibold border transition-colors ${
+                                logFilterChannel === c
+                                    ? 'bg-[#3390EC] text-white border-[#3390EC]'
+                                    : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
+                            }`}>
+                            {c === 'all' ? 'Все' : CHANNEL_LABELS[c]}
+                        </button>
+                    ))}
+                    <span className="text-gray-400 ml-2">Решение:</span>
+                    {([
+                        { val: 'all',       label: 'Все' },
+                        { val: 'auto_reply',label: 'Автоответ' },
+                        { val: 'escalate',  label: 'Эскалация' },
+                        { val: 'errors',    label: 'С ошибками' },
+                        { val: 'feedback',  label: 'С оценкой' },
+                    ]).map(({ val, label }) => (
+                        <button key={val} onClick={() => setLogFilterDecision(val)}
+                            className={`h-[24px] px-2.5 rounded-full font-semibold border transition-colors ${
+                                logFilterDecision === val
+                                    ? 'bg-[#3390EC] text-white border-[#3390EC]'
+                                    : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
+                            }`}>
+                            {label}
+                        </button>
+                    ))}
                 </div>
             )}
-            {logs.map(log => (
+
+            {logs.length === 0 && (
+                <div className="text-center py-8 text-gray-500 text-[13px]">
+                    <div className="font-medium text-[#111] mb-1">Пока пусто</div>
+                    <div className="text-[12px]">{canEdit ? 'Решения появятся, когда AI начнёт отвечать в чатах. Включите AI в шапке.' : 'Решения появятся, когда AI начнёт отвечать в чатах.'}</div>
+                </div>
+            )}
+
+            {logs.length > 0 && filteredLogs.length === 0 && (
+                <div className="text-center py-6 text-gray-400 text-[12px]">
+                    По фильтрам ничего не найдено.
+                </div>
+            )}
+
+            {filteredLogs.map(log => (
                 <div key={log.id} className="bg-white border border-[#E8E8E8] rounded-xl p-3.5 space-y-2">
+                    {/* Метаданные: канал · решение · время. Intent и confidence% —
+                        технические; убрали из основной строки, оставили в title-tooltip. */}
                     <div className="flex items-center gap-2 text-[11px]">
-                        <span className="text-gray-400">{new Date(log.createdAt).toLocaleString('ru')}</span>
-                        {log.channel && <span className="bg-purple-50 text-purple-700 font-bold px-1.5 py-0.5 rounded-full text-[10px]">{CHANNEL_LABELS[log.channel] ?? log.channel}</span>}
-                        {log.detectedIntent && <span className="text-gray-600 font-mono">{log.detectedIntent}</span>}
-                        {log.confidence != null && <span className="text-gray-400">{(log.confidence * 100).toFixed(0)}%</span>}
-                        {log.decision && (
-                            <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${DECISION_COLORS[log.decision] ?? 'bg-gray-100 text-gray-600'}`}>
-                                {log.decision === 'auto_reply' ? 'Автоответ' : log.decision === 'escalate' ? 'Оператор' : log.decision}
+                        {log.channel && (
+                            <span className="bg-[#F8F9FA] text-gray-700 font-medium px-2 py-0.5 rounded-full text-[10px] border border-[#F0F0F0]">
+                                {CHANNEL_LABELS[log.channel] ?? log.channel}
                             </span>
                         )}
+                        {log.decision && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${DECISION_COLORS[log.decision] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {log.decision === 'auto_reply' ? 'Автоответ' : log.decision === 'escalate' ? 'Эскалация' : log.decision}
+                            </span>
+                        )}
+                        {log.confidence != null && (
+                            <span title={`Уверенность AI: ${(log.confidence * 100).toFixed(0)}%`}
+                                  className="text-gray-400 cursor-help">{(log.confidence * 100).toFixed(0)}%</span>
+                        )}
+                        <span className="ml-auto text-gray-400">{new Date(log.createdAt).toLocaleString('ru')}</span>
                     </div>
                     {log.generatedReply && (
-                        <div className="text-[11px] text-gray-600 bg-[#F8F9FA] rounded-lg px-3 py-2 line-clamp-2">
+                        <div className="text-[12px] text-[#111] bg-[#F8F9FA] rounded-lg px-3 py-2 line-clamp-3">
                             {log.generatedReply}
                         </div>
                     )}
@@ -1296,7 +1477,8 @@ export default function AiControlCenterClient({
                             <XCircle size={10} /> {log.error}
                         </div>
                     )}
-                    {/* Feedback оператора */}
+                    {/* Feedback. Кнопки 👍/👎 видны всем — это единственная
+                        легитимная функция менеджера в этой странице. */}
                     {!log.reviewedByOperator && log.decision === 'auto_reply' && (
                         <div className="flex gap-1.5 pt-1">
                             <span className="text-[10px] text-gray-400 mr-1">Оценить:</span>
@@ -1323,13 +1505,15 @@ export default function AiControlCenterClient({
 
     // ─── Tabs навигация ───────────────────────────────────────────
 
-    const TABS = [
+    const ALL_TABS = [
         { key: 'sync',     label: 'Синхронизация', icon: RefreshCw },
         { key: 'provider', label: 'AI Провайдер',  icon: Zap },
         { key: 'rules',    label: 'Правила',        icon: Settings },
         { key: 'kb',       label: 'База знаний',    icon: BookOpen },
         { key: 'log',      label: 'Журнал',         icon: ClipboardList },
     ] as const
+    // Менеджер видит только Журнал — все настроечные вкладки админ-only.
+    const TABS = canEdit ? ALL_TABS : ALL_TABS.filter(t => t.key === 'log')
 
     return (
         <div className="flex flex-col h-full">
@@ -1360,13 +1544,19 @@ export default function AiControlCenterClient({
                 ))}
             </div>
 
-            {/* Content */}
+            {/* Content. Менеджер видит только Журнал — даже если в state
+                окажется другая вкладка (например, из старого URL),
+                рендерим LogTab — это безопасный fallback. */}
             <div className="flex-1 overflow-y-auto pr-1">
-                {tab === 'sync'     && <SyncTab />}
-                {tab === 'provider' && <ProviderTab />}
-                {tab === 'rules'    && <RulesTab />}
-                {tab === 'kb'       && <KbTab />}
-                {tab === 'log'      && <LogTab />}
+                {!canEdit ? <LogTab /> : (
+                    <>
+                        {tab === 'sync'     && <SyncTab />}
+                        {tab === 'provider' && <ProviderTab />}
+                        {tab === 'rules'    && <RulesTab />}
+                        {tab === 'kb'       && <KbTab />}
+                        {tab === 'log'      && <LogTab />}
+                    </>
+                )}
             </div>
         </div>
     )
