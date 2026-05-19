@@ -6,6 +6,8 @@ import {
     Eye, EyeOff, Info, ExternalLink,
 } from "lucide-react"
 import TelephonyTabs from "../_components/TelephonyTabs"
+import { AiCallKeysSection } from "../ai-call-keys/AiCallKeysClient"
+import type { AiCallKeysStatus } from "@/lib/ai-call/keys-status"
 
 interface ParamMap {
     username?: string
@@ -32,7 +34,13 @@ interface StatusPayload {
 
 const MASKED = '••••••••'
 
-export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolean }) {
+export default function TelephonyConnectionClient({
+    canEdit,
+    keysStatus,
+}: {
+    canEdit: boolean
+    keysStatus: AiCallKeysStatus
+}) {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [params, setParams] = useState<ParamMap>({})
@@ -283,6 +291,18 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                         </div>
                     </>
                 )}
+            </section>
+
+            {/* ── AI-call provider keys (OpenAI / Yandex SpeechKit) ───── */}
+            <section className="flex flex-col gap-4 rounded-md border border-border bg-card p-5">
+                <div>
+                    <div className="text-[15px] font-semibold text-foreground">API-ключи AI-обзвона</div>
+                    <div className="text-[12px] text-muted-foreground">
+                        OpenAI используется для LLM-диалога и Whisper-транскрипции. Yandex SpeechKit — приоритетный
+                        STT/TTS для русской речи. Ключи хранятся в БД зашифрованными, .env остаётся как dev-fallback.
+                    </div>
+                </div>
+                <AiCallKeysSection initialStatus={keysStatus} canEdit={canEdit} />
             </section>
 
             {/* ── Future: manager extension passwords, WS URL etc. ────── */}
