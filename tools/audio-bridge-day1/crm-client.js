@@ -4,6 +4,7 @@
  *   resolveCallByUuid(fsUuid)         GET /api/ai-calls/sessions/by-fs-uuid/<fsUuid>
  *   appendTranscript(callId, role, text)
  *                                     POST /api/ai-calls/sessions/<callId>/transcript-item
+ *   postState(callId, state)          POST /api/ai-calls/sessions/<callId>/state
  *   finalize(callId, payload)         POST /api/ai-calls/sessions/<callId>/finalize
  *   fetchKeys()                       GET /api/internal/ai-call-keys
  *
@@ -72,6 +73,32 @@ async function appendTranscript(callId, role, text) {
     }
 }
 
+/**
+ * Push a CRM-canonical intermediate state transition (`greeting` /
+ * `active` / `transferring`). The endpoint validates the allowlist
+ * server-side and is idempotent — same-state POSTs and POSTs against
+ * already-terminal calls are a no-op. So callers MAY safely call this
+ * more than once for the same transition; we still keep server-side
+ * call sites guarded to avoid unnecessary HTTP.
+ *
+ * Fire-and-forget by design: the response body is discarded, errors
+ * land on stderr. We don't want bridge-side retry here — that would
+ * race with the call's own state machine and risk rolling forward
+ * after the dialog already moved on. Eventual consistency through the
+ * structured opsLog stream is the canonical operator surface.
+ */
+async function postState(callId, state) {
+    try {
+        await fetch(`${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/state`, directInit({
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ state }),
+        }))
+    } catch (err) {
+        console.error(`[crm] postState ${state} for ${callId} failed: ${err.message}`)
+    }
+}
+
 async function finalize(callId, payload) {
     const res = await fetch(`${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/finalize`, directInit({
         method: 'POST',
@@ -124,6 +151,7 @@ function invalidateKeysCache() {
 module.exports = {
     resolveCallByUuid,
     appendTranscript,
+    postState,
     finalize,
     fetchKeys,
     invalidateKeysCache,

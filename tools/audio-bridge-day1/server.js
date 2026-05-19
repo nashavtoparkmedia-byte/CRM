@@ -46,6 +46,7 @@ const tts = require('./tts-router')
 const llm = require('./llm-client')
 const crm = require('./crm-client')
 const runtime = require('./runtime-config')
+const { opsLog } = require('./opsLog')
 const { CallSession } = require('./call-session')
 
 // Active per-call sessions keyed by FreeSWITCH call UUID. WS connections
@@ -365,6 +366,15 @@ async function ensureSessionForCall(callUuid) {
     if (!resolved?.callId || !resolved?.scenario) return null
 
     console.log(`[session] bind ${callUuid} → callId=${resolved.callId} scenario="${resolved.scenario.name}"`)
+
+    // CRM-canonical intermediate state writes are reported at most once
+    // per call to keep `Call.aiSessionStatus` operator-meaningful — we
+    // don't want a flood of greeting/active POSTs on bridge reconnect.
+    // Endpoint is also idempotent server-side; this is the bridge-side
+    // first line of defence.
+    let greetingReported = false
+    let activeReported = false
+
     const session = new CallSession({
         callUuid,
         scenario: resolved.scenario,
@@ -378,7 +388,39 @@ async function ensureSessionForCall(callUuid) {
         onTranscriptItem: (role, text) => {
             crm.appendTranscript(resolved.callId, role, text).catch(() => {})
         },
-        onState: s => console.log(`[session ${callUuid}] state=${s}`),
+        onState: s => {
+            // Always emit a structured JSON-line for every transition
+            // (idle/greeting/listening/thinking/speaking/ended). This is
+            // the «full operational timeline» surface — observable via
+            // `tail bridge.log | jq` without touching the DB.
+            opsLog('info', 'ai_call_state_changed', {
+                callUuid,
+                callId: resolved.callId,
+                to: s,
+            })
+            // CRM-canonical state write: `greeting` once, on entry.
+            // The other DB-visible transitions are owned by other paths:
+            //   - `starting`     → /api/ai-calls/start route
+            //   - `active`       → onUserSpoke below (first STT final)
+            //   - `transferring` → finalize route (reason='transferred')
+            //   - `ended`/`failed` → finalize route
+            // Everything else (listening/thinking/speaking/idle) stays
+            // bridge-local and never touches `Call.aiSessionStatus`.
+            if (s === 'greeting' && !greetingReported) {
+                greetingReported = true
+                crm.postState(resolved.callId, 'greeting')
+            }
+        },
+        onUserSpoke: () => {
+            // First STT final the session accepts. Marks the call as
+            // `active` in CRM — «real dialog has started, not just
+            // bot-monologue in greeting». Helper guards against the
+            // 2nd+ STT final hitting this branch; endpoint idempotency
+            // is the second line of defence.
+            if (activeReported) return
+            activeReported = true
+            crm.postState(resolved.callId, 'active')
+        },
     })
     sessions.set(callUuid, session)
     session.start().catch(err => {
