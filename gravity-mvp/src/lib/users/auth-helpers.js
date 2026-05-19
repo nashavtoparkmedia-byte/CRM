@@ -110,4 +110,106 @@ function canLogin({ currentUser, targetUserId, allUsers }) {
     return { allowed: false, reason: 'unknown_current_role' }
 }
 
-module.exports = { pickUserById, canLogin }
+/**
+ * The two privileged-operator roles that are allowed to manage other
+ * users (add / update / delete) and that count toward the
+ * «at least one privileged operator must remain» invariant.
+ */
+const PRIVILEGED_ROLES = Object.freeze(['Администратор', 'Руководитель'])
+
+/**
+ * The full allowlist of roles permitted to exist on a UserItem.
+ * Anything outside this set is rejected by `isValidRole` before it can
+ * reach `users.json`.
+ */
+const VALID_ROLES = Object.freeze(['Менеджер', 'Руководитель', 'Администратор'])
+
+/**
+ * Predicate: is the current user permitted to manage other users?
+ *
+ * Mirrors the existing client-side guard in `app/users/page.tsx` (which
+ * shows «Доступ запрещен» to Менеджер) and the `canLogin` policy from
+ * PR #45 (Администратор + Руководитель = operational tier):
+ *
+ *   anonymous     → false (fail closed)
+ *   Менеджер      → false
+ *   Руководитель  → true
+ *   Администратор → true
+ *   any other     → false (defense-in-depth)
+ */
+function canManageUsers(currentUser) {
+    if (!currentUser) return false
+    return PRIVILEGED_ROLES.includes(currentUser.role)
+}
+
+/**
+ * Predicate: is `role` one of the three allowlisted role strings?
+ *
+ * Server actions accept arbitrary JSON from the wire; without this
+ * guard an attacker could POST `addUser({ role: '__proto__' })` or
+ * similar garbage and corrupt `users.json`. Reject anything that isn't
+ * an exact string match.
+ */
+function isValidRole(role) {
+    return typeof role === 'string' && VALID_ROLES.includes(role)
+}
+
+/**
+ * Operational safety invariant: after deleting `idToDelete`, would the
+ * system be left with **zero** privileged users (no Администратор and
+ * no Руководитель)? If yes — the caller must refuse the delete.
+ *
+ * Why this matters: without at least one privileged user no one can
+ * recover the system through the UI. `login()` is locked down per
+ * PR #45 and user-CRUD itself requires `canManageUsers`. Recovery
+ * would mean hand-editing `users.json` on disk — an operational
+ * foot-gun we explicitly want to prevent.
+ *
+ * Returns `true` when the delete WOULD break the invariant (block it).
+ */
+function wouldDeleteLastPrivileged(users, idToDelete) {
+    const remaining = users.filter(u =>
+        u.id !== idToDelete && PRIVILEGED_ROLES.includes(u.role),
+    )
+    return remaining.length === 0
+}
+
+/**
+ * Same shape as `wouldDeleteLastPrivileged`, but for the role-change
+ * branch of `updateUser`: would patching user `idToUpdate` to `newRole`
+ * leave the system without a privileged user? Counts users **after**
+ * applying the hypothetical patch.
+ *
+ * Returns `true` when the demotion WOULD break the invariant (block).
+ *
+ * Returns `false` when the patch isn't a relevant role change
+ * (newRole missing, target unknown, target wasn't privileged, target
+ * stays privileged).
+ */
+function wouldDemoteLastPrivileged(users, idToUpdate, newRole) {
+    if (newRole === undefined || newRole === null) return false
+    const target = users.find(u => u.id === idToUpdate)
+    if (!target) return false // unknown id — the caller's own update
+                              // path will no-op; this helper only
+                              // watches for last-privileged loss.
+    if (!PRIVILEGED_ROLES.includes(target.role)) return false // wasn't privileged
+    if (PRIVILEGED_ROLES.includes(newRole)) return false       // stays privileged
+
+    // Target IS currently privileged AND newRole isn't. Would any other
+    // privileged user remain?
+    const otherPrivileged = users.filter(u =>
+        u.id !== idToUpdate && PRIVILEGED_ROLES.includes(u.role),
+    )
+    return otherPrivileged.length === 0
+}
+
+module.exports = {
+    pickUserById,
+    canLogin,
+    canManageUsers,
+    isValidRole,
+    wouldDeleteLastPrivileged,
+    wouldDemoteLastPrivileged,
+    PRIVILEGED_ROLES,
+    VALID_ROLES,
+}

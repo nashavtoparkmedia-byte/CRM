@@ -95,6 +95,61 @@ Anonymous-bypass остаётся как известный intentional trade-of
 
 ---
 
+## user CRUD server actions — PARTIALLY mitigated
+
+**Где:** `gravity-mvp/src/lib/users/user-service.ts` — `addUser`,
+`updateUser`, `deleteUser`. Использует UI `app/users/page.tsx`.
+
+**Что было:** все три функции были без серверного guard'a. Менеджер
+из DevTools мог:
+- `updateUser('u1', { role: 'Администратор' })` — self-elevation в
+  один шаг, обходящий PR #44/#45 целиком.
+- `addUser({ ..., role: 'Администратор' })` → новый admin → `login`
+  на него (через anonymous-path, который остаётся открытым).
+- `deleteUser('u2')` → удалить единственного Администратора, DoS
+  на admin pool.
+
+**Чем закрыто** (PR `fix/user-crud-guard`):
+
+- `assertCanManageUsers(action)` — server-side guard в начале каждой
+  функции. Reads cookie, resolves user через `pickUserById`, проверяет
+  через `canManageUsers`. На denial → structured warn:
+  `[auth] blocked user-management current=<id> role=<role> action=<addUser|updateUser|deleteUser>` + throw `Error('forbidden')`.
+  Политика: Администратор + Руководитель allowed; всё остальное
+  (включая Менеджер и anonymous) denied.
+
+- **Role allowlist в addUser/updateUser:** `isValidRole(role)` гарантирует
+  что в `users.json` попадают только три строки `Менеджер|Руководитель|Администратор`.
+  Защищает от prototype-poisoning и malformed-input.
+
+- **Last-privileged invariant в deleteUser/updateUser:**
+  `wouldDeleteLastPrivileged` / `wouldDemoteLastPrivileged` предотвращают
+  ситуацию, когда в системе не остаётся ни одного Администратора +
+  Руководителя. Без этого operator может случайно сделать UI
+  unrecoverable, и recovery потребует ручного редактирования
+  `users.json` на диске.
+
+- **20 unit-тестов** в `__tests__/user-crud.test.js` (canManageUsers /
+  isValidRole / wouldDeleteLastPrivileged / wouldDemoteLastPrivileged) +
+  все 13 предшествующих регрессий (login + pickUserById) остаются PASS.
+
+**Что НЕ закрыто этим PR (намеренно):**
+
+- **Anonymous user CRUD** через `/login` UI или DevTools всё ещё
+  возможен: anonymous → не имеет cookie → `canManageUsers(null)` →
+  false → blocked. Однако anonymous может вызвать `login(<existing admin id>)`
+  (это intentional onboarding flow PR #45), стать admin и потом
+  делать CRUD. Закрытие требует real auth.
+- **Audit trail / history log** изменений users.json — нет (отдельная
+  feature).
+- **UI-уровень enforcement** — оставлен как есть (client-side check в
+  `app/users/page.tsx` достаточен в комбинации с server-guard).
+
+**Priority of remaining work:** Low (anonymous-path закрывается
+полноценной authentication, не точечным fix-ом).
+
+---
+
 ## 26 callsites `getCurrentUser()` — частично mitigated
 
 После удаления fallback все они получают `null` в anonymous-сценарии.
