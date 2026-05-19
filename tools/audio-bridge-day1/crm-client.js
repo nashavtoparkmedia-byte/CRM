@@ -17,6 +17,8 @@
  * gate them by a shared secret (BRIDGE_SHARED_TOKEN — already wired here).
  */
 
+const { retryFinalizeRequest } = require('./retry-helpers')
+
 const CRM_BASE_URL = process.env.CRM_BASE_URL ?? 'http://127.0.0.1:3002'
 const BRIDGE_SHARED_TOKEN = process.env.BRIDGE_SHARED_TOKEN
 const KEYS_CACHE_TTL_MS = Number(process.env.BRIDGE_KEYS_CACHE_TTL_MS ?? 60_000)
@@ -99,17 +101,31 @@ async function postState(callId, state) {
     }
 }
 
+/**
+ * POST `/api/ai-calls/sessions/<callId>/finalize` with retry.
+ *
+ * Until this PR a transient CRM blip at the moment of finalize would
+ * leave the Call row stuck in `active`/`greeting` for 30 minutes
+ * (until the PR #43 stale-session reaper swept it). The fixed retry
+ * policy in `./retry-helpers.js` closes that gap for short outages
+ * without turning finalize into a blocking dependency: 3 attempts,
+ * 5 s per-attempt timeout, 500/1500 ms backoffs between them. 4xx
+ * responses are NOT retried (caller-side errors — retry won't help).
+ * Total worst-case ≈ 17 s.
+ *
+ * On final failure the helper throws; `server.js` already catches
+ * that throw. The retry inside this function is a *consistency
+ * improvement*, not a hard call-blocking dependency — if the CRM is
+ * truly down for the full retry window the row is still picked up
+ * by the stale-cleanup reaper.
+ */
 async function finalize(callId, payload) {
-    const res = await fetch(`${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/finalize`, directInit({
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(payload),
-    }))
-    if (!res.ok) {
-        const body = await res.text().catch(() => '')
-        throw new Error(`CRM finalize failed: HTTP ${res.status} ${body.slice(0, 200)}`)
-    }
-    return res.json().catch(() => ({}))
+    const url = `${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/finalize`
+    const init = directInit({
+        headers: { ...authHeaders() },
+    })
+    const r = await retryFinalizeRequest({ url, payload, init, callId })
+    return r.body
 }
 
 // ── Plaintext key cache, served from /api/internal/ai-call-keys ──────────────
