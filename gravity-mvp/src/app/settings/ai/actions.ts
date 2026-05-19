@@ -2,10 +2,50 @@
    $queryRaw which returns any[]; pragmatic over strict here. */
 'use server'
 
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
+import { getUsers } from '@/lib/users/user-service'
+
+// ─── Role guard ───────────────────────────────────────────────────
+//
+// UI уже скрывает кнопки настройки от менеджеров — но server actions
+// можно вызвать вручную через DevTools / fetch. Этот guard ставит
+// тот же чек на серверной стороне.
+//
+// ВАЖНО: НЕ используем общий getCurrentUser() — он fallback'ится на
+// `u3` (Руководитель) когда cookie crm_user_id отсутствует. Менеджер
+// мог бы удалить cookie через DevTools и обойти проверку. Здесь —
+// строгая логика: нет cookie → нет прав; пользователь не найден → нет
+// прав; роль не Администратор/Руководитель → нет прав.
+//
+// Helper не exported: в файле с 'use server' все exported функции
+// становятся server actions, а нам нужна внутренняя проверка.
+//
+// Open actions, доступные ВСЕМ ролям (включая менеджера):
+//   - все get* (read-only)
+//   - setOperatorVerdict (👍/👎 — единственное легитимное
+//     mutation-действие для менеджера в этом разделе)
+//   - checkScraperHealth (read-only ping транспорта)
+//
+// Protected actions (только Администратор / Руководитель):
+//   - saveAiConfig
+//   - testAiConnection (отправляет API-ключ в Anthropic/OpenAI)
+//   - create/update/deleteKnowledgeEntry
+//   - createImportJob / cancelImportJob / deleteImportJob
+async function assertCanEditAi() {
+    const cookieStore = await cookies()
+    const id = cookieStore.get('crm_user_id')?.value
+    if (!id) throw new Error('Недостаточно прав')
+    const users = await getUsers()
+    const user = users.find(u => u.id === id)
+    if (!user) throw new Error('Недостаточно прав')
+    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
+        throw new Error('Недостаточно прав')
+    }
+}
 
 // ─── AiAgentConfig ────────────────────────────────────────────────
 
@@ -17,6 +57,7 @@ export async function getAiConfig() {
 }
 
 export async function saveAiConfig(data: Record<string, any>) {
+    await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return null
     try {
@@ -45,6 +86,7 @@ export async function saveAiConfig(data: Record<string, any>) {
 }
 
 export async function testAiConnection(provider: string, apiKey: string, model: string) {
+    await assertCanEditAi()
     // Минимальный тест — попытка обратиться к API провайдера. Outbound
     // fetch уже идёт через undici globalDispatcher (см.
     // src/lib/ai-call/init-proxy.ts, импортируется из instrumentation.ts),
@@ -124,6 +166,7 @@ export async function createKnowledgeEntry(data: {
     channels: string[]
     priority: number
 }) {
+    await assertCanEditAi()
     const id = `kb_${Date.now()}`
     await prisma.$executeRaw`
         INSERT INTO "KnowledgeBaseEntry" (id, title, category, "sampleQuestions", answer, tags, channels, active, priority, "createdAt", "updatedAt")
@@ -145,6 +188,7 @@ export async function updateKnowledgeEntry(id: string, data: Partial<{
     answer: string; tags: string[]; channels: string[]
     active: boolean; priority: number
 }>) {
+    await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return
     const sets = fields.map((k, i) => `"${k}" = $${i + 1}`).join(', ')
@@ -157,6 +201,7 @@ export async function updateKnowledgeEntry(id: string, data: Partial<{
 }
 
 export async function deleteKnowledgeEntry(id: string) {
+    await assertCanEditAi()
     await prisma.$executeRaw`DELETE FROM "KnowledgeBaseEntry" WHERE id = ${id}`
     revalidatePath('/settings/ai')
 }
@@ -211,6 +256,7 @@ export async function createImportJob(data: {
     daysBack?: number
     connectionId?: string
 }) {
+    await assertCanEditAi()
     const id = `job_${Date.now()}`
     const daysBack = data.daysBack ?? null
     const connId = data.connectionId ?? null
@@ -265,6 +311,7 @@ export async function createImportJob(data: {
 }
 
 export async function cancelImportJob(id: string) {
+    await assertCanEditAi()
     try {
         await prisma.$executeRaw`
             UPDATE "HistoryImportJob"
@@ -278,6 +325,7 @@ export async function cancelImportJob(id: string) {
 }
 
 export async function deleteImportJob(id: string) {
+    await assertCanEditAi()
     try {
         await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE id = ${id}`
         revalidatePath('/settings/ai')
