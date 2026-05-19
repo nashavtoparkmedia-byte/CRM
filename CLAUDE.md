@@ -40,9 +40,26 @@ WhatsApp/Telegram.
 
 Порты: CRM → 3002, Scraper API → :3003, MAX Scraper → :3005.
 
-Перед стартом проверить `docker info`. Если Docker Desktop не запущен —
-сказать пользователю поднять иконкой в трее. `crm-redis` + `crm-minio`
-не критичны для UI, но скрапер упрётся в `ECONNREFUSED :6379`.
+**Local infra prerequisites (Redis + MinIO).** Без них AI-call
+persistence layer не работает: recording upload в MinIO и
+finalize/transcribe queue в Redis. Два способа поднять:
+
+```
+# Способ 1 — нативно в WSL (быстрее, не нужен Docker Desktop):
+node gravity-mvp/scripts/ensure_local_infra.js
+
+# Способ 2 — через Docker compose в telephony/ (рекомендовано для прода-зеркала):
+docker compose -f telephony/docker-compose.yml up -d redis minio minio-init
+```
+
+Helper-скрипт `ensure_local_infra.js` идемпотентный: если Redis/MinIO
+уже подняты — no-op; если нет — ставит/стартует в WSL и создаёт
+`recordings` bucket. Запускать единожды после reboot.
+
+Перед стартом скрапера дополнительно проверить `docker info` — если
+Docker Desktop не запущен, AI-call всё ещё работает (нативные
+WSL-сервисы), но скрапер с BullMQ упрётся в `ECONNREFUSED :6379`
+если оба провайдера упали.
 
 #### 2. «Телефония» / «Зелёная точка телефонии» / «Телефония красная»
 **Не AudioBridge** — для зелёной точки в шапке нужен ТОЛЬКО FreeSWITCH.
@@ -120,6 +137,34 @@ Yandex API ключ не сконфигурирован в админке или
 **TTS still on OpenAI.** Yandex TTS module exists (`yandex-tts.js`),
 но не активирован в проде — отдельная follow-up задача (russian voice
 quality work).
+
+### AI-call persistence layer (Task #4/#5 — закрыты)
+
+После реальных AI-звонков ожидается:
+- `Call.recordingPath` — MP3 в MinIO под `<year>/<month>/<fsUuid>.mp3`
+- `Call.aiSessionStatus = 'ended'` (или `'transferring'` для manager-handoff)
+- `Call.aiAnalysis` — JSON с qualification_status / lead_summary / reason / lead_data
+- `Call.aiSummary` — короткое summary одной строкой
+
+**Прежние симптомы (опровергнуты)**: `recordingPath=null` после звонка
+и `POST /api/ai-calls/sessions/<id>/finalize` тайм-аут >5 s. Корень
+обоих — отсутствующая локальная инфра (MinIO для upload, Redis для
+BullMQ queue.add блокировал finalize из-за `maxRetriesPerRequest: null`).
+
+**Code-уровень фиксы (PR — см. ниже)**:
+- `gravity-mvp/src/lib/freeswitch/recordingProcessor.ts` — per-stage
+  logging (`recording_stage_wav_found` / `_encoded` / `_uploaded` /
+  `_transcribe_enqueued`) + per-stage `withTimeout` обёртки (encode 60s,
+  upload 30s, enqueue 2s). System никогда не блокируется на mute infra.
+- `gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts` —
+  `enqueueAnalyze` обёрнут в `withTimeout(2000ms)`. Если Redis down —
+  finalize не висит, аналитика откладывается на ручной retry.
+
+**Regression smoke**: `node gravity-mvp/scripts/smoke_ai_persistence.js`
+синтетически прогоняет полный lifecycle (Prisma insert → fake WAV →
+processRecording → finalize HTTP → assertions) без живого звонка. 9/9
+проверок PASS на текущем main, latency ~7s end-to-end (ffmpeg encode
++ MinIO upload — основное время).
 
 ### SIP extension mapping (шапка CRM)
 `src/lib/sip/extensions.ts` маппит `user.id` → SIP-расширение в FS.

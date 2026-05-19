@@ -5,6 +5,25 @@ import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { enqueueAnalyze } from '@/lib/queue/queues'
 
+/**
+ * Race a promise against a deadline. If the inner promise doesn't settle
+ * within `ms`, throw a clearly-tagged timeout error so the caller can log
+ * the stage that hung without leaking the inner unsettled promise.
+ *
+ * Used because BullMQ Queue.add (and similar Redis-dependent calls) holds
+ * commands on the offline queue with `maxRetriesPerRequest: null`. When
+ * Redis is unreachable that queue never drains and the await blocks the
+ * whole HTTP request indefinitely — which manifested as «finalize >5 s,
+ * aiSessionStatus=failed» (Task #5).
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, tag: string): Promise<T> {
+    let to: NodeJS.Timeout | undefined
+    const timer = new Promise<never>((_, reject) => {
+        to = setTimeout(() => reject(new Error(`timeout_${tag}_after_${ms}ms`)), ms)
+    })
+    return Promise.race([p, timer]).finally(() => { if (to) clearTimeout(to) }) as Promise<T>
+}
+
 export const dynamic = 'force-dynamic'
 
 /**
@@ -135,9 +154,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     // the transcript after the fact. The job is idempotent on callId, and
     // the worker skips when aiAnalysis is already populated, so re-running
     // finalize never double-bills.
+    //
+    // The enqueue is wrapped in `withTimeout`: BullMQ Queue.add holds
+    // commands on the offline queue when Redis is unreachable
+    // (`maxRetriesPerRequest: null` is required for the worker side),
+    // which without this guard blocks the HTTP request indefinitely. The
+    // 2 s ceiling is much larger than a healthy enqueue (~10–50 ms) and
+    // much smaller than the 5 s client-side timeout we saw stall against.
     if (!aiAnalysisPayload && call.transcript && call.transcript.trim().length > 0) {
         try {
-            await enqueueAnalyze(id)
+            await withTimeout(enqueueAnalyze(id), 2000, 'enqueueAnalyze')
             opsLog('info', 'ai_call_analyze_enqueued_on_finalize', {
                 callId: id,
                 reason: 'no_end_call_tool_result',
@@ -146,8 +172,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         } catch (err: any) {
             // Don't surface a 500 here — finalize already succeeded in the
             // primary path (Call row is up to date). A failed enqueue means
-            // Redis is unhealthy; UI just won't show aiAnalysis until the
-            // operator retries via the manual re-analyze action.
+            // Redis is unhealthy or absent; UI just won't show aiAnalysis
+            // until the operator retries via the manual re-analyze action.
             opsLog('error', 'ai_call_analyze_enqueue_failed', {
                 callId: id,
                 error: err.message ?? String(err),
