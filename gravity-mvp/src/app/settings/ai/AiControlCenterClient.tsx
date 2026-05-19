@@ -6,7 +6,6 @@ import {
     Play, Pause, CheckCircle2, XCircle, AlertCircle,
     Plus, Trash2, Save, RefreshCw, ChevronDown, ChevronUp,
     Zap, MessageSquare, Phone, Send, Square, X, HelpCircle,
-    Info,
 } from 'lucide-react'
 import {
     saveAiConfig, testAiConnection,
@@ -105,14 +104,16 @@ interface Props {
 
 // ─── Переиспользуемые UI-примитивы ────────────────────────────────
 
-/** Короткая подсказка в одну-две строки, рядом с действием. По стилю
- *  совпадает с inline-info-блоками в /settings/integrations/ai-call-help. */
+/** Короткая подсказка в одну-две строки, рядом с действием. Telegram-
+ *  style: спокойный серый текст, без иконки и без bg-обёртки. Тонкий
+ *  left-border накапливает «это пояснение», но не кричит «callout».
+ *  Раньше было border + bg + Info-иконка — выглядело корпоративно
+ *  и тяжело. */
 function InlineInfo({ children }: { children: React.ReactNode }) {
     return (
-        <div className="flex items-start gap-2 rounded-lg border border-[#3390EC]/15 bg-[#3390EC]/[0.04] px-3 py-2 text-[12px] text-[#111] leading-[1.5]">
-            <Info size={13} className="shrink-0 mt-0.5 text-[#3390EC]" />
-            <span>{children}</span>
-        </div>
+        <p className="text-[12px] text-gray-500 leading-[1.5] border-l-2 border-[#E8E8E8] pl-3">
+            {children}
+        </p>
     )
 }
 
@@ -143,11 +144,24 @@ const STAT_HINT: Record<string, string> = {
     'Чатов':     'Сколько чатов попало в импорт.',
     'Контактов': 'Уникальные собеседники. У одного контакта может быть несколько чатов.',
 }
-const MODE_LABELS: Record<string, string> = {
-    off:             'Выключен',
-    suggest_only:    'Советует',
-    auto_reply:      'Автоответ',
-    operator_locked: 'Оператор',
+// Что AI реально делает в каждом режиме — для шапки и для tooltip-ов.
+// Это «mental model»: вместо «mode = suggest_only» показываем «AI
+// подсказывает ответы». Помогает админу не держать в голове термины.
+const RUNNING_LABEL: Record<string, string> = {
+    off:             'AI не работает',
+    suggest_only:    'AI подсказывает ответы',
+    auto_reply:      'AI отвечает сам, сложное передаёт менеджеру',
+    operator_locked: 'AI передаёт все диалоги менеджерам',
+}
+
+// Простая склейка-«N ответов / переданы менеджеру / ошибки» в одну
+// человеческую фразу, без слэшей и цифр-через-разделитель.
+function plural(n: number, one: string, few: string, many: string) {
+    const mod10 = n % 10
+    const mod100 = n % 100
+    if (mod10 === 1 && mod100 !== 11) return one
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few
+    return many
 }
 
 function StatusDot({ status, detail }: { status: string, detail?: React.ReactNode }) {
@@ -205,45 +219,59 @@ export default function AiControlCenterClient({
 
     // ─── Runtime Status block ─────────────────────────────────────
 
-    const RuntimeStatus = () => (
-        <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 mb-5 flex flex-wrap gap-4 items-center">
-            <div className="flex items-center gap-2">
-                <div className={`w-2.5 h-2.5 rounded-full ${config.enabled ? 'bg-green-500' : 'bg-gray-300'}`} />
-                <span className="text-[13px] font-semibold text-[#111]">
-                    AI {config.enabled ? 'включён' : 'выключен'}
+    // Шапка-статус: плоская строка, без box-обёртки. Цель — спокойное
+    // ощущение «AI работает», а не monitoring-панель. Цифры за сутки
+    // подаются как человеческая фраза, без слэшей.
+    const RuntimeStatus = () => {
+        const channels = config.activeChannels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')
+        const replied  = stats.autoReplied
+        const escal    = stats.escalated
+        const errs     = stats.errors
+        // Собираем 24h-фразу только если что-то было — в первые сутки
+        // молча, без «0 ответов / 0 ошибок».
+        const sentence: string[] = []
+        if (replied > 0) sentence.push(`${replied} ${plural(replied, 'ответ', 'ответа', 'ответов')}`)
+        if (escal   > 0) sentence.push(`${escal} ${plural(escal, 'передан', 'переданы', 'передано')} менеджеру`)
+        if (errs    > 0) sentence.push(`${errs} ${plural(errs, 'ошибка', 'ошибки', 'ошибок')}`)
+        const stats24h = sentence.join(', ')
+
+        return (
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-6 text-[13px]">
+                <span className="inline-flex items-baseline gap-2">
+                    <span className={`w-2 h-2 rounded-full ${config.enabled ? 'bg-green-500' : 'bg-gray-300'}`} style={{ transform: 'translateY(-1px)' }} />
+                    <span className="font-medium text-[#111]">
+                        {config.enabled ? (RUNNING_LABEL[config.mode] ?? 'AI работает') : 'AI не работает'}
+                    </span>
                 </span>
-                <span className="text-[11px] text-gray-500 ml-1">— {MODE_LABELS[config.mode] ?? config.mode}</span>
+                {config.enabled && channels && (
+                    <span className="text-gray-500">· в {channels}</span>
+                )}
+                {stats24h && (
+                    <span className="text-gray-400">· за сутки: {stats24h}</span>
+                )}
+                {canEdit && (
+                    <button
+                        onClick={() => {
+                            const newEnabled = !config.enabled
+                            if (config.enabled && !confirm('Выключить AI? Авто-ответы во всех каналах остановятся.')) return
+                            setConfig(c => ({ ...c, enabled: newEnabled }))
+                            startTransition(async () => {
+                                await saveAiConfig({ enabled: newEnabled })
+                                showToast(newEnabled ? 'AI включён' : 'AI выключен')
+                            })
+                        }}
+                        className={`ml-auto h-[26px] px-3 rounded-md text-[12px] font-medium transition-colors ${
+                            config.enabled
+                                ? 'text-red-600 hover:bg-red-50'
+                                : 'text-green-600 hover:bg-green-50'
+                        }`}
+                    >
+                        {config.enabled ? 'Выключить' : 'Включить'}
+                    </button>
+                )}
             </div>
-
-            <div className="flex items-center gap-3 ml-auto text-[11px] text-gray-500">
-                <span>Каналы: <b className="text-[#111]">{config.activeChannels.map(c => CHANNEL_LABELS[c] ?? c).join(', ') || '—'}</b></span>
-                <span>24ч: <b className="text-green-600">{stats.autoReplied}</b> авто / <b className="text-yellow-600">{stats.escalated}</b> эскал. / <b className="text-red-500">{stats.errors}</b> ошибок</span>
-            </div>
-
-            {/* Переключатель On/Off — только для админа/руководителя.
-                Менеджер видит статус, но не может его менять. */}
-            {canEdit && (
-                <button
-                    onClick={() => {
-                        const newEnabled = !config.enabled
-                        if (config.enabled && !confirm('Выключить AI? Авто-ответы во всех каналах остановятся.')) return
-                        setConfig(c => ({ ...c, enabled: newEnabled }))
-                        startTransition(async () => {
-                            await saveAiConfig({ enabled: newEnabled })
-                            showToast(newEnabled ? 'AI включён' : 'AI выключен')
-                        })
-                    }}
-                    className={`h-[28px] px-3 rounded-lg text-[11px] font-semibold transition-colors ${
-                        config.enabled
-                            ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                            : 'bg-green-50 text-green-600 hover:bg-green-100'
-                    }`}
-                >
-                    {config.enabled ? 'Выключить' : 'Включить'}
-                </button>
-            )}
-        </div>
-    )
+        )
+    }
 
     // ─── Вкладка: Синхронизация ───────────────────────────────────
 
@@ -638,9 +666,11 @@ export default function AiControlCenterClient({
                 )}
             </div>
 
-            {/* Настройки импорта */}
-            <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[14px] font-semibold text-[#111]">Новый импорт</h4>
+            {/* Настройки импорта — без border/bg, чтобы не создавать
+                «коробку в коробке» после status-блока выше. Заголовок
+                плюс отступ работают как разделитель. */}
+            <div className="space-y-3 pt-1">
+                <h4 className="text-[14px] font-semibold text-[#111]">Загрузить ещё историю</h4>
 
                 {/* Каналы */}
                 <div>
@@ -708,13 +738,13 @@ export default function AiControlCenterClient({
                 </button>
             </div>
 
-            {/* История заданий */}
+            {/* История заданий — flat-список с divide-y, без внешней
+                рамки. Раньше была вложенная card с заголовком + border;
+                теперь это просто секция страницы. */}
             {importJobs.length > 0 && (
-                <div className="bg-white border border-[#E8E8E8] rounded-xl overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-[#F0F0F0]">
-                        <h4 className="text-[13px] font-semibold text-[#111]">История импортов</h4>
-                    </div>
-                    <div className="divide-y divide-[#F5F5F5]">
+                <div className="pt-1">
+                    <h4 className="text-[13px] font-semibold text-[#111] mb-2">Прошлые загрузки</h4>
+                    <div className="divide-y divide-[#F0F0F0] border-t border-b border-[#F0F0F0]">
                         {importJobs.slice(0, 5).map(job => {
                             const RESULT_LABELS: Record<string, string> = { full: 'Вся доступная история', partial: 'Частичный', 'live only': 'Только live', failed: 'Ошибка' }
                             const STATUS_LABELS: Record<string, string> = { queued: 'В очереди', running: 'Выполняется', completed: 'Завершён', failed: 'Ошибка' }
@@ -877,12 +907,10 @@ export default function AiControlCenterClient({
     return (
         <div className="space-y-5">
             <InlineInfo>
-                Anthropic (Claude) — лучше понимает русский. OpenAI (GPT) — дешевле и быстрее на коротких ответах.
-                Подключение и модели — без перезапуска, изменения применяются после «Сохранить».
+                AI работает через внешнюю модель: Anthropic (Claude) или OpenAI (GPT).
+                Claude лучше понимает русский, GPT дешевле и быстрее на коротких ответах.
             </InlineInfo>
-            <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[14px] font-semibold text-[#111]">Провайдер</h4>
-
+            <div className="space-y-4 pt-1">
                 <div className="flex gap-2">
                     {['anthropic', 'openai'].map(p => (
                         <button
@@ -1056,14 +1084,14 @@ export default function AiControlCenterClient({
     }
 
     const RulesTab = () => (
-        <div className="space-y-5">
+        <div className="space-y-6">
             <InlineInfo>
-                Начни с режима «Советует». Когда увидишь в Журнале, что AI отвечает правильно
-                — переключайся на «Автоответ». «Оператор» полностью передаёт диалоги менеджерам.
+                Начните с «Советует». Когда в Журнале увидите, что AI отвечает правильно — переключитесь на «Автоответ».
             </InlineInfo>
-            {/* Режим */}
-            <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
-                <h4 className="text-[14px] font-semibold text-[#111]">Режим работы</h4>
+            {/* Режим — flat-секция, без обёртки. Заголовок + spacing
+                разделяют её от Промпта ниже. */}
+            <div className="space-y-3 pt-1">
+                <h4 className="text-[14px] font-semibold text-[#111]">Что AI делает</h4>
                 <div className="grid grid-cols-2 gap-2">
                     {([
                         { val: 'off',             label: 'Выключен', hint: 'AI не работает совсем.' },
@@ -1146,10 +1174,12 @@ export default function AiControlCenterClient({
                 </div>
             </div>
 
-            {/* Промпт */}
-            <div className="bg-white border border-[#E8E8E8] rounded-xl p-4 space-y-3">
+            {/* Промпт — тоже flat. Меняет «системный промпт» (термин)
+                на «как AI разговаривает» — это и есть то, что админ
+                реально настраивает в этих 4 textarea. */}
+            <div className="space-y-3 pt-1">
                 <div className="flex items-center justify-between">
-                    <h4 className="text-[14px] font-semibold text-[#111]">Системный промпт</h4>
+                    <h4 className="text-[14px] font-semibold text-[#111]">Как AI разговаривает</h4>
                     <span className="text-[11px] text-gray-400">Можно оставить пустым — будут значения по умолчанию</span>
                 </div>
                 {[
@@ -1235,8 +1265,9 @@ export default function AiControlCenterClient({
     const KbTab = () => (
         <div className="space-y-4">
             <InlineInfo>
-                База знаний — точные ответы, которые AI должен знать без выдумок: условия работы, цены, график, частые вопросы.
-                Чем больше записей, тем меньше AI «галлюцинирует».
+                Точные ответы, которые AI должен знать без выдумок: условия работы,
+                цены, график, частые вопросы. Чем больше записей, тем меньше AI
+                «галлюцинирует».
             </InlineInfo>
             <div className="flex items-center justify-between">
                 <span className="text-[12px] text-gray-500">{kb.length} {kb.length === 1 ? 'запись' : kb.length >= 2 && kb.length <= 4 ? 'записи' : 'записей'}</span>
@@ -1323,57 +1354,72 @@ export default function AiControlCenterClient({
                 </div>
             )}
 
-            <div className="space-y-2">
-                {kb.length === 0 && (
-                    <div className="text-center py-8 text-gray-500 text-[13px]">
-                        <div className="font-medium text-[#111] mb-1">Пока пусто</div>
-                        <div className="text-[12px]">Добавьте 3–5 базовых FAQ — без этого AI будет «фантазировать» по контексту.</div>
-                    </div>
-                )}
-                {kb.map(entry => (
-                    <div key={entry.id} className={`bg-white border rounded-xl p-3.5 transition-colors ${entry.active ? 'border-[#E8E8E8]' : 'border-dashed border-gray-200 opacity-60'}`}>
-                        <div className="flex items-start gap-2">
+            {kb.length === 0 && (
+                <div className="text-center py-10 text-gray-500 text-[13px]">
+                    <div className="font-medium text-[#111] mb-1">Пока ничего</div>
+                    <div className="text-[12px]">Добавьте 3–5 базовых FAQ — без них AI будет «фантазировать» по контексту.</div>
+                </div>
+            )}
+
+            {/* Список — flat divide-y вместо боксов. Раньше каждая запись
+                выглядела как карточка товара с border + rounded — слишком
+                визуально-тяжело для текстовых FAQ. */}
+            {kb.length > 0 && (
+                <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
+                    {kb.map(entry => (
+                        <div key={entry.id} className={`py-3.5 flex items-start gap-2 transition-opacity ${entry.active ? '' : 'opacity-50'}`}>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-[13px] font-semibold text-[#111] truncate">{entry.title}</span>
-                                    <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{entry.category}</span>
+                                    <span className="text-[10px] text-gray-400">{entry.category}</span>
                                     {entry.priority > 0 && (
                                         <span title={`Приоритет ${entry.priority} из 100 — выше шанс быть выбранной AI`}
                                               className="text-[10px] text-[#3390EC] cursor-help">★ {entry.priority}</span>
                                     )}
                                 </div>
-                                <p className="text-[11px] text-gray-500 line-clamp-2">{entry.answer}</p>
+                                <p className="text-[12px] text-gray-600 line-clamp-2 leading-[1.5]">{entry.answer}</p>
                                 {entry.tags.length > 0 && (
-                                    <div className="flex flex-wrap gap-1 mt-1">
+                                    <div className="flex flex-wrap gap-x-2 mt-1 text-[11px] text-gray-400">
                                         {entry.tags.map(t => (
-                                            <span key={t} className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full">{t}</span>
+                                            <span key={t}>#{t}</span>
                                         ))}
                                     </div>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1 shrink-0">
+                            <div className="flex items-center gap-2 shrink-0 text-[11px]">
                                 <button onClick={() => handleToggleKb(entry)}
-                                    className={`text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${entry.active ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                                    {entry.active ? 'Вкл' : 'Выкл'}
+                                    className={`transition-colors ${entry.active ? 'text-green-600 hover:underline' : 'text-gray-400 hover:text-[#111]'}`}>
+                                    {entry.active ? 'вкл' : 'выкл'}
                                 </button>
                                 <button onClick={() => handleDeleteKb(entry.id)}
-                                    className="text-gray-300 hover:text-red-500 transition-colors p-1">
+                                    title="Удалить запись"
+                                    className="text-gray-300 hover:text-red-500 transition-colors">
                                     <Trash2 size={12} />
                                 </button>
                             </div>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     )
 
     // ─── Вкладка: Журнал ──────────────────────────────────────────
 
-    const DECISION_COLORS: Record<string, string> = {
-        auto_reply: 'bg-green-50 text-green-700',
-        escalate:   'bg-yellow-50 text-yellow-700',
-        skip:       'bg-gray-100 text-gray-500',
+    // Human-readable лейблы: «Ответил сам» вместо технического
+    // «auto_reply», «Передал менеджеру» вместо «escalate». Это то, что
+    // реально сделал AI, без терминов.
+    const DECISION_LABEL: Record<string, string> = {
+        auto_reply: 'Ответил сам',
+        escalate:   'Передал менеджеру',
+        skip:       'Не отвечал',
+    }
+    // Цвета — спокойные, без жирной заливки. Decision-маркер сейчас
+    // ставится перед текстом ответа, без bg-фона.
+    const DECISION_DOT_COLOR: Record<string, string> = {
+        auto_reply: 'bg-green-500',
+        escalate:   'bg-amber-500',
+        skip:       'bg-gray-300',
     }
 
     // ─── Локальные фильтры журнала ────────────────────────────────
@@ -1393,39 +1439,41 @@ export default function AiControlCenterClient({
     })
 
     const LogTab = () => (
-        <div className="space-y-3">
+        <div className="space-y-4">
             <InlineInfo>
-                👍 / 👎 рядом с ответом AI помогает администратору понять, где агент работает хорошо,
-                а где нужно поправить правила или базу знаний. Оценка обратима — поставьте ту, которой нет.
+                Что AI ответил и какие решения принял. 👍 или 👎 рядом с ответом
+                помогает понять, где AI работает хорошо, а где нужно поправить.
             </InlineInfo>
 
-            {/* Простые фильтры — клиентские, по уже загруженной странице */}
+            {/* Простые фильтры — клиентские, по уже загруженной странице.
+                Без bg-fill: серый текст-кнопки, выбранная подсвечена
+                цветом и тонкой подложкой. Спокойнее чем сплошные pills. */}
             {logs.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
                     <span className="text-gray-400">Канал:</span>
                     {(['all', 'max', 'telegram', 'whatsapp'] as const).map(c => (
                         <button key={c} onClick={() => setLogFilterChannel(c)}
-                            className={`h-[24px] px-2.5 rounded-full font-semibold border transition-colors ${
+                            className={`transition-colors ${
                                 logFilterChannel === c
-                                    ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                    : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
+                                    ? 'text-[#3390EC] font-medium'
+                                    : 'text-gray-500 hover:text-[#111]'
                             }`}>
-                            {c === 'all' ? 'Все' : CHANNEL_LABELS[c]}
+                            {c === 'all' ? 'все' : CHANNEL_LABELS[c]}
                         </button>
                     ))}
-                    <span className="text-gray-400 ml-2">Решение:</span>
+                    <span className="text-gray-400 ml-3">Решение:</span>
                     {([
-                        { val: 'all',       label: 'Все' },
-                        { val: 'auto_reply',label: 'Автоответ' },
-                        { val: 'escalate',  label: 'Эскалация' },
-                        { val: 'errors',    label: 'С ошибками' },
-                        { val: 'feedback',  label: 'С оценкой' },
+                        { val: 'all',       label: 'все' },
+                        { val: 'auto_reply',label: 'ответил сам' },
+                        { val: 'escalate',  label: 'передал менеджеру' },
+                        { val: 'errors',    label: 'с ошибками' },
+                        { val: 'feedback',  label: 'с оценкой' },
                     ]).map(({ val, label }) => (
                         <button key={val} onClick={() => setLogFilterDecision(val)}
-                            className={`h-[24px] px-2.5 rounded-full font-semibold border transition-colors ${
+                            className={`transition-colors ${
                                 logFilterDecision === val
-                                    ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                    : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
+                                    ? 'text-[#3390EC] font-medium'
+                                    : 'text-gray-500 hover:text-[#111]'
                             }`}>
                             {label}
                         </button>
@@ -1434,9 +1482,9 @@ export default function AiControlCenterClient({
             )}
 
             {logs.length === 0 && (
-                <div className="text-center py-8 text-gray-500 text-[13px]">
-                    <div className="font-medium text-[#111] mb-1">Пока пусто</div>
-                    <div className="text-[12px]">{canEdit ? 'Решения появятся, когда AI начнёт отвечать в чатах. Включите AI в шапке.' : 'Решения появятся, когда AI начнёт отвечать в чатах.'}</div>
+                <div className="text-center py-10 text-gray-500 text-[13px]">
+                    <div className="font-medium text-[#111] mb-1">Пока ничего</div>
+                    <div className="text-[12px]">{canEdit ? 'Когда AI начнёт отвечать в чатах, его решения появятся здесь.' : 'Когда AI начнёт отвечать в чатах, его решения появятся здесь.'}</div>
                 </div>
             )}
 
@@ -1446,60 +1494,70 @@ export default function AiControlCenterClient({
                 </div>
             )}
 
-            {filteredLogs.map(log => (
-                <div key={log.id} className="bg-white border border-[#E8E8E8] rounded-xl p-3.5 space-y-2">
-                    {/* Метаданные: канал · решение · время. Intent и confidence% —
-                        технические; убрали из основной строки, оставили в title-tooltip. */}
-                    <div className="flex items-center gap-2 text-[11px]">
-                        {log.channel && (
-                            <span className="bg-[#F8F9FA] text-gray-700 font-medium px-2 py-0.5 rounded-full text-[10px] border border-[#F0F0F0]">
-                                {CHANNEL_LABELS[log.channel] ?? log.channel}
-                            </span>
-                        )}
-                        {log.decision && (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${DECISION_COLORS[log.decision] ?? 'bg-gray-100 text-gray-600'}`}>
-                                {log.decision === 'auto_reply' ? 'Автоответ' : log.decision === 'escalate' ? 'Эскалация' : log.decision}
-                            </span>
-                        )}
-                        {log.confidence != null && (
-                            <span title={`Уверенность AI: ${(log.confidence * 100).toFixed(0)}%`}
-                                  className="text-gray-400 cursor-help">{(log.confidence * 100).toFixed(0)}%</span>
-                        )}
-                        <span className="ml-auto text-gray-400">{new Date(log.createdAt).toLocaleString('ru')}</span>
-                    </div>
-                    {log.generatedReply && (
-                        <div className="text-[12px] text-[#111] bg-[#F8F9FA] rounded-lg px-3 py-2 line-clamp-3">
-                            {log.generatedReply}
+            {/* Список решений — flat divide-y вместо боксов. Раньше каждое
+                решение было card'ом с rounded-xl border — выглядело как
+                log-viewer. Теперь это «лента историй»: одно решение —
+                одна строка-блок, тонкая граница снизу. */}
+            {filteredLogs.length > 0 && (
+                <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
+                    {filteredLogs.map(log => (
+                        <div key={log.id} className="py-4 space-y-2">
+                            {/* Заголовок строки: dot-маркер решения, текст
+                                решения, канал, время. Технический %
+                                спрятан в title-tooltip — он редко нужен. */}
+                            <div className="flex items-baseline gap-2 text-[12px]">
+                                {log.decision && (
+                                    <span className="inline-flex items-baseline gap-1.5">
+                                        <span className={`w-1.5 h-1.5 rounded-full ${DECISION_DOT_COLOR[log.decision] ?? 'bg-gray-300'}`} style={{ transform: 'translateY(-1px)' }} />
+                                        <span className="font-medium text-[#111]">
+                                            {DECISION_LABEL[log.decision] ?? log.decision}
+                                        </span>
+                                    </span>
+                                )}
+                                {log.channel && (
+                                    <span className="text-gray-400">· {CHANNEL_LABELS[log.channel] ?? log.channel}</span>
+                                )}
+                                {log.confidence != null && (
+                                    <span title={`Уверенность AI: ${(log.confidence * 100).toFixed(0)}%`}
+                                          className="text-gray-300 cursor-help">· {(log.confidence * 100).toFixed(0)}%</span>
+                                )}
+                                <span className="ml-auto text-gray-400">{new Date(log.createdAt).toLocaleString('ru')}</span>
+                            </div>
+                            {log.generatedReply && (
+                                <div className="text-[13px] text-[#111] leading-[1.5] line-clamp-3">
+                                    {log.generatedReply}
+                                </div>
+                            )}
+                            {log.error && (
+                                <div className="text-[12px] text-red-500 flex items-center gap-1">
+                                    <XCircle size={11} /> {log.error}
+                                </div>
+                            )}
+                            {/* Feedback. Кнопки 👍/👎 видны всем — это
+                                единственная легитимная функция менеджера. */}
+                            {!log.reviewedByOperator && log.decision === 'auto_reply' && (
+                                <div className="flex gap-3 pt-0.5">
+                                    {(['good', 'bad'] as const).map(v => (
+                                        <button key={v} onClick={async () => {
+                                            await setOperatorVerdict(log.id, v)
+                                            setLogs(prev => prev.map(l => l.id === log.id ? { ...l, reviewedByOperator: true, operatorVerdict: v } : l))
+                                        }}
+                                        title={v === 'good' ? 'AI ответил хорошо' : 'AI ответил плохо'}
+                                        className={`text-[12px] transition-colors ${v === 'good' ? 'text-gray-500 hover:text-green-600' : 'text-gray-500 hover:text-red-500'}`}>
+                                            {v === 'good' ? '👍 Хорошо' : '👎 Плохо'}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                            {log.reviewedByOperator && (
+                                <div className="text-[11px] text-gray-400">
+                                    {log.operatorVerdict === 'good' ? '👍 оценено как хороший ответ' : log.operatorVerdict === 'bad' ? '👎 оценено как плохой ответ' : '✏️ исправлено'}
+                                </div>
+                            )}
                         </div>
-                    )}
-                    {log.error && (
-                        <div className="text-[11px] text-red-500 flex items-center gap-1">
-                            <XCircle size={10} /> {log.error}
-                        </div>
-                    )}
-                    {/* Feedback. Кнопки 👍/👎 видны всем — это единственная
-                        легитимная функция менеджера в этой странице. */}
-                    {!log.reviewedByOperator && log.decision === 'auto_reply' && (
-                        <div className="flex gap-1.5 pt-1">
-                            <span className="text-[10px] text-gray-400 mr-1">Оценить:</span>
-                            {(['good', 'bad'] as const).map(v => (
-                                <button key={v} onClick={async () => {
-                                    await setOperatorVerdict(log.id, v)
-                                    setLogs(prev => prev.map(l => l.id === log.id ? { ...l, reviewedByOperator: true, operatorVerdict: v } : l))
-                                }}
-                                className={`text-[10px] font-semibold px-2 py-0.5 rounded-lg transition-colors ${v === 'good' ? 'bg-green-50 text-green-600 hover:bg-green-100' : 'bg-red-50 text-red-500 hover:bg-red-100'}`}>
-                                    {v === 'good' ? '👍 Хорошо' : '👎 Плохо'}
-                                </button>
-                            ))}
-                        </div>
-                    )}
-                    {log.reviewedByOperator && (
-                        <div className="text-[10px] text-gray-400">
-                            Оценка: {log.operatorVerdict === 'good' ? '👍' : log.operatorVerdict === 'bad' ? '👎' : '✏️'}
-                        </div>
-                    )}
+                    ))}
                 </div>
-            ))}
+            )}
         </div>
     )
 
@@ -1526,19 +1584,22 @@ export default function AiControlCenterClient({
 
             <RuntimeStatus />
 
-            {/* Tabs */}
-            <div className="flex gap-1 mb-5 border-b border-[#E8E8E8] pb-0">
+            {/* Tabs — спокойный underline (1px вместо 2px), active-tab
+                подсвечен цветом и тонкой линией под собой. Без жирной
+                рамы под всем рядом, чтобы tabs не выглядели как Material
+                AppBar. */}
+            <div className="flex gap-1 mb-6 border-b border-[#F0F0F0]">
                 {TABS.map(({ key, label, icon: Icon }) => (
                     <button
                         key={key}
                         onClick={() => setTab(key)}
-                        className={`flex items-center gap-1.5 px-3 h-[36px] text-[12px] font-semibold border-b-2 transition-colors ${
+                        className={`flex items-center gap-1.5 px-3 h-[34px] text-[13px] -mb-px border-b transition-colors ${
                             tab === key
-                                ? 'border-[#3390EC] text-[#3390EC]'
+                                ? 'border-[#3390EC] text-[#3390EC] font-medium'
                                 : 'border-transparent text-gray-500 hover:text-[#111]'
                         }`}
                     >
-                        <Icon size={12} />
+                        <Icon size={13} />
                         {label}
                     </button>
                 ))}
