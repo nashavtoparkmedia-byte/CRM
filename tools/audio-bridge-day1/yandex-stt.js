@@ -28,6 +28,16 @@
  *   YANDEX_FOLDER_ID — optional, logged for context only
  *
  * Lang: ru-RU. To change, set YANDEX_STT_LANG.
+ *
+ * Live verification (issue #18): cmpc74qzq000bvp04ngxgajwa — full
+ * driver-qualification scenario, 6/6 turns clean (vs Whisper smoke
+ * cmpc6cd7v0007vp04tsqlopeh with 2 mishears + 2 silence
+ * hallucinations). Recognised forms with proper Russian casing and
+ * numerals — «права категории B», «больше 3 лет», «Екатеринбург»,
+ * «на этой неделе». Out-of-the-box `general` model is sufficient at
+ * 100% accuracy on this scenario; no per-vocabulary tuning required
+ * (the v3 streaming proto doesn't expose `speech_context` /
+ * phrase hints anyway — that interface is v1-batch-only).
  */
 
 const { credentials, Metadata } = require('@grpc/grpc-js')
