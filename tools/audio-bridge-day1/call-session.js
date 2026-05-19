@@ -93,15 +93,80 @@ class CallSession {
         // to a real epoch when speaking ends.
         this.acceptSttAfter = 0
 
+        // Silence-timeout machinery. The system prompt already tells the
+        // model «if STT sends garbage/silence reply briefly with "Не
+        // расслышал, повторите?" once and then move on», but that
+        // requires the model to be GIVEN something to react to. If the
+        // lead is fully silent — STT emits no finals at all — the model
+        // sits idle and the call hangs. These timers fire from the bridge
+        // side, generate a synthetic user message that wakes the model up
+        // (or end the call after N strikes), independent of STT activity.
+        //
+        // SILENCE_TIMEOUT_MS — how long to wait in `listening` before
+        // counting one «strike». Default ~8 s = phone-call-natural pause
+        // between turns + Yandex / Whisper final lag.
+        // MAX_SILENT_STRIKES — call ends as `unclear / silence` after
+        // this many consecutive misses. Default 2 (one re-prompt, then
+        // give up — matches the model's instruction «Дважды не
+        // переспрашивай»).
+        this.SILENCE_TIMEOUT_MS = Number(process.env.SILENCE_TIMEOUT_MS ?? 8000)
+        this.MAX_SILENT_STRIKES = Number(process.env.MAX_SILENT_STRIKES ?? 2)
+        this.silenceTimer = null
+        this.silenceStrikes = 0
+
         this.sttSession = null
         // Counter for unique audio filenames per call.
         this.playbackCount = 0
+    }
+
+    _clearSilenceTimer() {
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer)
+            this.silenceTimer = null
+        }
+    }
+
+    _armSilenceTimer() {
+        this._clearSilenceTimer()
+        if (this.state === 'ended') return
+        this.silenceTimer = setTimeout(() => this._onSilenceTimeout(), this.SILENCE_TIMEOUT_MS)
+    }
+
+    async _onSilenceTimeout() {
+        this.silenceTimer = null
+        if (this.state !== 'listening') return  // user started speaking → ignore
+        this.silenceStrikes++
+        console.log(
+            `[call ${this.callUuid}] silence-strike ${this.silenceStrikes}/${this.MAX_SILENT_STRIKES} ` +
+            `after ${this.SILENCE_TIMEOUT_MS}ms`,
+        )
+        if (this.silenceStrikes >= this.MAX_SILENT_STRIKES) {
+            // Hand off to the model with a tail-of-silence marker so it
+            // can wrap up gracefully (the system prompt knows how to call
+            // end_call with qualification_status=unclear when the lead
+            // didn't engage).
+            this.pendingUserText = '(длительная тишина — лид не отвечает; завершай разговор end_call с qualification_status=unclear)'
+            return this._processPendingUserText()
+        }
+        // First strike — synthesize a short re-prompt from the model side.
+        this.pendingUserText = '(лид молчит — короткое подбадривание или повтор последнего вопроса)'
+        return this._processPendingUserText()
     }
 
     _setState(s) {
         if (!STATES.includes(s)) throw new Error(`Unknown state: ${s}`)
         this.state = s
         this.onState(s)
+        // Drive the silence timer off state transitions instead of from
+        // every code path — fewer places to forget.
+        //   listening → arm: lead has the floor, start the no-input clock.
+        //   anything else → clear: bot is speaking / thinking / ended, no
+        //     pending listen.
+        if (s === 'listening') {
+            this._armSilenceTimer()
+        } else {
+            this._clearSilenceTimer()
+        }
     }
 
     async start() {
@@ -175,6 +240,10 @@ class CallSession {
 
         this.pendingUserText = (this.pendingUserText + ' ' + trimmed).trim()
         this.onTranscriptItem('user', trimmed)
+        // Lead actually said something — reset the no-input counter so a
+        // single mid-call gap doesn't end up as «strike 2 / abandoned».
+        this.silenceStrikes = 0
+        this._clearSilenceTimer()
         // Reset debounce: each new final pushes back the "user is done" moment.
         if (this.userPauseTimer) clearTimeout(this.userPauseTimer)
         this.userPauseTimer = setTimeout(() => this._processPendingUserText(), this.USER_PAUSE_MS)
@@ -363,6 +432,7 @@ class CallSession {
             clearTimeout(this.userPauseTimer)
             this.userPauseTimer = null
         }
+        this._clearSilenceTimer()
         if (this.sttSession) {
             try { this.sttSession.stop() } catch {}
             this.sttSession = null
