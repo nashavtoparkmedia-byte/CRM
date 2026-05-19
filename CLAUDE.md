@@ -91,22 +91,35 @@ git checkout tools/audio-bridge-day1/server.js tools/audio-bridge-day1/call-sess
 ```
 Или зафиксировать отдельным коммитом, если правки имеют смысл.
 
-**Force OpenAI STT + TTS.** В `tools/audio-bridge-day1/.env` должны
-быть **оба** env:
+**STT / TTS provider matrix (production):**
 ```
-AI_CALL_STT_PROVIDER=whisper
-AI_CALL_TTS_PROVIDER=openai
+AI_CALL_STT_PROVIDER=yandex      # default, native Russian, no silence hallucinations
+AI_CALL_TTS_PROVIDER=openai      # Yandex TTS not wired yet (separate follow-up)
 ```
-Yandex SpeechKit в текущей сборке SDK падает на старте STT-сессии:
-`this.stream.on is not a function` — известная проблема (SDK ↔ runtime
-несовместимость в `@yandex-cloud/nodejs-sdk` / `recognizeStreaming()`).
-Без `AI_CALL_STT_PROVIDER` bridge выберет Yandex (он приоритетнее по
-умолчанию когда ключи есть в админке) и любой AI-звонок сразу
-крашит STT → лид слышит бот, бот слышит тишину.
-TTS-override симметричный: иначе как только Yandex API key появится
-в админке, TTS автомат переключится на Yandex (даже когда STT остался
-на Whisper), и пайплайн станет mismatched. Yandex SDK интеграция —
-отдельная follow-up задача после закрытия echo.
+
+**STT — Yandex SpeechKit v3 streaming.** PR #22 fixed the SDK transport
+(nice-grpc + static API-Key metadata, replaced the broken `Session`
+client). Live-verified against Whisper on the same scenario
+(callId `cmpc74qzq000bvp04ngxgajwa` vs `cmpc6cd7v0007vp04tsqlopeh`):
+
+| | Yandex | Whisper |
+|---|---|---|
+| user STT correctness | 6/6 clean | 4/6 (mishears: «Водительский бассейн», «Учительские») |
+| silence hallucinations | 0 | 2× «Редактор субтитров А.Синецкая Корректор А.Егорова» |
+| scenario fields captured | 6 (full flow → transfer to manager) | 2 (stuck on «не расслышал») |
+
+Yandex doesn't expose `speech_context` / phrase hints in the v3
+streaming proto, so no per-vocabulary tuning. Out-of-the-box `general`
+model is fine for the driver-qualification scenario.
+
+**Whisper остаётся fallback** через `AI_CALL_STT_PROVIDER=whisper`
+override — code path не тронут, ничего не сломано. Используется когда
+Yandex API ключ не сконфигурирован в админке или сторона Yandex
+недоступна.
+
+**TTS still on OpenAI.** Yandex TTS module exists (`yandex-tts.js`),
+но не активирован в проде — отдельная follow-up задача (russian voice
+quality work).
 
 ### SIP extension mapping (шапка CRM)
 `src/lib/sip/extensions.ts` маппит `user.id` → SIP-расширение в FS.
