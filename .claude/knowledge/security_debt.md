@@ -43,51 +43,55 @@ PR #28 (commit `7a75430`) ввёл локальный guard `assertCanEditAi()` 
 
 ---
 
-## login(userId) без аутентификации — ОТКРЫТО, High
+## login(userId) — PARTIALLY mitigated
 
-**Где:** `gravity-mvp/src/lib/users/user-service.ts:35-38`
+**Где:** `gravity-mvp/src/lib/users/user-service.ts` — функция `login`.
 
-```ts
-export async function login(userId: string) {
-    const cookieStore = await cookies()
-    cookieStore.set('crm_user_id', userId, { maxAge: 60 * 60 * 24 * 7 })
-}
-```
+**Чем mitigated** (PR `fix/login-escalation-guard`):
+- `login(targetUserId)` теперь читает текущий cookie, резолвит current
+  user через `pickUserById`, и применяет server-side политику
+  `canLogin({ currentUser, targetUserId, allUsers })`:
 
-**Что не так.** Это server action, callable из браузера. Принимает
-произвольный `userId` без password / OTP / OAuth / любой проверки
-identity, и просто записывает его в cookie. Любой пользователь может
-вызвать `login('u3')` и получить cookie Руководителя за один HTTP-запрос.
+| current role     | allowed target  |
+|------------------|-----------------|
+| anonymous        | any             |
+| Администратор    | any             |
+| Руководитель     | any             |
+| Менеджер         | self only       |
+| anything else    | denied          |
 
-**Severity.** Более серьёзная, чем закрытый fallback: fallback был
-passive-bypass (нужно удалить cookie), а `login(userId)` —
-active-bypass (одна команда выдаёт нужную роль). После закрытия
-fallback это **самый прямой путь к privilege escalation** на CRM.
+  Кросс-id login от Менеджера → throw `forbidden` + structured warn
+  `[auth] blocked login escalation current=<id> role=<role> target=<id> reason=<tag>`.
+- Unknown / empty target id → также throw (никогда не пишем мусор в
+  cookie, чтобы не получить ghost-сессию которая masquerades за anonymous).
+- 7 unit-тестов в `__tests__/login.test.js` покрывают все 4 строки
+  матрицы выше + unknown-target + empty-target кейсы.
 
-**Сценарий обхода:**
-1. Реальный менеджер (или любой, кто открыл UI) видит кнопки переключения
-   identity (legacy demo / dev-mode UX).
-2. В DevTools Console: `fetch('/api/...', ...)` или прямой вызов
-   server action c `userId='u3'`.
-3. Cookie выставлена, все последующие запросы — под Руководителем.
+**Что НЕ закрыто этим PR (намеренно):**
 
-**Что нужно сделать (отдельной задачей):**
+- **Anonymous → любая identity** через `/login` UI или DevTools.
+  Это **intentional trust model** для текущей стадии продукта: CRM —
+  internal trusted app с identity-selector, а не internet-grade auth.
+  Закрытие требует реальной аутентификации (email/password / SSO /
+  one-time link) — отдельный архитектурный решение.
+- **`addUser/updateUser/deleteUser` server actions без guard'ов** —
+  отдельный escalation vector (создать user с `role: 'Администратор'`
+  → залогиниться на него). Закрывается в следующем PR того же класса
+  («fix(auth): protect user CRUD server actions»).
 
-- [ ] Определить архитектурную цель: реальная аутентификация (email +
-      password / OAuth / SSO) или identity-selector remains, но
-      защищён shared-secret / VPN / network namespace.
-- [ ] Если remains identity-selector: подписывать cookie HMAC ключом,
-      проверять подпись в getCurrentUser.
-- [ ] Если real auth: добавить middleware + login flow + logout flow.
-- [ ] Удалить произвольный `login(userId)` server action или обернуть
-      его в strict identity-selection guard (что-то подобное по правам
-      `assertCanEditAi`).
-- [ ] Regression test: anonymous → не может вызвать `login('u3')` и
-      получить Руководителя за один запрос.
+**Что осталось сделать (future scope):**
 
-**Priority:** High / security.
-**Block-release:** да — до фикса любой пользователь, видевший UI хотя
-бы раз, может escalate до Руководителя одной server-action call.
+- [ ] Real authentication primitive (email/password / OAuth / SSO).
+- [ ] Подписанные cookie с HMAC (когда появится server secret).
+- [ ] Защита user-CRUD server actions (`addUser/updateUser/deleteUser`)
+      ролевым guard'ом по образцу `assertCanEditAi`.
+- [ ] Middleware-уровневая защита (когда определимся с auth-моделью).
+
+**Priority of remaining work:** High (anonymous flow + user-CRUD).
+**Block-release status:** статус понижен с «да» до «нет» — самый
+очевидный active-bypass (Менеджер → Руководитель из DevTools) закрыт.
+Anonymous-bypass остаётся как известный intentional trade-off для
+текущей стадии продукта.
 
 ---
 

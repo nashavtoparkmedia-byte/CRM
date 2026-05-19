@@ -34,4 +34,80 @@ function pickUserById(users, id) {
     return users.find(u => u.id === id) || null
 }
 
-module.exports = { pickUserById }
+/**
+ * Authoritative predicate for the `login(targetUserId)` server action.
+ *
+ * Background
+ * ──────────
+ * The CRM has no real authentication today — `login(id)` simply writes a
+ * cookie with the chosen user id. Without any guard, a Менеджер sitting
+ * in a session could invoke `login('u3')` from DevTools and silently
+ * become Руководитель. We don't want to redesign auth yet; we just want
+ * to close the «authenticated escalation» vector while keeping the
+ * legitimate flows working:
+ *
+ *   - Anonymous (no cookie) → can pick any identity. This is the
+ *     intentional onboarding/demo flow. Closing it requires real auth
+ *     (email/password / OAuth / one-time link) — separate scope.
+ *   - Администратор → can switch to any identity (multi-role QA).
+ *   - Руководитель → can switch to any identity (operational role,
+ *     legitimately reviews from a manager's perspective).
+ *   - Менеджер → may only re-login as themselves (cookie refresh /
+ *     recovery flow). Any cross-id login from a manager session is the
+ *     escalation we block.
+ *
+ * Returns a tagged verdict so `login()` can produce a structured
+ * forensic-friendly log line («[auth] blocked login escalation
+ * current=u1 role=Менеджер target=u3 reason=manager_escalation_blocked»)
+ * without leaking stack traces.
+ *
+ * @param {Object}   args
+ * @param {Object|null} args.currentUser  — resolved user from cookie, or null.
+ * @param {string}   args.targetUserId   — id requested for the new cookie.
+ * @param {Array<{id: string}>} args.allUsers — pool to validate target against.
+ * @returns {{ allowed: boolean, reason: string|null }}
+ */
+function canLogin({ currentUser, targetUserId, allUsers }) {
+    // Never write a non-existent id into the cookie — even if the role
+    // check below would let it through, the result is a session that
+    // resolves to `null` (since pickUserById misses) which masquerades
+    // as anonymous. Reject early.
+    if (!targetUserId) {
+        return { allowed: false, reason: 'empty_target' }
+    }
+    const target = allUsers.find(u => u.id === targetUserId)
+    if (!target) {
+        return { allowed: false, reason: 'unknown_target' }
+    }
+
+    // Anonymous → any identity. Intentional: this is the onboarding /
+    // initial-login flow. Closing it requires real authentication
+    // (out of scope for this PR — see security_debt.md).
+    if (!currentUser) {
+        return { allowed: true, reason: null }
+    }
+
+    // Privileged operational roles → any identity. Admins switch users
+    // for QA; supervisors legitimately review from a manager's
+    // perspective. Both are treated as trusted within the CRM's current
+    // «trusted internal app» model.
+    if (currentUser.role === 'Администратор' || currentUser.role === 'Руководитель') {
+        return { allowed: true, reason: null }
+    }
+
+    // Менеджер → only their own id (cookie refresh / recovery). Any
+    // cross-id login from a manager session is the escalation vector
+    // this whole helper exists to block.
+    if (currentUser.role === 'Менеджер') {
+        if (currentUser.id === targetUserId) {
+            return { allowed: true, reason: null }
+        }
+        return { allowed: false, reason: 'manager_escalation_blocked' }
+    }
+
+    // Defense-in-depth: any future role we don't recognise here is
+    // denied by default rather than silently allowed.
+    return { allowed: false, reason: 'unknown_current_role' }
+}
+
+module.exports = { pickUserById, canLogin }

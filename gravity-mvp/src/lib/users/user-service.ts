@@ -3,10 +3,10 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { cookies } from 'next/headers'
-// Pure user-resolution helper. Lives in a sibling `.js` so the
-// unit-test can require it directly via `node --test`, without a
+// Pure user-resolution helpers. Live in a sibling `.js` so the
+// unit-tests can require them directly via `node --test`, without a
 // TypeScript loader. See `./auth-helpers.js`.
-import { pickUserById } from './auth-helpers'
+import { pickUserById, canLogin } from './auth-helpers'
 
 const filePath = path.join(process.cwd(), 'src/data/users.json')
 
@@ -51,9 +51,51 @@ export async function getCurrentUser(): Promise<UserItem | null> {
     return (pickUserById(users, id) as UserItem | null)
 }
 
-export async function login(userId: string) {
+/**
+ * Switch the active CRM identity by writing the `crm_user_id` cookie.
+ *
+ * NOT a real authentication primitive — there is no password / token /
+ * proof of identity. The CRM operates in an «internal trusted app»
+ * model: anyone with browser access to the deployment can pick an
+ * identity from the user list. This action enforces the **minimum**
+ * safe boundary on top of that model:
+ *
+ *   - Anonymous, Администратор, Руководитель → may pick any identity.
+ *   - Менеджер → may only re-pick their own id (cookie refresh).
+ *
+ * Anything else throws `forbidden` so the caller can surface an
+ * unmistakable failure. The deny path emits one structured warning
+ * line — no stack trace, no telemetry — to make accidental escalation
+ * attempts visible in dev/server logs.
+ *
+ * Full canLogin matrix + rationale lives in `./auth-helpers.js`.
+ * Out of scope for this guard: real authentication, signed cookies,
+ * user-CRUD endpoints, the anonymous-onboarding path itself.
+ */
+export async function login(targetUserId: string) {
     const cookieStore = await cookies()
-    cookieStore.set('crm_user_id', userId, { maxAge: 60 * 60 * 24 * 7 }) // 1 week
+    const currentId = cookieStore.get('crm_user_id')?.value
+    const allUsers = await getUsers()
+    const currentUser = currentId
+        ? (pickUserById(allUsers, currentId) as UserItem | null)
+        : null
+
+    const verdict = canLogin({ currentUser, targetUserId, allUsers })
+    if (!verdict.allowed) {
+        // Structured one-liner — forensic-friendly, greppable, no stack
+        // trace. `current=anonymous` when there was no cookie at all,
+        // and `current=<id>` when there was. Same for role.
+        console.warn(
+            `[auth] blocked login escalation ` +
+            `current=${currentUser?.id ?? 'anonymous'} ` +
+            `role=${currentUser?.role ?? 'anonymous'} ` +
+            `target=${targetUserId} ` +
+            `reason=${verdict.reason}`,
+        )
+        throw new Error('forbidden')
+    }
+
+    cookieStore.set('crm_user_id', targetUserId, { maxAge: 60 * 60 * 24 * 7 }) // 1 week
 }
 
 export async function logout() {
