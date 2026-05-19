@@ -62,6 +62,10 @@ function setConnection(c: Connection | null): void {
 
 let reconnectDelay = (globalThis as any).__eslReconnectDelay ?? 2000
 
+export function getEslConnection(): Connection | null {
+    return getConnection()
+}
+
 export async function startEslListener(): Promise<void> {
     if (getConnection()) return
     connect()
