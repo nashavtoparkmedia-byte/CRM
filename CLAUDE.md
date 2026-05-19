@@ -243,6 +243,51 @@ npm --prefix gravity-mvp run cleanup:stale-ai-sessions
 [stale-ai-session-cleanup] dry-run scanned=N stale=K wouldUpdate=K ttlMin=30
 ```
 
+### Infrastructure health endpoint
+
+**Endpoint:** `GET /api/health/infra` — отдельный от
+messaging-focused `/api/health` (последний возвращает transport /
+pipeline / workflow / job state и т.д.). Этот specifically для
+AI-call stack: ping'ует 4 зависимости одновременно с независимым
+timeout-ом и возвращает структурированный JSON для external monitor'a.
+
+**Намеренно public** — обходит auth, потому что external monitor не
+носит cookie. Будущие auth-PR (signed cookies / middleware / real
+auth) обязаны сохранить anonymous access на этот route.
+
+**Зависимости** (parallel `Promise.allSettled`, env-override timeout
+`HEALTH_CHECK_TIMEOUT_MS`, default 2000 ms):
+- `postgres` — `prisma.$queryRaw\`SELECT 1\``
+- `redis` — raw TCP + RESP `PING` (без `ioredis` SDK)
+- `minio` — `@aws-sdk/client-s3 HeadBucketCommand`
+- `fs_esl` — TCP-connect only (никакого ESL auth, никакого `bgapi`)
+
+**Status policy:**
+| condition | status | HTTP |
+|-----------|--------|------|
+| все 4 ok | `ok` | 200 |
+| 1–3 failed | `degraded` | 503 |
+| все 4 failed (или пустой check-set) | `down` | 503 |
+
+**Response shape:**
+```json
+{
+  "status": "ok",
+  "ts": "2026-05-20T12:00:00.000Z",
+  "checks": [
+    {"name":"postgres","ok":true,"ms":12},
+    {"name":"redis","ok":true,"ms":3},
+    {"name":"minio","ok":true,"ms":18},
+    {"name":"fs_esl","ok":true,"ms":1}
+  ]
+}
+```
+`ms` всегда присутствует (включая timeout/throw paths). При failure
+добавляется `error: <reason>`.
+
+**Recommended ping cadence:** 10–60 сек, в зависимости от alert SLA
+монитора.
+
 ### SIP extension mapping (шапка CRM)
 `src/lib/sip/extensions.ts` маппит `user.id` → SIP-расширение в FS.
 Сейчас: `u1=101`, `u2=102`, `u3=103`. Если в `src/data/users.json`
