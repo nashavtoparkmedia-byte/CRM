@@ -101,11 +101,11 @@ function ManagerHelp() {
             </div>
 
             <Step number={1} id="m-help" title="Как AI помогает в чатах" icon={<MessageSquare className="h-4 w-4 text-primary" />}>
-                <p>AI читает входящие сообщения от водителей и отвечает на типовые вопросы автоматически — пока вы заняты другими диалогами.</p>
-                <p className="mt-2">Над сообщением, которое отправил AI, в общем потоке стоит маленькая отметка — так понятно, что это не вы.</p>
+                <p>AI читает входящие сообщения от водителей и отвечает на типовые вопросы автоматически — пока ты занят другими диалогами.</p>
+                <p className="mt-2">Над сообщением, которое отправил AI, в общем потоке стоит маленькая отметка — так понятно, что это не ты.</p>
             </Step>
 
-            <Step number={2} id="m-handoff" title="Когда AI передаст диалог вам">
+            <Step number={2} id="m-handoff" title="Когда AI передаст диалог тебе">
                 <p>AI не отвечает сам и оставляет диалог менеджеру в трёх случаях:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>не уверен в ответе (низкая «уверенность» в журнале)</DashItem>
@@ -117,9 +117,9 @@ function ManagerHelp() {
 
             <Step number={3} id="m-mistake" title="Если AI ответил неправильно" icon={<AlertTriangle className="h-4 w-4 text-amber-600" />}>
                 <ol className="ml-5 list-decimal space-y-1 text-[13px]">
-                    <li>Напишите водителю правильный ответ обычным сообщением — поверх ответа AI.</li>
-                    <li>Откройте <b>Журнал</b> в AI Control Center и поставьте 👎 на этом решении.</li>
-                    <li>Расскажите администратору, какой ответ был неправильным — он поправит правила или базу знаний.</li>
+                    <li>Напиши водителю правильный ответ обычным сообщением — поверх ответа AI.</li>
+                    <li>Открой <b>Журнал</b> в AI Control Center и поставь 👎 на этом решении.</li>
+                    <li>Расскажи администратору, какой ответ был неправильным — он поправит правила или базу знаний.</li>
                 </ol>
             </Step>
 
@@ -128,11 +128,11 @@ function ManagerHelp() {
                 <p className="mt-2">В журнале видно по каждому ответу:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>откуда сообщение (MAX / TG / WA)</DashItem>
-                    <DashItem>что решил AI (Автоответ / Эскалация)</DashItem>
+                    <DashItem>что решил AI («Ответил сам» / «Передал менеджеру»)</DashItem>
                     <DashItem>текст ответа</DashItem>
                     <DashItem>уверенность в процентах — насколько AI был уверен</DashItem>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Сверху — фильтры по каналу и решению. Используйте их, чтобы найти конкретный случай.</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">Сверху — фильтры по каналу и решению. Используй их, чтобы найти конкретный случай.</p>
             </Step>
 
             <Step number={5} id="m-feedback" title="Как поставить 👍 / 👎" icon={<ThumbsUp className="h-4 w-4 text-accent" />}>
@@ -147,8 +147,12 @@ function ManagerHelp() {
                         <span><b>Плохо</b> — ответ неуместен, неточен или вреден</span>
                     </li>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Оценка обратима — нажмите вторую кнопку, если ошиблись.</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">Оценка обратима — нажми вторую кнопку, если ошибся.</p>
             </Step>
+
+            <div className="rounded-md border border-border bg-surface/40 px-4 py-3 text-[13px] text-muted-foreground">
+                Если AI вообще не отвечает в чатах — обратись к администратору.
+            </div>
         </div>
     )
 }
@@ -174,25 +178,25 @@ function AdminHelp() {
             </Step>
 
             <Step number={2} id="a-provider" title="Шаг 1. Настройка провайдера" icon={<KeyRound className="h-4 w-4 text-primary" />}>
-                <p>Откройте <b>AI Провайдер</b> и выполните по порядку:</p>
+                <p>Открой <b>AI Провайдер</b> и пройди по порядку:</p>
                 <ol className="mt-1.5 ml-5 list-decimal space-y-1 text-[13px]">
-                    <li>Выберите провайдера: <b>Anthropic</b> (лучше понимает русский) или <b>OpenAI</b> (дешевле и быстрее на коротких ответах).</li>
-                    <li>Получите ключ — ссылка «где взять» рядом с полем.</li>
-                    <li>Вставьте ключ и нажмите <Tag>Проверить</Tag>. Дождитесь зелёной галочки.</li>
-                    <li>Нажмите <Tag>Сохранить</Tag>.</li>
+                    <li>Выбери провайдера: <b>Anthropic</b> (лучше понимает русский) или <b>OpenAI</b> (дешевле и быстрее на коротких ответах).</li>
+                    <li>Получи ключ — ссылка «где взять» рядом с полем.</li>
+                    <li>Вставь ключ и нажми <Tag>Проверить</Tag>. Дождись зелёной галочки.</li>
+                    <li>Нажми <Tag>Сохранить</Tag>.</li>
                 </ol>
                 <p className="mt-2 text-[12px] text-muted-foreground">Имена моделей внутри «Дополнительно» обычно менять не нужно — дефолты подходят. Они подменяются автоматически при переключении провайдера.</p>
             </Step>
 
             <Step number={3} id="a-rules" title="Шаг 2. Правила" icon={<Settings className="h-4 w-4 text-primary" />}>
-                <p>Откройте <b>Правила</b> и задайте безопасный старт:</p>
+                <p>Открой <b>Правила</b> и задай безопасный старт:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>Режим: <b>«Советует»</b> — AI пишет ответ в подсказку, отправляет менеджер. Безопасный старт.</DashItem>
-                    <DashItem>Каналы: включите те мессенджеры, где готовы пускать AI.</DashItem>
+                    <DashItem>Каналы: включи те мессенджеры, где готов пускать AI.</DashItem>
                     <DashItem>Уверенность для автоответа: <b>0.75</b> — рекомендуемое значение. Чем выше, тем реже AI отвечает сам.</DashItem>
                     <DashItem>Макс. автоответов подряд: <b>5</b> — защита от диалога робота с роботом.</DashItem>
                 </ul>
-                <p className="mt-3">Заполните 4 блока промпта:</p>
+                <p className="mt-3">Заполни 4 блока промпта:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem><b>Роль</b> — кто отвечает (должность, компания)</DashItem>
                     <DashItem><b>Тон</b> — как разговаривать</DashItem>
@@ -203,7 +207,7 @@ function AdminHelp() {
             </Step>
 
             <Step number={4} id="a-kb" title="Шаг 3. База знаний" icon={<BookOpen className="h-4 w-4 text-primary" />}>
-                <p>До запуска добавьте <b>3–5 базовых FAQ</b>. Без них AI будет «фантазировать» по контексту:</p>
+                <p>До запуска добавь <b>3–5 базовых FAQ</b>. Без них AI будет «фантазировать» по контексту:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>условия работы (комиссия, выплаты)</DashItem>
                     <DashItem>адрес офиса и график</DashItem>
@@ -220,32 +224,32 @@ function AdminHelp() {
             </Step>
 
             <Step number={5} id="a-sync" title="Шаг 4. Синхронизация истории" icon={<RefreshCw className="h-4 w-4 text-primary" />}>
-                <p>На вкладке <b>Синхронизация</b> загрузите историю чатов — AI будет понимать контекст диалогов.</p>
+                <p>На вкладке <b>Синхронизация</b> загрузи историю чатов — AI будет понимать контекст диалогов.</p>
                 <ol className="mt-1.5 ml-5 list-decimal space-y-1 text-[13px]">
-                    <li>Выберите каналы (MAX / TG / WA).</li>
+                    <li>Выбери каналы (MAX / TG / WA).</li>
                     <li>Режим: <b>«За последние N дней»</b>, 7 — достаточно для прогрева.</li>
-                    <li>Нажмите <Tag>Запустить импорт</Tag>.</li>
+                    <li>Нажми <Tag>Запустить импорт</Tag>.</li>
                 </ol>
-                <p className="mt-2 text-[12px] text-muted-foreground">MAX-импорт требует, чтобы был запущен <b>MAX Web Scraper</b> (иконка в трее или <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">start-all.bat</code> в корне проекта). Если статус «Сервис не запущен» — включите его и нажмите «Повторить проверку».</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">MAX-импорт требует, чтобы был запущен <b>MAX Web Scraper</b> (иконка в трее или <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">start-all.bat</code> в корне проекта). Если статус «Сервис не запущен» — включи его и нажми «Повторить проверку».</p>
             </Step>
 
             <Step number={6} id="a-enable" title="Шаг 5. Включить AI" icon={<Power className="h-4 w-4 text-accent" />}>
-                <p>В шапке страницы — кнопка <Tag color="accent">Включить</Tag>. Нажмите её, когда:</p>
+                <p>В шапке страницы — кнопка <Tag color="accent">Включить</Tag>. Нажми её, когда:</p>
                 <ul className="mt-1.5 space-y-1 text-[13px]">
                     <DashItem>провайдер подключён и проверен</DashItem>
                     <DashItem>выбран режим («Советует» для старта)</DashItem>
                     <DashItem>в каналах есть хотя бы один мессенджер</DashItem>
                     <DashItem>в базе знаний есть базовые ответы</DashItem>
                 </ul>
-                <p className="mt-2 text-[12px] text-muted-foreground">Первые сутки заходите в Журнал каждые 2 часа, ставьте 👍 / 👎. Если 👍 преобладает — переключайтесь на «Автоответ».</p>
+                <p className="mt-2 text-[12px] text-muted-foreground">Первые сутки заходи в Журнал каждые 2 часа, ставь 👍 / 👎. Если 👍 преобладает — переключай на «Автоответ».</p>
             </Step>
 
             <Step number={7} id="a-trouble" title="Если AI не отвечает" icon={<AlertTriangle className="h-4 w-4 text-destructive" />}>
-                <p><b>AI выключен</b> — в шапке серый индикатор. Нажмите «Включить».</p>
-                <p className="mt-2"><b>Ключ не подключён</b> — в Журнале появятся ошибки. Откройте <b>AI Провайдер</b>, нажмите «Проверить» ещё раз.</p>
+                <p><b>AI выключен</b> — в шапке серый индикатор. Нажми «Включить».</p>
+                <p className="mt-2"><b>Ключ не подключён</b> — в Журнале появятся ошибки. Открой <b>AI Провайдер</b>, нажми «Проверить» ещё раз.</p>
                 <p className="mt-2"><b>Каналы не выбраны</b> — в Правилах ни один из MAX / TG / WA не подсвечен синим.</p>
-                <p className="mt-2"><b>Порог слишком высокий</b> — AI всегда передаёт диалог менеджеру. Уменьшите «Уверенность для автоответа» в Правилах.</p>
-                <p className="mt-2"><b>Импорт упирается в «Сервис не запущен»</b> — включите MAX Web Scraper в трее или через <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">start-all.bat</code>.</p>
+                <p className="mt-2"><b>Порог слишком высокий</b> — AI всегда передаёт диалог менеджеру. Уменьши «Уверенность для автоответа» в Правилах.</p>
+                <p className="mt-2"><b>Импорт упирается в «Сервис не запущен»</b> — включи MAX Web Scraper в трее или через <code className="rounded bg-surface px-1 py-0.5 text-[12px] border border-border">start-all.bat</code>.</p>
             </Step>
         </div>
     )
