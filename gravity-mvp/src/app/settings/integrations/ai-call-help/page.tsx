@@ -35,7 +35,7 @@ const GUIDES: GuideCard[] = [
     },
     {
         href: '/settings/integrations/ai-call-help/ai-control-center',
-        title: 'Инструкция по AI Control Center',
+        title: 'Инструкция по AI в чатах',
         description: 'AI-агент в чатах MAX, Telegram и WhatsApp: настройка провайдера и правил, база знаний, журнал решений.',
         icon: <Bot className="h-5 w-5 text-violet-600" />,
         iconBg: 'bg-violet-100/60',

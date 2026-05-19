@@ -159,10 +159,14 @@ export const DOMAINS: NavigationDomain[] = [
                 // визуально по двум местам. Теперь — единый раздел «AI».
                 title: "AI",
                 items: [
-                    { label: "AI Control Center", href: "/settings/ai", icon: Cpu, sectionKey: "ai_control" },
+                    // Label «AI в чатах» — текстовый AI в MAX/TG/WhatsApp.
+                    // Симметрично «AI-обзвон» (голосовой AI). Старый
+                    // технический термин «AI Control Center» оставлен в
+                    // URL (/settings/ai), но в UI больше не показывается.
+                    { label: "AI в чатах", href: "/settings/ai", icon: Cpu, sectionKey: "ai_control" },
                     { label: "AI-обзвон", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
                     // Hub-индекс инструкций по всем AI-функциям. Внутри —
-                    // карточки на конкретные инструкции (AI Control Center,
+                    // карточки на конкретные инструкции (AI в чатах,
                     // AI-обзвон, и т.д. — по мере роста).
                     { label: "Инструкции", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
                 ]
