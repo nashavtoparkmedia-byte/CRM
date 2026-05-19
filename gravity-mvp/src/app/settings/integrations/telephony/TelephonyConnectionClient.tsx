@@ -294,7 +294,7 @@ export default function TelephonyConnectionClient({
             </section>
 
             {/* ── AI-call provider keys (OpenAI / Yandex SpeechKit) ───── */}
-            <section className="flex flex-col gap-4 rounded-md border border-border bg-card p-5">
+            <section id="api-keys" className="flex flex-col gap-4 rounded-md border border-border bg-card p-5 scroll-mt-6">
                 <div>
                     <div className="text-[15px] font-semibold text-foreground">API-ключи AI-обзвона</div>
                     <div className="text-[12px] text-muted-foreground">

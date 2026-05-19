@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Sparkles, Save, RotateCcw, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import { Save, RotateCcw, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import TelephonyTabs from "../_components/TelephonyTabs"
 
 interface ConfigShape {
     id: string
@@ -70,17 +71,7 @@ export default function TelephonyAiClient({
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
-            <header className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-                    <Sparkles className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                    <h1 className="text-[20px] font-semibold leading-tight text-foreground">AI-анализ звонков</h1>
-                    <p className="text-[13px] text-muted-foreground">
-                        Whisper расшифровывает запись, Claude оценивает разговор менеджера по 5 критериям.
-                    </p>
-                </div>
-            </header>
+            <TelephonyTabs active="ai" />
 
             {!canEdit && (
                 <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-muted-foreground">
