@@ -134,9 +134,34 @@ override — code path не тронут, ничего не сломано. Ис
 Yandex API ключ не сконфигурирован в админке или сторона Yandex
 недоступна.
 
-**TTS still on OpenAI.** Yandex TTS module exists (`yandex-tts.js`),
-но не активирован в проде — отдельная follow-up задача (russian voice
-quality work).
+**TTS still on OpenAI.** Yandex TTS module готов (PR
+[branch feat/ai-call-hardening] — readiness probe
+`tools/audio-bridge-day1/scripts/probe_yandex_tts.js` подтверждает:
+ключи приходят из CRM, tts-router принимает yandex, `synthesize()`
+возвращает 8 kHz mono linear16 WAV за ~400 мс). Production остаётся
+на OpenAI до отдельной voice-UX задачи — флип это смена env-флага,
+не код-изменение.
+
+### Dev simulation (без телефонии)
+
+`POST /api/ai-calls/dev-simulate` гоняет весь LLM/tools-флоу
+in-process — без FreeSWITCH, без аудио, без MinIO. Использует ту же
+prompt+TOOLS surface что live bridge. Полезно для тюнинга сценариев,
+проверки save_lead_data / end_call / transfer_to_manager без оплаты
+trunk-минут.
+
+Smoke: `node gravity-mvp/scripts/smoke_dev_simulate.js` — 3 сценария
+(qualified, not_qualified, unclear), assertion'ы устойчивы к GPT
+non-determinism (latency 4-15s per scenario, gpt-4o-mini).
+
+### Silence handling в live call
+
+`tools/audio-bridge-day1/call-session.js` добавляет no-input timer:
+`listening` стейт армит `SILENCE_TIMEOUT_MS` (8s default); по истечении
+кидает synthetic user message модели — первый strike это re-prompt
+(модель решает что сказать), второй strike — закрытие end_call со
+status=unclear. Сбрасывается на любой принятый STT final. Env knobs:
+`SILENCE_TIMEOUT_MS`, `MAX_SILENT_STRIKES`.
 
 ### AI-call persistence layer (Task #4/#5 — закрыты)
 
