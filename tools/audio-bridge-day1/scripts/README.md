@@ -21,6 +21,8 @@ Nothing here auto-runs. Every entry point requires explicit `node` /
 | Are two WAVs sample-identical (after alignment)? | `diff_wav_samples.js` | Bit-diff count, per-window divergence histogram |
 | I need a known-broken WAV to validate a metric on. | `inject_dropouts.py` | WAV with deterministic silence gaps |
 | I need an A/B/C listening set of the same Russian phrase. | `generate_23_listening_set.js` | 3 WAVs in `.claude/diag-23/<ts>/` |
+| Does mod_audio_fork mono/mixed/stereo + pause/resume still work in this build? | `test_mod_audio_fork.js` | Fps + bytes/frame per mix-type, pause/resume effective yes/no |
+| Are Yandex TTS keys + module + format ready to flip to prod? | `probe_yandex_tts.js` | 5-step JSON report, persisted WAV for manual listen |
 
 ## Quick recipes
 

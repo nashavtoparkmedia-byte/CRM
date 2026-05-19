@@ -134,9 +134,62 @@ override — code path не тронут, ничего не сломано. Ис
 Yandex API ключ не сконфигурирован в админке или сторона Yandex
 недоступна.
 
-**TTS still on OpenAI.** Yandex TTS module exists (`yandex-tts.js`),
-но не активирован в проде — отдельная follow-up задача (russian voice
-quality work).
+**TTS still on OpenAI.** Yandex TTS module готов (PR
+[branch feat/ai-call-hardening] — readiness probe
+`tools/audio-bridge-day1/scripts/probe_yandex_tts.js` подтверждает:
+ключи приходят из CRM, tts-router принимает yandex, `synthesize()`
+возвращает 8 kHz mono linear16 WAV за ~400 мс). Production остаётся
+на OpenAI до отдельной voice-UX задачи — флип это смена env-флага,
+не код-изменение.
+
+### Dev simulation (без телефонии)
+
+`POST /api/ai-calls/dev-simulate` гоняет весь LLM/tools-флоу
+in-process — без FreeSWITCH, без аудио, без MinIO. Использует ту же
+prompt+TOOLS surface что live bridge. Полезно для тюнинга сценариев,
+проверки save_lead_data / end_call / transfer_to_manager без оплаты
+trunk-минут.
+
+Smoke: `node gravity-mvp/scripts/smoke_dev_simulate.js` — 3 сценария
+(qualified, not_qualified, unclear), assertion'ы устойчивы к GPT
+non-determinism (latency 4-15s per scenario, gpt-4o-mini).
+
+### Silence handling в live call
+
+`tools/audio-bridge-day1/call-session.js` добавляет no-input timer:
+`listening` стейт армит `SILENCE_TIMEOUT_MS` (8s default); по истечении
+кидает synthetic user message модели — первый strike это re-prompt
+(модель решает что сказать), второй strike — закрытие end_call со
+status=unclear. Сбрасывается на любой принятый STT final. Env knobs:
+`SILENCE_TIMEOUT_MS`, `MAX_SILENT_STRIKES`.
+
+### AI-call persistence layer (Task #4/#5 — закрыты)
+
+После реальных AI-звонков ожидается:
+- `Call.recordingPath` — MP3 в MinIO под `<year>/<month>/<fsUuid>.mp3`
+- `Call.aiSessionStatus = 'ended'` (или `'transferring'` для manager-handoff)
+- `Call.aiAnalysis` — JSON с qualification_status / lead_summary / reason / lead_data
+- `Call.aiSummary` — короткое summary одной строкой
+
+**Прежние симптомы (опровергнуты)**: `recordingPath=null` после звонка
+и `POST /api/ai-calls/sessions/<id>/finalize` тайм-аут >5 s. Корень
+обоих — отсутствующая локальная инфра (MinIO для upload, Redis для
+BullMQ queue.add блокировал finalize из-за `maxRetriesPerRequest: null`).
+
+**Code-уровень фиксы (PR — см. ниже)**:
+- `gravity-mvp/src/lib/freeswitch/recordingProcessor.ts` — per-stage
+  logging (`recording_stage_wav_found` / `_encoded` / `_uploaded` /
+  `_transcribe_enqueued`) + per-stage `withTimeout` обёртки (encode 60s,
+  upload 30s, enqueue 2s). System никогда не блокируется на mute infra.
+- `gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts` —
+  `enqueueAnalyze` обёрнут в `withTimeout(2000ms)`. Если Redis down —
+  finalize не висит, аналитика откладывается на ручной retry.
+
+**Regression smoke**: `node gravity-mvp/scripts/smoke_ai_persistence.js`
+синтетически прогоняет полный lifecycle (Prisma insert → fake WAV →
+processRecording → finalize HTTP → assertions) без живого звонка. 9/9
+проверок PASS на текущем main, latency ~7s end-to-end (ffmpeg encode
++ MinIO upload — основное время).
 
 ### AI-call persistence layer (Task #4/#5 — закрыты)
 

@@ -150,9 +150,23 @@ export const DOMAINS: NavigationDomain[] = [
             { label: 'Общие настройки', href: '/settings', icon: Settings, sectionKey: 'settings' },
             { label: 'Справочники', href: '/settings/dictionaries', icon: ListRestart, sectionKey: 'dictionaries' },
             { label: 'Пользователи', href: '/users', icon: UserCog, sectionKey: 'users' },
-            { label: 'AI Control Center', href: '/settings/ai', icon: Cpu, sectionKey: 'ai_control' },
         ],
         groups: [
+            {
+                // Все AI-функции CRM собраны в одну группу — до интеграций.
+                // Раньше AI Control Center жил в общем items наверху, а
+                // AI-обзвон отдельной группой внизу: тематика разъезжалась
+                // визуально по двум местам. Теперь — единый раздел «AI».
+                title: "AI",
+                items: [
+                    { label: "AI Control Center", href: "/settings/ai", icon: Cpu, sectionKey: "ai_control" },
+                    { label: "AI-обзвон", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
+                    // Hub-индекс инструкций по всем AI-функциям. Внутри —
+                    // карточки на конкретные инструкции (AI Control Center,
+                    // AI-обзвон, и т.д. — по мере роста).
+                    { label: "Инструкции", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
+                ]
+            },
             {
                 title: "Интеграции",
                 items: [
@@ -163,24 +177,6 @@ export const DOMAINS: NavigationDomain[] = [
                     { label: "Bot", href: "/settings/integrations/bot", icon: Bot, sectionKey: "bot" },
                     { label: "Телефония", href: "/settings/integrations/telephony", icon: Smartphone, sectionKey: "telephony" },
                     { label: "Avito", href: "/settings/integrations/avito", icon: Megaphone, sectionKey: "settings_integration_avito" }
-                ]
-            },
-            {
-                // AI-обзвон — продуктовая группа. API ключи теперь живут
-                // внутри страницы «Проекты и сценарии» как вкладка, чтобы
-                // меньше шуметь в боковом меню. Прямой URL /ai-call-keys
-                // остался работать (legacy ссылки из инструкции).
-                title: "AI-обзвон",
-                items: [
-                    { label: "Проекты и сценарии", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
-                    // Пункт ведёт на hub-индекс инструкций
-                    // (/settings/integrations/ai-call-help), а не на
-                    // конкретную инструкцию AI-обзвона. Hub собирает
-                    // инструкции по всем AI-функциям CRM; пользователь
-                    // выбирает нужную карточкой. Раздел будет расти —
-                    // под группой AI-обзвон это исторический legacy от
-                    // момента, когда инструкция была одна.
-                    { label: "Инструкции", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
                 ]
             }
         ]

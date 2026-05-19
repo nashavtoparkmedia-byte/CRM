@@ -6,6 +6,7 @@ import {
     Play, Pause, CheckCircle2, XCircle, AlertCircle,
     Plus, Trash2, Save, RefreshCw, ChevronDown, ChevronUp,
     Zap, MessageSquare, Phone, Send, Square, X, HelpCircle,
+    Loader2,
 } from 'lucide-react'
 import {
     saveAiConfig, testAiConnection,
@@ -13,6 +14,8 @@ import {
     getDecisionLogs, setOperatorVerdict,
     createImportJob, getAllImportJobs, cancelImportJob, deleteImportJob,
     getAiRuntimeStats, checkScraperHealth,
+    createAiProfile, updateAiProfile, deleteAiProfile, setActiveAiProfile,
+    type AiProfileData,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -97,6 +100,9 @@ interface Props {
     initialImportJobs: ImportJob[]
     initialLogs: DecisionLog[]
     initialStats: RuntimeStats
+    /** Стили общения (Роль/Тон/Разрешено/Запрещено). Один активен. */
+    initialProfiles: AiProfileData[]
+    initialActiveProfileId: string | null
     /** Администратор/Руководитель видит все вкладки и может менять настройки.
      *  Менеджеру оставлен только Журнал (read-only + 👍/👎). */
     canEdit: boolean
@@ -193,6 +199,7 @@ function StatusDot({ status, detail }: { status: string, detail?: React.ReactNod
 
 export default function AiControlCenterClient({
     initialConfig, initialKb, initialImportJobs, initialLogs, initialStats,
+    initialProfiles, initialActiveProfileId,
     canEdit,
 }: Props) {
     // Менеджеру открываем сразу Журнал — это единственная вкладка, где он
@@ -209,6 +216,8 @@ export default function AiControlCenterClient({
     const [importJobs, setImportJobs] = useState<ImportJob[]>(initialImportJobs)
     const [logs, setLogs]             = useState<DecisionLog[]>(initialLogs)
     const [stats, setStats]           = useState<RuntimeStats>(initialStats)
+    const [profiles, setProfiles]     = useState<AiProfileData[]>(initialProfiles)
+    const [activeProfileId, setActiveProfileId] = useState<string | null>(initialActiveProfileId)
     const [isPending, startTransition] = useTransition()
     const [toast, setToast]           = useState<string | null>(null)
 
@@ -1062,18 +1071,17 @@ export default function AiControlCenterClient({
     const [rulesSaving, setRulesSaving] = useState(false)
 
     const handleSaveRules = async () => {
+        // Промпт-поля (role/tone/allowed/forbidden) больше не идут через
+        // saveAiConfig — они живут в AiAgentProfile и сохраняются
+        // отдельно через updateAiProfile внутри ProfilesEditor.
         setRulesSaving(true)
         try {
             await saveAiConfig({
-                mode:                 config.mode,
-                language:             config.language,
-                confidenceThreshold:  config.confidenceThreshold,
+                mode:                  config.mode,
+                language:              config.language,
+                confidenceThreshold:   config.confidenceThreshold,
                 maxAutoRepliesPerChat: config.maxAutoRepliesPerChat,
-                activeChannels:       config.activeChannels,
-                promptRole:           config.promptRole,
-                promptTone:           config.promptTone,
-                promptAllowed:        config.promptAllowed,
-                promptForbidden:      config.promptForbidden,
+                activeChannels:        config.activeChannels,
             })
             showToast('Правила сохранены')
         } catch (e: any) {
@@ -1174,35 +1182,20 @@ export default function AiControlCenterClient({
                 </div>
             </div>
 
-            {/* Промпт — тоже flat. Меняет «системный промпт» (термин)
-                на «как AI разговаривает» — это и есть то, что админ
-                реально настраивает в этих 4 textarea. */}
-            <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-between">
-                    <h4 className="text-[14px] font-semibold text-[#111]">Как AI разговаривает</h4>
-                    <span className="text-[11px] text-gray-400">Можно оставить пустым — будут значения по умолчанию</span>
-                </div>
-                {[
-                    { key: 'promptRole',     label: 'Роль',       hint: 'Кто отвечает: должность, компания. Один абзац.',         placeholder: 'Ассистент диспетчера таксопарка NashAvtoPark' },
-                    { key: 'promptTone',     label: 'Тон',        hint: 'Как разговаривать: длина, формальность, эмодзи.',        placeholder: 'Коротко, спокойно, без канцелярита' },
-                    { key: 'promptAllowed',  label: 'Разрешено',  hint: 'Что AI может делать без согласования с менеджером.',     placeholder: 'Отвечать на FAQ, подтверждать получение' },
-                    { key: 'promptForbidden',label: 'Запрещено',  hint: 'Что нельзя ни при каких условиях — обещания, оценки и т.п.', placeholder: 'Обещать выплаты, спорить, придумывать факты' },
-                ].map(({ key, label, hint, placeholder }) => (
-                    <div key={key}>
-                        <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
-                            {label}
-                            <Hint text={hint} />
-                        </label>
-                        <textarea
-                            rows={2}
-                            value={(config as any)[key] ?? ''}
-                            onChange={e => setConfig(c => ({ ...c, [key]: e.target.value }))}
-                            placeholder={placeholder}
-                            className="w-full border border-[#E0E0E0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#3390EC] resize-none placeholder:text-gray-300"
-                        />
-                    </div>
-                ))}
-            </div>
+            {/* Стиль общения — управляется через профили. Раньше тут
+                жили 4 textarea, напрямую писавшие в AiAgentConfig
+                (promptRole/Tone/Allowed/Forbidden). Теперь — отдельная
+                сущность AiAgentProfile, можно держать несколько стилей
+                и переключать активный (по аналогии с проектами в
+                /settings/integrations/ai-call-scenarios). */}
+            <ProfilesEditor
+                profiles={profiles}
+                setProfiles={setProfiles}
+                activeProfileId={activeProfileId}
+                setActiveProfileId={setActiveProfileId}
+                canEdit={canEdit}
+                showToast={showToast}
+            />
 
             <button
                 onClick={handleSaveRules}
@@ -1619,6 +1612,316 @@ export default function AiControlCenterClient({
                     </>
                 )}
             </div>
+        </div>
+    )
+}
+
+// ─── ProfilesEditor — стили общения AI-агента ────────────────────
+//
+// Chip-табы профилей сверху (как в /settings/integrations/ai-call-scenarios),
+// под ними — редактор открытого профиля (4 textarea). Активный
+// помечается зелёным; смена активного — кнопкой «Сделать активным»
+// в шапке открытого профиля. Удалить можно только не-default профиль.
+//
+// Каждое изменение сохраняется на сервер по «Сохранить стиль» — это
+// один профиль за раз, без массового save (как у Rules).
+
+interface ProfilesEditorProps {
+    profiles: AiProfileData[]
+    setProfiles: React.Dispatch<React.SetStateAction<AiProfileData[]>>
+    activeProfileId: string | null
+    setActiveProfileId: (id: string | null) => void
+    canEdit: boolean
+    showToast: (msg: string) => void
+}
+
+function ProfilesEditor({
+    profiles, setProfiles, activeProfileId, setActiveProfileId, canEdit, showToast,
+}: ProfilesEditorProps) {
+    // Выбранный для редактирования — по умолчанию активный, иначе первый.
+    const [viewingId, setViewingId] = useState<string>(
+        activeProfileId ?? profiles[0]?.id ?? ''
+    )
+    const [activating, setActivating] = useState<string | null>(null)
+    const [creating, setCreating] = useState(false)
+
+    const viewing = profiles.find(p => p.id === viewingId) ?? profiles[0] ?? null
+
+    async function handleSetActive(id: string) {
+        setActivating(id)
+        try {
+            await setActiveAiProfile(id)
+            setActiveProfileId(id)
+            showToast('Стиль активирован')
+        } catch (e: any) {
+            showToast('Ошибка: ' + e.message)
+        } finally {
+            setActivating(null)
+        }
+    }
+
+    async function handleCreate() {
+        setCreating(true)
+        try {
+            const created = await createAiProfile({
+                name: 'Новый стиль',
+                description: '',
+                promptRole: '',
+                promptTone: '',
+                promptAllowed: '',
+                promptForbidden: '',
+            })
+            setProfiles(prev => [...prev, created as AiProfileData])
+            setViewingId(created.id)
+            showToast('Стиль создан')
+        } catch (e: any) {
+            showToast('Ошибка: ' + e.message)
+        } finally {
+            setCreating(false)
+        }
+    }
+
+    return (
+        <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between">
+                <h4 className="text-[14px] font-semibold text-[#111]">Стиль общения</h4>
+                <span className="text-[11px] text-gray-400">Можно держать несколько, переключать активный</span>
+            </div>
+
+            {/* Chip-табы — по аналогии с проектами в /ai-call-scenarios.
+                Активный помечен зелёным, выбранный (открытый) — синим. */}
+            <div className="flex flex-wrap gap-2">
+                {profiles.map(p => {
+                    const isViewing = p.id === viewingId
+                    const isActive = p.id === activeProfileId
+                    const base = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium border transition-colors'
+                    const style = (() => {
+                        if (isViewing && isActive) return 'bg-green-600 text-white border-green-600'
+                        if (isViewing)             return 'bg-[#3390EC] text-white border-[#3390EC]'
+                        if (isActive)              return 'border-green-500/50 bg-green-50 text-green-900 hover:bg-green-100'
+                        return 'border-[#E0E0E0] bg-white text-gray-600 hover:border-[#3390EC]'
+                    })()
+                    return (
+                        <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setViewingId(p.id)}
+                            className={`${base} ${style}`}
+                            title={isActive ? 'Активный стиль' : undefined}
+                        >
+                            {isActive && (
+                                <CheckCircle2 className={`h-3 w-3 ${isViewing ? 'text-white' : 'text-green-600'}`} />
+                            )}
+                            {p.name}
+                        </button>
+                    )
+                })}
+                {canEdit && (
+                    <button
+                        type="button"
+                        onClick={handleCreate}
+                        disabled={creating}
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-[#E0E0E0] px-3 py-1.5 text-[12px] text-gray-500 hover:border-[#3390EC] hover:text-[#3390EC] disabled:opacity-50"
+                    >
+                        {creating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                        Новый стиль
+                    </button>
+                )}
+            </div>
+
+            {!viewing ? (
+                <div className="rounded-md border border-dashed border-[#E0E0E0] bg-[#FAFAFA] p-6 text-center text-[13px] text-gray-500">
+                    Стилей нет. Создай первый кнопкой выше.
+                </div>
+            ) : (
+                <ProfileForm
+                    key={viewing.id}
+                    profile={viewing}
+                    isActive={viewing.id === activeProfileId}
+                    activating={activating === viewing.id}
+                    canEdit={canEdit}
+                    onSetActive={() => handleSetActive(viewing.id)}
+                    onSaved={(updated) => {
+                        setProfiles(prev => prev.map(p => p.id === updated.id ? updated : p))
+                        showToast('Стиль сохранён')
+                    }}
+                    onDeleted={(id) => {
+                        setProfiles(prev => prev.filter(p => p.id !== id))
+                        if (activeProfileId === id) setActiveProfileId(null)
+                        if (viewingId === id) {
+                            const next = profiles.find(p => p.id !== id)
+                            setViewingId(next?.id ?? '')
+                        }
+                        showToast('Стиль удалён')
+                    }}
+                    showToast={showToast}
+                />
+            )}
+        </div>
+    )
+}
+
+interface ProfileFormProps {
+    profile: AiProfileData
+    isActive: boolean
+    activating: boolean
+    canEdit: boolean
+    onSetActive: () => void
+    onSaved: (updated: AiProfileData) => void
+    onDeleted: (id: string) => void
+    showToast: (msg: string) => void
+}
+
+function ProfileForm({
+    profile, isActive, activating, canEdit, onSetActive, onSaved, onDeleted, showToast,
+}: ProfileFormProps) {
+    const [name, setName] = useState(profile.name)
+    const [description, setDescription] = useState(profile.description ?? '')
+    const [promptRole, setPromptRole] = useState(profile.promptRole ?? '')
+    const [promptTone, setPromptTone] = useState(profile.promptTone ?? '')
+    const [promptAllowed, setPromptAllowed] = useState(profile.promptAllowed ?? '')
+    const [promptForbidden, setPromptForbidden] = useState(profile.promptForbidden ?? '')
+    const [saving, setSaving] = useState(false)
+    const [deleting, setDeleting] = useState(false)
+
+    const dirty =
+        name !== profile.name ||
+        (description || '') !== (profile.description || '') ||
+        (promptRole || '') !== (profile.promptRole || '') ||
+        (promptTone || '') !== (profile.promptTone || '') ||
+        (promptAllowed || '') !== (profile.promptAllowed || '') ||
+        (promptForbidden || '') !== (profile.promptForbidden || '')
+
+    async function handleSave() {
+        if (!name.trim()) { showToast('Имя стиля обязательно'); return }
+        setSaving(true)
+        try {
+            const updated = await updateAiProfile(profile.id, {
+                name, description, promptRole, promptTone, promptAllowed, promptForbidden,
+            })
+            onSaved(updated as AiProfileData)
+        } catch (e: any) {
+            showToast('Ошибка: ' + e.message)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    async function handleDelete() {
+        if (!confirm(`Удалить стиль «${profile.name}»?`)) return
+        setDeleting(true)
+        try {
+            await deleteAiProfile(profile.id)
+            onDeleted(profile.id)
+        } catch (e: any) {
+            showToast('Ошибка: ' + e.message)
+            setDeleting(false)
+        }
+    }
+
+    return (
+        <div className="rounded-md border border-[#E8E8E8] bg-white p-4">
+            {/* Шапка: имя на всю ширину, справа bagde активности.
+                Раньше использовалось `flex items-start` + `space-y-2`
+                для двух input'ов — на проде верстка ехала (вероятно
+                глобальный CSS навязывает min-height для input'ов и
+                space-y перестаёт перекрывать его). Сейчас — явный
+                grid из трёх блоков с собственным `mb-3`. */}
+            <div className="flex items-center gap-3 mb-2">
+                <input
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    disabled={!canEdit}
+                    placeholder="Название стиля"
+                    className="flex-1 min-w-0 border border-[#E0E0E0] rounded-md px-3 py-2 text-[14px] font-medium text-[#111] outline-none focus:border-[#3390EC] disabled:bg-[#FAFAFA]"
+                />
+                <div className="shrink-0">
+                    {isActive ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-[11px] font-medium text-green-700 whitespace-nowrap">
+                            <CheckCircle2 className="h-3 w-3" />
+                            активный
+                        </span>
+                    ) : canEdit ? (
+                        <button
+                            type="button"
+                            onClick={onSetActive}
+                            disabled={activating}
+                            title="Сделать этот стиль активным — AI начнёт говорить им"
+                            className="inline-flex items-center gap-1 rounded-full border border-green-500/50 px-2.5 py-1 text-[11px] font-medium text-green-700 hover:bg-green-50 disabled:opacity-50 whitespace-nowrap"
+                        >
+                            {activating
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <CheckCircle2 className="h-3 w-3" />}
+                            Сделать активным
+                        </button>
+                    ) : null}
+                </div>
+            </div>
+            <input
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+                disabled={!canEdit}
+                placeholder="Короткое описание — где этот стиль уместен"
+                className="block w-full border border-[#E0E0E0] rounded-md px-3 py-1.5 text-[12px] text-gray-600 outline-none focus:border-[#3390EC] disabled:bg-[#FAFAFA] mb-4"
+            />
+
+            {/* 4 текстовых блока — Роль/Тон/Разрешено/Запрещено.
+                Явный `mb-3` на каждом — раньше использовался `space-y-3`
+                на parent, который мог конфликтовать с шапкой. */}
+            {[
+                { key: 'promptRole',     value: promptRole,     set: setPromptRole,     label: 'Роль',       hint: 'Кто отвечает: должность, компания. Один абзац.',         placeholder: 'Ассистент таксопарка NashAvtoPark' },
+                { key: 'promptTone',     value: promptTone,     set: setPromptTone,     label: 'Тон',        hint: 'Как разговаривать: на ты/на вы, длина, эмодзи, шутки.', placeholder: 'Дружелюбно, на ты, коротко, можно лёгкая шутка' },
+                { key: 'promptAllowed',  value: promptAllowed,  set: setPromptAllowed,  label: 'Разрешено',  hint: 'Что AI может делать без согласования с менеджером.',     placeholder: 'Отвечать на FAQ, объяснять тарифы, брать контакт водителя' },
+                { key: 'promptForbidden',value: promptForbidden,set: setPromptForbidden,label: 'Запрещено',  hint: 'Что нельзя ни при каких условиях.',                       placeholder: 'Гарантировать доход, спорить, обещать "0% комиссии"' },
+            ].map(({ key, value, set, label, hint, placeholder }) => (
+                <div key={key} className="mb-3">
+                    <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
+                        {label}
+                        <Hint text={hint} />
+                    </label>
+                    <textarea
+                        rows={2}
+                        value={value}
+                        onChange={e => set(e.target.value)}
+                        disabled={!canEdit}
+                        placeholder={placeholder}
+                        className="block w-full border border-[#E0E0E0] rounded-md px-3 py-2 text-[12px] outline-none focus:border-[#3390EC] resize-none placeholder:text-gray-300 disabled:bg-[#FAFAFA]"
+                    />
+                </div>
+            ))}
+
+            {/* Футер — Сохранить + Удалить (для не-default) + подсказка
+                для системного. flex-wrap чтобы текст «Системный стиль…»
+                переходил на новую строку, а не накладывался на кнопку. */}
+            {canEdit && (
+                <div className="flex flex-wrap items-center gap-3 pt-2 mt-2 border-t border-[#F0F0F0]">
+                    <button
+                        type="button"
+                        onClick={handleSave}
+                        disabled={saving || !dirty}
+                        className="inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] px-3 py-1.5 text-[12px] font-medium text-white hover:bg-[#2B7FD4] disabled:opacity-50"
+                    >
+                        {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+                        Сохранить стиль
+                    </button>
+                    {!profile.isDefault && (
+                        <button
+                            type="button"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-[#E0E0E0] px-3 py-1.5 text-[12px] font-medium text-red-500 hover:bg-red-50 disabled:opacity-50"
+                        >
+                            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                            Удалить
+                        </button>
+                    )}
+                    {profile.isDefault && (
+                        <span className="text-[11px] text-gray-400 basis-full sm:basis-auto">
+                            Системный стиль — удалить нельзя, только править.
+                        </span>
+                    )}
+                </div>
+            )}
         </div>
     )
 }
