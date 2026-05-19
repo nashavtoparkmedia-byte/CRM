@@ -53,14 +53,23 @@ class CallSession {
      * @param {Function} [opts.onFinalize]       called once with the full result
      * @param {Function} [opts.onTranscriptItem] (role, text) for live CRM mirror
      * @param {Function} [opts.onState]          (state) for diagnostics
+     * @param {Function} [opts.onUserSpoke]      called on the FIRST STT final
+     *                                           that the session accepts. Used
+     *                                           by the bridge to mark the
+     *                                           call as `active` in CRM —
+     *                                           «real dialog has started».
+     *                                           Fires more than once is
+     *                                           harmless; server.js guards
+     *                                           against duplicate POSTs.
      */
-    constructor({ callUuid, scenario, broadcastWav, onFinalize, onTranscriptItem, onState }) {
+    constructor({ callUuid, scenario, broadcastWav, onFinalize, onTranscriptItem, onState, onUserSpoke }) {
         this.callUuid = callUuid
         this.scenario = scenario
         this.broadcastWav = broadcastWav
         this.onFinalize = onFinalize ?? (() => {})
         this.onTranscriptItem = onTranscriptItem ?? (() => {})
         this.onState = onState ?? (() => {})
+        this.onUserSpoke = onUserSpoke ?? (() => {})
 
         this.state = 'idle'
         // OpenAI message history — system + alternating user/assistant turns.
@@ -240,6 +249,12 @@ class CallSession {
 
         this.pendingUserText = (this.pendingUserText + ' ' + trimmed).trim()
         this.onTranscriptItem('user', trimmed)
+        // Lifecycle hook: «real dialog has started». Bridge uses this
+        // to mark CRM `Call.aiSessionStatus='active'` via the /state
+        // endpoint. Fires once per session in practice (server.js
+        // de-dupes); the helper itself is allowed to fire many times
+        // — the endpoint is idempotent.
+        this.onUserSpoke()
         // Lead actually said something — reset the no-input counter so a
         // single mid-call gap doesn't end up as «strike 2 / abandoned».
         this.silenceStrikes = 0
