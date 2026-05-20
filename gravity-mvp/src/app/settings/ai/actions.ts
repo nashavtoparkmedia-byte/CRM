@@ -1534,6 +1534,73 @@ export async function getLegacyMigrationPreview() {
     return getLegacyMigrationPreviewCore()
 }
 
+// ─── AI Knowledge Core bulk governance (PR5) ────────────────────
+//
+// Массовые действия для админа: подтвердить все unverified в секции,
+// архивировать все drafts. Каждое действие пишется в audit отдельной
+// записью (через существующие single-item handlers), так что
+// explainability остаётся точной — не "массовое" событие, а серия
+// атомарных.
+
+export interface BulkActionResult {
+    processed: number
+    skipped:   number
+    failed:    number
+    errors:    Array<{ itemId: string; message: string }>
+}
+
+/** Bulk verify — устанавливает isVerified=true для всех переданных
+ *  itemId (если ещё не verified). Каждый item — отдельная audit-запись.
+ *  Возвращает счётчики processed/skipped/failed. */
+export async function bulkVerifyItems(itemIds: string[]): Promise<BulkActionResult> {
+    await requireAdminUserId()
+    const result: BulkActionResult = { processed: 0, skipped: 0, failed: 0, errors: [] }
+    for (const id of itemIds) {
+        try {
+            const cur = await loadItemForEdit(id)
+            if (!cur) { result.failed++; result.errors.push({ itemId: id, message: 'не найден' }); continue }
+            if (cur.isVerified) { result.skipped++; continue }
+            await verifyKnowledgeItem(id, true)
+            result.processed++
+        } catch (e: any) {
+            result.failed++
+            result.errors.push({ itemId: id, message: e?.message ?? 'unknown' })
+        }
+    }
+    if (result.processed > 0) revalidatePath('/settings/ai')
+    return result
+}
+
+/** Bulk archive — отправляет в архив все active items в секции со
+ *  status='draft'. Используется для "вычистить черновики" в KnowledgeTab.
+ *  Каждый item — отдельная audit-запись (action='archived'). */
+export async function bulkArchiveDraftsInSection(sectionId: string): Promise<BulkActionResult> {
+    await requireAdminUserId()
+    const result: BulkActionResult = { processed: 0, skipped: 0, failed: 0, errors: [] }
+    if (!sectionId) return result
+    let drafts: any[] = []
+    try {
+        drafts = await prisma.$queryRaw<any[]>`
+            SELECT id FROM "AiKnowledgeItem"
+            WHERE "sectionId" = ${sectionId} AND status = 'draft' AND "isActive" = true
+        `
+    } catch (e: any) {
+        result.errors.push({ itemId: '*', message: e?.message ?? 'load failed' })
+        return result
+    }
+    for (const r of drafts) {
+        try {
+            await archiveKnowledgeItem(r.id)
+            result.processed++
+        } catch (e: any) {
+            result.failed++
+            result.errors.push({ itemId: r.id, message: e?.message ?? 'unknown' })
+        }
+    }
+    if (result.processed > 0) revalidatePath('/settings/ai')
+    return result
+}
+
 /**
  * Выполняет миграцию. Idempotent — повторный запуск пропускает уже
  * мигрированные. Legacy KB НЕ удаляется, остаётся active для

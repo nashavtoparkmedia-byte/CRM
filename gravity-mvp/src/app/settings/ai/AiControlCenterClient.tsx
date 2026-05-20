@@ -28,9 +28,11 @@ import {
     getDecisionExplainabilityForUi, previewDecisionRetry,
     getKnowledgeReadinessForUi,
     getLegacyMigrationPreview, migrateLegacyKnowledgeBase,
+    bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
     type LegacyMigrationPreview, type LegacyMigrationResult,
+    type BulkActionResult,
     type RetryPreviewResult,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
@@ -540,6 +542,37 @@ export default function AiControlCenterClient({
     // активные — теперь админ может быстро отфильтровать конфликты
     // или черновики, не покидая текущую секцию.
     const [coreFilter, setCoreFilter] = useState<'all' | 'conflicts' | 'drafts' | 'unverified'>('all')
+    // PR5: bulk governance — running flag (для блокировки кнопки)
+    const [bulkRunning, setBulkRunning] = useState(false)
+
+    async function handleBulkVerify(itemIds: string[]) {
+        if (bulkRunning || itemIds.length === 0) return
+        if (!confirm(`Подтвердить ${itemIds.length} ${plural(itemIds.length, 'знание', 'знания', 'знаний')}? Каждое попадает в audit отдельной записью.`)) return
+        setBulkRunning(true)
+        try {
+            const r = await bulkVerifyItems(itemIds) as BulkActionResult
+            showToast(`Подтверждено: ${r.processed}${r.skipped ? `, пропущено ${r.skipped}` : ''}${r.failed ? `, ошибок ${r.failed}` : ''}`)
+            await refreshCurrentSection()
+        } catch (e: any) {
+            showToast('Ошибка: ' + (e?.message ?? 'unknown'))
+        } finally {
+            setBulkRunning(false)
+        }
+    }
+    async function handleBulkArchiveDrafts(sectionId: string | null) {
+        if (bulkRunning || !sectionId) return
+        if (!confirm('Архивировать все черновики в этом разделе? Действие обратимо через «Архив → Восстановить».')) return
+        setBulkRunning(true)
+        try {
+            const r = await bulkArchiveDraftsInSection(sectionId) as BulkActionResult
+            showToast(`Архивировано черновиков: ${r.processed}${r.failed ? `, ошибок ${r.failed}` : ''}`)
+            await refreshCurrentSection()
+        } catch (e: any) {
+            showToast('Ошибка: ' + (e?.message ?? 'unknown'))
+        } finally {
+            setBulkRunning(false)
+        }
+    }
 
     async function refreshReadiness() {
         try {
@@ -2736,6 +2769,7 @@ export default function AiControlCenterClient({
                                         const conflictCount   = knowledgeItems.filter(i => i.conflictGroupId).length
                                         const draftCount      = knowledgeItems.filter(i => i.status === 'draft').length
                                         const unverifiedCount = knowledgeItems.filter(i => !i.isVerified && i.status === 'active').length
+                                        const unverifiedIds   = knowledgeItems.filter(i => !i.isVerified && i.status === 'active').map(i => i.id)
                                         return (
                                         <div className="flex items-center gap-x-3 gap-y-1 text-[11px] mb-2 flex-wrap">
                                             <button
@@ -2766,6 +2800,30 @@ export default function AiControlCenterClient({
                                                     className={`transition-colors ${coreFilter === 'unverified' ? 'text-gray-700 font-medium' : 'text-gray-500 hover:text-[#111]'}`}
                                                 >
                                                     Без подтверждения ({unverifiedCount})
+                                                </button>
+                                            )}
+                                            {/* PR5: bulk action — показывается только если выбран
+                                                соответствующий filter с непустым набором. */}
+                                            {canEdit && coreFilter === 'unverified' && unverifiedCount > 0 && (
+                                                <button
+                                                    onClick={() => handleBulkVerify(unverifiedIds)}
+                                                    disabled={bulkRunning}
+                                                    title="Подтвердить все знания в текущей выборке. Каждое попадает в audit отдельной записью."
+                                                    className="ml-auto h-[24px] px-2.5 inline-flex items-center gap-1 rounded border border-green-500/40 text-green-700 text-[10px] font-medium hover:bg-green-50 disabled:opacity-50 transition-colors"
+                                                >
+                                                    {bulkRunning && <Loader2 size={10} className="animate-spin" />}
+                                                    Подтвердить все
+                                                </button>
+                                            )}
+                                            {canEdit && coreFilter === 'drafts' && draftCount > 0 && (
+                                                <button
+                                                    onClick={() => handleBulkArchiveDrafts(selectedSectionId)}
+                                                    disabled={bulkRunning}
+                                                    title="Архивировать все черновики в этом разделе. Обратимо через «Архив → Восстановить»."
+                                                    className="ml-auto h-[24px] px-2.5 inline-flex items-center gap-1 rounded border border-amber-500/40 text-amber-700 text-[10px] font-medium hover:bg-amber-50 disabled:opacity-50 transition-colors"
+                                                >
+                                                    {bulkRunning && <Loader2 size={10} className="animate-spin" />}
+                                                    Архивировать все черновики
                                                 </button>
                                             )}
                                         </div>
