@@ -536,6 +536,10 @@ export default function AiControlCenterClient({
     // PR5: модал runtime-rollout (объяснение что runtime контролируется
     // env-флагом + checklist).
     const [rolloutOpen, setRolloutOpen] = useState(false)
+    // PR5: фильтр items в "Ядро" под-табе. Раньше показывались все
+    // активные — теперь админ может быстро отфильтровать конфликты
+    // или черновики, не покидая текущую секцию.
+    const [coreFilter, setCoreFilter] = useState<'all' | 'conflicts' | 'drafts' | 'unverified'>('all')
 
     async function refreshReadiness() {
         try {
@@ -2102,10 +2106,19 @@ export default function AiControlCenterClient({
                                 ⚠ конфликт
                             </button>
                         )}
-                        {item.status === 'superseded' && (
-                            <span title="Факт устарел и заменён новой версией. Старые ответы AI всё равно ссылаются на него — это нужно для истории explainability."
-                                  className="text-[10px] text-gray-400 cursor-help">заменено</span>
-                        )}
+                        {item.status === 'superseded' && (() => {
+                            const successor = item.supersededByItemId
+                                ? knowledgeItems.find(k => k.id === item.supersededByItemId)
+                                : null
+                            return (
+                                <span
+                                    title="Факт устарел и заменён новой версией. Старые ответы AI всё равно ссылаются на него — это нужно для истории explainability."
+                                    className="text-[10px] text-gray-400 cursor-help inline-flex items-center gap-1"
+                                >
+                                    → заменено{successor && `: ${successor.title}`}
+                                </span>
+                            )
+                        })()}
                         {item.status === 'draft' && (
                             <span title="Не прошло порог уверенности — ждёт ручной проверки"
                                   className="text-[10px] text-blue-500">черновик</span>
@@ -2717,6 +2730,47 @@ export default function AiControlCenterClient({
                                             </button>
                                         )}
                                     </div>
+                                    {/* PR5: client-side filter (только Ядро под-таб).
+                                        Архив имеет свою отдельную секцию items. */}
+                                    {knowledgeSubtab === 'core' && knowledgeItems.length > 0 && (() => {
+                                        const conflictCount   = knowledgeItems.filter(i => i.conflictGroupId).length
+                                        const draftCount      = knowledgeItems.filter(i => i.status === 'draft').length
+                                        const unverifiedCount = knowledgeItems.filter(i => !i.isVerified && i.status === 'active').length
+                                        return (
+                                        <div className="flex items-center gap-x-3 gap-y-1 text-[11px] mb-2 flex-wrap">
+                                            <button
+                                                onClick={() => setCoreFilter('all')}
+                                                className={`transition-colors ${coreFilter === 'all' ? 'text-[#3390EC] font-medium' : 'text-gray-500 hover:text-[#111]'}`}
+                                            >
+                                                Все ({knowledgeItems.length})
+                                            </button>
+                                            {conflictCount > 0 && (
+                                                <button
+                                                    onClick={() => setCoreFilter('conflicts')}
+                                                    className={`transition-colors ${coreFilter === 'conflicts' ? 'text-amber-600 font-medium' : 'text-gray-500 hover:text-[#111]'}`}
+                                                >
+                                                    Конфликты ({conflictCount})
+                                                </button>
+                                            )}
+                                            {draftCount > 0 && (
+                                                <button
+                                                    onClick={() => setCoreFilter('drafts')}
+                                                    className={`transition-colors ${coreFilter === 'drafts' ? 'text-blue-500 font-medium' : 'text-gray-500 hover:text-[#111]'}`}
+                                                >
+                                                    Черновики ({draftCount})
+                                                </button>
+                                            )}
+                                            {unverifiedCount > 0 && (
+                                                <button
+                                                    onClick={() => setCoreFilter('unverified')}
+                                                    className={`transition-colors ${coreFilter === 'unverified' ? 'text-gray-700 font-medium' : 'text-gray-500 hover:text-[#111]'}`}
+                                                >
+                                                    Без подтверждения ({unverifiedCount})
+                                                </button>
+                                            )}
+                                        </div>
+                                        )
+                                    })()}
                                     {knowledgeItemsLoading ? (
                                         <div className="flex items-center gap-2 text-[12px] text-gray-400 py-6">
                                             <Loader2 size={12} className="animate-spin" /> Загружаем…
@@ -2734,13 +2788,27 @@ export default function AiControlCenterClient({
                                                 </>
                                             )}
                                         </div>
-                                    ) : (
-                                        <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
-                                            {knowledgeItems.map(it => (
-                                                <KnowledgeItemRow key={it.id} item={it} />
-                                            ))}
-                                        </div>
-                                    )}
+                                    ) : (() => {
+                                        const filtered = knowledgeSubtab !== 'core' ? knowledgeItems :
+                                            coreFilter === 'conflicts'  ? knowledgeItems.filter(i => i.conflictGroupId) :
+                                            coreFilter === 'drafts'     ? knowledgeItems.filter(i => i.status === 'draft') :
+                                            coreFilter === 'unverified' ? knowledgeItems.filter(i => !i.isVerified && i.status === 'active') :
+                                                                          knowledgeItems
+                                        if (filtered.length === 0) {
+                                            return (
+                                                <div className="text-center py-8 text-[12px] text-gray-400">
+                                                    По выбранному фильтру ничего не найдено.
+                                                </div>
+                                            )
+                                        }
+                                        return (
+                                            <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
+                                                {filtered.map(it => (
+                                                    <KnowledgeItemRow key={it.id} item={it} />
+                                                ))}
+                                            </div>
+                                        )
+                                    })()}
                                 </>
                             )}
                         </div>
