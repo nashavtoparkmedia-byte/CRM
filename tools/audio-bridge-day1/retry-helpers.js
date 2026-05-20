@@ -56,7 +56,19 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function fetchOnce(url, init, timeoutMs, fetchImpl) {
+/**
+ * Single-shot fetch wrapper with an AbortController-backed timeout.
+ *
+ * Used by `retryFinalizeRequest` per-attempt; also exported so the
+ * crm-client's non-finalize callers (resolveCallByUuid /
+ * appendTranscript / postState / fetchKeys) can wrap their fetches
+ * without re-implementing the AbortController dance. Each of those
+ * is a single-shot best-effort call — no retry — so we only need the
+ * timeout primitive, not the full retry policy.
+ *
+ * `fetchImpl` defaults to the global `fetch`; tests inject a mock.
+ */
+async function fetchOnce(url, init, timeoutMs, fetchImpl = fetch) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     try {
@@ -226,4 +238,9 @@ module.exports = {
     // NOT for production use.
     _createRetryFinalize,
     PRODUCTION_POLICY,
+    // Exported as a standalone timeout-wrapped fetch — used by
+    // non-finalize crm-client calls that want bounded waits but not
+    // retry semantics (resolveCallByUuid / appendTranscript /
+    // postState / fetchKeys).
+    fetchOnce,
 }
