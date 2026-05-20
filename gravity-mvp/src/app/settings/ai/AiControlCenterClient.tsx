@@ -25,6 +25,9 @@ import {
     verifyKnowledgeItem, supersedeKnowledgeItem, resolveConflict,
     createManualKnowledgeItem, getKnowledgeAuditLog,
     listRecentRetrievalTraces, getKnowledgeRuntimeStateForUi,
+    getDecisionExplainabilityForUi, previewDecisionRetry,
+    type ExplainabilityBundle,
+    type RetryPreviewResult,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
     type ExtractionScope,
@@ -178,6 +181,52 @@ const ACTION_LABEL: Record<string, string> = {
     superseded:        'Заменено новым знанием',
     conflict_resolved: 'Конфликт разрешён',
     source_added:      'Добавлен источник',
+}
+
+// PR4: human-readable labels для explainability модалки.
+const DECISION_HUMAN: Record<string, string> = {
+    auto_reply: 'Ответил сам',
+    escalate:   'Передал менеджеру',
+    skip:       'Не отвечал',
+}
+const RETRIEVAL_MODE_HUMAN: Record<string, string> = {
+    legacy:  'Legacy — старая база FAQ',
+    shadow:  'Shadow — новое ядро работало в фоне',
+    runtime: 'Runtime — ответ из ядра знаний',
+}
+const ESCALATION_HUMAN: Record<string, string> = {
+    conflict:       'Конфликт в знаниях компании — два правила противоречат друг другу',
+    requires_human: 'Запрос требует решения менеджера',
+    low_confidence: 'Недостаточная уверенность в найденных знаниях',
+    no_relevant:    'Не нашёл подходящих знаний по этому запросу',
+    only_drafts:    'Найдены только черновые знания, не прошедшие проверку',
+    ambiguous:      'Запрос можно понять по-разному',
+    safety_block:   'Сработал защитный фильтр',
+}
+const USAGE_REASON_HUMAN: Record<string, string> = {
+    used:                     'Использовано в ответе',
+    filtered_archived:        'Пропущено: знание в архиве',
+    filtered_superseded:      'Пропущено: знание заменено новым',
+    filtered_draft:           'Пропущено: знание черновое',
+    filtered_low_confidence:  'Пропущено: низкая уверенность',
+    filtered_low_evidence:    'Пропущено: мало источников',
+    filtered_conflict:        'Пропущено: участвует в конфликте',
+    filtered_requires_human:  'Пропущено: требует менеджера',
+    filtered_safety:          'Пропущено: защитный фильтр',
+    filtered_escalation:      'Не дошло до ответа: эскалация',
+    filtered_no_knowledge:    'Не использовано',
+}
+const AUDIT_AFTER_HUMAN: Record<string, string> = {
+    created:           'создано экстрактором',
+    manual_created:    'создано вручную',
+    edited:            'отредактировано',
+    archived:          'в архив',
+    restored:          'восстановлено',
+    verified:          'подтверждено',
+    unverified:        'подтверждение снято',
+    superseded:        'заменено новым знанием',
+    conflict_resolved: 'конфликт разрешён',
+    source_added:      'добавлен источник',
 }
 
 // Однострочные подсказки к счётчикам импорта. Старый StatHint был портянкой
@@ -377,6 +426,74 @@ export default function AiControlCenterClient({
     const [supersedeFor, setSupersedeFor] = useState<KnowledgeItem | null>(null)
     const [conflictFor, setConflictFor] = useState<KnowledgeItem | null>(null)
     const [conflictMembers, setConflictMembers] = useState<KnowledgeItem[]>([])
+
+    // PR4: explainability модалка "Почему AI так ответил?"
+    const [explainBundle, setExplainBundle] = useState<ExplainabilityBundle | null>(null)
+    const [explainOpen, setExplainOpen] = useState(false)
+    const [explainLoading, setExplainLoading] = useState(false)
+    const [retryPreview, setRetryPreview] = useState<RetryPreviewResult | null>(null)
+    const [retryRunning, setRetryRunning] = useState(false)
+    const [advancedOpen, setAdvancedOpen] = useState(false)
+
+    function copyToClipboardSafe(text: string, successMessage: string) {
+        try {
+            if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                navigator.clipboard.writeText(text)
+                    .then(() => showToast(successMessage))
+                    .catch(() => showToast('Не удалось скопировать'))
+                return
+            }
+        } catch { /* fallthrough */ }
+        showToast('Не удалось скопировать')
+    }
+
+    async function openExplain(logId: string) {
+        setExplainOpen(true)
+        setExplainBundle(null)
+        setRetryPreview(null)
+        setAdvancedOpen(false)
+        setExplainLoading(true)
+        try {
+            const b = await getDecisionExplainabilityForUi(logId)
+            setExplainBundle(b)
+        } catch {
+            /* empty bundle */
+        } finally {
+            setExplainLoading(false)
+        }
+    }
+    async function runRetryPreview() {
+        if (!explainBundle?.decision) return
+        setRetryRunning(true)
+        setRetryPreview(null)
+        try {
+            const r = await previewDecisionRetry(explainBundle.decision.id)
+            setRetryPreview(r as RetryPreviewResult)
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'неизвестная ошибка'
+            setRetryPreview({
+                items: [], policyType: 'no_knowledge', escalationReason: null,
+                generatedReply: null,
+                trace: {
+                    candidateCount: 0, prefilterDurationMs: 0, rerankDurationMs: null,
+                    generatorDurationMs: null, totalDurationMs: 0,
+                    runtimeVersion: null, rerankUsedModel: null,
+                },
+                errorMessage: msg,
+            })
+        } finally {
+            setRetryRunning(false)
+        }
+    }
+    function jumpToKnowledgeItem(_itemId: string, sectionId: string) {
+        setExplainOpen(false)
+        setSelectedSectionId(sectionId)
+        setKnowledgeSubtab('core')
+        setTab('knowledge')
+        listItemsBySection(sectionId, { includeArchived: false })
+            .then(arr => setKnowledgeItems(arr as KnowledgeItem[]))
+            .catch(() => { /* silent */ })
+    }
 
     // PR3.8: shadow/runtime traces для UI вкладки "Источники".
     interface RetrievalTrace {
@@ -2753,6 +2870,16 @@ export default function AiControlCenterClient({
                                     {log.operatorVerdict === 'good' ? '👍 оценено как хороший ответ' : log.operatorVerdict === 'bad' ? '👎 оценено как плохой ответ' : '✏️ исправлено'}
                                 </div>
                             )}
+                            {/* PR4: explainability link — открывает модал "Почему AI так ответил?" */}
+                            <div className="pt-0.5">
+                                <button
+                                    onClick={() => openExplain(log.id)}
+                                    className="text-[11px] text-gray-400 hover:text-[#3390EC] inline-flex items-center gap-1 transition-colors"
+                                >
+                                    <HelpCircle size={11} />
+                                    Почему AI так ответил?
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -2780,6 +2907,342 @@ export default function AiControlCenterClient({
             {toast && (
                 <div className="fixed top-4 right-4 z-50 bg-[#111] text-white text-[12px] font-medium px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
                     {toast}
+                </div>
+            )}
+
+            {/* PR4: Explainability modal "Почему AI так ответил?" */}
+            {explainOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                    onClick={() => !retryRunning && setExplainOpen(false)}
+                >
+                    <div onClick={e => e.stopPropagation()}
+                         className="bg-white rounded-xl shadow-xl w-[680px] max-w-[96vw] max-h-[90vh] flex flex-col">
+                        <div className="px-6 pt-5 pb-3 border-b border-[#F0F0F0]">
+                            <h2 className="text-[17px] font-semibold text-[#111]">Почему AI так ответил?</h2>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                            {explainLoading || !explainBundle ? (
+                                <div className="flex items-center gap-2 text-[12px] text-gray-400 py-8">
+                                    <Loader2 size={13} className="animate-spin" /> Загружаем подробности…
+                                </div>
+                            ) : !explainBundle.decision ? (
+                                <div className="text-[12px] text-gray-400 py-6">Решение не найдено.</div>
+                            ) : (() => {
+                                const bundle = explainBundle
+                                const decision = bundle.decision!
+                                // Group usages: used vs filtered (улучшение #2 — "что AI НЕ использовал")
+                                const usedUsages = bundle.knowledgeUsages.filter(u => u.policyDecision === 'used')
+                                const filteredUsages = bundle.knowledgeUsages.filter(u =>
+                                    u.policyDecision && u.policyDecision.startsWith('filtered_')
+                                )
+                                return <>
+                                    {/* Вопрос / ответ */}
+                                    <div className="space-y-2">
+                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Что спросил клиент</div>
+                                        <div className="bg-[#F8F9FA] rounded-lg px-3 py-2 text-[13px] text-[#111] whitespace-pre-wrap leading-relaxed">
+                                            {bundle.userMessage?.content ?? '(сообщение не найдено)'}
+                                        </div>
+                                        <div className="flex items-baseline gap-2 pt-2">
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Что ответил AI</div>
+                                            {decision.generatedReply && (
+                                                <button
+                                                    onClick={() => copyToClipboardSafe(decision.generatedReply!, 'Ответ скопирован')}
+                                                    className="text-[10px] text-gray-400 hover:text-[#3390EC] inline-flex items-center gap-0.5"
+                                                    title="Скопировать ответ"
+                                                >
+                                                    <ClipboardList size={9} /> копировать
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="bg-[#F0F4FA] rounded-lg px-3 py-2 text-[13px] text-[#111] whitespace-pre-wrap leading-relaxed">
+                                            {decision.generatedReply ?? (decision.escalated
+                                                ? '(передано менеджеру, ответа клиенту не было)'
+                                                : '(ответа нет)')}
+                                        </div>
+                                    </div>
+
+                                    {/* Mode + policy */}
+                                    <div>
+                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Как AI принял решение</div>
+                                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] text-gray-600">
+                                            <span><strong className="text-[#111]">Решение:</strong> {DECISION_HUMAN[decision.decision ?? ''] ?? decision.decision}</span>
+                                            {decision.retrievalMode && (
+                                                <span>· {RETRIEVAL_MODE_HUMAN[decision.retrievalMode] ?? decision.retrievalMode}</span>
+                                            )}
+                                        </div>
+                                        {decision.escalationReason && (
+                                            <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900 leading-relaxed">
+                                                <strong>Почему не ответил сам:</strong> {ESCALATION_HUMAN[decision.escalationReason] ?? decision.escalationReason}
+                                            </div>
+                                        )}
+                                        {decision.error && (
+                                            <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
+                                                Ошибка: {decision.error}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Использованные знания */}
+                                    <div>
+                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                            Использованные знания ({usedUsages.length})
+                                        </div>
+                                        {usedUsages.length === 0 ? (
+                                            <div className="text-[12px] text-gray-400 italic">
+                                                Знания из ядра не использовались
+                                                {decision.retrievalMode === 'legacy' && ' (старая база FAQ)'}.
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {usedUsages.map(u => {
+                                                    const it = u.item
+                                                    if (!it) return <div key={u.id} className="text-[12px] text-gray-400 italic">Знание было удалено</div>
+                                                    const changedAfter = new Date(it.updatedAt) > new Date(decision.createdAt)
+                                                    return (
+                                                        <div key={u.id} className="px-3 py-2 rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA]">
+                                                            <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
+                                                                <span className="text-[13px] font-semibold text-[#111]">{it.title}</span>
+                                                                {it.isVerified && <span className="text-[10px] text-green-700">подтверждено</span>}
+                                                                {it.safetyLevel === 'requires_human' && <span className="text-[10px] text-red-600">только менеджер</span>}
+                                                                {it.safetyLevel === 'sensitive'      && <span className="text-[10px] text-amber-600">чувствительное</span>}
+                                                                {it.conflictGroupId && <span className="text-[10px] text-amber-600">в конфликте</span>}
+                                                                {it.status === 'superseded' && <span className="text-[10px] text-gray-400">заменено</span>}
+                                                                {changedAfter && <span title="После этого ответа знание было изменено" className="text-[10px] text-[#3390EC]">изменено после ответа</span>}
+                                                                {it.sectionTitle && <span className="text-[10px] text-gray-400 ml-auto">{it.sectionTitle}</span>}
+                                                            </div>
+                                                            <p className="text-[12px] text-gray-700 leading-relaxed">{it.canonicalStatement}</p>
+                                                            <div className="flex items-baseline gap-2 mt-1 text-[10px] text-gray-500">
+                                                                <span>{USAGE_REASON_HUMAN[u.policyDecision ?? ''] ?? 'обработано'}</span>
+                                                                {it.sourceCount > 0 && <span>· {it.sourceCount} {plural(it.sourceCount,'источник','источника','источников')}</span>}
+                                                                {it.uniqueManagerCount > 0 && <span>· {it.uniqueManagerCount} {plural(it.uniqueManagerCount,'менеджер','менеджера','менеджеров')}</span>}
+                                                            </div>
+                                                            {canEdit && (
+                                                                <div className="flex gap-3 mt-2 text-[11px]">
+                                                                    <button onClick={() => jumpToKnowledgeItem(it.id, it.sectionId)}
+                                                                        className="text-[#3390EC] hover:underline">
+                                                                        Открыть в Ядре
+                                                                    </button>
+                                                                    <button onClick={() => {
+                                                                        const ki: KnowledgeItem = {
+                                                                            id: it.id, sectionId: it.sectionId,
+                                                                            title: it.title, canonicalStatement: it.canonicalStatement,
+                                                                            tags: it.tags, confidence: it.confidence,
+                                                                            sourceCount: it.sourceCount, uniqueManagerCount: it.uniqueManagerCount,
+                                                                            status: it.status as KnowledgeItem['status'],
+                                                                            isActive: it.isActive,
+                                                                            safetyLevel: it.safetyLevel as KnowledgeItem['safetyLevel'],
+                                                                            supersededByItemId: it.supersededByItemId,
+                                                                            conflictGroupId: it.conflictGroupId,
+                                                                            isVerified: it.isVerified,
+                                                                            verifiedBy: null, verifiedAt: null,
+                                                                            createdBy: null, lastUsedAt: null,
+                                                                            createdAt: it.updatedAt, updatedAt: it.updatedAt,
+                                                                        }
+                                                                        setExplainOpen(false)
+                                                                        openEditFor(ki)
+                                                                    }} className="text-gray-500 hover:text-[#111]">
+                                                                        Редактировать
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Что AI сознательно НЕ использовал (улучшение #2) */}
+                                    {filteredUsages.length > 0 && (
+                                        <div>
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                                Что AI не использовал ({filteredUsages.length})
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                {filteredUsages.map(u => {
+                                                    const it = u.item
+                                                    if (!it) return null
+                                                    return (
+                                                        <div key={u.id} className="px-3 py-2 rounded-lg border border-[#E8E8E8] bg-white opacity-70">
+                                                            <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
+                                                                <span className="text-[12px] font-medium text-gray-700">{it.title}</span>
+                                                                {it.sectionTitle && <span className="text-[10px] text-gray-400 ml-auto">{it.sectionTitle}</span>}
+                                                            </div>
+                                                            <div className="text-[11px] text-gray-500">
+                                                                {USAGE_REASON_HUMAN[u.policyDecision ?? ''] ?? u.policyDecision}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Sources (Admin only) */}
+                                    {canEdit && bundle.sources.length > 0 && (
+                                        <div>
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                                Источники ({bundle.sources.length})
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                {bundle.sources.slice(0, 10).map(s => (
+                                                    <div key={s.id} className="px-3 py-2 border-l-2 border-[#E8E8E8] bg-[#F8F9FA] text-[12px]">
+                                                        <p className="text-[#111] leading-relaxed">{s.excerpt}</p>
+                                                        <div className="text-[10px] text-gray-400 mt-0.5 flex flex-wrap gap-x-2">
+                                                            {s.originType === 'manual_entry'
+                                                                ? <span>создано вручную</span>
+                                                                : <>
+                                                                    {s.channel && <span>{CHANNEL_LABELS[s.channel] ?? s.channel}</span>}
+                                                                    {s.occurredAt && <span>· {new Date(s.occurredAt).toLocaleDateString('ru')}</span>}
+                                                                  </>}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Knowledge changes after answer */}
+                                    {bundle.auditAfter.length > 0 && (
+                                        <div>
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                                Что изменилось после этого ответа
+                                            </div>
+                                            <div className="space-y-1">
+                                                {bundle.auditAfter.map(a => (
+                                                    <div key={a.id} className="text-[12px] text-gray-600 flex items-baseline gap-2">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-[#3390EC] shrink-0 mt-1.5" />
+                                                        <span>{AUDIT_AFTER_HUMAN[a.action] ?? a.action}</span>
+                                                        <span className="text-[10px] text-gray-400">{new Date(a.createdAt).toLocaleString('ru')}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Retry preview (Admin only) */}
+                                    {canEdit && (
+                                        <div>
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                                Прогнать заново
+                                            </div>
+                                            {!retryPreview && !retryRunning && (
+                                                <button onClick={runRetryPreview}
+                                                    className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md border border-[#E0E0E0] bg-white hover:border-[#3390EC] hover:text-[#3390EC] text-[12px] text-gray-600 transition-colors">
+                                                    <RefreshCw size={12} /> Что AI ответил бы сейчас (без отправки)
+                                                </button>
+                                            )}
+                                            {retryRunning && (
+                                                <div className="flex items-center gap-2 text-[12px] text-gray-500">
+                                                    <Loader2 size={12} className="animate-spin" /> Прогоняем...
+                                                </div>
+                                            )}
+                                            {retryPreview && (
+                                                <div className="space-y-2">
+                                                    {retryPreview.errorMessage && (
+                                                        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
+                                                            {retryPreview.errorMessage}
+                                                        </div>
+                                                    )}
+                                                    {retryPreview.generatedReply && (
+                                                        <div className="px-3 py-2 bg-[#F0FAF4] border border-green-200 rounded-lg text-[12px] text-[#111] whitespace-pre-wrap leading-relaxed">
+                                                            <div className="text-[10px] text-green-700 mb-1 uppercase tracking-wide">Новый ответ (превью, не отправлено)</div>
+                                                            {retryPreview.generatedReply}
+                                                        </div>
+                                                    )}
+                                                    {retryPreview.policyType !== 'answer' && (
+                                                        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900">
+                                                            Сейчас AI {retryPreview.policyType === 'escalate' ? 'передал бы менеджеру' : 'не нашёл бы знаний'}
+                                                            {retryPreview.escalationReason && `: ${ESCALATION_HUMAN[retryPreview.escalationReason] ?? retryPreview.escalationReason}`}
+                                                        </div>
+                                                    )}
+                                                    <button onClick={runRetryPreview}
+                                                        className="text-[11px] text-gray-400 hover:text-[#3390EC] inline-flex items-center gap-1">
+                                                        <RefreshCw size={10} /> Прогнать ещё раз
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Shadow vs runtime compare */}
+                                    {decision.shadowRetrievalSummary && decision.retrievalMode === 'shadow' && (
+                                        <div>
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                                Что бы сделало новое ядро
+                                            </div>
+                                            <div className="text-[12px] text-gray-600 leading-relaxed">
+                                                Решение в фоне: <strong className="text-[#111]">
+                                                    {(() => {
+                                                        const s = decision.shadowRetrievalSummary as { decision?: string; escalationReason?: string | null }
+                                                        return DECISION_HUMAN[s?.decision ?? ''] ?? s?.decision ?? '—'
+                                                    })()}
+                                                </strong>
+                                                {(() => {
+                                                    const s = decision.shadowRetrievalSummary as { decision?: string; escalationReason?: string | null }
+                                                    if (s?.escalationReason) {
+                                                        return <> · {ESCALATION_HUMAN[s.escalationReason] ?? s.escalationReason}</>
+                                                    }
+                                                    return null
+                                                })()}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Advanced/debug accordion (Admin only) — улучшение #3: durations */}
+                                    {canEdit && (
+                                        <details className="group border-t border-[#F0F0F0] pt-3"
+                                                 open={advancedOpen}
+                                                 onToggle={e => setAdvancedOpen((e.target as HTMLDetailsElement).open)}>
+                                            <summary className="cursor-pointer select-none text-[11px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                                                <ChevronDown size={11} className="transition-transform group-open:rotate-180" />
+                                                Технические детали
+                                            </summary>
+                                            <div className="mt-3 space-y-1 text-[11px] text-gray-500 font-mono">
+                                                <div>id: {decision.id}</div>
+                                                {decision.knowledgeRuntimeVersion && (
+                                                    <div>версия: {decision.knowledgeRuntimeVersion}</div>
+                                                )}
+                                                {decision.selectedModel && (
+                                                    <div>модель: {decision.selectedModel}</div>
+                                                )}
+                                                {decision.detectedIntent && (
+                                                    <div>intent: {decision.detectedIntent}</div>
+                                                )}
+                                                {decision.confidence != null && (
+                                                    <div>confidence: {(decision.confidence * 100).toFixed(0)}%</div>
+                                                )}
+                                                {retryPreview && (
+                                                    <div className="pt-2 text-gray-400">retry preview durations:</div>
+                                                )}
+                                                {retryPreview && (
+                                                    <div className="ml-3">
+                                                        prefilter={retryPreview.trace.prefilterDurationMs}ms ·
+                                                        rerank={retryPreview.trace.rerankDurationMs ?? '—'}ms ·
+                                                        generator={retryPreview.trace.generatorDurationMs ?? '—'}ms ·
+                                                        total={retryPreview.trace.totalDurationMs}ms
+                                                    </div>
+                                                )}
+                                                <div className="pt-2 text-gray-400">scores per item:</div>
+                                                {bundle.knowledgeUsages.map(u => (
+                                                    <div key={u.id} className="ml-3">
+                                                        {u.itemId.slice(0, 12)} · retrieval={u.retrievalScore?.toFixed(3) ?? 'null'} · rerank={u.rerankScore?.toFixed(3) ?? 'null'} · {u.policyDecision ?? '—'}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </details>
+                                    )}
+                                </>
+                            })()}
+                        </div>
+                        <div className="flex justify-end px-6 py-3 border-t border-[#F0F0F0]">
+                            <button onClick={() => setExplainOpen(false)} disabled={retryRunning}
+                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md disabled:opacity-50">
+                                Закрыть
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
