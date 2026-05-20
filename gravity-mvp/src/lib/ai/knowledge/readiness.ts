@@ -325,41 +325,41 @@ function computeChecks(
 ): ReadinessCheck[] {
     const checks: ReadinessCheck[] = []
 
-    // 1. Conflicts: 0 → ok, >0 → fail (нужно вмешательство)
+    // 1. Conflicts → "Спорные знания"
     checks.push({
         id:     'conflicts',
-        label:  'Конфликты в ядре',
+        label:  'Спорные знания',
         status: counts.conflictGroups === 0 ? 'ok' : 'fail',
         detail: counts.conflictGroups === 0
-            ? 'Нет неразрешённых конфликтов'
-            : `${counts.conflictGroups} неразрешённых конфликт${plural(counts.conflictGroups, '', 'а', 'ов')} требуют решения`,
+            ? 'Нет противоречий между фактами'
+            : `Найдено ${counts.conflictGroups} ${plural(counts.conflictGroups, 'противоречие', 'противоречия', 'противоречий')} между фактами — выберите правильный вариант`,
     })
 
-    // 2. Verified coverage
+    // 2. Verified coverage → "Проверенные знания"
     const ratio = counts.activeItems > 0 ? counts.verifiedItems / counts.activeItems : 0
     let vStatus: ReadinessCheckStatus = 'fail'
     let vDetail = ''
     if (counts.activeItems === 0) {
         vStatus = 'fail'
-        vDetail = 'Ядро пустое — запустите сбор'
+        vDetail = 'В ядре пока ничего нет — запустите сбор'
     } else if (counts.verifiedItems < THRESHOLDS.verifiedMinimum) {
         vStatus = 'warn'
-        vDetail = `Подтверждено ${counts.verifiedItems} из ${counts.activeItems} — рекомендуется ${THRESHOLDS.verifiedMinimum}+`
+        vDetail = `Проверено ${counts.verifiedItems} из ${counts.activeItems} — желательно хотя бы ${THRESHOLDS.verifiedMinimum}`
     } else if (ratio >= THRESHOLDS.verifiedRatioOk) {
         vStatus = 'ok'
-        vDetail = `Подтверждено ${counts.verifiedItems} из ${counts.activeItems} (${Math.round(ratio * 100)}%)`
+        vDetail = `Проверено ${counts.verifiedItems} из ${counts.activeItems} (${Math.round(ratio * 100)}%)`
     } else if (ratio >= THRESHOLDS.verifiedRatioWarn) {
         vStatus = 'warn'
-        vDetail = `Подтверждено ${counts.verifiedItems} из ${counts.activeItems} (${Math.round(ratio * 100)}%) — стоит дотянуть до 60%`
+        vDetail = `Проверено ${counts.verifiedItems} из ${counts.activeItems} (${Math.round(ratio * 100)}%) — стоит довести до 60%`
     } else {
         vStatus = 'warn'
-        vDetail = `Подтверждено только ${counts.verifiedItems} из ${counts.activeItems} (${Math.round(ratio * 100)}%)`
+        vDetail = `Проверено только ${counts.verifiedItems} из ${counts.activeItems} (${Math.round(ratio * 100)}%)`
     }
-    checks.push({ id: 'verified_coverage', label: 'Подтверждённое покрытие', status: vStatus, detail: vDetail })
+    checks.push({ id: 'verified_coverage', label: 'Проверенные знания', status: vStatus, detail: vDetail })
 
-    // 3. Extraction recency
+    // 3. Extraction recency → "Свежесть знаний"
     let eStatus: ReadinessCheckStatus = 'fail'
-    let eDetail = 'Ни одного сбора ядра не запускалось'
+    let eDetail = 'Сбор знаний ещё ни разу не запускался'
     if (lastExtraction) {
         const ref = lastExtraction.finishedAt ?? lastExtraction.startedAt ?? lastExtraction.createdAt
         if (ref) {
@@ -367,54 +367,54 @@ function computeChecks(
             const humanAgo = humanizeHours(hoursAgo)
             if (lastExtraction.status === 'failed') {
                 eStatus = 'fail'
-                eDetail = `Последний сбор завершился ошибкой (${humanAgo} назад)`
+                eDetail = `Последний сбор закончился ошибкой (${humanAgo} назад)`
             } else if (hoursAgo > THRESHOLDS.extractionStaleFailHours) {
                 eStatus = 'fail'
-                eDetail = `Последний сбор был ${humanAgo} назад — данные устарели`
+                eDetail = `Сбор был ${humanAgo} назад — знания устарели, запустите ещё раз`
             } else if (hoursAgo > THRESHOLDS.extractionStaleWarnHours) {
                 eStatus = 'warn'
                 eDetail = `Последний сбор ${humanAgo} назад`
             } else {
                 eStatus = 'ok'
-                eDetail = `Сбор актуален: ${humanAgo} назад`
+                eDetail = `Знания свежие: сбор ${humanAgo} назад`
             }
         }
     }
-    checks.push({ id: 'extraction_recency', label: 'Свежесть сбора ядра', status: eStatus, detail: eDetail })
+    checks.push({ id: 'extraction_recency', label: 'Свежесть знаний', status: eStatus, detail: eDetail })
 
-    // 4. Shadow activity: должно набраться достаточно traces за 7д
+    // 4. Shadow activity → "Наблюдение за ответами AI"
     let sStatus: ReadinessCheckStatus = 'warn'
     let sDetail = ''
     if (activity.shadowDecisions === 0 && activity.runtimeDecisions === 0) {
         sStatus = 'warn'
-        sDetail = 'Нет shadow-trace за 7 дней — нечем оценить retrieval до runtime'
+        sDetail = 'За 7 дней AI ещё ни разу не пробовал ответить из ядра — нечего оценивать'
     } else if (activity.shadowDecisions >= THRESHOLDS.shadowMinActivity) {
         sStatus = 'ok'
-        sDetail = `Shadow собрал ${activity.shadowDecisions} trace за 7 дней`
+        sDetail = `AI попробовал ответить из ядра ${activity.shadowDecisions} ${plural(activity.shadowDecisions, 'раз', 'раза', 'раз')} за 7 дней`
     } else {
         sStatus = 'warn'
-        sDetail = `Shadow собрал ${activity.shadowDecisions} trace за 7 дней — мало для надёжной оценки`
+        sDetail = `AI попробовал ответить из ядра только ${activity.shadowDecisions} ${plural(activity.shadowDecisions, 'раз', 'раза', 'раз')} за 7 дней — нужно больше наблюдений`
     }
-    checks.push({ id: 'shadow_activity', label: 'Shadow-наблюдения', status: sStatus, detail: sDetail })
+    checks.push({ id: 'shadow_activity', label: 'Наблюдение за ответами AI', status: sStatus, detail: sDetail })
 
-    // 5. Escalation rate (только если есть base)
+    // 5. Escalation rate → "Передача менеджеру"
     let escStatus: ReadinessCheckStatus = 'ok'
-    let escDetail = 'Недостаточно данных для оценки эскалации'
+    let escDetail = 'Пока мало данных, чтобы оценить'
     if (activity.decisionsTotal >= 10) {
         const escRatio = activity.escalated / activity.decisionsTotal
         const pct = Math.round(escRatio * 100)
         if (escRatio <= THRESHOLDS.escalationOkRatio) {
             escStatus = 'ok'
-            escDetail = `${pct}% решений переданы менеджеру за 7 дней`
+            escDetail = `${pct}% диалогов AI передал менеджеру за 7 дней — нормальный уровень`
         } else if (escRatio <= THRESHOLDS.escalationWarnRatio) {
             escStatus = 'warn'
-            escDetail = `${pct}% решений переданы менеджеру — повышенный уровень`
+            escDetail = `${pct}% диалогов AI передал менеджеру — выше обычного`
         } else {
             escStatus = 'fail'
-            escDetail = `${pct}% решений переданы менеджеру — AI почти всегда передаёт, не готов к runtime`
+            escDetail = `${pct}% диалогов AI передал менеджеру — почти всегда не отвечает сам, ядру нужно дозреть`
         }
     }
-    checks.push({ id: 'escalation_rate', label: 'Уровень эскалации', status: escStatus, detail: escDetail })
+    checks.push({ id: 'escalation_rate', label: 'Передача менеджеру', status: escStatus, detail: escDetail })
 
     return checks
 }

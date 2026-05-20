@@ -2240,16 +2240,17 @@ export default function AiControlCenterClient({
 
     // PR3.8: runtime mode pill (legend в шапке Sources).
     // PR5: clickable — открывает RuntimeRolloutModal с checklist'ом
-    // готовности и объяснением что runtime контролируется env-флагом.
+    // готовности. PR5 humanization: убрали Runtime/Shadow/Legacy
+    // англицизмы, теперь человеческие подписи.
     const RuntimeModePill = ({ state }: { state: typeof runtimeState }) => {
         const cfg =
-            state.mode === 'runtime' ? { bg: 'bg-green-100',  txt: 'text-green-700', label: 'Runtime' } :
-            state.mode === 'shadow'  ? { bg: 'bg-amber-100',  txt: 'text-amber-700', label: 'Shadow' } :
-                                       { bg: 'bg-gray-100',   txt: 'text-gray-500',  label: 'Legacy' }
+            state.mode === 'runtime' ? { bg: 'bg-green-100',  txt: 'text-green-700', label: 'AI отвечает из ядра' } :
+            state.mode === 'shadow'  ? { bg: 'bg-amber-100',  txt: 'text-amber-700', label: 'Тестовый режим' } :
+                                       { bg: 'bg-gray-100',   txt: 'text-gray-500',  label: 'Старая система' }
         const title =
-            state.mode === 'runtime' ? 'AI отвечает по новому ядру знаний. Нажмите для checklist готовности.' :
-            state.mode === 'shadow'  ? 'Ядро работает в параллель — клиенту отвечает старый pipeline. Нажмите для checklist.' :
-                                       'Knowledge Core не подключён к ответам AI. Нажмите для checklist готовности.'
+            state.mode === 'runtime' ? 'AI уже отвечает водителям из нового ядра знаний. Нажмите для проверки готовности.' :
+            state.mode === 'shadow'  ? 'Новое ядро работает в фоне для наблюдения, водителям отвечает старая система. Нажмите для проверки готовности.' :
+                                       'Новое ядро знаний пока не подключено к ответам AI. Нажмите для проверки готовности.'
         return (
             <button
                 type="button"
@@ -2287,7 +2288,7 @@ export default function AiControlCenterClient({
             <div className="space-y-1.5">
                 <div className="flex items-center gap-3 flex-wrap rounded-md border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2 text-[12px] text-gray-600">
                     <span
-                        title="Сводный статус готовности — наихудший из checklist'а"
+                        title="Общая готовность ядра — самая слабая из 5 проверок ниже. Кликните «Проверить готовность» чтобы увидеть подробности."
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${overallCfg.bg} ${overallCfg.txt}`}
                     >
                         <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
@@ -2320,37 +2321,37 @@ export default function AiControlCenterClient({
                     </button>
                 </div>
                 {/* PR5.10: health 7d — fitness "хорошо ли работает сейчас".
-                    Отдельная строка, ещё более компактная. Показывается
-                    только если есть данные за 7 дней. */}
+                    PR5-humanization: убрали "эскалация", "shadow≠actual"
+                    и прочий dev-jargon. */}
                 {hasHealth && (
                     <div className="flex items-center gap-3 flex-wrap px-3 py-1 text-[11px] text-gray-500">
-                        <span className="uppercase tracking-wide text-[10px] text-gray-400">Здоровье · 7д:</span>
+                        <span className="uppercase tracking-wide text-[10px] text-gray-400">За 7 дней:</span>
                         {h.escalationPct != null && (
-                            <span title={`Доля решений где AI передал диалог менеджеру (${h.decisionsBase} за 7 дней)`}>
-                                эскалация <strong className={h.escalationPct > 0.65 ? 'text-red-600' : h.escalationPct > 0.4 ? 'text-amber-600' : 'text-[#111]'}>{pct(h.escalationPct)}</strong>
+                            <span title={`AI передал менеджеру в ${pct(h.escalationPct)} диалогов из ${h.decisionsBase}. Низкий процент — AI справляется сам. Высокий — ему не хватает знаний.`}>
+                                передал менеджеру <strong className={h.escalationPct > 0.65 ? 'text-red-600' : h.escalationPct > 0.4 ? 'text-amber-600' : 'text-[#111]'}>{pct(h.escalationPct)}</strong>
                             </span>
                         )}
                         {h.noMatchPct != null && (
                             <>
                                 <span className="text-gray-300">·</span>
-                                <span title={`Решений где retriever не нашёл подходящих знаний (${h.decisionsBase} за 7 дней)`}>
-                                    нет ответа <strong className="text-[#111]">{pct(h.noMatchPct)}</strong>
+                                <span title={`AI не нашёл подходящих знаний в ${pct(h.noMatchPct)} диалогов из ${h.decisionsBase}. Если много — стоит добавить факты или собрать ядро заново.`}>
+                                    не нашёл ответ <strong className="text-[#111]">{pct(h.noMatchPct)}</strong>
                                 </span>
                             </>
                         )}
                         {h.verifiedUsagePct != null && (
                             <>
                                 <span className="text-gray-300">·</span>
-                                <span title={`Доля used-знаний которые подтверждены (${h.usageBase} usage logs за 7 дней)`}>
-                                    из подтверждённых <strong className={h.verifiedUsagePct >= 0.6 ? 'text-green-700' : 'text-[#111]'}>{pct(h.verifiedUsagePct)}</strong>
+                                <span title={`Из ${h.usageBase} использованных знаний ${pct(h.verifiedUsagePct)} были проверены админом. Чем выше — тем безопаснее ответы AI.`}>
+                                    из проверенных <strong className={h.verifiedUsagePct >= 0.6 ? 'text-green-700' : 'text-[#111]'}>{pct(h.verifiedUsagePct)}</strong>
                                 </span>
                             </>
                         )}
                         {h.shadowRuntimeMismatchPct != null && (
                             <>
                                 <span className="text-gray-300">·</span>
-                                <span title="Доля shadow trace где Knowledge Core решил иначе чем actual decision. Меньше = ближе к runtime-ready.">
-                                    shadow≠actual <strong className={h.shadowRuntimeMismatchPct > 0.3 ? 'text-amber-600' : 'text-[#111]'}>{pct(h.shadowRuntimeMismatchPct)}</strong>
+                                <span title="В тестовом режиме AI пробует ответить из ядра, но реально отвечает старая система. Этот процент — где они разошлись. Чем меньше — тем ближе ядро к готовности.">
+                                    разошлось с реальностью <strong className={h.shadowRuntimeMismatchPct > 0.3 ? 'text-amber-600' : 'text-[#111]'}>{pct(h.shadowRuntimeMismatchPct)}</strong>
                                 </span>
                             </>
                         )}
@@ -2360,9 +2361,16 @@ export default function AiControlCenterClient({
         )
     }
 
-    // PR5: rollout-checklist модал. Объясняет что runtime управляется
-    // env-флагом (не UI-switch), показывает 5 checks + текущие env-флаги.
-    // НЕ позволяет включить runtime — это conscious deployment-action.
+    // PR5: rollout-checklist модал. PR5-humanization: убрали Runtime/
+    // Shadow/Legacy/env-флаги из основного UI. Технические детали — в
+    // collapsible accordion внизу для админа/разработчика.
+    //
+    // Operational language:
+    //   "Runtime" → "AI отвечает из ядра знаний"
+    //   "Shadow"  → "Тестовый режим"
+    //   "Legacy"  → "Старая система ответов"
+    //
+    // Каждый check имеет tooltip "что/зачем/хорошо или плохо".
     const RuntimeRolloutModal = () => {
         if (!rolloutOpen) return null
         const r = readiness
@@ -2370,6 +2378,29 @@ export default function AiControlCenterClient({
             status === 'ok' ? <span className="text-green-600">●</span> :
             status === 'warn' ? <span className="text-amber-600">●</span> :
                                 <span className="text-red-600">●</span>
+
+        // Tooltip-словарь "что/зачем/хорошо или плохо" для каждого check.
+        const CHECK_HELP: Record<string, string> = {
+            conflicts:          'Когда AI извлёк из переписок два противоречащих факта (например, разные цифры комиссии), он не может выбрать сам — нужен админ. Чем меньше противоречий, тем увереннее AI отвечает.',
+            verified_coverage:  'Подтверждённые знания — это факты, точность которых уже проверил админ. AI делает на них упор. Чем больше подтверждено, тем безопаснее переключать AI на ответы из ядра.',
+            extraction_recency: 'Сбор знаний из переписок нужно повторять время от времени — иначе ядро отстанет от живой жизни компании. Свежее = ближе к реальности.',
+            shadow_activity:    'Прежде чем доверить AI отвечать из ядра, мы наблюдаем — какие ответы он БЫ дал, если бы отвечал сам. Чем больше таких наблюдений, тем точнее видно, готов он или нет.',
+            escalation_rate:    'Процент диалогов, где AI решил «не отвечать сам, передать менеджеру». Здоровый уровень — небольшой процент. Если AI почти всегда передаёт менеджеру, значит ему не хватает знаний.',
+        }
+
+        // Описание текущего режима для humanized header.
+        const modeDescription =
+            runtimeState.mode === 'runtime' ? {
+                title: 'AI отвечает из ядра знаний',
+                body:  'AI уже использует новое ядро для ответов водителям. Старая база больше не применяется.',
+            } : runtimeState.mode === 'shadow' ? {
+                title: 'Тестовый режим',
+                body:  'Новое ядро работает в фоне для наблюдения. Водителям отвечает старая система ответов — никаких рисков для реальных диалогов.',
+            } : {
+                title: 'Старая система ответов',
+                body:  'Новое ядро ещё не подключено. AI отвечает по старым правилам / FAQ-карточкам.',
+            }
+
         return (
             <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16" onClick={() => setRolloutOpen(false)}>
                 <div
@@ -2378,9 +2409,9 @@ export default function AiControlCenterClient({
                 >
                     <div className="px-6 py-4 border-b border-[#F0F0F0] flex items-center justify-between">
                         <div>
-                            <h2 className="text-[16px] font-semibold text-[#111]">Готовность к запуску в runtime</h2>
+                            <h2 className="text-[16px] font-semibold text-[#111]">Готовность ядра знаний</h2>
                             <p className="text-[12px] text-gray-500 mt-0.5">
-                                Сводный статус и checklist перед переводом AI на ответы из ядра.
+                                Видно, как продвигается подготовка AI к самостоятельным ответам.
                             </p>
                         </div>
                         <button
@@ -2391,32 +2422,32 @@ export default function AiControlCenterClient({
                     </div>
 
                     <div className="px-6 py-4 overflow-y-auto space-y-5">
-                        {/* Текущий режим */}
+                        {/* Текущий режим — без env-флагов в основном UI */}
                         <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Текущий режим</div>
-                            <div className="flex items-center gap-2">
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Сейчас</div>
+                            <div className="flex items-center gap-2 mb-1">
                                 <RuntimeModePill state={runtimeState} />
-                                <span className="text-[13px] text-[#111]">
-                                    {runtimeState.mode === 'runtime' && 'AI отвечает из ядра знаний'}
-                                    {runtimeState.mode === 'shadow'  && 'Ядро работает в фоне (legacy KB отвечает клиенту)'}
-                                    {runtimeState.mode === 'legacy'  && 'Ядро не подключено к ответам'}
-                                </span>
+                                <span className="text-[13px] font-semibold text-[#111]">{modeDescription.title}</span>
                             </div>
-                            <div className="text-[11px] text-gray-500 mt-2">
-                                Shadow: <code className="bg-white px-1 rounded border border-[#E8E8E8]">AI_KNOWLEDGE_SHADOW_MODE</code> = {runtimeState.shadowOn ? '1' : '0'}<br/>
-                                Runtime: <code className="bg-white px-1 rounded border border-[#E8E8E8]">AI_KNOWLEDGE_RUNTIME_ENABLED</code> = {runtimeState.runtimeOn ? '1' : '0'}
-                            </div>
+                            <p className="text-[12px] text-gray-600 leading-relaxed">{modeDescription.body}</p>
                         </div>
 
-                        {/* Checklist */}
+                        {/* Checklist готовности — humanized labels, каждый с tooltip */}
                         <div>
                             <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Готовность ядра</div>
                             <ul className="space-y-2">
                                 {r.checks.map(ch => (
                                     <li key={ch.id} className="flex items-start gap-2 text-[13px]">
                                         <span className="mt-[2px] text-[14px] leading-none">{checkIcon(ch.status)}</span>
-                                        <div>
-                                            <div className="font-medium text-[#111]">{ch.label}</div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="font-medium text-[#111]">{ch.label}</span>
+                                                <span
+                                                    title={CHECK_HELP[ch.id] ?? ''}
+                                                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 text-[9px] text-gray-400 cursor-help"
+                                                    aria-label="Подсказка"
+                                                >?</span>
+                                            </div>
                                             <div className="text-[12px] text-gray-500">{ch.detail}</div>
                                         </div>
                                     </li>
@@ -2424,36 +2455,63 @@ export default function AiControlCenterClient({
                             </ul>
                         </div>
 
-                        {/* Activity 7d */}
+                        {/* Активность за 7 дней — humanized labels */}
                         <div>
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Активность за 7 дней</div>
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Что было за 7 дней</div>
                             <div className="grid grid-cols-2 gap-2 text-[12px]">
-                                <Stat label="Всего решений" value={r.activity7d.decisionsTotal} />
-                                <Stat label="Shadow-trace" value={r.activity7d.shadowDecisions} />
+                                <Stat label="Всего ответов AI" value={r.activity7d.decisionsTotal} />
+                                <Stat label="Тестовых наблюдений" value={r.activity7d.shadowDecisions} />
                                 <Stat label="Передано менеджеру" value={r.activity7d.escalated} />
-                                <Stat label="Без подходящих знаний" value={r.activity7d.noMatch} />
+                                <Stat label="AI не нашёл ответ" value={r.activity7d.noMatch} />
                             </div>
                         </div>
 
-                        {/* Explanation */}
+                        {/* Humanized warning: не про env-флаги, а про процесс */}
                         <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] p-3 text-[12px] text-[#8B6914] leading-relaxed">
-                            <strong className="block mb-1 text-[#8B6914]">Runtime включается осознанно</strong>
-                            Это не UI-переключатель. После того как checklist «зелёный»,
-                            установите переменную окружения <code className="bg-white px-1 rounded border border-[#E8E0C0]">AI_KNOWLEDGE_RUNTIME_ENABLED=1</code>
-                            в конфиге сервера и перезапустите CRM. До перезапуска ничего не поменяется
-                            — клиентам по-прежнему отвечает legacy KB. Это страховка
-                            от случайного флипа кнопкой.
+                            <strong className="block mb-1 text-[#8B6914]">Новый режим включается отдельно</strong>
+                            Сейчас новое ядро знаний работает только в тестовом режиме — водителям отвечает старая система. Прежде чем перевести AI на ответы из ядра, нужно:
+                            <ul className="list-disc ml-5 mt-1.5 space-y-0.5">
+                                <li>собрать знания (кнопка «Собрать ядро»)</li>
+                                <li>посмотреть, что AI отвечает в тестовом режиме</li>
+                                <li>подтвердить ключевые факты — тарифы, требования, документы</li>
+                                <li>разрешить спорные знания, если они появятся</li>
+                            </ul>
+                            <p className="mt-2">
+                                Когда все четыре пункта выше зелёные — разработчик отдельно включит новый режим на сервере. Это страховка от случайного переключения кнопкой.
+                            </p>
                         </div>
+
+                        {/* Технические детали — скрыто по-умолчанию, для админа/разработчика */}
+                        <details className="group rounded-md border border-[#E8E8E8] bg-[#FAFAFA]">
+                            <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-gray-500 hover:text-[#111]">
+                                <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+                                Технические детали (для разработчика)
+                            </summary>
+                            <div className="px-3 pb-3 text-[11px] text-gray-600 space-y-2">
+                                <div>
+                                    Режим управляется переменными окружения сервера. UI только показывает их фактическое значение, не флипает.
+                                </div>
+                                <div className="bg-white border border-[#E8E8E8] rounded px-2 py-1.5 font-mono text-[10px] leading-relaxed">
+                                    AI_KNOWLEDGE_SHADOW_MODE = <strong>{runtimeState.shadowOn ? '1' : '0'}</strong><br/>
+                                    AI_KNOWLEDGE_RUNTIME_ENABLED = <strong>{runtimeState.runtimeOn ? '1' : '0'}</strong>
+                                </div>
+                                <div>
+                                    Чтобы перевести AI на ответы из ядра: установите{' '}
+                                    <code className="bg-white px-1 rounded border border-[#E8E8E8]">AI_KNOWLEDGE_RUNTIME_ENABLED=1</code>{' '}
+                                    в .env и перезапустите CRM.
+                                </div>
+                            </div>
+                        </details>
                     </div>
 
                     <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-between gap-2">
                         <a
-                            href="/settings/integrations/ai-knowledge-help#a-runtime"
+                            href="/settings/integrations/ai-knowledge-help"
                             target="_blank"
                             rel="noopener"
                             className="text-[12px] text-[#3390EC] hover:underline"
                         >
-                            Открыть инструкцию по runtime →
+                            Открыть инструкцию →
                         </a>
                         <button
                             onClick={() => setRolloutOpen(false)}
@@ -2660,21 +2718,22 @@ export default function AiControlCenterClient({
                         </div>
                     )}
                     <div className="mt-3 text-[10px] text-gray-400 leading-relaxed">
-                        <strong>Shadow mode</strong> — retriever работает параллельно,
-                        ответ клиенту даёт legacy KB (наблюдение перед runtime).
-                        {' '}<strong>Runtime</strong> — generator получает только
-                        подтверждённые факты из ядра. Управляется env:
-                        <code className="mx-1 text-[10px]">AI_KNOWLEDGE_SHADOW_MODE</code>
-                        и <code className="text-[10px]">AI_KNOWLEDGE_RUNTIME_ENABLED</code>.
-                        Кликните по pill в шапке — увидите checklist готовности и
-                        текущие значения.{' '}
+                        <strong>Тестовый режим</strong> — новое ядро работает в фоне,
+                        чтобы можно было посмотреть какие ответы оно бы давало.
+                        Водителям отвечает старая система — никаких рисков.{' '}
+                        <strong>Активный режим</strong> — AI начинает отвечать
+                        водителям из ядра. Включается разработчиком только когда
+                        ядро готово (см. <button
+                            type="button"
+                            onClick={() => setRolloutOpen(true)}
+                            className="text-[#3390EC] hover:underline"
+                        >проверка готовности</button>).{' '}
                         <a
                             href="/settings/integrations/ai-knowledge-help#a-shadow"
                             target="_blank"
                             rel="noopener"
                             className="text-[#3390EC] hover:underline"
-                        >
-                            Что это значит?
+                        >Подробнее
                         </a>
                     </div>
                 </div>
