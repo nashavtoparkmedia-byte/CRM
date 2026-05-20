@@ -190,6 +190,7 @@ class CallSession {
         // Initialise STT session if a provider is available.
         if (stt.enabled()) {
             this.sttSession = stt.createSttSession({
+                callUuid: this.callUuid,   // threaded into inactivity-timeout opsLog
                 onPartial: () => {}, // ignore partials at orchestrator level
                 onFinal: text => this._onSttFinal(text),
                 onError: err => console.error(`[call ${this.callUuid}] stt error: ${err.message}`),

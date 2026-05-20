@@ -52,12 +52,22 @@ const {
     RecognitionModelOptions_AudioProcessingType,
 } = require('@yandex-cloud/nodejs-sdk/dist/generated/yandex/cloud/ai/stt/v3/stt')
 
+const { createInactivityWatchdog } = require('./inactivity-watchdog')
+const { opsLog } = require('./opsLog')
+
 const LANG = (process.env.YANDEX_STT_LANG ?? 'ru-RU').trim()
 const SAMPLE_RATE = 8000
 // Required by proto — undefined here crashes serialization. Valid values
 // per Yandex docs: 'general' | 'general:rc' | 'general:deprecated'.
 const MODEL = (process.env.YANDEX_STT_MODEL ?? 'general').trim()
 const ENDPOINT = process.env.YANDEX_STT_ENDPOINT ?? 'stt.api.cloud.yandex.net:443'
+// Inactivity watchdog: if Yandex returns no event of any kind (partial,
+// final, refinement, even diagnostic) within this window, treat the
+// stream as hung and abort. Default 20 s — longer than Whisper's 15 s
+// fetch timeout because gRPC streaming includes natural conversational
+// pauses. Bridge falls through to its existing STT-error pathway,
+// which lets the silence-timer (PR #30) end the call gracefully.
+const STREAM_INACTIVITY_TIMEOUT_MS = Number(process.env.YANDEX_STT_TIMEOUT_MS ?? 20000)
 
 /**
  * Pushable async iterable — nice-grpc bidi streaming wants AsyncIterable
@@ -122,6 +132,10 @@ class YandexSttSession {
      * @param {object} opts
      * @param {string} opts.apiKey
      * @param {string} [opts.folderId]
+     * @param {string} [opts.callUuid]    — included in inactivity-timeout
+     *                                       opsLog so operators can
+     *                                       correlate an STT stall to
+     *                                       a specific FreeSWITCH call.
      * @param {(text: string, confidence: number) => void} [opts.onPartial]
      * @param {(text: string) => void} [opts.onFinal]
      * @param {(err: Error) => void} [opts.onError]
@@ -129,6 +143,7 @@ class YandexSttSession {
     constructor(opts) {
         this.apiKey = opts.apiKey
         this.folderId = opts.folderId
+        this.callUuid = opts.callUuid    // optional; opsLog handles undefined gracefully
         this.onPartial = opts.onPartial ?? (() => {})
         this.onFinal = opts.onFinal ?? (() => {})
         this.onError = opts.onError ?? (err => console.error(`[stt] error: ${err.message}`))
@@ -136,6 +151,7 @@ class YandexSttSession {
         this.consumeP = null    // Promise resolving when response stream ends
         this.started = false
         this.chunkCount = 0
+        this._watchdog = null   // armed in start(), cleared on stop() / stream-end / timeout
     }
 
     async start() {
@@ -182,8 +198,20 @@ class YandexSttSession {
             throw new Error(`recognizeStreaming() init failed: ${err.message}`)
         }
 
+        // Arm inactivity watchdog. Yandex SDK v3 streaming doesn't
+        // expose a per-call deadline / RPC timeout knob, so we wrap the
+        // response loop with our own watchdog: any server-side event
+        // (handled in `_handleResponse`) calls `reset()`, the loop's
+        // `finally` block calls `clear()`. If the stream falls silent
+        // we abort and surface as STT error.
+        this._watchdog = createInactivityWatchdog({
+            timeoutMs: STREAM_INACTIVITY_TIMEOUT_MS,
+            onTimeout: () => this._onInactivityTimeout(),
+        })
+        this._watchdog.reset()
+
         console.log(
-            `[stt] streaming started — model=${MODEL}, lang=${LANG}, rate=${SAMPLE_RATE}Hz, folder=${this.folderId ?? '-'}`,
+            `[stt] streaming started — model=${MODEL}, lang=${LANG}, rate=${SAMPLE_RATE}Hz, folder=${this.folderId ?? '-'}, inactivity_timeout=${STREAM_INACTIVITY_TIMEOUT_MS}ms`,
         )
 
         // Consume responses in the background. Errors surface via onError
@@ -197,9 +225,49 @@ class YandexSttSession {
             } catch (err) {
                 if (this.started) this.onError(err)
             } finally {
+                if (this._watchdog) {
+                    this._watchdog.clear()
+                    this._watchdog = null
+                }
                 this.started = false
             }
         })()
+    }
+
+    /**
+     * Fires when no server-side event has arrived within
+     * STREAM_INACTIVITY_TIMEOUT_MS. Closes the request stream so the
+     * response iterator terminates, which drops us into the consumeP
+     * `finally` block and marks the session not-started. The error is
+     * propagated through the existing `onError` pathway so the bridge
+     * sees this exactly like any other STT failure.
+     *
+     * False-positive analysis (why 20 s is safe for normal flow)
+     * ──────────────────────────────────────────────────────────
+     *   • User pauses: typically 0.5–3 s within a turn, never close to 20 s.
+     *   • Turn boundaries: silence-timer (PR #30) already ends silent
+     *     calls after 16 s (2 × 8 s strikes), so a 20 s no-Yandex-event
+     *     window would already be a failed call regardless.
+     *   • TTS playback (bridge in `speaking` state): bridge stops feeding
+     *     PCM into STT via the `onPcm` source gate. Even with no input,
+     *     Yandex SpeechKit v3 streaming emits periodic diagnostic events
+     *     (`audioCursors`, `responseWallTimeMs`, `eouUpdate`) — `_handleResponse`
+     *     resets the watchdog on ANY response, including unmatched
+     *     diagnostic ones. A long TTS prompt is therefore tolerated by
+     *     design without false-positive.
+     *   • Real stall (network glitch, server-side hang): zero events of
+     *     any kind for 20 s — this is the case we want to catch and
+     *     abort. Bridge falls through to silence-timer recovery.
+     */
+    _onInactivityTimeout() {
+        opsLog('error', 'yandex_stt_inactivity_timeout', {
+            provider: 'yandex',
+            callUuid: this.callUuid,
+            chunkCount: this.chunkCount,
+            timeoutMs: STREAM_INACTIVITY_TIMEOUT_MS,
+        })
+        this.onError(new Error(`yandex_stt_inactivity_timeout_${STREAM_INACTIVITY_TIMEOUT_MS}ms`))
+        this.stop()
     }
 
     /** Feed raw PCM bytes. */
@@ -214,6 +282,10 @@ class YandexSttSession {
     }
 
     stop() {
+        if (this._watchdog) {
+            this._watchdog.clear()
+            this._watchdog = null
+        }
         if (this.requests) {
             try { this.requests.end() } catch {}
             this.requests = null
@@ -222,6 +294,13 @@ class YandexSttSession {
     }
 
     _handleResponse(resp) {
+        // Any incoming response — even a diagnostic one with no
+        // alternatives — proves the stream is still alive, so reset
+        // the inactivity watchdog first thing. Doing this BEFORE
+        // matching event types means a stream that emits only
+        // diagnostic events (statusCode, eouUpdate) is still
+        // considered healthy.
+        if (this._watchdog) this._watchdog.reset()
         // Yandex returns a `StreamingResponse` with a oneof event field
         // plus top-level diagnostic fields (responseWallTimeMs, audioCursors,
         // sessionUuid). Speech text lives under `partial.alternatives[].text`
