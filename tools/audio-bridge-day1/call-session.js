@@ -33,6 +33,7 @@ const stt = require('./stt-router')
 const tts = require('./tts-router')
 const llm = require('./llm-client')
 const { classifySttGarbage } = require('./stt-garbage')
+const { decideRecoveryAction, isAmbiguousShort } = require('./recovery-policy')
 
 /**
  * State transitions:
@@ -153,6 +154,15 @@ class CallSession {
         this.sttSession = null
         // Counter for unique audio filenames per call.
         this.playbackCount = 0
+        // PR #61 — Conversation Recovery Layer v1.
+        //   consecutiveGarbageCount: run length of consecutive garbage
+        //     drops. Reset on accepted real STT or after a recovery fires.
+        //     Drives the "garbage 2x in a row → recover" trigger.
+        //   recoveryAttempts: total recoveries fired this call. Hard-capped
+        //     at MAX_RECOVERY_ATTEMPTS (2) by recovery-policy; past that,
+        //     control falls back to silence-timer → end_call unclear.
+        this.consecutiveGarbageCount = 0
+        this.recoveryAttempts = 0
     }
 
     /**
@@ -171,6 +181,45 @@ class CallSession {
             occurredAt: new Date().toISOString(),
             payload: payload ?? null,
         })
+    }
+
+    /**
+     * Conversation Recovery Layer trigger point (PR #61).
+     *
+     * Caller passed a `trigger` + a decision from decideRecoveryAction.
+     * This helper:
+     *   1. Increments recoveryAttempts (used for the next decision cap).
+     *   2. Emits a `recovery_attempted` event with the trigger / action /
+     *      phrase head / attempt ordinal — measurable per architect.
+     *   3. Speaks the recovery phrase via TTS (same code path as a normal
+     *      LLM-driven reply, so all turn-taking guards apply).
+     *   4. Re-enters `listening` state, which re-arms the silence timer
+     *      via the existing _setState transition logic.
+     *
+     * Pure side-effect helper. Never throws — caller is in a hot path
+     * (silence-timer fire / STT final) and must not be blocked by a
+     * recovery failure.
+     */
+    async _triggerRecovery(trigger, recovery) {
+        if (this.state === 'ended') return
+        this.recoveryAttempts += 1
+        this._emitEvent('recovery_attempted', {
+            trigger,
+            action: recovery.action,
+            phrase_head: (recovery.phrase ?? '').slice(0, 60),
+            attempt_n: this.recoveryAttempts,
+            state_at_trigger: this.state,
+        })
+        console.log(
+            `[call ${this.callUuid}] recovery (${trigger} → ${recovery.action}) ` +
+            `attempt ${this.recoveryAttempts}: ${(recovery.phrase ?? '').slice(0, 60)}`,
+        )
+        try {
+            await this._speak(recovery.phrase)
+        } catch (err) {
+            console.error(`[call ${this.callUuid}] recovery speak failed: ${err.message}`)
+        }
+        if (this.state !== 'ended') this._setState('listening')
     }
 
     _clearSilenceTimer() {
@@ -210,6 +259,26 @@ class CallSession {
             // didn't engage).
             this.pendingUserText = '(длительная тишина — лид не отвечает; завершай разговор end_call с qualification_status=unclear)'
             return this._processPendingUserText()
+        }
+        // PR #61 — On the FIRST silence strike when the lead never spoke
+        // (pre-greeting cliff territory), prefer a short deterministic
+        // re-engage prompt over the LLM-injection path. Saves an LLM
+        // round-trip and gives the lead a chance to respond before the
+        // silence-strike 2 / end_call path fires. If the lead DID speak
+        // (realUserUtterances > 0) we keep the legacy LLM-injection
+        // behaviour — mid-dialog silence is a different shape.
+        if (this.silenceStrikes === 1 && this.realUserUtterances === 0) {
+            const recovery = decideRecoveryAction({
+                trigger: 'silence_after_greeting',
+                recoveryAttempts: this.recoveryAttempts,
+            })
+            if (recovery.action) {
+                await this._triggerRecovery('silence_after_greeting', recovery)
+                return
+            }
+            // Exhausted (≥ MAX_RECOVERY_ATTEMPTS) — fall through to the
+            // legacy LLM-injection path, which will likely produce
+            // end_call(unclear) on the next round.
         }
         // First strike — synthesize a short re-prompt from the model side.
         this.pendingUserText = '(лид молчит — короткое подбадривание или повтор последнего вопроса)'
@@ -301,7 +370,7 @@ class CallSession {
         this.sttSession.send(pcmBuffer)
     }
 
-    _onSttFinal(text) {
+    async _onSttFinal(text) {
         const trimmed = text.trim()
         if (!trimmed) return
 
@@ -334,9 +403,10 @@ class CallSession {
         //   - DO emit stt_suspicious_pattern event for observability
         const garbage = classifySttGarbage(trimmed)
         if (garbage.suspicious && garbage.action === 'drop') {
+            this.consecutiveGarbageCount += 1
             console.log(
-                `[call ${this.callUuid}] stt-garbage-drop (${garbage.pattern_name}): ` +
-                `${trimmed.slice(0, 80)}`,
+                `[call ${this.callUuid}] stt-garbage-drop (${garbage.pattern_name}, ` +
+                `consec=${this.consecutiveGarbageCount}): ${trimmed.slice(0, 80)}`,
             )
             this._emitEvent('stt_suspicious_pattern', {
                 pattern_name: garbage.pattern_name,
@@ -344,8 +414,49 @@ class CallSession {
                 action: 'drop',
                 source: 'final',
             })
+            // PR #61 — Recovery on garbage cluster (≥2 consecutive). The
+            // policy returns no-op on a single drop; only sustained
+            // garbage triggers a re-prompt. Recovery resets the counter
+            // so we don't fire again on the very next drop.
+            const recovery = decideRecoveryAction({
+                trigger: 'garbage',
+                consecutiveGarbage: this.consecutiveGarbageCount,
+                recoveryAttempts: this.recoveryAttempts,
+            })
+            if (recovery.action) {
+                this.consecutiveGarbageCount = 0
+                await this._triggerRecovery('garbage', recovery)
+            }
             return
         }
+
+        // PR #61 — Ambiguous-short check. Final passed the garbage
+        // classifier (not subtitle credits / not emoji / not pure-Latin)
+        // but is too short to plausibly carry meaning. Heuristic is
+        // tight: ≤ 1 letter after stripping non-letters. Recovery here
+        // is a single clarification prompt; on exhaustion we fall
+        // through to normal processing (the short utterance reaches
+        // the LLM as-is — silence-timer will catch dead-zones).
+        if (isAmbiguousShort(trimmed)) {
+            const recovery = decideRecoveryAction({
+                trigger: 'ambiguous_short',
+                recoveryAttempts: this.recoveryAttempts,
+            })
+            if (recovery.action) {
+                console.log(
+                    `[call ${this.callUuid}] ambiguous-short → recovery: ${trimmed}`,
+                )
+                this.consecutiveGarbageCount = 0  // not garbage; safe to reset
+                await this._triggerRecovery('ambiguous_short', recovery)
+                return
+            }
+            // Exhausted — fall through, let dialog handle (or silence-timer).
+        }
+
+        // Real (non-garbage, non-ambiguous) speech accepted — reset the
+        // consecutive-garbage counter so a single garbage drop later
+        // doesn't accidentally cross the 2-in-a-row threshold.
+        this.consecutiveGarbageCount = 0
 
         this.pendingUserText = (this.pendingUserText + ' ' + trimmed).trim()
         this.onTranscriptItem('user', trimmed)

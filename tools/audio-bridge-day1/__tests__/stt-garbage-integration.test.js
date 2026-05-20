@@ -168,12 +168,22 @@ test('garbage emission: stt_suspicious_pattern event with full payload', () => {
     } finally { cleanup() }
 })
 
-test('multiple garbage inputs: one event per drop', () => {
+test('multiple garbage inputs: one event per drop', async () => {
     const { s, cleanup } = makeSession()
     try {
-        s._onSttFinal('Редактор субтитров А.X Корректор А.Y')
-        s._onSttFinal('😎')
-        s._onSttFinal('Yes ok ok')
+        // PR #61: _onSttFinal is async (recovery layer awaits TTS).
+        // The 2nd consecutive garbage triggers a recovery that calls
+        // _speak() and sets acceptSttAfter ~500ms in the future. To
+        // assert all 3 STT drops are recorded as separate events
+        // without waiting on real wall-clock for the grace window,
+        // reset acceptSttAfter before each call. Production runs STT
+        // asynchronously over time so this isn't an issue there.
+        s.acceptSttAfter = 0
+        await s._onSttFinal('Редактор субтитров А.X Корректор А.Y')
+        s.acceptSttAfter = 0
+        await s._onSttFinal('😎')
+        s.acceptSttAfter = 0
+        await s._onSttFinal('Yes ok ok')
 
         const susEvents = s.events.filter(e => e.type === 'stt_suspicious_pattern')
         assert.equal(susEvents.length, 3)
