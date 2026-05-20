@@ -1486,3 +1486,28 @@ export async function previewDecisionRetry(
         }
     }
 }
+
+// ─── AI Knowledge Core readiness (PR5) ──────────────────────────
+//
+// Operational state aggregator для readiness row + runtime warning
+// модала. Read-only, без mutation, без PII. Доступно всем ролям —
+// counts не несут чувствительных данных. Reuse logic в smoke.
+
+import {
+    getKnowledgeReadiness,
+} from '@/lib/ai/knowledge/readiness'
+export type {
+    KnowledgeReadinessBundle,
+    KnowledgeReadinessCounts,
+    KnowledgeLastExtraction,
+    KnowledgeActivity7d,
+    ReadinessCheck,
+    ReadinessCheckStatus,
+} from '@/lib/ai/knowledge/readiness'
+
+/** Bundle для readiness row в шапке и для runtime warning модала.
+ *  Подтягивается на page.tsx загрузке + после операций governance
+ *  (verify/archive/etc) для отражения нового состояния. */
+export async function getKnowledgeReadinessForUi() {
+    return getKnowledgeReadiness()
+}
