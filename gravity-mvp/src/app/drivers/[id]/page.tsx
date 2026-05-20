@@ -32,14 +32,25 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
         getDriverTimeline(id),
         getTelegramConnections(),
         getMaxConnections(),
-        prisma.driver.findUnique({ where: { yandexDriverId: id }, select: { id: true } }),
+        // PR #64: accept either yandexDriverId OR Prisma cuid in URL.
+        // Also select `phone` so the page can fall back to the local
+        // value when Yandex API returns nothing (sync stale, network
+        // down, driver dropped from Yandex Fleet).
+        prisma.driver.findFirst({
+            where: { OR: [{ yandexDriverId: id }, { id }] },
+            select: { id: true, phone: true },
+        }),
     ])
     const car = driver?.car_id ? await getCarById(driver.car_id, id) : null
 
     const driverName = driver
         ? `${driver.last_name || ''} ${driver.first_name || ''}`.trim() || 'Неизвестный водитель'
         : `ID: ${id}`
-    const driverPhone = driver?.phones?.[0] || '—'
+    // PR #64: phone has two sources of truth — Yandex Fleet API (live)
+    // and our local Prisma DB (last-known). Operator should be able to
+    // dial (or fire the AI-call mock) whenever EITHER has it. Yandex
+    // wins when both are present; local is the fallback.
+    const driverPhone = driver?.phones?.[0] || prismaDriver?.phone || '—'
     const driverStatus = driver?.status || '—'
     const driverBalance = driver?.balance !== undefined ? `${Number(driver.balance).toLocaleString('ru-RU')} ₽` : '—'
     const driverBalanceLimit = driver?.balance_limit !== undefined ? `${Number(driver.balance_limit).toLocaleString('ru-RU')} ₽` : '—'
