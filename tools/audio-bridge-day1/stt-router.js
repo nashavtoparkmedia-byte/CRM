@@ -62,19 +62,23 @@ function describeProvider() {
  * currently configured — callers should treat that as "audio-only mode"
  * (PCM is recorded/logged, the dialog skipped).
  */
-function createSttSession({ onPartial, onFinal, onError } = {}) {
+function createSttSession({ onPartial, onFinal, onError, callUuid } = {}) {
     if (hasYandex()) {
         loadYandexSdkLazy()
         if (YandexSttSessionCtor) {
             return new YandexSttSessionCtor({
                 apiKey: runtime.getYandexApiKey(),
                 folderId: runtime.getYandexFolderId(),
+                callUuid,
                 onPartial, onFinal, onError,
             })
         }
         // SDK missing — fall through to Whisper if available.
     }
     if (hasOpenAi()) {
+        // Whisper doesn't have a streaming-inactivity surface yet (it's
+        // batch over fetch with its own 15 s timeout), so callUuid is
+        // not propagated to it from this PR.
         return new WhisperSttSession({ onPartial, onFinal, onError })
     }
     return null

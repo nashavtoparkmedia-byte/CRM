@@ -132,6 +132,10 @@ class YandexSttSession {
      * @param {object} opts
      * @param {string} opts.apiKey
      * @param {string} [opts.folderId]
+     * @param {string} [opts.callUuid]    — included in inactivity-timeout
+     *                                       opsLog so operators can
+     *                                       correlate an STT stall to
+     *                                       a specific FreeSWITCH call.
      * @param {(text: string, confidence: number) => void} [opts.onPartial]
      * @param {(text: string) => void} [opts.onFinal]
      * @param {(err: Error) => void} [opts.onError]
@@ -139,6 +143,7 @@ class YandexSttSession {
     constructor(opts) {
         this.apiKey = opts.apiKey
         this.folderId = opts.folderId
+        this.callUuid = opts.callUuid    // optional; opsLog handles undefined gracefully
         this.onPartial = opts.onPartial ?? (() => {})
         this.onFinal = opts.onFinal ?? (() => {})
         this.onError = opts.onError ?? (err => console.error(`[stt] error: ${err.message}`))
@@ -236,9 +241,28 @@ class YandexSttSession {
      * `finally` block and marks the session not-started. The error is
      * propagated through the existing `onError` pathway so the bridge
      * sees this exactly like any other STT failure.
+     *
+     * False-positive analysis (why 20 s is safe for normal flow)
+     * ──────────────────────────────────────────────────────────
+     *   • User pauses: typically 0.5–3 s within a turn, never close to 20 s.
+     *   • Turn boundaries: silence-timer (PR #30) already ends silent
+     *     calls after 16 s (2 × 8 s strikes), so a 20 s no-Yandex-event
+     *     window would already be a failed call regardless.
+     *   • TTS playback (bridge in `speaking` state): bridge stops feeding
+     *     PCM into STT via the `onPcm` source gate. Even with no input,
+     *     Yandex SpeechKit v3 streaming emits periodic diagnostic events
+     *     (`audioCursors`, `responseWallTimeMs`, `eouUpdate`) — `_handleResponse`
+     *     resets the watchdog on ANY response, including unmatched
+     *     diagnostic ones. A long TTS prompt is therefore tolerated by
+     *     design without false-positive.
+     *   • Real stall (network glitch, server-side hang): zero events of
+     *     any kind for 20 s — this is the case we want to catch and
+     *     abort. Bridge falls through to silence-timer recovery.
      */
     _onInactivityTimeout() {
         opsLog('error', 'yandex_stt_inactivity_timeout', {
+            provider: 'yandex',
+            callUuid: this.callUuid,
             chunkCount: this.chunkCount,
             timeoutMs: STREAM_INACTIVITY_TIMEOUT_MS,
         })
