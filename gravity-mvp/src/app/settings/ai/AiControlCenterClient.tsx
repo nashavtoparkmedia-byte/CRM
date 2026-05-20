@@ -7,6 +7,9 @@ import {
     Plus, Trash2, Save, RefreshCw, ChevronDown, ChevronUp,
     Zap, MessageSquare, Phone, Send, Square, X, HelpCircle,
     Loader2,
+    // AI Knowledge Core: tab icon + section icons + UX.
+    Library, Wallet, FileText, PiggyBank, Clock, Banknote,
+    MessageCircle, AlertTriangle, CheckSquare, Ban, ChevronRight, Sparkles,
 } from 'lucide-react'
 import {
     saveAiConfig, testAiConnection,
@@ -15,7 +18,9 @@ import {
     createImportJob, getAllImportJobs, cancelImportJob, deleteImportJob,
     getAiRuntimeStats, checkScraperHealth,
     createAiProfile, updateAiProfile, deleteAiProfile, setActiveAiProfile,
+    listKnowledgeSections, listItemsBySection, listExtractionJobs,
     type AiProfileData,
+    type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -103,6 +108,10 @@ interface Props {
     /** Стили общения (Роль/Тон/Разрешено/Запрещено). Один активен. */
     initialProfiles: AiProfileData[]
     initialActiveProfileId: string | null
+    /** AI Knowledge Core (PR1, read-only). Секции — "оглавление книги". */
+    initialSections: KnowledgeSection[]
+    initialKnowledgeStats: KnowledgeStats
+    initialExtractionJobs: unknown[]
     /** Администратор/Руководитель видит все вкладки и может менять настройки.
      *  Менеджеру оставлен только Журнал (read-only + 👍/👎). */
     canEdit: boolean
@@ -141,6 +150,13 @@ function Hint({ text }: { text: string }) {
 // ─── Утилиты ──────────────────────────────────────────────────────
 
 const CHANNEL_LABELS: Record<string, string> = { max: 'MAX', telegram: 'TG', whatsapp: 'WA' }
+
+// AI Knowledge Core: маппинг iconKey → lucide-компонент. Неизвестный/null → BookOpen.
+// Имена соответствуют scripts/seed_knowledge_sections.js.
+const SECTION_ICONS: Record<string, typeof BookOpen> = {
+    Wallet, CheckCircle2, FileText, PiggyBank, Clock, Banknote,
+    MessageCircle, AlertTriangle, CheckSquare, Ban, BookOpen,
+}
 
 // Однострочные подсказки к счётчикам импорта. Старый StatHint был портянкой
 // из 6 строк и одинаков для «Сообщений» / «Чатов» (copy-paste). По принципу
@@ -200,12 +216,13 @@ function StatusDot({ status, detail }: { status: string, detail?: React.ReactNod
 export default function AiControlCenterClient({
     initialConfig, initialKb, initialImportJobs, initialLogs, initialStats,
     initialProfiles, initialActiveProfileId,
+    initialSections, initialKnowledgeStats, initialExtractionJobs,
     canEdit,
 }: Props) {
     // Менеджеру открываем сразу Журнал — это единственная вкладка, где он
     // что-то делает. Админ/Руководитель — начинают с Синхронизации, как и
     // раньше.
-    const [tab, setTab] = useState<'sync' | 'provider' | 'rules' | 'kb' | 'log'>(canEdit ? 'sync' : 'log')
+    const [tab, setTab] = useState<'sync' | 'provider' | 'rules' | 'kb' | 'knowledge' | 'log'>(canEdit ? 'sync' : 'log')
     const [config, setConfig] = useState<AiConfig>(initialConfig ?? {
         id: 'singleton', enabled: false, mode: 'off', provider: 'anthropic',
         classificationModel: 'claude-haiku-4-5', responseModel: 'claude-sonnet-4-5',
@@ -220,6 +237,33 @@ export default function AiControlCenterClient({
     const [activeProfileId, setActiveProfileId] = useState<string | null>(initialActiveProfileId)
     const [isPending, startTransition] = useTransition()
     const [toast, setToast]           = useState<string | null>(null)
+
+    // ─── AI Knowledge Core (PR1, read-only) ──────────────────────
+    const [sections] = useState<KnowledgeSection[]>(initialSections)
+    const [knowledgeStats] = useState<KnowledgeStats>(initialKnowledgeStats)
+    const [extractionJobs] = useState<unknown[]>(initialExtractionJobs)
+    const [knowledgeSubtab, setKnowledgeSubtab] =
+        useState<'core' | 'sources' | 'archive'>('core')
+    const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
+        initialSections.find(s => s.isActive)?.id ?? initialSections[0]?.id ?? null
+    )
+    const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([])
+    const [knowledgeItemsLoading, setKnowledgeItemsLoading] = useState(false)
+    // Подгружаем items при смене секции / подвкладки (Ядро ↔ Архив).
+    // В "Источники" items не нужны — там показывается список jobs.
+    useEffect(() => {
+        if (!selectedSectionId) { setKnowledgeItems([]); return }
+        if (knowledgeSubtab === 'sources') return
+        let cancelled = false
+        setKnowledgeItemsLoading(true)
+        listItemsBySection(selectedSectionId, {
+            includeArchived: knowledgeSubtab === 'archive',
+        })
+            .then(arr => { if (!cancelled) setKnowledgeItems(arr as KnowledgeItem[]) })
+            .catch(() => { if (!cancelled) setKnowledgeItems([]) })
+            .finally(() => { if (!cancelled) setKnowledgeItemsLoading(false) })
+        return () => { cancelled = true }
+    }, [selectedSectionId, knowledgeSubtab])
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
@@ -1453,6 +1497,229 @@ export default function AiControlCenterClient({
         </div>
     )
 
+    // ─── Вкладка: Ядро знаний (AI Knowledge Core, PR1 read-only) ──
+    //
+    // Book-style layout: оглавление слева, items выбранного раздела
+    // справа. Под-табы Ядро/Источники/Архив. Кнопка "Собрать ядро"
+    // disabled — extraction появится в PR2.
+
+    const KnowledgeItemRow = ({ item }: { item: KnowledgeItem }) => {
+        const confidenceLabel =
+            item.confidence >= 0.8 ? 'высокая' :
+            item.confidence >= 0.5 ? 'средняя' : 'низкая'
+        const confidenceColor =
+            item.confidence >= 0.8 ? 'text-green-600' :
+            item.confidence >= 0.5 ? 'text-gray-500' : 'text-amber-600'
+        const displayTags = item.tags.filter(t => !t.startsWith('type:'))
+        return (
+            <div className={`py-3.5 ${!item.isActive ? 'opacity-60' : ''}`}>
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                        <span className="text-[13px] font-semibold text-[#111] truncate">{item.title}</span>
+                        {item.isVerified && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-green-700">
+                                <CheckCircle2 size={11} /> подтверждено
+                            </span>
+                        )}
+                        {item.sourceCount === 1 && (
+                            <span className="text-[10px] text-gray-400">один источник</span>
+                        )}
+                        {item.safetyLevel === 'sensitive' && (
+                            <span className="text-[10px] text-amber-600">чувствительное</span>
+                        )}
+                        {item.safetyLevel === 'requires_human' && (
+                            <span className="text-[10px] text-red-600">только менеджер</span>
+                        )}
+                        {item.conflictGroupId && (
+                            <span className="text-[10px] text-amber-600">⚠ конфликт</span>
+                        )}
+                        {item.status === 'superseded' && (
+                            <span className="text-[10px] text-gray-400">заменено</span>
+                        )}
+                        {item.status === 'draft' && (
+                            <span className="text-[10px] text-blue-500">черновик</span>
+                        )}
+                    </div>
+                    <p className="text-[12px] text-gray-600 line-clamp-2 leading-[1.5]">
+                        {item.canonicalStatement}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[10px] text-gray-400">
+                        <span>
+                            {item.sourceCount === 0
+                                ? 'создано вручную'
+                                : `найдено в ${item.sourceCount} ${plural(item.sourceCount,'диалоге','диалогах','диалогах')}`}
+                        </span>
+                        {item.uniqueManagerCount > 0 && (
+                            <span>· {item.uniqueManagerCount} {plural(item.uniqueManagerCount,'менеджер','менеджера','менеджеров')}</span>
+                        )}
+                        {item.sourceCount > 0 && (
+                            <span>· уверенность <span className={confidenceColor}>{confidenceLabel}</span></span>
+                        )}
+                        {displayTags.length > 0 && (
+                            <span>· {displayTags.map(t => `#${t}`).join(' ')}</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    const KnowledgeSourcesPanel = () => (
+        <div className="border-t border-[#F0F0F0] pt-4">
+            {extractionJobs.length === 0 ? (
+                <div className="text-center py-12 text-[12px] text-gray-400">
+                    <div className="font-medium text-[#111] text-[13px] mb-1">Извлечения ещё не запускались</div>
+                    Когда вы запустите «Собрать ядро», здесь появятся отчёты:<br />
+                    сколько диалогов проанализировано, сколько новых знаний добавлено.
+                </div>
+            ) : (
+                <div className="text-[12px] text-gray-500">
+                    Запусков: {extractionJobs.length}. Подробности появятся в следующем апдейте.
+                </div>
+            )}
+        </div>
+    )
+
+    const KnowledgeTab = () => {
+        const selectedSection = sections.find(s => s.id === selectedSectionId) ?? null
+        return (
+            <div className="space-y-4">
+                <InlineInfo>
+                    Ядро знаний — структурированная память AI: тарифы, требования,
+                    условия, документы, частые вопросы. AI отвечает фактами из ядра,
+                    а стиль берёт из «Правил». Сбор ядра из истории переписок будет
+                    в следующем апдейте.
+                </InlineInfo>
+
+                {/* Под-табы + disabled "Собрать ядро" */}
+                <div className="flex items-center justify-between">
+                    <div className="flex gap-1">
+                        {(['core','sources','archive'] as const).map(k => (
+                            <button
+                                key={k}
+                                onClick={() => setKnowledgeSubtab(k)}
+                                className={`h-[28px] px-3 rounded-lg text-[12px] font-medium transition-colors ${
+                                    knowledgeSubtab === k
+                                        ? 'bg-[#F0F4FA] text-[#3390EC]'
+                                        : 'text-gray-500 hover:text-[#111]'
+                                }`}
+                            >
+                                {k === 'core' ? 'Ядро' : k === 'sources' ? 'Источники' : 'Архив'}
+                            </button>
+                        ))}
+                    </div>
+                    <button
+                        disabled
+                        title="Будет в следующем обновлении"
+                        className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC]/40 text-white text-[11px] font-semibold cursor-not-allowed"
+                    >
+                        <Sparkles size={11} />
+                        Собрать ядро
+                    </button>
+                </div>
+
+                {/* Сводка по ядру */}
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11px] text-gray-400">
+                    <span>{knowledgeStats.activeSections} {plural(knowledgeStats.activeSections,'раздел','раздела','разделов')}</span>
+                    <span>·</span>
+                    <span>{knowledgeStats.activeItems} {plural(knowledgeStats.activeItems,'знание','знания','знаний')}</span>
+                    <span>·</span>
+                    <span>{knowledgeStats.totalSources} {plural(knowledgeStats.totalSources,'источник','источника','источников')}</span>
+                    {knowledgeStats.draftItems > 0 && (
+                        <>
+                            <span>·</span>
+                            <span className="text-gray-500">{knowledgeStats.draftItems} на проверке</span>
+                        </>
+                    )}
+                    {knowledgeStats.conflictingItems > 0 && (
+                        <>
+                            <span>·</span>
+                            <span className="text-amber-600">{knowledgeStats.conflictingItems} в конфликте</span>
+                        </>
+                    )}
+                </div>
+
+                {knowledgeSubtab === 'sources' ? (
+                    <KnowledgeSourcesPanel />
+                ) : (
+                    /* Book-style: оглавление + контент выбранной секции */
+                    <div className="grid grid-cols-[260px_1fr] gap-6 border-t border-[#F0F0F0] pt-4">
+                        {/* Оглавление */}
+                        <div className="space-y-0.5">
+                            {sections.length === 0 ? (
+                                <p className="text-[11px] text-gray-400 px-2 py-3 leading-relaxed">
+                                    Разделы не настроены. Запустите{' '}
+                                    <code className="text-[10px]">node scripts/seed_knowledge_sections.js</code>.
+                                </p>
+                            ) : sections.map(s => {
+                                const Icon = (s.iconKey && SECTION_ICONS[s.iconKey]) || BookOpen
+                                const isSelected = s.id === selectedSectionId
+                                return (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => setSelectedSectionId(s.id)}
+                                        className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors ${
+                                            isSelected
+                                                ? 'bg-[#F0F4FA] text-[#3390EC]'
+                                                : 'text-[#111] hover:bg-[#F8F9FA]'
+                                        }`}
+                                    >
+                                        <Icon size={14} className={isSelected ? 'text-[#3390EC]' : 'text-gray-400'} />
+                                        <span className="flex-1 text-[13px] font-medium truncate">{s.title}</span>
+                                        <span className={`text-[11px] tabular-nums ${isSelected ? 'text-[#3390EC]' : 'text-gray-400'}`}>
+                                            {s.itemCount}
+                                        </span>
+                                        <ChevronRight size={12} className={`transition-opacity ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+                                    </button>
+                                )
+                            })}
+                        </div>
+
+                        {/* Контент */}
+                        <div>
+                            {!selectedSection ? (
+                                <div className="text-[12px] text-gray-400 italic">Выберите раздел слева.</div>
+                            ) : (
+                                <>
+                                    <div className="mb-3">
+                                        <h3 className="text-[15px] font-semibold text-[#111]">{selectedSection.title}</h3>
+                                        {selectedSection.description && (
+                                            <p className="text-[12px] text-gray-500 mt-0.5">{selectedSection.description}</p>
+                                        )}
+                                    </div>
+                                    {knowledgeItemsLoading ? (
+                                        <div className="flex items-center gap-2 text-[12px] text-gray-400 py-6">
+                                            <Loader2 size={12} className="animate-spin" /> Загружаем…
+                                        </div>
+                                    ) : knowledgeItems.length === 0 ? (
+                                        <div className="text-center py-12 text-[12px] text-gray-400">
+                                            {knowledgeSubtab === 'archive' ? (
+                                                <>В этом разделе нет архивных знаний.</>
+                                            ) : (
+                                                <>
+                                                    <div className="font-medium text-[#111] text-[13px] mb-1">Пока пусто</div>
+                                                    В этом разделе нет извлечённых знаний.<br />
+                                                    Нажмите «Собрать ядро» — AI проанализирует<br />
+                                                    импортированные переписки и сам соберёт факты.
+                                                </>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
+                                            {knowledgeItems.map(it => (
+                                                <KnowledgeItemRow key={it.id} item={it} />
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        )
+    }
+
     // ─── Вкладка: Журнал ──────────────────────────────────────────
 
     // Human-readable лейблы: «Ответил сам» вместо технического
@@ -1613,11 +1880,13 @@ export default function AiControlCenterClient({
     // ─── Tabs навигация ───────────────────────────────────────────
 
     const ALL_TABS = [
-        { key: 'sync',     label: 'Синхронизация', icon: RefreshCw },
-        { key: 'provider', label: 'AI Провайдер',  icon: Zap },
-        { key: 'rules',    label: 'Правила',        icon: Settings },
-        { key: 'kb',       label: 'База знаний',    icon: BookOpen },
-        { key: 'log',      label: 'Журнал',         icon: ClipboardList },
+        { key: 'sync',      label: 'Синхронизация', icon: RefreshCw },
+        { key: 'provider',  label: 'AI Провайдер',  icon: Zap },
+        { key: 'rules',     label: 'Правила',        icon: Settings },
+        { key: 'kb',        label: 'База знаний',    icon: BookOpen },
+        // "Ядро знаний" — AI Knowledge Core (PR1 read-only).
+        { key: 'knowledge', label: 'Ядро знаний',    icon: Library },
+        { key: 'log',       label: 'Журнал',         icon: ClipboardList },
     ] as const
     // Менеджер видит только Журнал — все настроечные вкладки админ-only.
     const TABS = canEdit ? ALL_TABS : ALL_TABS.filter(t => t.key === 'log')
@@ -1663,8 +1932,9 @@ export default function AiControlCenterClient({
                         {tab === 'sync'     && <SyncTab />}
                         {tab === 'provider' && <ProviderTab />}
                         {tab === 'rules'    && <RulesTab />}
-                        {tab === 'kb'       && <KbTab />}
-                        {tab === 'log'      && <LogTab />}
+                        {tab === 'kb'        && <KbTab />}
+                        {tab === 'knowledge' && <KnowledgeTab />}
+                        {tab === 'log'       && <LogTab />}
                     </>
                 )}
             </div>

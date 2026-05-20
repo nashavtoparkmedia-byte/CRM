@@ -11,13 +11,19 @@ import {
     getAiRuntimeStats,
     listAiProfiles,
     getActiveProfileId,
+    listKnowledgeSections,
+    getKnowledgeStats,
+    listExtractionJobs,
 } from './actions'
 
 export const dynamic   = 'force-dynamic'
 export const revalidate = 0
 
 export default async function AiControlCenterPage() {
-    const [user, config, kb, importJobs, logs, stats, profiles, activeProfileId] = await Promise.all([
+    const [
+        user, config, kb, importJobs, logs, stats, profiles, activeProfileId,
+        knowledgeSections, knowledgeStats, extractionJobs,
+    ] = await Promise.all([
         getCurrentUser(),
         getAiConfig(),
         getKnowledgeBase(),
@@ -26,6 +32,9 @@ export default async function AiControlCenterPage() {
         getAiRuntimeStats(),
         listAiProfiles(),
         getActiveProfileId(),
+        listKnowledgeSections(),
+        getKnowledgeStats(),
+        listExtractionJobs(10),
     ])
     const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
@@ -65,6 +74,9 @@ export default async function AiControlCenterPage() {
                     initialStats={stats}
                     initialProfiles={profiles}
                     initialActiveProfileId={activeProfileId}
+                    initialSections={knowledgeSections}
+                    initialKnowledgeStats={knowledgeStats}
+                    initialExtractionJobs={extractionJobs}
                     canEdit={canEdit}
                 />
             </div>

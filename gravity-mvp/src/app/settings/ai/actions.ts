@@ -511,3 +511,39 @@ export async function setActiveAiProfile(id: string | null) {
     })
     revalidatePath('/settings/ai')
 }
+
+// ─── AI Knowledge Core (PR1: read-only) ──────────────────────────
+//
+// Server actions поверх lib/ai/knowledge/queries.ts. В PR1 — только
+// чтения. write/edit/extraction появятся в PR2+.
+//
+// 'use server' file directive требует все экспорты как async-функции,
+// поэтому используем inline wrappers, а не re-export.
+
+import * as knowledgeQueries from '@/lib/ai/knowledge/queries'
+export type {
+    KnowledgeSection,
+    KnowledgeItem,
+    KnowledgeSource,
+    KnowledgeStats,
+} from '@/lib/ai/knowledge/queries'
+
+export async function listKnowledgeSections() {
+    return knowledgeQueries.listKnowledgeSections()
+}
+
+export async function listItemsBySection(sectionId: string, opts?: { includeArchived?: boolean }) {
+    return knowledgeQueries.listItemsBySection(sectionId, opts ?? {})
+}
+
+export async function getItemWithSources(itemId: string) {
+    return knowledgeQueries.getItemWithSources(itemId)
+}
+
+export async function getKnowledgeStats() {
+    return knowledgeQueries.getKnowledgeStats()
+}
+
+export async function listExtractionJobs(limit?: number) {
+    return knowledgeQueries.listExtractionJobs(limit ?? 10)
+}

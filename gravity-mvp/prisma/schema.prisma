@@ -993,6 +993,11 @@ model TelephonyAiConfig {
 }
 
 /// FAQ / База знаний агента
+/// FAQ / База знаний агента (legacy, плоская).
+/// С PR1 AI Knowledge Core этот layer переводится в постепенный
+/// deprecation: новый слой company memory живёт в AiKnowledge*.
+/// Полная миграция legacy → core делается в PR5. Здесь оставлено для
+/// backward-compat и нулевого риска прод regressions.
 model KnowledgeBaseEntry {
   id              String    @id @default(cuid())
   title           String
@@ -1010,6 +1015,175 @@ model KnowledgeBaseEntry {
 
   @@index([active, priority(sort: Desc)])
   @@index([category])
+}
+
+// =====================================================================
+// AI Knowledge Core — extracted business memory + explainable retrieval.
+//
+// Channel-agnostic: AiKnowledgeSource.originType / AiKnowledgeUsageLog
+// .runtimeContext позволяют тот же слой памяти переиспользовать в voice
+// runtime (AI-обзвон) без миграции. В MVP используется только chat-сторона.
+//
+// В PR1 (foundation) — только schema + seed секций + read-only UI.
+// Никаких write/edit/extraction — это PR2. Pipeline ответа не трогается.
+//
+// Red lines: memory/project_ai_knowledge_core.md.
+// =====================================================================
+
+/// Раздел "книги знаний". Slug стабильный (используется в URL и seed'е),
+/// title редактируется админом. isActive скрывает целиком раздел в UI.
+model AiKnowledgeSection {
+  id          String            @id @default(cuid())
+  slug        String            @unique
+  title       String
+  description String?
+  /// Lucide icon key (BookOpen, Wallet, FileText, ...). Опционально —
+  /// если null, UI рендерит дефолтный.
+  iconKey     String?
+  sortOrder   Int               @default(0)
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  items       AiKnowledgeItem[]
+
+  @@index([isActive, sortOrder])
+}
+
+/// Каноничный факт компании. Хранит ЧТО известно, а не КАК отвечать —
+/// формулировка ответа определяется стилем (AiAgentProfile) на этапе
+/// генерации. canonicalStatement намеренно отделено от title:
+/// title — заголовок для UI, canonicalStatement — машинно-нейтральная
+/// формулировка для подмешивания в prompt retriever'а.
+model AiKnowledgeItem {
+  id                   String                @id @default(cuid())
+  sectionId            String
+  title                String
+  /// Каноничная формулировка факта компании. PII удалена, стиль нейтральный.
+  /// НЕ answer-шаблон. Стиль ответа берётся из активного AiAgentProfile.
+  canonicalStatement   String
+  tags                 String[]
+  /// Уверенность в знании. Рассчитывается экстрактором как weighted-
+  /// aggregate по source.confidence. 0..1.
+  confidence           Float                 @default(0.5)
+  /// Raw count извлечений. Может расти от одного менеджера — тогда
+  /// uniqueManagerCount остаётся = 1, что снижает доверие.
+  sourceCount          Int                   @default(0)
+  /// Сколько РАЗНЫХ менеджеров формулировали этот факт. Anti-bias:
+  /// один менеджер копи-пастит шаблон 50 раз != стабильное знание компании.
+  uniqueManagerCount   Int                   @default(0)
+  status               AiKnowledgeStatus     @default(active)
+  /// Быстрый toggle. Архивные items тоже isActive=false.
+  isActive             Boolean               @default(true)
+  /// Категория safety для retrieval policy. Sensitive (тарифы, деньги) —
+  /// требует более высокого confidence. requires_human — никогда не
+  /// отвечаем сами, всегда escalate.
+  safetyLevel          AiKnowledgeSafety     @default(normal)
+  /// Если новое правило заменило это. Отличаем от conflictGroupId:
+  /// supersession = смена правила во времени; conflict = два item
+  /// существуют одновременно с разными утверждениями.
+  supersededByItemId   String?               @unique
+  supersededByItem     AiKnowledgeItem?      @relation("supersession", fields: [supersededByItemId], references: [id])
+  supersedes           AiKnowledgeItem?      @relation("supersession")
+  /// Группировка конфликтующих items. retriever по policy не отвечает
+  /// при наличии conflict — эскалирует менеджеру.
+  conflictGroupId      String?
+  /// Verified-флаг (governance PR2.5). Поднимается админом вручную.
+  /// Manual items автоверифицированы при создании. Retrieval даёт
+  /// verified items более высокий priority.
+  isVerified           Boolean               @default(false)
+  verifiedBy           String?
+  verifiedAt           DateTime?
+  /// Кто создал: 'extractor' | userId.
+  createdBy            String?
+  /// Timestamp последнего использования в retrieval — для UI sorting.
+  lastUsedAt           DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  section              AiKnowledgeSection    @relation(fields: [sectionId], references: [id])
+  sources              AiKnowledgeSource[]
+  usages               AiKnowledgeUsageLog[]
+
+  @@index([sectionId, status, isActive])
+  @@index([conflictGroupId])
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([isVerified])
+}
+
+/// Доказательство откуда извлечено знание. Excerpt всегда PII-masked
+/// (имена/телефоны/ВУ заменены на токены) ДО сохранения.
+///
+/// originType polymorphic: chat_message / voice_transcript / manual_entry /
+/// doc_section. В PR1+PR2 используется только chat_message; остальные
+/// под будущее без миграции.
+///
+/// messageId/chatId — soft references (без FK), чтобы удаление сырого
+/// сообщения не каскадировало в knowledge layer.
+model AiKnowledgeSource {
+  id            String                  @id @default(cuid())
+  itemId        String
+  originType    AiKnowledgeSourceOrigin @default(chat_message)
+  messageId     String?
+  chatId        String?
+  channel       ChatChannel?
+  managerUserId String?
+  /// PII-masked фрагмент исходного сообщения. НЕ полное сообщение —
+  /// короткая выдержка.
+  excerpt       String
+  /// sha256(itemId + messageId + excerpt). Гарантирует идемпотентность
+  /// при повторных запусках экстрактора.
+  excerptHash   String
+  confidence    Float
+  /// Когда было отправлено исходное сообщение (Message.sentAt). Для
+  /// recency-веса в retrieval ranking.
+  occurredAt    DateTime?
+  createdAt     DateTime                @default(now())
+  item          AiKnowledgeItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, excerptHash])
+  @@index([itemId])
+  @@index([messageId])
+  @@index([managerUserId])
+}
+
+/// Лог использования знания в ответе AI. Source-of-truth для
+/// explainability ("Почему AI так ответил?"). Channel-agnostic.
+/// decisionLogId — soft reference на AiDecisionLog.
+model AiKnowledgeUsageLog {
+  id             String              @id @default(cuid())
+  itemId         String
+  runtimeContext AiKnowledgeRuntime  @default(chat_reply)
+  decisionLogId  String?
+  messageId      String?
+  retrievalScore Float?
+  rerankScore    Float?
+  /// true если item реально попал в финальный prompt генератора.
+  usedInReply    Boolean             @default(false)
+  usedAt         DateTime            @default(now())
+  item           AiKnowledgeItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, usedAt(sort: Desc)])
+  @@index([decisionLogId])
+  @@index([usedAt(sort: Desc)])
+}
+
+/// Задание на извлечение знаний из истории. Создаётся кнопкой
+/// "Собрать ядро знаний" в PR2. scope JSON: { mode, dateFrom?, dateTo?,
+/// channels?, sampleSize? }. progress JSON: { messagesScanned,
+/// pairsBuilt, candidatesFound, itemsCreated, itemsMerged,
+/// sourcesAdded, conflictsDetected, ... }.
+model AiExtractionJob {
+  id           String                  @id @default(cuid())
+  status       AiExtractionStatus      @default(queued)
+  sourceType   AiKnowledgeSourceOrigin @default(chat_message)
+  scope        Json                    @default("{}")
+  progress     Json?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  errorMessage String?
+  createdBy    String?
+  createdAt    DateTime                @default(now())
+
+  @@index([status, createdAt(sort: Desc)])
 }
 
 /// Журнал решений AI агента
@@ -1609,6 +1783,44 @@ enum AiImportMode {
 }
 
 enum AiImportStatus {
+  queued
+  running
+  completed
+  partial
+  failed
+}
+
+// ─── AI Knowledge Core enums ──────────────────────────────────────
+// Red lines + design: memory/project_ai_knowledge_core.md
+
+enum AiKnowledgeStatus {
+  active        // используется retriever'ом по умолчанию
+  archived      // спрятано от retriever, видно админу в "Архиве"
+  superseded    // заменено более новым item (supersededByItemId set)
+  draft         // не прошло порог уверенности — ждёт ручной проверки
+  needs_review  // зарезервировано
+}
+
+enum AiKnowledgeSafety {
+  normal           // обычный факт
+  sensitive        // тарифы, деньги, юр. условия — более жёсткий порог
+  requires_human   // никогда не отвечаем сами, всегда escalate
+}
+
+enum AiKnowledgeSourceOrigin {
+  chat_message      // MVP использует только это
+  voice_transcript  // под будущее: AI-обзвон
+  manual_entry      // создано админом вручную (или миграция legacy KB)
+  doc_section       // под будущее: импорт PDF/MD
+}
+
+enum AiKnowledgeRuntime {
+  chat_reply     // ContextBuilder → ResponseGenerator (AI в чатах)
+  voice_reply    // под будущее: AI-обзвон AudioBridge
+  dev_simulate   // dry-run без отправки
+}
+
+enum AiExtractionStatus {
   queued
   running
   completed
