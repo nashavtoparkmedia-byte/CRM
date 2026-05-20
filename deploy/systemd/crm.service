@@ -1,0 +1,62 @@
+; systemd unit template for the CRM (gravity-mvp).
+;
+; Copy to /etc/systemd/system/crm.service, then:
+;   sudo systemctl daemon-reload
+;   sudo systemctl enable --now crm
+;   sudo systemctl status crm
+;
+; All bracketed paths must be filled in for the host. Secrets go in the
+; EnvironmentFile (not in this unit, not in the repo).
+
+[Unit]
+Description=AI-call CRM (gravity-mvp, Next.js)
+Documentation=https://github.com/nashavtoparkmedia-byte/CRM/blob/main/docs/operations/deployment.md
+; Postgres must be up before us; Redis + MinIO are not hard dependencies
+; (BullMQ retries, recording-upload retries on PR #54), but listing them
+; gives systemd a saner startup order.
+After=network-online.target postgresql.service redis.service minio.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=crm
+Group=crm
+; Update to wherever the repo lives on this host.
+WorkingDirectory=/srv/crm/gravity-mvp
+; Secrets + per-environment vars (DATABASE_URL, S3_*, OPENAI_API_KEY,
+; YANDEX_API_KEY, etc.). DO NOT commit this file. Use 0600 perms.
+EnvironmentFile=/etc/crm/crm.env
+ExecStart=/usr/bin/npm start
+
+; Restart policy: only on crash, not on operator-issued stop. Wait
+; 5 s before respawn — matches CRM's ~2-5 s boot time, prevents hot-
+; loops on a config bug.
+Restart=on-failure
+RestartSec=5
+
+; Give up after 5 restart failures in 2 minutes. An operator must
+; intervene; auto-restart loops should not hide config errors.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+; Graceful shutdown: instrumentation.ts handles SIGTERM by closing
+; OperationalJobs intervals, WA/TG clients, BullMQ workers, and
+; Prisma in order, with its own 10 s force-exit timer. 15 s here
+; gives the graceful path plenty of room.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+
+; Standard output to journald; for separate files use StandardOutput=
+; with a syslog identifier and configure rsyslog/journald to fan out.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crm
+
+; Hardening — sane defaults. Loosen only if needed.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/crm /var/log/crm
+
+[Install]
+WantedBy=multi-user.target
