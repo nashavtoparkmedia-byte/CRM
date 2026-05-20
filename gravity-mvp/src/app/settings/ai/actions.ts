@@ -1054,3 +1054,158 @@ export async function createManualKnowledgeItem(input: {
     revalidatePath('/settings/ai')
     return { itemId }
 }
+
+// ─── AI Knowledge Core retrieval policy (PR3.4) ──────────────────
+//
+// Singleton config из AiRetrievalPolicy + env-mirrored flags.
+// Source-of-truth для shadow/runtime — env (см. featureFlags.ts).
+
+import {
+    isShadowModeEnabled,
+    isRuntimeEnabled,
+    getKnowledgeRuntimeMode,
+} from '@/lib/ai/knowledge/featureFlags'
+
+export interface RetrievalPolicy {
+    minConfidenceForReply:     number
+    sensitiveConfidenceMargin: number
+    minSourceCountForReply:    number
+    verifiedScoreBoost:        number
+    excludeArchived:           boolean
+    excludeSuperseded:         boolean
+    excludeDraft:              boolean
+    conflictEscalates:         boolean
+    maxStaleDays:              number | null
+    rerankEnabled:             boolean
+    rerankTopN:                number
+    prefilterTopN:             number
+    shadowMode:                boolean
+    runtimeEnabled:            boolean
+    policyVersion:             string
+    updatedAt:                 string
+    updatedBy:                 string | null
+}
+
+export async function getRetrievalPolicy(): Promise<RetrievalPolicy> {
+    const fallback: RetrievalPolicy = {
+        minConfidenceForReply:     0.7,
+        sensitiveConfidenceMargin: 0.85,
+        minSourceCountForReply:    1,
+        verifiedScoreBoost:        0.2,
+        excludeArchived:           true,
+        excludeSuperseded:         true,
+        excludeDraft:              true,
+        conflictEscalates:         true,
+        maxStaleDays:              null,
+        rerankEnabled:             true,
+        rerankTopN:                5,
+        prefilterTopN:             20,
+        shadowMode:                isShadowModeEnabled(),
+        runtimeEnabled:            isRuntimeEnabled(),
+        policyVersion:             'v1',
+        updatedAt:                 new Date().toISOString(),
+        updatedBy:                 null,
+    }
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT
+                "minConfidenceForReply", "sensitiveConfidenceMargin",
+                "minSourceCountForReply", "verifiedScoreBoost",
+                "excludeArchived", "excludeSuperseded", "excludeDraft",
+                "conflictEscalates", "maxStaleDays",
+                "rerankEnabled", "rerankTopN", "prefilterTopN",
+                "policyVersion", "updatedAt", "updatedBy"
+            FROM "AiRetrievalPolicy" WHERE id = 'singleton' LIMIT 1
+        `
+        if (!rows[0]) return fallback
+        return {
+            ...fallback,
+            ...rows[0],
+            // env wins over БД для shadow/runtime — это runtime truth.
+            shadowMode:    isShadowModeEnabled(),
+            runtimeEnabled: isRuntimeEnabled(),
+        }
+    } catch {
+        return fallback
+    }
+}
+
+export interface RetrievalPolicyPatch {
+    minConfidenceForReply?:     number
+    sensitiveConfidenceMargin?: number
+    minSourceCountForReply?:    number
+    verifiedScoreBoost?:        number
+    excludeArchived?:           boolean
+    excludeSuperseded?:         boolean
+    excludeDraft?:              boolean
+    conflictEscalates?:         boolean
+    rerankEnabled?:             boolean
+    rerankTopN?:                number
+    prefilterTopN?:             number
+}
+
+/**
+ * Patch thresholds policy. shadowMode/runtimeEnabled менять через UI
+ * НЕЛЬЗЯ — они контролируются env.
+ */
+export async function saveRetrievalPolicy(patch: RetrievalPolicyPatch): Promise<void> {
+    const actor = await requireAdminUserId()
+    const fields: string[] = []
+    const vals: any[] = []
+    const allowed: Array<keyof RetrievalPolicyPatch> = [
+        'minConfidenceForReply', 'sensitiveConfidenceMargin',
+        'minSourceCountForReply', 'verifiedScoreBoost',
+        'excludeArchived', 'excludeSuperseded', 'excludeDraft',
+        'conflictEscalates', 'rerankEnabled', 'rerankTopN', 'prefilterTopN',
+    ]
+    for (const k of allowed) {
+        if (patch[k] === undefined) continue
+        fields.push(`"${k}" = $${fields.length + 1}`)
+        vals.push(patch[k])
+    }
+    if (fields.length === 0) return
+    fields.push(`"updatedAt" = NOW()`)
+    fields.push(`"updatedBy" = $${vals.length + 1}`)
+    vals.push(actor)
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AiRetrievalPolicy" SET ${fields.join(', ')} WHERE id = 'singleton'`,
+        ...vals,
+    )
+    revalidatePath('/settings/ai')
+}
+
+/**
+ * Recent retrieval traces для UI "Активность ответов". Берём
+ * AiDecisionLog с retrievalMode != null.
+ */
+export async function listRecentRetrievalTraces(limit = 30): Promise<unknown[]> {
+    try {
+        return await prisma.$queryRaw<any[]>`
+            SELECT
+                id, "messageId", "chatId", channel,
+                "retrievalMode", "retrievalDecision", "escalationReason",
+                "knowledgeRuntimeVersion", "shadowRetrievalSummary",
+                decision, "generatedReply",
+                "createdAt"
+            FROM "AiDecisionLog"
+            WHERE "retrievalMode" IS NOT NULL
+            ORDER BY "createdAt" DESC
+            LIMIT ${limit}
+        `
+    } catch {
+        return []
+    }
+}
+
+/** Human-friendly runtime mode для UI шапки. */
+export async function getKnowledgeRuntimeStateForUi(): Promise<{
+    mode: 'legacy' | 'shadow' | 'runtime'
+    shadowOn: boolean
+    runtimeOn: boolean
+}> {
+    return {
+        mode:     getKnowledgeRuntimeMode(),
+        shadowOn:  isShadowModeEnabled(),
+        runtimeOn: isRuntimeEnabled(),
+    }
+}
