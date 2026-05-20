@@ -27,8 +27,10 @@ import {
     listRecentRetrievalTraces, getKnowledgeRuntimeStateForUi,
     getDecisionExplainabilityForUi, previewDecisionRetry,
     getKnowledgeReadinessForUi,
+    getLegacyMigrationPreview, migrateLegacyKnowledgeBase,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
+    type LegacyMigrationPreview, type LegacyMigrationResult,
     type RetryPreviewResult,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
@@ -1805,21 +1807,105 @@ export default function AiControlCenterClient({
         showToast('Удалено')
     }
 
+    // PR5: Legacy KB migration. State машина: idle → preview → running →
+    // result. Открывается из KbTab по кнопке "Перенести в Ядро".
+    const [migrationOpen, setMigrationOpen]       = useState(false)
+    const [migrationPreview, setMigrationPreview] =
+        useState<LegacyMigrationPreview | null>(null)
+    const [migrationLoading, setMigrationLoading] = useState(false)
+    const [migrationRunning, setMigrationRunning] = useState(false)
+    const [migrationResult, setMigrationResult]   =
+        useState<LegacyMigrationResult | null>(null)
+    // Свёрнутость legacy KB block — namespace по-умолчанию: если есть
+    // KbEntry, разворачиваем; иначе свёрнуто.
+    const [legacyExpanded, setLegacyExpanded] = useState(initialKb.length > 0)
+
+    async function openMigrationModal() {
+        setMigrationOpen(true)
+        setMigrationResult(null)
+        setMigrationLoading(true)
+        try {
+            const p = await getLegacyMigrationPreview()
+            setMigrationPreview(p as LegacyMigrationPreview)
+        } catch (e: any) {
+            showToast('Ошибка preview: ' + (e?.message ?? 'unknown'))
+        } finally {
+            setMigrationLoading(false)
+        }
+    }
+    async function runMigration() {
+        if (migrationRunning) return
+        setMigrationRunning(true)
+        try {
+            const r = await migrateLegacyKnowledgeBase()
+            setMigrationResult(r as LegacyMigrationResult)
+            // После миграции — обновим readiness и текущую секцию ядра.
+            refreshReadiness()
+            if (selectedSectionId) {
+                const arr = await listItemsBySection(selectedSectionId, {
+                    includeArchived: knowledgeSubtab === 'archive',
+                })
+                setKnowledgeItems(arr as KnowledgeItem[])
+            }
+            const stats = await getKnowledgeStatsAction()
+            setKnowledgeStats(stats as KnowledgeStats)
+            if ((r as LegacyMigrationResult).migrated > 0) {
+                showToast(`Перенесено в ядро: ${(r as LegacyMigrationResult).migrated}`)
+            }
+        } catch (e: any) {
+            showToast('Ошибка миграции: ' + (e?.message ?? 'unknown'))
+        } finally {
+            setMigrationRunning(false)
+        }
+    }
+
     const KbTab = () => (
         <div className="space-y-4">
+            {/* PR5: deprecation banner — старая база остаётся доступной,
+                но рекомендуем переносить в Ядро знаний. Без physical
+                delete — reversible path. */}
+            <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] px-4 py-3 text-[12px] text-[#8B6914] leading-relaxed">
+                <strong className="block mb-1 text-[#8B6914]">База знаний — устаревший раздел</strong>
+                Это ручные FAQ-карточки старого формата. Теперь AI берёт ответы из{' '}
+                <strong>Ядра знаний</strong> — оно собирается автоматически из реальных
+                переписок. Старые записи остаются доступными до миграции, потом их
+                можно скрыть.{' '}
+                <a
+                    href="/settings/integrations/ai-knowledge-help#a-overview"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-[#3390EC] hover:underline"
+                >
+                    В чём разница →
+                </a>
+            </div>
+
             <InlineInfo>
                 Точные ответы, которые AI должен знать без выдумок: условия работы,
-                цены, график, частые вопросы. Чем больше записей, тем меньше AI
-                «галлюцинирует».
+                цены, график, частые вопросы.
             </InlineInfo>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-[12px] text-gray-500">{kb.length} {kb.length === 1 ? 'запись' : kb.length >= 2 && kb.length <= 4 ? 'записи' : 'записей'}</span>
-                <button
-                    onClick={() => setShowKbForm(v => !v)}
-                    className="h-[28px] px-3 bg-[#3390EC] text-white text-[11px] font-semibold rounded-lg hover:bg-[#2B7FD4] transition-colors flex items-center gap-1"
-                >
-                    <Plus size={11} /> Добавить
-                </button>
+                <div className="flex items-center gap-2">
+                    {kb.length > 0 && (
+                        <button
+                            onClick={openMigrationModal}
+                            disabled={!canEdit}
+                            title={canEdit
+                                ? 'Перенести записи из базы знаний в Ядро (как verified-факты). Базу не удаляет.'
+                                : 'Доступно только Администратору'}
+                            className="h-[28px] px-3 inline-flex items-center gap-1 rounded-lg border border-[#3390EC] text-[#3390EC] text-[11px] font-semibold hover:bg-[#F0F4FA] disabled:opacity-40 transition-colors"
+                        >
+                            Перенести в Ядро
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setShowKbForm(v => !v)}
+                        className="h-[28px] px-3 bg-[#3390EC] text-white text-[11px] font-semibold rounded-lg hover:bg-[#2B7FD4] transition-colors flex items-center gap-1"
+                    >
+                        <Plus size={11} /> Добавить
+                    </button>
+                </div>
             </div>
 
             {showKbForm && (
@@ -1904,13 +1990,28 @@ export default function AiControlCenterClient({
                 </div>
             )}
 
-            {/* Список — flat divide-y вместо боксов. Раньше каждая запись
-                выглядела как карточка товара с border + rounded — слишком
-                визуально-тяжело для текстовых FAQ. */}
+            {/* PR5: список обёрнут в свёртываемый "Legacy" блок.
+                Не physical delete — reversible: можно развернуть и
+                продолжить работу со старой базой при необходимости. */}
             {kb.length > 0 && (
+                <div className="rounded-md border border-[#E8E8E8]">
+                    <button
+                        type="button"
+                        onClick={() => setLegacyExpanded(v => !v)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-gray-500 hover:bg-[#FAFBFC] transition-colors"
+                    >
+                        <span>
+                            <span className="font-medium text-[#111]">Legacy записи</span>
+                            <span className="ml-2 text-gray-400">{kb.length}</span>
+                        </span>
+                        <span className="text-[11px] text-gray-400">
+                            {legacyExpanded ? 'свернуть' : 'развернуть'}
+                        </span>
+                    </button>
+                    {legacyExpanded && (
                 <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
                     {kb.map(entry => (
-                        <div key={entry.id} className={`py-3.5 flex items-start gap-2 transition-opacity ${entry.active ? '' : 'opacity-50'}`}>
+                        <div key={entry.id} className={`py-3.5 flex items-start gap-2 px-3 transition-opacity ${entry.active ? '' : 'opacity-50'}`}>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-0.5">
                                     <span className="text-[13px] font-semibold text-[#111] truncate">{entry.title}</span>
@@ -1942,6 +2043,8 @@ export default function AiControlCenterClient({
                             </div>
                         </div>
                     ))}
+                </div>
+                    )}
                 </div>
             )}
         </div>
@@ -3163,6 +3266,109 @@ export default function AiControlCenterClient({
 
             {/* PR5: Runtime rollout checklist modal */}
             <RuntimeRolloutModal />
+
+            {/* PR5: Legacy KB → Knowledge Core migration modal */}
+            {migrationOpen && (
+                <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                     onClick={() => !migrationRunning && setMigrationOpen(false)}>
+                    <div
+                        className="bg-white rounded-lg shadow-xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="px-6 py-4 border-b border-[#F0F0F0]">
+                            <h2 className="text-[16px] font-semibold text-[#111]">Перенести базу знаний в Ядро</h2>
+                            <p className="text-[12px] text-gray-500 mt-0.5">
+                                Записи копируются как verified-факты. Сама база знаний не удаляется.
+                            </p>
+                        </div>
+                        <div className="px-6 py-4 overflow-y-auto space-y-4">
+                            {migrationLoading && (
+                                <div className="flex items-center gap-2 text-[12px] text-gray-400 py-6">
+                                    <Loader2 size={13} className="animate-spin" /> Считаем что переносить…
+                                </div>
+                            )}
+                            {!migrationLoading && migrationPreview && !migrationResult && (
+                                <div className="space-y-3 text-[13px] text-[#111]">
+                                    <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
+                                        <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Сводка</div>
+                                        <div className="space-y-0.5 text-[12px]">
+                                            <div>Активных записей в базе: <strong>{migrationPreview.legacyTotalActive}</strong></div>
+                                            <div>Уже перенесено: <strong>{migrationPreview.alreadyMigrated}</strong></div>
+                                            <div>Будет перенесено сейчас: <strong className="text-[#3390EC]">{migrationPreview.toMigrate}</strong></div>
+                                        </div>
+                                    </div>
+                                    {migrationPreview.bySection.length > 0 && (
+                                        <div>
+                                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Распределение по разделам</div>
+                                            <ul className="space-y-0.5 text-[12px]">
+                                                {migrationPreview.bySection.map(s => (
+                                                    <li key={s.sectionSlug} className="flex items-center justify-between">
+                                                        <span>{s.sectionTitle}</span>
+                                                        <span className="text-gray-500">{s.count}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                            <p className="text-[11px] text-gray-400 mt-2">
+                                                Категории сопоставлены автоматически. После переноса вы можете переместить факты в другой раздел через карточку знания.
+                                            </p>
+                                        </div>
+                                    )}
+                                    {migrationPreview.toMigrate === 0 && (
+                                        <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3 text-[12px] text-gray-600">
+                                            Все активные записи уже перенесены. Повторный запуск ничего не добавит.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                            {migrationResult && (
+                                <div className="space-y-3 text-[13px]">
+                                    <div className={`rounded-md border p-3 ${
+                                        migrationResult.failed > 0
+                                            ? 'border-[#FFE8B0] bg-[#FFFBED] text-[#8B6914]'
+                                            : 'border-green-200 bg-green-50 text-green-800'
+                                    }`}>
+                                        <strong className="block mb-1">Готово</strong>
+                                        Перенесено: {migrationResult.migrated} ·{' '}
+                                        Пропущено: {migrationResult.skipped} ·{' '}
+                                        С ошибкой: {migrationResult.failed}
+                                    </div>
+                                    {migrationResult.errors.length > 0 && (
+                                        <div>
+                                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Ошибки</div>
+                                            <ul className="space-y-1 text-[12px] text-red-600">
+                                                {migrationResult.errors.slice(0, 10).map((e, i) => (
+                                                    <li key={i}>
+                                                        <code className="text-[11px] bg-white px-1 rounded border border-[#E8E0C0]">{e.legacyId}</code> — {e.message}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                            <button
+                                onClick={() => !migrationRunning && setMigrationOpen(false)}
+                                disabled={migrationRunning}
+                                className="h-9 px-4 rounded-md border border-[#E0E0E0] text-[13px] text-gray-600 hover:bg-[#F8F9FA] disabled:opacity-50"
+                            >
+                                {migrationResult ? 'Закрыть' : 'Отмена'}
+                            </button>
+                            {!migrationResult && migrationPreview && migrationPreview.toMigrate > 0 && (
+                                <button
+                                    onClick={runMigration}
+                                    disabled={migrationRunning}
+                                    className="h-9 px-4 rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                                >
+                                    {migrationRunning && <Loader2 size={13} className="animate-spin" />}
+                                    Перенести {migrationPreview.toMigrate}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* PR4: Explainability modal "Почему AI так ответил?" */}
             {explainOpen && (
