@@ -1177,6 +1177,30 @@ model AiKnowledgeUsageLog {
   @@index([usedAt(sort: Desc)])
 }
 
+/// PR2.5 governance: lightweight audit trail для изменений Knowledge
+/// Core админом. JSON-snapshots перед/после действия — не diff.
+/// itemId — soft-link (nullable, без FK), чтобы будущий physical
+/// delete item'а в перспективе не каскадировал в audit history.
+/// В PR2.5 hard delete не разрешён, но архитектурно готовимся.
+model AiKnowledgeAuditLog {
+  id          String                 @id @default(cuid())
+  itemId      String?
+  /// userId совершившего действие. null если system.
+  actor       String?
+  action      AiKnowledgeAuditAction
+  /// JSON-snapshot до действия. Для 'created'/'manual_created' — null.
+  beforeJson  Json?
+  /// JSON-snapshot после.
+  afterJson   Json?
+  /// Свободное место для контекста: { reason, supersededBy,
+  /// fromConflictGroupId, ... } — UI рендерит по action типу.
+  metadata    Json?
+  createdAt   DateTime               @default(now())
+
+  @@index([itemId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+}
+
 /// Задание на извлечение знаний из истории. Создаётся кнопкой
 /// "Собрать ядро знаний". scope JSON: { mode, dateFrom?, dateTo?,
 /// channels?, sampleSize? }. progress JSON: { messagesScanned,
@@ -1848,6 +1872,19 @@ enum AiExtractionStatus {
   completed
   partial
   failed
+}
+
+enum AiKnowledgeAuditAction {
+  created            // item создан экстрактором
+  manual_created     // item создан админом вручную
+  edited             // title/canonicalStatement/tags/safetyLevel изменены
+  archived           // status → archived (soft delete)
+  restored           // status → active (un-archive)
+  verified           // isVerified → true
+  unverified         // isVerified → false
+  superseded         // помечен как заменённый другим item'ом
+  conflict_resolved  // conflictGroupId снят или участники разруливаются
+  source_added       // (опц., extractor может писать для трейсабельности)
 }
 
 enum CallDirection {
