@@ -775,6 +775,11 @@ model Call {
   qualificationScore  Int?
   leadDataStructured  Json?
 
+  // Conversation Intelligence Layer (PR #59). Timeline of signal-bearing
+  // events emitted by the bridge and the CRM finalize route. Cleared with
+  // the Call (ON DELETE CASCADE). See docs/design/conversation-intelligence-layer.md.
+  aiEvents      AiCallEvent[]
+
   metadata      Json?         @default("{}")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -1628,6 +1633,56 @@ enum AiCallSessionStatus {
   transferring   // SIP REFER in flight — connecting to manager
   ended          // hangup, normal completion
   failed         // STT/LLM/TTS error or bridge dropped
+}
+
+/// Conversation Intelligence Layer (PR #59). One row per signal-bearing
+/// moment in an AI-call: greeting started, first real user speech, silence
+/// strike, call completed. Append-only. Best-effort emission — losing a
+/// row never breaks the call (write helper swallows insert errors). Read
+/// access is via raw SQL / Prisma; no UI yet (next PR).
+///
+/// Volume budget: ~3-6 rows per AI-call in v1. Future PRs add events
+/// (save_lead_data_emitted, manager_requested, stt_suspicious_pattern,
+/// etc.) via ALTER TYPE on the enum below.
+///
+/// See docs/design/conversation-intelligence-layer.md for the full
+/// taxonomy + per-event payload schemas.
+model AiCallEvent {
+  id          String          @id @default(cuid())
+  callId      String
+
+  /// Discriminated event type. v1 ships 4 values; future PRs extend.
+  type        AiCallEventType
+
+  /// Wall-clock timestamp of emission. Used for cross-event delta queries
+  /// (time-to-first-speech, silence interval, etc.).
+  occurredAt  DateTime        @default(now())
+
+  /// Monotonic per-call ordinal. Resolves same-millisecond ties (the bridge
+  /// can fire two events within one event-loop tick when tool dispatch
+  /// chains). Assigned by the bridge at emission time.
+  seq         Int
+
+  /// Type-specific payload. Schemas documented per type in the design doc;
+  /// validated by `src/lib/ai-call/event-emitter.js` at write time.
+  payload     Json?
+
+  call        Call            @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  /// Primary access pattern: timeline reconstruction for one call.
+  @@index([callId, seq])
+  /// Secondary access pattern: aggregations across calls by event type.
+  @@index([type, occurredAt(sort: Desc)])
+}
+
+/// v1 ships only 4 events. Adding more is one ALTER TYPE per addition
+/// (Postgres doesn't allow batch enum additions in a single transaction
+/// with other DDL — separate migration files going forward).
+enum AiCallEventType {
+  greeting_started
+  first_real_user_speech
+  silence_strike
+  call_completed
 }
 
 /// Structured business-outcome of an AI-call (PR #57). Set by the
