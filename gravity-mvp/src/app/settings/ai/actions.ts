@@ -56,6 +56,15 @@ export async function getAiConfig() {
     } catch { return null }
 }
 
+/** Поля AiAgentConfig с типом enum в Postgres. При raw UPDATE Prisma
+ *  не может автокаст text → enum, и весь UPDATE падает с 42804.
+ *  Решение: для этих полей подставляем `$N::"EnumType"` вместо просто
+ *  `$N`. Остальные поля идут как обычно. */
+const ENUM_CASTS: Record<string, string> = {
+    provider: 'AiProviderType',
+    mode:     'AiAgentMode',
+}
+
 export async function saveAiConfig(data: Record<string, any>) {
     await assertCanEditAi()
     const fields = Object.keys(data)
@@ -67,10 +76,16 @@ export async function saveAiConfig(data: Record<string, any>) {
             const allData = { id: 'singleton', ...data }
             const cols  = Object.keys(allData).map(k => `"${k}"`).join(', ')
             const vals  = Object.values(allData)
-            const marks = vals.map((_, i) => `$${i + 1}`).join(', ')
+            const marks = Object.keys(allData).map((k, i) => {
+                const cast = ENUM_CASTS[k]
+                return cast ? `$${i + 1}::"${cast}"` : `$${i + 1}`
+            }).join(', ')
             await prisma.$executeRawUnsafe(`INSERT INTO "AiAgentConfig" (${cols}) VALUES (${marks})`, ...vals)
         } else {
-            const sets  = fields.map((k, i) => `"${k}" = $${i + 1}`).join(', ')
+            const sets  = fields.map((k, i) => {
+                const cast = ENUM_CASTS[k]
+                return cast ? `"${k}" = $${i + 1}::"${cast}"` : `"${k}" = $${i + 1}`
+            }).join(', ')
             const vals  = Object.values(data)
             await prisma.$executeRawUnsafe(
                 `UPDATE "AiAgentConfig" SET ${sets}, "updatedAt" = NOW() WHERE id = 'singleton'`,
@@ -80,8 +95,12 @@ export async function saveAiConfig(data: Record<string, any>) {
         revalidatePath('/settings/ai')
         return { id: 'singleton', ...data }
     } catch (e: any) {
-        console.error('[AI Config] saveAiConfig error:', e.message)
-        return null
+        // Раньше эта ошибка была silent — UI получал null и не знал что
+        // именно поле провайдер/режим попало в enum-mismatch и весь
+        // UPDATE откатился. Перебрасываем: handleSaveProvider /
+        // handleTestConnection покажут toast с реальной причиной.
+        console.error('[AI Config] saveAiConfig error:', e?.message ?? e)
+        throw new Error(`Не удалось сохранить настройки AI: ${e?.message ?? 'unknown error'}`)
     }
 }
 
