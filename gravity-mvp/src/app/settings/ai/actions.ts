@@ -536,9 +536,7 @@ export async function listItemsBySection(sectionId: string, opts?: { includeArch
     return knowledgeQueries.listItemsBySection(sectionId, opts ?? {})
 }
 
-export async function getItemWithSources(itemId: string) {
-    return knowledgeQueries.getItemWithSources(itemId)
-}
+// getItemWithSources объявлен ниже (PR2.5) с permission-фильтром sources.
 
 export async function getKnowledgeStats() {
     return knowledgeQueries.getKnowledgeStats()
@@ -546,4 +544,131 @@ export async function getKnowledgeStats() {
 
 export async function listExtractionJobs(limit?: number) {
     return knowledgeQueries.listExtractionJobs(limit ?? 10)
+}
+
+// ─── AI Knowledge Core — PR2 extraction actions ──────────────────
+//
+// Permission split:
+//   - listKnowledgeSections / listItemsBySection / getKnowledgeStats /
+//     listExtractionJobs / getExtractionJob — все роли (read-only)
+//   - getItemWithSources — sources только для Admin/Lead (PII risk)
+//   - startKnowledgeExtraction / saveExtractionQualityTier —
+//     только Admin/Lead (тратит LLM-токены)
+
+import { runExtraction } from '@/lib/ai/knowledge/Extractor'
+import type { ExtractionScope } from '@/lib/ai/knowledge/pairBuilder'
+export type { ExtractionScope } from '@/lib/ai/knowledge/pairBuilder'
+
+/** Может ли текущий пользователь видеть source excerpts (PII risk).
+ *  Совпадает с assertCanEditAi, но возвращает boolean без throw —
+ *  для тихой фильтрации sources, не для отказа в action. */
+async function canViewKnowledgeSources(): Promise<boolean> {
+    const cookieStore = await cookies()
+    const id = cookieStore.get('crm_user_id')?.value
+    if (!id) return false
+    const users = await getUsers()
+    const user = users.find(u => u.id === id)
+    if (!user) return false
+    return user.role === 'Администратор' || user.role === 'Руководитель'
+}
+
+/** Полная карточка item с источниками. Sources возвращаются ТОЛЬКО
+ *  Админу/Руководителю (PII risk). Manager получает sources=[]. */
+export async function getItemWithSources(itemId: string) {
+    const full = await knowledgeQueries.getItemWithSources(itemId)
+    const allowed = await canViewKnowledgeSources()
+    if (allowed) return full
+    return { item: full.item, sources: [] as typeof full.sources }
+}
+
+/** Создаёт AiExtractionJob + fire-and-forget runExtraction.
+ *  Возвращает свежесозданный job для немедленного показа в UI до
+ *  первого polling-цикла. */
+export async function startKnowledgeExtraction(
+    scope: ExtractionScope,
+    qualityTier: 'economy' | 'balanced' | 'quality' = 'balanced',
+): Promise<{ id: string; status: string; createdAt: string }> {
+    await assertCanEditAi()
+    const id = 'kbj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+    const scopeJson = JSON.stringify(scope ?? { mode: 'last_90d' })
+
+    await prisma.$executeRaw`
+        INSERT INTO "AiExtractionJob" (
+            id, status, "sourceType", scope,
+            "extractionQualityTier", "createdAt"
+        ) VALUES (
+            ${id},
+            'queued'::"AiExtractionStatus",
+            'chat_message'::"AiKnowledgeSourceOrigin",
+            ${scopeJson}::jsonb,
+            ${qualityTier},
+            NOW()
+        )
+    `
+    revalidatePath('/settings/ai')
+
+    // Fire-and-forget. Errors логируются внутри runExtraction.
+    runExtraction(id).catch(e => {
+        console.error('[ai-knowledge] runExtraction crashed:', e?.message)
+    })
+
+    return {
+        id,
+        status: 'queued',
+        createdAt: new Date().toISOString(),
+    }
+}
+
+/** Polling-эндпоинт для прогресса. */
+export async function getExtractionJob(id: string) {
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT
+                id, status::text AS status,
+                "sourceType"::text AS "sourceType",
+                scope, progress,
+                "extractionProvider", "extractionModel",
+                "extractionPromptVersion", "extractionQualityTier",
+                "startedAt", "finishedAt", "errorMessage", "createdAt"
+            FROM "AiExtractionJob"
+            WHERE id = ${id} LIMIT 1
+        `
+        return rows[0] ?? null
+    } catch {
+        return null
+    }
+}
+
+/** Сохраняет выбранный пресет качества (singleton config). */
+export async function saveExtractionQualityTier(
+    tier: 'economy' | 'balanced' | 'quality',
+): Promise<void> {
+    await assertCanEditAi()
+    if (!['economy', 'balanced', 'quality'].includes(tier)) {
+        throw new Error('Недопустимый tier')
+    }
+    await prisma.$executeRaw`
+        UPDATE "AiAgentConfig"
+        SET "extractionQualityTier" = ${tier},
+            "updatedAt"             = NOW()
+        WHERE id = 'singleton'
+    `
+    revalidatePath('/settings/ai')
+}
+
+/** Текущий tier (для предзаполнения UI-селектора). */
+export async function getExtractionQualityTier(): Promise<'economy' | 'balanced' | 'quality'> {
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT "extractionQualityTier"
+            FROM "AiAgentConfig"
+            WHERE id = 'singleton'
+            LIMIT 1
+        `
+        const t = rows[0]?.extractionQualityTier
+        if (t === 'economy' || t === 'balanced' || t === 'quality') return t
+        return 'balanced'
+    } catch {
+        return 'balanced'
+    }
 }
