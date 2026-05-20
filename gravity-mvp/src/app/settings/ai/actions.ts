@@ -1511,3 +1511,37 @@ export type {
 export async function getKnowledgeReadinessForUi() {
     return getKnowledgeReadiness()
 }
+
+// ─── AI Knowledge Core legacy migration (PR5) ───────────────────
+//
+// Перенос ручной KnowledgeBaseEntry → AiKnowledgeItem. Legacy KB НЕ
+// удаляется (reversible path). UI потом скрывает её под "Legacy".
+// Core логика — в `@/lib/ai/knowledge/legacyMigration`, чтобы smoke
+// мог дёрнуть её напрямую без cookie-context.
+
+import {
+    getLegacyMigrationPreviewCore,
+    migrateLegacyKnowledgeBaseCore,
+} from '@/lib/ai/knowledge/legacyMigration'
+export type {
+    LegacyMigrationPreview,
+    LegacyMigrationResult,
+} from '@/lib/ai/knowledge/legacyMigration'
+
+/** Preview без записи — для UI confirmation модала перед запуском. */
+export async function getLegacyMigrationPreview() {
+    await assertCanEditAi()
+    return getLegacyMigrationPreviewCore()
+}
+
+/**
+ * Выполняет миграцию. Idempotent — повторный запуск пропускает уже
+ * мигрированные. Legacy KB НЕ удаляется, остаётся active для
+ * reversible-сценария.
+ */
+export async function migrateLegacyKnowledgeBase() {
+    const actor = await requireAdminUserId()
+    const result = await migrateLegacyKnowledgeBaseCore(actor)
+    if (result.migrated > 0) revalidatePath('/settings/ai')
+    return result
+}
