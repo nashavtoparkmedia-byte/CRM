@@ -672,3 +672,385 @@ export async function getExtractionQualityTier(): Promise<'economy' | 'balanced'
         return 'balanced'
     }
 }
+
+// ─── AI Knowledge Core governance (PR2.5) ────────────────────────
+//
+// Edit/archive/restore/verify/supersede/resolve-conflict/manual-create
+// + audit trail. Все mutation-actions требуют Admin/Lead роли
+// (assertCanEditAi), читают userId для audit.actor и пишут before/after
+// JSON snapshots в AiKnowledgeAuditLog. Soft-delete only.
+
+import {
+    writeAuditEntry,
+    snapshotItem,
+    getKnowledgeAuditLog as getAuditLogRaw,
+} from '@/lib/ai/knowledge/auditLog'
+
+/**
+ * Возвращает userId текущего пользователя если он Admin/Lead, иначе
+ * throws. Используется в governance-actions: assertCanEditAi проверяет
+ * роль, но не возвращает id; здесь нужен id для audit.actor.
+ */
+async function requireAdminUserId(): Promise<string> {
+    const cookieStore = await cookies()
+    const id = cookieStore.get('crm_user_id')?.value
+    if (!id) throw new Error('Недостаточно прав')
+    const users = await getUsers()
+    const user = users.find(u => u.id === id)
+    if (!user) throw new Error('Недостаточно прав')
+    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
+        throw new Error('Недостаточно прав')
+    }
+    return user.id
+}
+
+async function loadItemForEdit(id: string): Promise<any | null> {
+    const rows = await prisma.$queryRaw<any[]>`
+        SELECT
+            id, "sectionId", title, "canonicalStatement", tags,
+            confidence, "sourceCount", "uniqueManagerCount",
+            status::text AS status, "isActive",
+            "safetyLevel"::text AS "safetyLevel",
+            "supersededByItemId", "conflictGroupId",
+            "isVerified", "verifiedBy", "verifiedAt"
+        FROM "AiKnowledgeItem"
+        WHERE id = ${id}
+        LIMIT 1
+    `
+    return rows[0] ?? null
+}
+
+interface EditItemPatch {
+    title?:              string
+    canonicalStatement?: string
+    tags?:               string[]
+    safetyLevel?:        'normal' | 'sensitive' | 'requires_human'
+}
+
+/**
+ * Редактирует поля item'а. Частичный patch: меняется только то, что
+ * явно передано. Audit с before/after + metadata.changedFields.
+ */
+export async function editKnowledgeItem(id: string, patch: EditItemPatch): Promise<void> {
+    const actor = await requireAdminUserId()
+    const before = await loadItemForEdit(id)
+    if (!before) throw new Error('Знание не найдено')
+
+    const sets: string[] = []
+    const vals: any[] = []
+    if (patch.title !== undefined) {
+        if (!patch.title.trim()) throw new Error('Заголовок не может быть пустым')
+        sets.push(`"title" = $${sets.length + 1}`)
+        vals.push(patch.title.trim())
+    }
+    if (patch.canonicalStatement !== undefined) {
+        if (!patch.canonicalStatement.trim()) throw new Error('Формулировка не может быть пустой')
+        sets.push(`"canonicalStatement" = $${sets.length + 1}`)
+        vals.push(patch.canonicalStatement.trim())
+    }
+    if (patch.tags !== undefined) {
+        sets.push(`"tags" = $${sets.length + 1}::text[]`)
+        vals.push(patch.tags)
+    }
+    if (patch.safetyLevel !== undefined) {
+        if (!['normal', 'sensitive', 'requires_human'].includes(patch.safetyLevel)) {
+            throw new Error('Недопустимый safetyLevel')
+        }
+        sets.push(`"safetyLevel" = $${sets.length + 1}::"AiKnowledgeSafety"`)
+        vals.push(patch.safetyLevel)
+    }
+    if (sets.length === 0) return
+
+    sets.push(`"updatedAt" = NOW()`)
+    vals.push(id)
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AiKnowledgeItem" SET ${sets.join(', ')} WHERE id = $${vals.length}`,
+        ...vals,
+    )
+
+    const after = await loadItemForEdit(id)
+    const changedFields = Object.keys(patch).filter(k => (patch as any)[k] !== undefined)
+    await writeAuditEntry({
+        itemId: id, actor, action: 'edited',
+        before: snapshotItem(before), after: snapshotItem(after),
+        metadata: { changedFields },
+    })
+    revalidatePath('/settings/ai')
+}
+
+/** Soft delete: status='archived' + isActive=false. Sources сохраняются. */
+export async function archiveKnowledgeItem(id: string): Promise<void> {
+    const actor = await requireAdminUserId()
+    const before = await loadItemForEdit(id)
+    if (!before) throw new Error('Знание не найдено')
+    if (before.status === 'archived') return
+
+    await prisma.$executeRaw`
+        UPDATE "AiKnowledgeItem"
+        SET status     = 'archived'::"AiKnowledgeStatus",
+            "isActive" = false,
+            "updatedAt" = NOW()
+        WHERE id = ${id}
+    `
+    const after = await loadItemForEdit(id)
+    await writeAuditEntry({
+        itemId: id, actor, action: 'archived',
+        before: snapshotItem(before), after: snapshotItem(after),
+    })
+    revalidatePath('/settings/ai')
+}
+
+/** Восстановление из архива. Запрещено для superseded. */
+export async function restoreKnowledgeItem(id: string): Promise<void> {
+    const actor = await requireAdminUserId()
+    const before = await loadItemForEdit(id)
+    if (!before) throw new Error('Знание не найдено')
+    if (before.status === 'active' && before.isActive) return
+    if (before.status === 'superseded') {
+        throw new Error('Знание заменено новым. Сначала уберите ссылку supersededByItemId.')
+    }
+
+    await prisma.$executeRaw`
+        UPDATE "AiKnowledgeItem"
+        SET status     = 'active'::"AiKnowledgeStatus",
+            "isActive" = true,
+            "updatedAt" = NOW()
+        WHERE id = ${id}
+    `
+    const after = await loadItemForEdit(id)
+    await writeAuditEntry({
+        itemId: id, actor, action: 'restored',
+        before: snapshotItem(before), after: snapshotItem(after),
+    })
+    revalidatePath('/settings/ai')
+}
+
+/** Verify / un-verify. */
+export async function verifyKnowledgeItem(id: string, verified: boolean): Promise<void> {
+    const actor = await requireAdminUserId()
+    const before = await loadItemForEdit(id)
+    if (!before) throw new Error('Знание не найдено')
+    if (before.isVerified === verified) return
+
+    if (verified) {
+        await prisma.$executeRaw`
+            UPDATE "AiKnowledgeItem"
+            SET "isVerified" = true, "verifiedBy" = ${actor},
+                "verifiedAt" = NOW(), "updatedAt" = NOW()
+            WHERE id = ${id}
+        `
+    } else {
+        await prisma.$executeRaw`
+            UPDATE "AiKnowledgeItem"
+            SET "isVerified" = false, "verifiedBy" = NULL,
+                "verifiedAt" = NULL, "updatedAt" = NOW()
+            WHERE id = ${id}
+        `
+    }
+
+    const after = await loadItemForEdit(id)
+    await writeAuditEntry({
+        itemId: id, actor, action: verified ? 'verified' : 'unverified',
+        before: snapshotItem(before), after: snapshotItem(after),
+    })
+    revalidatePath('/settings/ai')
+}
+
+/** Audit history по item для UI. */
+export async function getKnowledgeAuditLog(itemId: string, limit?: number) {
+    return getAuditLogRaw(itemId, limit ?? 50)
+}
+
+/**
+ * Помечает oldItem как заменённый newItem'ом (temporal replacement,
+ * не конфликт). Валидация: same section, no cycles, no self.
+ */
+export async function supersedeKnowledgeItem(
+    oldItemId: string,
+    newItemId: string,
+): Promise<void> {
+    const actor = await requireAdminUserId()
+    if (oldItemId === newItemId) throw new Error('Нельзя заменить знание самим собой')
+
+    const oldBefore = await loadItemForEdit(oldItemId)
+    const newBefore = await loadItemForEdit(newItemId)
+    if (!oldBefore) throw new Error('Старое знание не найдено')
+    if (!newBefore) throw new Error('Новое знание не найдено')
+    if (oldBefore.sectionId !== newBefore.sectionId) {
+        throw new Error('Замена работает только внутри одной секции')
+    }
+    if (newBefore.status === 'superseded') {
+        throw new Error('Новое знание само заменено более новым')
+    }
+    if (newBefore.supersededByItemId === oldItemId) {
+        throw new Error('Цикл замены: эти знания уже ссылаются друг на друга')
+    }
+
+    await prisma.$executeRaw`
+        UPDATE "AiKnowledgeItem"
+        SET status               = 'superseded'::"AiKnowledgeStatus",
+            "isActive"           = false,
+            "supersededByItemId" = ${newItemId},
+            "updatedAt"          = NOW()
+        WHERE id = ${oldItemId}
+    `
+
+    const oldAfter = await loadItemForEdit(oldItemId)
+    await writeAuditEntry({
+        itemId: oldItemId, actor, action: 'superseded',
+        before: snapshotItem(oldBefore), after: snapshotItem(oldAfter),
+        metadata: { supersededBy: newItemId },
+    })
+    await writeAuditEntry({
+        itemId: newItemId, actor, action: 'superseded',
+        before: null, after: null,
+        metadata: { supersedes: oldItemId, role: 'replacement' },
+    })
+    revalidatePath('/settings/ai')
+}
+
+export type ConflictResolveAction = 'keep_this_archive_others' | 'unmark_all'
+
+/** Разрешение конфликта. Auto-resolve запрещён. */
+export async function resolveConflict(
+    itemId: string,
+    action: ConflictResolveAction,
+): Promise<void> {
+    const actor = await requireAdminUserId()
+    const before = await loadItemForEdit(itemId)
+    if (!before) throw new Error('Знание не найдено')
+    const groupId = before.conflictGroupId
+    if (!groupId) throw new Error('У этого знания нет конфликта')
+
+    const members = await prisma.$queryRaw<any[]>`
+        SELECT
+            id, "sectionId", title, "canonicalStatement", tags,
+            confidence, "sourceCount", "uniqueManagerCount",
+            status::text AS status, "isActive",
+            "safetyLevel"::text AS "safetyLevel",
+            "supersededByItemId", "conflictGroupId",
+            "isVerified", "verifiedBy", "verifiedAt"
+        FROM "AiKnowledgeItem"
+        WHERE "conflictGroupId" = ${groupId}
+    `
+
+    if (action === 'keep_this_archive_others') {
+        for (const m of members) {
+            if (m.id === itemId) continue
+            if (m.status === 'archived') continue
+            const memberBefore = m
+            await prisma.$executeRaw`
+                UPDATE "AiKnowledgeItem"
+                SET status            = 'archived'::"AiKnowledgeStatus",
+                    "isActive"        = false,
+                    "conflictGroupId" = NULL,
+                    "updatedAt"       = NOW()
+                WHERE id = ${m.id}
+            `
+            const memberAfter = await loadItemForEdit(m.id)
+            await writeAuditEntry({
+                itemId: m.id, actor, action: 'archived',
+                before: snapshotItem(memberBefore), after: snapshotItem(memberAfter),
+                metadata: { reason: 'conflict_resolved_keep_other', winnerItemId: itemId },
+            })
+        }
+        await prisma.$executeRaw`
+            UPDATE "AiKnowledgeItem"
+            SET "conflictGroupId" = NULL, "updatedAt" = NOW()
+            WHERE id = ${itemId}
+        `
+        const winnerAfter = await loadItemForEdit(itemId)
+        await writeAuditEntry({
+            itemId, actor, action: 'conflict_resolved',
+            before: snapshotItem(before), after: snapshotItem(winnerAfter),
+            metadata: { resolution: 'kept_this', archivedCount: members.length - 1 },
+        })
+    } else {
+        // unmark_all
+        await prisma.$executeRaw`
+            UPDATE "AiKnowledgeItem"
+            SET "conflictGroupId" = NULL, "updatedAt" = NOW()
+            WHERE "conflictGroupId" = ${groupId}
+        `
+        for (const m of members) {
+            const after = await loadItemForEdit(m.id)
+            await writeAuditEntry({
+                itemId: m.id, actor, action: 'conflict_resolved',
+                before: snapshotItem(m), after: snapshotItem(after),
+                metadata: { resolution: 'unmark_all', formerGroupId: groupId },
+            })
+        }
+    }
+    revalidatePath('/settings/ai')
+}
+
+/**
+ * Создание item админом вручную. Auto-verified, manual_entry source.
+ */
+export async function createManualKnowledgeItem(input: {
+    sectionId:          string
+    title:              string
+    canonicalStatement: string
+    tags?:              string[]
+    safetyLevel?:       'normal' | 'sensitive' | 'requires_human'
+}): Promise<{ itemId: string }> {
+    const actor = await requireAdminUserId()
+    if (!input.sectionId) throw new Error('Раздел обязателен')
+    if (!input.title?.trim()) throw new Error('Заголовок обязателен')
+    if (!input.canonicalStatement?.trim()) throw new Error('Формулировка обязательна')
+
+    const sec = await prisma.$queryRaw<any[]>`
+        SELECT id FROM "AiKnowledgeSection" WHERE id = ${input.sectionId} AND "isActive" = true LIMIT 1
+    `
+    if (!sec[0]) throw new Error('Раздел не найден или отключён')
+
+    const safety = input.safetyLevel ?? 'normal'
+    if (!['normal', 'sensitive', 'requires_human'].includes(safety)) {
+        throw new Error('Недопустимый safetyLevel')
+    }
+
+    const itemId = 'kbi_m_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+    const tagSet = new Set<string>(input.tags ?? [])
+    tagSet.add('type:manual')
+    const tags = [...tagSet].filter(t => t.trim())
+
+    await prisma.$executeRaw`
+        INSERT INTO "AiKnowledgeItem" (
+            id, "sectionId", title, "canonicalStatement", tags,
+            confidence, "sourceCount", "uniqueManagerCount",
+            status, "isActive", "safetyLevel",
+            "isVerified", "verifiedBy", "verifiedAt",
+            "createdBy", "createdAt", "updatedAt"
+        ) VALUES (
+            ${itemId}, ${input.sectionId},
+            ${input.title.trim()}, ${input.canonicalStatement.trim()},
+            ${tags}::text[],
+            0.95, 0, 0,
+            'active'::"AiKnowledgeStatus", true, ${safety}::"AiKnowledgeSafety",
+            true, ${actor}, NOW(),
+            ${actor}, NOW(), NOW()
+        )
+    `
+    const sourceId = 'kbs_m_' + Math.random().toString(36).slice(2, 12)
+    const excerptHash = 'manual:' + itemId
+    await prisma.$executeRaw`
+        INSERT INTO "AiKnowledgeSource" (
+            id, "itemId", "originType",
+            "messageId", "chatId", channel, "managerUserId",
+            excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
+        ) VALUES (
+            ${sourceId}, ${itemId}, 'manual_entry',
+            NULL, NULL, NULL, ${actor},
+            '[создано вручную администратором]', ${excerptHash}, 1.0, NOW(), NOW()
+        )
+    `
+
+    const after = await loadItemForEdit(itemId)
+    await writeAuditEntry({
+        itemId, actor, action: 'manual_created',
+        before: null, after: snapshotItem(after),
+        metadata: { sectionId: input.sectionId },
+    })
+    revalidatePath('/settings/ai')
+    return { itemId }
+}
