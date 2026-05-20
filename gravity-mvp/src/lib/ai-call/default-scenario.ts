@@ -6,7 +6,7 @@
  * scripted questions, objection handling built into the system prompt.
  */
 
-import type { AiCallOutcomeSchema, AiCallScenarioQuestion } from './types'
+import type { AiCallGreetingVariant, AiCallOutcomeSchema, AiCallScenarioQuestion } from './types'
 
 export const DEFAULT_SCENARIO_NAME = 'Квалификация водителя (по умолчанию)'
 
@@ -87,3 +87,45 @@ export const DEFAULT_SCENARIO_OUTCOME_SCHEMA: AiCallOutcomeSchema = {
           values: ['this_week', 'next_week', 'later', 'unsure'], label: 'Когда готов оформляться' },
     ],
 }
+
+/**
+ * Greeting A/B variants for the default driver-qualification scenario
+ * (PR #62). The bridge deterministically picks one via
+ * `hash(callUuid) % N` and speaks it directly (no LLM round-trip on
+ * greeting). Variant id lands in `greeting_started.payload.variant_id`
+ * for funnel attribution.
+ *
+ * Variant A (baseline) — the current pre-PR-62 wording, kept verbatim
+ *   so the A/B test measures a true delta against historical data.
+ *
+ * Variant B (ultra-short) — strips the «automatic call» mention and
+ *   the recording-warning, compresses to "who + immediate ask". Tests
+ *   whether the longer wording was driving the 29% pre-greeting drop.
+ *
+ * Variant C (more human) — informal-but-still-disclosed phrasing.
+ *   Tests whether dropping "автоматический" while keeping context
+ *   ("вы оставляли заявку") improves engagement vs. variant B.
+ *
+ * Three variants is the maximum the architect approved for v1; adding
+ * more requires a new PR. Same hash bucket policy applies — fewer
+ * variants ⇒ wider buckets ⇒ faster statistical signal per variant.
+ */
+export const DEFAULT_SCENARIO_GREETING_VARIANTS: AiCallGreetingVariant[] = [
+    {
+        id: 'A',
+        label: 'Baseline (формальный, с упоминанием записи)',
+        text:
+            'Здравствуйте! Это автоматический звонок от компании НашАвтоПарк ' +
+            'по вашей заявке. Разговор записывается. Удобно сейчас минуту обсудить?',
+    },
+    {
+        id: 'B',
+        label: 'Ultra-short (без «автоматический», без упоминания записи)',
+        text: 'Здравствуйте! НашАвтоПарк по вашей заявке. Удобно сейчас минуту?',
+    },
+    {
+        id: 'C',
+        label: 'Human (без «автоматический», контекст «вы оставляли заявку»)',
+        text: 'Здравствуйте! Это НашАвтоПарк — вы оставляли у нас заявку. Удобно говорить?',
+    },
+]

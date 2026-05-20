@@ -34,6 +34,7 @@ const tts = require('./tts-router')
 const llm = require('./llm-client')
 const { classifySttGarbage } = require('./stt-garbage')
 const { decideRecoveryAction, isAmbiguousShort } = require('./recovery-policy')
+const { pickGreetingVariant } = require('./greeting-variants')
 
 /**
  * State transitions:
@@ -163,6 +164,13 @@ class CallSession {
         //     control falls back to silence-timer → end_call unclear.
         this.consecutiveGarbageCount = 0
         this.recoveryAttempts = 0
+        // PR #62 — Greeting Optimization Layer v1. Deterministically
+        // picked at session start via hash(callUuid) % N; the picked
+        // variant text is spoken directly (no LLM round-trip on
+        // greeting). variant_id lands in greeting_started.payload
+        // for funnel attribution. NULL = scenario opted out of A/B
+        // (legacy LLM-generated greeting path).
+        this.greetingVariant = null
     }
 
     /**
@@ -299,6 +307,9 @@ class CallSession {
             this._emitEvent('greeting_started', {
                 scenario_id: this.scenario?.id ?? null,
                 scenario_name: this.scenario?.name ?? null,
+                // PR #62 — A/B variant attribution. NULL when the scenario
+                // did not opt in (legacy LLM-generated greeting path).
+                variant_id: this.greetingVariant?.id ?? null,
             })
         }
         // Drive the silence timer off state transitions instead of from
@@ -348,8 +359,37 @@ class CallSession {
         // First greeting — only if LLM is enabled. Otherwise stay silent
         // and just record the call (Day-1 behaviour).
         if (llm.enabled() && tts.enabled()) {
+            // PR #62 — Greeting Optimization Layer v1. Pick A/B variant
+            // BEFORE _setState('greeting') so the picked variant_id
+            // lands in the greeting_started event payload. NULL ⇒
+            // scenario opted out; fall through to legacy LLM path.
+            this.greetingVariant = pickGreetingVariant({
+                callUuid: this.callUuid,
+                scenario: this.scenario,
+            })
             this._setState('greeting')
-            await this._doTurn(/* asGreeting */ true)
+            if (this.greetingVariant) {
+                // Speak the picked variant directly — deterministic text,
+                // no LLM round-trip on the greeting. Push the same text
+                // into the LLM message history so subsequent turns see
+                // what the bot already said.
+                console.log(
+                    `[call ${this.callUuid}] greeting variant=${this.greetingVariant.id}: ` +
+                    `${this.greetingVariant.text.slice(0, 60)}`,
+                )
+                this.messages.push({ role: 'assistant', content: this.greetingVariant.text })
+                this.onTranscriptItem('assistant', this.greetingVariant.text)
+                try {
+                    await this._speak(this.greetingVariant.text)
+                } catch (err) {
+                    console.error(`[call ${this.callUuid}] greeting variant speak failed: ${err.message}`)
+                }
+                if (this.state !== 'ended') this._setState('listening')
+            } else {
+                // Legacy path: LLM generates the opening line from the
+                // system prompt + synthetic user kick-off message.
+                await this._doTurn(/* asGreeting */ true)
+            }
         } else {
             this._setState('listening')
         }

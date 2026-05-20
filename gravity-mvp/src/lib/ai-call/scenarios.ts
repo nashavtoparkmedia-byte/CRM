@@ -17,7 +17,12 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import type { AiCallOutcomeSchema, AiCallScenarioConfig, AiCallScenarioQuestion } from './types'
+import type {
+    AiCallGreetingVariant,
+    AiCallOutcomeSchema,
+    AiCallScenarioConfig,
+    AiCallScenarioQuestion,
+} from './types'
 import {
     DEFAULT_SCENARIO_NAME,
     DEFAULT_SCENARIO_DESCRIPTION,
@@ -25,6 +30,7 @@ import {
     DEFAULT_SCENARIO_QUESTIONS,
     DEFAULT_SCENARIO_TARGET_SEC,
     DEFAULT_SCENARIO_OUTCOME_SCHEMA,
+    DEFAULT_SCENARIO_GREETING_VARIANTS,
 } from './default-scenario'
 
 // Prisma types for AiCallScenario/AiCallProject are generated after
@@ -60,6 +66,10 @@ function rowToConfig(row: any): AiCallScenarioWithProject {
         // opted-in get canonical-key validation at finalize-time + LLM
         // tool constraints at runtime. NULL = legacy passthrough.
         outcomeSchema: (row.outcomeSchema as AiCallOutcomeSchema | null) ?? undefined,
+        // greetingVariants is opaque JSON in Prisma. PR #62: scenarios
+        // that opted-in get A/B variant assignment at call start. NULL
+        // = legacy LLM-generated greeting.
+        greetingVariants: (row.greetingVariants as AiCallGreetingVariant[] | null) ?? undefined,
         projectId: row.projectId ?? null,
         projectName: row.project?.name ?? null,
     }
@@ -120,6 +130,7 @@ export async function listScenarios(opts?: { includeInactive?: boolean; projectI
             questions: DEFAULT_SCENARIO_QUESTIONS,
             targetDurationSec: DEFAULT_SCENARIO_TARGET_SEC,
             outcomeSchema: DEFAULT_SCENARIO_OUTCOME_SCHEMA,
+            greetingVariants: DEFAULT_SCENARIO_GREETING_VARIANTS,
             projectId: DEFAULT_PROJECT_ID,
         })
         return [seeded]
@@ -142,6 +153,7 @@ export async function createScenario(input: {
     questions: AiCallScenarioQuestion[]
     targetDurationSec?: number
     outcomeSchema?: AiCallOutcomeSchema
+    greetingVariants?: AiCallGreetingVariant[]
     projectId?: string
 }): Promise<AiCallScenarioWithProject> {
     const row = await db.aiCallScenario.create({
@@ -152,6 +164,7 @@ export async function createScenario(input: {
             questions: input.questions as any,
             targetDurationSec: input.targetDurationSec,
             outcomeSchema: input.outcomeSchema as any,
+            greetingVariants: input.greetingVariants as any,
             projectId: input.projectId ?? DEFAULT_PROJECT_ID,
             isActive: true,
         },
@@ -169,6 +182,7 @@ export async function updateScenario(
         questions?: AiCallScenarioQuestion[]
         targetDurationSec?: number
         outcomeSchema?: AiCallOutcomeSchema | null
+        greetingVariants?: AiCallGreetingVariant[] | null
         isActive?: boolean
         projectId?: string
     },
@@ -182,6 +196,7 @@ export async function updateScenario(
             ...(patch.questions !== undefined && { questions: patch.questions as any }),
             ...(patch.targetDurationSec !== undefined && { targetDurationSec: patch.targetDurationSec }),
             ...(patch.outcomeSchema !== undefined && { outcomeSchema: patch.outcomeSchema as any }),
+            ...(patch.greetingVariants !== undefined && { greetingVariants: patch.greetingVariants as any }),
             ...(patch.isActive !== undefined && { isActive: patch.isActive }),
             ...(patch.projectId !== undefined && { projectId: patch.projectId }),
         },
