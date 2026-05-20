@@ -32,6 +32,7 @@
 const stt = require('./stt-router')
 const tts = require('./tts-router')
 const llm = require('./llm-client')
+const { classifySttGarbage } = require('./stt-garbage')
 
 /**
  * State transitions:
@@ -317,6 +318,32 @@ class CallSession {
         // Post-speak grace window — see acceptSttAfter setup in _speak().
         if (Date.now() < this.acceptSttAfter) {
             console.log(`[call ${this.callUuid}] stt-drop (grace): ${trimmed.slice(0, 60)}`)
+            return
+        }
+
+        // PR #60 — STT Garbage Filter v1. Suppress known-garbage STT
+        // outputs BEFORE they pollute the dialog state. The classifier
+        // is pure + tiny + ships with near-zero FP risk per
+        // docs/research/stt-garbage-patterns.md. On `drop`:
+        //   - DO NOT increment realUserUtterances
+        //   - DO NOT push to pendingUserText
+        //   - DO NOT trigger onTranscriptItem / onUserSpoke
+        //   - DO NOT reset silence strikes (silence-timer keeps running
+        //     so the call still has a chance to terminate naturally if
+        //     ALL inputs are garbage)
+        //   - DO emit stt_suspicious_pattern event for observability
+        const garbage = classifySttGarbage(trimmed)
+        if (garbage.suspicious && garbage.action === 'drop') {
+            console.log(
+                `[call ${this.callUuid}] stt-garbage-drop (${garbage.pattern_name}): ` +
+                `${trimmed.slice(0, 80)}`,
+            )
+            this._emitEvent('stt_suspicious_pattern', {
+                pattern_name: garbage.pattern_name,
+                matched_text: trimmed.slice(0, 200),
+                action: 'drop',
+                source: 'final',
+            })
             return
         }
 

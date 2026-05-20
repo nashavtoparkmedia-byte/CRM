@@ -1675,14 +1675,23 @@ model AiCallEvent {
   @@index([type, occurredAt(sort: Desc)])
 }
 
-/// v1 ships only 4 events. Adding more is one ALTER TYPE per addition
-/// (Postgres doesn't allow batch enum additions in a single transaction
-/// with other DDL — separate migration files going forward).
+/// Conversation Intelligence Layer events. Adding more is one
+/// ALTER TYPE per addition (Postgres doesn't allow batch enum additions
+/// in a single transaction with other DDL — separate migration files
+/// going forward).
+///
+/// Shipped:
+///   v1 (PR #59):  greeting_started / first_real_user_speech /
+///                 silence_strike / call_completed
+///   v2 (PR #60):  + stt_suspicious_pattern — emitted when an STT final
+///                 matches a known garbage pattern; payload carries
+///                 pattern_name + matched_text + action.
 enum AiCallEventType {
   greeting_started
   first_real_user_speech
   silence_strike
   call_completed
+  stt_suspicious_pattern
 }
 
 /// Structured business-outcome of an AI-call (PR #57). Set by the

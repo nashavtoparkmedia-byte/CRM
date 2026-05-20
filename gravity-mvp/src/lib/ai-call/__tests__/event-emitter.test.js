@@ -48,13 +48,14 @@ function captureLog() {
 // ALLOWED_TYPES surface
 // ════════════════════════════════════════════════════════════════════
 
-test('ALLOWED_TYPES is frozen and has exactly the 4 v1 types', () => {
+test('ALLOWED_TYPES is frozen and matches v1+v2 enum (5 types)', () => {
     assert.equal(Object.isFrozen(ALLOWED_TYPES), true)
     assert.deepEqual([...ALLOWED_TYPES].sort(), [
         'call_completed',
         'first_real_user_speech',
         'greeting_started',
         'silence_strike',
+        'stt_suspicious_pattern',
     ])
 })
 
