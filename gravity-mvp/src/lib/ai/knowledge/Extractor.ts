@@ -38,6 +38,11 @@ import {
     isVerbatimEvidence,
     makeExcerptHash,
 } from './textUtils'
+import {
+    checkAgainstTrusted,
+    makeConflictsTag,
+    makeMatchesTag,
+} from './trustedGuard'
 
 // ─── Tunable constants ────────────────────────────────────────────
 
@@ -68,6 +73,14 @@ export interface ExtractionJobProgress {
     skippedNoVerbatim:        number
     skippedUnknownSection:    number
     conflictsDetected:        number
+    /** PR6: candidates blocked because they contradict a verified or
+     *  legacy-migrated rule. Создаются как draft+requires_human для
+     *  ручного review админом, в runtime не используются. */
+    trustedConflictsBlocked:  number
+    /** PR6: candidates which echo a verified/legacy rule — merged
+     *  with confidence boost. Track для visibility сколько менеджеров
+     *  подтверждают официальную линию. */
+    trustedMatchesBoosted:    number
 }
 
 function emptyProgress(): ExtractionJobProgress {
@@ -78,6 +91,7 @@ function emptyProgress(): ExtractionJobProgress {
         sourcesCreated: 0, sourcesSkippedDuplicate: 0,
         skippedLowConfidence: 0, skippedNoVerbatim: 0, skippedUnknownSection: 0,
         conflictsDetected: 0,
+        trustedConflictsBlocked: 0, trustedMatchesBoosted: 0,
     }
 }
 
@@ -110,6 +124,9 @@ interface ItemRow {
     isActive:           boolean
     conflictGroupId:    string | null
     tags:               string[]
+    /** PR6: trustedGuard смотрит этот флаг плюс tags 'source:legacy'
+     *  чтобы определить trusted источник. */
+    isVerified:         boolean
 }
 
 // ─── Model resolution ─────────────────────────────────────────────
@@ -221,7 +238,8 @@ async function loadExistingItems(sectionId: string): Promise<ItemRow[]> {
             confidence, "sourceCount", "uniqueManagerCount",
             "safetyLevel"::text   AS "safetyLevel",
             status::text          AS status,
-            "isActive", "conflictGroupId", tags
+            "isActive", "conflictGroupId", tags,
+            "isVerified"
         FROM "AiKnowledgeItem"
         WHERE "sectionId" = ${sectionId}
           AND status IN ('active', 'draft')
@@ -271,6 +289,62 @@ function decideActivation(
 }
 
 // ─── Write paths ──────────────────────────────────────────────────
+
+/**
+ * PR6: создаёт item который противоречит trusted (verified/legacy)
+ * правилу. Принудительно status='draft', isActive=false,
+ * safetyLevel='requires_human' + tag conflicts_with_trusted:<id>.
+ *
+ * НЕ попадает в runtime retrieval (excludeDraft=true в политике),
+ * но виден в UI с красной плашкой "противоречит подтверждённому
+ * правилу". Это review signal для админа — менеджер в чате сказал
+ * что-то не по официальной линии.
+ */
+async function createBlockedByTrustedItem(
+    sectionId:        string,
+    candidate:        ExtractionCandidate,
+    pair:             PromptPair,
+    maskedExcerpt:    string,
+    excerptHash:      string,
+    trustedItemId:    string,
+): Promise<{ itemId: string }> {
+    const itemId   = 'kbi_' + Math.random().toString(36).slice(2, 14)
+    const sourceId = 'kbs_' + Math.random().toString(36).slice(2, 14)
+    const tags = mergeTags(candidate.tags, [
+        `type:${candidate.type}`,
+        makeConflictsTag(trustedItemId),
+    ])
+
+    await prisma.$executeRaw`
+        INSERT INTO "AiKnowledgeItem" (
+            id, "sectionId", title, "canonicalStatement",
+            tags, confidence,
+            "sourceCount", "uniqueManagerCount",
+            status, "isActive", "safetyLevel",
+            "createdBy", "createdAt", "updatedAt"
+        ) VALUES (
+            ${itemId}, ${sectionId}, ${candidate.title}, ${candidate.canonical_statement},
+            ${tags}::text[], ${candidate.confidence},
+            1, ${pair.managerUserId ? 1 : 0},
+            'draft'::"AiKnowledgeStatus", false, 'requires_human'::"AiKnowledgeSafety",
+            'extractor', NOW(), NOW()
+        )
+    `
+    await prisma.$executeRaw`
+        INSERT INTO "AiKnowledgeSource" (
+            id, "itemId", "originType",
+            "messageId", "chatId", channel, "managerUserId",
+            excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
+        ) VALUES (
+            ${sourceId}, ${itemId}, 'chat_message',
+            ${pair.managerMessageId}, ${pair.chatId},
+            ${pair.channel}::"ChatChannel", ${pair.managerUserId},
+            ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
+            NOW()
+        )
+    `
+    return { itemId }
+}
 
 async function createItemWithSource(
     sectionId:     string,
@@ -462,6 +536,48 @@ async function processBatch(
             ctx.itemsBySection.set(section.id, existing)
         }
 
+        // PR6: Trusted Knowledge Guard. Проверяем candidate против
+        // verified/legacy-migrated items в той же секции ДО основной
+        // dedup-логики. Если candidate противоречит подтверждённому
+        // правилу — он не должен стать активным; создаём как
+        // draft+requires_human для admin-review.
+        const guard = checkAgainstTrusted(
+            { title: cand.title, canonicalStatement: cand.canonical_statement },
+            existing.map(e => ({
+                id: e.id, title: e.title,
+                canonicalStatement: e.canonicalStatement,
+                status: e.status, isVerified: e.isVerified, tags: e.tags,
+            })),
+        )
+        if (guard.verdict === 'contradicts') {
+            const { itemId } = await createBlockedByTrustedItem(
+                section.id, cand, pair, maskedExcerpt, excerptHash, guard.trusted.id,
+            )
+            ctx.progress.itemsCreated++
+            ctx.progress.sourcesCreated++
+            ctx.progress.itemsAsDraft++
+            ctx.progress.trustedConflictsBlocked++
+            ctx.progress.candidatesAccepted++
+            existing.push({
+                id: itemId, sectionId: section.id,
+                title: cand.title, canonicalStatement: cand.canonical_statement,
+                confidence: cand.confidence, sourceCount: 1, uniqueManagerCount: 0,
+                safetyLevel: 'requires_human', status: 'draft',
+                isActive: false, conflictGroupId: null,
+                tags: mergeTags(cand.tags, [`type:${cand.type}`, makeConflictsTag(guard.trusted.id)]),
+                isVerified: false,
+            })
+            continue
+        }
+        // PR6: matches_trusted — candidate подтверждает уже существующий
+        // verified/legacy факт. Продолжаем standard merge-or-create flow,
+        // но помечаем tag matches_trusted:<id> чтобы UI мог показать
+        // "ещё одно подтверждение".
+        if (guard.verdict === 'matches_trusted') {
+            cand.tags = [...(cand.tags ?? []), makeMatchesTag(guard.trusted.id)]
+            ctx.progress.trustedMatchesBoosted++
+        }
+
         const match = findBestMatch(cand, existing)
         if (match && match.score >= MERGE_SIMILARITY) {
             if (detectConflict(cand, match.item)) {
@@ -481,6 +597,7 @@ async function processBatch(
                     safetyLevel: cand.safety_level, status: activated ? 'active' : 'draft',
                     isActive: activated, conflictGroupId: null,
                     tags: mergeTags(cand.tags, [`type:${cand.type}`]),
+                    isVerified: false,
                 }
                 existing.push(newItem)
                 await markConflict(newItem, match.item)
@@ -510,6 +627,7 @@ async function processBatch(
             safetyLevel: cand.safety_level, status: activated ? 'active' : 'draft',
             isActive: activated, conflictGroupId: null,
             tags: mergeTags(cand.tags, [`type:${cand.type}`]),
+            isVerified: false,
         })
     }
     ctx.progress.pairsProcessed += batch.length

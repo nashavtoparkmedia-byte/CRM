@@ -2165,6 +2165,35 @@ export default function AiControlCenterClient({
                                 ⚠ конфликт
                             </button>
                         )}
+                        {/* PR6: trustedGuard заблокировал этот candidate
+                            потому что он противоречит подтверждённому
+                            правилу. Tag формат "conflicts_with_trusted:<id>". */}
+                        {(() => {
+                            const trustedConflictTag = item.tags.find(t => t.startsWith('conflicts_with_trusted:'))
+                            if (!trustedConflictTag) return null
+                            const trustedId = trustedConflictTag.slice('conflicts_with_trusted:'.length)
+                            const trustedItem = knowledgeItems.find(k => k.id === trustedId)
+                            return (
+                                <span
+                                    title={trustedItem
+                                        ? `Менеджер в чате сказал что-то, что расходится с подтверждённым правилом «${trustedItem.title}». В runtime AI это не использует — нужно ручное решение администратора.`
+                                        : 'Менеджер в чате сказал что-то, что расходится с подтверждённым правилом компании. В runtime AI это не использует — нужно ручное решение администратора.'}
+                                    className="text-[10px] text-red-600 cursor-help"
+                                >
+                                    ⛔ противоречит правилу
+                                </span>
+                            )
+                        })()}
+                        {/* PR6: trustedGuard пометил этот candidate как
+                            подтверждение verified/legacy правила. */}
+                        {item.tags.some(t => t.startsWith('matches_trusted:')) && (
+                            <span
+                                title="Менеджеры в чатах подтверждают это правило — оно совпадает с подтверждённым фактом. Можно усилить."
+                                className="text-[10px] text-green-700 cursor-help"
+                            >
+                                ✓ подтверждает правило
+                            </span>
+                        )}
                         {item.status === 'superseded' && (() => {
                             const successor = item.supersededByItemId
                                 ? knowledgeItems.find(k => k.id === item.supersededByItemId)
