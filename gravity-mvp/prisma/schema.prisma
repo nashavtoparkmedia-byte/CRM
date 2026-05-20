@@ -1169,12 +1169,62 @@ model AiKnowledgeUsageLog {
   rerankScore    Float?
   /// true если item реально попал в финальный prompt генератора.
   usedInReply    Boolean             @default(false)
+  /// PR3: исход policy для этого item'а:
+  /// 'used' | 'filtered_archived' | 'filtered_superseded' |
+  /// 'filtered_draft' | 'filtered_low_confidence' | 'filtered_conflict' |
+  /// 'filtered_requires_human' | 'filtered_safety' | 'filtered_escalation' |
+  /// 'filtered_no_knowledge'. Null для legacy записей.
+  policyDecision String?
+  /// PR3: запись в shadow mode (НЕ дошло до клиента).
+  shadowMode     Boolean             @default(false)
+  /// PR3: причина эскалации (если policy скипнул item / весь retrieval).
+  escalationReason String?
   usedAt         DateTime            @default(now())
   item           AiKnowledgeItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@index([itemId, usedAt(sort: Desc)])
   @@index([decisionLogId])
   @@index([usedAt(sort: Desc)])
+  @@index([shadowMode, usedAt(sort: Desc)])
+}
+
+/// PR3 retrieval policy — singleton настройки безопасности и порогов
+/// для answer-time pipeline. Mirror env flags (AI_KNOWLEDGE_SHADOW_MODE /
+/// AI_KNOWLEDGE_RUNTIME_ENABLED) сохраняется здесь для UI visibility,
+/// но source-of-truth остаётся env — контролируется деплоем, не UI
+/// (защита от случайного flip).
+model AiRetrievalPolicy {
+  id                        String   @id @default("singleton")
+  /// Минимальная уверенность item'а для авто-ответа.
+  minConfidenceForReply     Float    @default(0.7)
+  /// Sensitive items (тарифы/проценты/деньги) — жёстче порог.
+  sensitiveConfidenceMargin Float    @default(0.85)
+  /// Минимальное число sources для авто-ответа. Verified items
+  /// проходят даже с 1 (manual create или strong-signal extraction).
+  minSourceCountForReply    Int      @default(1)
+  /// Бонус к score за isVerified=true.
+  verifiedScoreBoost        Float    @default(0.2)
+  /// Scope filters.
+  excludeArchived           Boolean  @default(true)
+  excludeSuperseded         Boolean  @default(true)
+  excludeDraft              Boolean  @default(true)
+  /// Эскалировать при unresolved conflict.
+  conflictEscalates         Boolean  @default(true)
+  /// Под будущее.
+  maxStaleDays              Int?
+  /// LLM rerank можно отключить (deterministic-only) для smoke.
+  rerankEnabled             Boolean  @default(true)
+  rerankTopN                Int      @default(5)
+  prefilterTopN             Int      @default(20)
+  /// Mirror env flags для UI visibility. Runtime берёт из env.
+  shadowMode                Boolean  @default(true)
+  runtimeEnabled            Boolean  @default(false)
+  /// Версия policy + retrieval-pipeline. Bump при содержательных
+  /// изменениях retrieval-prompt'а или decision tree.
+  policyVersion             String   @default("v1")
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  updatedBy                 String?
 }
 
 /// PR2.5 governance: lightweight audit trail для изменений Knowledge
@@ -1251,12 +1301,25 @@ model AiDecisionLog {
   reviewedByOperator   Boolean  @default(false)
   /// "good" | "bad" | "fixed"
   operatorVerdict      String?
+  /// PR3 retrieval metadata. Все nullable для backward-compat.
+  /// 'legacy' | 'shadow' | 'runtime' — какой layer формировал ответ.
+  retrievalMode        String?
+  /// 'answer' | 'escalate' | 'no_knowledge' | 'fallback_kb'
+  retrievalDecision    String?
+  /// 'conflict' | 'requires_human' | 'low_confidence' | 'no_relevant' |
+  /// 'only_drafts' | 'ambiguous' | 'safety_block'
+  escalationReason     String?
+  /// Snapshot версий promptVersion + policyVersion + retrieval-model.
+  knowledgeRuntimeVersion String?
+  /// Shadow trace summary: что бы retriever сделал. Для UI compare.
+  shadowRetrievalSummary  Json?
   createdAt            DateTime @default(now())
 
   @@index([createdAt(sort: Desc)])
   @@index([channel])
   @@index([detectedIntent])
   @@index([decision])
+  @@index([retrievalMode, createdAt(sort: Desc)])
 }
 
 /// Задания на импорт истории из мессенджеров
