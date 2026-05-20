@@ -21,6 +21,9 @@ import {
     listKnowledgeSections, listItemsBySection, listExtractionJobs,
     startKnowledgeExtraction, getExtractionJob, saveExtractionQualityTier,
     getKnowledgeStats as getKnowledgeStatsAction,
+    editKnowledgeItem, archiveKnowledgeItem, restoreKnowledgeItem,
+    verifyKnowledgeItem, supersedeKnowledgeItem, resolveConflict,
+    createManualKnowledgeItem, getKnowledgeAuditLog,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
     type ExtractionScope,
@@ -157,10 +160,23 @@ function Hint({ text }: { text: string }) {
 const CHANNEL_LABELS: Record<string, string> = { max: 'MAX', telegram: 'TG', whatsapp: 'WA' }
 
 // AI Knowledge Core: маппинг iconKey → lucide-компонент. Неизвестный/null → BookOpen.
-// Имена соответствуют scripts/seed_knowledge_sections.js.
 const SECTION_ICONS: Record<string, typeof BookOpen> = {
     Wallet, CheckCircle2, FileText, PiggyBank, Clock, Banknote,
     MessageCircle, AlertTriangle, CheckSquare, Ban, BookOpen,
+}
+
+// PR2.5 audit action labels для UI "История".
+const ACTION_LABEL: Record<string, string> = {
+    created:           'Создано экстрактором',
+    manual_created:    'Создано вручную',
+    edited:            'Отредактировано',
+    archived:          'В архив',
+    restored:          'Восстановлено',
+    verified:          'Подтверждено',
+    unverified:        'Подтверждение снято',
+    superseded:        'Заменено новым знанием',
+    conflict_resolved: 'Конфликт разрешён',
+    source_added:      'Добавлен источник',
 }
 
 // Однострочные подсказки к счётчикам импорта. Старый StatHint был портянкой
@@ -332,6 +348,167 @@ export default function AiControlCenterClient({
         }, 2000)
         return () => clearInterval(interval)
     }, [activeExtractionJob, selectedSectionId, knowledgeSubtab])
+
+    // ─── Governance (PR2.5) ──────────────────────────────────────
+    const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null)
+    const [editForm, setEditForm] = useState({
+        title: '', canonicalStatement: '', tagsCsv: '',
+        safetyLevel: 'normal' as 'normal' | 'sensitive' | 'requires_human',
+    })
+    const [editTab, setEditTab] = useState<'fields' | 'history'>('fields')
+    const [editSaving, setEditSaving] = useState(false)
+    interface AuditEntry {
+        id: string
+        action: string
+        actor: string | null
+        createdAt: string
+        metadata: Record<string, unknown> | null
+    }
+    const [auditEntries, setAuditEntries] = useState<AuditEntry[]>([])
+
+    const [manualCreateOpen, setManualCreateOpen] = useState(false)
+    const [manualForm, setManualForm] = useState({
+        title: '', canonicalStatement: '', tagsCsv: '',
+        safetyLevel: 'normal' as 'normal' | 'sensitive' | 'requires_human',
+    })
+    const [manualSaving, setManualSaving] = useState(false)
+
+    const [supersedeFor, setSupersedeFor] = useState<KnowledgeItem | null>(null)
+    const [conflictFor, setConflictFor] = useState<KnowledgeItem | null>(null)
+    const [conflictMembers, setConflictMembers] = useState<KnowledgeItem[]>([])
+
+    async function refreshCurrentSection() {
+        if (!selectedSectionId) return
+        const arr = await listItemsBySection(selectedSectionId, {
+            includeArchived: knowledgeSubtab === 'archive',
+        })
+        setKnowledgeItems(arr as KnowledgeItem[])
+        const stats = await getKnowledgeStatsAction()
+        setKnowledgeStats(stats as KnowledgeStats)
+        const secs = await listKnowledgeSections()
+        setSections(secs as KnowledgeSection[])
+    }
+
+    function openEditFor(item: KnowledgeItem) {
+        setEditingItem(item)
+        setEditForm({
+            title: item.title,
+            canonicalStatement: item.canonicalStatement,
+            tagsCsv: item.tags.filter(t => !t.startsWith('type:')).join(', '),
+            safetyLevel: item.safetyLevel,
+        })
+        setEditTab('fields')
+        setAuditEntries([])
+    }
+
+    async function loadAuditHistory(itemId: string) {
+        try {
+            const arr = await getKnowledgeAuditLog(itemId, 50)
+            setAuditEntries(arr as unknown as AuditEntry[])
+        } catch {
+            setAuditEntries([])
+        }
+    }
+
+    async function handleSaveEdit() {
+        if (!editingItem) return
+        setEditSaving(true)
+        try {
+            const tags = editForm.tagsCsv
+                .split(',').map(s => s.trim()).filter(Boolean)
+                .concat(editingItem.tags.filter(t => t.startsWith('type:')))
+            await editKnowledgeItem(editingItem.id, {
+                title:              editForm.title,
+                canonicalStatement: editForm.canonicalStatement,
+                tags,
+                safetyLevel:        editForm.safetyLevel,
+            })
+            setEditingItem(null)
+            await refreshCurrentSection()
+            showToast('Сохранено')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        } finally {
+            setEditSaving(false)
+        }
+    }
+
+    async function handleArchive(item: KnowledgeItem) {
+        try {
+            await archiveKnowledgeItem(item.id)
+            await refreshCurrentSection()
+            showToast('В архив')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        }
+    }
+    async function handleRestore(item: KnowledgeItem) {
+        try {
+            await restoreKnowledgeItem(item.id)
+            await refreshCurrentSection()
+            showToast('Восстановлено')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        }
+    }
+    async function handleVerify(item: KnowledgeItem, verified: boolean) {
+        try {
+            await verifyKnowledgeItem(item.id, verified)
+            await refreshCurrentSection()
+            showToast(verified ? 'Подтверждено' : 'Подтверждение снято')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        }
+    }
+    async function handleSupersede(oldItem: KnowledgeItem, newItemId: string) {
+        try {
+            await supersedeKnowledgeItem(oldItem.id, newItemId)
+            setSupersedeFor(null)
+            await refreshCurrentSection()
+            showToast('Знание заменено новым')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        }
+    }
+    async function handleResolveConflict(itemId: string, action: 'keep_this_archive_others' | 'unmark_all') {
+        try {
+            await resolveConflict(itemId, action)
+            setConflictFor(null)
+            await refreshCurrentSection()
+            showToast(action === 'unmark_all' ? 'Конфликт снят' : 'Конфликт разрешён')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        }
+    }
+    async function openConflictResolver(item: KnowledgeItem) {
+        setConflictFor(item)
+        if (!item.conflictGroupId) { setConflictMembers([]); return }
+        const arr = await listItemsBySection(item.sectionId, { includeArchived: true })
+        const members = (arr as KnowledgeItem[]).filter(i => i.conflictGroupId === item.conflictGroupId)
+        setConflictMembers(members)
+    }
+    async function handleCreateManual() {
+        if (!selectedSectionId) return
+        setManualSaving(true)
+        try {
+            const tags = manualForm.tagsCsv.split(',').map(s => s.trim()).filter(Boolean)
+            await createManualKnowledgeItem({
+                sectionId:          selectedSectionId,
+                title:              manualForm.title,
+                canonicalStatement: manualForm.canonicalStatement,
+                tags,
+                safetyLevel:        manualForm.safetyLevel,
+            })
+            setManualCreateOpen(false)
+            setManualForm({ title: '', canonicalStatement: '', tagsCsv: '', safetyLevel: 'normal' })
+            await refreshCurrentSection()
+            showToast('Знание добавлено')
+        } catch (e) {
+            showToast('Ошибка: ' + (e instanceof Error ? e.message : 'неизвестная'))
+        } finally {
+            setManualSaving(false)
+        }
+    }
 
     async function handleStartExtraction() {
         setExtractionStarting(true)
@@ -1601,14 +1778,16 @@ export default function AiControlCenterClient({
         const confidenceColor =
             item.confidence >= 0.8 ? 'text-green-600' :
             item.confidence >= 0.5 ? 'text-gray-500' : 'text-amber-600'
+        const isArchived = item.status === 'archived' || item.status === 'superseded' || !item.isActive
         const displayTags = item.tags.filter(t => !t.startsWith('type:'))
         return (
-            <div className={`py-3.5 ${!item.isActive ? 'opacity-60' : ''}`}>
+            <div className={`py-3.5 flex items-start gap-3 group ${!item.isActive ? 'opacity-60' : ''}`}>
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <span className="text-[13px] font-semibold text-[#111] truncate">{item.title}</span>
                         {item.isVerified && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-green-700">
+                            <span title={item.verifiedAt ? `Подтверждено ${new Date(item.verifiedAt).toLocaleDateString('ru')}` : 'Подтверждено'}
+                                  className="inline-flex items-center gap-0.5 text-[10px] text-green-700">
                                 <CheckCircle2 size={11} /> подтверждено
                             </span>
                         )}
@@ -1622,13 +1801,21 @@ export default function AiControlCenterClient({
                             <span className="text-[10px] text-red-600">только менеджер</span>
                         )}
                         {item.conflictGroupId && (
-                            <span className="text-[10px] text-amber-600">⚠ конфликт</span>
+                            <button
+                                onClick={() => canEdit && openConflictResolver(item)}
+                                disabled={!canEdit}
+                                className="text-[10px] text-amber-600 hover:underline disabled:no-underline disabled:cursor-default"
+                                title={canEdit ? 'Открыть конфликт' : undefined}
+                            >
+                                ⚠ конфликт
+                            </button>
                         )}
                         {item.status === 'superseded' && (
                             <span className="text-[10px] text-gray-400">заменено</span>
                         )}
                         {item.status === 'draft' && (
-                            <span className="text-[10px] text-blue-500">черновик</span>
+                            <span title="Не прошло порог уверенности — ждёт ручной проверки"
+                                  className="text-[10px] text-blue-500">черновик</span>
                         )}
                     </div>
                     <p className="text-[12px] text-gray-600 line-clamp-2 leading-[1.5]">
@@ -1651,6 +1838,37 @@ export default function AiControlCenterClient({
                         )}
                     </div>
                 </div>
+                {canEdit && (
+                    <div className="shrink-0 flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openEditFor(item)} title="Редактировать"
+                            className="h-7 w-7 inline-flex items-center justify-center text-gray-400 hover:text-[#3390EC] hover:bg-[#F0F4FA] rounded-md">
+                            <Save size={13} />
+                        </button>
+                        {item.isActive && (
+                            <button onClick={() => handleVerify(item, !item.isVerified)}
+                                title={item.isVerified ? 'Снять подтверждение' : 'Подтвердить'}
+                                className={`h-7 w-7 inline-flex items-center justify-center rounded-md ${
+                                    item.isVerified
+                                        ? 'text-green-600 hover:bg-green-50'
+                                        : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                                }`}>
+                                <CheckCircle2 size={13} />
+                            </button>
+                        )}
+                        {isArchived ? (
+                            <button onClick={() => handleRestore(item)} title="Восстановить из архива"
+                                disabled={item.status === 'superseded'}
+                                className="h-7 w-7 inline-flex items-center justify-center text-gray-400 hover:text-[#3390EC] hover:bg-[#F0F4FA] rounded-md disabled:opacity-40 disabled:cursor-not-allowed">
+                                <RefreshCw size={13} />
+                            </button>
+                        ) : (
+                            <button onClick={() => handleArchive(item)} title="В архив"
+                                className="h-7 w-7 inline-flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md">
+                                <Trash2 size={13} />
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         )
     }
@@ -1856,10 +2074,23 @@ export default function AiControlCenterClient({
                                 <div className="text-[12px] text-gray-400 italic">Выберите раздел слева.</div>
                             ) : (
                                 <>
-                                    <div className="mb-3">
-                                        <h3 className="text-[15px] font-semibold text-[#111]">{selectedSection.title}</h3>
-                                        {selectedSection.description && (
-                                            <p className="text-[12px] text-gray-500 mt-0.5">{selectedSection.description}</p>
+                                    <div className="mb-3 flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-[15px] font-semibold text-[#111]">{selectedSection.title}</h3>
+                                            {selectedSection.description && (
+                                                <p className="text-[12px] text-gray-500 mt-0.5">{selectedSection.description}</p>
+                                            )}
+                                        </div>
+                                        {canEdit && knowledgeSubtab === 'core' && (
+                                            <button
+                                                onClick={() => {
+                                                    setManualForm({ title: '', canonicalStatement: '', tagsCsv: '', safetyLevel: 'normal' })
+                                                    setManualCreateOpen(true)
+                                                }}
+                                                className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg border border-[#E0E0E0] bg-white hover:border-[#3390EC] hover:text-[#3390EC] text-[11px] font-medium text-gray-600 transition-colors shrink-0"
+                                            >
+                                                <Plus size={11} /> Добавить вручную
+                                            </button>
                                         )}
                                     </div>
                                     {knowledgeItemsLoading ? (
@@ -1892,6 +2123,237 @@ export default function AiControlCenterClient({
                     </div>
                 )}
             </div>
+            {/* PR2.5 Edit / History modal */}
+            {editingItem && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                     onClick={() => !editSaving && setEditingItem(null)}>
+                    <div onClick={e => e.stopPropagation()}
+                         className="bg-white rounded-xl shadow-xl w-[520px] max-w-[94vw] max-h-[88vh] flex flex-col">
+                        <div className="px-6 pt-5 pb-3">
+                            <h2 className="text-[17px] font-semibold text-[#111]">Знание</h2>
+                            <p className="text-[11px] text-gray-400 mt-0.5">
+                                {editingItem.isVerified ? 'подтверждено · ' : ''}
+                                {editingItem.sourceCount === 0
+                                    ? 'создано вручную'
+                                    : `${editingItem.sourceCount} ${plural(editingItem.sourceCount,'источник','источника','источников')}`}
+                            </p>
+                        </div>
+                        <div className="flex gap-1 px-6 border-b border-[#F0F0F0]">
+                            {(['fields','history'] as const).map(k => (
+                                <button key={k}
+                                    onClick={() => {
+                                        setEditTab(k)
+                                        if (k === 'history' && editingItem) loadAuditHistory(editingItem.id)
+                                    }}
+                                    className={`px-3 h-[32px] text-[12px] font-medium -mb-px border-b transition-colors ${
+                                        editTab === k
+                                            ? 'border-[#3390EC] text-[#3390EC]'
+                                            : 'border-transparent text-gray-500 hover:text-[#111]'
+                                    }`}>
+                                    {k === 'fields' ? 'Поля' : 'История'}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                            {editTab === 'fields' ? (
+                                <div className="space-y-3">
+                                    <div>
+                                        <label className="text-[11px] text-gray-500 block mb-1">Заголовок</label>
+                                        <input value={editForm.title}
+                                            onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                                            className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] text-gray-500 block mb-1">Формулировка</label>
+                                        <textarea rows={4} value={editForm.canonicalStatement}
+                                            onChange={e => setEditForm(f => ({ ...f, canonicalStatement: e.target.value }))}
+                                            className="w-full border border-[#E0E0E0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#3390EC] resize-none leading-relaxed" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[11px] text-gray-500 mb-1 block">Теги (через запятую)</label>
+                                            <input value={editForm.tagsCsv}
+                                                onChange={e => setEditForm(f => ({ ...f, tagsCsv: e.target.value }))}
+                                                placeholder="комиссия, тариф"
+                                                className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
+                                                Категория <Hint text="«Чувствительное» — финансы. «Только менеджер» — индивидуальные условия, AI всегда эскалирует." />
+                                            </label>
+                                            <select value={editForm.safetyLevel}
+                                                onChange={e => setEditForm(f => ({ ...f, safetyLevel: e.target.value as typeof f.safetyLevel }))}
+                                                className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC] bg-white">
+                                                <option value="normal">обычное</option>
+                                                <option value="sensitive">чувствительное</option>
+                                                <option value="requires_human">только менеджер</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    {editingItem.status === 'active' && (
+                                        <button onClick={() => setSupersedeFor(editingItem)}
+                                            className="text-[12px] text-[#3390EC] hover:underline inline-flex items-center gap-1">
+                                            Заменить новым знанием →
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                auditEntries.length === 0 ? (
+                                    <div className="text-center text-[12px] text-gray-400 py-8">История пока пуста.</div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {auditEntries.map(a => (
+                                            <div key={a.id} className="border-l-2 border-[#E8E8E8] pl-3 py-1">
+                                                <div className="text-[12px] text-[#111]">
+                                                    <strong className="font-semibold">{ACTION_LABEL[a.action] ?? a.action}</strong>
+                                                    {a.actor && <span className="text-gray-400"> · {a.actor}</span>}
+                                                </div>
+                                                <div className="text-[11px] text-gray-400">{new Date(a.createdAt).toLocaleString('ru')}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-[#F0F0F0]">
+                            <button onClick={() => setEditingItem(null)} disabled={editSaving}
+                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md transition-colors disabled:opacity-50">
+                                Закрыть
+                            </button>
+                            {editTab === 'fields' && (
+                                <button onClick={handleSaveEdit} disabled={editSaving}
+                                    className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50">
+                                    {editSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                                    Сохранить
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PR2.5 Manual create modal */}
+            {manualCreateOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                     onClick={() => !manualSaving && setManualCreateOpen(false)}>
+                    <div onClick={e => e.stopPropagation()}
+                         className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-w-[94vw] space-y-3">
+                        <div>
+                            <h2 className="text-[17px] font-semibold text-[#111]">Добавить знание вручную</h2>
+                            <p className="text-[12px] text-gray-500 mt-1">
+                                Будет добавлено в раздел «{sections.find(s => s.id === selectedSectionId)?.title}»
+                                как подтверждённое знание.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-gray-500 block mb-1">Заголовок *</label>
+                            <input value={manualForm.title}
+                                onChange={e => setManualForm(f => ({ ...f, title: e.target.value }))}
+                                placeholder="Минимальный возраст водителя"
+                                className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]" />
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-gray-500 block mb-1">Формулировка *</label>
+                            <textarea rows={3} value={manualForm.canonicalStatement}
+                                onChange={e => setManualForm(f => ({ ...f, canonicalStatement: e.target.value }))}
+                                placeholder="Минимальный возраст водителя — 21 год."
+                                className="w-full border border-[#E0E0E0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#3390EC] resize-none leading-relaxed" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[11px] text-gray-500 block mb-1">Теги</label>
+                                <input value={manualForm.tagsCsv}
+                                    onChange={e => setManualForm(f => ({ ...f, tagsCsv: e.target.value }))}
+                                    placeholder="возраст, требования"
+                                    className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]" />
+                            </div>
+                            <div>
+                                <label className="text-[11px] text-gray-500 block mb-1">Категория</label>
+                                <select value={manualForm.safetyLevel}
+                                    onChange={e => setManualForm(f => ({ ...f, safetyLevel: e.target.value as typeof f.safetyLevel }))}
+                                    className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC] bg-white">
+                                    <option value="normal">обычное</option>
+                                    <option value="sensitive">чувствительное</option>
+                                    <option value="requires_human">только менеджер</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button onClick={() => setManualCreateOpen(false)} disabled={manualSaving}
+                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md disabled:opacity-50">
+                                Отмена
+                            </button>
+                            <button onClick={handleCreateManual}
+                                disabled={manualSaving || !manualForm.title.trim() || !manualForm.canonicalStatement.trim()}
+                                className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50">
+                                {manualSaving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                                Создать
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PR2.5 Conflict resolver modal */}
+            {conflictFor && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                     onClick={() => setConflictFor(null)}>
+                    <div onClick={e => e.stopPropagation()}
+                         className="bg-white rounded-xl shadow-xl p-6 w-[540px] max-w-[94vw] space-y-3 max-h-[80vh] overflow-y-auto">
+                        <div>
+                            <h2 className="text-[17px] font-semibold text-[#111]">Конфликт знаний</h2>
+                            <p className="text-[12px] text-gray-500 mt-1">
+                                AI извлёк противоречивые формулировки. Выберите, какое
+                                оставить, или снимите конфликт, если оба верны.
+                            </p>
+                        </div>
+                        <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
+                            {conflictMembers.map(m => (
+                                <div key={m.id} className="py-3 flex items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-[13px] font-semibold text-[#111]">
+                                            {m.title}
+                                            {!m.isActive && <span className="ml-2 text-[10px] text-gray-400">в архиве</span>}
+                                            {m.id === conflictFor.id && <span className="ml-2 text-[10px] text-[#3390EC]">(этот)</span>}
+                                        </div>
+                                        <p className="text-[12px] text-gray-600 mt-0.5">{m.canonicalStatement}</p>
+                                        <div className="text-[10px] text-gray-400 mt-0.5">
+                                            {m.sourceCount} {plural(m.sourceCount,'диалог','диалога','диалогов')} ·
+                                            уверенность {(m.confidence*100|0)}%
+                                        </div>
+                                    </div>
+                                    {m.isActive && (
+                                        <button onClick={() => handleResolveConflict(m.id, 'keep_this_archive_others')}
+                                            className="h-7 px-2.5 text-[11px] text-[#3390EC] hover:bg-[#F0F4FA] rounded-md font-medium shrink-0">
+                                            Оставить это
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2">
+                            <button onClick={() => handleResolveConflict(conflictFor.id, 'unmark_all')}
+                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md">
+                                Снять конфликт без действий
+                            </button>
+                            <button onClick={() => setConflictFor(null)}
+                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md">
+                                Закрыть
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PR2.5 Supersede picker modal */}
+            {supersedeFor && (
+                <SupersedePickerModal
+                    oldItem={supersedeFor}
+                    onClose={() => setSupersedeFor(null)}
+                    onPick={(newId) => handleSupersede(supersedeFor, newId)}
+                />
+            )}
+
             {/* Extraction modal */}
             {extractionModalOpen && (
                 <div
@@ -2195,6 +2657,98 @@ export default function AiControlCenterClient({
                         {tab === 'log'       && <LogTab />}
                     </>
                 )}
+            </div>
+        </div>
+    )
+}
+
+// ─── SupersedePickerModal — выбор замены для temporal supersession ─
+//
+// Top-level компонент (а не closure внутри AiControlCenterClient),
+// потому что у него собственный useEffect загрузки items. Принимает
+// oldItem и callbacks. Загружает items той же секции, фильтрует
+// superseded/archived/себя; на выбранном вызывает onPick.
+
+function SupersedePickerModal({
+    oldItem, onClose, onPick,
+}: {
+    oldItem: KnowledgeItem
+    onClose: () => void
+    onPick: (newItemId: string) => void
+}) {
+    const [items, setItems] = useState<KnowledgeItem[]>([])
+    const [loading, setLoading] = useState(true)
+    const [search, setSearch] = useState('')
+
+    useEffect(() => {
+        let cancelled = false
+        setLoading(true)
+        listItemsBySection(oldItem.sectionId).then(arr => {
+            if (cancelled) return
+            const filtered = (arr as KnowledgeItem[]).filter(i =>
+                i.id !== oldItem.id &&
+                i.status !== 'superseded' &&
+                i.isActive
+            )
+            setItems(filtered)
+        }).finally(() => { if (!cancelled) setLoading(false) })
+        return () => { cancelled = true }
+    }, [oldItem])
+
+    const filteredItems = search.trim()
+        ? items.filter(i =>
+            i.title.toLowerCase().includes(search.toLowerCase()) ||
+            i.canonicalStatement.toLowerCase().includes(search.toLowerCase())
+        )
+        : items
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+            <div onClick={e => e.stopPropagation()}
+                 className="bg-white rounded-xl shadow-xl p-6 w-[540px] max-w-[94vw] max-h-[80vh] flex flex-col">
+                <div>
+                    <h2 className="text-[17px] font-semibold text-[#111]">Заменить новым знанием</h2>
+                    <p className="text-[12px] text-gray-500 mt-1">
+                        Старое знание уйдёт в архив со ссылкой «заменено». Это
+                        не конфликт — это обновление правила во времени.
+                    </p>
+                </div>
+                <div className="my-3 px-3 py-2 border-l-2 border-[#E8E8E8]">
+                    <div className="text-[12px] font-semibold text-[#111]">{oldItem.title}</div>
+                    <p className="text-[11px] text-gray-500 line-clamp-2">{oldItem.canonicalStatement}</p>
+                </div>
+                <input
+                    placeholder="Найти знание-замену..."
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]"
+                />
+                <div className="flex-1 overflow-y-auto mt-3 -mx-2">
+                    {loading ? (
+                        <div className="text-center text-[12px] text-gray-400 py-6">Загружаем…</div>
+                    ) : filteredItems.length === 0 ? (
+                        <div className="text-center text-[12px] text-gray-400 py-6">
+                            В этом разделе нет других active-знаний.
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-[#F0F0F0]">
+                            {filteredItems.map(i => (
+                                <button key={i.id}
+                                    onClick={() => onPick(i.id)}
+                                    className="w-full text-left px-3 py-2 hover:bg-[#F8F9FA] transition-colors">
+                                    <div className="text-[13px] font-semibold text-[#111]">{i.title}</div>
+                                    <p className="text-[11px] text-gray-500 line-clamp-2">{i.canonicalStatement}</p>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <div className="flex justify-end pt-3">
+                    <button onClick={onClose}
+                        className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md">
+                        Отмена
+                    </button>
+                </div>
             </div>
         </div>
     )
