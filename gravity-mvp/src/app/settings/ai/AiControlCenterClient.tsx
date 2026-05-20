@@ -1381,8 +1381,34 @@ export default function AiControlCenterClient({
         setTestStatus('testing')
         const result = await testAiConnection(config.provider, apiKey, config.classificationModel)
         if (result.ok) {
-            setTestStatus('ok')
-            setConfig(c => ({ ...c, connectionStatus: 'ok', lastConnectionCheckAt: new Date().toISOString() }))
+            // PR5 UX fix: раньше «Проверить» сохраняла только connectionStatus,
+            // а сам apiKeyEncrypted оставался пустым в БД до клика «Сохранить».
+            // Это создавало ловушку: зелёная галочка «ключ активен», но
+            // «Собрать ядро» disabled с "API ключ не настроен". Теперь при
+            // успешной проверке сразу персистим ключ — отдельный клик
+            // «Сохранить» становится не обязательным.
+            try {
+                await saveAiConfig({
+                    provider:            config.provider,
+                    apiKeyEncrypted:     apiKey,
+                    classificationModel: config.classificationModel,
+                    responseModel:       config.responseModel,
+                    connectionStatus:    'ok',
+                    lastConnectionCheckAt: new Date(),
+                })
+                setConfig(c => ({
+                    ...c,
+                    apiKeyEncrypted:      apiKey,
+                    connectionStatus:     'ok',
+                    lastConnectionCheckAt: new Date().toISOString(),
+                }))
+                setTestStatus('ok')
+                showToast('Ключ проверен и сохранён')
+            } catch (e: any) {
+                setTestStatus('ok')
+                setConfig(c => ({ ...c, connectionStatus: 'ok', lastConnectionCheckAt: new Date().toISOString() }))
+                showToast('Ключ проверен, но не удалось сохранить: ' + (e?.message ?? 'unknown'))
+            }
         } else {
             setTestStatus('error')
             setTestError(result.error ?? 'Ошибка')
