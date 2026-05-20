@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Sparkles, Bot, ArrowRight } from 'lucide-react'
+import { Sparkles, Bot, Brain, ArrowRight } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,6 +38,13 @@ const GUIDES: GuideCard[] = [
         title: 'Инструкция по AI в чатах',
         description: 'AI-агент в чатах MAX, Telegram и WhatsApp: настройка провайдера и правил, база знаний, журнал решений.',
         icon: <Bot className="h-5 w-5 text-violet-600" />,
+        iconBg: 'bg-violet-100/60',
+    },
+    {
+        href: '/settings/integrations/ai-knowledge-help',
+        title: 'Инструкция по Ядру знаний',
+        description: 'Память AI: сбор ядра из переписок, verified-факты, конфликты, explainability, shadow/runtime mode.',
+        icon: <Brain className="h-5 w-5 text-violet-600" />,
         iconBg: 'bg-violet-100/60',
     },
 ]
