@@ -23,6 +23,12 @@ import { opsLog } from '@/lib/opsLog'
 import { uploadFile, S3_BUCKET } from '@/lib/storage/minio'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { enqueueTranscribe } from '@/lib/queue/queues'
+// Plain CommonJS helper — pure retry policy for the MinIO upload, no
+// generic abstraction. See `./recording-upload-retry.js` for the
+// hardcoded policy (3 attempts, [2000, 5000] ms backoffs, transient-
+// only). opsLog is dependency-injected to keep that helper require-
+// able by `node --test` without a TS loader.
+import { retryUploadRecording } from './recording-upload-retry'
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 
@@ -112,7 +118,20 @@ export async function processRecording(args: {
         })
 
         const upStart = Date.now()
-        await withTimeout(uploadFile(mp3LocalPath, objectKey, 'audio/mpeg'), UPLOAD_TIMEOUT_MS, 'uploadFile')
+        // Retry-wrap the upload: each attempt keeps the existing
+        // per-attempt timeout (UPLOAD_TIMEOUT_MS), the helper itself
+        // adds bounded retries for transient errors only. WAV stays
+        // on disk on final failure — see the existing «leave WAV in
+        // place» comment in the outer catch.
+        await retryUploadRecording({
+            uploadFn: () => withTimeout(
+                uploadFile(mp3LocalPath, objectKey, 'audio/mpeg'),
+                UPLOAD_TIMEOUT_MS,
+                'uploadFile',
+            ),
+            callId: args.callId,
+            opsLog,
+        })
         opsLog('info', 'recording_stage_uploaded', {
             operation: 'recording', callId: args.callId,
             objectKey, uploadMs: Date.now() - upStart,
