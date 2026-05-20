@@ -92,6 +92,20 @@ class CallSession {
         // computeOutcome to distinguish `dropped_no_input` from
         // `dropped_mid_call` and from `unclear_engaged`.
         this.realUserUtterances = 0
+        // PR #59 — Conversation Intelligence Layer v1. Accumulate events
+        // in memory; ship them all in the finalize payload (one HTTP
+        // call, server bulk-inserts via persistEvents helper). Lower
+        // overhead than per-event POST and reuses the existing finalize
+        // retry channel (PR #52). Trade-off: if the bridge crashes
+        // mid-call, the events are lost — acceptable per architect's
+        // best-effort contract («event layer must NOT break the call»).
+        this.events = []
+        this.eventSeq = 0
+        // Anchor for `delay_ms_since_greeting` payload field on
+        // first_real_user_speech.
+        this.greetingStartedAt = null
+        // Anchor for `time_since_last_real_speech_ms` on silence_strike.
+        this.lastRealSpeechAt = null
         // Debounce timer for "user paused → process turn"
         this.userPauseTimer = null
         this.USER_PAUSE_MS = Number(process.env.USER_PAUSE_MS ?? 1200)
@@ -140,6 +154,24 @@ class CallSession {
         this.playbackCount = 0
     }
 
+    /**
+     * Append one Conversation Intelligence event to the in-memory list.
+     * PR #59 v1: events are accumulated and shipped in the finalize
+     * payload. CRM-side `persistEvents` helper bulk-inserts.
+     *
+     * Pure function. No HTTP, no async, no DB. Cannot fail. Safe to call
+     * from any code path including timer callbacks and error handlers.
+     */
+    _emitEvent(type, payload) {
+        this.eventSeq += 1
+        this.events.push({
+            type,
+            seq: this.eventSeq,
+            occurredAt: new Date().toISOString(),
+            payload: payload ?? null,
+        })
+    }
+
     _clearSilenceTimer() {
         if (this.silenceTimer) {
             clearTimeout(this.silenceTimer)
@@ -161,6 +193,15 @@ class CallSession {
             `[call ${this.callUuid}] silence-strike ${this.silenceStrikes}/${this.MAX_SILENT_STRIKES} ` +
             `after ${this.SILENCE_TIMEOUT_MS}ms`,
         )
+        // PR #59 — emit silence_strike event. Payload distinguishes
+        // strike 1 (recoverable — bot re-prompts) from strike 2 (terminal).
+        this._emitEvent('silence_strike', {
+            strike_n: this.silenceStrikes,
+            time_since_last_real_speech_ms: this.lastRealSpeechAt
+                ? Date.now() - this.lastRealSpeechAt
+                : null,
+            state_at_strike: this.state,
+        })
         if (this.silenceStrikes >= this.MAX_SILENT_STRIKES) {
             // Hand off to the model with a tail-of-silence marker so it
             // can wrap up gracefully (the system prompt knows how to call
@@ -176,8 +217,20 @@ class CallSession {
 
     _setState(s) {
         if (!STATES.includes(s)) throw new Error(`Unknown state: ${s}`)
+        const prev = this.state
         this.state = s
         this.onState(s)
+        // PR #59 — emit greeting_started exactly once, on the FIRST
+        // transition into greeting state. The state machine doesn't
+        // re-enter greeting after leaving, but guard with prev check
+        // to be defensive against future state-machine changes.
+        if (s === 'greeting' && prev !== 'greeting' && this.greetingStartedAt === null) {
+            this.greetingStartedAt = Date.now()
+            this._emitEvent('greeting_started', {
+                scenario_id: this.scenario?.id ?? null,
+                scenario_name: this.scenario?.name ?? null,
+            })
+        }
         // Drive the silence timer off state transitions instead of from
         // every code path — fewer places to forget.
         //   listening → arm: lead has the floor, start the no-input clock.
@@ -281,6 +334,19 @@ class CallSession {
         // dropped_no_input (counter=0) from dropped_mid_call or
         // unclear_engaged (counter>0).
         this.realUserUtterances += 1
+        // PR #59 — emit first_real_user_speech exactly once, on the
+        // 0→1 transition. This is the highest-signal event in v1:
+        // its absence on a finalized call is the pre-greeting-cliff
+        // indicator.
+        if (this.realUserUtterances === 1) {
+            this._emitEvent('first_real_user_speech', {
+                delay_ms_since_greeting: this.greetingStartedAt
+                    ? Date.now() - this.greetingStartedAt
+                    : null,
+                first_phrase_head: trimmed.slice(0, 80),
+            })
+        }
+        this.lastRealSpeechAt = Date.now()
         // Lead actually said something — reset the no-input counter so a
         // single mid-call gap doesn't end up as «strike 2 / abandoned».
         this.silenceStrikes = 0
@@ -472,6 +538,12 @@ class CallSession {
                 // bridge-synthesized silence wake-ups). CRM's
                 // outcome-mapper uses this to distinguish drop categories.
                 realUserUtterances: this.realUserUtterances,
+                // PR #59 — Conversation Intelligence v1 timeline events.
+                // Bulk-inserted by CRM's persistEvents helper. Append-only
+                // by construction (in-memory list never mutated after
+                // emission). Lost on bridge crash — acceptable per
+                // architect's best-effort contract.
+                events: this.events,
             })
         } catch (err) {
             console.error(`[call ${this.callUuid}] onFinalize threw: ${err.message}`)

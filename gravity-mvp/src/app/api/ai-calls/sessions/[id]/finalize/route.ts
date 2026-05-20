@@ -12,6 +12,13 @@ import {
     normalizeQualificationScore,
 } from '@/lib/ai-call/outcome-mapper'
 import { validateLeadData } from '@/lib/ai-call/scenario-schema'
+// PR #59: Conversation Intelligence v1. Best-effort event persistence —
+// helper NEVER throws to the caller; insert failures are logged and
+// the finalize response still returns success.
+import { _createPersistEvents } from '@/lib/ai-call/event-emitter'
+
+// Bind once at module init. Same DI pattern as other AI-call helpers.
+const persistEvents = _createPersistEvents(prisma as any)
 
 /**
  * Race a promise against a deadline. If the inner promise doesn't settle
@@ -60,6 +67,11 @@ export const dynamic = 'force-dynamic'
  *      user turns ONLY (excludes bridge-synthesized silence wake-ups).
  *      Drives outcome classification. Older bridges that don't send this
  *      field fall back to counting user-role items in `transcript`.
+ *    events?: Array<{ type, seq, occurredAt?, payload? }>
+ *                                              — PR #59: Conversation
+ *      Intelligence v1 timeline. Bridge accumulates in-memory, ships in
+ *      finalize body. CRM bulk-inserts via best-effort helper — insert
+ *      failure does NOT fail the finalize.
  *  }
  *
  * Side-effects:
@@ -235,6 +247,74 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         structuredLeadDataFieldsCount: Object.keys(leadDataStructured).length,
         validationIssuesCount: validationIssues.length,
         taskId: createdTask?.id,
+    })
+
+    // ── PR #59: Conversation Intelligence v1 — persist timeline events ─
+    //
+    // Architectural contract (architect-mandated):
+    //   - append-only insert
+    //   - best-effort emission
+    //   - no transaction coupling — Call.update committed FIRST above
+    //   - event layer must NOT break the call → helper never throws
+    //
+    // We synthesise one CRM-side event (`call_completed`) here with the
+    // canonical outcome already computed, then bulk-insert it together
+    // with the bridge-supplied events. The helper handles validation,
+    // unknown types, and DB failures internally.
+    const bridgeEvents: any[] = Array.isArray(body.events) ? body.events : []
+    // `completed_via` is a small enum that captures HOW the call ended.
+    // Maps the bridge's `reason` + the computed outcome into one of:
+    //   bridge_error              — sessionStatus=failed (STT/LLM/bridge crash)
+    //   llm_transfer_to_manager   — LLM invoked the transfer tool
+    //   llm_end_call              — LLM reached end_call with a verdict
+    //   silence_timeout           — silence-strike 2 ended the call
+    //                               (outcome=dropped_no_input)
+    //   ws_close                  — WS closed without LLM tool — lead hung up
+    const completedVia: string = (() => {
+        if (sessionStatus === 'failed') return 'bridge_error'
+        if (reason === 'transferred') return 'llm_transfer_to_manager'
+        if (reason === 'completed') {
+            // Silence-timeout path: bridge synthesises an end_call(unclear)
+            // and lands here with reason=completed but no real engagement.
+            if (aiOutcome === 'dropped_no_input') return 'silence_timeout'
+            return 'llm_end_call'
+        }
+        return 'ws_close'
+    })()
+    const maxBridgeSeq: number = bridgeEvents.reduce(
+        (m: number, e: any) => (typeof e?.seq === 'number' && e.seq > m ? e.seq : m),
+        0,
+    )
+    const eventsResult = await persistEvents({
+        events: [
+            ...bridgeEvents,
+            {
+                type: 'call_completed',
+                seq: maxBridgeSeq + 1,
+                occurredAt: endedAt.toISOString(),
+                payload: {
+                    outcome: aiOutcome,
+                    hangup_cause: 'NORMAL_CLEARING',
+                    total_ms: durationSec * 1000,
+                    completed_via: completedVia,
+                    validation_issues_count: validationIssues.length,
+                },
+            },
+        ],
+        callId: id,
+        opsLog: ((level: string, event: string, ctx: object) =>
+            opsLog(level as any, event, ctx)) as any,
+    })
+
+    // Single ops-line summary of event persistence. The HTTP response
+    // does NOT expose this — events are an observability sidecar; the
+    // log is the source of truth for operators verifying emission.
+    opsLog('info', 'ai_call_events_persisted', {
+        callId: id,
+        inserted: eventsResult.inserted,
+        skipped: eventsResult.skipped,
+        errored: eventsResult.errored,
+        issues: eventsResult.issues.slice(0, 5),
     })
 
     // Fallback analysis path. The bridge only sends `result` when the LLM
