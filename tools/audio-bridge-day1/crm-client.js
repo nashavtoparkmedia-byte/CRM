@@ -17,11 +17,19 @@
  * gate them by a shared secret (BRIDGE_SHARED_TOKEN — already wired here).
  */
 
-const { retryFinalizeRequest } = require('./retry-helpers')
+const { retryFinalizeRequest, fetchOnce } = require('./retry-helpers')
 
 const CRM_BASE_URL = process.env.CRM_BASE_URL ?? 'http://127.0.0.1:3002'
 const BRIDGE_SHARED_TOKEN = process.env.BRIDGE_SHARED_TOKEN
 const KEYS_CACHE_TTL_MS = Number(process.env.BRIDGE_KEYS_CACHE_TTL_MS ?? 60_000)
+// Per-request timeout for non-finalize bridge → CRM calls (resolve,
+// appendTranscript, postState, fetchKeys). All four are best-effort
+// single-shot operations — no retry, just a bounded wait so a hung
+// CRM can't block the bridge's hot paths (`ensureSessionForCall`,
+// per-utterance transcript push, lifecycle state updates). 5 s is the
+// same per-attempt budget the finalize retry uses; consistent ops
+// behaviour across the bridge → CRM surface.
+const BRIDGE_CRM_REQUEST_TIMEOUT_MS = 5000
 
 // Direct (proxy-free) undici dispatcher for talking to the local CRM. The
 // process-wide globalDispatcher is a ProxyAgent pointing at Xray; if we
@@ -53,9 +61,11 @@ function directInit(init = {}) {
 }
 
 async function resolveCallByUuid(fsUuid) {
-    const res = await fetch(`${CRM_BASE_URL}/api/ai-calls/sessions/by-fs-uuid/${encodeURIComponent(fsUuid)}`, directInit({
-        headers: { ...authHeaders() },
-    }))
+    const res = await fetchOnce(
+        `${CRM_BASE_URL}/api/ai-calls/sessions/by-fs-uuid/${encodeURIComponent(fsUuid)}`,
+        directInit({ headers: { ...authHeaders() } }),
+        BRIDGE_CRM_REQUEST_TIMEOUT_MS,
+    )
     if (!res.ok) {
         const body = await res.text().catch(() => '')
         throw new Error(`CRM resolve failed: HTTP ${res.status} ${body.slice(0, 200)}`)
@@ -65,12 +75,20 @@ async function resolveCallByUuid(fsUuid) {
 
 async function appendTranscript(callId, role, text) {
     try {
-        await fetch(`${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/transcript-item`, directInit({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
-            body: JSON.stringify({ role, text }),
-        }))
+        await fetchOnce(
+            `${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/transcript-item`,
+            directInit({
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ role, text }),
+            }),
+            BRIDGE_CRM_REQUEST_TIMEOUT_MS,
+        )
     } catch (err) {
+        // Soft failure by design — per-utterance transcript-item is
+        // best-effort. AbortError lands here too (treated identical
+        // to network error). No retry, no log spam: just one stderr
+        // line and the call carries on.
         console.error(`[crm] transcript-item failed: ${err.message}`)
     }
 }
@@ -91,12 +109,20 @@ async function appendTranscript(callId, role, text) {
  */
 async function postState(callId, state) {
     try {
-        await fetch(`${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/state`, directInit({
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders() },
-            body: JSON.stringify({ state }),
-        }))
+        await fetchOnce(
+            `${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/state`,
+            directInit({
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
+                body: JSON.stringify({ state }),
+            }),
+            BRIDGE_CRM_REQUEST_TIMEOUT_MS,
+        )
     } catch (err) {
+        // Same shape as appendTranscript: bounded wait, soft failure,
+        // single stderr line. The /state endpoint is idempotent on
+        // the CRM side (PR #51) so a missed POST just leaves the row
+        // at its previous canonical state — not a correctness issue.
         console.error(`[crm] postState ${state} for ${callId} failed: ${err.message}`)
     }
 }
@@ -140,9 +166,11 @@ async function fetchKeys() {
     const now = Date.now()
     if (keysCache && keysCache.expiresAt > now) return keysCache.value
     try {
-        const res = await fetch(`${CRM_BASE_URL}/api/internal/ai-call-keys`, directInit({
-            headers: { ...authHeaders() },
-        }))
+        const res = await fetchOnce(
+            `${CRM_BASE_URL}/api/internal/ai-call-keys`,
+            directInit({ headers: { ...authHeaders() } }),
+            BRIDGE_CRM_REQUEST_TIMEOUT_MS,
+        )
         if (!res.ok) {
             console.error(`[crm] fetchKeys HTTP ${res.status}`)
             // Cache the failure briefly so we don't hammer a misconfigured
@@ -154,6 +182,10 @@ async function fetchKeys() {
         keysCache = { value: data, expiresAt: now + KEYS_CACHE_TTL_MS }
         return data
     } catch (err) {
+        // Same short-TTL failure cache for timeouts (AbortError lands
+        // here) as for HTTP non-2xx, so a hung CRM doesn't make us
+        // hammer it every PCM frame. 5 s TTL means recovery within
+        // one missed cycle once CRM is back.
         console.error(`[crm] fetchKeys error: ${err.message}`)
         keysCache = { value: emptyKeys(), expiresAt: now + 5_000 }
         return keysCache.value
