@@ -901,6 +901,14 @@ model AiCallScenario {
   /// persisted to the `greeting_started` event payload for funnel
   /// attribution. NULL / empty array → legacy LLM-generated greeting.
   greetingVariants  Json?
+  /// Prompt fragments (PR #63). Record mapping slot → { id, version, text,
+  /// hypothesis? } for composable system-prompt assembly. Required slots:
+  /// greeting / qualification_intro / recovery / transfer_framing.
+  /// Optional: objection_soft / closing. NULL or missing required slots →
+  /// legacy monolithic prompt path. See tools/audio-bridge-day1/
+  /// prompt-fragments.js for the composer + src/lib/ai-call/types.ts for
+  /// the typed shape.
+  fragments         Json?
   isActive          Boolean        @default(true)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt

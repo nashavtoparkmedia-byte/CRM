@@ -20,6 +20,7 @@
 
 const runtime = require('./runtime-config')
 const { withProxy } = require('./proxy-fetch')
+const { buildConversationPrompt } = require('./prompt-fragments')
 
 const OPENAI_MODEL = process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
 const OPENAI_TIMEOUT_MS = Number(process.env.OPENAI_TIMEOUT_MS ?? 15000)
@@ -258,10 +259,13 @@ async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIM
 }
 
 /**
- * Build the initial system message for a given scenario row from CRM.
- * Embeds the questions inline so the model has the script in front of it.
+ * Legacy monolithic system-prompt builder. Used directly when a
+ * scenario has no `fragments` configured (PR #63 fallback path).
+ *
+ * Kept as a separate function so prompt-fragments.js can call back
+ * into it via dependency injection without circular-import gymnastics.
  */
-function buildSystemMessage(scenario) {
+function buildLegacySystemMessage(scenario) {
     const questions = (scenario.questions ?? []).map((q, i) => `${i + 1}. ${q.text}`).join('\n')
     const promptParts = [
         scenario.systemPrompt ?? '',
@@ -316,6 +320,22 @@ function buildSystemMessage(scenario) {
     )
 
     return promptParts.join('\n')
+}
+
+/**
+ * Build the initial system message for a given scenario row from CRM.
+ *
+ * PR #63: routes through the prompt-fragments composer. If the
+ * scenario opted into fragments (all 4 required slots valid), the
+ * composer assembles the prompt from named pieces. Otherwise it
+ * falls through to the legacy monolithic builder (byte-identical
+ * behaviour for existing scenarios — no forced migration).
+ */
+function buildSystemMessage(scenario) {
+    return buildConversationPrompt({
+        scenario,
+        legacyBuilder: buildLegacySystemMessage,
+    })
 }
 
 // `enabled` is now a function — the answer depends on runtime config

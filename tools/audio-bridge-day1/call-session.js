@@ -35,6 +35,7 @@ const llm = require('./llm-client')
 const { classifySttGarbage } = require('./stt-garbage')
 const { decideRecoveryAction, isAmbiguousShort } = require('./recovery-policy')
 const { pickGreetingVariant } = require('./greeting-variants')
+const { getFragmentVersions } = require('./prompt-fragments')
 
 /**
  * State transitions:
@@ -310,6 +311,12 @@ class CallSession {
                 // PR #62 — A/B variant attribution. NULL when the scenario
                 // did not opt in (legacy LLM-generated greeting path).
                 variant_id: this.greetingVariant?.id ?? null,
+                // PR #63 — Prompt Fragment Layer attribution. Object map
+                // of slot → "<fragment_id>@<version>" for every fragment
+                // actually used in the composed prompt. NULL when the
+                // scenario stayed on the legacy monolithic prompt path.
+                // Funnel queries join on this for per-fragment A/B.
+                fragment_versions: getFragmentVersions(this.scenario),
             })
         }
         // Drive the silence timer off state transitions instead of from

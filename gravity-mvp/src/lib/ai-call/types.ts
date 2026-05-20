@@ -79,6 +79,43 @@ export interface AiCallScenarioConfig {
      * NULL/undefined or empty array → legacy LLM-generated greeting.
      */
     greetingVariants?: AiCallGreetingVariant[]
+    /**
+     * Prompt fragments (PR #63). Optional record of slot → fragment.
+     * Required slots (all four must be valid for fragments path to
+     * engage): `greeting`, `qualification_intro`, `recovery`,
+     * `transfer_framing`. Optional: `objection_soft`, `closing`.
+     * Missing or partial → legacy monolithic prompt path.
+     */
+    fragments?: AiCallScenarioFragments
+}
+
+/**
+ * One named prompt fragment (PR #63). `id` is short + stable;
+ * `version` is freeform (number or version-tag string) used for
+ * funnel attribution. `text` is the literal prompt span. `hypothesis`
+ * is an optional admin-facing note explaining what the fragment is
+ * testing — never emitted in event payloads, never read by the
+ * composer; documentation only.
+ */
+export interface AiCallPromptFragment {
+    id: string
+    version: number | string
+    text: string
+    hypothesis?: string
+}
+
+/**
+ * Slot → fragment mapping (PR #63). Required slots are typed as such;
+ * optional slots may be omitted. Unknown extra slots are silently
+ * ignored by the bridge composer.
+ */
+export interface AiCallScenarioFragments {
+    greeting:            AiCallPromptFragment
+    qualification_intro: AiCallPromptFragment
+    recovery:            AiCallPromptFragment
+    transfer_framing:    AiCallPromptFragment
+    objection_soft?:     AiCallPromptFragment
+    closing?:            AiCallPromptFragment
 }
 
 /**
