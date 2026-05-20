@@ -31,15 +31,19 @@
 
 'use strict'
 
-// Allowed event types in v1. Future PRs add to this set after the
-// enum migration extends the Postgres type. Keeping this list narrow
-// is intentional — every type added needs a documented payload shape
-// in the design doc.
+// Allowed event types. Every type added needs (a) the enum extended
+// via an ALTER TYPE migration, (b) a documented payload shape in
+// docs/design/conversation-intelligence-layer.md.
+//
+//   v1 (PR #59):  greeting_started / first_real_user_speech /
+//                 silence_strike / call_completed
+//   v2 (PR #60):  + stt_suspicious_pattern
 const ALLOWED_TYPES = Object.freeze(new Set([
     'greeting_started',
     'first_real_user_speech',
     'silence_strike',
     'call_completed',
+    'stt_suspicious_pattern',
 ]))
 
 /**
