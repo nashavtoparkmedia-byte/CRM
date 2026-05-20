@@ -64,10 +64,33 @@ export interface ReadinessCheck {
     detail: string
 }
 
+export interface KnowledgeHealth7d {
+    /** Доля shadow trace где AI Knowledge решил иначе чем actual
+     *  decision (auto_reply vs escalate vs skip). Полезно как сигнал
+     *  "стоит ли уже переключать в runtime". null = недостаточно
+     *  shadow trace для оценки. */
+    shadowRuntimeMismatchPct: number | null
+    /** escalated / decisionsTotal. null если decisionsTotal < 10. */
+    escalationPct:            number | null
+    /** noMatch / decisionsTotal. null если decisionsTotal < 10. */
+    noMatchPct:               number | null
+    /** Из всех usage logs WHERE usedInReply=true — сколько у verified
+     *  items. null если used==0. */
+    verifiedUsagePct:         number | null
+    /** Базовая стат для UI footnote: total decisions over 7d. */
+    decisionsBase:            number
+    /** Total used-in-reply usage logs over 7d. */
+    usageBase:                number
+}
+
 export interface KnowledgeReadinessBundle {
     counts:         KnowledgeReadinessCounts
     lastExtraction: KnowledgeLastExtraction | null
     activity7d:     KnowledgeActivity7d
+    /** PR5.10 — read-only health summary. Отдельно от readiness
+     *  checks: те — gating "готов ли запускать", health — fitness
+     *  "хорошо ли работает уже сейчас". */
+    health7d:       KnowledgeHealth7d
     /** Computed на основе counts+activity. Не gating — UI решает
      *  что показать. */
     checks:         ReadinessCheck[]
@@ -107,9 +130,10 @@ export async function getKnowledgeReadiness(): Promise<KnowledgeReadinessBundle>
     const counts        = await loadCounts()
     const lastExtraction = await loadLastExtraction()
     const activity7d    = await loadActivity7d()
+    const health7d      = await loadHealth7d(activity7d)
     const checks        = computeChecks(counts, lastExtraction, activity7d)
     const overall       = worstStatus(checks.map(c => c.status))
-    return { counts, lastExtraction, activity7d, checks, overall }
+    return { counts, lastExtraction, activity7d, health7d, checks, overall }
 }
 
 // ─── Implementation ──────────────────────────────────────────────
@@ -209,6 +233,85 @@ async function loadActivity7d(): Promise<KnowledgeActivity7d> {
             noMatch:           Number(r.noMatch           ?? 0),
             firstAt:           r.firstAt ? new Date(r.firstAt).toISOString() : null,
             lastAt:            r.lastAt  ? new Date(r.lastAt).toISOString()  : null,
+        }
+    } catch {
+        return empty
+    }
+}
+
+async function loadHealth7d(activity: KnowledgeActivity7d): Promise<KnowledgeHealth7d> {
+    const empty: KnowledgeHealth7d = {
+        shadowRuntimeMismatchPct: null,
+        escalationPct: null,
+        noMatchPct: null,
+        verifiedUsagePct: null,
+        decisionsBase: activity.decisionsTotal,
+        usageBase: 0,
+    }
+    try {
+        // 1. Shadow mismatch: для shadow-mode trace где
+        //    shadowRetrievalSummary->>'decision' отличается от
+        //    actual decision (auto_reply vs escalate vs skip).
+        let shadowMismatchPct: number | null = null
+        if (activity.shadowDecisions >= 10) {
+            const shadowRows = await prisma.$queryRaw<any[]>`
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE "shadowRetrievalSummary" IS NOT NULL
+                        AND (
+                            ("shadowRetrievalSummary"->>'decision' = 'answer' AND decision != 'auto_reply')
+                            OR
+                            ("shadowRetrievalSummary"->>'decision' = 'escalate' AND decision != 'escalate')
+                            OR
+                            ("shadowRetrievalSummary"->>'decision' = 'no_knowledge' AND decision = 'auto_reply')
+                        )
+                    )::int AS mismatched,
+                    COUNT(*) FILTER (
+                        WHERE "shadowRetrievalSummary" IS NOT NULL
+                    )::int AS total
+                FROM "AiDecisionLog"
+                WHERE "retrievalMode" = 'shadow'
+                  AND "createdAt" > NOW() - INTERVAL '7 days'
+            `
+            const r = shadowRows[0] ?? {}
+            const total = Number(r.total ?? 0)
+            if (total > 0) {
+                shadowMismatchPct = Number(r.mismatched ?? 0) / total
+            }
+        }
+
+        // 2. Escalation / no-match — reuse activity counts
+        const escalationPct = activity.decisionsTotal >= 10
+            ? activity.escalated / activity.decisionsTotal
+            : null
+        const noMatchPct = activity.decisionsTotal >= 10
+            ? activity.noMatch / activity.decisionsTotal
+            : null
+
+        // 3. Verified usage %: from AiKnowledgeUsageLog joined with Item
+        const usageRows = await prisma.$queryRaw<any[]>`
+            SELECT
+                COUNT(*) FILTER (WHERE ul."usedInReply" = true)::int AS "usedTotal",
+                COUNT(*) FILTER (
+                    WHERE ul."usedInReply" = true AND ki."isVerified" = true
+                )::int AS "usedVerified"
+            FROM "AiKnowledgeUsageLog" ul
+            LEFT JOIN "AiKnowledgeItem" ki ON ki.id = ul."itemId"
+            WHERE ul."usedAt" > NOW() - INTERVAL '7 days'
+        `
+        const u = usageRows[0] ?? {}
+        const usedTotal = Number(u.usedTotal ?? 0)
+        const verifiedUsagePct = usedTotal > 0
+            ? Number(u.usedVerified ?? 0) / usedTotal
+            : null
+
+        return {
+            shadowRuntimeMismatchPct: shadowMismatchPct,
+            escalationPct,
+            noMatchPct,
+            verifiedUsagePct,
+            decisionsBase: activity.decisionsTotal,
+            usageBase: usedTotal,
         }
     } catch {
         return empty

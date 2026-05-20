@@ -2250,40 +2250,86 @@ export default function AiControlCenterClient({
             readiness.overall === 'ok'   ? { bg: 'bg-green-100', txt: 'text-green-700', label: 'Готов' } :
             readiness.overall === 'warn' ? { bg: 'bg-amber-100', txt: 'text-amber-700', label: 'Нужна доводка' } :
                                             { bg: 'bg-red-100',   txt: 'text-red-700',   label: 'Не готов' }
+
+        const h = readiness.health7d
+        // health row показываем только если есть хоть одно значение
+        const hasHealth = h.escalationPct != null || h.noMatchPct != null
+            || h.verifiedUsagePct != null || h.shadowRuntimeMismatchPct != null
+        const pct = (v: number | null) => v == null ? '—' : `${Math.round(v * 100)}%`
+
         return (
-            <div className="flex items-center gap-3 flex-wrap rounded-md border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2 text-[12px] text-gray-600">
-                <span
-                    title="Сводный статус готовности — наихудший из checklist'а"
-                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${overallCfg.bg} ${overallCfg.txt}`}
-                >
-                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-                    {overallCfg.label}
-                </span>
-                <span><strong className="text-[#111]">{c.activeItems}</strong> активных знаний</span>
-                <span className="text-gray-400">·</span>
-                <span><strong className="text-[#111]">{c.verifiedItems}</strong> подтверждённых</span>
-                {c.draftItems > 0 && (
-                    <>
-                        <span className="text-gray-400">·</span>
-                        <span>{c.draftItems} черновиков</span>
-                    </>
+            <div className="space-y-1.5">
+                <div className="flex items-center gap-3 flex-wrap rounded-md border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2 text-[12px] text-gray-600">
+                    <span
+                        title="Сводный статус готовности — наихудший из checklist'а"
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${overallCfg.bg} ${overallCfg.txt}`}
+                    >
+                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                        {overallCfg.label}
+                    </span>
+                    <span><strong className="text-[#111]">{c.activeItems}</strong> активных знаний</span>
+                    <span className="text-gray-400">·</span>
+                    <span><strong className="text-[#111]">{c.verifiedItems}</strong> подтверждённых</span>
+                    {c.draftItems > 0 && (
+                        <>
+                            <span className="text-gray-400">·</span>
+                            <span>{c.draftItems} черновиков</span>
+                        </>
+                    )}
+                    {c.conflictGroups > 0 && (
+                        <>
+                            <span className="text-gray-400">·</span>
+                            <span className="text-amber-700">{c.conflictGroups} конфликтов</span>
+                        </>
+                    )}
+                    <span className="text-gray-400">·</span>
+                    <span>сбор: {ago}</span>
+                    <RuntimeModePill state={runtimeState} />
+                    <button
+                        type="button"
+                        onClick={() => setRolloutOpen(true)}
+                        className="ml-auto text-[12px] text-[#3390EC] hover:underline"
+                    >
+                        Проверить готовность
+                    </button>
+                </div>
+                {/* PR5.10: health 7d — fitness "хорошо ли работает сейчас".
+                    Отдельная строка, ещё более компактная. Показывается
+                    только если есть данные за 7 дней. */}
+                {hasHealth && (
+                    <div className="flex items-center gap-3 flex-wrap px-3 py-1 text-[11px] text-gray-500">
+                        <span className="uppercase tracking-wide text-[10px] text-gray-400">Здоровье · 7д:</span>
+                        {h.escalationPct != null && (
+                            <span title={`Доля решений где AI передал диалог менеджеру (${h.decisionsBase} за 7 дней)`}>
+                                эскалация <strong className={h.escalationPct > 0.65 ? 'text-red-600' : h.escalationPct > 0.4 ? 'text-amber-600' : 'text-[#111]'}>{pct(h.escalationPct)}</strong>
+                            </span>
+                        )}
+                        {h.noMatchPct != null && (
+                            <>
+                                <span className="text-gray-300">·</span>
+                                <span title={`Решений где retriever не нашёл подходящих знаний (${h.decisionsBase} за 7 дней)`}>
+                                    нет ответа <strong className="text-[#111]">{pct(h.noMatchPct)}</strong>
+                                </span>
+                            </>
+                        )}
+                        {h.verifiedUsagePct != null && (
+                            <>
+                                <span className="text-gray-300">·</span>
+                                <span title={`Доля used-знаний которые подтверждены (${h.usageBase} usage logs за 7 дней)`}>
+                                    из подтверждённых <strong className={h.verifiedUsagePct >= 0.6 ? 'text-green-700' : 'text-[#111]'}>{pct(h.verifiedUsagePct)}</strong>
+                                </span>
+                            </>
+                        )}
+                        {h.shadowRuntimeMismatchPct != null && (
+                            <>
+                                <span className="text-gray-300">·</span>
+                                <span title="Доля shadow trace где Knowledge Core решил иначе чем actual decision. Меньше = ближе к runtime-ready.">
+                                    shadow≠actual <strong className={h.shadowRuntimeMismatchPct > 0.3 ? 'text-amber-600' : 'text-[#111]'}>{pct(h.shadowRuntimeMismatchPct)}</strong>
+                                </span>
+                            </>
+                        )}
+                    </div>
                 )}
-                {c.conflictGroups > 0 && (
-                    <>
-                        <span className="text-gray-400">·</span>
-                        <span className="text-amber-700">{c.conflictGroups} конфликтов</span>
-                    </>
-                )}
-                <span className="text-gray-400">·</span>
-                <span>сбор: {ago}</span>
-                <RuntimeModePill state={runtimeState} />
-                <button
-                    type="button"
-                    onClick={() => setRolloutOpen(true)}
-                    className="ml-auto text-[12px] text-[#3390EC] hover:underline"
-                >
-                    Проверить готовность
-                </button>
             </div>
         )
     }

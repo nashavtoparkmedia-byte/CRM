@@ -1501,6 +1501,7 @@ export type {
     KnowledgeReadinessCounts,
     KnowledgeLastExtraction,
     KnowledgeActivity7d,
+    KnowledgeHealth7d,
     ReadinessCheck,
     ReadinessCheckStatus,
 } from '@/lib/ai/knowledge/readiness'
