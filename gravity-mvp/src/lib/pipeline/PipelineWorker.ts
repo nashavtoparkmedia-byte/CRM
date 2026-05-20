@@ -5,6 +5,8 @@ import { contextBuilder } from './ContextBuilder'
 import { intentClassifier } from './IntentClassifier'
 import { decisionEngine, DecisionResult } from './DecisionEngine'
 import { responseGenerator } from './ResponseGenerator'
+import { RETRIEVAL_PROMPT_VERSION } from '@/lib/ai/knowledge/retrievalPrompt'
+import type { KnowledgeRetrievalResult } from './ContextBuilder'
 
 /**
  * PipelineWorker — обрабатывает входящие сообщения через очередь MessageEventLog.
@@ -88,6 +90,13 @@ export class PipelineWorker {
     let replySent      = false
     let error: string | null = null
 
+    // PR3 retrieval state.
+    let retrievalMode:    string | null = null
+    let retrievalDecision: string | null = null
+    let escalationReason: string | null = null
+    let runtimeVersion:   string | null = null
+    let shadowSummary:    string | null = null
+
     try {
       // Step 2: Classify intent
       classification = await intentClassifier.classify(userMessage, ctx)
@@ -97,8 +106,40 @@ export class PipelineWorker {
       decision = await decisionEngine.decide(classification, ctx)
       console.log(`[Pipeline] Decision="${decision.decision}" (${decision.reason}) msg=${message.id}`)
 
+      // ─── PR3: retrieval policy override в runtime mode ────────
+      //
+      // Если retriever работал в runtime mode и policy решил escalate
+      // (conflict / requires_human / low_confidence / etc) — override
+      // decision на 'escalate' и не вызываем generator. AI не должен
+      // сам "склеить" что-то из неполных/опасных знаний.
+      //
+      // В shadow mode override не делаем — ответ продолжает идти из
+      // legacy KB, policy decision пишется в trace для compare.
+      const kr = ctx.knowledgeRetrieval
+      if (kr) {
+        retrievalMode     = kr.mode
+        retrievalDecision = kr.trace.policy.type
+        escalationReason  = kr.trace.policy.escalationReason
+        runtimeVersion    = `rerank:${RETRIEVAL_PROMPT_VERSION} policy:${kr.trace.policyVersion}`
+        if (kr.mode === 'shadow') {
+          shadowSummary = JSON.stringify({
+            decision:         kr.trace.policy.type,
+            escalationReason: kr.trace.policy.escalationReason,
+            topItemIds:       kr.items.map(i => i.id).slice(0, 5),
+            candidateCount:   kr.trace.candidates.length,
+            durationMs:       kr.trace.durationMs,
+          })
+        }
+        if (kr.mode === 'runtime' && kr.trace.policy.type !== 'answer') {
+          console.log(`[Pipeline] Knowledge policy override → escalate (${kr.trace.policy.escalationReason}) msg=${message.id}`)
+          decision = { decision: 'escalate', reason: `knowledge:${kr.trace.policy.escalationReason}` }
+        }
+      } else {
+        retrievalMode = 'legacy'
+      }
+
       // Step 4: Generate and optionally send response
-      if (decision.decision !== 'skip') {
+      if (decision.decision !== 'skip' && decision.decision !== 'escalate') {
         const generated = await responseGenerator.generate(ctx, classification, decision)
         generatedReply  = generated.reply
         replySent       = generated.sent
@@ -120,6 +161,8 @@ export class PipelineWorker {
         id, "messageId", "chatId", channel,
         "detectedIntent", confidence, decision, "selectedModel",
         "usedKnowledgeEntries", "generatedReply", "replySent", escalated, error,
+        "retrievalMode", "retrievalDecision", "escalationReason",
+        "knowledgeRuntimeVersion", "shadowRetrievalSummary",
         "createdAt"
       ) VALUES (
         ${logId},
@@ -135,9 +178,76 @@ export class PipelineWorker {
         ${replySent},
         ${decision.decision === 'escalate'},
         ${error},
+        ${retrievalMode},
+        ${retrievalDecision},
+        ${escalationReason},
+        ${runtimeVersion},
+        ${shadowSummary}::jsonb,
         NOW()
       )
     `.catch(e => console.error('[Pipeline] AiDecisionLog write error:', e.message))
+
+    // ─── PR3: AiKnowledgeUsageLog — 1 запись на item ──────────
+    // Tolerant: ошибки записи не валят pipeline.
+    if (ctx.knowledgeRetrieval) {
+      await this._writeUsageLog(ctx.knowledgeRetrieval, logId, message.id, replySent)
+        .catch(e => console.error('[Pipeline] UsageLog write error:', e.message))
+    }
+  }
+
+  /**
+   * Пишет AiKnowledgeUsageLog по результатам retrieval. Одна запись на
+   * каждый top-candidate. usedInReply = true только если runtime+answer
+   * И item в usableItems И реально replySent.
+   */
+  private async _writeUsageLog(
+    kr: KnowledgeRetrievalResult,
+    decisionLogId: string,
+    messageId: string,
+    actualReplySent: boolean,
+  ): Promise<void> {
+    const usableSet = new Set(kr.items.map(i => i.id))
+    const policyType = kr.trace.policy.type
+    const escReason  = kr.trace.policy.escalationReason
+    const skippedById = new Map<string, string>()
+    for (const s of kr.trace.policy.skippedItems) skippedById.set(s.itemId, s.reason)
+
+    for (const cand of kr.trace.candidates) {
+      const usedInPrompt = kr.mode === 'runtime' && policyType === 'answer' && usableSet.has(cand.item.id)
+      const usedInReply  = usedInPrompt && actualReplySent
+      let policyDecision: string
+      if (usableSet.has(cand.item.id) && policyType === 'answer') {
+        policyDecision = 'used'
+      } else if (skippedById.has(cand.item.id)) {
+        policyDecision = 'filtered_' + skippedById.get(cand.item.id)
+      } else if (policyType === 'escalate') {
+        policyDecision = 'filtered_escalation'
+      } else {
+        policyDecision = 'filtered_no_knowledge'
+      }
+      const id = 'kul_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
+      await prisma.$executeRaw`
+        INSERT INTO "AiKnowledgeUsageLog" (
+          id, "itemId", "runtimeContext", "decisionLogId", "messageId",
+          "retrievalScore", "rerankScore", "usedInReply",
+          "policyDecision", "shadowMode", "escalationReason",
+          "usedAt"
+        ) VALUES (
+          ${id},
+          ${cand.item.id},
+          'chat_reply'::"AiKnowledgeRuntime",
+          ${decisionLogId},
+          ${messageId},
+          ${cand.prefilterScore},
+          ${cand.rerankScore},
+          ${usedInReply},
+          ${policyDecision},
+          ${kr.mode === 'shadow'},
+          ${escReason},
+          NOW()
+        )
+      `.catch(() => { /* tolerant per-item */ })
+    }
   }
 }
 

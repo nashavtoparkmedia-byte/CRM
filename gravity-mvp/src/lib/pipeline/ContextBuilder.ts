@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { Message } from '@prisma/client'
+import { retrieve, type RetrievalTrace, type RetrievableItem } from '@/lib/ai/knowledge/Retriever'
+import { getKnowledgeRuntimeMode } from '@/lib/ai/knowledge/featureFlags'
 
 export interface AiConfig {
   enabled: boolean
@@ -27,12 +29,27 @@ export interface KbEntry {
   priority: number
 }
 
+/**
+ * PR3: результат retrieval pipeline. null если retrieval disabled
+ * (mode=legacy) или если вызов retrieve() упал. Pipeline в обоих
+ * случаях продолжает работать на legacy KnowledgeBaseEntry.
+ */
+export interface KnowledgeRetrievalResult {
+  /** 'shadow' = trace пишется, ответ из legacy. 'runtime' = ответ из retrieved facts. */
+  mode:  'shadow' | 'runtime'
+  items: RetrievableItem[]
+  trace: RetrievalTrace
+}
+
 export interface MessageContext {
   config: AiConfig
   chat: { id: string; channel: string; externalChatId: string; driverId: string | null }
   driver: { fullName: string | null; phone: string | null } | null
   recentMessages: Array<{ role: 'user' | 'assistant'; content: string }>
   knowledgeBase: KbEntry[]
+  /** PR3: retrieval result. null если retrieval disabled или упал —
+   *  ResponseGenerator в этом случае работает на legacy knowledgeBase. */
+  knowledgeRetrieval: KnowledgeRetrievalResult | null
 }
 
 export class ContextBuilder {
@@ -126,7 +143,44 @@ export class ContextBuilder {
       priority:        r.priority,
     }))
 
-    return { config, chat, driver, recentMessages, knowledgeBase }
+    // ─── PR3: AI Knowledge Core retrieval (shadow / runtime) ─────
+    //
+    // Mode определяется env-флагами:
+    //   - 'legacy'  → retrieval skip (нулевое влияние)
+    //   - 'shadow'  → retrieve работает, trace пишется PipelineWorker'ом,
+    //                 но ответ всё ещё из legacy knowledgeBase
+    //   - 'runtime' → retrieve работает, ResponseGenerator получает items
+    //                 как single source of truth
+    //
+    // Tolerant: failure retrieve() не валит main pipeline —
+    // knowledgeRetrieval=null, и ResponseGenerator работает на legacy KB.
+    let knowledgeRetrieval: KnowledgeRetrievalResult | null = null
+    const mode = getKnowledgeRuntimeMode()
+    if (mode !== 'legacy') {
+      const lastInbound = recentMessages.slice().reverse().find(m => m.role === 'user')
+      const query = lastInbound?.content ?? message.content ?? ''
+      if (query.trim().length > 0) {
+        try {
+          const result = await retrieve({
+            query,
+            recentMessages,
+            shadowMode: mode === 'shadow',
+          })
+          knowledgeRetrieval = {
+            mode:  mode === 'runtime' ? 'runtime' : 'shadow',
+            items: result.items,
+            trace: result.trace,
+          }
+        } catch (e: any) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.error('[contextBuilder] retrieve failed:', e?.message)
+          }
+          knowledgeRetrieval = null
+        }
+      }
+    }
+
+    return { config, chat, driver, recentMessages, knowledgeBase, knowledgeRetrieval }
   }
 }
 

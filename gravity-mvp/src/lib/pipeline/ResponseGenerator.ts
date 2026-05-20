@@ -2,6 +2,7 @@ import { MessageContext } from './ContextBuilder'
 import { ClassificationResult } from './IntentClassifier'
 import { DecisionResult } from './DecisionEngine'
 import { channelRegistry } from './ChannelAdapterRegistry'
+import { formatRetrievedFactsForPrompt } from '@/lib/ai/knowledge/Retriever'
 
 export interface GeneratedResponse {
   reply: string | null
@@ -18,10 +19,14 @@ export class ResponseGenerator {
       return { reply: null, sent: false }
     }
 
-    const { config, chat, driver, recentMessages, knowledgeBase } = ctx
+    const { config, chat, driver, recentMessages, knowledgeBase, knowledgeRetrieval } = ctx
 
-    // Find matched KB entry for grounding
-    const matchedKb = classification.matchedKbEntryId
+    // PR3 runtime-mode: ТОЛЬКО canonical facts из Knowledge Core.
+    // Legacy KB dump игнорируется. Без excerpts, без raw chat.
+    const useRuntimeKnowledge = knowledgeRetrieval?.mode === 'runtime'
+
+    // Legacy путь: matchedKb из KnowledgeBaseEntry (shadow / null → legacy).
+    const matchedKb = !useRuntimeKnowledge && classification.matchedKbEntryId
       ? knowledgeBase.find(kb => kb.id === classification.matchedKbEntryId)
       : null
 
@@ -33,7 +38,17 @@ export class ResponseGenerator {
     if (config.promptForbidden) parts.push(`Запрещено: ${config.promptForbidden}.`)
     parts.push(`Язык ответа: ${config.language}. Отвечай кратко и по делу.`)
     if (driver?.fullName) parts.push(`Водитель: ${driver.fullName}.`)
-    if (matchedKb) {
+    if (useRuntimeKnowledge) {
+      // PR3 runtime: ТОЛЬКО canonical facts. Никаких raw excerpts.
+      // Жёсткая инструкция использовать только переданное и эскалировать
+      // иначе — вся защита от галлюцинаций.
+      parts.push(
+        '\nИспользуй ТОЛЬКО следующие подтверждённые факты компании. ' +
+        'Если фактов недостаточно или они противоречат вопросу клиента — ' +
+        'честно скажи, что передашь вопрос менеджеру.\n' +
+        formatRetrievedFactsForPrompt(knowledgeRetrieval!.items),
+      )
+    } else if (matchedKb) {
       parts.push(`\nСправочная информация по теме "${matchedKb.title}":\n${matchedKb.answer}`)
     }
 
