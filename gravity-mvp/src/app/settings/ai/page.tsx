@@ -15,6 +15,7 @@ import {
     getKnowledgeStats,
     listExtractionJobs,
     getExtractionQualityTier,
+    getKnowledgeReadinessForUi,
 } from './actions'
 
 export const dynamic   = 'force-dynamic'
@@ -24,6 +25,7 @@ export default async function AiControlCenterPage() {
     const [
         user, config, kb, importJobs, logs, stats, profiles, activeProfileId,
         knowledgeSections, knowledgeStats, extractionJobs, extractionTier,
+        knowledgeReadiness,
     ] = await Promise.all([
         getCurrentUser(),
         getAiConfig(),
@@ -37,6 +39,7 @@ export default async function AiControlCenterPage() {
         getKnowledgeStats(),
         listExtractionJobs(10),
         getExtractionQualityTier(),
+        getKnowledgeReadinessForUi(),
     ])
     const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
@@ -80,6 +83,7 @@ export default async function AiControlCenterPage() {
                     initialKnowledgeStats={knowledgeStats}
                     initialExtractionJobs={extractionJobs}
                     initialExtractionTier={extractionTier}
+                    initialReadiness={knowledgeReadiness}
                     canEdit={canEdit}
                 />
             </div>

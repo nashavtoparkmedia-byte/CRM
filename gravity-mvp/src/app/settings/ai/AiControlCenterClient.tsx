@@ -26,7 +26,9 @@ import {
     createManualKnowledgeItem, getKnowledgeAuditLog,
     listRecentRetrievalTraces, getKnowledgeRuntimeStateForUi,
     getDecisionExplainabilityForUi, previewDecisionRetry,
+    getKnowledgeReadinessForUi,
     type ExplainabilityBundle,
+    type KnowledgeReadinessBundle,
     type RetryPreviewResult,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
@@ -124,6 +126,10 @@ interface Props {
     initialExtractionJobs: unknown[]
     /** Сохранённый пресет модели для extraction (PR2). */
     initialExtractionTier: 'economy' | 'balanced' | 'quality'
+    /** Operational readiness bundle (PR5). counts + lastExtraction +
+     *  activity7d + checks[]. UI обновляет после governance-операций
+     *  через refreshReadiness(). */
+    initialReadiness: KnowledgeReadinessBundle
     /** Администратор/Руководитель видит все вкладки и может менять настройки.
      *  Менеджеру оставлен только Журнал (read-only + 👍/👎). */
     canEdit: boolean
@@ -288,6 +294,7 @@ export default function AiControlCenterClient({
     initialConfig, initialKb, initialImportJobs, initialLogs, initialStats,
     initialProfiles, initialActiveProfileId,
     initialSections, initialKnowledgeStats, initialExtractionJobs, initialExtractionTier,
+    initialReadiness,
     canEdit,
 }: Props) {
     // Менеджеру открываем сразу Журнал — это единственная вкладка, где он
@@ -521,6 +528,19 @@ export default function AiControlCenterClient({
         useState<{ mode: 'legacy' | 'shadow' | 'runtime', shadowOn: boolean, runtimeOn: boolean }>({
             mode: 'legacy', shadowOn: false, runtimeOn: false,
         })
+    // PR5: operational readiness — counts + checks. Обновляется
+    // после verify/archive/edit и при открытии rollout-модала.
+    const [readiness, setReadiness] = useState<KnowledgeReadinessBundle>(initialReadiness)
+    // PR5: модал runtime-rollout (объяснение что runtime контролируется
+    // env-флагом + checklist).
+    const [rolloutOpen, setRolloutOpen] = useState(false)
+
+    async function refreshReadiness() {
+        try {
+            const r = await getKnowledgeReadinessForUi()
+            setReadiness(r as KnowledgeReadinessBundle)
+        } catch { /* silent */ }
+    }
 
     // На mount fetch runtime state + recent traces.
     useEffect(() => {
@@ -546,6 +566,9 @@ export default function AiControlCenterClient({
         setKnowledgeStats(stats as KnowledgeStats)
         const secs = await listKnowledgeSections()
         setSections(secs as KnowledgeSection[])
+        // PR5: governance операции (verify/archive/etc) меняют readiness,
+        // обновляем безшумно — UI не блокируется на этом запросе.
+        refreshReadiness()
     }
 
     function openEditFor(item: KnowledgeItem) {
@@ -2033,21 +2056,202 @@ export default function AiControlCenterClient({
     }
 
     // PR3.8: runtime mode pill (legend в шапке Sources).
+    // PR5: clickable — открывает RuntimeRolloutModal с checklist'ом
+    // готовности и объяснением что runtime контролируется env-флагом.
     const RuntimeModePill = ({ state }: { state: typeof runtimeState }) => {
         const cfg =
             state.mode === 'runtime' ? { bg: 'bg-green-100',  txt: 'text-green-700', label: 'Runtime' } :
             state.mode === 'shadow'  ? { bg: 'bg-amber-100',  txt: 'text-amber-700', label: 'Shadow' } :
                                        { bg: 'bg-gray-100',   txt: 'text-gray-500',  label: 'Legacy' }
         const title =
-            state.mode === 'runtime' ? 'AI отвечает по новому ядру знаний.' :
-            state.mode === 'shadow'  ? 'Ядро работает в параллель — клиенту отвечает старый pipeline. Traces собираются.' :
-                                       'Knowledge Core не подключён к ответам AI.'
+            state.mode === 'runtime' ? 'AI отвечает по новому ядру знаний. Нажмите для checklist готовности.' :
+            state.mode === 'shadow'  ? 'Ядро работает в параллель — клиенту отвечает старый pipeline. Нажмите для checklist.' :
+                                       'Knowledge Core не подключён к ответам AI. Нажмите для checklist готовности.'
         return (
-            <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.bg} ${cfg.txt}`}>
+            <button
+                type="button"
+                onClick={() => setRolloutOpen(true)}
+                title={title}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-opacity hover:opacity-80 ${cfg.bg} ${cfg.txt}`}
+            >
                 <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
                 {cfg.label}
-            </span>
+            </button>
         )
+    }
+
+    // PR5: operational readiness — компактная строка с counters +
+    // overall-pill + ссылкой на checklist. Не дашборд, а "пульс ядра".
+    const KnowledgeReadinessRow = () => {
+        const c = readiness.counts
+        const lastExtr = readiness.lastExtraction
+        const ago = lastExtr
+            ? humanizeAgo(lastExtr.finishedAt ?? lastExtr.startedAt ?? lastExtr.createdAt)
+            : 'нет данных'
+
+        const overallCfg =
+            readiness.overall === 'ok'   ? { bg: 'bg-green-100', txt: 'text-green-700', label: 'Готов' } :
+            readiness.overall === 'warn' ? { bg: 'bg-amber-100', txt: 'text-amber-700', label: 'Нужна доводка' } :
+                                            { bg: 'bg-red-100',   txt: 'text-red-700',   label: 'Не готов' }
+        return (
+            <div className="flex items-center gap-3 flex-wrap rounded-md border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2 text-[12px] text-gray-600">
+                <span
+                    title="Сводный статус готовности — наихудший из checklist'а"
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${overallCfg.bg} ${overallCfg.txt}`}
+                >
+                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                    {overallCfg.label}
+                </span>
+                <span><strong className="text-[#111]">{c.activeItems}</strong> активных знаний</span>
+                <span className="text-gray-400">·</span>
+                <span><strong className="text-[#111]">{c.verifiedItems}</strong> подтверждённых</span>
+                {c.draftItems > 0 && (
+                    <>
+                        <span className="text-gray-400">·</span>
+                        <span>{c.draftItems} черновиков</span>
+                    </>
+                )}
+                {c.conflictGroups > 0 && (
+                    <>
+                        <span className="text-gray-400">·</span>
+                        <span className="text-amber-700">{c.conflictGroups} конфликтов</span>
+                    </>
+                )}
+                <span className="text-gray-400">·</span>
+                <span>сбор: {ago}</span>
+                <RuntimeModePill state={runtimeState} />
+                <button
+                    type="button"
+                    onClick={() => setRolloutOpen(true)}
+                    className="ml-auto text-[12px] text-[#3390EC] hover:underline"
+                >
+                    Проверить готовность
+                </button>
+            </div>
+        )
+    }
+
+    // PR5: rollout-checklist модал. Объясняет что runtime управляется
+    // env-флагом (не UI-switch), показывает 5 checks + текущие env-флаги.
+    // НЕ позволяет включить runtime — это conscious deployment-action.
+    const RuntimeRolloutModal = () => {
+        if (!rolloutOpen) return null
+        const r = readiness
+        const checkIcon = (status: 'ok' | 'warn' | 'fail') =>
+            status === 'ok' ? <span className="text-green-600">●</span> :
+            status === 'warn' ? <span className="text-amber-600">●</span> :
+                                <span className="text-red-600">●</span>
+        return (
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16" onClick={() => setRolloutOpen(false)}>
+                <div
+                    className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="px-6 py-4 border-b border-[#F0F0F0] flex items-center justify-between">
+                        <div>
+                            <h2 className="text-[16px] font-semibold text-[#111]">Готовность к запуску в runtime</h2>
+                            <p className="text-[12px] text-gray-500 mt-0.5">
+                                Сводный статус и checklist перед переводом AI на ответы из ядра.
+                            </p>
+                        </div>
+                        <button
+                            onClick={() => setRolloutOpen(false)}
+                            className="text-gray-400 hover:text-[#111] text-[20px] leading-none"
+                            aria-label="Закрыть"
+                        >×</button>
+                    </div>
+
+                    <div className="px-6 py-4 overflow-y-auto space-y-5">
+                        {/* Текущий режим */}
+                        <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Текущий режим</div>
+                            <div className="flex items-center gap-2">
+                                <RuntimeModePill state={runtimeState} />
+                                <span className="text-[13px] text-[#111]">
+                                    {runtimeState.mode === 'runtime' && 'AI отвечает из ядра знаний'}
+                                    {runtimeState.mode === 'shadow'  && 'Ядро работает в фоне (legacy KB отвечает клиенту)'}
+                                    {runtimeState.mode === 'legacy'  && 'Ядро не подключено к ответам'}
+                                </span>
+                            </div>
+                            <div className="text-[11px] text-gray-500 mt-2">
+                                Shadow: <code className="bg-white px-1 rounded border border-[#E8E8E8]">AI_KNOWLEDGE_SHADOW_MODE</code> = {runtimeState.shadowOn ? '1' : '0'}<br/>
+                                Runtime: <code className="bg-white px-1 rounded border border-[#E8E8E8]">AI_KNOWLEDGE_RUNTIME_ENABLED</code> = {runtimeState.runtimeOn ? '1' : '0'}
+                            </div>
+                        </div>
+
+                        {/* Checklist */}
+                        <div>
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Готовность ядра</div>
+                            <ul className="space-y-2">
+                                {r.checks.map(ch => (
+                                    <li key={ch.id} className="flex items-start gap-2 text-[13px]">
+                                        <span className="mt-[2px] text-[14px] leading-none">{checkIcon(ch.status)}</span>
+                                        <div>
+                                            <div className="font-medium text-[#111]">{ch.label}</div>
+                                            <div className="text-[12px] text-gray-500">{ch.detail}</div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Activity 7d */}
+                        <div>
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Активность за 7 дней</div>
+                            <div className="grid grid-cols-2 gap-2 text-[12px]">
+                                <Stat label="Всего решений" value={r.activity7d.decisionsTotal} />
+                                <Stat label="Shadow-trace" value={r.activity7d.shadowDecisions} />
+                                <Stat label="Передано менеджеру" value={r.activity7d.escalated} />
+                                <Stat label="Без подходящих знаний" value={r.activity7d.noMatch} />
+                            </div>
+                        </div>
+
+                        {/* Explanation */}
+                        <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] p-3 text-[12px] text-[#8B6914] leading-relaxed">
+                            <strong className="block mb-1 text-[#8B6914]">Runtime включается осознанно</strong>
+                            Это не UI-переключатель. После того как checklist «зелёный»,
+                            установите переменную окружения <code className="bg-white px-1 rounded border border-[#E8E0C0]">AI_KNOWLEDGE_RUNTIME_ENABLED=1</code>
+                            в конфиге сервера и перезапустите CRM. До перезапуска ничего не поменяется
+                            — клиентам по-прежнему отвечает legacy KB. Это страховка
+                            от случайного флипа кнопкой.
+                        </div>
+                    </div>
+
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex justify-end">
+                        <button
+                            onClick={() => setRolloutOpen(false)}
+                            className="h-9 px-4 rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90"
+                        >
+                            Понятно
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    function Stat({ label, value }: { label: string; value: number }) {
+        return (
+            <div className="rounded-md border border-[#E8E8E8] bg-white px-3 py-2">
+                <div className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</div>
+                <div className="text-[15px] font-semibold text-[#111]">{value}</div>
+            </div>
+        )
+    }
+
+    function humanizeAgo(iso: string | null): string {
+        if (!iso) return 'нет данных'
+        const ms = Date.now() - new Date(iso).getTime()
+        const h = ms / 3600000
+        if (h < 1)  return 'меньше часа назад'
+        if (h < 2)  return '1 ч назад'
+        if (h < 24) return `${Math.floor(h)} ч назад`
+        const days = Math.floor(h / 24)
+        const last = days % 10
+        const tail =
+            last === 1 && days % 100 !== 11 ? 'день' :
+            last >= 2 && last <= 4 && (days % 100 < 10 || days % 100 >= 20) ? 'дня' : 'дней'
+        return `${days} ${tail} назад`
     }
 
     // PR3.8: одна строка retrieval-трейса в "Активность ответов".
@@ -2241,6 +2445,9 @@ export default function AiControlCenterClient({
                     а стиль берёт из «Правил». Сбор ядра из истории переписок будет
                     в следующем апдейте.
                 </InlineInfo>
+
+                {/* PR5: operational readiness row */}
+                <KnowledgeReadinessRow />
 
                 {/* Под-табы + disabled "Собрать ядро" */}
                 <div className="flex items-center justify-between">
@@ -2909,6 +3116,9 @@ export default function AiControlCenterClient({
                     {toast}
                 </div>
             )}
+
+            {/* PR5: Runtime rollout checklist modal */}
+            <RuntimeRolloutModal />
 
             {/* PR4: Explainability modal "Почему AI так ответил?" */}
             {explainOpen && (
