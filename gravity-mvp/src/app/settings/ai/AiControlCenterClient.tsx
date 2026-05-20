@@ -1968,32 +1968,40 @@ export default function AiControlCenterClient({
                     <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                         <span className="text-[13px] font-semibold text-[#111] truncate">{item.title}</span>
                         {item.isVerified && (
-                            <span title={item.verifiedAt ? `Подтверждено ${new Date(item.verifiedAt).toLocaleDateString('ru')}` : 'Подтверждено'}
-                                  className="inline-flex items-center gap-0.5 text-[10px] text-green-700">
+                            <span title={item.verifiedAt
+                                ? `Админ подтвердил точность этого факта ${new Date(item.verifiedAt).toLocaleDateString('ru')}. AI делает на нём упор в ответе.`
+                                : 'Админ подтвердил точность этого факта. AI делает на нём упор.'}
+                                  className="inline-flex items-center gap-0.5 text-[10px] text-green-700 cursor-help">
                                 <CheckCircle2 size={11} /> подтверждено
                             </span>
                         )}
                         {item.sourceCount === 1 && (
-                            <span className="text-[10px] text-gray-400">один источник</span>
+                            <span title="Этот факт встретился только в одной переписке — желательно подтвердить ещё в одной перед runtime."
+                                  className="text-[10px] text-gray-400 cursor-help">один источник</span>
                         )}
                         {item.safetyLevel === 'sensitive' && (
-                            <span className="text-[10px] text-amber-600">чувствительное</span>
+                            <span title="Чувствительная тема — AI отвечает фактом, но добавляет более осторожную формулировку."
+                                  className="text-[10px] text-amber-600 cursor-help">чувствительное</span>
                         )}
                         {item.safetyLevel === 'requires_human' && (
-                            <span className="text-[10px] text-red-600">только менеджер</span>
+                            <span title="AI не отвечает сам — даже если факт точный, тема требует менеджера. Diff показывает в explainability как «пропущено: требует менеджера»."
+                                  className="text-[10px] text-red-600 cursor-help">только менеджер</span>
                         )}
                         {item.conflictGroupId && (
                             <button
                                 onClick={() => canEdit && openConflictResolver(item)}
                                 disabled={!canEdit}
                                 className="text-[10px] text-amber-600 hover:underline disabled:no-underline disabled:cursor-default"
-                                title={canEdit ? 'Открыть конфликт' : undefined}
+                                title={canEdit
+                                    ? 'Два факта противоречат друг другу. Откройте, чтобы выбрать правильный — остальные уйдут в архив.'
+                                    : 'Два факта противоречат друг другу. Админ должен разрешить конфликт.'}
                             >
                                 ⚠ конфликт
                             </button>
                         )}
                         {item.status === 'superseded' && (
-                            <span className="text-[10px] text-gray-400">заменено</span>
+                            <span title="Факт устарел и заменён новой версией. Старые ответы AI всё равно ссылаются на него — это нужно для истории explainability."
+                                  className="text-[10px] text-gray-400 cursor-help">заменено</span>
                         )}
                         {item.status === 'draft' && (
                             <span title="Не прошло порог уверенности — ждёт ручной проверки"
@@ -2217,7 +2225,15 @@ export default function AiControlCenterClient({
                         </div>
                     </div>
 
-                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex justify-end">
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-between gap-2">
+                        <a
+                            href="/settings/integrations/ai-knowledge-help#a-runtime"
+                            target="_blank"
+                            rel="noopener"
+                            className="text-[12px] text-[#3390EC] hover:underline"
+                        >
+                            Открыть инструкцию по runtime →
+                        </a>
                         <button
                             onClick={() => setRolloutOpen(false)}
                             className="h-9 px-4 rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90"
@@ -2424,10 +2440,21 @@ export default function AiControlCenterClient({
                     )}
                     <div className="mt-3 text-[10px] text-gray-400 leading-relaxed">
                         <strong>Shadow mode</strong> — retriever работает параллельно,
-                        ответ клиенту даёт legacy KB. <strong>Runtime</strong> — generator
-                        получает только подтверждённые факты из ядра. Управляется env:
+                        ответ клиенту даёт legacy KB (наблюдение перед runtime).
+                        {' '}<strong>Runtime</strong> — generator получает только
+                        подтверждённые факты из ядра. Управляется env:
                         <code className="mx-1 text-[10px]">AI_KNOWLEDGE_SHADOW_MODE</code>
                         и <code className="text-[10px]">AI_KNOWLEDGE_RUNTIME_ENABLED</code>.
+                        Кликните по pill в шапке — увидите checklist готовности и
+                        текущие значения.{' '}
+                        <a
+                            href="/settings/integrations/ai-knowledge-help#a-shadow"
+                            target="_blank"
+                            rel="noopener"
+                            className="text-[#3390EC] hover:underline"
+                        >
+                            Что это значит?
+                        </a>
                     </div>
                 </div>
             </div>
@@ -2442,8 +2469,15 @@ export default function AiControlCenterClient({
                 <InlineInfo>
                     Ядро знаний — структурированная память AI: тарифы, требования,
                     условия, документы, частые вопросы. AI отвечает фактами из ядра,
-                    а стиль берёт из «Правил». Сбор ядра из истории переписок будет
-                    в следующем апдейте.
+                    а стиль берёт из «Правил».{' '}
+                    <a
+                        href="/settings/integrations/ai-knowledge-help"
+                        target="_blank"
+                        rel="noopener"
+                        className="text-[#3390EC] hover:underline"
+                    >
+                        Подробнее в инструкции →
+                    </a>
                 </InlineInfo>
 
                 {/* PR5: operational readiness row */}
@@ -2966,6 +3000,16 @@ export default function AiControlCenterClient({
             <InlineInfo>
                 Что AI ответил и какие решения принял. 👍 или 👎 рядом с ответом
                 помогает понять, где AI работает хорошо, а где нужно поправить.
+                Кнопка <strong>«Почему AI так ответил?»</strong> на каждой записи
+                раскрывает retrieval-trace и используемые знания.{' '}
+                <a
+                    href="/settings/integrations/ai-knowledge-help#m-why"
+                    target="_blank"
+                    rel="noopener"
+                    className="text-[#3390EC] hover:underline"
+                >
+                    Подробнее →
+                </a>
             </InlineInfo>
 
             {/* Простые фильтры — клиентские, по уже загруженной странице.
