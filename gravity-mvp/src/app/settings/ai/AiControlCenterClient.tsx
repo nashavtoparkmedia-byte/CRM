@@ -24,6 +24,7 @@ import {
     editKnowledgeItem, archiveKnowledgeItem, restoreKnowledgeItem,
     verifyKnowledgeItem, supersedeKnowledgeItem, resolveConflict,
     createManualKnowledgeItem, getKnowledgeAuditLog,
+    listRecentRetrievalTraces, getKnowledgeRuntimeStateForUi,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
     type ExtractionScope,
@@ -376,6 +377,47 @@ export default function AiControlCenterClient({
     const [supersedeFor, setSupersedeFor] = useState<KnowledgeItem | null>(null)
     const [conflictFor, setConflictFor] = useState<KnowledgeItem | null>(null)
     const [conflictMembers, setConflictMembers] = useState<KnowledgeItem[]>([])
+
+    // PR3.8: shadow/runtime traces для UI вкладки "Источники".
+    interface RetrievalTrace {
+        id: string
+        messageId: string | null
+        chatId: string | null
+        channel: string | null
+        retrievalMode: string | null
+        retrievalDecision: string | null
+        escalationReason: string | null
+        knowledgeRuntimeVersion: string | null
+        shadowRetrievalSummary: {
+            decision?: string
+            escalationReason?: string | null
+            topItemIds?: string[]
+            candidateCount?: number
+            durationMs?: number
+        } | null
+        decision: string | null
+        generatedReply: string | null
+        createdAt: string
+    }
+    const [retrievalTraces, setRetrievalTraces] = useState<RetrievalTrace[]>([])
+    const [runtimeState, setRuntimeState] =
+        useState<{ mode: 'legacy' | 'shadow' | 'runtime', shadowOn: boolean, runtimeOn: boolean }>({
+            mode: 'legacy', shadowOn: false, runtimeOn: false,
+        })
+
+    // На mount fetch runtime state + recent traces.
+    useEffect(() => {
+        let cancelled = false
+        Promise.all([
+            getKnowledgeRuntimeStateForUi(),
+            listRecentRetrievalTraces(30),
+        ]).then(([state, traces]) => {
+            if (cancelled) return
+            setRuntimeState(state)
+            setRetrievalTraces(traces as RetrievalTrace[])
+        }).catch(() => { /* silent */ })
+        return () => { cancelled = true }
+    }, [])
 
     async function refreshCurrentSection() {
         if (!selectedSectionId) return
@@ -1873,6 +1915,86 @@ export default function AiControlCenterClient({
         )
     }
 
+    // PR3.8: runtime mode pill (legend в шапке Sources).
+    const RuntimeModePill = ({ state }: { state: typeof runtimeState }) => {
+        const cfg =
+            state.mode === 'runtime' ? { bg: 'bg-green-100',  txt: 'text-green-700', label: 'Runtime' } :
+            state.mode === 'shadow'  ? { bg: 'bg-amber-100',  txt: 'text-amber-700', label: 'Shadow' } :
+                                       { bg: 'bg-gray-100',   txt: 'text-gray-500',  label: 'Legacy' }
+        const title =
+            state.mode === 'runtime' ? 'AI отвечает по новому ядру знаний.' :
+            state.mode === 'shadow'  ? 'Ядро работает в параллель — клиенту отвечает старый pipeline. Traces собираются.' :
+                                       'Knowledge Core не подключён к ответам AI.'
+        return (
+            <span title={title} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${cfg.bg} ${cfg.txt}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                {cfg.label}
+            </span>
+        )
+    }
+
+    // PR3.8: одна строка retrieval-трейса в "Активность ответов".
+    const RetrievalTraceRow = ({ trace }: { trace: typeof retrievalTraces[number] }) => {
+        const DECISION_TXT: Record<string, string> = {
+            answer:       'ответ из ядра',
+            escalate:     'передано менеджеру',
+            no_knowledge: 'нет подходящих знаний',
+        }
+        const REASON_TXT: Record<string, string> = {
+            conflict:        'конфликт знаний',
+            requires_human:  'требует менеджера',
+            low_confidence:  'низкая уверенность',
+            no_relevant:     'нечего ответить',
+            only_drafts:     'только черновики',
+            ambiguous:       'неоднозначно',
+            safety_block:    'safety-фильтр',
+        }
+        const isShadow = trace.retrievalMode === 'shadow'
+        const dec = trace.retrievalDecision ?? '—'
+        const decColor =
+            dec === 'answer'   ? 'text-green-600' :
+            dec === 'escalate' ? 'text-amber-600' :
+                                 'text-gray-500'
+        const summary = trace.shadowRetrievalSummary
+        return (
+            <div className="py-2.5">
+                <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className={`text-[12px] font-medium ${decColor}`}>
+                        {DECISION_TXT[dec] ?? dec}
+                    </span>
+                    {trace.escalationReason && (
+                        <span className="text-[10px] text-gray-400">
+                            · {REASON_TXT[trace.escalationReason] ?? trace.escalationReason}
+                        </span>
+                    )}
+                    {isShadow && (
+                        <span className="text-[10px] text-amber-600">· shadow</span>
+                    )}
+                    {trace.channel && (
+                        <span className="text-[10px] text-gray-400">
+                            · {CHANNEL_LABELS[trace.channel] ?? trace.channel}
+                        </span>
+                    )}
+                    <span className="text-[10px] text-gray-400 ml-auto">
+                        {new Date(trace.createdAt).toLocaleString('ru')}
+                    </span>
+                </div>
+                {summary && summary.candidateCount != null && (
+                    <div className="text-[10px] text-gray-500 mt-0.5">
+                        {summary.candidateCount} кандидатов
+                        {summary.durationMs != null && ` · ${summary.durationMs} мс`}
+                        {summary.topItemIds && summary.topItemIds.length > 0 && ` · top: ${summary.topItemIds.slice(0,3).join(', ')}`}
+                    </div>
+                )}
+                {trace.knowledgeRuntimeVersion && (
+                    <div className="text-[10px] text-gray-400 mt-0.5">
+                        {trace.knowledgeRuntimeVersion}
+                    </div>
+                )}
+            </div>
+        )
+    }
+
     const KnowledgeSourcesPanel = () => {
         const STATUS_LABEL: Record<string, string> = {
             queued: 'В очереди', running: 'Идёт сбор',
@@ -1882,7 +2004,12 @@ export default function AiControlCenterClient({
             economy: 'Экономичная', balanced: 'Сбалансированная', quality: 'Повышенное качество',
         }
         return (
-            <div className="border-t border-[#F0F0F0] pt-4">
+            <div className="border-t border-[#F0F0F0] pt-4 space-y-6">
+                {/* Sub-section 1: Извлечения (PR2) */}
+                <div>
+                    <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        Сбор ядра из истории
+                    </div>
                 {extractionJobs.length === 0 ? (
                     <div className="text-center py-12 text-[12px] text-gray-400">
                         <div className="font-medium text-[#111] text-[13px] mb-1">Извлечения ещё не запускались</div>
@@ -1946,6 +2073,42 @@ export default function AiControlCenterClient({
                         })}
                     </div>
                 )}
+                </div>
+
+                {/* Sub-section 2: Активность ответов (PR3 shadow/runtime) */}
+                <div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                        <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
+                            Активность ответов
+                        </span>
+                        <RuntimeModePill state={runtimeState} />
+                    </div>
+                    {retrievalTraces.length === 0 ? (
+                        <div className="text-center py-6 text-[12px] text-gray-400">
+                            {runtimeState.mode === 'legacy' ? (
+                                <>
+                                    Knowledge Core ещё не подключён к ответам AI.<br />
+                                    Включается через env-флаги (см. описание ниже).
+                                </>
+                            ) : (
+                                <>Пока нет ответов через ядро. Записи появятся при обработке входящих сообщений.</>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-[#F0F0F0]">
+                            {retrievalTraces.slice(0, 20).map(t => (
+                                <RetrievalTraceRow key={t.id} trace={t} />
+                            ))}
+                        </div>
+                    )}
+                    <div className="mt-3 text-[10px] text-gray-400 leading-relaxed">
+                        <strong>Shadow mode</strong> — retriever работает параллельно,
+                        ответ клиенту даёт legacy KB. <strong>Runtime</strong> — generator
+                        получает только подтверждённые факты из ядра. Управляется env:
+                        <code className="mx-1 text-[10px]">AI_KNOWLEDGE_SHADOW_MODE</code>
+                        и <code className="text-[10px]">AI_KNOWLEDGE_RUNTIME_ENABLED</code>.
+                    </div>
+                </div>
             </div>
         )
     }
