@@ -147,14 +147,49 @@ test('first silence strike does not end the call', async (t) => {
 
     assert.equal(events.finalize.length, 0, 'onFinalize NOT called after 1 strike')
     assert.notEqual(s.state, 'ended', 'session not in ended state after 1 strike')
-    // The model should have been pinged with a synthetic «лид молчит» nudge.
-    assert.equal(mockState.llmCalls.length, 1, 'LLM consulted once for re-prompt')
-    const lastUserMsg = mockState.llmCalls[0].messages.filter(m => m.role === 'user').pop()
-    assert.match(
-        lastUserMsg.content,
-        /молчит|подбадривание|повтор/i,
-        'synthetic user message hints at silence + re-prompt',
+
+    // PR #61 — Conversation Recovery Layer. On strike 1 with
+    // realUserUtterances=0 (pre-greeting-cliff territory) the recovery
+    // layer intercepts BEFORE the legacy LLM-injection path. Instead
+    // of bouncing a synthetic «(лид молчит)» message off the model,
+    // the bridge speaks a short deterministic re-engage prompt and
+    // re-enters listening state. The LLM is never consulted on this
+    // strike — saves a round-trip and gives the lead a chance before
+    // strike 2 fires.
+    assert.equal(
+        mockState.llmCalls.length, 0,
+        'PR #61: LLM NOT consulted on strike-1 (recovery layer intercepted)',
     )
+    const recoveryEvents = s.events.filter(e => e.type === 'recovery_attempted')
+    assert.equal(recoveryEvents.length, 1, 'recovery_attempted event emitted')
+    assert.equal(recoveryEvents[0].payload.trigger, 'silence_after_greeting')
+    assert.equal(recoveryEvents[0].payload.action, 'reengage')
+})
+
+// PR #61 regression: after the lead HAS spoken (realUserUtterances > 0),
+// a mid-dialog silence on strike 1 should still go through the legacy
+// LLM-injection path — recovery layer only fires for the pre-greeting
+// cliff, not for mid-dialog gaps. Different shapes need different
+// responses (a real lead pause shouldn't get "Вас слышно?" — they're
+// already engaged).
+test('first silence strike AFTER real speech → legacy LLM path (PR #61 boundary)', async (t) => {
+    resetMocks()
+    mockState.llmReturn = { kind: 'text', content: 'Понял, продолжу.' }
+    const { s, cleanup } = makeSession()
+    t.after(cleanup)
+
+    s._setState('listening')
+    // Lead spoke once → realUserUtterances bumps to 1 (PR #57).
+    await s._onSttFinal('да удобно')
+    s.silenceStrikes = 0  // reset (real speech zeroed it)
+
+    await s._onSilenceTimeout()
+
+    assert.equal(
+        s.events.filter(e => e.type === 'recovery_attempted').length, 0,
+        'recovery NOT triggered (lead already engaged — mid-dialog silence)',
+    )
+    assert.ok(mockState.llmCalls.length >= 1, 'LLM consulted on mid-dialog silence')
 })
 
 // ---- Acceptance #4: second strike ends the call with unclear --------------

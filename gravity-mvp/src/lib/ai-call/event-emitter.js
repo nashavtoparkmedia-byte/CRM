@@ -38,12 +38,14 @@
 //   v1 (PR #59):  greeting_started / first_real_user_speech /
 //                 silence_strike / call_completed
 //   v2 (PR #60):  + stt_suspicious_pattern
+//   v3 (PR #61):  + recovery_attempted
 const ALLOWED_TYPES = Object.freeze(new Set([
     'greeting_started',
     'first_real_user_speech',
     'silence_strike',
     'call_completed',
     'stt_suspicious_pattern',
+    'recovery_attempted',
 ]))
 
 /**

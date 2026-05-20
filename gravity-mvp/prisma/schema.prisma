@@ -1692,6 +1692,7 @@ enum AiCallEventType {
   silence_strike
   call_completed
   stt_suspicious_pattern
+  recovery_attempted
 }
 
 /// Structured business-outcome of an AI-call (PR #57). Set by the
