@@ -952,8 +952,19 @@ model AiAgentConfig {
   /// "ok" | "error" | "unchecked"
   connectionStatus      String?
   lastConnectionCheckAt DateTime?
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  /// AI Knowledge Core (PR2): пресет модели для extraction-pipeline.
+  /// 'economy' | 'balanced' | 'quality'. Маппится в Extractor на
+  /// конкретную модель: economy → Haiku/4o-mini, balanced →
+  /// classificationModel, quality → responseModel. Default 'balanced'
+  /// — provider-agnostic, дёшево, JSON-mode достаточно.
+  /// Extraction-model ≠ response-model: это разные контуры.
+  extractionQualityTier String?         @default("balanced")
+  /// Версия системного промпта экстрактора. Bump при содержательных
+  /// изменениях — даёт regression analysis: сравнить ядро, собранное
+  /// разными версиями prompt'а.
+  extractionPromptVersion String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 }
 
 /// Стили общения AI-агента. Один профиль = один стиль (Роль / Тон /
@@ -1167,7 +1178,7 @@ model AiKnowledgeUsageLog {
 }
 
 /// Задание на извлечение знаний из истории. Создаётся кнопкой
-/// "Собрать ядро знаний" в PR2. scope JSON: { mode, dateFrom?, dateTo?,
+/// "Собрать ядро знаний". scope JSON: { mode, dateFrom?, dateTo?,
 /// channels?, sampleSize? }. progress JSON: { messagesScanned,
 /// pairsBuilt, candidatesFound, itemsCreated, itemsMerged,
 /// sourcesAdded, conflictsDetected, ... }.
@@ -1177,6 +1188,17 @@ model AiExtractionJob {
   sourceType   AiKnowledgeSourceOrigin @default(chat_message)
   scope        Json                    @default("{}")
   progress     Json?
+  /// Snapshot модели и pipeline на момент запуска job — для
+  /// explainability и regression analysis ("это ядро собрано моделью X
+  /// промптом vN"). Пишется при старте Extractor.run, не редактируется.
+  extractionProvider      String?
+  extractionModel         String?
+  extractionPromptVersion String?
+  /// Какой пресет был выбран в UI: 'economy'/'balanced'/'quality'.
+  /// Нужен отдельно от model — между запусками config мог сменить
+  /// classificationModel, и tier позволяет "тот же тип запуска,
+  /// но с новой моделью".
+  extractionQualityTier   String?
   startedAt    DateTime?
   finishedAt   DateTime?
   errorMessage String?
