@@ -1209,3 +1209,280 @@ export async function getKnowledgeRuntimeStateForUi(): Promise<{
         runtimeOn: isRuntimeEnabled(),
     }
 }
+
+// ─── AI Knowledge Core explainability (PR4) ──────────────────────
+//
+// Read-only aggregator поверх traces из PR3. Permission filter:
+// sources видны только Admin/Lead. Manager получает usages+items,
+// но sources=[].
+
+import {
+    getDecisionExplainability,
+    type ExplainabilityBundle,
+} from '@/lib/ai/knowledge/explainability'
+import { retrieve as runRetrieve } from '@/lib/ai/knowledge/Retriever'
+export type {
+    ExplainabilityBundle,
+    ExplainDecisionRow,
+    ExplainMessageRow,
+    ExplainUsageRow,
+    ExplainSourceRow,
+    ExplainAuditRow,
+} from '@/lib/ai/knowledge/explainability'
+
+/**
+ * Bundle для UI explainability модалки. Server-side фильтрует sources
+ * для не-Admin ролей — PII не пересекает boundary. Manager видит
+ * items без raw excerpts.
+ */
+export async function getDecisionExplainabilityForUi(
+    decisionLogId: string,
+): Promise<ExplainabilityBundle> {
+    const bundle = await getDecisionExplainability(decisionLogId)
+    const allowed = await canViewKnowledgeSources()
+    if (allowed) return bundle
+    return { ...bundle, sources: [] }
+}
+
+export interface RetryPreviewResult {
+    /** Что retriever нашёл сейчас (после возможных правок knowledge). */
+    items: Array<{
+        id:                 string
+        title:              string
+        canonicalStatement: string
+        isVerified:         boolean
+        sectionId:          string
+    }>
+    policyType:       'answer' | 'escalate' | 'no_knowledge'
+    escalationReason: string | null
+    /** Сгенерированный ответ (если policy='answer' и apiKey доступен). */
+    generatedReply:   string | null
+    /** Trace для UI compare с original + advanced/debug. */
+    trace: {
+        candidateCount:      number
+        prefilterDurationMs: number
+        rerankDurationMs:    number | null
+        generatorDurationMs: number | null
+        totalDurationMs:     number
+        runtimeVersion:      string | null
+        rerankUsedModel:     string | null
+    }
+    errorMessage: string | null
+}
+
+/**
+ * Preview retry — Admin only. Прогоняет retrieve+generator на
+ * оригинальном сообщении С ТЕКУЩИМИ знаниями, БЕЗ отправки клиенту
+ * и БЕЗ записи в AiDecisionLog/UsageLog. Чисто диагностический вызов.
+ *
+ * Telemetry: console.log на start / phase / done — operational
+ * visibility без persistence.
+ */
+export async function previewDecisionRetry(
+    decisionLogId: string,
+): Promise<RetryPreviewResult> {
+    await requireAdminUserId()
+    const startedAt = Date.now()
+    console.log(`[retry-preview] started decisionLogId=${decisionLogId}`)
+
+    const empty: RetryPreviewResult = {
+        items: [],
+        policyType: 'no_knowledge',
+        escalationReason: 'no_relevant',
+        generatedReply: null,
+        trace: {
+            candidateCount: 0, prefilterDurationMs: 0,
+            rerankDurationMs: null, generatorDurationMs: null,
+            totalDurationMs: 0, runtimeVersion: null, rerankUsedModel: null,
+        },
+        errorMessage: 'Decision не найден',
+    }
+
+    // 1. Original message
+    const rows = await prisma.$queryRaw<any[]>`
+        SELECT
+            dl."messageId" AS "messageId",
+            m.content      AS "userContent"
+        FROM "AiDecisionLog" dl
+        LEFT JOIN "Message" m ON m.id = dl."messageId"
+        WHERE dl.id = ${decisionLogId} LIMIT 1
+    `
+    const row = rows[0]
+    if (!row || !row.userContent) {
+        console.warn(`[retry-preview] no user message for ${decisionLogId}`)
+        return { ...empty, errorMessage: 'Не удалось загрузить вопрос клиента' }
+    }
+
+    // 2. Retrieve (force runtime semantics)
+    let retrieveOut
+    try {
+        retrieveOut = await runRetrieve({
+            query: row.userContent,
+            shadowMode: false,
+        })
+    } catch (e: any) {
+        console.error(`[retry-preview] retrieve failed: ${e?.message}`)
+        return { ...empty, errorMessage: 'Retrieve упал: ' + (e?.message ?? 'unknown') }
+    }
+    console.log(`[retry-preview] retrieve done in ${retrieveOut.trace.durationMs}ms · candidates=${retrieveOut.trace.candidates.length} · policy=${retrieveOut.trace.policy.type}`)
+
+    const items = retrieveOut.items.map(i => ({
+        id:                 i.id,
+        title:              i.title,
+        canonicalStatement: i.canonicalStatement,
+        isVerified:         i.isVerified,
+        sectionId:          i.sectionId,
+    }))
+
+    // 3. Если policy эскалировала — generator не вызываем
+    if (retrieveOut.trace.policy.type !== 'answer') {
+        const totalMs = Date.now() - startedAt
+        console.log(`[retry-preview] escalated by policy: ${retrieveOut.trace.policy.escalationReason} · total ${totalMs}ms`)
+        return {
+            items,
+            policyType:       retrieveOut.trace.policy.type,
+            escalationReason: retrieveOut.trace.policy.escalationReason,
+            generatedReply:   null,
+            trace: {
+                candidateCount:      retrieveOut.trace.candidates.length,
+                prefilterDurationMs: retrieveOut.trace.prefilterDurationMs,
+                rerankDurationMs:    retrieveOut.trace.rerankDurationMs,
+                generatorDurationMs: null,
+                totalDurationMs:     totalMs,
+                runtimeVersion:      `rerank:${retrieveOut.trace.rerankPromptVersion} policy:${retrieveOut.trace.policyVersion}`,
+                rerankUsedModel:     retrieveOut.trace.rerankUsedModel,
+            },
+            errorMessage:     null,
+        }
+    }
+
+    // 4. Generator call
+    const cfgRows = await prisma.$queryRaw<any[]>`
+        SELECT provider::text AS provider,
+               "apiKeyEncrypted" AS "apiKey",
+               "responseModel", language,
+               "promptRole", "promptTone", "promptAllowed", "promptForbidden",
+               "activeProfileId"
+        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
+    `
+    const cfg = cfgRows[0]
+    if (!cfg?.apiKey) {
+        const totalMs = Date.now() - startedAt
+        console.warn(`[retry-preview] no API key configured · total ${totalMs}ms`)
+        return {
+            items, policyType: 'answer', escalationReason: null, generatedReply: null,
+            trace: {
+                candidateCount:      retrieveOut.trace.candidates.length,
+                prefilterDurationMs: retrieveOut.trace.prefilterDurationMs,
+                rerankDurationMs:    retrieveOut.trace.rerankDurationMs,
+                generatorDurationMs: null,
+                totalDurationMs:     totalMs,
+                runtimeVersion:      `rerank:${retrieveOut.trace.rerankPromptVersion} policy:${retrieveOut.trace.policyVersion}`,
+                rerankUsedModel:     retrieveOut.trace.rerankUsedModel,
+            },
+            errorMessage: 'AI provider не настроен (нет API key)',
+        }
+    }
+
+    let role = cfg.promptRole, tone = cfg.promptTone,
+        allowed = cfg.promptAllowed, forbidden = cfg.promptForbidden
+    if (cfg.activeProfileId) {
+        const p = await prisma.$queryRaw<any[]>`
+            SELECT "promptRole", "promptTone", "promptAllowed", "promptForbidden"
+            FROM "AiAgentProfile" WHERE id = ${cfg.activeProfileId} LIMIT 1
+        `
+        if (p[0]) {
+            role     = p[0].promptRole     ?? role
+            tone     = p[0].promptTone     ?? tone
+            allowed  = p[0].promptAllowed  ?? allowed
+            forbidden = p[0].promptForbidden ?? forbidden
+        }
+    }
+
+    const parts: string[] = []
+    parts.push(role || 'Ты — помощник службы поддержки водителей такси.')
+    if (tone)      parts.push(`Тон общения: ${tone}.`)
+    if (allowed)   parts.push(`Разрешено: ${allowed}.`)
+    if (forbidden) parts.push(`Запрещено: ${forbidden}.`)
+    parts.push(`Язык: ${cfg.language || 'ru'}. Отвечай кратко.`)
+    parts.push(
+        '\nИспользуй ТОЛЬКО следующие подтверждённые факты компании. ' +
+        'Если фактов недостаточно — честно скажи, что передашь менеджеру.\n' +
+        items.map((it, i) => `${i + 1}. ${it.title}${it.isVerified ? ' [подтверждено]' : ''}\n   ${it.canonicalStatement}`).join('\n'),
+    )
+    const systemPrompt = parts.join(' ')
+
+    const generatorStart = Date.now()
+    let generatorMs: number | null = null
+    try {
+        let reply: string | null = null
+        if (cfg.provider === 'openai') {
+            const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: cfg.responseModel || 'gpt-4o-mini',
+                    max_tokens: 500, temperature: 0,
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user',   content: row.userContent },
+                    ],
+                }),
+            })
+            generatorMs = Date.now() - generatorStart
+            if (res.ok) {
+                const data: any = await res.json()
+                reply = data?.choices?.[0]?.message?.content ?? null
+            }
+        } else {
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: { 'x-api-key': cfg.apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+                body: JSON.stringify({
+                    model: cfg.responseModel || 'claude-sonnet-4-5',
+                    max_tokens: 500,
+                    system: systemPrompt,
+                    messages: [{ role: 'user', content: row.userContent }],
+                }),
+            })
+            generatorMs = Date.now() - generatorStart
+            if (res.ok) {
+                const data: any = await res.json()
+                reply = data?.content?.[0]?.text?.trim() ?? null
+            }
+        }
+        const totalMs = Date.now() - startedAt
+        console.log(`[retry-preview] generator ${generatorMs}ms · total ${totalMs}ms · reply=${reply ? 'yes' : 'no'}`)
+        return {
+            items,
+            policyType: 'answer', escalationReason: null,
+            generatedReply: reply,
+            trace: {
+                candidateCount:      retrieveOut.trace.candidates.length,
+                prefilterDurationMs: retrieveOut.trace.prefilterDurationMs,
+                rerankDurationMs:    retrieveOut.trace.rerankDurationMs,
+                generatorDurationMs: generatorMs,
+                totalDurationMs:     totalMs,
+                runtimeVersion:      `rerank:${retrieveOut.trace.rerankPromptVersion} policy:${retrieveOut.trace.policyVersion}`,
+                rerankUsedModel:     retrieveOut.trace.rerankUsedModel,
+            },
+            errorMessage: reply ? null : 'LLM не вернула текст',
+        }
+    } catch (e: any) {
+        const totalMs = Date.now() - startedAt
+        console.error(`[retry-preview] generator failed: ${e?.message} · total ${totalMs}ms`)
+        return {
+            items, policyType: 'answer', escalationReason: null, generatedReply: null,
+            trace: {
+                candidateCount:      retrieveOut.trace.candidates.length,
+                prefilterDurationMs: retrieveOut.trace.prefilterDurationMs,
+                rerankDurationMs:    retrieveOut.trace.rerankDurationMs,
+                generatorDurationMs: generatorMs,
+                totalDurationMs:     totalMs,
+                runtimeVersion:      `rerank:${retrieveOut.trace.rerankPromptVersion} policy:${retrieveOut.trace.policyVersion}`,
+                rerankUsedModel:     retrieveOut.trace.rerankUsedModel,
+            },
+            errorMessage: 'Generator упал: ' + (e?.message ?? 'unknown'),
+        }
+    }
+}
