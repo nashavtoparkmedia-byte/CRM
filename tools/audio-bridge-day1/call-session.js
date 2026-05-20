@@ -78,8 +78,20 @@ class CallSession {
         this.leadData = {}
         // What the model decided in end_call. Filled on graceful close.
         this.finalResult = null
+        // PR #57 — per-scenario tool overrides (canonical-key enum on
+        // save_lead_data, qualification_score arg on end_call). Built
+        // once at start() so the deep-clone happens only once per call.
+        this.tools = null
         // Pending STT finals coalesced between LLM turns.
         this.pendingUserText = ''
+        // PR #57 — counter of real STT-derived user turns ONLY. Synthetic
+        // wake-up messages injected by the silence-timeout path push
+        // directly to pendingUserText and bypass this counter, so they
+        // don't inflate engagement signal in the outcome mapper.
+        // Bridge sends this in the finalize body; route.ts feeds it to
+        // computeOutcome to distinguish `dropped_no_input` from
+        // `dropped_mid_call` and from `unclear_engaged`.
+        this.realUserUtterances = 0
         // Debounce timer for "user paused → process turn"
         this.userPauseTimer = null
         this.USER_PAUSE_MS = Number(process.env.USER_PAUSE_MS ?? 1200)
@@ -179,6 +191,13 @@ class CallSession {
     }
 
     async start() {
+        // PR #57 — cache scenario-specific tool overrides once. When
+        // outcomeSchema is absent this is just a reference to the
+        // module-level TOOLS array (no allocation); when present, it's
+        // a deep clone with `save_lead_data.field` enum'd to canonical
+        // keys. Each turn passes this through to chatTurn.
+        this.tools = llm.enabled() ? llm.buildTools(this.scenario) : null
+
         // Build system prompt from scenario, push as the very first message.
         this.messages.push({
             role: 'system',
@@ -256,6 +275,12 @@ class CallSession {
         // de-dupes); the helper itself is allowed to fire many times
         // — the endpoint is idempotent.
         this.onUserSpoke()
+        // PR #57 — count REAL user utterances (excludes synthetic
+        // wake-up messages injected by _onSilenceTimeout). This is
+        // the signal the outcome mapper uses to distinguish
+        // dropped_no_input (counter=0) from dropped_mid_call or
+        // unclear_engaged (counter>0).
+        this.realUserUtterances += 1
         // Lead actually said something — reset the no-input counter so a
         // single mid-call gap doesn't end up as «strike 2 / abandoned».
         this.silenceStrikes = 0
@@ -293,7 +318,7 @@ class CallSession {
 
         let result
         try {
-            result = await llm.chatTurn({ messages: this.messages })
+            result = await llm.chatTurn({ messages: this.messages, tools: this.tools })
         } catch (err) {
             console.error(`[call ${this.callUuid}] llm error: ${err.message}`)
             this._setState('listening')
@@ -369,10 +394,16 @@ class CallSession {
         }
 
         if (name === 'end_call') {
+            // PR #57 — propagate qualification_score through to the
+            // finalize payload. Optional from the LLM's perspective;
+            // CRM-side mapper clamps + persists into Call.qualificationScore.
             this.finalResult = {
                 qualification_status: args.qualification_status,
                 lead_summary: args.lead_summary,
                 reason: args.reason,
+                qualification_score: typeof args.qualification_score === 'number'
+                    ? args.qualification_score
+                    : null,
                 manager_task: args.manager_task ?? { should_create: false },
                 lead_data: this.leadData,
             }
@@ -437,6 +468,10 @@ class CallSession {
                 result: this.finalResult,
                 leadData: this.leadData,
                 transcript: this.messages.filter(m => m.role === 'user' || m.role === 'assistant'),
+                // PR #57 — real STT-derived user turn count (excludes
+                // bridge-synthesized silence wake-ups). CRM's
+                // outcome-mapper uses this to distinguish drop categories.
+                realUserUtterances: this.realUserUtterances,
             })
         } catch (err) {
             console.error(`[call ${this.callUuid}] onFinalize threw: ${err.message}`)

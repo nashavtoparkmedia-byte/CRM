@@ -81,6 +81,19 @@ const TOOLS = [
                         type: 'string',
                         description: 'Короткое объяснение, почему такой итог.',
                     },
+                    // PR #57: numeric quality score for analytics + funnel.
+                    // Optional: not_qualified leads can skip it. For
+                    // qualified/unclear, 0 = низкое качество, 100 = высокое.
+                    // Учитывай комплексность ответов, готовность,
+                    // чистоту намерения.
+                    qualification_score: {
+                        type: 'integer',
+                        minimum: 0,
+                        maximum: 100,
+                        description:
+                            'Числовая оценка качества лида 0-100 (низкое → высокое). ' +
+                            'Заполняй для qualified и unclear. Для not_qualified можно не заполнять.',
+                    },
                     manager_task: {
                         type: 'object',
                         description:
@@ -122,6 +135,51 @@ const TOOLS = [
 ]
 
 /**
+ * Build the OpenAI tools array for one scenario (PR #57). When the
+ * scenario carries an `outcomeSchema` (canonical field declarations),
+ * override `save_lead_data.field` to an enum of those canonical keys
+ * so the model is forced to use them at the point of tool-call. The
+ * CRM-side validator is the safety net; this is the primary
+ * enforcement.
+ *
+ * Scenarios without outcomeSchema get the legacy free-form tools —
+ * full back-compat with existing scenarios.
+ *
+ * Pure function. Caller (CallSession) builds this once at session
+ * start and reuses across turns.
+ */
+function buildTools(scenario) {
+    const fields = scenario?.outcomeSchema?.fields
+    if (!Array.isArray(fields) || fields.length === 0) {
+        return TOOLS  // legacy passthrough — module-level array
+    }
+    const canonicalKeys = fields.map(f => f && f.key).filter(Boolean)
+    if (canonicalKeys.length === 0) return TOOLS
+
+    // Deep-clone TOOLS to avoid mutating the shared module-level array
+    // (multiple concurrent sessions would otherwise corrupt each other).
+    // JSON round-trip is fine — these are plain JSON-shaped objects.
+    const tools = JSON.parse(JSON.stringify(TOOLS))
+    const saveLeadData = tools.find(t => t?.function?.name === 'save_lead_data')
+    if (saveLeadData) {
+        const fieldHints = fields.map(f => {
+            const req = f.required ? ' (обязательно)' : ''
+            const type = f.type === 'enum'
+                ? `enum [${(f.values ?? []).join(', ')}]`
+                : f.type
+            const label = f.label ? ` — ${f.label}` : ''
+            return `${f.key}: ${type}${req}${label}`
+        }).join('; ')
+        saveLeadData.function.parameters.properties.field = {
+            type: 'string',
+            enum: canonicalKeys,
+            description: 'Канонические поля сценария — выбирай ТОЛЬКО из этого списка: ' + fieldHints,
+        }
+    }
+    return tools
+}
+
+/**
  * Send one turn of conversation and parse the model's response.
  *
  * @param {Object} args
@@ -130,11 +188,14 @@ const TOOLS = [
  *   Full conversation so far (system + user + assistant + tool turns).
  * @param {string} [args.model]      Override model (default gpt-4o-mini)
  * @param {number} [args.timeoutMs]  Network timeout
+ * @param {Array}  [args.tools]      Override the tool set (PR #57). When
+ *                                   omitted, the module-level legacy
+ *                                   TOOLS array is used.
  * @returns {Promise<{kind: 'text', content: string} |
  *                   {kind: 'function', name: string, args: object, callId: string} |
  *                   {kind: 'empty'}>}
  */
-async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIMEOUT_MS }) {
+async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIMEOUT_MS, tools }) {
     const apiKey = runtime.getOpenAiKey()
     if (!apiKey) {
         throw new Error('OpenAI API key is not configured (DB or .env) — llm-client is disabled')
@@ -154,7 +215,7 @@ async function chatTurn({ messages, model = OPENAI_MODEL, timeoutMs = OPENAI_TIM
             body: JSON.stringify({
                 model,
                 messages,
-                tools: TOOLS,
+                tools: tools ?? TOOLS,
                 temperature: 0.4,
                 // 4o-mini is fast enough for ~1s p50 here. We don't stream
                 // because the dialog turn is short and we need the structured
@@ -223,6 +284,37 @@ function buildSystemMessage(scenario) {
         '— Если лид агрессивен, требует человека или вопрос вне сценария — вызывай transfer_to_manager.',
         '— Не сочиняй факты. Не отвечай на off-topic — мягко возвращай к вопросу.',
     ]
+
+    // PR #57: when the scenario declares an outcomeSchema, append a
+    // canonical-key cheat sheet so the model uses the right `field`
+    // names in save_lead_data. The save_lead_data tool's `field` arg
+    // also gets constrained to this enum via buildTools — this prose
+    // version is for the human-language reasoning layer.
+    const fields = scenario.outcomeSchema?.fields
+    if (Array.isArray(fields) && fields.length > 0) {
+        const lines = fields.map(f => {
+            const req = f.required ? ' (обязательно)' : ''
+            const type = f.type === 'enum'
+                ? `enum [${(f.values ?? []).join(', ')}]`
+                : f.type
+            const label = f.label ? ` — ${f.label}` : ''
+            return `  • ${f.key}: ${type}${req}${label}`
+        }).join('\n')
+        promptParts.push(
+            '',
+            'Канонические поля для save_lead_data (используй ТОЛЬКО эти имена field):',
+            lines,
+        )
+    }
+
+    // PR #57: also nudge the model to emit qualification_score in
+    // end_call. The tool schema already has the field — this prose
+    // reinforces it for older models that under-use optional args.
+    promptParts.push(
+        '',
+        'В end_call добавь qualification_score 0-100 (опционально для not_qualified): оценка качества лида.',
+    )
+
     return promptParts.join('\n')
 }
 
@@ -236,6 +328,7 @@ function enabled() {
 module.exports = {
     chatTurn,
     buildSystemMessage,
+    buildTools,
     TOOLS,
     enabled,
 }

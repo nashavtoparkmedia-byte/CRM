@@ -4,6 +4,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { enqueueAnalyze } from '@/lib/queue/queues'
+// PR #57: Structured Outcome Layer. Pure-CommonJS helpers (no TS loader
+// needed; node:test can require them directly).
+import {
+    computeOutcome,
+    tagWithValidationIssues,
+    normalizeQualificationScore,
+} from '@/lib/ai-call/outcome-mapper'
+import { validateLeadData } from '@/lib/ai-call/scenario-schema'
 
 /**
  * Race a promise against a deadline. If the inner promise doesn't settle
@@ -41,20 +49,32 @@ export const dynamic = 'force-dynamic'
  *      qualification_status: 'qualified' | 'not_qualified' | 'unclear'
  *      lead_summary: string
  *      reason: string
+ *      qualification_score?: number             — 0–100, PR #57 (optional)
  *      manager_task?: { should_create: boolean, summary?: string, priority?: 'high'|'normal'|'low' }
  *      transfer_reason?: string
  *      lead_data?: Record<string, string>
  *    }
  *    leadData?: Record<string, string>
  *    transcript?: Array<{ role: 'user'|'assistant', content: string }>
+ *    realUserUtterances?: number               — PR #57: real STT-derived
+ *      user turns ONLY (excludes bridge-synthesized silence wake-ups).
+ *      Drives outcome classification. Older bridges that don't send this
+ *      field fall back to counting user-role items in `transcript`.
  *  }
  *
  * Side-effects:
  *   - Call.aiSessionStatus → 'ended' | 'failed' | 'transferring'
- *   - Call.aiAnalysis ← result JSON (incl. lead_data merged in)
+ *   - Call.aiAnalysis ← result JSON (incl. lead_data merged in) — UNCHANGED
+ *     and preserved verbatim for forensics / debugging.
  *   - Call.aiSummary ← result.lead_summary
  *   - Call.aiTransferReason ← result.transfer_reason
  *   - Call.endedAt, durationSec — computed
+ *   - PR #57 — Structured Outcome Layer:
+ *     - Call.aiOutcome           ← deterministic enum from outcome-mapper
+ *     - Call.aiOutcomeReason     ← machine-friendly slug + optional
+ *                                  ';validation_issues=N' suffix
+ *     - Call.qualificationScore  ← LLM-provided 0–100 score (clamped)
+ *     - Call.leadDataStructured  ← scenario-schema-validated canonical fields
  *   - Optionally creates a Task for the manager when
  *     result.manager_task.should_create is true.
  */
@@ -65,7 +85,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     let body: any
     try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }) }
 
-    const call = await prisma.call.findUnique({ where: { id } })
+    // Include the scenario row so the outcome-mapper validation step can
+    // see `outcomeSchema` without a second roundtrip. The relation may
+    // be null for legacy / hand-created Call rows; the validator
+    // gracefully passes through when schema is absent.
+    const call = await (prisma as any).call.findUnique({
+        where: { id },
+        include: { aiScenario: { select: { outcomeSchema: true } } },
+    })
     if (!call) return NextResponse.json({ error: 'not_found' }, { status: 404 })
 
     const reason: string = body.reason ?? 'closed'
@@ -88,6 +115,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             qualification_status: result.qualification_status ?? 'unclear',
             lead_summary: result.lead_summary ?? null,
             reason: result.reason ?? null,
+            // qualification_score persists through aiAnalysis too — keeps
+            // raw / structured paths in lockstep for forensics.
+            qualification_score: result.qualification_score ?? null,
+            transfer_reason: result.transfer_reason ?? null,
             manager_task: result.manager_task ?? { should_create: false },
             lead_data: leadData ?? result.lead_data ?? {},
         }
@@ -124,6 +155,39 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         ;(aiAnalysisPayload as any).created_task_id = task.id
     }
 
+    // ── PR #57: Structured Outcome Layer ─────────────────────────────────
+    // Compute the deterministic AiOutcome enum from finalize inputs.
+    // `realUserUtterances` comes from the bridge (counter of real STT
+    // finals only, excluding synthetic wake-ups). For older bridges that
+    // pre-date this field, fall back to counting user-role transcript
+    // items — the synthetic-wake-up false positive is tolerable because
+    // it only affects edge cases (full-silence calls); the new field
+    // closes that hole exactly.
+    const realUserUtterances: number = typeof body.realUserUtterances === 'number'
+        ? body.realUserUtterances
+        : Array.isArray(body.transcript)
+            ? body.transcript.filter((t: any) => t?.role === 'user').length
+            : 0
+
+    const { outcome: aiOutcome, reason: outcomeReasonSlug } = computeOutcome({
+        aiAnalysis: aiAnalysisPayload,
+        reason,
+        sessionStatus,
+        realUserUtterances,
+    })
+
+    // Validate lead_data against the scenario's outcomeSchema (if any).
+    // Extra LLM keys are silently dropped; mismatches surface as `issues`
+    // for the opsLog/runbook signal but DO NOT block finalize.
+    const scenarioOutcomeSchema = (call as any).aiScenario?.outcomeSchema ?? null
+    const { data: leadDataStructured, issues: validationIssues } = validateLeadData(
+        aiAnalysisPayload?.lead_data ?? null,
+        scenarioOutcomeSchema,
+    )
+
+    const aiOutcomeReason = tagWithValidationIssues(outcomeReasonSlug, validationIssues.length)
+    const qualificationScore = normalizeQualificationScore(aiAnalysisPayload?.qualification_score)
+
     await (prisma as any).call.update({
         where: { id },
         data: {
@@ -132,17 +196,44 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             durationSec,
             hangupCause: 'NORMAL_CLEARING',
             aiSessionStatus: sessionStatus,
+            // Raw aiAnalysis preserved verbatim for forensics / debugging
+            // — never overwritten with structured fields.
             aiAnalysis: aiAnalysisPayload as any,
             aiSummary: aiAnalysisPayload?.lead_summary ?? null,
             aiTransferReason: result?.transfer_reason ?? null,
+            // Structured outcome columns — queryable, A/B-testable.
+            aiOutcome,
+            aiOutcomeReason,
+            qualificationScore,
+            leadDataStructured: leadDataStructured as any,
         } as any,
     })
+
+    if (validationIssues.length > 0) {
+        // Runbook signal: scenario authors / PMs see this and know to
+        // either tighten the scenario prompt or relax the schema.
+        // Capped at 10 issues to keep logs bounded; the count above is
+        // the source of truth for SQL queries (the `;validation_issues=N`
+        // suffix on aiOutcomeReason).
+        opsLog('warn', 'ai_outcome_schema_validation_issues', {
+            callId: id,
+            scenarioId: call.aiScenarioId ?? null,
+            issuesCount: validationIssues.length,
+            issues: validationIssues.slice(0, 10),
+        })
+    }
 
     opsLog('info', 'ai_call_finalized', {
         callId: id,
         reason,
         sessionStatus,
         qualification: aiAnalysisPayload?.qualification_status,
+        // PR #57 — structured fields for grep-friendly ops visibility.
+        aiOutcome,
+        aiOutcomeReason,
+        qualificationScore,
+        structuredLeadDataFieldsCount: Object.keys(leadDataStructured).length,
+        validationIssuesCount: validationIssues.length,
         taskId: createdTask?.id,
     })
 

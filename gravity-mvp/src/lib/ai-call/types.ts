@@ -63,7 +63,51 @@ export interface AiCallScenarioConfig {
     questions: AiCallScenarioQuestion[]
     /** Soft target call length in seconds — informs LLM about pacing. */
     targetDurationSec?: number
+    /**
+     * Canonical-key schema for the lead_data the LLM gathers via
+     * save_lead_data (PR #57). When present, bridge constrains the
+     * `field` arg in the save_lead_data tool to this list of keys, and
+     * the CRM finalize mapper validates raw lead_data into typed
+     * canonical fields. NULL/undefined = no schema; legacy passthrough.
+     */
+    outcomeSchema?: AiCallOutcomeSchema
 }
+
+/**
+ * Outcome schema declared per scenario (PR #57). Defines the canonical
+ * lead_data keys the LLM may emit via save_lead_data, with types and
+ * required flags. Validation lives in src/lib/ai-call/scenario-schema.js
+ * (pure CommonJS so node:test can load it without a TS loader).
+ */
+export interface AiCallOutcomeSchema {
+    fields: AiCallOutcomeSchemaField[]
+}
+
+/**
+ * One canonical lead_data field. `type` drives coercion + validation:
+ *   - integer: parseInt; supports min / max bounds
+ *   - boolean: native true/false OR Russian/English allowlist
+ *              (да/нет/yes/no/true/false/есть/нету/1/0)
+ *   - string:  non-empty after trim; optional maxLength truncation
+ *   - enum:    case-insensitive match against `values`
+ */
+export type AiCallOutcomeSchemaField =
+    | { key: string; type: 'integer'; required: boolean; min?: number; max?: number; label?: string }
+    | { key: string; type: 'boolean'; required: boolean; label?: string }
+    | { key: string; type: 'string';  required: boolean; maxLength?: number; label?: string }
+    | { key: string; type: 'enum';    required: boolean; values: string[]; label?: string }
+
+/**
+ * Deterministic outcome enum mirrors the Prisma AiOutcome enum exactly.
+ * See outcome-mapper.js for the decision tree.
+ */
+export type AiCallOutcomeValue =
+    | 'qualified'
+    | 'not_qualified'
+    | 'unclear_engaged'
+    | 'dropped_mid_call'
+    | 'dropped_no_input'
+    | 'error'
 
 export interface AiCallScenarioQuestion {
     /** Free-text question the AI should naturally weave into the dialog. */

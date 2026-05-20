@@ -749,6 +749,32 @@ model Call {
   aiScenario       AiCallScenario?      @relation(fields: [aiScenarioId], references: [id])
   aiMessages       AiCallMessage[]
 
+  // Structured Outcome Layer (PR #57). Lifts qualification result out of
+  // the opaque `aiAnalysis Json?` blob into typed, queryable columns.
+  // Raw aiAnalysis is preserved untouched for forensics; business queries
+  // (funnel reports, manager-queue sorting, A/B variants) hit these.
+  //
+  // aiOutcome           — deterministic enum from outcome-mapper.js. Six
+  //                       values, covers every finalize path including
+  //                       drops + bridge errors.
+  // aiOutcomeReason     — machine-friendly snake_case slug, NOT a summary
+  //                       (`aiSummary` is the human-readable one). Useful
+  //                       for `WHERE aiOutcomeReason = 'llm_transferred_to_manager'`.
+  //                       Appended with `;validation_issues=N` when LLM
+  //                       lead_data didn't match the scenario's
+  //                       outcomeSchema — operator runbook signal.
+  // qualificationScore  — 0–100 lead-quality score returned by the LLM in
+  //                       the end_call tool. Nullable: not all scenarios
+  //                       wire a score (older scenarios, scenarios where
+  //                       scoring doesn't make sense).
+  // leadDataStructured  — canonical-keyed validated lead data per the
+  //                       scenario's outcomeSchema. Extra keys dropped,
+  //                       types coerced, issues logged in opsLog.
+  aiOutcome           AiOutcome?
+  aiOutcomeReason     String?
+  qualificationScore  Int?
+  leadDataStructured  Json?
+
   metadata      Json?         @default("{}")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -763,6 +789,9 @@ model Call {
   @@index([fromNumber])
   @@index([toNumber])
   @@index([isAi, startedAt(sort: Desc)])
+  // Funnel analytics: «qualified leads last 7 days», «outcome distribution
+  // per scenario». Bounded scan even at high call volume.
+  @@index([aiOutcome, startedAt(sort: Desc)])
 }
 
 /// Per-utterance transcript of an AI-driven call: each row is one finalized
@@ -854,6 +883,13 @@ model AiCallScenario {
   questions         Json           @default("[]")
   /// Soft target call length in seconds — informs LLM about pacing.
   targetDurationSec Int?
+  /// Canonical-key schema for the lead_data the LLM collects via
+  /// save_lead_data. Shape: { fields: [{ key, type, required, ...constraints }] }.
+  /// Type is one of 'integer' | 'boolean' | 'string' | 'enum'. NULL means
+  /// no schema — finalize mapper passes lead_data through verbatim
+  /// (back-compat with pre-PR scenarios). See src/lib/ai-call/scenario-schema.js
+  /// and src/lib/ai-call/types.ts for the validated shape.
+  outcomeSchema     Json?
   isActive          Boolean        @default(true)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
@@ -1592,5 +1628,28 @@ enum AiCallSessionStatus {
   transferring   // SIP REFER in flight — connecting to manager
   ended          // hangup, normal completion
   failed         // STT/LLM/TTS error or bridge dropped
+}
+
+/// Structured business-outcome of an AI-call (PR #57). Set by the
+/// outcome-mapper deterministic decision tree at finalize time. Used
+/// for queryable analytics that don't require JSON parsing.
+///
+/// qualified          — LLM end_call(qualification_status=qualified)
+/// not_qualified      — LLM end_call(qualification_status=not_qualified)
+/// unclear_engaged    — lead engaged, qualification unclear (or LLM
+///                      requested human transfer; manager task created
+///                      separately in finalize route)
+/// dropped_mid_call   — lead spoke at least once then hung up before
+///                      LLM could end the call (no qualification verdict)
+/// dropped_no_input   — lead never gave real speech; either pre-greeting
+///                      hangup or the silence-timeout path fired
+/// error              — bridge / STT / LLM technical failure
+enum AiOutcome {
+  qualified
+  not_qualified
+  unclear_engaged
+  dropped_mid_call
+  dropped_no_input
+  error
 }
 

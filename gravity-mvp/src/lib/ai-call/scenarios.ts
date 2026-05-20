@@ -17,13 +17,14 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import type { AiCallScenarioConfig, AiCallScenarioQuestion } from './types'
+import type { AiCallOutcomeSchema, AiCallScenarioConfig, AiCallScenarioQuestion } from './types'
 import {
     DEFAULT_SCENARIO_NAME,
     DEFAULT_SCENARIO_DESCRIPTION,
     DEFAULT_SCENARIO_SYSTEM_PROMPT,
     DEFAULT_SCENARIO_QUESTIONS,
     DEFAULT_SCENARIO_TARGET_SEC,
+    DEFAULT_SCENARIO_OUTCOME_SCHEMA,
 } from './default-scenario'
 
 // Prisma types for AiCallScenario/AiCallProject are generated after
@@ -55,6 +56,10 @@ function rowToConfig(row: any): AiCallScenarioWithProject {
         systemPrompt: row.systemPrompt,
         questions: (row.questions as AiCallScenarioQuestion[]) ?? [],
         targetDurationSec: row.targetDurationSec ?? undefined,
+        // outcomeSchema is opaque JSON in Prisma. PR #57: scenarios that
+        // opted-in get canonical-key validation at finalize-time + LLM
+        // tool constraints at runtime. NULL = legacy passthrough.
+        outcomeSchema: (row.outcomeSchema as AiCallOutcomeSchema | null) ?? undefined,
         projectId: row.projectId ?? null,
         projectName: row.project?.name ?? null,
     }
@@ -114,6 +119,7 @@ export async function listScenarios(opts?: { includeInactive?: boolean; projectI
             systemPrompt: DEFAULT_SCENARIO_SYSTEM_PROMPT,
             questions: DEFAULT_SCENARIO_QUESTIONS,
             targetDurationSec: DEFAULT_SCENARIO_TARGET_SEC,
+            outcomeSchema: DEFAULT_SCENARIO_OUTCOME_SCHEMA,
             projectId: DEFAULT_PROJECT_ID,
         })
         return [seeded]
@@ -135,6 +141,7 @@ export async function createScenario(input: {
     systemPrompt: string
     questions: AiCallScenarioQuestion[]
     targetDurationSec?: number
+    outcomeSchema?: AiCallOutcomeSchema
     projectId?: string
 }): Promise<AiCallScenarioWithProject> {
     const row = await db.aiCallScenario.create({
@@ -144,6 +151,7 @@ export async function createScenario(input: {
             systemPrompt: input.systemPrompt,
             questions: input.questions as any,
             targetDurationSec: input.targetDurationSec,
+            outcomeSchema: input.outcomeSchema as any,
             projectId: input.projectId ?? DEFAULT_PROJECT_ID,
             isActive: true,
         },
@@ -160,6 +168,7 @@ export async function updateScenario(
         systemPrompt?: string
         questions?: AiCallScenarioQuestion[]
         targetDurationSec?: number
+        outcomeSchema?: AiCallOutcomeSchema | null
         isActive?: boolean
         projectId?: string
     },
@@ -172,6 +181,7 @@ export async function updateScenario(
             ...(patch.systemPrompt !== undefined && { systemPrompt: patch.systemPrompt }),
             ...(patch.questions !== undefined && { questions: patch.questions as any }),
             ...(patch.targetDurationSec !== undefined && { targetDurationSec: patch.targetDurationSec }),
+            ...(patch.outcomeSchema !== undefined && { outcomeSchema: patch.outcomeSchema as any }),
             ...(patch.isActive !== undefined && { isActive: patch.isActive }),
             ...(patch.projectId !== undefined && { projectId: patch.projectId }),
         },
