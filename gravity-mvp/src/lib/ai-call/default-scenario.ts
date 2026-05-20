@@ -6,7 +6,7 @@
  * scripted questions, objection handling built into the system prompt.
  */
 
-import type { AiCallScenarioQuestion } from './types'
+import type { AiCallOutcomeSchema, AiCallScenarioQuestion } from './types'
 
 export const DEFAULT_SCENARIO_NAME = 'Квалификация водителя (по умолчанию)'
 
@@ -62,3 +62,28 @@ export const DEFAULT_SCENARIO_QUESTIONS: AiCallScenarioQuestion[] = [
         intentKeywords: ['эта неделя', 'следующая', 'завтра', 'послезавтра', 'выходные'],
     },
 ]
+
+/**
+ * Canonical-key schema for the default driver-qualification scenario
+ * (PR #57). Maps the 5 questions above into 6 typed fields. Bridge
+ * constrains `save_lead_data.field` to this list of keys; finalize
+ * mapper validates / coerces values into canonical typed shape.
+ *
+ * Adding a field here without updating the system prompt is fine —
+ * the model will just not populate it. Removing a required field
+ * here without updating the prompt would surface validation issues
+ * on every call (the runbook signal in `aiOutcomeReason`).
+ */
+export const DEFAULT_SCENARIO_OUTCOME_SCHEMA: AiCallOutcomeSchema = {
+    fields: [
+        { key: 'hasLicenseB',     type: 'boolean', required: true,  label: 'Водительские права B' },
+        { key: 'experienceYears', type: 'integer', required: false, min: 0, max: 60, label: 'Стаж вождения (лет)' },
+        { key: 'carOwnership',    type: 'enum',    required: true,
+          values: ['own', 'rent_needed', 'either'], label: 'Машина: своя / аренда' },
+        { key: 'shiftPreference', type: 'enum',    required: true,
+          values: ['day', 'night', 'rotating', 'any'], label: 'Предпочитаемый график' },
+        { key: 'city',            type: 'string',  required: false, maxLength: 80, label: 'Город / район работы' },
+        { key: 'readyAt',         type: 'enum',    required: false,
+          values: ['this_week', 'next_week', 'later', 'unsure'], label: 'Когда готов оформляться' },
+    ],
+}

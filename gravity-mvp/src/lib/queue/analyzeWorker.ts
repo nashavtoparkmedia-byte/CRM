@@ -192,6 +192,26 @@ async function analyzeAiCall(callId: string, transcript: string, model: string):
 
     const parsed: QualificationResult = parseQualifyResponse(JSON.parse(content))
 
+    // PR #57 — Structured Outcome Layer (fallback path).
+    //
+    // The analyzeWorker only fires when the bridge finalized WITHOUT an
+    // end_call tool result — i.e. the lead hung up mid-call (transcript
+    // exists, otherwise the enqueue is skipped in finalize route.ts).
+    // So the CALL EVENT is unambiguously a drop, regardless of what the
+    // post-hoc analyzer says about lead quality.
+    //
+    // Two distinct dimensions:
+    //   - aiOutcome           — what the call EVENT was (here: drop)
+    //   - qualificationScore  — how good the LEAD was (analyzer can opine)
+    //
+    // We set aiOutcome=dropped_mid_call deterministically. We do NOT
+    // touch qualificationScore here — the post-hoc analyzer doesn't
+    // currently emit a numeric score, and back-fitting one from the
+    // parsed.qualification_status free-text would be guessing.
+    // leadDataStructured stays null in this path: parsed.answers has a
+    // fixed analyzer schema (has_license / experience_years / ...) that
+    // is intentionally different from the scenario-canonical schema,
+    // and mapping between them is out of scope for this PR.
     await prisma.call.update({
         where: { id: callId },
         data: {
@@ -199,7 +219,9 @@ async function analyzeAiCall(callId: string, transcript: string, model: string):
             // manager evaluation, not for lead qualification.
             aiSummary: parsed.lead_summary,
             aiAnalysis: parsed as unknown as Prisma.InputJsonValue,
-        },
+            aiOutcome: 'dropped_mid_call' as any,
+            aiOutcomeReason: 'user_hangup_recovered_by_post_hoc_analysis',
+        } as any,
     })
 
     logUsage(callId, 'analyze_ai_call_saved', model, startedAt, completion.usage, {
