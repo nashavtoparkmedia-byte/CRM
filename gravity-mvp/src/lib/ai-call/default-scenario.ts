@@ -6,7 +6,12 @@
  * scripted questions, objection handling built into the system prompt.
  */
 
-import type { AiCallGreetingVariant, AiCallOutcomeSchema, AiCallScenarioQuestion } from './types'
+import type {
+    AiCallGreetingVariant,
+    AiCallOutcomeSchema,
+    AiCallScenarioFragments,
+    AiCallScenarioQuestion,
+} from './types'
 
 export const DEFAULT_SCENARIO_NAME = 'Квалификация водителя (по умолчанию)'
 
@@ -129,3 +134,86 @@ export const DEFAULT_SCENARIO_GREETING_VARIANTS: AiCallGreetingVariant[] = [
         text: 'Здравствуйте! Это НашАвтоПарк — вы оставляли у нас заявку. Удобно говорить?',
     },
 ]
+
+/**
+ * Default scenario prompt fragments (PR #63). Exposed as a const so a
+ * PM / admin can opt the default scenario into the fragment path with
+ * one click in a future UI. NOT applied to the seeded default scenario
+ * by default — existing prod scenarios stay on the legacy monolithic
+ * prompt path until the architect chooses to switch.
+ *
+ * Composed by tools/audio-bridge-day1/prompt-fragments.js into the
+ * system prompt at call start. Order:
+ *   [greeting] [qualification_intro] [questions block]
+ *   [speech + scenario rules — scaffolding]
+ *   [transfer_framing] [objection_soft?] [recovery] [closing?]
+ *   [canonical-keys cheat sheet, if outcomeSchema set]
+ *   [end_call qualification_score nudge]
+ *
+ * Each fragment has an `id` + `version`. When a fragment is iterated,
+ * bump the version (or change the id) so funnel attribution can tell
+ * old text from new.
+ */
+export const DEFAULT_SCENARIO_FRAGMENTS_V1: AiCallScenarioFragments = {
+    greeting: {
+        id: 'default-greeting',
+        version: 1,
+        text:
+            'Ты — голосовой ассистент компании «НашАвтоПарк», которая помогает водителям ' +
+            'зарабатывать в Яндекс Pro, MAX и других агрегаторах. Ты звонишь лиду, ' +
+            'который оставил заявку через сайт или мессенджер.',
+    },
+    qualification_intro: {
+        id: 'default-qual-intro',
+        version: 1,
+        text:
+            'Твоя задача — за 2 минуты в живом дружелюбном разговоре выяснить ключевые ' +
+            'детали и передать звонок менеджеру для финального оформления. Стиль речи: ' +
+            'короткие фразы (10–15 слов), без формальных оборотов. Слова-связки «ага», ' +
+            '«понятно», «отлично» — нормально.',
+    },
+    transfer_framing: {
+        id: 'default-transfer-framing',
+        version: 1,
+        text:
+            'Когда все 5 вопросов закрыты — скажи: «Отлично, всё записал. Сейчас соединю ' +
+            'с менеджером — он расскажет про конкретные условия и оформление». Затем ' +
+            'вызови transfer_to_manager(reason="квалификация пройдена").',
+        hypothesis:
+            'Явная отсылка к «менеджер расскажет конкретные условия» снижает падение ' +
+            'на этом шаге; без этого лиды иногда вешали трубку до transfer.',
+    },
+    recovery: {
+        id: 'default-recovery',
+        version: 1,
+        text:
+            'Если лид молчит или STT прислал мусор: переспроси один раз коротко ' +
+            '(«Не расслышал, повторите?»). Дважды НЕ переспрашивай — лучше задай ' +
+            'следующий вопрос. Не повторяй greeting целиком.',
+    },
+    objection_soft: {
+        id: 'default-objection-soft',
+        version: 1,
+        text:
+            'Обработка возражений:\n' +
+            '— «Уже работаю / не интересно» → вежливо: «Понял, спасибо что уделили время», ' +
+            'end_call(qualification_status=not_qualified).\n' +
+            '— «Сколько платите / какая аренда / какие комиссии» → НЕ говори цифры сам, ' +
+            'transfer_to_manager(reason="вопрос по условиям").\n' +
+            '— «Какие документы / как оформляться» → transfer_to_manager(reason="вопрос по оформлению").\n' +
+            '— «А вы кто / откуда у вас мой номер» → «Вы оставляли заявку на нашем сайте — ' +
+            'могу проверить дату, если важно. Удобно сейчас минутку?»',
+        hypothesis:
+            'Деление возражений на 4 explicit кейса снижает дрейф LLM в свободную ' +
+            'интерпретацию и часто-наблюдаемый «понял, спасибо» на любой push-back.',
+    },
+    closing: {
+        id: 'default-closing',
+        version: 1,
+        text:
+            'Жёсткие правила:\n' +
+            '— НИКОГДА не называй конкретные суммы, проценты, размеры выплат — только менеджер.\n' +
+            '— НИКОГДА не обещай конкретные сроки выхода на смену без подтверждения от менеджера.\n' +
+            '— Если что-то непонятно или вне сценария — transfer_to_manager, не выдумывай ответ.',
+    },
+}

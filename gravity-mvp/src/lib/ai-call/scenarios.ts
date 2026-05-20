@@ -21,6 +21,7 @@ import type {
     AiCallGreetingVariant,
     AiCallOutcomeSchema,
     AiCallScenarioConfig,
+    AiCallScenarioFragments,
     AiCallScenarioQuestion,
 } from './types'
 import {
@@ -70,6 +71,10 @@ function rowToConfig(row: any): AiCallScenarioWithProject {
         // that opted-in get A/B variant assignment at call start. NULL
         // = legacy LLM-generated greeting.
         greetingVariants: (row.greetingVariants as AiCallGreetingVariant[] | null) ?? undefined,
+        // fragments is opaque JSON in Prisma. PR #63: scenarios that
+        // opted-in get composable system-prompt assembly. NULL or
+        // missing required slots → legacy monolithic prompt path.
+        fragments: (row.fragments as AiCallScenarioFragments | null) ?? undefined,
         projectId: row.projectId ?? null,
         projectName: row.project?.name ?? null,
     }
@@ -154,6 +159,7 @@ export async function createScenario(input: {
     targetDurationSec?: number
     outcomeSchema?: AiCallOutcomeSchema
     greetingVariants?: AiCallGreetingVariant[]
+    fragments?: AiCallScenarioFragments
     projectId?: string
 }): Promise<AiCallScenarioWithProject> {
     const row = await db.aiCallScenario.create({
@@ -165,6 +171,7 @@ export async function createScenario(input: {
             targetDurationSec: input.targetDurationSec,
             outcomeSchema: input.outcomeSchema as any,
             greetingVariants: input.greetingVariants as any,
+            fragments: input.fragments as any,
             projectId: input.projectId ?? DEFAULT_PROJECT_ID,
             isActive: true,
         },
@@ -183,6 +190,7 @@ export async function updateScenario(
         targetDurationSec?: number
         outcomeSchema?: AiCallOutcomeSchema | null
         greetingVariants?: AiCallGreetingVariant[] | null
+        fragments?: AiCallScenarioFragments | null
         isActive?: boolean
         projectId?: string
     },
@@ -197,6 +205,7 @@ export async function updateScenario(
             ...(patch.targetDurationSec !== undefined && { targetDurationSec: patch.targetDurationSec }),
             ...(patch.outcomeSchema !== undefined && { outcomeSchema: patch.outcomeSchema as any }),
             ...(patch.greetingVariants !== undefined && { greetingVariants: patch.greetingVariants as any }),
+            ...(patch.fragments !== undefined && { fragments: patch.fragments as any }),
             ...(patch.isActive !== undefined && { isActive: patch.isActive }),
             ...(patch.projectId !== undefined && { projectId: patch.projectId }),
         },
