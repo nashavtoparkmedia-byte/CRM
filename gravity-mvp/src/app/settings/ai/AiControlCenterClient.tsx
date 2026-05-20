@@ -2702,6 +2702,23 @@ export default function AiControlCenterClient({
                                             {p.conflictsDetected != null && p.conflictsDetected > 0 && (
                                                 <span className="text-amber-600">· {p.conflictsDetected} конфликтов</span>
                                             )}
+                                            {/* PR6.1: Trusted Knowledge Guard counters. Видимы
+                                                только если защитный слой реально что-то отловил.
+                                                Зелёное "подтверждает" — позитивный сигнал что
+                                                менеджеры говорят по правилам. Красное
+                                                "противоречит" — сигнал к admin-review. */}
+                                            {p.trustedConflictsBlocked != null && p.trustedConflictsBlocked > 0 && (
+                                                <span title="Менеджеры в чатах сказали что-то, что противоречит подтверждённым правилам компании. Эти записи заблокированы и не попали в активное ядро — но видны для проверки в фильтре «Черновики» / «Без подтверждения»."
+                                                      className="text-red-600 cursor-help">
+                                                    · {p.trustedConflictsBlocked} противоречит правилам — заблокировано
+                                                </span>
+                                            )}
+                                            {p.trustedMatchesBoosted != null && p.trustedMatchesBoosted > 0 && (
+                                                <span title="Менеджеры в чатах подтверждают уже проверенные правила компании. Хороший сигнал — официальная линия совпадает с тем, что менеджеры реально говорят водителям."
+                                                      className="text-green-700 cursor-help">
+                                                    · {p.trustedMatchesBoosted} подтверждает проверенные правила
+                                                </span>
+                                            )}
                                             {p.llmErrors != null && p.llmErrors > 0 && (
                                                 <span className="text-red-600">· {p.llmErrors} ошибок LLM</span>
                                             )}
