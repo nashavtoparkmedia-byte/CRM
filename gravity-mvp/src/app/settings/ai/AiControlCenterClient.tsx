@@ -19,8 +19,11 @@ import {
     getAiRuntimeStats, checkScraperHealth,
     createAiProfile, updateAiProfile, deleteAiProfile, setActiveAiProfile,
     listKnowledgeSections, listItemsBySection, listExtractionJobs,
+    startKnowledgeExtraction, getExtractionJob, saveExtractionQualityTier,
+    getKnowledgeStats as getKnowledgeStatsAction,
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
+    type ExtractionScope,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -112,6 +115,8 @@ interface Props {
     initialSections: KnowledgeSection[]
     initialKnowledgeStats: KnowledgeStats
     initialExtractionJobs: unknown[]
+    /** Сохранённый пресет модели для extraction (PR2). */
+    initialExtractionTier: 'economy' | 'balanced' | 'quality'
     /** Администратор/Руководитель видит все вкладки и может менять настройки.
      *  Менеджеру оставлен только Журнал (read-only + 👍/👎). */
     canEdit: boolean
@@ -216,7 +221,7 @@ function StatusDot({ status, detail }: { status: string, detail?: React.ReactNod
 export default function AiControlCenterClient({
     initialConfig, initialKb, initialImportJobs, initialLogs, initialStats,
     initialProfiles, initialActiveProfileId,
-    initialSections, initialKnowledgeStats, initialExtractionJobs,
+    initialSections, initialKnowledgeStats, initialExtractionJobs, initialExtractionTier,
     canEdit,
 }: Props) {
     // Менеджеру открываем сразу Журнал — это единственная вкладка, где он
@@ -238,10 +243,10 @@ export default function AiControlCenterClient({
     const [isPending, startTransition] = useTransition()
     const [toast, setToast]           = useState<string | null>(null)
 
-    // ─── AI Knowledge Core (PR1, read-only) ──────────────────────
-    const [sections] = useState<KnowledgeSection[]>(initialSections)
-    const [knowledgeStats] = useState<KnowledgeStats>(initialKnowledgeStats)
-    const [extractionJobs] = useState<unknown[]>(initialExtractionJobs)
+    // ─── AI Knowledge Core (PR1+PR2) ─────────────────────────────
+    const [sections, setSections] = useState<KnowledgeSection[]>(initialSections)
+    const [knowledgeStats, setKnowledgeStats] = useState<KnowledgeStats>(initialKnowledgeStats)
+    const [extractionJobs, setExtractionJobs] = useState<unknown[]>(initialExtractionJobs)
     const [knowledgeSubtab, setKnowledgeSubtab] =
         useState<'core' | 'sources' | 'archive'>('core')
     const [selectedSectionId, setSelectedSectionId] = useState<string | null>(
@@ -264,6 +269,92 @@ export default function AiControlCenterClient({
             .finally(() => { if (!cancelled) setKnowledgeItemsLoading(false) })
         return () => { cancelled = true }
     }, [selectedSectionId, knowledgeSubtab])
+
+    // ─── Extraction (PR2.6) ──────────────────────────────────────
+    const [extractionModalOpen, setExtractionModalOpen] = useState(false)
+    const [extractionScopeMode, setExtractionScopeMode] =
+        useState<'last_30d' | 'last_90d' | 'all'>('last_90d')
+    const [extractionTier, setExtractionTier] =
+        useState<'economy' | 'balanced' | 'quality'>(initialExtractionTier)
+    const [extractionStarting, setExtractionStarting] = useState(false)
+    interface ExtractionJobLite {
+        id: string
+        status: string
+        progress: Record<string, number> | null
+        extractionProvider?: string | null
+        extractionModel?: string | null
+        extractionPromptVersion?: string | null
+        extractionQualityTier?: string | null
+        startedAt?: string | null
+        finishedAt?: string | null
+        errorMessage?: string | null
+    }
+    const [activeExtractionJob, setActiveExtractionJob] = useState<ExtractionJobLite | null>(null)
+
+    // Polling — только пока queued/running. На terminal status — финальный
+    // refresh sections+stats+items + toast feedback.
+    useEffect(() => {
+        if (!activeExtractionJob) return
+        if (activeExtractionJob.status === 'completed' ||
+            activeExtractionJob.status === 'partial' ||
+            activeExtractionJob.status === 'failed') {
+            // UX-фикс: failed job отрабатывает мгновенно (нет ключа / нет
+            // сообщений). Без toast пользователь не понимал что произошло.
+            if (activeExtractionJob.status === 'failed') {
+                const msg = activeExtractionJob.errorMessage || 'неизвестная ошибка'
+                showToast('Сбор ядра не запущен: ' + msg)
+            } else if (activeExtractionJob.status === 'partial') {
+                showToast('Сбор завершён частично — детали в Источниках')
+            } else {
+                const created = (activeExtractionJob.progress as Record<string, number> | null)?.itemsCreated ?? 0
+                const merged = (activeExtractionJob.progress as Record<string, number> | null)?.itemsMerged ?? 0
+                showToast(`Сбор завершён: ${created} ${plural(created,'новое','новых','новых')} ${plural(created,'знание','знания','знаний')}` + (merged > 0 ? ` · ${merged} обновлено` : ''))
+            }
+            Promise.all([
+                listKnowledgeSections(),
+                getKnowledgeStatsAction(),
+                listExtractionJobs(10),
+            ]).then(([s, st, jobs]) => {
+                setSections(s as KnowledgeSection[])
+                setKnowledgeStats(st as KnowledgeStats)
+                setExtractionJobs(jobs)
+                if (selectedSectionId) {
+                    listItemsBySection(selectedSectionId, {
+                        includeArchived: knowledgeSubtab === 'archive',
+                    }).then(arr => setKnowledgeItems(arr as KnowledgeItem[]))
+                }
+            }).catch(() => { /* silent */ })
+            return
+        }
+        const interval = setInterval(async () => {
+            const fresh = await getExtractionJob(activeExtractionJob.id)
+            if (fresh) setActiveExtractionJob(fresh as ExtractionJobLite)
+        }, 2000)
+        return () => clearInterval(interval)
+    }, [activeExtractionJob, selectedSectionId, knowledgeSubtab])
+
+    async function handleStartExtraction() {
+        setExtractionStarting(true)
+        try {
+            if (extractionTier !== initialExtractionTier) {
+                await saveExtractionQualityTier(extractionTier)
+            }
+            const scope: ExtractionScope = { mode: extractionScopeMode }
+            const job = await startKnowledgeExtraction(scope, extractionTier)
+            setExtractionModalOpen(false)
+            setActiveExtractionJob({
+                id: job.id,
+                status: job.status,
+                progress: null,
+            } as ExtractionJobLite)
+            showToast('Сбор ядра запущен')
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : 'неизвестная ошибка'
+            showToast('Ошибка: ' + msg)
+        } finally {
+            setExtractionStarting(false)
+        }
+    }
 
     const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
@@ -1564,25 +1655,87 @@ export default function AiControlCenterClient({
         )
     }
 
-    const KnowledgeSourcesPanel = () => (
-        <div className="border-t border-[#F0F0F0] pt-4">
-            {extractionJobs.length === 0 ? (
-                <div className="text-center py-12 text-[12px] text-gray-400">
-                    <div className="font-medium text-[#111] text-[13px] mb-1">Извлечения ещё не запускались</div>
-                    Когда вы запустите «Собрать ядро», здесь появятся отчёты:<br />
-                    сколько диалогов проанализировано, сколько новых знаний добавлено.
-                </div>
-            ) : (
-                <div className="text-[12px] text-gray-500">
-                    Запусков: {extractionJobs.length}. Подробности появятся в следующем апдейте.
-                </div>
-            )}
-        </div>
-    )
+    const KnowledgeSourcesPanel = () => {
+        const STATUS_LABEL: Record<string, string> = {
+            queued: 'В очереди', running: 'Идёт сбор',
+            completed: 'Завершено', partial: 'Завершено частично', failed: 'Ошибка',
+        }
+        const TIER_LABEL: Record<string, string> = {
+            economy: 'Экономичная', balanced: 'Сбалансированная', quality: 'Повышенное качество',
+        }
+        return (
+            <div className="border-t border-[#F0F0F0] pt-4">
+                {extractionJobs.length === 0 ? (
+                    <div className="text-center py-12 text-[12px] text-gray-400">
+                        <div className="font-medium text-[#111] text-[13px] mb-1">Извлечения ещё не запускались</div>
+                        Когда вы запустите «Собрать ядро», здесь появятся отчёты:<br />
+                        сколько диалогов проанализировано, сколько новых знаний добавлено.
+                    </div>
+                ) : (
+                    <div className="divide-y divide-[#F0F0F0]">
+                        {extractionJobs.map((rawJob, idx) => {
+                            const j = rawJob as ExtractionJobLite & {
+                                createdAt?: string
+                                scope?: { mode?: string }
+                            }
+                            const p = j.progress ?? {}
+                            return (
+                                <div key={j.id ?? idx} className="py-3">
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        <StatusDot status={j.status} />
+                                        <span className="text-[13px] font-medium text-[#111]">
+                                            {STATUS_LABEL[j.status] ?? j.status}
+                                        </span>
+                                        {j.scope?.mode && (
+                                            <span className="text-[11px] text-gray-400">· scope: {j.scope.mode}</span>
+                                        )}
+                                        {j.extractionQualityTier && (
+                                            <span className="text-[11px] text-gray-400">
+                                                · {TIER_LABEL[j.extractionQualityTier] ?? j.extractionQualityTier}
+                                            </span>
+                                        )}
+                                        {j.createdAt && (
+                                            <span className="text-[11px] text-gray-400 ml-auto">
+                                                {new Date(j.createdAt).toLocaleString('ru')}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {j.errorMessage && (
+                                        <p className="text-[11px] text-red-600 mb-1">{j.errorMessage}</p>
+                                    )}
+                                    {Object.keys(p).length > 0 && (
+                                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
+                                            {p.pairsBuilt != null && <span>{p.pairsBuilt} пар</span>}
+                                            {p.itemsCreated != null && <span>· {p.itemsCreated} новых знаний</span>}
+                                            {p.itemsMerged != null && p.itemsMerged > 0 && <span>· {p.itemsMerged} объединено</span>}
+                                            {p.itemsAsDraft != null && p.itemsAsDraft > 0 && <span>· {p.itemsAsDraft} черновиков</span>}
+                                            {p.conflictsDetected != null && p.conflictsDetected > 0 && (
+                                                <span className="text-amber-600">· {p.conflictsDetected} конфликтов</span>
+                                            )}
+                                            {p.llmErrors != null && p.llmErrors > 0 && (
+                                                <span className="text-red-600">· {p.llmErrors} ошибок LLM</span>
+                                            )}
+                                        </div>
+                                    )}
+                                    {(j.extractionProvider || j.extractionModel) && (
+                                        <p className="text-[10px] text-gray-400 mt-1">
+                                            модель: {j.extractionProvider}/{j.extractionModel}
+                                            {j.extractionPromptVersion && ` · prompt ${j.extractionPromptVersion}`}
+                                        </p>
+                                    )}
+                                </div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+        )
+    }
 
     const KnowledgeTab = () => {
         const selectedSection = sections.find(s => s.id === selectedSectionId) ?? null
         return (
+            <>
             <div className="space-y-4">
                 <InlineInfo>
                     Ядро знаний — структурированная память AI: тарифы, требования,
@@ -1608,14 +1761,36 @@ export default function AiControlCenterClient({
                             </button>
                         ))}
                     </div>
-                    <button
-                        disabled
-                        title="Будет в следующем обновлении"
-                        className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC]/40 text-white text-[11px] font-semibold cursor-not-allowed"
-                    >
-                        <Sparkles size={11} />
-                        Собрать ядро
-                    </button>
+                    {activeExtractionJob && (activeExtractionJob.status === 'queued' || activeExtractionJob.status === 'running') ? (
+                        <div className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC]/10 text-[#3390EC] text-[11px] font-semibold">
+                            <Loader2 size={11} className="animate-spin" />
+                            {activeExtractionJob.status === 'queued' ? 'В очереди' : 'Идёт сбор'}
+                            {activeExtractionJob.progress?.pairsProcessed != null && activeExtractionJob.progress?.pairsBuilt != null && activeExtractionJob.progress.pairsBuilt > 0 && (
+                                <span className="text-gray-500 font-normal">
+                                    · {activeExtractionJob.progress.pairsProcessed}/{activeExtractionJob.progress.pairsBuilt}
+                                </span>
+                            )}
+                        </div>
+                    ) : (() => {
+                        // UX-фикс: блокируем кнопку если AI provider не настроен.
+                        const noKey = !config.apiKeyEncrypted || (config.apiKeyEncrypted as string).trim() === ''
+                        const disabledReason = !canEdit
+                            ? 'Доступно только Администратору'
+                            : noKey
+                                ? 'Сначала настройте AI Провайдер (вкладка слева) — добавьте API ключ'
+                                : 'Запустить сбор ядра знаний из истории переписок'
+                        return (
+                            <button
+                                onClick={() => canEdit && !noKey && setExtractionModalOpen(true)}
+                                disabled={!canEdit || noKey}
+                                title={disabledReason}
+                                className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC] text-white text-[11px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <Sparkles size={11} />
+                                Собрать ядро
+                            </button>
+                        )
+                    })()}
                 </div>
 
                 {/* Сводка по ядру */}
@@ -1717,6 +1892,89 @@ export default function AiControlCenterClient({
                     </div>
                 )}
             </div>
+            {/* Extraction modal */}
+            {extractionModalOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+                    onClick={() => !extractionStarting && setExtractionModalOpen(false)}
+                >
+                    <div onClick={e => e.stopPropagation()}
+                         className="bg-white rounded-xl shadow-xl p-6 w-[440px] max-w-[94vw] space-y-4">
+                        <div>
+                            <h2 className="text-[17px] font-semibold text-[#111]">Сбор ядра знаний</h2>
+                            <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
+                                AI проанализирует импортированную историю переписок
+                                и обновит ядро. Не влияет на ответы клиентам.
+                            </p>
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-gray-500 mb-1.5 block">Что анализировать</label>
+                            <div className="flex flex-col gap-1.5">
+                                {([
+                                    { v: 'last_30d', label: 'Последние 30 дней',  hint: 'быстро, частичный обзор' },
+                                    { v: 'last_90d', label: 'Последние 90 дней',  hint: 'рекомендуется для первой сборки' },
+                                    { v: 'all',      label: 'Всю доступную историю', hint: 'дольше, максимум знаний' },
+                                ] as const).map(opt => (
+                                    <label key={opt.v}
+                                        className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
+                                            extractionScopeMode === opt.v
+                                                ? 'border-[#3390EC] bg-[#F0F4FA]'
+                                                : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
+                                        }`}>
+                                        <input type="radio" name="extraction-scope" className="mt-0.5"
+                                            checked={extractionScopeMode === opt.v}
+                                            onChange={() => setExtractionScopeMode(opt.v)} />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[13px] font-medium text-[#111]">{opt.label}</div>
+                                            <div className="text-[11px] text-gray-500">{opt.hint}</div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1.5">
+                                Модель анализа переписок
+                                <Hint text="Экономичная — быстрее и дешевле; Сбалансированная — рекомендуется; Повышенное качество — медленнее и дороже. Эта настройка относится только к сбору ядра, не к ответам клиентам." />
+                            </label>
+                            <div className="flex flex-col gap-1.5">
+                                {([
+                                    { v: 'economy',  label: 'Экономичная',                      hint: 'быстрее и дешевле' },
+                                    { v: 'balanced', label: 'Сбалансированная (рекомендуется)', hint: 'та же модель, что AI использует для классификации' },
+                                    { v: 'quality',  label: 'Повышенное качество',              hint: 'медленнее и дороже, лучше для редких формулировок' },
+                                ] as const).map(opt => (
+                                    <label key={opt.v}
+                                        className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
+                                            extractionTier === opt.v
+                                                ? 'border-[#3390EC] bg-[#F0F4FA]'
+                                                : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
+                                        }`}>
+                                        <input type="radio" name="extraction-tier" className="mt-0.5"
+                                            checked={extractionTier === opt.v}
+                                            onChange={() => setExtractionTier(opt.v)} />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[13px] font-medium text-[#111]">{opt.label}</div>
+                                            <div className="text-[11px] text-gray-500">{opt.hint}</div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2 pt-1">
+                            <button onClick={() => setExtractionModalOpen(false)} disabled={extractionStarting}
+                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md transition-colors disabled:opacity-50">
+                                Отмена
+                            </button>
+                            <button onClick={handleStartExtraction} disabled={extractionStarting}
+                                className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors">
+                                {extractionStarting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                                Запустить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            </>
         )
     }
 
