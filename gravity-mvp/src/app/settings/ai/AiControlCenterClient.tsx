@@ -3603,35 +3603,42 @@ export default function AiControlCenterClient({
                                                                 {it.sourceCount > 0 && <span>· {it.sourceCount} {plural(it.sourceCount,'источник','источника','источников')}</span>}
                                                                 {it.uniqueManagerCount > 0 && <span>· {it.uniqueManagerCount} {plural(it.uniqueManagerCount,'менеджер','менеджера','менеджеров')}</span>}
                                                             </div>
-                                                            {canEdit && (
-                                                                <div className="flex gap-3 mt-2 text-[11px]">
-                                                                    <button onClick={() => jumpToKnowledgeItem(it.id, it.sectionId)}
-                                                                        className="text-[#3390EC] hover:underline">
-                                                                        Открыть в Ядре
-                                                                    </button>
-                                                                    <button onClick={() => {
-                                                                        const ki: KnowledgeItem = {
-                                                                            id: it.id, sectionId: it.sectionId,
-                                                                            title: it.title, canonicalStatement: it.canonicalStatement,
-                                                                            tags: it.tags, confidence: it.confidence,
-                                                                            sourceCount: it.sourceCount, uniqueManagerCount: it.uniqueManagerCount,
-                                                                            status: it.status as KnowledgeItem['status'],
-                                                                            isActive: it.isActive,
-                                                                            safetyLevel: it.safetyLevel as KnowledgeItem['safetyLevel'],
-                                                                            supersededByItemId: it.supersededByItemId,
-                                                                            conflictGroupId: it.conflictGroupId,
-                                                                            isVerified: it.isVerified,
-                                                                            verifiedBy: null, verifiedAt: null,
-                                                                            createdBy: null, lastUsedAt: null,
-                                                                            createdAt: it.updatedAt, updatedAt: it.updatedAt,
-                                                                        }
-                                                                        setExplainOpen(false)
-                                                                        openEditFor(ki)
-                                                                    }} className="text-gray-500 hover:text-[#111]">
-                                                                        Редактировать
-                                                                    </button>
-                                                                </div>
-                                                            )}
+                                                            <div className="flex gap-3 mt-2 text-[11px] flex-wrap">
+                                                                <button onClick={() => copyToClipboardSafe(it.canonicalStatement, 'Формулировка скопирована')}
+                                                                    className="text-gray-400 hover:text-[#3390EC] inline-flex items-center gap-0.5"
+                                                                    title="Скопировать каноническую формулировку">
+                                                                    <ClipboardList size={9} /> копировать формулировку
+                                                                </button>
+                                                                {canEdit && (
+                                                                    <>
+                                                                        <button onClick={() => jumpToKnowledgeItem(it.id, it.sectionId)}
+                                                                            className="text-[#3390EC] hover:underline">
+                                                                            Открыть в Ядре
+                                                                        </button>
+                                                                        <button onClick={() => {
+                                                                            const ki: KnowledgeItem = {
+                                                                                id: it.id, sectionId: it.sectionId,
+                                                                                title: it.title, canonicalStatement: it.canonicalStatement,
+                                                                                tags: it.tags, confidence: it.confidence,
+                                                                                sourceCount: it.sourceCount, uniqueManagerCount: it.uniqueManagerCount,
+                                                                                status: it.status as KnowledgeItem['status'],
+                                                                                isActive: it.isActive,
+                                                                                safetyLevel: it.safetyLevel as KnowledgeItem['safetyLevel'],
+                                                                                supersededByItemId: it.supersededByItemId,
+                                                                                conflictGroupId: it.conflictGroupId,
+                                                                                isVerified: it.isVerified,
+                                                                                verifiedBy: null, verifiedAt: null,
+                                                                                createdBy: null, lastUsedAt: null,
+                                                                                createdAt: it.updatedAt, updatedAt: it.updatedAt,
+                                                                            }
+                                                                            setExplainOpen(false)
+                                                                            openEditFor(ki)
+                                                                        }} className="text-gray-500 hover:text-[#111]">
+                                                                            Редактировать
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     )
                                                 })}
