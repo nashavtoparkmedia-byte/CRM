@@ -895,6 +895,12 @@ model AiCallScenario {
   /// (back-compat with pre-PR scenarios). See src/lib/ai-call/scenario-schema.js
   /// and src/lib/ai-call/types.ts for the validated shape.
   outcomeSchema     Json?
+  /// Greeting A/B variants (PR #62). Array of { id, text, label? } — the
+  /// bridge deterministically picks one via hash(callUuid) % N and speaks
+  /// it directly via TTS (no LLM round-trip on greeting). Variant ID is
+  /// persisted to the `greeting_started` event payload for funnel
+  /// attribution. NULL / empty array → legacy LLM-generated greeting.
+  greetingVariants  Json?
   isActive          Boolean        @default(true)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt

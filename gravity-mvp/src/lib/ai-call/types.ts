@@ -71,6 +71,26 @@ export interface AiCallScenarioConfig {
      * canonical fields. NULL/undefined = no schema; legacy passthrough.
      */
     outcomeSchema?: AiCallOutcomeSchema
+    /**
+     * Greeting A/B variants (PR #62). Array of `{ id, text, label? }`.
+     * Bridge picks one via `hash(callUuid) % N` and speaks it directly
+     * via TTS — no LLM round-trip on greeting. Variant ID lands in
+     * the `greeting_started` event payload for funnel attribution.
+     * NULL/undefined or empty array → legacy LLM-generated greeting.
+     */
+    greetingVariants?: AiCallGreetingVariant[]
+}
+
+/**
+ * One greeting variant (PR #62). `id` is short and stable (e.g. 'A',
+ * 'B', 'C') — used as the variant_id in events. `text` is the exact
+ * phrase the bridge speaks. `label` is optional admin-facing UI
+ * description; never emitted in payloads.
+ */
+export interface AiCallGreetingVariant {
+    id: string
+    text: string
+    label?: string
 }
 
 /**
