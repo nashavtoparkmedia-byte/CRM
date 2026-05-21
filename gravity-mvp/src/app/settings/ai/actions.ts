@@ -1632,3 +1632,133 @@ export async function migrateLegacyKnowledgeBase() {
     if (result.migrated > 0) revalidatePath('/settings/ai')
     return result
 }
+
+// ─── AI Knowledge Core channel connections (PR7) ────────────────
+//
+// Unified listing для UI source-selector в Extraction modal + для
+// панели «Источники» с возможностью disable. Без cookie permission —
+// counts/labels не несут PII (телефон маскируется).
+
+export type ChannelType = 'whatsapp' | 'telegram' | 'max'
+
+export interface ChannelConnection {
+    channel:      ChannelType
+    /** id из WhatsAppConnection / TelegramConnection / MaxConnection. */
+    id:           string
+    /** Человеко-читаемая подпись для UI: "WhatsApp +7922•••5750" или
+     *  "Telegram Support" или "MAX Drivers". Падает обратно на
+     *  "Безымянное подключение" если нет ни name, ни phone. */
+    label:        string
+    /** Mask'нутый телефон вида "+7922•••5750" или null если у канала
+     *  нет phone-attribute (MAX). */
+    phoneMasked:  string | null
+    /** Сырое name из связанной таблицы (для admin tooltip). */
+    name:         string | null
+    /** Текущий live-status. Только 'ready' означает что импорт примет
+     *  сообщения; для остальных импорт fail'нется или будет
+     *  ограничен. */
+    status:       'ready' | 'qr' | 'authenticating' | 'idle' | 'disconnected' | 'inactive' | 'unknown'
+    /** Soft active flag — был ли connection помечен админом как
+     *  активный в его настройках. !== status='ready'. */
+    isActive:     boolean
+    /** Готов ли принимать импорт прямо сейчас. */
+    isReady:      boolean
+}
+
+function maskPhone(raw: string | null): string | null {
+    if (!raw) return null
+    const digits = raw.replace(/\D/g, '')
+    if (digits.length < 7) return raw
+    const head = digits.slice(0, 4)
+    const tail = digits.slice(-4)
+    return `+${head}•••${tail}`
+}
+
+/** Возвращает все известные channel-connections, unified shape.
+ *  Read-only, без cookie checks — labels не несут PII. */
+export async function listChannelConnections(): Promise<ChannelConnection[]> {
+    const result: ChannelConnection[] = []
+
+    // WhatsApp
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT id, name, "phoneNumber", status::text AS status
+            FROM "WhatsAppConnection"
+        `
+        for (const r of rows) {
+            const phoneMasked = maskPhone(r.phoneNumber)
+            const label = r.name?.trim()
+                ? `WhatsApp ${r.name.trim()}`
+                : phoneMasked
+                    ? `WhatsApp ${phoneMasked}`
+                    : 'WhatsApp · безымянное подключение'
+            const isReady = r.status === 'ready'
+            result.push({
+                channel: 'whatsapp', id: r.id, label,
+                phoneMasked, name: r.name ?? null,
+                status: r.status as ChannelConnection['status'],
+                isActive: isReady, isReady,
+            })
+        }
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[listChannelConnections] WA failed:', e?.message)
+        }
+    }
+
+    // Telegram
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT id, name, "phoneNumber", "isActive"
+            FROM "TelegramConnection"
+        `
+        for (const r of rows) {
+            const phoneMasked = maskPhone(r.phoneNumber)
+            const label = r.name?.trim()
+                ? `Telegram ${r.name.trim()}`
+                : phoneMasked
+                    ? `Telegram ${phoneMasked}`
+                    : 'Telegram · безымянное подключение'
+            const status: ChannelConnection['status'] = r.isActive ? 'ready' : 'inactive'
+            result.push({
+                channel: 'telegram', id: r.id, label,
+                phoneMasked, name: r.name ?? null,
+                status, isActive: !!r.isActive, isReady: !!r.isActive,
+            })
+        }
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[listChannelConnections] TG failed:', e?.message)
+        }
+    }
+
+    // MAX
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT id, name, "isActive"
+            FROM "MaxConnection"
+        `
+        for (const r of rows) {
+            const label = r.name?.trim()
+                ? `MAX ${r.name.trim()}`
+                : 'MAX · безымянное подключение'
+            const status: ChannelConnection['status'] = r.isActive ? 'ready' : 'inactive'
+            result.push({
+                channel: 'max', id: r.id, label,
+                phoneMasked: null, name: r.name ?? null,
+                status, isActive: !!r.isActive, isReady: !!r.isActive,
+            })
+        }
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[listChannelConnections] MAX failed:', e?.message)
+        }
+    }
+
+    // Stable order: channel alphabetically → isReady DESC → label asc
+    return result.sort((a, b) => {
+        if (a.channel !== b.channel) return a.channel.localeCompare(b.channel)
+        if (a.isReady !== b.isReady) return a.isReady ? -1 : 1
+        return a.label.localeCompare(b.label)
+    })
+}
