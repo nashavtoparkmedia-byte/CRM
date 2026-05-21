@@ -997,29 +997,6 @@ model AiAgentConfig {
   updatedAt             DateTime        @updatedAt
 }
 
-/// Стили общения AI-агента. Один профиль = один стиль (Роль / Тон /
-/// Разрешено / Запрещено). Админ создаёт несколько («Дружелюбный на ты»,
-/// «Официальный на вы»), переключает активный через AiAgentConfig.
-/// activeProfileId. UI: /settings/ai → таб «Правила» → блок «Стиль
-/// общения», по аналогии с /settings/integrations/ai-call-scenarios.
-model AiAgentProfile {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  promptRole      String?
-  promptTone      String?
-  promptAllowed   String?
-  promptForbidden String?
-  /// Системный профиль, защищён от удаления (default seed).
-  isDefault       Boolean  @default(false)
-  sortOrder       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  // обратная связь: один профиль может быть активен в config'е.
-  configsAsActive AiAgentConfig[]
-}
-
 /// Настройки AI-анализа звонков (Stage 4). Singleton, id = "singleton".
 /// Админ меняет модель и промт через /settings/integrations/telephony-ai.
 /// Промт остаётся стабильным между звонками — OpenAI автоматически
