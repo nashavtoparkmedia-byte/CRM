@@ -1,0 +1,44 @@
+<!--
+  Day 1 test extensions for the AI-call audio bridge.
+
+  drachtio's mod_audio_fork registers an API (uuid_audio_fork), not a
+  dialplan application. Invoke from dialplan via bgapi:
+
+      bgapi uuid_audio_fork <uuid> start <ws-url> <mix-type> <sampling-rate> <metadata>
+
+  mix-type:      mono | mixed | stereo
+  sampling-rate: 8k | 16k       (literal "8k", not "8000")
+  metadata:      single token, no spaces — JSON without whitespace is fine
+
+  9999  — minimal: answer + uuid_audio_fork + park
+          Use when calling from a live SIP client.
+  9998  — loopback-friendly: same + inline tone_stream:// playback
+          Lets you trigger via `originate ... loopback/9998/default &park()`
+          without a live SIP client. tone_stream is built-in, no WAV needed.
+-->
+<include>
+  <extension name="audio_fork_test">
+    <condition field="destination_number" expression="^9999$">
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+      <!-- audio_fork is auto-started by the Node bridge listening to
+           CHANNEL_ANSWER events via ESL — dialplan stays clean. -->
+      <action application="sleep" data="300"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+
+  <extension name="audio_fork_test_with_playback">
+    <condition field="destination_number" expression="^9998$">
+      <action application="answer"/>
+      <action application="sleep" data="500"/>
+      <!-- audio_fork is auto-started by the Node bridge listening to
+           CHANNEL_ANSWER events via ESL — dialplan stays clean. -->
+      <action application="sleep" data="300"/>
+      <!-- 440 Hz / 1s, then 880 Hz / 1s — tone_stream is built-in. -->
+      <action application="playback" data="tone_stream://%(1000,500,440)"/>
+      <action application="playback" data="tone_stream://%(1000,500,880)"/>
+      <action application="park"/>
+    </condition>
+  </extension>
+</include>
