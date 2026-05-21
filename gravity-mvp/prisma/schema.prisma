@@ -758,6 +758,37 @@ model Call {
   aiScenario       AiCallScenario?      @relation(fields: [aiScenarioId], references: [id])
   aiMessages       AiCallMessage[]
 
+  // Structured Outcome Layer (PR #57). Lifts qualification result out of
+  // the opaque `aiAnalysis Json?` blob into typed, queryable columns.
+  // Raw aiAnalysis is preserved untouched for forensics; business queries
+  // (funnel reports, manager-queue sorting, A/B variants) hit these.
+  //
+  // aiOutcome           — deterministic enum from outcome-mapper.js. Six
+  //                       values, covers every finalize path including
+  //                       drops + bridge errors.
+  // aiOutcomeReason     — machine-friendly snake_case slug, NOT a summary
+  //                       (`aiSummary` is the human-readable one). Useful
+  //                       for `WHERE aiOutcomeReason = 'llm_transferred_to_manager'`.
+  //                       Appended with `;validation_issues=N` when LLM
+  //                       lead_data didn't match the scenario's
+  //                       outcomeSchema — operator runbook signal.
+  // qualificationScore  — 0–100 lead-quality score returned by the LLM in
+  //                       the end_call tool. Nullable: not all scenarios
+  //                       wire a score (older scenarios, scenarios where
+  //                       scoring doesn't make sense).
+  // leadDataStructured  — canonical-keyed validated lead data per the
+  //                       scenario's outcomeSchema. Extra keys dropped,
+  //                       types coerced, issues logged in opsLog.
+  aiOutcome           AiOutcome?
+  aiOutcomeReason     String?
+  qualificationScore  Int?
+  leadDataStructured  Json?
+
+  // Conversation Intelligence Layer (PR #59). Timeline of signal-bearing
+  // events emitted by the bridge and the CRM finalize route. Cleared with
+  // the Call (ON DELETE CASCADE). See docs/design/conversation-intelligence-layer.md.
+  aiEvents      AiCallEvent[]
+
   metadata      Json?         @default("{}")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -772,6 +803,9 @@ model Call {
   @@index([fromNumber])
   @@index([toNumber])
   @@index([isAi, startedAt(sort: Desc)])
+  // Funnel analytics: «qualified leads last 7 days», «outcome distribution
+  // per scenario». Bounded scan even at high call volume.
+  @@index([aiOutcome, startedAt(sort: Desc)])
 }
 
 /// Per-utterance transcript of an AI-driven call: each row is one finalized
@@ -797,21 +831,100 @@ model AiCallMessage {
   @@index([role])
 }
 
+/// One configurable AI-call provider setting (API key, folder ID, mock-mode
+/// toggle, …). Stored in DB so admins can configure keys via the settings
+/// UI without redeploying. Secrets are AES-256-GCM encrypted at rest;
+/// `mask` keeps the last 4 chars for UX. Non-secret values (mockMode,
+/// yandexFolderId) go in plain `valuePlain` and `encryptedValue` is null.
+///
+/// (provider, key) is the natural primary key — there's at most one OpenAI
+/// API key, one Yandex Folder ID, etc. Soft semantics via `isConfigured`:
+/// rows are deleted when admin clicks "Удалить ключ"; `isConfigured`
+/// caches the row's status for fast filtering.
+model AiProviderSetting {
+  id              String   @id @default(cuid())
+  provider        String   /// 'openai' | 'yandex' | 'system'
+  key             String   /// 'apiKey' | 'folderId' | 'mockMode'
+  /// AES-256-GCM ciphertext for secret values (apiKey). null for plain values.
+  encryptedValue  String?
+  /// Plain-text storage for non-secrets (folderId — public; mockMode — boolean).
+  valuePlain      String?
+  /// Last 4 chars for "•••• ABCD" mask in the UI. Always safe to expose.
+  mask            String?
+  isConfigured    Boolean  @default(true)
+  /// Last time someone clicked "Проверить подключение" for this key.
+  lastCheckedAt   DateTime?
+  /// 'ok' | 'invalid_key' | 'no_folder' | 'network' | 'http_error' | …
+  lastCheckStatus String?
+  /// Free-text diagnostic from the last check (shown next to the badge).
+  lastCheckMessage String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([provider, key])
+  @@index([provider])
+}
+
+/// Top-level grouping for AI-call scenarios. Lets the UI organise scripts
+/// by business purpose (lead qualification, churn winback, NPS survey, …).
+/// Seeded with 3 defaults — see prisma/seed/ai-call-projects.ts.
+model AiCallProject {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  slug        String           @unique
+  description String?
+  /// Soft-delete via isActive. Existing scenarios keep their projectId
+  /// even if the project is deactivated — they just don't show in the picker.
+  isActive    Boolean          @default(true)
+  /// Display order in the settings UI grouping.
+  sortOrder   Int              @default(100)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  scenarios   AiCallScenario[]
+}
+
 /// Reusable AI-call scenario: system prompt + ordered questions. Manager picks
-/// one when initiating an AI call. Soft-deleted via isActive.
+/// one when initiating an AI call. Soft-deleted via isActive. Belongs to one
+/// AiCallProject (nullable for backfill — pre-project scenarios will be
+/// auto-assigned to the "Квалификация лида" default project on first read).
 model AiCallScenario {
-  id            String   @id @default(cuid())
-  name          String
-  description   String?
-  systemPrompt  String
+  id                String         @id @default(cuid())
+  projectId         String?
+  name              String
+  description       String?
+  systemPrompt      String
   /// Array of { text, intentKeywords?, branches? } — see AiCallScenarioQuestion type
-  questions     Json     @default("[]")
+  questions         Json           @default("[]")
   /// Soft target call length in seconds — informs LLM about pacing.
   targetDurationSec Int?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  calls         Call[]
+  /// Canonical-key schema for the lead_data the LLM collects via
+  /// save_lead_data. Shape: { fields: [{ key, type, required, ...constraints }] }.
+  /// Type is one of 'integer' | 'boolean' | 'string' | 'enum'. NULL means
+  /// no schema — finalize mapper passes lead_data through verbatim
+  /// (back-compat with pre-PR scenarios). See src/lib/ai-call/scenario-schema.js
+  /// and src/lib/ai-call/types.ts for the validated shape.
+  outcomeSchema     Json?
+  /// Greeting A/B variants (PR #62). Array of { id, text, label? } — the
+  /// bridge deterministically picks one via hash(callUuid) % N and speaks
+  /// it directly via TTS (no LLM round-trip on greeting). Variant ID is
+  /// persisted to the `greeting_started` event payload for funnel
+  /// attribution. NULL / empty array → legacy LLM-generated greeting.
+  greetingVariants  Json?
+  /// Prompt fragments (PR #63). Record mapping slot → { id, version, text,
+  /// hypothesis? } for composable system-prompt assembly. Required slots:
+  /// greeting / qualification_intro / recovery / transfer_framing.
+  /// Optional: objection_soft / closing. NULL or missing required slots →
+  /// legacy monolithic prompt path. See tools/audio-bridge-day1/
+  /// prompt-fragments.js for the composer + src/lib/ai-call/types.ts for
+  /// the typed shape.
+  fragments         Json?
+  isActive          Boolean        @default(true)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  project           AiCallProject? @relation(fields: [projectId], references: [id])
+  calls             Call[]
+
+  @@index([projectId, isActive])
 }
 
 /// Единственная запись — настройки AI агента (upsert by id="singleton")
@@ -833,15 +946,46 @@ model AiAgentConfig {
   workingHours          Json?
   /// [{ condition, model }]
   routingRules          Json?
+  /// Промпт-поля legacy fallback. С момента введения профилей (см.
+  /// AiAgentProfile) реальный промпт берётся из активного профиля
+  /// через activeProfileId. Эти поля сохраняются для backward-compat:
+  /// если activeProfileId = null, runtime используется их.
   promptRole            String?
   promptTone            String?
   promptAllowed         String?
   promptForbidden       String?
+  /// Активный стиль AI-агента. FK на AiAgentProfile.id. При null —
+  /// runtime fallback на promptRole/Tone/Allowed/Forbidden выше.
+  activeProfileId       String?
+  activeProfile         AiAgentProfile? @relation(fields: [activeProfileId], references: [id], onDelete: SetNull)
   /// "ok" | "error" | "unchecked"
   connectionStatus      String?
   lastConnectionCheckAt DateTime?
   createdAt             DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
+}
+
+/// Стили общения AI-агента. Один профиль = один стиль (Роль / Тон /
+/// Разрешено / Запрещено). Админ создаёт несколько («Дружелюбный на ты»,
+/// «Официальный на вы»), переключает активный через AiAgentConfig.
+/// activeProfileId. UI: /settings/ai → таб «Правила» → блок «Стиль
+/// общения», по аналогии с /settings/integrations/ai-call-scenarios.
+model AiAgentProfile {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  promptRole      String?
+  promptTone      String?
+  promptAllowed   String?
+  promptForbidden String?
+  /// Системный профиль, защищён от удаления (default seed).
+  isDefault       Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // обратная связь: один профиль может быть активен в config'е.
+  configsAsActive AiAgentConfig[]
 }
 
 /// Настройки AI-анализа звонков (Stage 4). Singleton, id = "singleton".
@@ -1502,14 +1646,13 @@ enum CallDirection {
 enum CallStatus {
   ringing       // call placed, not answered yet
   active        // bridged, conversation in progress
-  completed     // ended normally after a conversation (billsec > 0)
-  missed        // inbound, callee (manager) never picked up — only for inbound direction
-  no_answer     // outbound, peer didn't pick up (NO_ANSWER / NO_USER_RESPONSE / dialplan timeout)
-  busy          // peer's line busy (USER_BUSY)
-  rejected      // peer explicitly declined (CALL_REJECTED) — for outbound only;
-                // for inbound manager-reject we use 'rejected' too
-  cancelled     // outbound, manager hit "Отбой" before peer answered (ORIGINATOR_CANCEL)
-  failed        // technical failure: no route, codec mismatch, gateway down, invalid number, etc.
+  completed     // ended normally after a conversation
+  missed        // inbound, never answered
+  no_answer     // outbound, callee didn't pick up
+  busy
+  failed        // technical failure (no route, codec mismatch, etc.)
+  rejected      // explicitly declined
+  cancelled     // outbound, manager hit Отбой before peer picked up
 }
 
 enum AiCallMessageRole {
@@ -1526,5 +1669,88 @@ enum AiCallSessionStatus {
   transferring   // SIP REFER in flight — connecting to manager
   ended          // hangup, normal completion
   failed         // STT/LLM/TTS error or bridge dropped
+}
+
+/// Conversation Intelligence Layer (PR #59). One row per signal-bearing
+/// moment in an AI-call: greeting started, first real user speech, silence
+/// strike, call completed. Append-only. Best-effort emission — losing a
+/// row never breaks the call (write helper swallows insert errors). Read
+/// access is via raw SQL / Prisma; no UI yet (next PR).
+///
+/// Volume budget: ~3-6 rows per AI-call in v1. Future PRs add events
+/// (save_lead_data_emitted, manager_requested, stt_suspicious_pattern,
+/// etc.) via ALTER TYPE on the enum below.
+///
+/// See docs/design/conversation-intelligence-layer.md for the full
+/// taxonomy + per-event payload schemas.
+model AiCallEvent {
+  id          String          @id @default(cuid())
+  callId      String
+
+  /// Discriminated event type. v1 ships 4 values; future PRs extend.
+  type        AiCallEventType
+
+  /// Wall-clock timestamp of emission. Used for cross-event delta queries
+  /// (time-to-first-speech, silence interval, etc.).
+  occurredAt  DateTime        @default(now())
+
+  /// Monotonic per-call ordinal. Resolves same-millisecond ties (the bridge
+  /// can fire two events within one event-loop tick when tool dispatch
+  /// chains). Assigned by the bridge at emission time.
+  seq         Int
+
+  /// Type-specific payload. Schemas documented per type in the design doc;
+  /// validated by `src/lib/ai-call/event-emitter.js` at write time.
+  payload     Json?
+
+  call        Call            @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  /// Primary access pattern: timeline reconstruction for one call.
+  @@index([callId, seq])
+  /// Secondary access pattern: aggregations across calls by event type.
+  @@index([type, occurredAt(sort: Desc)])
+}
+
+/// Conversation Intelligence Layer events. Adding more is one
+/// ALTER TYPE per addition (Postgres doesn't allow batch enum additions
+/// in a single transaction with other DDL — separate migration files
+/// going forward).
+///
+/// Shipped:
+///   v1 (PR #59):  greeting_started / first_real_user_speech /
+///                 silence_strike / call_completed
+///   v2 (PR #60):  + stt_suspicious_pattern — emitted when an STT final
+///                 matches a known garbage pattern; payload carries
+///                 pattern_name + matched_text + action.
+enum AiCallEventType {
+  greeting_started
+  first_real_user_speech
+  silence_strike
+  call_completed
+  stt_suspicious_pattern
+  recovery_attempted
+}
+
+/// Structured business-outcome of an AI-call (PR #57). Set by the
+/// outcome-mapper deterministic decision tree at finalize time. Used
+/// for queryable analytics that don't require JSON parsing.
+///
+/// qualified          — LLM end_call(qualification_status=qualified)
+/// not_qualified      — LLM end_call(qualification_status=not_qualified)
+/// unclear_engaged    — lead engaged, qualification unclear (or LLM
+///                      requested human transfer; manager task created
+///                      separately in finalize route)
+/// dropped_mid_call   — lead spoke at least once then hung up before
+///                      LLM could end the call (no qualification verdict)
+/// dropped_no_input   — lead never gave real speech; either pre-greeting
+///                      hangup or the silence-timeout path fired
+/// error              — bridge / STT / LLM technical failure
+enum AiOutcome {
+  qualified
+  not_qualified
+  unclear_engaged
+  dropped_mid_call
+  dropped_no_input
+  error
 }
 
