@@ -815,6 +815,27 @@ model AiCallScenario {
 }
 
 /// Единственная запись — настройки AI агента (upsert by id="singleton")
+/// Стили общения AI-агента (Роль / Тон / Разрешено / Запрещено).
+/// Один профиль активен в AiAgentConfig через activeProfileId.
+/// Системный seed-профиль защищён от удаления через isDefault=true.
+model AiAgentProfile {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  promptRole      String?
+  promptTone      String?
+  promptAllowed   String?
+  promptForbidden String?
+  /// Системный профиль, защищён от удаления (default seed).
+  isDefault       Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // обратная связь: один профиль может быть активен в config'е.
+  configsAsActive AiAgentConfig[]
+}
+
 model AiAgentConfig {
   id                    String         @id @default("singleton")
   enabled               Boolean        @default(false)
@@ -833,10 +854,18 @@ model AiAgentConfig {
   workingHours          Json?
   /// [{ condition, model }]
   routingRules          Json?
+  /// Промпт-поля legacy fallback. С момента введения профилей (см.
+  /// AiAgentProfile) реальный промпт берётся из активного профиля
+  /// через activeProfileId. Эти поля сохраняются для backward-compat:
+  /// если activeProfileId = null, runtime используется их.
   promptRole            String?
   promptTone            String?
   promptAllowed         String?
   promptForbidden       String?
+  /// Активный стиль AI-агента. FK на AiAgentProfile.id. При null —
+  /// runtime fallback на promptRole/Tone/Allowed/Forbidden выше.
+  activeProfileId       String?
+  activeProfile         AiAgentProfile? @relation(fields: [activeProfileId], references: [id], onDelete: SetNull)
   /// "ok" | "error" | "unchecked"
   connectionStatus      String?
   lastConnectionCheckAt DateTime?
