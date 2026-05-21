@@ -29,11 +29,14 @@ import {
     getKnowledgeReadinessForUi,
     getLegacyMigrationPreview, migrateLegacyKnowledgeBase,
     listChannelConnections,
+    getSourceStatsByConnection, disableKnowledgeSource, resetKnowledgeCore,
     bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
     type LegacyMigrationPreview, type LegacyMigrationResult,
     type ChannelConnection,
+    type SourceStatsRow, type DisableSourceResult,
+    type ResetMode, type ResetResult,
     type BulkActionResult,
     type RetryPreviewResult,
     type AiProfileData,
@@ -368,6 +371,15 @@ export default function AiControlCenterClient({
     const [channelConnectionsLoading, setChannelConnectionsLoading] = useState(false)
     const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<string>>(new Set())
     const [onlyConnectedNow, setOnlyConnectedNow] = useState(true)
+    // PR7.9: «Источники» panel state — статистика per connection
+    // и состояние disable / reset операций.
+    const [sourceStats, setSourceStats] = useState<SourceStatsRow[]>([])
+    const [disableInFlight, setDisableInFlight] = useState<string | null>(null)
+    const [resetModalOpen, setResetModalOpen] = useState(false)
+    const [resetMode, setResetMode] = useState<ResetMode | null>(null)
+    const [resetTypedConfirm, setResetTypedConfirm] = useState('')
+    const [resetRunning, setResetRunning] = useState(false)
+    const [resetResult, setResetResult] = useState<ResetResult | null>(null)
     interface ExtractionJobLite {
         id: string
         status: string
@@ -588,6 +600,94 @@ export default function AiControlCenterClient({
         }
     }
 
+    // PR7.9: disable source by connection. Soft-disable + auto-archive
+    // unverified/non-manual items с 0 active sources. Verified/manual
+    // оставляем active + warning tag (handled server-side).
+    async function handleDisableSource(conn: ChannelConnection, stat?: SourceStatsRow) {
+        if (disableInFlight) return
+        const itemsCount = stat?.itemsTouched ?? 0
+        const verifiedCount = stat?.itemsVerified ?? 0
+        const manualCount = stat?.itemsManual ?? 0
+        const protectedCount = verifiedCount + manualCount
+        const willArchive = Math.max(0, itemsCount - protectedCount)
+        const msg = [
+            `Отключить знания из аккаунта «${conn.label}»?`,
+            '',
+            `Затронуто знаний: ${itemsCount}.`,
+            willArchive > 0
+                ? `~${willArchive} автоматически собранных уйдут в архив (можно восстановить).`
+                : 'Авто-собранных среди них нет.',
+            protectedCount > 0
+                ? `${protectedCount} подтверждённых или ручных останутся активными с пометкой «Источники отключены».`
+                : '',
+            '',
+            'Действие обратимо через карточку знания → Архив → Восстановить.',
+        ].filter(Boolean).join('\n')
+        if (!confirm(msg)) return
+
+        setDisableInFlight(conn.id)
+        try {
+            const r = await disableKnowledgeSource({
+                channel:      conn.channel,
+                connectionId: conn.id,
+            }) as DisableSourceResult
+            showToast(
+                `Отключено. Архивировано: ${r.itemsAutoArchived}` +
+                (r.itemsKeptWithWarning > 0 ? `, оставлено с предупреждением: ${r.itemsKeptWithWarning}` : ''),
+            )
+            // Refresh stats + current section.
+            const fresh = await getSourceStatsByConnection() as SourceStatsRow[]
+            setSourceStats(fresh)
+            await refreshCurrentSection()
+        } catch (e: any) {
+            showToast('Ошибка: ' + (e?.message ?? 'unknown'))
+        } finally {
+            setDisableInFlight(null)
+        }
+    }
+
+    // PR7.9: full core reset. NO default mode, requires typed confirm
+    // для full. После успеха показывает result inline; пользователь
+    // сам нажимает «Закрыть».
+    async function handleResetCore() {
+        if (resetRunning || !resetMode) return
+        if (resetMode === 'full' && resetTypedConfirm !== 'ОЧИСТИТЬ') {
+            showToast('Для полного reset введите подтверждение «ОЧИСТИТЬ»')
+            return
+        }
+        setResetRunning(true)
+        try {
+            const r = await resetKnowledgeCore(
+                resetMode,
+                resetMode === 'full' ? resetTypedConfirm : undefined,
+            ) as ResetResult
+            setResetResult(r)
+            // Refresh dependent state.
+            const stats = await getSourceStatsByConnection() as SourceStatsRow[]
+            setSourceStats(stats)
+            await refreshCurrentSection()
+            showToast(`В архив: ${r.archivedCount}, сохранено: ${r.keptCount}`)
+        } catch (e: any) {
+            showToast('Ошибка: ' + (e?.message ?? 'unknown'))
+        } finally {
+            setResetRunning(false)
+        }
+    }
+
+    function openResetModal() {
+        setResetModalOpen(true)
+        setResetMode(null)
+        setResetTypedConfirm('')
+        setResetResult(null)
+    }
+    function closeResetModal() {
+        if (resetRunning) return
+        setResetModalOpen(false)
+        setResetMode(null)
+        setResetTypedConfirm('')
+        setResetResult(null)
+    }
+
     async function refreshReadiness() {
         try {
             const r = await getKnowledgeReadinessForUi()
@@ -605,11 +705,14 @@ export default function AiControlCenterClient({
             // labels + live status. Loaded one-time на mount; модал
             // «Собрать ядро» (PR7.4) переиспользует этот же state.
             listChannelConnections(),
-        ]).then(([state, traces, conns]) => {
+            // PR7.9: per-connection статистика для «Источники» panel.
+            getSourceStatsByConnection(),
+        ]).then(([state, traces, conns, stats]) => {
             if (cancelled) return
             setRuntimeState(state)
             setRetrievalTraces(traces as RetrievalTrace[])
             setChannelConnections(conns as ChannelConnection[])
+            setSourceStats(stats as SourceStatsRow[])
             // Если ещё не было user-выбора в селекторе — preselect
             // все ready. При повторном открытии модала PR7.4 проверяет
             // selectedConnectionIds.size > 0 и оставляет user choice.
@@ -2302,6 +2405,18 @@ export default function AiControlCenterClient({
                                 ✓ подтверждает правило
                             </span>
                         )}
+                        {/* PR7.9: Verified/manual item, у которого все
+                            исходные source-аккаунты отключены — UI-сигнал
+                            что evidence ушло, но запись сохранилась
+                            намеренно из-за trust-level. */}
+                        {item.tags.includes('sources_all_disabled') && (
+                            <span
+                                title="Все исходные аккаунты, откуда AI узнал об этом, отключены админом. Знание оставлено активным, потому что подтверждено вручную или добавлено как ручная запись. Рекомендуется проверить актуальность."
+                                className="text-[10px] text-amber-700 cursor-help"
+                            >
+                                ⚠ источники отключены
+                            </span>
+                        )}
                         {item.status === 'superseded' && (() => {
                             const successor = item.supersededByItemId
                                 ? knowledgeItems.find(k => k.id === item.supersededByItemId)
@@ -2756,8 +2871,145 @@ export default function AiControlCenterClient({
         const TIER_LABEL: Record<string, string> = {
             economy: 'Экономичная', balanced: 'Сбалансированная', quality: 'Повышенное качество',
         }
+        // PR7.9: «Подключённые аккаунты» — список connections со
+        // статистикой и кнопкой «Отключить». Для WA — реальный
+        // disable. Для TG/MAX legacy items с connectionId=NULL —
+        // отдельный honest блок «Старые записи без точной привязки».
+        const STATUS_LABEL_LOCAL: Record<string, string> = {
+            ready: 'подключён', qr: 'ждёт QR', authenticating: 'входит',
+            idle: 'не активен', disconnected: 'отключён',
+            inactive: 'отключён', unknown: '—',
+        }
+        // Group stats by connectionId for quick lookup.
+        const statsByConnId = new Map<string, SourceStatsRow>()
+        const orphanStats: SourceStatsRow[] = []
+        for (const s of sourceStats) {
+            if (s.connectionId) statsByConnId.set(s.connectionId, s)
+            else orphanStats.push(s)
+        }
+        // Group connections by channel for rendering.
+        const connsByChannel = new Map<string, ChannelConnection[]>()
+        for (const c of channelConnections) {
+            const arr = connsByChannel.get(c.channel) ?? []
+            arr.push(c)
+            connsByChannel.set(c.channel, arr)
+        }
+
         return (
             <div className="border-t border-[#F0F0F0] pt-4 space-y-6">
+                {/* Sub-section 0 (PR7.9): Подключённые аккаунты */}
+                <div>
+                    <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+                        Подключённые аккаунты
+                        <Hint text="Эти подключения сейчас могут принимать сообщения от водителей и попадать в сбор ядра. Можно отключить знания из конкретного аккаунта — записи из него уйдут в архив (подтверждённые и ручные останутся с пометкой)." />
+                    </div>
+                    {channelConnections.length === 0 ? (
+                        <div className="text-[12px] text-gray-400 px-3 py-3 rounded-lg border border-[#E8E8E8] bg-[#FAFBFC]">
+                            Нет подключённых аккаунтов. Подключите WhatsApp / Telegram / MAX в разделе «Интеграции».
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            {[...connsByChannel.entries()].map(([channel, conns]) => {
+                                const CHANNEL_LABEL_LOCAL: Record<string, string> = {
+                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                }
+                                return (
+                                    <div key={channel} className="rounded-lg border border-[#E8E8E8] overflow-hidden">
+                                        <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] flex items-center justify-between">
+                                            <span>{CHANNEL_LABEL_LOCAL[channel] ?? channel}</span>
+                                            {channel !== 'whatsapp' && (
+                                                <span title="Точная привязка знания к конкретному аккаунту для этого мессенджера пока не сохраняется на уровне базы. Отключить знания одного аккаунта Telegram/MAX нельзя — это в работе."
+                                                      className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
+                                                    точечный disable в работе
+                                                </span>
+                                            )}
+                                        </div>
+                                        {conns.map(conn => {
+                                            const stat = statsByConnId.get(conn.id)
+                                            const dotColor =
+                                                conn.isReady ? 'bg-green-500' :
+                                                conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
+                                                'bg-gray-300'
+                                            const itemsTouched = stat?.itemsTouched ?? 0
+                                            const itemsActive  = stat?.itemsActive ?? 0
+                                            const verified     = stat?.itemsVerified ?? 0
+                                            const manual       = stat?.itemsManual ?? 0
+                                            const sourcesActive = stat?.sourcesActive ?? 0
+                                            const canDisable = canEdit
+                                                && channel === 'whatsapp'
+                                                && itemsActive > 0
+                                                && disableInFlight !== conn.id
+                                            return (
+                                                <div key={conn.id} className="border-t border-[#F0F0F0] first:border-t-0 px-3 py-2.5 flex items-start gap-3">
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className="text-[13px] font-medium text-[#111]">
+                                                                {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '')}
+                                                            </span>
+                                                            <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+                                                                <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                                                {STATUS_LABEL_LOCAL[conn.status] ?? conn.status}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-[11px] text-gray-500 mt-0.5 flex flex-wrap gap-x-3">
+                                                            {itemsTouched > 0 ? (
+                                                                <>
+                                                                    <span>{itemsActive} активных знаний</span>
+                                                                    {verified > 0 && <span>· {verified} проверено</span>}
+                                                                    {manual > 0 && <span>· {manual} вручную</span>}
+                                                                    <span className="text-gray-400">· {sourcesActive} активных источников</span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-gray-400">из этого аккаунта пока ничего не собрано</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    {canDisable ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDisableSource(conn, stat)}
+                                                            disabled={disableInFlight !== null}
+                                                            title="Записи из этого аккаунта уйдут в архив. Подтверждённые и ручные сохранятся с пометкой «Источники отключены». Обратимо."
+                                                            className="h-[28px] px-2.5 text-[11px] font-medium text-red-700 border border-red-200 rounded-md hover:bg-red-50 disabled:opacity-50 transition-colors shrink-0"
+                                                        >
+                                                            {disableInFlight === conn.id
+                                                                ? <Loader2 size={11} className="animate-spin inline" />
+                                                                : 'Отключить знания'}
+                                                        </button>
+                                                    ) : channel !== 'whatsapp' && itemsActive > 0 && canEdit ? (
+                                                        <span title="Disable для этого канала пока не работает — нет привязки сообщений к аккаунту в БД. Это будет в следующем апдейте."
+                                                              className="h-[28px] px-2.5 text-[11px] text-gray-400 inline-flex items-center cursor-help shrink-0">
+                                                            недоступно
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )
+                            })}
+                            {orphanStats.length > 0 && (
+                                <div className="rounded-lg border border-[#FFE8B0] bg-[#FFFBED] px-3 py-2.5 text-[12px] text-[#8B6914]">
+                                    <div className="font-medium mb-1">Старые записи без точной привязки к аккаунту</div>
+                                    {orphanStats.map(s => {
+                                        const CHANNEL_LABEL_LOCAL: Record<string, string> = {
+                                            whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                        }
+                                        return (
+                                            <div key={s.channel} className="text-[11px]">
+                                                {CHANNEL_LABEL_LOCAL[s.channel] ?? s.channel}: {s.itemsActive} активных знаний из {s.itemsTouched} затронутых, {s.sourcesActive} активных источников.
+                                            </div>
+                                        )
+                                    })}
+                                    <div className="text-[11px] mt-1 leading-relaxed">
+                                        Это знания, которые AI собрал до того, как мы стали сохранять, из какого аккаунта они пришли. Для них точечного disable пока нет. Будут охвачены, когда добавим chat-level привязку для Telegram/MAX.
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
                 {/* Sub-section 1: Извлечения (PR2) */}
                 <div>
                     <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
@@ -2915,6 +3167,163 @@ export default function AiControlCenterClient({
                             className="text-[#3390EC] hover:underline"
                         >Подробнее
                         </a>
+                    </div>
+                </div>
+
+                {/* PR7.9: Опасная зона — «Очистить ядро». Открывает
+                    modal с 3 вариантами + typed confirm для full. */}
+                {canEdit && (
+                    <div className="rounded-lg border border-[#FFD8D8] bg-[#FFF8F8] p-3 space-y-2">
+                        <div className="text-[12px] font-semibold text-red-700">Опасная зона</div>
+                        <p className="text-[12px] text-gray-600 leading-relaxed">
+                            «Очистить ядро» переводит активные знания в архив. Это мягкое действие — данные не удаляются, можно восстановить отдельные карточки в разделе «Архив».
+                        </p>
+                        <button
+                            type="button"
+                            onClick={openResetModal}
+                            className="h-[28px] px-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-red-700 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
+                        >
+                            Очистить ядро…
+                        </button>
+                    </div>
+                )}
+            </div>
+        )
+    }
+
+    // PR7.9: Reset modal — три варианта soft-archive, no default,
+    // typed confirm для full. Доступен только Admin/Lead через
+    // openResetModal() из «Источники» panel.
+    const ResetCoreModal = () => {
+        if (!resetModalOpen) return null
+        const runtimeOn = runtimeState.runtimeOn
+        const submitDisabled = resetRunning
+            || !resetMode
+            || (resetMode === 'full' && resetTypedConfirm !== 'ОЧИСТИТЬ')
+
+        const MODES: Array<{
+            value: ResetMode; title: string; body: string; tone: 'normal' | 'caution' | 'danger'
+        }> = [
+            {
+                value: 'auto_only',
+                title: 'Только автоматически собранные',
+                body:  'Уйдут в архив записи, которые AI собрал из переписок и которые ещё не подтверждены. Подтверждённые правила и записи, добавленные вручную (включая перенесённые из старой базы), сохранятся.',
+                tone:  'normal',
+            },
+            {
+                value: 'unverified',
+                title: 'Всё, что не подтверждено',
+                body:  'Уйдут в архив все знания, кроме тех, что админ лично подтвердил. Ручные записи без подтверждения тоже архивируются.',
+                tone:  'caution',
+            },
+            {
+                value: 'full',
+                title: 'Полностью очистить ядро',
+                body:  'В архив уйдут ВСЕ активные знания, включая подтверждённые и ручные. Понадобится подтверждение текстом.',
+                tone:  'danger',
+            },
+        ]
+
+        return (
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                 onClick={closeResetModal}>
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+                     onClick={e => e.stopPropagation()}>
+                    <div className="px-6 py-4 border-b border-[#F0F0F0] flex items-center justify-between">
+                        <div>
+                            <h2 className="text-[16px] font-semibold text-[#111]">Очистить ядро знаний</h2>
+                            <p className="text-[12px] text-gray-500 mt-0.5">
+                                Мягкое архивирование — данные не удаляются. Восстановление — через карточку знания в разделе «Архив».
+                            </p>
+                        </div>
+                        <button onClick={closeResetModal} disabled={resetRunning}
+                                className="text-gray-400 hover:text-[#111] text-[20px] leading-none disabled:opacity-50"
+                                aria-label="Закрыть">×</button>
+                    </div>
+
+                    <div className="px-6 py-4 overflow-y-auto space-y-4">
+                        {resetResult ? (
+                            <div className="rounded-md border border-green-200 bg-green-50 p-3 text-[13px] text-green-900 space-y-1">
+                                <div className="font-semibold">Готово</div>
+                                <div>В архив: <b>{resetResult.archivedCount}</b> ·{' '}
+                                     Сохранено: <b>{resetResult.keptCount}</b></div>
+                                <div className="text-[12px] text-green-800/80">
+                                    Восстановить отдельные знания можно в разделе «Архив». Чтобы собрать ядро заново — нажмите «Собрать ядро» в шапке.
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {runtimeOn && (
+                                    <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] p-3 text-[12px] text-[#8B6914] leading-relaxed">
+                                        <strong className="block mb-1">AI сейчас отвечает из ядра</strong>
+                                        После очистки ответы AI станут беднее — пока ядро не пересобрано. Если это не запланированный rollout, лучше отложить.
+                                    </div>
+                                )}
+
+                                <div className="text-[11px] uppercase tracking-wide text-gray-500">Что архивировать</div>
+                                <div className="flex flex-col gap-2">
+                                    {MODES.map(m => {
+                                        const selected = resetMode === m.value
+                                        const borderActive =
+                                            m.tone === 'danger' ? 'border-red-300 bg-red-50/40' :
+                                            m.tone === 'caution' ? 'border-amber-300 bg-amber-50/40' :
+                                            'border-[#3390EC] bg-[#F0F4FA]'
+                                        return (
+                                            <label key={m.value}
+                                                className={`flex items-start gap-2 px-3 py-2.5 rounded-lg cursor-pointer border transition-colors ${
+                                                    selected ? borderActive : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
+                                                }`}>
+                                                <input type="radio" name="reset-mode" className="mt-0.5"
+                                                    checked={selected}
+                                                    onChange={() => setResetMode(m.value)} />
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="text-[13px] font-medium text-[#111]">{m.title}</div>
+                                                    <p className="text-[12px] text-gray-600 mt-0.5 leading-relaxed">{m.body}</p>
+                                                </div>
+                                            </label>
+                                        )
+                                    })}
+                                </div>
+
+                                {resetMode === 'full' && (
+                                    <div className="rounded-md border border-red-300 bg-red-50 p-3 space-y-2">
+                                        <div className="text-[12px] text-red-800">
+                                            Чтобы подтвердить полную очистку, введите слово <b>ОЧИСТИТЬ</b> заглавными буквами:
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={resetTypedConfirm}
+                                            onChange={e => setResetTypedConfirm(e.target.value)}
+                                            placeholder="ОЧИСТИТЬ"
+                                            className="w-full h-[34px] border border-red-200 rounded-md px-3 text-[13px] outline-none focus:border-red-400 bg-white"
+                                            autoFocus
+                                        />
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                        <button
+                            onClick={closeResetModal}
+                            disabled={resetRunning}
+                            className="h-9 px-4 rounded-md border border-[#E0E0E0] text-[13px] text-gray-600 hover:bg-[#F8F9FA] disabled:opacity-50"
+                        >
+                            {resetResult ? 'Закрыть' : 'Отмена'}
+                        </button>
+                        {!resetResult && (
+                            <button
+                                onClick={handleResetCore}
+                                disabled={submitDisabled}
+                                className={`h-9 px-4 rounded-md text-white text-[13px] font-medium disabled:opacity-50 inline-flex items-center gap-1.5 ${
+                                    resetMode === 'full' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#3390EC] hover:opacity-90'
+                                }`}
+                            >
+                                {resetRunning && <Loader2 size={13} className="animate-spin" />}
+                                {resetMode === 'full' ? 'Очистить полностью' : 'Архивировать'}
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>
@@ -3802,6 +4211,9 @@ export default function AiControlCenterClient({
 
             {/* PR5: Runtime rollout checklist modal */}
             <RuntimeRolloutModal />
+
+            {/* PR7.9: Reset Knowledge Core modal (3 modes + typed confirm) */}
+            <ResetCoreModal />
 
             {/* PR5: Legacy KB → Knowledge Core migration modal */}
             {migrationOpen && (
