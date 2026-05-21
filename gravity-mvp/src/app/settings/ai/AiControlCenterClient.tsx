@@ -1065,7 +1065,7 @@ export default function AiControlCenterClient({
                          (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'Сервис не запущен' :
                          (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'Запускается…' :
                          (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'unknown' ? 'Проверка…' :
-                         importStatus === 'completed' ? 'Актуально' :
+                         importStatus === 'completed' ? 'Импорт завершён' :
                          importStatus === 'running' ? 'Идёт импорт' :
                          importStatus === 'queued' ? 'В очереди' :
                          importStatus === 'partial' ? 'Частично' :
@@ -1227,6 +1227,17 @@ export default function AiControlCenterClient({
                                 </div>
                             </>
                         )}
+                    </div>
+                )}
+
+                {/* PR7.5: honest sync stamp. Badge выше говорит про
+                    статус последнего job, а здесь — конкретная дата
+                    последнего успешного импорта. Не смешиваем «когда
+                    в последний раз скачали» и «жив ли аккаунт сейчас». */}
+                {lastJob && lastJob.status === 'completed' && lastJob.finishedAt && (
+                    <div className="mt-2 text-[11px] text-gray-500">
+                        Последний импорт: <b className="text-gray-700">{new Date(lastJob.finishedAt).toLocaleString('ru')}</b>.
+                        {' '}Статус подключения смотрите в списке загрузок ниже.
                     </div>
                 )}
 
