@@ -7,7 +7,6 @@ import TelegramLinkClient from './TelegramLinkClient'
 import { DriverTimeline } from './DriverTimeline'
 import CallButton from '@/components/sip/CallButton'
 import CallsList from '@/components/sip/CallsList'
-import AiMockCallButton from '@/components/sip/AiMockCallButton'
 import { prisma } from '@/lib/prisma'
 import { getDriverById, getCarById } from '@/app/actions'
 import { getDriverTimeline } from './timeline-actions'
@@ -32,25 +31,14 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
         getDriverTimeline(id),
         getTelegramConnections(),
         getMaxConnections(),
-        // PR #64: accept either yandexDriverId OR Prisma cuid in URL.
-        // Also select `phone` so the page can fall back to the local
-        // value when Yandex API returns nothing (sync stale, network
-        // down, driver dropped from Yandex Fleet).
-        prisma.driver.findFirst({
-            where: { OR: [{ yandexDriverId: id }, { id }] },
-            select: { id: true, phone: true },
-        }),
+        prisma.driver.findUnique({ where: { yandexDriverId: id }, select: { id: true } }),
     ])
     const car = driver?.car_id ? await getCarById(driver.car_id, id) : null
 
     const driverName = driver
         ? `${driver.last_name || ''} ${driver.first_name || ''}`.trim() || 'Неизвестный водитель'
         : `ID: ${id}`
-    // PR #64: phone has two sources of truth — Yandex Fleet API (live)
-    // and our local Prisma DB (last-known). Operator should be able to
-    // dial (or fire the AI-call mock) whenever EITHER has it. Yandex
-    // wins when both are present; local is the fallback.
-    const driverPhone = driver?.phones?.[0] || prismaDriver?.phone || '—'
+    const driverPhone = driver?.phones?.[0] || '—'
     const driverStatus = driver?.status || '—'
     const driverBalance = driver?.balance !== undefined ? `${Number(driver.balance).toLocaleString('ru-RU')} ₽` : '—'
     const driverBalanceLimit = driver?.balance_limit !== undefined ? `${Number(driver.balance_limit).toLocaleString('ru-RU')} ₽` : '—'
@@ -93,16 +81,10 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                             <span className="font-semibold text-foreground">{driverName}</span>
 
                                             <span className="text-muted-foreground font-medium">Телефон:</span>
-                                            <span className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                                            <span className="font-semibold text-foreground flex items-center gap-2">
                                                 {driverPhone}
                                                 {driverPhone && driverPhone !== '—' && (
                                                     <CallButton phoneNumber={driverPhone} label="Позвонить" />
-                                                )}
-                                                {driverPhone && driverPhone !== '—' && prismaDriver && (
-                                                    <AiMockCallButton
-                                                        driverId={prismaDriver.id}
-                                                        phoneNumber={driverPhone}
-                                                    />
                                                 )}
                                             </span>
 

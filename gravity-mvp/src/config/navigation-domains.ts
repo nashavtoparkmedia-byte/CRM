@@ -4,7 +4,7 @@ import {
     IdCard, Activity, Archive, Clock, UserCheck, AlertCircle,
     TrendingDown, Ban, Eye, MessageCircle, Bot, FileText,
     Timer, History, BarChart2, Phone, Smartphone, Key, CarFront, Link2,
-    Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles, BookOpen,
+    Megaphone, Filter, PieChart, LucideIcon, Cpu, Sparkles
 } from "lucide-react";
 
 export type NavigationItem = {
@@ -150,29 +150,9 @@ export const DOMAINS: NavigationDomain[] = [
             { label: 'Общие настройки', href: '/settings', icon: Settings, sectionKey: 'settings' },
             { label: 'Справочники', href: '/settings/dictionaries', icon: ListRestart, sectionKey: 'dictionaries' },
             { label: 'Пользователи', href: '/users', icon: UserCog, sectionKey: 'users' },
+            { label: 'AI Control Center', href: '/settings/ai', icon: Cpu, sectionKey: 'ai_control' },
         ],
         groups: [
-            {
-                // Все AI-функции CRM собраны в одну группу — до интеграций.
-                // Раньше AI Control Center жил в общем items наверху, а
-                // AI-обзвон отдельной группой внизу: тематика разъезжалась
-                // визуально по двум местам. Теперь — единый раздел.
-                // Title «AI-функции» — симметрично с «Интеграции»:
-                // существительное во мн.ч., описывает содержимое группы.
-                title: "AI-функции",
-                items: [
-                    // Label «AI в чатах» — текстовый AI в MAX/TG/WhatsApp.
-                    // Симметрично «AI-обзвон» (голосовой AI). Старый
-                    // технический термин «AI Control Center» оставлен в
-                    // URL (/settings/ai), но в UI больше не показывается.
-                    { label: "AI в чатах", href: "/settings/ai", icon: Cpu, sectionKey: "ai_control" },
-                    { label: "AI-обзвон", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
-                    // Hub-индекс инструкций по всем AI-функциям. Внутри —
-                    // карточки на конкретные инструкции (AI в чатах,
-                    // AI-обзвон, и т.д. — по мере роста).
-                    { label: "Инструкции", href: "/settings/integrations/ai-call-help", icon: BookOpen, sectionKey: "ai_call_help" }
-                ]
-            },
             {
                 title: "Интеграции",
                 items: [
@@ -182,6 +162,7 @@ export const DOMAINS: NavigationDomain[] = [
                     { label: "MAX", href: "/settings/integrations/max", icon: MessageSquare, sectionKey: "max" },
                     { label: "Bot", href: "/settings/integrations/bot", icon: Bot, sectionKey: "bot" },
                     { label: "Телефония", href: "/settings/integrations/telephony", icon: Smartphone, sectionKey: "telephony" },
+                    { label: "Сценарии ИИ-обзвона", href: "/settings/integrations/ai-call-scenarios", icon: Sparkles, sectionKey: "ai_call_scenarios" },
                     { label: "Avito", href: "/settings/integrations/avito", icon: Megaphone, sectionKey: "settings_integration_avito" }
                 ]
             }

@@ -35,7 +35,6 @@ export default function MessagesShell({
     isProfileOpen: boolean
     initialMessageId: string | null
     initialPhone?: string | null
-    initialPhone?: string | null
 }) {
     const [chatId, setChatIdState] = useState(initialChatId)
     const [channelTab, setChannelTab] = useState(activeChannelTab)

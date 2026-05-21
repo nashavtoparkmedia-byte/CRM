@@ -140,18 +140,69 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             )
         }
 
-        // 2. Channel Filter (multi-select) — but never filter out the currently selected chat.
-        // Strict matching: a chat appears on a channel tab ONLY if its primary channel matches.
-        // Merged conversations (e.g. driver with both MAX and WA chats) are shown under their
-        // primary channel only — clicking the WA tab shows only WA chats.
+        // 2. Channel Filter (multi-select).
+        //
+        // Strict: rows are excluded if none of their chats sit in the selected
+        // channel. We intentionally do NOT keep the currently selected chat
+        // visible across channel tabs — clicking "TG" must show only TG, the
+        // operator's last selection is preserved in the right-side chat panel
+        // separately. (The looser keep-selected rule applies to status tabs
+        // below — see "Tab Filter" — because those are workflow filters, not
+        // channel filters.)
+        //
+        // Single channel selected:
+        //   The merged conversation entry is REBASED onto that channel's
+        //   underlying chat (channelChats[ch]). The row shows that channel's
+        //   last message, timestamp and unread count — so when the operator
+        //   clicks WhatsApp, Ремезов's row shows his last WA message even
+        //   though his most recent activity overall is a phone call.
+        //
+        // Multi-channel selected:
+        //   Union — include entries that have ≥1 selected channel, no rebase.
+        //   Reaching for multi-select means the operator wants the broad view.
+        //
+        // Without a channel filter, the row stays merged (primary chat).
         if (selectedChannels.size > 0) {
             const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch
             const normalizedSet = new Set(Array.from(selectedChannels).map(normalizeChannel))
-            list = list.filter(c => {
-                const isSelected = selectedChatId && (c.id === selectedChatId || c.allChatIds?.includes(selectedChatId))
-                if (isSelected) return true
-                return normalizedSet.has(c.channel)
-            })
+
+            if (selectedChannels.size === 1) {
+                const onlyCh = normalizeChannel(Array.from(selectedChannels)[0])
+                list = list
+                    .filter(c => {
+                        // Conversation has a chat in this channel iff the
+                        // channelChats / channelMap contains it.
+                        return !!(c.channelChats?.[onlyCh] || c.channelMap?.[onlyCh])
+                    })
+                    .map(c => {
+                        const ch = c.channelChats?.[onlyCh]
+                        if (!ch) return c
+                        // Rebase: swap display fields with the channel-specific chat.
+                        // Keep aggregate fields (allChatIds, channelMap, etc.) so
+                        // open-chat side-rails and channel-switcher still work.
+                        return {
+                            ...c,
+                            id: ch.id,
+                            channel: ch.channel,
+                            name: ch.name ?? c.name,
+                            lastMessageAt: ch.lastMessageAt ?? c.lastMessageAt,
+                            lastInboundAt: ch.lastInboundAt ?? null,
+                            lastOutboundAt: ch.lastOutboundAt ?? null,
+                            unreadCount: ch.unreadCount ?? 0,
+                            requiresResponse: !!ch.requiresResponse,
+                            status: (ch.status as any) ?? c.status,
+                            messages: ch.messages ?? c.messages,
+                            metadata: ch.metadata ?? c.metadata,
+                        }
+                    })
+            } else {
+                list = list.filter(c => {
+                    if (c.allChannels && c.allChannels.length > 0) {
+                        return c.allChannels.some((ch: string) => normalizedSet.has(ch))
+                    }
+                    return normalizedSet.has(c.channel)
+                })
+            }
         }
 
         // 3. Tab Filter — but never filter out the currently selected chat
@@ -798,14 +849,16 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                         const isGroup = c.chatType && c.chatType !== 'private'
                         return viewMode === 'chats' ? !isGroup : !!isGroup
                     }
-                    // Tab badge counts ONLY chats whose PRIMARY channel matches the tab.
-                    // This keeps the badge consistent with what's visible after clicking the tab
-                    // (filter is also strict: primary channel only).
+                    // Tab badge counts unread for every chat in this channel — even
+                    // on merged conversations whose primary channel is something
+                    // else. Uses channelUnread map filled by MessageService.
                     const channelUnread = accountFilteredConversations
-                        .filter(c => c.channel === normalizedChannel)
+                        .filter(c => !!(c.channelChats?.[normalizedChannel] || c.channelMap?.[normalizedChannel] || c.channel === normalizedChannel))
                         .reduce((sum, c) => {
                             if (isSelectedConv(c) || !matchesViewMode(c)) return sum
-                            return sum + (c.unreadCount || 0)
+                            // Channel-specific unread (preferred); fall back to primary unread.
+                            const u = c.channelUnread?.[normalizedChannel] ?? (c.channel === normalizedChannel ? (c.unreadCount || 0) : 0)
+                            return sum + u
                         }, 0)
                     return (
                         <button

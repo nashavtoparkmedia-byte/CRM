@@ -31,15 +31,7 @@ export async function GET(req: NextRequest) {
             },
         })
 
-        // Project AI-call fields into the response (CallsList renders an
-        // AI badge for isAi=true, hides aiScore badge for them).
-        const projected = calls.map(c => ({
-            ...c,
-            isAi: (c as any).isAi ?? false,
-            aiSessionStatus: (c as any).aiSessionStatus ?? null,
-        }))
-
-        return NextResponse.json({ calls: projected })
+        return NextResponse.json({ calls })
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 })
     }

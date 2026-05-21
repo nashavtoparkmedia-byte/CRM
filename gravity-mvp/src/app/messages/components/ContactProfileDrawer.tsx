@@ -78,6 +78,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
 
+    // Add-phone inline form state
+    const [showAddPhone, setShowAddPhone] = useState(false)
+    const [newPhoneInput, setNewPhoneInput] = useState('')
+    const [addingPhone, setAddingPhone] = useState(false)
+    const [addPhoneError, setAddPhoneError] = useState<string | null>(null)
+    const [phoneConflict, setPhoneConflict] = useState<{ contactId: string; displayName: string; phone: string } | null>(null)
+
     // Reachability: merge persisted status from DB with optional live-check override
     const [liveReachability, setLiveReachability] = useState<Record<string, boolean | null>>({})
 
@@ -293,9 +300,99 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     </div>
                 ) : contact ? (
                     <div className="px-4 py-2.5">
-                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Телефоны и каналы</h4>
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Телефоны и каналы</h4>
+                            {!showAddPhone && (
+                                <button
+                                    onClick={() => { setShowAddPhone(true); setAddPhoneError(null); setPhoneConflict(null) }}
+                                    className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4] flex items-center gap-0.5"
+                                >
+                                    <Plus size={10} />
+                                    Добавить номер
+                                </button>
+                            )}
+                        </div>
 
-                        {phonesWithIdentities.length === 0 && orphanIdentities.length === 0 && (
+                        {/* Inline form for adding a new phone manually. POST hits
+                            /api/contacts/:id/phones — if the phone already
+                            belongs to ANOTHER contact, the API returns a
+                            "PHONE_BELONGS_TO_OTHER" warning with suggestMerge,
+                            which we surface as a "Объединить?" prompt. */}
+                        {showAddPhone && (
+                            <div className="mb-3 p-2 rounded-lg border border-gray-200 bg-gray-50">
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        autoFocus
+                                        type="tel"
+                                        inputMode="tel"
+                                        value={newPhoneInput}
+                                        onChange={(e) => setNewPhoneInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Escape') { setShowAddPhone(false); setNewPhoneInput('') }
+                                            if (e.key === 'Enter') (document.getElementById('add-phone-submit') as HTMLButtonElement)?.click()
+                                        }}
+                                        placeholder="+7 922 555-44-33"
+                                        className="flex-1 h-[28px] rounded-md bg-white border border-gray-200 px-2 text-[12px] font-mono outline-none focus:border-[#3390EC]"
+                                    />
+                                    <button
+                                        id="add-phone-submit"
+                                        disabled={addingPhone || !newPhoneInput.trim()}
+                                        onClick={async () => {
+                                            setAddingPhone(true); setAddPhoneError(null); setPhoneConflict(null)
+                                            try {
+                                                const res = await fetch(`/api/contacts/${contact.id}/phones`, {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ phone: newPhoneInput.trim(), isPrimary: contact.phones.length === 0 }),
+                                                })
+                                                const body = await res.json().catch(() => ({}))
+                                                if (body.warning === 'PHONE_BELONGS_TO_OTHER' && body.existingContact) {
+                                                    setPhoneConflict({
+                                                        contactId: body.existingContact.id,
+                                                        displayName: body.existingContact.displayName,
+                                                        phone: body.phone,
+                                                    })
+                                                    return
+                                                }
+                                                if (!res.ok) {
+                                                    setAddPhoneError(body.message ?? body.error ?? `Ошибка ${res.status}`)
+                                                    return
+                                                }
+                                                setShowAddPhone(false); setNewPhoneInput('')
+                                                refetchContact()
+                                            } catch (err: any) {
+                                                setAddPhoneError(err.message ?? 'Ошибка сети')
+                                            } finally {
+                                                setAddingPhone(false)
+                                            }
+                                        }}
+                                        className="h-[28px] px-2.5 rounded-md bg-[#3390EC] text-white text-[11px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {addingPhone ? <Loader2 size={11} className="animate-spin" /> : 'Сохранить'}
+                                    </button>
+                                    <button
+                                        onClick={() => { setShowAddPhone(false); setNewPhoneInput(''); setAddPhoneError(null); setPhoneConflict(null) }}
+                                        className="h-[28px] px-1.5 rounded-md text-gray-400 hover:text-gray-700 text-[11px]"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                                {addPhoneError && (
+                                    <div className="mt-1.5 text-[10px] text-red-500">{addPhoneError}</div>
+                                )}
+                                {phoneConflict && (
+                                    <div className="mt-1.5 p-1.5 rounded bg-amber-50 border border-amber-200 text-[10px]">
+                                        <div className="font-semibold text-amber-700">Этот номер уже у другого контакта</div>
+                                        <div className="text-amber-700 mt-0.5">«{phoneConflict.displayName}»</div>
+                                        <div className="text-amber-600 mt-1">
+                                            Чтобы добавить — сначала объедините контакты на «…» → Объединить.
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {phonesWithIdentities.length === 0 && orphanIdentities.length === 0 && !showAddPhone && (
                             <div className="text-[12px] text-gray-400 italic">Нет активных каналов связи</div>
                         )}
 
@@ -307,6 +404,27 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             const phoneChannels: string[] = ['whatsapp', 'telegram', 'max']
                             const missingChannels = phoneChannels.filter(ch => !existingChannels.has(ch))
 
+                            // Temp-phone badge + countdown until Avito's number rotates.
+                            const tempDaysLeft = phone.expiresAt
+                                ? Math.max(0, Math.ceil((new Date(phone.expiresAt).getTime() - Date.now()) / 86400_000))
+                                : null
+
+                            const handleDeletePhone = async () => {
+                                const what = phone.isTemporary ? 'временный номер' : 'номер'
+                                if (!confirm(`Удалить ${what} ${formatPhone(phone.phone)}? История звонков на него останется.`)) return
+                                const res = await fetch(`/api/contacts/${contact!.id}/phones/${phone.id}`, { method: 'DELETE' })
+                                if (res.ok) refetchContact()
+                            }
+
+                            const handleMakePrimary = async () => {
+                                const res = await fetch(`/api/contacts/${contact!.id}/phones/${phone.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ isPrimary: true }),
+                                })
+                                if (res.ok) refetchContact()
+                            }
+
                             return (
                                 <div key={phone.id} className="mb-2.5">
                                     <div className="flex items-center gap-1.5 mb-1">
@@ -317,8 +435,32 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {phone.isPrimary && (
                                             <Star size={10} className="text-yellow-500 fill-yellow-500" />
                                         )}
-                                        <div className="ml-auto">
+                                        {phone.isTemporary && (
+                                            <span
+                                                className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100"
+                                                title={tempDaysLeft !== null ? `Временный номер Авито · истечёт через ${tempDaysLeft} дн.` : 'Временный номер Авито'}
+                                            >
+                                                ⏱ Врем.{tempDaysLeft !== null && tempDaysLeft <= 3 ? ` ${tempDaysLeft}д` : ''}
+                                            </span>
+                                        )}
+                                        <div className="ml-auto flex items-center gap-0.5">
+                                            {!phone.isPrimary && !phone.isTemporary && (
+                                                <button
+                                                    onClick={handleMakePrimary}
+                                                    className="w-5 h-5 rounded hover:bg-yellow-50 flex items-center justify-center text-gray-300 hover:text-yellow-500 transition-colors"
+                                                    title="Сделать основным"
+                                                >
+                                                    <Star size={11} />
+                                                </button>
+                                            )}
                                             <CallButton phoneNumber={phone.phone} label="" />
+                                            <button
+                                                onClick={handleDeletePhone}
+                                                className="w-5 h-5 rounded hover:bg-red-50 flex items-center justify-center text-gray-300 hover:text-red-500 transition-colors"
+                                                title="Удалить номер"
+                                            >
+                                                <Trash2 size={11} />
+                                            </button>
                                         </div>
                                     </div>
                                     <div className="ml-4 space-y-0.5">
@@ -632,7 +774,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             {/* Task Create Modal */}
             {isTaskModalOpen && contactOrDriverId && (
                 <TaskCreateModal
-                    driverId={chat.driver?.id || contactOrDriverId}
+                    driverId={chat.driver?.id}
+                    contactId={contact?.id}
                     driverName={displayName}
                     source="chat"
                     chatContext={{ chatId: chat.id }}

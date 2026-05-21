@@ -638,14 +638,25 @@ export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
     const cookieStore = await cookies();
     const currentUserId = cookieStore.get('crm_user_id')?.value || null;
 
-    // Enforce single main scenario per driver
-    if (input.scenario) {
+    // Enforce single main scenario per PERSON. A "person" can be identified
+    // by driverId, contactId, or both. The previous version only checked
+    // driverId — and worse, did so unconditionally, so `driverId: undefined`
+    // fell through Prisma as "no filter" and matched ANY active main
+    // scenario task across the DB, generating false-positive rejections
+    // when creating a task on a contact that had no driver linked yet.
+    if (input.scenario && (input.driverId || input.contactId)) {
         const scenarioConfig = getScenario(input.scenario)
         if (scenarioConfig?.isMainScenario) {
             const mainIds = getMainScenarioIds()
+            const targetClause: Prisma.TaskWhereInput =
+                input.driverId && input.contactId
+                    ? { OR: [{ driverId: input.driverId }, { contactId: input.contactId }] }
+                    : input.driverId
+                        ? { driverId: input.driverId }
+                        : { contactId: input.contactId! }
             const existing = await prisma.task.findFirst({
                 where: {
-                    driverId: input.driverId,
+                    ...targetClause,
                     scenario: { in: mainIds },
                     isActive: true,
                 },
@@ -653,7 +664,7 @@ export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
             })
             if (existing) {
                 const existingLabel = getScenario(existing.scenario!)?.label ?? existing.scenario
-                throw new Error(`У водителя уже есть активный сценарий: ${existingLabel}`)
+                throw new Error(`У этого контакта уже есть активный сценарий: ${existingLabel}`)
             }
         }
     }
@@ -661,6 +672,7 @@ export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
     const task = await prisma.task.create({
         data: {
             driverId: input.driverId,
+            contactId: input.contactId,
             source: input.source,
             type: input.type,
             title: input.title,
@@ -986,6 +998,56 @@ export async function checkSimilarTasks(
         dueAt: t.dueAt?.toISOString() ?? null,
         createdAt: t.createdAt.toISOString(),
     }))
+}
+
+/**
+ * Look up an active main-scenario task for this person (driver and/or
+ * contact). Used by TaskCreateModal to PROACTIVELY warn before submit if
+ * the operator picks a scenario the person already has open — and to
+ * offer a link to open it instead of forcing them to dismiss a generic
+ * error and figure it out.
+ *
+ * `target` can specify driverId, contactId, or both. If both are nil,
+ * returns null (defensive: previously `findFirst({ where: { driverId:
+ * undefined } })` matched ANY task in the DB).
+ */
+export async function getActiveMainScenarioForDriver(
+    target: { driverId?: string | null; contactId?: string | null } | string,
+    scenarioId: string,
+): Promise<{ id: string; title: string; scenario: string; scenarioLabel: string; stage: string | null } | null> {
+    // Back-compat: callers used to pass driverId as a bare string.
+    const driverId = typeof target === 'string' ? target : (target?.driverId ?? null)
+    const contactId = typeof target === 'string' ? null : (target?.contactId ?? null)
+
+    if (!driverId && !contactId) return null
+
+    const scenarioConfig = getScenario(scenarioId)
+    if (!scenarioConfig?.isMainScenario) return null
+
+    const mainIds = getMainScenarioIds()
+    const targetClause: Prisma.TaskWhereInput =
+        driverId && contactId
+            ? { OR: [{ driverId }, { contactId }] }
+            : driverId
+                ? { driverId }
+                : { contactId: contactId! }
+    const existing = await prisma.task.findFirst({
+        where: {
+            ...targetClause,
+            scenario: { in: mainIds },
+            isActive: true,
+        },
+        select: { id: true, title: true, scenario: true, stage: true },
+    })
+    if (!existing || !existing.scenario) return null
+
+    return {
+        id: existing.id,
+        title: existing.title,
+        scenario: existing.scenario,
+        scenarioLabel: getScenario(existing.scenario)?.label ?? existing.scenario,
+        stage: existing.stage,
+    }
 }
 
 // ─── Counts (for navigation badge) ────────────────────────────────────────

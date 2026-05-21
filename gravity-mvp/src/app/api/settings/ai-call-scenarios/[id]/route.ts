@@ -39,7 +39,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             ...(body.questions !== undefined && { questions: body.questions }),
             ...(body.targetDurationSec !== undefined && { targetDurationSec: Number(body.targetDurationSec) }),
             ...(body.isActive !== undefined && { isActive: Boolean(body.isActive) }),
-            ...(body.projectId !== undefined && { projectId: String(body.projectId) }),
         })
         opsLog('info', 'ai_call_scenario_updated', { operation: 'ai_call_scenarios', scenarioId: id })
         return NextResponse.json({ scenario })

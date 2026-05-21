@@ -141,6 +141,13 @@ export interface TaskEventDTO {
 
 export interface CreateTaskInput {
     driverId?: string
+    // contactId is the "person" anchor when there's no linked Driver yet
+    // (e.g. phone-only contacts created from an inbound call). The server
+    // uses driverId-or-contactId to enforce single-main-scenario uniqueness
+    // and to attach the task; passing it prevents false-positive duplicate
+    // rejections that fire when Prisma sees driverId: undefined and treats
+    // the where clause as "no filter".
+    contactId?: string
     source: TaskSource
     type: string
     title: string

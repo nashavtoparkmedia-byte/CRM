@@ -14,9 +14,6 @@ interface CallRow {
     durationSec: number | null
     recordingPath: string | null
     aiScore?: number | null
-    isAi?: boolean
-    aiSessionStatus?: 'starting' | 'greeting' | 'active' | 'transferring' | 'ended' | 'failed' | null
-    aiSummary?: string | null
 }
 
 /**
@@ -126,16 +123,7 @@ function CallRowItem({
                         {new Date(call.startedAt).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
                     </div>
                 </div>
-                {call.isAi && (
-                    <span
-                        title={call.aiSummary ?? 'AI-обзвон'}
-                        className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary"
-                    >
-                        <Sparkles className="h-3 w-3"/>
-                        ИИ
-                    </span>
-                )}
-                {!call.isAi && typeof call.aiScore === 'number' && (
+                {typeof call.aiScore === 'number' && (
                     <span
                         title={`AI-оценка ${call.aiScore}/10`}
                         className={[
@@ -150,7 +138,7 @@ function CallRowItem({
                     </span>
                 )}
                 <div className="text-[12px] tabular-nums text-muted-foreground">
-                    {call.durationSec ? formatDuration(call.durationSec) : statusLabel(call.status)}
+                    {call.durationSec ? formatDuration(call.durationSec) : statusLabel(call.status, call.direction)}
                 </div>
             </Link>
             {call.recordingPath && (
@@ -174,19 +162,30 @@ function CallRowItem({
 }
 
 function iconFor(c: CallRow) {
-    if (c.status === 'missed') return PhoneMissed
+    if (c.direction === 'inbound' && c.status !== 'completed' && c.status !== 'active' && c.status !== 'ringing') return PhoneMissed
     if (c.direction === 'inbound') return PhoneIncoming
     return PhoneOutgoing
 }
 
 function colorFor(c: CallRow): string {
-    if (c.status === 'missed') return 'text-red-500'
     if (c.status === 'completed') return 'text-green-600'
+    if (c.direction === 'inbound' && (c.status === 'missed' || c.status === 'no_answer')) return 'text-red-500'
+    if (c.direction === 'outbound' && c.status === 'no_answer') return 'text-red-500'
+    if (c.status === 'busy') return 'text-red-500'
     return 'text-muted-foreground'
 }
 
-function statusLabel(s: string): string {
-    return ({ missed: 'Пропущен', no_answer: 'Не ответил', busy: 'Занято', failed: 'Сбой', rejected: 'Отклонён', ringing: '…' } as Record<string, string>)[s] ?? s
+function statusLabel(s: string, direction: 'inbound' | 'outbound'): string {
+    if (s === 'completed') return 'Завершён'
+    if (s === 'active') return '…'
+    if (s === 'ringing') return '…'
+    if (s === 'missed') return 'Пропущен'
+    if (s === 'busy') return 'Занято'
+    if (s === 'cancelled') return 'Отменён'
+    if (s === 'rejected') return direction === 'inbound' ? 'Отклонён' : 'Отклонён абонентом'
+    if (s === 'failed') return 'Сбой'
+    if (s === 'no_answer') return direction === 'inbound' ? 'Пропущен' : 'Без ответа'
+    return s
 }
 
 function formatDuration(sec: number): string {

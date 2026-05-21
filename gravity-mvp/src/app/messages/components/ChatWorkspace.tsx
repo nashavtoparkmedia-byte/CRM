@@ -259,7 +259,8 @@ function ChatWorkspaceInner({
             {(taskModalContext || isTaskModalOpenForChat) && (
                 <TaskCreateModal
                     driverId={chat.driver?.id}
-                    driverName={chat.driver?.fullName || chat.name || 'Контакт'}
+                    contactId={chat.contactId ?? chat.contact?.id ?? undefined}
+                    driverName={chat.driver?.fullName || chat.contact?.displayName || chat.name || 'Контакт'}
                     source="chat"
                     chatContext={{
                         chatId,

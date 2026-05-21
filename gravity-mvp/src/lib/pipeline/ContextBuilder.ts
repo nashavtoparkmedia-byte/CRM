@@ -59,18 +59,6 @@ export class ContextBuilder {
     if (!rows[0]) return null
     const raw = rows[0]
 
-    // Загрузка активного профиля стиля общения (если выбран).
-    // Без активного профиля runtime fallback'ится на legacy-поля
-    // promptRole/Tone/Allowed/Forbidden из самого AiAgentConfig.
-    let profile: any = null
-    if (raw.activeProfileId) {
-      const profileRows = await prisma.$queryRaw<any[]>`
-        SELECT "promptRole", "promptTone", "promptAllowed", "promptForbidden"
-        FROM "AiAgentProfile" WHERE id = ${raw.activeProfileId} LIMIT 1
-      `
-      profile = profileRows[0] ?? null
-    }
-
     const config: AiConfig = {
       enabled:              raw.enabled,
       mode:                 raw.mode,
@@ -82,14 +70,10 @@ export class ContextBuilder {
       confidenceThreshold:  raw.confidenceThreshold ?? 0.75,
       maxAutoRepliesPerChat: raw.maxAutoRepliesPerChat ?? 5,
       activeChannels:       raw.activeChannels || [],
-      // Приоритет: активный профиль → legacy-поля config'а → null.
-      // Так старые установки продолжают работать, пока админ не создаст
-      // профиль; одновременно после смены активного профиля runtime
-      // подхватывает новый стиль без редеплоя.
-      promptRole:           profile?.promptRole      ?? raw.promptRole      ?? null,
-      promptTone:           profile?.promptTone      ?? raw.promptTone      ?? null,
-      promptAllowed:        profile?.promptAllowed   ?? raw.promptAllowed   ?? null,
-      promptForbidden:      profile?.promptForbidden ?? raw.promptForbidden ?? null,
+      promptRole:           raw.promptRole ?? null,
+      promptTone:           raw.promptTone ?? null,
+      promptAllowed:        raw.promptAllowed ?? null,
+      promptForbidden:      raw.promptForbidden ?? null,
     }
 
     if (!config.enabled || config.mode === 'off') return null

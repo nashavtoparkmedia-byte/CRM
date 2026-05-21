@@ -12,14 +12,12 @@ export const dynamic = 'force-dynamic'
  * Admin / Руководитель only for POST. GET is open to any authenticated user
  * so the lead card's "Call with AI" button can render the scenario picker.
  */
-export async function GET(req: NextRequest) {
+export async function GET() {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     try {
-        const { searchParams } = new URL(req.url)
-        const projectId = searchParams.get('projectId') ?? undefined
-        const scenarios = await listScenarios(projectId ? { projectId } : undefined)
+        const scenarios = await listScenarios()
         return NextResponse.json({ scenarios })
     } catch (err: any) {
         opsLog('error', 'ai_call_scenarios_list_failed', { operation: 'ai_call_scenarios', error: err.message })
@@ -49,7 +47,6 @@ export async function POST(req: NextRequest) {
             systemPrompt,
             questions: Array.isArray(body?.questions) ? body.questions : [],
             targetDurationSec: body?.targetDurationSec ? Number(body.targetDurationSec) : undefined,
-            projectId: body?.projectId ? String(body.projectId) : undefined,
         })
         opsLog('info', 'ai_call_scenario_created', { operation: 'ai_call_scenarios', scenarioId: scenario.id })
         return NextResponse.json({ scenario })

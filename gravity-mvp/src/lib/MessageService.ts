@@ -163,14 +163,54 @@ export class MessageService {
                 // Ownership: use primary chat's assignee (most recent activity = authoritative)
                 const assignedToUserId = primary.assignedToUserId || driverChats.find((c: any) => c.assignedToUserId)?.assignedToUserId || null
                 const allChatIds = driverChats.map((c: any) => c.id)
-                const channelMap = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.id]))
-                const channelUnread = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.unreadCount || 0]))
-                
+                // Per-channel maps. driverChats is sorted by lastMessageAt DESC,
+                // so the FIRST occurrence per channel is the newest chat in that
+                // channel. With Object.fromEntries the LAST entry won, which on
+                // contacts that accidentally have two chats in the same channel
+                // (e.g. WhatsApp LID vs phone-number formats) routed clicks to
+                // the older empty one. Iterate-and-skip-if-set fixes this.
+                const channelMap: Record<string, string> = {}
+                const channelUnread: Record<string, number> = {}
+                for (const c of driverChats) {
+                    if (channelMap[c.channel] === undefined) channelMap[c.channel] = c.id
+                    // Sum unread across same-channel duplicates so the badge
+                    // doesn't undercount when a contact has split chats.
+                    channelUnread[c.channel] = (channelUnread[c.channel] ?? 0) + (c.unreadCount || 0)
+                }
+
                 // Aggregate profiles from all chats for this driver
                 const allProfiles = driverChats.map((c: any) => ({
                     channel: c.channel,
                     profileId: c.metadata?.connectionId || c.metadata?.profileId || null
                 })).filter(p => p.profileId)
+
+                // Per-channel snapshot of each underlying chat. Used by ChatList
+                // to "rebase" a merged entry onto a specific channel when the
+                // operator filters by WA/TG/MAX/Тел — the row then shows that
+                // channel's last message, timestamp and unread count instead of
+                // the primary chat's. Only the display-critical fields are
+                // copied to keep the payload small.
+                //
+                // Same dedup rule as channelMap above: keep the newest chat per
+                // channel, skip same-channel duplicates.
+                const channelChats: Record<string, any> = {}
+                for (const c of driverChats) {
+                    if (channelChats[c.channel]) continue
+                    channelChats[c.channel] = {
+                        id: c.id,
+                        channel: c.channel,
+                        name: c.name,
+                        lastMessageAt: c.lastMessageAt,
+                        lastInboundAt: c.lastInboundAt,
+                        lastOutboundAt: c.lastOutboundAt,
+                        unreadCount: c.unreadCount || 0,
+                        requiresResponse: !!c.requiresResponse,
+                        status: c.status,
+                        messages: c.messages, // last message (take: 1 above)
+                        metadata: c.metadata,
+                        assignedToUserId: c.assignedToUserId,
+                    }
+                }
 
                 mergedEntries.push({
                     ...primary,
@@ -181,6 +221,7 @@ export class MessageService {
                     channelMap, // { whatsapp: chatId, telegram: chatId, max: chatId }
                     channelUnread, // { whatsapp: 3, telegram: 1, ... }
                     allProfiles, // List of { channel, profileId }
+                    channelChats, // { whatsapp: {chat}, telegram: {chat}, ... }
                     // For display in channel-filter tabs, keep all channels the driver has
                     allChannels: driverChats.map((c: any) => c.channel)
                 })
@@ -189,12 +230,29 @@ export class MessageService {
             // 4. Add ungrouped chats as-is
             for (const chat of ungroupedChats) {
                 const profileId = chat.metadata?.connectionId || chat.metadata?.profileId || null
+                const channelChats: Record<string, any> = {
+                    [chat.channel]: {
+                        id: chat.id,
+                        channel: chat.channel,
+                        name: chat.name,
+                        lastMessageAt: chat.lastMessageAt,
+                        lastInboundAt: chat.lastInboundAt,
+                        lastOutboundAt: chat.lastOutboundAt,
+                        unreadCount: chat.unreadCount || 0,
+                        requiresResponse: !!chat.requiresResponse,
+                        status: chat.status,
+                        messages: chat.messages,
+                        metadata: chat.metadata,
+                        assignedToUserId: chat.assignedToUserId,
+                    },
+                }
                 mergedEntries.push({
                     ...chat,
                     allChatIds: [chat.id],
                     channelMap: { [chat.channel]: chat.id },
                     channelUnread: { [chat.channel]: chat.unreadCount || 0 },
                     allProfiles: profileId ? [{ channel: chat.channel, profileId }] : [],
+                    channelChats,
                     allChannels: [chat.channel]
                 })
             }
@@ -274,6 +332,12 @@ export class MessageService {
                 status: 'sent',
                 externalId: null, // NEW — skip anything that already has a provider id
                 sentAt: { lt: cutoff },
+                // Call-type messages are NOT outbound text we're trying to deliver —
+                // they're historical records of phone calls synced from FreeSWITCH.
+                // Recovery is for stuck text messages only; touching calls clobbers
+                // metadata.{callId,disposition,durationSec} which the chat timeline
+                // and call-card renderer rely on.
+                type: { not: 'call' },
             },
             data: {
                 status: 'failed',

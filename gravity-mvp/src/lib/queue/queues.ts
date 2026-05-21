@@ -66,15 +66,12 @@ function defaultJobOptions(): JobsOptions {
  * Enqueue Whisper transcription for a Call. Idempotent on callId — repeated
  * enqueue calls with the same callId reuse the same job id and BullMQ ignores
  * the duplicate.
- *
- * jobId uses `-` not `:` as the separator — BullMQ 5+ rejects colons in
- * custom job ids (`Custom Id cannot contain :`), and we hit that as a
- * silent enqueue failure on every call until this got fixed.
  */
 export async function enqueueTranscribe(callId: string): Promise<void> {
     await getTranscribeQueue().add(
         'transcribe',
         { callId },
+        // BullMQ disallows ':' in custom job ids — use '-' as separator.
         { jobId: `transcribe-${callId}` },
     )
 }
@@ -82,13 +79,12 @@ export async function enqueueTranscribe(callId: string): Promise<void> {
 /**
  * Enqueue Claude AI analysis for a Call. Caller is expected to ensure
  * Call.transcript is populated; the worker will skip if it isn't.
- *
- * jobId uses `-` not `:` for the same reason as enqueueTranscribe above.
  */
 export async function enqueueAnalyze(callId: string): Promise<void> {
     await getAnalyzeQueue().add(
         'analyze',
         { callId },
+        // BullMQ disallows ':' in custom job ids — use '-' as separator.
         { jobId: `analyze-${callId}` },
     )
 }

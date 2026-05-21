@@ -6,6 +6,9 @@ export interface ContactPhone {
     label: string | null
     isPrimary: boolean
     source: string
+    isTemporary?: boolean
+    expiresAt?: string | null
+    isActive?: boolean
 }
 
 export interface ContactIdentity {

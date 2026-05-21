@@ -413,7 +413,10 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             })
             session.on('accepted', () => {
                 stopRingback()
-                setActiveCall(prev => (prev?.session === session ? { ...prev, state: 'active', answeredAt: Date.now() } : prev))
+                setActiveCall(prev => {
+                if (!prev || prev.session !== session) return prev
+                return { ...prev, state: 'active', answeredAt: Date.now() }
+            })
             })
             session.on('ended', () => {
                 stopRingback()
@@ -506,10 +509,16 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         })
 
         session.on('progress', () => {
-            setActiveCall(prev => (prev?.session === session ? { ...prev, state: 'ringing' } : prev))
+            setActiveCall(prev => {
+                if (!prev || prev.session !== session) return prev
+                return { ...prev, state: 'ringing' }
+            })
         })
         session.on('accepted', () => {
-            setActiveCall(prev => (prev?.session === session ? { ...prev, state: 'active', answeredAt: Date.now() } : prev))
+            setActiveCall(prev => {
+                if (!prev || prev.session !== session) return prev
+                return { ...prev, state: 'active', answeredAt: Date.now() }
+            })
         })
         session.on('ended', () => {
             setActiveCall(prev => (prev?.session === session ? null : prev))
