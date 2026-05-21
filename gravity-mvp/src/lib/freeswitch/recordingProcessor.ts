@@ -23,6 +23,12 @@ import { opsLog } from '@/lib/opsLog'
 import { uploadFile, S3_BUCKET } from '@/lib/storage/minio'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { enqueueTranscribe } from '@/lib/queue/queues'
+// Plain CommonJS helper — pure retry policy for the MinIO upload, no
+// generic abstraction. See `./recording-upload-retry.js` for the
+// hardcoded policy (3 attempts, [2000, 5000] ms backoffs, transient-
+// only). opsLog is dependency-injected to keep that helper require-
+// able by `node --test` without a TS loader.
+import { retryUploadRecording } from './recording-upload-retry'
 
 ffmpeg.setFfmpegPath(ffmpegInstaller.path)
 
@@ -42,13 +48,42 @@ function translateToHostPath(containerPath: string): string {
     return containerPath
 }
 
+/**
+ * Wrap a Promise with a deadline. If `p` doesn't settle in `ms`, throws
+ * `timeout_<stage>_<ms>ms`. Lets us guarantee processRecording never
+ * blocks the ESL event loop on a wedged MinIO / Redis / ffmpeg.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, stage: string): Promise<T> {
+    let to: NodeJS.Timeout | undefined
+    const timer = new Promise<never>((_, reject) => {
+        to = setTimeout(() => reject(new Error(`timeout_${stage}_after_${ms}ms`)), ms)
+    })
+    return Promise.race([p, timer]).finally(() => { if (to) clearTimeout(to) }) as Promise<T>
+}
+
+const ENCODE_TIMEOUT_MS = Number(process.env.RECORDING_ENCODE_TIMEOUT_MS ?? 60_000)
+const UPLOAD_TIMEOUT_MS = Number(process.env.RECORDING_UPLOAD_TIMEOUT_MS ?? 30_000)
+const ENQUEUE_TIMEOUT_MS = Number(process.env.RECORDING_ENQUEUE_TIMEOUT_MS ?? 2_000)
+
 export async function processRecording(args: {
     callId: string
     fsUuid: string
     recordingFile: string | null
 }): Promise<void> {
-    if (!args.recordingFile) return
+    // Per-stage logging is the explicit fix for Task #4 — when something
+    // (MinIO, ffmpeg, Redis) is down, recordingPath used to stay null with
+    // a single «recording_processing_failed» line that didn't say which
+    // stage broke. Now every stage either logs success or a tagged error,
+    // so operators can see at a glance whether the WAV was found, encoded,
+    // uploaded, persisted, and queued.
+    if (!args.recordingFile) {
+        opsLog('warn', 'recording_skipped_no_file', {
+            operation: 'recording', callId: args.callId,
+        })
+        return
+    }
 
+    const startedAt = Date.now()
     const wavHostPath = translateToHostPath(args.recordingFile)
 
     // Give FreeSWITCH a moment to flush the file. record_session closes the
@@ -57,17 +92,50 @@ export async function processRecording(args: {
     if (!existsSync(wavHostPath)) {
         await sleep(500)
         if (!existsSync(wavHostPath)) {
-            opsLog('warn', 'recording_wav_missing', { operation: 'recording', callId: args.callId, error: wavHostPath })
+            opsLog('warn', 'recording_wav_missing', {
+                operation: 'recording', callId: args.callId, error: wavHostPath,
+            })
             return
         }
     }
+
+    const wavSize = await fs.stat(wavHostPath).then(s => s.size).catch(() => -1)
+    opsLog('info', 'recording_stage_wav_found', {
+        operation: 'recording', callId: args.callId,
+        wavHostPath, wavSize,
+    })
 
     const mp3LocalPath = path.join(os.tmpdir(), `${args.fsUuid}.mp3`)
     const objectKey = `${new Date().getFullYear()}/${pad(new Date().getMonth() + 1)}/${args.fsUuid}.mp3`
 
     try {
-        await encodeToMp3(wavHostPath, mp3LocalPath)
-        await uploadFile(mp3LocalPath, objectKey, 'audio/mpeg')
+        const encStart = Date.now()
+        await withTimeout(encodeToMp3(wavHostPath, mp3LocalPath), ENCODE_TIMEOUT_MS, 'encodeToMp3')
+        const mp3Size = await fs.stat(mp3LocalPath).then(s => s.size).catch(() => -1)
+        opsLog('info', 'recording_stage_encoded', {
+            operation: 'recording', callId: args.callId,
+            mp3Size, encodeMs: Date.now() - encStart,
+        })
+
+        const upStart = Date.now()
+        // Retry-wrap the upload: each attempt keeps the existing
+        // per-attempt timeout (UPLOAD_TIMEOUT_MS), the helper itself
+        // adds bounded retries for transient errors only. WAV stays
+        // on disk on final failure — see the existing «leave WAV in
+        // place» comment in the outer catch.
+        await retryUploadRecording({
+            uploadFn: () => withTimeout(
+                uploadFile(mp3LocalPath, objectKey, 'audio/mpeg'),
+                UPLOAD_TIMEOUT_MS,
+                'uploadFile',
+            ),
+            callId: args.callId,
+            opsLog,
+        })
+        opsLog('info', 'recording_stage_uploaded', {
+            operation: 'recording', callId: args.callId,
+            objectKey, uploadMs: Date.now() - upStart,
+        })
 
         await prisma.call.update({
             where: { id: args.callId },
@@ -78,6 +146,7 @@ export async function processRecording(args: {
             operation: 'recording',
             callId: args.callId,
             objectKey,
+            totalMs: Date.now() - startedAt,
         })
 
         // Notify any open SSE listeners that the recording is ready to play.
@@ -90,7 +159,10 @@ export async function processRecording(args: {
         // the queue can't accept the job, log and continue — the recording
         // itself is already safely in S3, so the user can still listen to it.
         try {
-            await enqueueTranscribe(args.callId)
+            await withTimeout(enqueueTranscribe(args.callId), ENQUEUE_TIMEOUT_MS, 'enqueueTranscribe')
+            opsLog('info', 'recording_stage_transcribe_enqueued', {
+                operation: 'recording', callId: args.callId,
+            })
         } catch (err: any) {
             opsLog('error', 'transcribe_enqueue_failed', {
                 operation: 'recording',
@@ -103,10 +175,15 @@ export async function processRecording(args: {
         await fs.unlink(wavHostPath).catch(() => {})
         await fs.unlink(mp3LocalPath).catch(() => {})
     } catch (err: any) {
+        // Identify which stage tripped via the `timeout_<stage>_...` tag
+        // emitted by withTimeout, OR via the original error message.
+        const tag = /^timeout_([a-zA-Z]+)_/.exec(err.message)?.[1] ?? 'unknown'
         opsLog('error', 'recording_processing_failed', {
             operation: 'recording',
             callId: args.callId,
+            stage: tag,
             error: err.message,
+            totalMs: Date.now() - startedAt,
         })
         // Leave the WAV in place so we can retry / debug manually.
     }
