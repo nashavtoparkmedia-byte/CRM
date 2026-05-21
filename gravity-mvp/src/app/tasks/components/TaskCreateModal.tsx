@@ -9,12 +9,21 @@ import {
     Loader2
 } from 'lucide-react'
 import { useCreateTask } from '@/hooks/use-task-mutations'
-import { checkSimilarTasks } from '@/app/tasks/actions'
+import { checkSimilarTasks, getActiveMainScenarioForDriver } from '@/app/tasks/actions'
 import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/types'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
+import Link from 'next/link'
+import DateTimePicker from '@/components/ui/DateTimePicker'
 
 interface TaskCreateModalProps {
     driverId?: string
+    // Some chats are bound to a Contact but have no linked Driver yet
+    // (e.g. a phone-only contact created from an inbound call before any
+    // matching driver record exists). Pass contactId so the scenario
+    // uniqueness check + the proactive conflict lookup target the right
+    // person — without it the server would treat "no driver" as "no
+    // filter" and trip false-positive duplicate-scenario rejections.
+    contactId?: string
     driverName: string
     source?: TaskSource
     chatContext?: {
@@ -36,6 +45,7 @@ const TASK_TYPES = [
 
 export default function TaskCreateModal({
     driverId,
+    contactId,
     driverName,
     source = 'manual',
     chatContext,
@@ -55,6 +65,16 @@ export default function TaskCreateModal({
     // Dedupe hints
     const [similarTasks, setSimilarTasks] = useState<SimilarTaskHint[]>([])
     const [isCheckingDedupe, setIsCheckingDedupe] = useState(false)
+
+    // PROACTIVE main-scenario conflict: if the operator picks a main scenario
+    // (Подключение / Отток / Сопровождение) and the driver already has one
+    // active, surface it before they hit Submit so the path forward — open
+    // the existing task, or fall back to "Без сценария" — is one click.
+    const [scenarioConflict, setScenarioConflict] = useState<{
+        id: string
+        title: string
+        scenarioLabel: string
+    } | null>(null)
 
     const scenarioOptions = getAllScenarioOptions()
 
@@ -77,6 +97,29 @@ export default function TaskCreateModal({
         return () => { isMounted = false }
     }, [driverId, type])
 
+    // Proactive: on scenario change, check if this person (driver and/or
+    // contact) already has an active main scenario task. If yes, show the
+    // link before submit so the operator gets a clean path forward.
+    useEffect(() => {
+        if ((!driverId && !contactId) || !scenario) {
+            setScenarioConflict(null)
+            // Picking "Без сценария" also clears any stale server error from
+            // a previous conflict submit, otherwise the red box lingers and
+            // confuses the next attempt.
+            setCreateError(null)
+            return
+        }
+        let isMounted = true
+        getActiveMainScenarioForDriver({ driverId, contactId }, scenario)
+            .then(res => {
+                if (!isMounted) return
+                setScenarioConflict(res ? { id: res.id, title: res.title, scenarioLabel: res.scenarioLabel } : null)
+                if (res) setCreateError(null)
+            })
+            .catch(err => console.error('Scenario conflict check failed', err))
+        return () => { isMounted = false }
+    }, [driverId, contactId, scenario])
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         setCreateError(null)
@@ -98,6 +141,7 @@ export default function TaskCreateModal({
 
         createTask.mutate({
             driverId,
+            contactId,
             source: chatContext ? 'chat' : source,
             type: finalType,
             title: finalTitle,
@@ -114,8 +158,24 @@ export default function TaskCreateModal({
             onSuccess: () => {
                 onClose()
             },
-            onError: (err: any) => {
-                setCreateError(err?.message || 'Не удалось создать задачу')
+            onError: async (err: any) => {
+                const msg = err?.message || 'Не удалось создать задачу'
+                setCreateError(msg)
+                // If the server bounced us on the "main scenario already
+                // active" guard, fetch the existing task so we can render
+                // the same nice link UI as the proactive check (the latter
+                // may miss when HMR hasn't reloaded the server action or
+                // when driverId arrives late).
+                if (/уже есть активный сценарий|активный сценарий|main.scenario|already.*active.*scenario/i.test(msg) && (driverId || contactId) && scenario) {
+                    try {
+                        const conflict = await getActiveMainScenarioForDriver({ driverId, contactId }, scenario)
+                        if (conflict) {
+                            setScenarioConflict({ id: conflict.id, title: conflict.title, scenarioLabel: conflict.scenarioLabel })
+                        }
+                    } catch (lookupErr) {
+                        console.error('Conflict lookup after failed submit failed', lookupErr)
+                    }
+                }
             },
         })
     }
@@ -161,8 +221,47 @@ export default function TaskCreateModal({
                             </select>
                         </div>
 
-                        {/* Error from server (e.g. duplicate scenario) */}
-                        {createError && (
+                        {/* Proactive scenario conflict (found before submit).
+                            Offers two clean paths forward: open the existing task,
+                            or fall back to "Без сценария" with one click. Keeps
+                            the operator from being stuck staring at a generic
+                            error message. */}
+                        {scenarioConflict && (
+                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 animate-in fade-in">
+                                <div className="flex gap-2.5">
+                                    <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[13px] text-amber-900 font-semibold">
+                                            У водителя уже активен сценарий «{scenarioConflict.scenarioLabel}»
+                                        </p>
+                                        <p className="text-[12px] text-amber-800 mt-0.5 truncate">
+                                            Задача: {scenarioConflict.title}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            <Link
+                                                href={`/tasks/${scenarioConflict.id}`}
+                                                onClick={onClose}
+                                                className="inline-flex items-center px-3 h-[28px] rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-semibold"
+                                            >
+                                                Открыть существующую
+                                            </Link>
+                                            <button
+                                                type="button"
+                                                onClick={() => setScenario('')}
+                                                className="inline-flex items-center px-3 h-[28px] rounded-md bg-white hover:bg-amber-100 border border-amber-300 text-amber-900 text-[12px] font-semibold"
+                                            >
+                                                Создать без сценария
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Error from server. Suppressed when the proactive
+                            conflict block above is already showing — that
+                            one carries the same info plus action links. */}
+                        {createError && !scenarioConflict && (
                             <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex gap-3 animate-in fade-in">
                                 <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
                                 <p className="text-[13px] text-red-800">{createError}</p>
@@ -253,12 +352,7 @@ export default function TaskCreateModal({
                                 <Calendar className="w-3.5 h-3.5" />
                                 Выполнить до
                             </label>
-                            <input
-                                type="datetime-local"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                                className="w-full h-[38px] bg-[#f9fafb] border border-[#d1d5db] rounded-lg px-3 text-[14px] outline-none focus:border-[#4f46e5]"
-                            />
+                            <DateTimePicker value={dueDate} onChange={setDueDate} />
                         </div>
 
                         {/* Description */}
@@ -302,7 +396,8 @@ export default function TaskCreateModal({
                     <button
                         type="submit"
                         form="task-form"
-                        disabled={createTask.isPending}
+                        disabled={createTask.isPending || !!scenarioConflict}
+                        title={scenarioConflict ? 'Сначала откройте существующую задачу или выберите «Без сценария»' : undefined}
                         className="flex items-center justify-center gap-2 px-6 py-2 rounded-lg bg-[#4f46e5] hover:bg-[#4338ca] text-white text-[14px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {createTask.isPending && <Loader2 className="w-4 h-4 animate-spin" />}

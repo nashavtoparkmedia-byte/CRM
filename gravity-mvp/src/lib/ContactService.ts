@@ -158,6 +158,174 @@ export class ContactService {
   }
 
   /**
+   * Resolve or create a Contact for a phone number — used by the ESL call
+   * handler when a Call comes in and the contact-by-phone lookup misses.
+   *
+   * Differs from resolveContact() in that calls have no per-channel external
+   * id (no Telegram user id, no MAX userId, no WhatsApp JID). The phone IS
+   * the only handle, so we only touch Contact + ContactPhone — no
+   * ContactIdentity row. Later MAX/TG/WA messages from the same person will
+   * hit resolveContact() and that path's "phone match" branch will attach
+   * a fresh ContactIdentity to this same Contact, completing the merge.
+   *
+   * @returns existing or newly created Contact with primary phone attached,
+   *          or null if the phone string could not be normalised.
+   */
+  static async resolveByPhone(
+    phone: string,
+    displayName?: string | null,
+  ): Promise<{ contact: { id: string; displayName: string }; phoneId: string; isNew: boolean } | null> {
+    const normalized = normalizePhoneE164(phone)
+    if (!normalized) return null
+
+    // Skip expired temporary phones — Avito recycles its disposable numbers,
+    // and an old temporary from a previous lead would otherwise mis-attach a
+    // new call to the wrong Contact.
+    const existing = await prisma.contactPhone.findFirst({
+      where: {
+        phone: normalized,
+        isActive: true,
+        OR: [
+          { isTemporary: false },
+          { isTemporary: true, expiresAt: null },
+          { isTemporary: true, expiresAt: { gt: new Date() } },
+        ],
+      },
+      include: { contact: { select: { id: true, displayName: true } } },
+    })
+    if (existing) {
+      return { contact: existing.contact, phoneId: existing.id, isNew: false }
+    }
+
+    const fallbackName = (displayName && displayName.trim()) || normalized
+    const contact = await prisma.contact.create({
+      data: {
+        displayName: fallbackName,
+        displayNameSource: 'channel',
+        masterSource: 'chat',
+      },
+    })
+    const newPhone = await prisma.contactPhone.create({
+      data: {
+        contactId: contact.id,
+        phone: normalized,
+        source: 'manual',
+        isPrimary: true,
+      },
+    })
+    await prisma.contact.update({
+      where: { id: contact.id },
+      data: { primaryPhoneId: newPhone.id },
+    })
+    console.log(`[ContactService] Created contact via phone: contact=${contact.id} phone=${normalized}`)
+    return {
+      contact: { id: contact.id, displayName: fallbackName },
+      phoneId: newPhone.id,
+      isNew: true,
+    }
+  }
+
+  /**
+   * Add a phone number to an existing Contact. Used both by the LeadIntake
+   * service (when Avito-worker reveals the real number) and by the manual
+   * "+ Add number" button in the contact profile drawer.
+   *
+   * Returns:
+   *   - { kind: 'added', phoneId, contactId }                     — phone added cleanly
+   *   - { kind: 'exists_same_contact', phoneId, contactId }       — already attached, no-op
+   *   - { kind: 'conflict', otherContactId, otherContactName }    — phone belongs to a DIFFERENT contact;
+   *                                                                  caller (UI) should prompt for merge
+   *
+   * For Avito → real-phone transition LeadIntake should call this with
+   * `deactivateTemporaries:true` so all the contact's temp Avito numbers go
+   * inactive in the same transaction (the real number is now known, the
+   * disposable ones are no longer useful and would only confuse merge later).
+   */
+  static async addPhoneToContact(
+    contactId: string,
+    phone: string,
+    opts?: {
+      isTemporary?: boolean
+      expiresAt?: Date | null
+      source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'phone' | 'yandex'
+      label?: string | null
+      makePrimary?: boolean
+      deactivateTemporaries?: boolean
+    },
+  ): Promise<
+    | { kind: 'added'; phoneId: string; contactId: string }
+    | { kind: 'exists_same_contact'; phoneId: string; contactId: string }
+    | { kind: 'conflict'; otherContactId: string; otherContactName: string }
+  > {
+    const normalized = normalizePhoneE164(phone)
+    if (!normalized) throw new Error('Invalid phone number')
+
+    // Already on the target contact?
+    const same = await prisma.contactPhone.findFirst({
+      where: { contactId, phone: normalized },
+    })
+    if (same) {
+      // If row exists but inactive — reactivate.
+      if (!same.isActive) {
+        await prisma.contactPhone.update({
+          where: { id: same.id },
+          data: { isActive: true },
+        })
+      }
+      return { kind: 'exists_same_contact', phoneId: same.id, contactId }
+    }
+
+    // Phone owned by ANOTHER contact?
+    const otherOwner = await prisma.contactPhone.findFirst({
+      where: { phone: normalized, isActive: true, NOT: { contactId } },
+      include: { contact: { select: { id: true, displayName: true } } },
+    })
+    if (otherOwner) {
+      return {
+        kind: 'conflict',
+        otherContactId: otherOwner.contact.id,
+        otherContactName: otherOwner.contact.displayName,
+      }
+    }
+
+    // Clean slate — create. Optionally deactivate this contact's old
+    // temporaries (used when the real number arrives for an Avito lead).
+    return await prisma.$transaction(async (tx) => {
+      if (opts?.deactivateTemporaries) {
+        await (tx.contactPhone as any).updateMany({
+          where: { contactId, isTemporary: true, isActive: true },
+          data: { isActive: false, isPrimary: false },
+        })
+      }
+      // If this is the new primary, demote the previous one.
+      if (opts?.makePrimary) {
+        await tx.contactPhone.updateMany({
+          where: { contactId, isPrimary: true },
+          data: { isPrimary: false },
+        })
+      }
+      const created = await (tx.contactPhone as any).create({
+        data: {
+          contactId,
+          phone: normalized,
+          source: opts?.source ?? 'manual',
+          label: opts?.label ?? null,
+          isPrimary: opts?.makePrimary ?? false,
+          isTemporary: opts?.isTemporary ?? false,
+          expiresAt: opts?.expiresAt ?? null,
+        },
+      })
+      if (opts?.makePrimary) {
+        await tx.contact.update({
+          where: { id: contactId },
+          data: { primaryPhoneId: created.id },
+        })
+      }
+      return { kind: 'added', phoneId: created.id, contactId }
+    })
+  }
+
+  /**
    * Ensure Chat has contactId, contactIdentityId, and driverId (if Contact is linked to a Driver).
    */
   static async ensureChatLinked(chatId: string, contactId: string, identityId: string): Promise<void> {

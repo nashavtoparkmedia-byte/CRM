@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({
             connId,
-            wsUser: sock.user?.id ?? null,
+            wsUser: (sock as any).user?.id ?? null,
             legacyChats,
             legacyMsgs,
             oldestLegacyMsgTs: oldestMsg?.timestamp ?? null,

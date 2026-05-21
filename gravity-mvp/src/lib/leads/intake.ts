@@ -95,6 +95,24 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     input.candidateName,
   )
 
+  // Mark Avito-phones as temporary. From 28.05.2026 onwards Avito hides
+  // the candidate's real number behind a disposable proxy that rotates —
+  // we want it visible in the contact card AS temporary so the operator
+  // doesn't save it, and we want it auto-cleaned after TTL if the real
+  // number never arrives. Other sources (telegram/whatsapp/phone) skip
+  // this entirely.
+  if (input.source === 'avito' && input.phone) {
+    const normalized = normalizePhoneE164(input.phone)
+    if (normalized) {
+      const ttlDays = Number(process.env.AVITO_TEMP_PHONE_TTL_DAYS ?? '14')
+      const expiresAt = new Date(Date.now() + ttlDays * 86400_000)
+      await (prisma.contactPhone as any).updateMany({
+        where: { contactId: resolved.contact.id, phone: normalized, isTemporary: false },
+        data: { isTemporary: true, expiresAt, label: 'Временный (Авито)' },
+      })
+    }
+  }
+
   // ─── Step 2: Find or create Chat (один на пару Contact + channel) ──
   // Сначала ищем существующий чат для этого контакта и канала. Если
   // есть — переиспользуем (повторные отклики ложатся в тот же чат).
@@ -245,41 +263,29 @@ export async function updateLeadPhone(
     contactId = identity.contactId
   }
 
-  // Уже есть такой телефон у этого Contact'а?
-  const existing = await prisma.contactPhone.findFirst({
-    where: { contactId, phone: normalized, isActive: true },
+  // Avito-worker раскрыл настоящий номер — добавляем его как новый
+  // primary phone, и одновременно деактивируем все временные у этого
+  // Contact'a. Если в `expiresAt` ещё был live временный — он уйдёт в
+  // isActive:false, чтобы Авито при следующей ротации временного не
+  // случайно сматчился через resolveByPhone в этот же Contact.
+  const result = await ContactService.addPhoneToContact(contactId, normalized, {
+    isTemporary: false,
+    source: input.source as 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'phone',
+    label: 'Личный',
+    makePrimary: true,
+    deactivateTemporaries: true,
   })
-  if (existing) {
-    return { phoneId: existing.id, merged: false }
+
+  if (result.kind === 'exists_same_contact') {
+    return { phoneId: result.phoneId, merged: false }
   }
-
-  // Добавляем ContactPhone. Source='avito' (или соответствующий source).
-  // Если такой телефон уже есть у ДРУГОГО Contact'а —
-  // ContactMergeService должен сработать асинхронно; здесь мы только
-  // создаём запись, merge-логика выходит за рамки intake.
-  const newPhone = await prisma.contactPhone.create({
-    data: {
-      contactId,
-      phone: normalized,
-      // ContactPhoneSource enum теперь содержит 'avito' / 'site' и т.п.
-      source: input.source as 'avito' | 'whatsapp' | 'telegram' | 'phone',
-      isPrimary: false,
-    },
-  })
-
-  // Если у контакта ещё нет primaryPhoneId — назначим этот.
-  // Только когда primary не задан, чтобы не перетереть осознанный
-  // оператором выбор первого телефона.
-  const contact = await prisma.contact.findUnique({
-    where: { id: contactId },
-    select: { primaryPhoneId: true },
-  })
-  if (contact && !contact.primaryPhoneId) {
-    await prisma.contact.update({
-      where: { id: contactId },
-      data: { primaryPhoneId: newPhone.id },
-    })
+  if (result.kind === 'conflict') {
+    // Number is already attached to a different Contact — we surface this
+    // up the call stack so the webhook / catchup-sync can decide whether
+    // to merge or just log. Auto-merge is intentionally avoided here.
+    throw new Error(
+      `[LeadIntake] updateLeadPhone: phone ${normalized} belongs to contact ${result.otherContactId} (${result.otherContactName}); manual merge required`,
+    )
   }
-
-  return { phoneId: newPhone.id, merged: false }
+  return { phoneId: result.phoneId, merged: false }
 }

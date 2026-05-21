@@ -12,6 +12,7 @@ import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import Link from 'next/link'
+import CallButton from '@/components/sip/CallButton'
 
 interface ChatHeaderProps {
     chat: Conversation
@@ -310,6 +311,21 @@ export default function ChatHeader({
                                     <span>Открыть</span>
                                 </button>
                             )}
+
+                            {/* "Позвонить" — звонилка прямо из шапки чата.
+                                Берём первый доступный номер: linked driver →
+                                resolved contact's primary phone → раздроблённый
+                                externalChatId (для WhatsApp в формате "+7...:wa").
+                                Если ни одного — кнопка не показывается. */}
+                            {(() => {
+                                const phone =
+                                    chat.driver?.phone ||
+                                    contact?.phones?.find?.((p: any) => p.isPrimary)?.phone ||
+                                    contact?.phones?.[0]?.phone ||
+                                    (chat.externalChatId?.startsWith('+') ? chat.externalChatId.split(':')[0] : null)
+                                if (!phone) return null
+                                return <CallButton phoneNumber={phone} label="" />
+                            })()}
 
                             <button
                                 onClick={() => setIsSearchActive(true)}

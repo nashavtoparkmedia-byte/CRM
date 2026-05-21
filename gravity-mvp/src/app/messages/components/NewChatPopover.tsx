@@ -1,20 +1,24 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { X, Search, Send, Loader2, AlertTriangle } from "lucide-react"
+import { X, Search, Send, Loader2, AlertTriangle, Phone } from "lucide-react"
 import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
+import { useSip } from "@/lib/sip/SipContext"
+import { toast } from "sonner"
 
 const CHANNELS = [
-    { id: 'wa', label: 'WA', dbChannel: 'whatsapp', color: 'bg-emerald-500', activeBg: 'bg-emerald-50 ring-emerald-500 text-emerald-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-    { id: 'tg', label: 'TG', dbChannel: 'telegram', color: 'bg-blue-500', activeBg: 'bg-blue-50 ring-blue-500 text-blue-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
-    { id: 'max', label: 'MAX', dbChannel: 'max', color: 'bg-purple-500', activeBg: 'bg-purple-50 ring-purple-500 text-purple-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'wa',    label: 'WA',  dbChannel: 'whatsapp', color: 'bg-emerald-500', activeBg: 'bg-emerald-50 ring-emerald-500 text-emerald-700', inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'tg',    label: 'TG',  dbChannel: 'telegram', color: 'bg-blue-500',    activeBg: 'bg-blue-50 ring-blue-500 text-blue-700',          inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'max',   label: 'MAX', dbChannel: 'max',      color: 'bg-purple-500',  activeBg: 'bg-purple-50 ring-purple-500 text-purple-700',    inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
+    { id: 'phone', label: 'Тел', dbChannel: 'phone',    color: 'bg-orange-500',  activeBg: 'bg-orange-50 ring-orange-500 text-orange-700',    inactiveBg: 'bg-gray-100 text-gray-500 hover:bg-gray-200' },
 ]
 
 const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
-    whatsapp: { label: 'WA', cls: 'bg-emerald-50 text-emerald-600' },
-    telegram: { label: 'TG', cls: 'bg-blue-50 text-blue-600' },
-    max: { label: 'MAX', cls: 'bg-purple-50 text-purple-600' },
+    whatsapp: { label: 'WA',  cls: 'bg-emerald-50 text-emerald-600' },
+    telegram: { label: 'TG',  cls: 'bg-blue-50 text-blue-600' },
+    max:      { label: 'MAX', cls: 'bg-purple-50 text-purple-600' },
+    phone:    { label: 'Тел', cls: 'bg-orange-50 text-orange-600' },
 }
 
 interface NewChatPopoverProps {
@@ -36,6 +40,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
 
     const { results, loading } = useContactSearch(query)
     const { loading: starting, error: startError, startByContact, startByPhone, clearError } = useStartConversation()
+    const { startPlaceholderOutbound, setActiveCallFsUuid, status: sipStatus } = useSip()
 
     // Pre-check reachability for new phone numbers on TG/WA
     const [reachability, setReachability] = useState<{ reachable: boolean; error?: string } | null>(null)
@@ -136,7 +141,47 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
 
     const isPhone = /^[\d\s\+\-\(\)]{4,}$/.test(query.trim())
 
+    /**
+     * Normalise a Russian phone number into E.164 (+7XXXXXXXXXX). Only applied
+     * for the phone channel — text channels keep the raw input so partial
+     * digit/name search keeps working.
+     *
+     * Rules:
+     *   "9221234567"          → "+79221234567"   (10 digits — assume RU)
+     *   "89221234567"         → "+79221234567"   (11 digits, leading 8)
+     *   "79221234567"         → "+79221234567"   (11 digits, leading 7)
+     *   "+7 (922) 123-45-67"  → "+79221234567"   (strip non-digits, then 11/7)
+     *   "9221"                → "9221"           (< 7 digits — too early, keep raw so user can keep typing)
+     */
+    function normalizeRuPhoneInput(raw: string): string {
+        const digits = raw.replace(/\D/g, '')
+        if (digits.length < 7) return raw
+        if (digits.length === 10) return '+7' + digits
+        if (digits.length === 11 && (digits[0] === '8' || digits[0] === '7')) return '+7' + digits.slice(1)
+        return '+' + digits
+    }
+
+    function handleQueryChange(value: string) {
+        if (selectedChannel === 'phone') {
+            setQuery(normalizeRuPhoneInput(value))
+        } else {
+            setQuery(value)
+        }
+        setShowSuggestions(true)
+    }
+
     const handleSelectContact = async (contact: ContactSearchResult) => {
+        // Phone channel — call the contact's primary phone (or any phone).
+        if (selectedChannel === 'phone') {
+            const phone = primaryPhone(contact)
+            if (!phone) {
+                toast.error('У контакта нет номера телефона')
+                return
+            }
+            await placeCall(phone, contact.displayName)
+            return
+        }
+
         const channelDef = CHANNELS.find(c => c.id === selectedChannel)
         const dbChannel = channelDef?.dbChannel || 'telegram'
 
@@ -157,8 +202,60 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
         }
     }
 
+    /**
+     * Place an outbound call. Shared by handleSelectContact + handleStartChat
+     * for the phone channel — both contact-row click and "set phone manually
+     * → press Позвонить" land here. Reuses the same /api/calls/originate +
+     * placeholder-popup flow as the in-chat CallButton.
+     */
+    const placeCall = async (phoneNumber: string, displayName?: string | null) => {
+        if (sipStatus !== 'registered') {
+            toast.error('SIP не зарегистрирован — переключитесь на менеджера в шапке')
+            return
+        }
+        const normalized = phoneNumber.trim()
+        if (!/^\+?\d[\d\s\-\(\)]{6,}$/.test(normalized)) {
+            toast.error('Введите телефонный номер')
+            return
+        }
+
+        // Warm mic permission inside the user-gesture context — same trick
+        // as CallButton.tsx. Fire-and-forget; do NOT await.
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            .then(s => s.getTracks().forEach(t => t.stop()))
+            .catch(() => {})
+
+        // Optimistic popup + ringback BEFORE the originate fetch resolves.
+        startPlaceholderOutbound(normalized, displayName ?? null)
+        onClose()  // hide the New-chat popover immediately, popup takes over
+
+        try {
+            const res = await fetch('/api/calls/originate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phoneNumber: normalized }),
+            })
+            const body = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                toast.error(body?.error ?? `Не удалось инициировать звонок (HTTP ${res.status})`)
+                return
+            }
+            if (body?.fsUuid) setActiveCallFsUuid(body.fsUuid)
+        } catch (err: any) {
+            toast.error(`Ошибка сети: ${err?.message ?? err}`)
+        }
+    }
+
     const handleStartChat = async () => {
         if (!query.trim() || starting) return
+
+        // Phone channel — initiate a call instead of opening a chat.
+        if (selectedChannel === 'phone') {
+            const contact = results[0]
+            const target = contact ? (primaryPhone(contact) || query.trim()) : query.trim()
+            await placeCall(target, contact?.displayName)
+            return
+        }
 
         if (results.length > 0) {
             await handleSelectContact(results[0])
@@ -179,10 +276,11 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
     const primaryPhone = (c: ContactSearchResult) =>
         c.phones.find(p => p.isPrimary)?.phone || c.phones[0]?.phone || null
 
+    const isPhoneChannelOuter = selectedChannel === 'phone'
     return (
         <div
             ref={popoverRef}
-            className="absolute top-[48px] right-0 w-[300px] bg-white rounded-xl shadow-2xl border border-[#E0E0E0] z-50 animate-in fade-in slide-in-from-top-2 duration-150 overflow-hidden"
+            className="absolute top-[48px] right-0 w-[340px] bg-white rounded-xl shadow-2xl border border-[#E0E0E0] z-50 animate-in fade-in slide-in-from-top-2 duration-150 overflow-hidden"
         >
             {/* Header */}
             <div className="flex items-center justify-between px-3.5 h-[40px] border-b border-[#E8E8E8]">
@@ -195,21 +293,33 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 </button>
             </div>
 
-            {/* Input */}
+            {/* Input — taller, larger font, mono digits for phone channel.
+                When the operator picks "Тел" we swap the lead icon (Search →
+                Phone) and switch to font-mono so plus / digits read crisply
+                and don't collide with the icon. */}
             <div className="px-3.5 pt-3 pb-2">
                 <div className="relative">
-                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                    {isPhoneChannelOuter ? (
+                        <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500" />
+                    ) : (
+                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    )}
                     {(loading || checking) && (
-                        <Loader2 size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                        <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
                     )}
                     <input
                         ref={inputRef}
-                        type="text"
+                        type={isPhoneChannelOuter ? 'tel' : 'text'}
+                        inputMode={isPhoneChannelOuter ? 'tel' : 'text'}
                         value={query}
-                        onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true) }}
+                        onChange={(e) => handleQueryChange(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleStartChat() }}
-                        placeholder="Телефон или имя..."
-                        className="w-full h-[36px] bg-[#F4F5F7] rounded-lg pl-8 pr-8 text-[13px] outline-none placeholder:text-gray-400 font-medium text-[#111] focus:bg-[#EEF0F3] transition-colors"
+                        placeholder={isPhoneChannelOuter ? '+7 922 215-57-50' : 'Телефон или имя...'}
+                        className={`w-full h-[44px] bg-[#F4F5F7] rounded-lg pl-10 pr-9 outline-none placeholder:text-gray-400 text-[#111] focus:bg-[#EEF0F3] transition-colors ${
+                            isPhoneChannelOuter
+                                ? 'font-mono text-[16px] tracking-wide font-semibold'
+                                : 'font-medium text-[14px]'
+                        }`}
                     />
                 </div>
 
@@ -307,7 +417,26 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                 return (
                                     <button
                                         key={ch.id}
-                                        onClick={() => setSelectedChannel(ch.id)}
+                                        // Prevent the button from stealing focus on click — keeps
+                                        // the cursor in the phone/name input so the operator can
+                                        // keep typing without an extra click to re-focus the field.
+                                        // The click still fires on mouseup; we only swallow the
+                                        // implicit focus that mousedown would cause.
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                            setSelectedChannel(ch.id)
+                                            // Re-normalise whatever's already in the input when
+                                            // the operator flips to "Тел" — covers the «paste then
+                                            // switch channel» path.
+                                            if (ch.id === 'phone' && query) {
+                                                const normalised = normalizeRuPhoneInput(query)
+                                                if (normalised !== query) setQuery(normalised)
+                                            }
+                                            // Belt-and-suspenders: keyboard activation (Enter/Space
+                                            // on a focused button) doesn't go through mousedown,
+                                            // so explicitly re-focus the input.
+                                            inputRef.current?.focus()
+                                        }}
                                         title={hasIdentity ? `${ch.label}: канал активен у контакта` : `${ch.label}: контакт НЕ найден — будет создан новый, доставка не гарантирована`}
                                         className={`flex-1 h-[34px] text-[11px] font-bold rounded-lg transition-all relative flex items-center justify-center gap-1 ${
                                             selectedChannel === ch.id
@@ -351,23 +480,52 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 </div>
             )}
 
-            {/* Action */}
+            {/* Action — button text/icon swap when the phone channel is picked,
+                so the operator sees "Позвонить" instead of "Написать". */}
             <div className="px-3.5 pb-3">
-                <button
-                    onClick={handleStartChat}
-                    disabled={!query.trim() || starting}
-                    className={`w-full h-[36px] rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
-                        !query.trim() || starting
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-[#3390EC] text-white hover:bg-[#2B7FD4] active:scale-[0.98] shadow-md shadow-[#3390EC]/20'
-                    }`}
-                >
-                    {starting ? (
-                        <><Loader2 size={13} className="animate-spin" /> Создаём...</>
-                    ) : (
-                        <><Send size={13} /> Написать</>
-                    )}
-                </button>
+                {(() => {
+                    const isPhoneChannel = selectedChannel === 'phone'
+                    const sipNotReady = isPhoneChannel && sipStatus !== 'registered'
+                    const disabled = !query.trim() || starting || sipNotReady
+                    const baseColor = isPhoneChannel
+                        ? 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20'
+                        : 'bg-[#3390EC] hover:bg-[#2B7FD4] shadow-[#3390EC]/20'
+
+                    return (
+                        <>
+                            <button
+                                onClick={handleStartChat}
+                                disabled={disabled}
+                                title={sipNotReady ? 'SIP не зарегистрирован — переключитесь на менеджера в шапке' : undefined}
+                                className={`w-full h-[36px] rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                                    disabled
+                                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                        : `${baseColor} text-white active:scale-[0.98] shadow-md`
+                                }`}
+                            >
+                                {starting ? (
+                                    <><Loader2 size={13} className="animate-spin" /> Создаём...</>
+                                ) : isPhoneChannel ? (
+                                    <><Phone size={13} /> Позвонить</>
+                                ) : (
+                                    <><Send size={13} /> Написать</>
+                                )}
+                            </button>
+                            {sipNotReady && (
+                                <div className="mt-1.5 flex items-start gap-1.5 text-[10px] leading-tight text-amber-600">
+                                    <AlertTriangle size={11} className="shrink-0 mt-[1px]" />
+                                    <span>
+                                        SIP не зарегистрирован
+                                        {sipStatus === 'connecting' ? ' — подключаюсь…'
+                                            : sipStatus === 'failed' ? ' — ошибка подключения, проверь FreeSWITCH'
+                                            : sipStatus === 'unregistered' ? ' — выбери менеджера в шапке'
+                                            : ' — статус: ' + sipStatus}
+                                    </span>
+                                </div>
+                            )}
+                        </>
+                    )
+                })()}
             </div>
         </div>
     )

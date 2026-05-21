@@ -1,7 +1,6 @@
-import Link from 'next/link'
-import { Bot, BookOpen } from 'lucide-react'
+import { Bot } from 'lucide-react'
 import { PageContainer } from '@/components/ui/PageContainer'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { SectionDescription } from '@/components/ui/SectionDescription'
 import AiControlCenterClient from './AiControlCenterClient'
 import {
     getAiConfig,
@@ -9,25 +8,19 @@ import {
     getAllImportJobs,
     getDecisionLogs,
     getAiRuntimeStats,
-    listAiProfiles,
-    getActiveProfileId,
 } from './actions'
 
 export const dynamic   = 'force-dynamic'
 export const revalidate = 0
 
 export default async function AiControlCenterPage() {
-    const [user, config, kb, importJobs, logs, stats, profiles, activeProfileId] = await Promise.all([
-        getCurrentUser(),
+    const [config, kb, importJobs, logs, stats] = await Promise.all([
         getAiConfig(),
         getKnowledgeBase(),
         getAllImportJobs(10),
         getDecisionLogs({ limit: 30 }),
         getAiRuntimeStats(),
-        listAiProfiles(),
-        getActiveProfileId(),
     ])
-    const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
     return (
         <PageContainer>
@@ -37,23 +30,14 @@ export default async function AiControlCenterPage() {
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100/60 text-violet-600 border shadow-sm">
                             <Bot size={24} />
                         </div>
-                        <div className="flex-1 min-w-0">
+                        <div>
                             <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                                AI в чатах
+                                AI Control Center
                             </h1>
                             <p className="text-sm text-muted-foreground mt-1">
-                                {canEdit
-                                    ? 'AI читает чаты MAX, Telegram и WhatsApp, отвечает на типовые вопросы, сложное передаёт менеджеру.'
-                                    : 'Решения AI в чатах. Поставьте 👍 или 👎 — это помогает админу понять, где AI работает хорошо.'}
+                                Управление агентом, база знаний, правила эскалации, синхронизация истории
                             </p>
                         </div>
-                        <Link
-                            href="/settings/integrations/ai-call-help/ai-control-center"
-                            className="inline-flex h-9 flex-shrink-0 items-center gap-1.5 rounded-md border border-[#E0E0E0] bg-white px-3 text-[13px] font-medium text-[#111] transition-colors hover:bg-[#F8F9FA]"
-                        >
-                            <BookOpen className="h-3.5 w-3.5" />
-                            Инструкция
-                        </Link>
                     </div>
                 </div>
 
@@ -63,9 +47,6 @@ export default async function AiControlCenterPage() {
                     initialImportJobs={importJobs}
                     initialLogs={logs}
                     initialStats={stats}
-                    initialProfiles={profiles}
-                    initialActiveProfileId={activeProfileId}
-                    canEdit={canEdit}
                 />
             </div>
         </PageContainer>

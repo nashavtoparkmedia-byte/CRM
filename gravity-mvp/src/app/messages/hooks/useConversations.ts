@@ -36,6 +36,23 @@ export interface Conversation {
     channelUnread?: Record<string, number> // { whatsapp: 3, telegram: 1, ... }
     allChannels?: string[]
     allProfiles?: { channel: string, profileId: string }[]
+    // Per-channel snapshot of each underlying chat. Used by ChatList to swap
+    // the displayed lastMessage/lastMessageAt/unread on a merged entry when
+    // the operator filters by a specific channel tab.
+    channelChats?: Record<string, {
+        id: string
+        channel: string
+        name?: string | null
+        lastMessageAt?: string | null
+        lastInboundAt?: string | null
+        lastOutboundAt?: string | null
+        unreadCount?: number
+        requiresResponse?: boolean
+        status?: string
+        messages?: { content: string; type?: string; metadata?: Record<string, any> | null }[]
+        metadata?: Record<string, any> | null
+        assignedToUserId?: string | null
+    }>
 }
 
 // SHARED STATE (outside the hook) to keep all ChatList/Workspace instances in sync
