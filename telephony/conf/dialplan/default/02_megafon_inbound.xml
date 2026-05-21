@@ -10,12 +10,17 @@
     all incoming traffic goes to the same manager pool.
   -->
   <extension name="megafon_inbound_fork">
-    <!-- Match ONLY calls coming from the Megafon SBC. The original
-         `source=mod_sofia` matched every sofia channel, including outbound
-         calls originated from the browser (user 101 → 79XXX...), which then
-         hit this "ring everyone" bridge and failed because 101 cannot bridge
-         to itself. Restrict by inbound profile = external. -->
-    <condition field="${sofia_profile_name}" expression="^external$">
+    <!-- Match ONLY *inbound* calls from the Megafon SBC. Two filters:
+           1) sofia_profile_name=external  — Megafon comes in on that profile.
+           2) destination_number is a real 10–15-digit phone number, not a
+              short internal test extension (9999/9998/etc.) — that protects
+              against catching outbound a-legs that we originate via
+              sofia/gateway/megafon/...  and then transfer to a test ext.
+              An older rule used `source=mod_sofia`, which matched every
+              sofia channel including outbound originates, causing
+              USER_NOT_REGISTERED storms when the a-leg landed on 9999. -->
+    <condition field="${sofia_profile_name}" expression="^external$"/>
+    <condition field="destination_number" expression="^\d{10,15}$">
       <action application="set" data="hangup_after_bridge=true"/>
       <action application="set" data="continue_on_fail=true"/>
       <action application="set" data="ringback=${us-ring}"/>
