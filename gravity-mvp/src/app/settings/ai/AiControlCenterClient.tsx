@@ -3069,13 +3069,13 @@ export default function AiControlCenterClient({
                                         if (labels.length === 0) {
                                             return (
                                                 <p className="text-[11px] text-gray-400 mb-1">
-                                                    Из {ids.length} {ids.length === 1 ? 'аккаунта' : 'аккаунтов'} (детали недоступны)
+                                                    Собрано из {ids.length} {ids.length === 1 ? 'аккаунта' : 'аккаунтов'} (имена недоступны — возможно подключение удалили)
                                                 </p>
                                             )
                                         }
                                         return (
                                             <p className="text-[11px] text-gray-500 mb-1">
-                                                Из: <b className="text-gray-700">{labels.join(', ')}</b>
+                                                Собрано из: <b className="text-gray-700">{labels.join(', ')}</b>
                                             </p>
                                         )
                                     })()}
@@ -3243,14 +3243,46 @@ export default function AiControlCenterClient({
 
                     <div className="px-6 py-4 overflow-y-auto space-y-4">
                         {resetResult ? (
-                            <div className="rounded-md border border-green-200 bg-green-50 p-3 text-[13px] text-green-900 space-y-1">
-                                <div className="font-semibold">Готово</div>
-                                <div>В архив: <b>{resetResult.archivedCount}</b> ·{' '}
-                                     Сохранено: <b>{resetResult.keptCount}</b></div>
-                                <div className="text-[12px] text-green-800/80">
-                                    Восстановить отдельные знания можно в разделе «Архив». Чтобы собрать ядро заново — нажмите «Собрать ядро» в шапке.
+                            <>
+                                <div className="rounded-md border border-green-200 bg-green-50 p-3 text-[13px] text-green-900 space-y-1">
+                                    <div className="font-semibold">Ядро очищено</div>
+                                    <div>В архив: <b>{resetResult.archivedCount}</b> ·{' '}
+                                         Сохранено: <b>{resetResult.keptCount}</b></div>
                                 </div>
-                            </div>
+                                {/* PR7.10: explicit Rebuild CTA — не просто
+                                    "закройте и нажмите Собрать ядро в шапке",
+                                    а конкретное действие здесь и сейчас.
+                                    Закрывает Reset modal, открывает
+                                    Extraction modal с preserved scope/tier
+                                    из последнего запуска (или default).
+                                    Восстановить отдельные знания всё ещё
+                                    можно через «Архив». */}
+                                <div className="rounded-md border border-[#3390EC]/30 bg-[#F0F4FA] p-3 space-y-2">
+                                    <div className="text-[13px] font-semibold text-[#111]">
+                                        Собрать ядро заново
+                                    </div>
+                                    <p className="text-[12px] text-gray-600 leading-relaxed">
+                                        Теперь можно проанализировать переписки и собрать обновлённое ядро.{' '}
+                                        Выбор аккаунтов сохранится — можно скорректировать перед запуском.
+                                    </p>
+                                    <div className="pt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                closeResetModal()
+                                                openExtractionModal()
+                                            }}
+                                            className="h-9 px-4 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] text-white text-[13px] font-semibold hover:bg-[#2B7FD4]"
+                                        >
+                                            <Sparkles size={13} />
+                                            Собрать заново
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 leading-relaxed pt-1">
+                                        Восстановить отдельные знания из архива можно в разделе «Архив» в любой момент.
+                                    </p>
+                                </div>
+                            </>
                         ) : (
                             <>
                                 {runtimeOn && (
@@ -3839,6 +3871,82 @@ export default function AiControlCenterClient({
                                 и обновит ядро. Не влияет на ответы клиентам.
                             </p>
                         </div>
+
+                        {/* PR7.10: Context Summary — сводка по
+                            аккаунтам, безопасности и отключённым
+                            источникам. Считается из channelConnections
+                            + sourceStats + readiness. */}
+                        {channelConnections.length > 0 && (() => {
+                            const selectedConns = channelConnections.filter(c => selectedConnectionIds.has(c.id))
+                            const byChannel = new Map<string, ChannelConnection[]>()
+                            for (const c of selectedConns) {
+                                const arr = byChannel.get(c.channel) ?? []
+                                arr.push(c)
+                                byChannel.set(c.channel, arr)
+                            }
+                            const CHANNEL_LABEL_LOCAL: Record<string, string> = {
+                                whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                            }
+                            // disabled sources estimate: sourceStats где !sourcesActive
+                            const disabledConnIds = sourceStats
+                                .filter(s => s.connectionId && s.sourcesTotal > 0 && s.sourcesActive === 0)
+                                .map(s => s.connectionId!) as string[]
+                            const disabledLabels = disabledConnIds
+                                .map(id => channelConnections.find(c => c.id === id)?.label)
+                                .filter(Boolean) as string[]
+                            // Safety warnings
+                            const warnings: string[] = []
+                            if (runtimeState.runtimeOn) {
+                                warnings.push('AI сейчас отвечает из ядра — пересборка временно изменит его. Это нормально, но имейте в виду.')
+                            }
+                            if (readiness.overall === 'warn' || readiness.overall === 'fail') {
+                                const conflictsCheck = readiness.checks.find(c => c.id === 'conflicts')
+                                if (conflictsCheck && conflictsCheck.status === 'fail') {
+                                    warnings.push('В ядре есть неразрешённые спорные знания. Лучше сначала разобрать их — иначе они унаследуются и в новом сборе.')
+                                }
+                                const verifiedCheck = readiness.checks.find(c => c.id === 'verified_coverage')
+                                if (verifiedCheck && verifiedCheck.status !== 'ok') {
+                                    warnings.push('В ядре мало подтверждённых правил. Это не блок, но AI может ошибиться в свежесобранных фактах — проверяйте после сбора.')
+                                }
+                            }
+                            return (
+                                <div className="rounded-lg border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2.5 space-y-2">
+                                    <div className="text-[11px] uppercase tracking-wide text-gray-500">
+                                        Сейчас будет использовано
+                                    </div>
+                                    {selectedConns.length === 0 ? (
+                                        <div className="text-[12px] text-gray-500">
+                                            Не выбрано ни одного аккаунта — сбор пройдёт только по уже загруженной истории.
+                                        </div>
+                                    ) : (
+                                        <ul className="text-[12px] text-gray-700 space-y-0.5">
+                                            {[...byChannel.entries()].map(([channel, conns]) => (
+                                                <li key={channel}>
+                                                    <span className="font-medium">{CHANNEL_LABEL_LOCAL[channel] ?? channel}:</span>{' '}
+                                                    {conns.length} {conns.length === 1 ? 'аккаунт' : conns.length < 5 ? 'аккаунта' : 'аккаунтов'}
+                                                    {channel !== 'whatsapp' && (
+                                                        <span className="text-amber-700 text-[11px]"> · фильтр по аккаунту в работе, берётся вся история канала</span>
+                                                    )}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    {disabledLabels.length > 0 && (
+                                        <div className="text-[11px] text-gray-500 pt-1 border-t border-[#E8E8E8]">
+                                            {disabledLabels.length} {disabledLabels.length === 1 ? 'источник отключён и не участвует' : 'источника отключены и не участвуют'} в сборе.
+                                        </div>
+                                    )}
+                                    {warnings.length > 0 && (
+                                        <div className="rounded border border-[#FFE8B0] bg-[#FFFBED] px-2.5 py-2 text-[11px] text-[#8B6914] leading-relaxed space-y-1">
+                                            {warnings.map((w, i) => (
+                                                <div key={i}>⚠ {w}</div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })()}
+
                         <div>
                             <label className="text-[11px] text-gray-500 mb-1.5 block">Что анализировать</label>
                             <div className="flex flex-col gap-1.5">
