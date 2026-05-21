@@ -601,10 +601,20 @@ export default function AiControlCenterClient({
         Promise.all([
             getKnowledgeRuntimeStateForUi(),
             listRecentRetrievalTraces(30),
-        ]).then(([state, traces]) => {
+            // PR7.6: подключения для рендера job-card connection
+            // labels + live status. Loaded one-time на mount; модал
+            // «Собрать ядро» (PR7.4) переиспользует этот же state.
+            listChannelConnections(),
+        ]).then(([state, traces, conns]) => {
             if (cancelled) return
             setRuntimeState(state)
             setRetrievalTraces(traces as RetrievalTrace[])
+            setChannelConnections(conns as ChannelConnection[])
+            // Если ещё не было user-выбора в селекторе — preselect
+            // все ready. При повторном открытии модала PR7.4 проверяет
+            // selectedConnectionIds.size > 0 и оставляет user choice.
+            setSelectedConnectionIds(prev => prev.size > 0 ? prev
+                : new Set((conns as ChannelConnection[]).filter(c => c.isReady).map(c => c.id)))
         }).catch(() => { /* silent */ })
         return () => { cancelled = true }
     }, [])
@@ -1406,6 +1416,36 @@ export default function AiControlCenterClient({
                                         ><X size={12} /></button>
                                     )}
                                 </div>
+                                {/* PR7.6: connection label + live status.
+                                    Видно «из какого аккаунта импорт» и
+                                    «жив ли он сейчас» — не путать с
+                                    job status выше. */}
+                                {(() => {
+                                    const conn = (job as any).connectionId
+                                        ? channelConnections.find(c => c.id === (job as any).connectionId)
+                                        : null
+                                    if (!conn) return null
+                                    const STATUS_LABEL: Record<string, string> = {
+                                        ready: 'подключён',     qr: 'ждёт QR',
+                                        authenticating: 'входит', idle: 'не активен',
+                                        disconnected: 'отключён', inactive: 'отключён',
+                                        unknown: '—',
+                                    }
+                                    const dotColor =
+                                        conn.isReady ? 'bg-green-500' :
+                                        conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
+                                        'bg-gray-300'
+                                    return (
+                                        <div className="mt-1 ml-5 flex items-center gap-2 text-[11px] text-gray-500">
+                                            <span>{conn.label}</span>
+                                            <span className="text-gray-300">·</span>
+                                            <span className="inline-flex items-center gap-1">
+                                                <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                                <span>аккаунт сейчас: {STATUS_LABEL[conn.status] ?? conn.status}</span>
+                                            </span>
+                                        </div>
+                                    )
+                                })()}
                                 {/* Статистика результата */}
                                 {hasStats && (
                                     <div className="mt-2 ml-5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
@@ -2761,6 +2801,32 @@ export default function AiControlCenterClient({
                                     {j.errorMessage && (
                                         <p className="text-[11px] text-red-600 mb-1">{j.errorMessage}</p>
                                     )}
+                                    {/* PR7.6: scope source info — из каких аккаунтов
+                                        собирали ядро. Если scope.connectionIds
+                                        задан — показываем list labels из
+                                        channelConnections, иначе «все ready
+                                        аккаунты». Для transparency PR4
+                                        explainability. */}
+                                    {(() => {
+                                        const scopeAny = (j.scope ?? {}) as Record<string, unknown>
+                                        const ids = Array.isArray(scopeAny.connectionIds) ? scopeAny.connectionIds as string[] : null
+                                        if (!ids || ids.length === 0) return null
+                                        const labels = ids
+                                            .map(id => channelConnections.find(c => c.id === id)?.label)
+                                            .filter(Boolean) as string[]
+                                        if (labels.length === 0) {
+                                            return (
+                                                <p className="text-[11px] text-gray-400 mb-1">
+                                                    Из {ids.length} {ids.length === 1 ? 'аккаунта' : 'аккаунтов'} (детали недоступны)
+                                                </p>
+                                            )
+                                        }
+                                        return (
+                                            <p className="text-[11px] text-gray-500 mb-1">
+                                                Из: <b className="text-gray-700">{labels.join(', ')}</b>
+                                            </p>
+                                        )
+                                    })()}
                                     {Object.keys(p).length > 0 && (
                                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-500">
                                             {p.pairsBuilt != null && <span>{p.pairsBuilt} пар</span>}
