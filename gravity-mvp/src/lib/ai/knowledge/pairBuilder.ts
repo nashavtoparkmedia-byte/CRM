@@ -24,6 +24,20 @@ export interface ExtractionScope {
     dateFrom?: string | Date | null
     dateTo?:   string | Date | null
     channels?: string[] | null
+    /** PR7.3: source-selector. Когда передан — UI выбрал конкретные
+     *  WhatsApp / Telegram / MAX connection'ы для сбора. Filter на
+     *  message-level выполняется через channel-specific join'ы
+     *  (Message.chatId → channel-table → connectionId). Если массив
+     *  пуст или undefined — выборка из всех ready connections данного
+     *  channel'а (existing behaviour). Сохраняется в AiExtractionJob
+     *  .scope для transparency (PR4 explainability покажет
+     *  "из каких аккаунтов собирали"). */
+    connectionIds?:    string[] | null
+    /** PR7.3: если true — pairBuilder/scope ограничивает выборку
+     *  только теми connection'ами, status которых сейчас 'ready'
+     *  (WhatsApp) или isActive=true (TG/MAX). Использовать когда
+     *  тестовые/отключённые аккаунты не должны влиять на ядро. */
+    onlyConnectedNow?: boolean
     /** Защитный потолок числа пар. Default 5000. */
     maxPairs?: number
 }
@@ -76,6 +90,16 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
         ? scope.channels
         : ['max', 'telegram', 'whatsapp']
 
+    // PR7.3 TODO: применить scope.connectionIds + scope.onlyConnectedNow
+    // на этом уровне через channel-specific JOIN'ы:
+    //   whatsapp: Message.chatId → WhatsAppChat → connectionId
+    //   telegram: Message.chatId → ... → TelegramConnection.id
+    //   max:      Message.chatId → ... → MaxConnection.id
+    // На текущий момент scope сохраняется в AiExtractionJob.scope для
+    // transparency (UI/explainability показывают "из каких аккаунтов
+    // собирали"), но фильтр не применяется — выборка остаётся по
+    // channels. Это намеренный compromise PR7a: filter execution
+    // выделен в отдельный future PR ради изоляции risk на ranking.
     const rows = await prisma.$queryRaw<RawMessage[]>`
         SELECT
             id,
