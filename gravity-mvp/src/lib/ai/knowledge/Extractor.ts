@@ -334,11 +334,13 @@ async function createBlockedByTrustedItem(
         INSERT INTO "AiKnowledgeSource" (
             id, "itemId", "originType",
             "messageId", "chatId", channel, "managerUserId",
+            "connectionId",
             excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
         ) VALUES (
             ${sourceId}, ${itemId}, 'chat_message',
             ${pair.managerMessageId}, ${pair.chatId},
             ${pair.channel}::"ChatChannel", ${pair.managerUserId},
+            ${pair.connectionId},
             ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
             NOW()
         )
@@ -379,11 +381,13 @@ async function createItemWithSource(
         INSERT INTO "AiKnowledgeSource" (
             id, "itemId", "originType",
             "messageId", "chatId", channel, "managerUserId",
+            "connectionId",
             excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
         ) VALUES (
             ${sourceId}, ${itemId}, 'chat_message',
             ${pair.managerMessageId}, ${pair.chatId},
             ${pair.channel}::"ChatChannel", ${pair.managerUserId},
+            ${pair.connectionId},
             ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
             NOW()
         )
@@ -405,11 +409,13 @@ async function mergeIntoItem(
             INSERT INTO "AiKnowledgeSource" (
                 id, "itemId", "originType",
                 "messageId", "chatId", channel, "managerUserId",
+                "connectionId",
                 excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
             ) VALUES (
                 ${sourceId}, ${item.id}, 'chat_message',
                 ${pair.managerMessageId}, ${pair.chatId},
                 ${pair.channel}::"ChatChannel", ${pair.managerUserId},
+                ${pair.connectionId},
                 ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
                 NOW()
             )

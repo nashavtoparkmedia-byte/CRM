@@ -52,17 +52,23 @@ export interface PromptPair {
     clientAt:         Date
     managerAt:        Date
     managerUserId:    string | null
+    /** PR7.6.5: source provenance. Не-null только для WhatsApp
+     *  (через Chat → WhatsAppChat.connectionId JOIN). Для TG/MAX
+     *  остаётся NULL — schema не хранит chat-level mapping. */
+    connectionId:     string | null
 }
 
 interface RawMessage {
-    id:        string
-    chatId:    string
-    channel:   string | null
-    direction: string
-    type:      string | null
-    content:   string | null
-    sentAt:    Date
-    aiStatus:  string | null
+    id:           string
+    chatId:       string
+    channel:      string | null
+    direction:    string
+    type:         string | null
+    content:      string | null
+    sentAt:       Date
+    aiStatus:     string | null
+    /** PR7.6.5: WA-only, resolved через LEFT JOIN. NULL для TG/MAX. */
+    connectionId: string | null
 }
 
 const DEFAULT_MAX_PAIRS = 5000
@@ -113,30 +119,36 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
     const connectionIds = scope.connectionIds ?? []
 
     if (!hasConnectionFilter) {
-        // Fast path: no extra JOIN.
+        // Fast path: no filter, но всё равно LEFT JOIN на WhatsAppChat
+        // ради PR7.6.5 source provenance — resolve connectionId для
+        // WA messages. JOIN дешёвый (FK + index), TG/MAX дают NULL.
         return await prisma.$queryRaw<RawMessage[]>`
             SELECT
-                id,
-                "chatId",
-                channel::text                 AS channel,
-                direction::text               AS direction,
-                type::text                    AS type,
-                content,
-                "sentAt",
-                "aiStatus"::text              AS "aiStatus"
-            FROM "Message"
-            WHERE direction IN ('inbound', 'outbound')
-              AND type NOT IN ('system', 'call')
-              AND content IS NOT NULL
-              AND length(content) > 1
-              AND channel::text = ANY(${channels})
-              AND (${from}::timestamp IS NULL OR "sentAt" >= ${from})
-              AND (${to}::timestamp   IS NULL OR "sentAt" <= ${to})
-            ORDER BY "chatId" ASC, "sentAt" ASC
+                m.id,
+                m."chatId",
+                m.channel::text                 AS channel,
+                m.direction::text               AS direction,
+                m.type::text                    AS type,
+                m.content,
+                m."sentAt",
+                m."aiStatus"::text              AS "aiStatus",
+                wc."connectionId"               AS "connectionId"
+            FROM "Message" m
+            LEFT JOIN "Chat" c           ON c.id = m."chatId"
+            LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
+            WHERE m.direction IN ('inbound', 'outbound')
+              AND m.type NOT IN ('system', 'call')
+              AND m.content IS NOT NULL
+              AND length(m.content) > 1
+              AND m.channel::text = ANY(${channels})
+              AND (${from}::timestamp IS NULL OR m."sentAt" >= ${from})
+              AND (${to}::timestamp   IS NULL OR m."sentAt" <= ${to})
+            ORDER BY m."chatId" ASC, m."sentAt" ASC
         `
     }
 
     // Connection-filtered path: WA real-filter via JOIN, TG/MAX include-all.
+    // PR7.6.5: SELECT wc.connectionId — resolve provenance для WA.
     return await prisma.$queryRaw<RawMessage[]>`
         SELECT
             m.id,
@@ -146,7 +158,8 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
             m.type::text                    AS type,
             m.content,
             m."sentAt",
-            m."aiStatus"::text              AS "aiStatus"
+            m."aiStatus"::text              AS "aiStatus",
+            wc."connectionId"               AS "connectionId"
         FROM "Message" m
         LEFT JOIN "Chat" c           ON c.id = m."chatId"
         LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
@@ -204,6 +217,10 @@ function buildPairsForChat(chatMsgs: RawMessage[]): PromptPair[] {
             clientAt:         m.sentAt,
             managerAt:        mgr.sentAt,
             managerUserId:    null,
+            // PR7.6.5: provenance из inbound message (тот же чат, та
+            // же WA connection). connectionId совпадает у inbound/
+            // outbound в пределах одного чата.
+            connectionId:     m.connectionId,
         })
     }
     return pairs
