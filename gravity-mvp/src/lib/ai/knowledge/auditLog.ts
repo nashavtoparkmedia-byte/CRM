@@ -25,6 +25,10 @@ export type AiKnowledgeAuditAction =
     | 'superseded'
     | 'conflict_resolved'
     | 'source_added'
+    // PR7.7 — soft-disable знаний с конкретного источника
+    | 'source_disabled'
+    // PR7.8 — массовый reset ядра (auto_only / unverified / full)
+    | 'core_reset'
 
 export interface AuditEntryInput {
     itemId:    string | null

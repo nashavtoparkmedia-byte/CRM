@@ -1762,3 +1762,354 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
         return a.label.localeCompare(b.label)
     })
 }
+
+// ─── AI Knowledge Core source disable (PR7.7) ───────────────────
+//
+// Soft-disable знаний из конкретного источника. НЕ physical delete.
+// Поведение зависит от trust-level item'а:
+//   verified=true ИЛИ tags ⊇ {type:manual}  → keep active + warning
+//   else                                    → auto-archive
+
+export interface SourceStatsRow {
+    channel:               string
+    connectionId:          string | null
+    sourcesTotal:          number
+    sourcesActive:         number
+    itemsTouched:          number
+    itemsActive:           number
+    itemsVerified:         number
+    itemsManual:           number
+}
+
+/** Per-connection статистика для UI «Источники» (PR7.10). NULL
+ *  connectionId группируется отдельно — это legacy TG/MAX sources
+ *  где schema не хранит chat-level provenance. */
+export async function getSourceStatsByConnection(): Promise<SourceStatsRow[]> {
+    try {
+        return await prisma.$queryRaw<SourceStatsRow[]>`
+            SELECT
+                s.channel::text                                  AS channel,
+                s."connectionId"                                 AS "connectionId",
+                COUNT(s.id)::int                                 AS "sourcesTotal",
+                COUNT(s.id) FILTER (WHERE s."isActive" = true)::int AS "sourcesActive",
+                COUNT(DISTINCT s."itemId")::int                  AS "itemsTouched",
+                COUNT(DISTINCT s."itemId") FILTER (
+                    WHERE EXISTS (
+                        SELECT 1 FROM "AiKnowledgeItem" ki
+                        WHERE ki.id = s."itemId"
+                          AND ki.status = 'active' AND ki."isActive" = true
+                    )
+                )::int                                            AS "itemsActive",
+                COUNT(DISTINCT s."itemId") FILTER (
+                    WHERE EXISTS (
+                        SELECT 1 FROM "AiKnowledgeItem" ki
+                        WHERE ki.id = s."itemId" AND ki."isVerified" = true
+                    )
+                )::int                                            AS "itemsVerified",
+                COUNT(DISTINCT s."itemId") FILTER (
+                    WHERE EXISTS (
+                        SELECT 1 FROM "AiKnowledgeItem" ki
+                        WHERE ki.id = s."itemId" AND 'type:manual' = ANY(ki.tags)
+                    )
+                )::int                                            AS "itemsManual"
+            FROM "AiKnowledgeSource" s
+            GROUP BY s.channel, s."connectionId"
+            ORDER BY s.channel, s."connectionId"
+        `
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[getSourceStatsByConnection] failed:', e?.message)
+        }
+        return []
+    }
+}
+
+export interface DisableSourceResult {
+    sourcesDisabled:        number
+    itemsAutoArchived:      number
+    itemsKeptWithWarning:   number
+    itemsUnaffected:        number
+}
+
+/**
+ * PR7.7: отключить знания, пришедшие из конкретного подключения.
+ * WhatsApp работает напрямую через connectionId. TG/MAX items с
+ * connectionId=NULL (legacy schema) не задеваются — UI объявит.
+ */
+export async function disableKnowledgeSource(input: {
+    channel:      'whatsapp' | 'telegram' | 'max'
+    connectionId: string
+}): Promise<DisableSourceResult> {
+    const actor = await requireAdminUserId()
+    if (!input.channel || !input.connectionId) {
+        throw new Error('channel и connectionId обязательны')
+    }
+
+    const affectedItemRows = await prisma.$queryRaw<Array<{ itemId: string }>>`
+        SELECT DISTINCT "itemId"
+        FROM "AiKnowledgeSource"
+        WHERE channel::text = ${input.channel}
+          AND "connectionId" = ${input.connectionId}
+          AND "isActive" = true
+    `
+    const affectedItemIds = affectedItemRows.map(r => r.itemId)
+
+    const disabledCount = await prisma.$executeRaw`
+        UPDATE "AiKnowledgeSource"
+        SET "isActive" = false
+        WHERE channel::text = ${input.channel}
+          AND "connectionId" = ${input.connectionId}
+          AND "isActive" = true
+    `
+
+    const result: DisableSourceResult = {
+        sourcesDisabled:      Number(disabledCount),
+        itemsAutoArchived:    0,
+        itemsKeptWithWarning: 0,
+        itemsUnaffected:      0,
+    }
+
+    if (affectedItemIds.length === 0) return result
+
+    for (const itemId of affectedItemIds) {
+        const itemRows = await prisma.$queryRaw<any[]>`
+            SELECT
+                id, "sectionId", title, "canonicalStatement", tags,
+                confidence, "sourceCount", "uniqueManagerCount",
+                status::text AS status, "isActive",
+                "safetyLevel"::text AS "safetyLevel",
+                "supersededByItemId", "conflictGroupId",
+                "isVerified", "verifiedBy", "verifiedAt"
+            FROM "AiKnowledgeItem"
+            WHERE id = ${itemId}
+            LIMIT 1
+        `
+        const item = itemRows[0]
+        if (!item) continue
+        if (item.status !== 'active') {
+            result.itemsUnaffected++
+            continue
+        }
+
+        const activeSourcesRows = await prisma.$queryRaw<any[]>`
+            SELECT COUNT(*)::int AS cnt
+            FROM "AiKnowledgeSource"
+            WHERE "itemId" = ${itemId} AND "isActive" = true
+        `
+        const activeSources = Number(activeSourcesRows[0]?.cnt ?? 0)
+
+        if (activeSources > 0) {
+            result.itemsUnaffected++
+            continue
+        }
+
+        const isManual = Array.isArray(item.tags) && item.tags.includes('type:manual')
+        const shouldKeepActive = item.isVerified === true || isManual
+
+        if (shouldKeepActive) {
+            const hasMarker = Array.isArray(item.tags) && item.tags.includes('sources_all_disabled')
+            if (!hasMarker) {
+                await prisma.$executeRaw`
+                    UPDATE "AiKnowledgeItem"
+                    SET tags = array_append(tags, 'sources_all_disabled'),
+                        "updatedAt" = NOW()
+                    WHERE id = ${itemId}
+                `
+            }
+            await writeAuditEntry({
+                itemId, actor,
+                action: 'source_disabled',
+                before: snapshotItem(item),
+                after:  snapshotItem({
+                    ...item,
+                    tags: hasMarker ? item.tags : [...item.tags, 'sources_all_disabled'],
+                }),
+                metadata: {
+                    connectionId: input.connectionId,
+                    channel:      input.channel,
+                    outcome:      'kept_active_warning',
+                    reason:       item.isVerified ? 'verified' : 'manual',
+                },
+            })
+            result.itemsKeptWithWarning++
+        } else {
+            await prisma.$executeRaw`
+                UPDATE "AiKnowledgeItem"
+                SET status = 'archived'::"AiKnowledgeStatus",
+                    "isActive" = false,
+                    "updatedAt" = NOW()
+                WHERE id = ${itemId}
+            `
+            await writeAuditEntry({
+                itemId, actor,
+                action: 'source_disabled',
+                before: snapshotItem(item),
+                after:  snapshotItem({ ...item, status: 'archived', isActive: false }),
+                metadata: {
+                    connectionId: input.connectionId,
+                    channel:      input.channel,
+                    outcome:      'auto_archived',
+                    reason:       'no_active_sources',
+                },
+            })
+            result.itemsAutoArchived++
+        }
+    }
+
+    await writeAuditEntry({
+        itemId: null, actor,
+        action: 'source_disabled',
+        before: null, after: null,
+        metadata: {
+            connectionId:         input.connectionId,
+            channel:              input.channel,
+            sourcesDisabled:      result.sourcesDisabled,
+            itemsAutoArchived:    result.itemsAutoArchived,
+            itemsKeptWithWarning: result.itemsKeptWithWarning,
+            itemsUnaffected:      result.itemsUnaffected,
+        },
+    })
+
+    revalidatePath('/settings/ai')
+    return result
+}
+
+// ─── AI Knowledge Core full reset (PR7.8) ───────────────────────
+//
+// Массовый soft-archive ядра по 3 режимам. NO physical delete.
+// Restore возможен через PR2.5 restoreKnowledgeItem per-item.
+//
+// Runtime safety: метод не блокирует full reset при runtime_enabled —
+// env-flag это deployment decision, UI не должен flip-обратно. Но
+// UI обязан показать warning перед typed confirmation.
+
+export type ResetMode = 'auto_only' | 'unverified' | 'full'
+
+export interface ResetResult {
+    mode:              ResetMode
+    archivedCount:     number
+    keptCount:         number
+    /** Сколько items уже было archived до этого reset — не трогаются. */
+    alreadyArchived:   number
+    /** Для UI verify сценария. */
+    runtimeWasEnabled: boolean
+}
+
+/**
+ * Описание режимов:
+ *   auto_only  → archive items где !isVerified И !'type:manual' И !'source:legacy'
+ *                Это extraction-only auto-сборка. Самый «безопасный».
+ *   unverified → archive все !isVerified. Manual-created без verified
+ *                тоже идут в архив (админ должен ручную подтвердить).
+ *   full       → archive ВСЕ active items. Требует typedConfirm.
+ */
+export async function resetKnowledgeCore(
+    mode: ResetMode,
+    typedConfirm?: string,
+): Promise<ResetResult> {
+    const actor = await requireAdminUserId()
+    if (!['auto_only', 'unverified', 'full'].includes(mode)) {
+        throw new Error('Недопустимый mode')
+    }
+    if (mode === 'full' && typedConfirm !== 'ОЧИСТИТЬ') {
+        throw new Error('Для полного reset введите подтверждение «ОЧИСТИТЬ»')
+    }
+
+    const runtimeWasEnabled = isRuntimeEnabled()
+
+    // 1. Select target items per-mode.
+    let rowsToArchive: any[] = []
+    if (mode === 'auto_only') {
+        rowsToArchive = await prisma.$queryRaw<any[]>`
+            SELECT
+                id, "sectionId", title, "canonicalStatement", tags,
+                confidence, "sourceCount", "uniqueManagerCount",
+                status::text AS status, "isActive",
+                "safetyLevel"::text AS "safetyLevel",
+                "supersededByItemId", "conflictGroupId",
+                "isVerified", "verifiedBy", "verifiedAt"
+            FROM "AiKnowledgeItem"
+            WHERE status = 'active' AND "isActive" = true
+              AND "isVerified" = false
+              AND NOT ('type:manual'   = ANY(tags))
+              AND NOT ('source:legacy' = ANY(tags))
+        `
+    } else if (mode === 'unverified') {
+        rowsToArchive = await prisma.$queryRaw<any[]>`
+            SELECT
+                id, "sectionId", title, "canonicalStatement", tags,
+                confidence, "sourceCount", "uniqueManagerCount",
+                status::text AS status, "isActive",
+                "safetyLevel"::text AS "safetyLevel",
+                "supersededByItemId", "conflictGroupId",
+                "isVerified", "verifiedBy", "verifiedAt"
+            FROM "AiKnowledgeItem"
+            WHERE status = 'active' AND "isActive" = true
+              AND "isVerified" = false
+        `
+    } else {
+        // full
+        rowsToArchive = await prisma.$queryRaw<any[]>`
+            SELECT
+                id, "sectionId", title, "canonicalStatement", tags,
+                confidence, "sourceCount", "uniqueManagerCount",
+                status::text AS status, "isActive",
+                "safetyLevel"::text AS "safetyLevel",
+                "supersededByItemId", "conflictGroupId",
+                "isVerified", "verifiedBy", "verifiedAt"
+            FROM "AiKnowledgeItem"
+            WHERE status = 'active' AND "isActive" = true
+        `
+    }
+
+    // 2. Count kept / already-archived for telemetry.
+    const totalActiveRows = await prisma.$queryRaw<any[]>`
+        SELECT COUNT(*)::int AS cnt FROM "AiKnowledgeItem"
+        WHERE status = 'active' AND "isActive" = true
+    `
+    const archivedRows = await prisma.$queryRaw<any[]>`
+        SELECT COUNT(*)::int AS cnt FROM "AiKnowledgeItem"
+        WHERE status = 'archived'
+    `
+    const totalActiveBefore = Number(totalActiveRows[0]?.cnt ?? 0)
+    const alreadyArchived = Number(archivedRows[0]?.cnt ?? 0)
+    const archivedCount = rowsToArchive.length
+    const keptCount = totalActiveBefore - archivedCount
+
+    // 3. Apply archive. Один statement per-id, чтобы writeAuditEntry
+    //    видел per-item before/after — для UI explainability rollback.
+    for (const item of rowsToArchive) {
+        await prisma.$executeRaw`
+            UPDATE "AiKnowledgeItem"
+            SET status = 'archived'::"AiKnowledgeStatus",
+                "isActive" = false,
+                "updatedAt" = NOW()
+            WHERE id = ${item.id}
+        `
+        await writeAuditEntry({
+            itemId: item.id, actor,
+            action: 'core_reset',
+            before: snapshotItem(item),
+            after:  snapshotItem({ ...item, status: 'archived', isActive: false }),
+            metadata: { mode, runtimeWasEnabled },
+        })
+    }
+
+    // 4. Top-level reset event (без itemId).
+    await writeAuditEntry({
+        itemId: null, actor,
+        action: 'core_reset',
+        before: null, after: null,
+        metadata: {
+            mode,
+            archivedCount,
+            keptCount,
+            beforeCount:       totalActiveBefore,
+            afterCount:        keptCount,
+            runtimeWasEnabled,
+        },
+    })
+
+    revalidatePath('/settings/ai')
+    return { mode, archivedCount, keptCount, alreadyArchived, runtimeWasEnabled }
+}
