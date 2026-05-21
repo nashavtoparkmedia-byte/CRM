@@ -1157,6 +1157,12 @@ model AiKnowledgeSource {
   chatId        String?
   channel       ChatChannel?
   managerUserId String?
+  /// PR7: polymorphic FK на conversation-провайдер (WhatsAppConnection /
+  /// TelegramConnection / MaxConnection). Discriminator — `channel`.
+  /// Без relation чтобы сохранять explainability-history даже после
+  /// удаления connection'а. NULL для legacy sources (до PR7) и для
+  /// manual-entry (manual_entry origin).
+  connectionId  String?
   /// PII-masked фрагмент исходного сообщения. НЕ полное сообщение —
   /// короткая выдержка.
   excerpt       String
@@ -1167,6 +1173,11 @@ model AiKnowledgeSource {
   /// Когда было отправлено исходное сообщение (Message.sentAt). Для
   /// recency-веса в retrieval ranking.
   occurredAt    DateTime?
+  /// PR7: soft-disable флаг. При disableKnowledgeSource(connectionId)
+  /// все matching sources переводятся в isActive=false. Не physical
+  /// delete — explainability/audit-history сохраняется. Item с 0
+  /// active sources auto-archived (кроме verified/manual).
+  isActive      Boolean                 @default(true)
   createdAt     DateTime                @default(now())
   item          AiKnowledgeItem         @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -1174,6 +1185,7 @@ model AiKnowledgeSource {
   @@index([itemId])
   @@index([messageId])
   @@index([managerUserId])
+  @@index([connectionId, isActive])
 }
 
 /// Лог использования знания в ответе AI. Source-of-truth для
@@ -1968,6 +1980,17 @@ enum AiKnowledgeAuditAction {
   superseded         // помечен как заменённый другим item'ом
   conflict_resolved  // conflictGroupId снят или участники разруливаются
   source_added       // (опц., extractor может писать для трейсабельности)
+  source_disabled    // PR7: source soft-disabled через
+                     // disableKnowledgeSource(connectionId). metadata:
+                     // { connectionId, channel, itemsAffected,
+                     //   itemsAutoArchived }. itemId == null для events
+                     // на уровне connection, либо per-item для каждого
+                     // affected item.
+  core_reset         // PR7: массовый reset ядра через resetKnowledgeCore.
+                     // metadata: { mode, itemsArchived, beforeCount,
+                     //   afterCount, runtimeWasEnabled }. itemId == null
+                     // для общего события, плюс per-item для каждого
+                     // archived.
 }
 
 enum CallDirection {
