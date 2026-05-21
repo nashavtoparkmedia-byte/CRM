@@ -28,10 +28,12 @@ import {
     getDecisionExplainabilityForUi, previewDecisionRetry,
     getKnowledgeReadinessForUi,
     getLegacyMigrationPreview, migrateLegacyKnowledgeBase,
+    listChannelConnections,
     bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
     type LegacyMigrationPreview, type LegacyMigrationResult,
+    type ChannelConnection,
     type BulkActionResult,
     type RetryPreviewResult,
     type AiProfileData,
@@ -354,6 +356,18 @@ export default function AiControlCenterClient({
     const [extractionTier, setExtractionTier] =
         useState<'economy' | 'balanced' | 'quality'>(initialExtractionTier)
     const [extractionStarting, setExtractionStarting] = useState(false)
+    // PR7.4: source-selector state.
+    // — channelConnections: список подключений всех каналов (lazy load
+    //   при первом открытии модала).
+    // — selectedConnectionIds: подключения которые админ оставил
+    //   ☑ в чекбоксах. По default — все ready. При unselect WA
+    //   connection — pairBuilder реально отрежет его сообщения.
+    // — onlyConnectedNow: convenience toggle. Если true, отключённые
+    //   подключения автоматически снимаются из selected.
+    const [channelConnections, setChannelConnections] = useState<ChannelConnection[]>([])
+    const [channelConnectionsLoading, setChannelConnectionsLoading] = useState(false)
+    const [selectedConnectionIds, setSelectedConnectionIds] = useState<Set<string>>(new Set())
+    const [onlyConnectedNow, setOnlyConnectedNow] = useState(true)
     interface ExtractionJobLite {
         id: string
         status: string
@@ -731,13 +745,56 @@ export default function AiControlCenterClient({
         }
     }
 
+    // PR7.4: загружаем connections при открытии модала + дефолтный
+    // выбор — все ready подключения. Если открыли уже не первый раз,
+    // повторно не загружаем чтобы не сбросить пользовательский выбор.
+    async function openExtractionModal() {
+        setExtractionModalOpen(true)
+        if (channelConnections.length === 0) {
+            setChannelConnectionsLoading(true)
+            try {
+                const conns = await listChannelConnections() as ChannelConnection[]
+                setChannelConnections(conns)
+                // Default: все ready подключения ☑
+                setSelectedConnectionIds(new Set(conns.filter(c => c.isReady).map(c => c.id)))
+            } catch (e) {
+                showToast('Не удалось загрузить список подключений')
+            } finally {
+                setChannelConnectionsLoading(false)
+            }
+        }
+    }
+
+    function toggleConnectionSelection(id: string) {
+        setSelectedConnectionIds(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
     async function handleStartExtraction() {
         setExtractionStarting(true)
         try {
             if (extractionTier !== initialExtractionTier) {
                 await saveExtractionQualityTier(extractionTier)
             }
-            const scope: ExtractionScope = { mode: extractionScopeMode }
+            // PR7.4: вычисляем effective set с учётом onlyConnectedNow.
+            const readyIds = new Set(channelConnections.filter(c => c.isReady).map(c => c.id))
+            const effective = onlyConnectedNow
+                ? [...selectedConnectionIds].filter(id => readyIds.has(id))
+                : [...selectedConnectionIds]
+            const scope: ExtractionScope = {
+                mode: extractionScopeMode,
+                // Передаём connectionIds только если выбор не совпадает
+                // с полным набором ready (чтобы не загромождать scope
+                // лишними данными если ничего не отфильтровано).
+                connectionIds: effective.length > 0 && effective.length < channelConnections.length
+                    ? effective
+                    : null,
+                onlyConnectedNow,
+            }
             const job = await startKnowledgeExtraction(scope, extractionTier)
             setExtractionModalOpen(false)
             setActiveExtractionJob({
@@ -2846,7 +2903,7 @@ export default function AiControlCenterClient({
                                 : 'Запустить сбор ядра знаний из истории переписок'
                         return (
                             <button
-                                onClick={() => canEdit && !noKey && setExtractionModalOpen(true)}
+                                onClick={() => canEdit && !noKey && openExtractionModal()}
                                 disabled={!canEdit || noKey}
                                 title={disabledReason}
                                 className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC] text-white text-[11px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -3321,6 +3378,105 @@ export default function AiControlCenterClient({
                                 ))}
                             </div>
                         </div>
+                        {/* PR7.4: source selector. Показывает реальные
+                            подключения с честным разделением на WA
+                            (filter работает) и TG/MAX (best-effort,
+                            берётся вся история канала). */}
+                        <div>
+                            <label className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1.5">
+                                Из каких источников собрать знания?
+                                <Hint text="Выбрать конкретные аккаунты WhatsApp работает напрямую — будут проанализированы только их чаты. Для Telegram и MAX сбор пока берёт всю историю канала независимо от отметок." />
+                            </label>
+                            {channelConnectionsLoading ? (
+                                <div className="flex items-center gap-2 text-[12px] text-gray-400 py-3 px-3">
+                                    <Loader2 size={12} className="animate-spin" /> Загружаем список подключений…
+                                </div>
+                            ) : channelConnections.length === 0 ? (
+                                <div className="text-[12px] text-gray-500 px-3 py-3 rounded-lg border border-[#FFE8B0] bg-[#FFFBED]">
+                                    Нет подключённых мессенджеров. Можно собрать только из уже загруженной истории — нажмите «Запустить».
+                                </div>
+                            ) : (
+                                <>
+                                    {(() => {
+                                        const STATUS_LABEL: Record<string, string> = {
+                                            ready:          'подключён',
+                                            qr:             'ждёт QR',
+                                            authenticating: 'входит',
+                                            idle:           'не активен',
+                                            disconnected:   'отключён',
+                                            inactive:       'отключён',
+                                            unknown:        '—',
+                                        }
+                                        const CHANNEL_LABEL: Record<string, string> = {
+                                            whatsapp: 'WhatsApp',
+                                            telegram: 'Telegram',
+                                            max:      'MAX',
+                                        }
+                                        // group by channel
+                                        const byChannel = new Map<string, ChannelConnection[]>()
+                                        for (const c of channelConnections) {
+                                            const arr = byChannel.get(c.channel) ?? []
+                                            arr.push(c)
+                                            byChannel.set(c.channel, arr)
+                                        }
+                                        return (
+                                            <div className="flex flex-col gap-2">
+                                                {[...byChannel.entries()].map(([channel, conns]) => (
+                                                    <div key={channel} className="rounded-lg border border-[#E8E8E8]">
+                                                        <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] rounded-t-lg flex items-center justify-between">
+                                                            <span>{CHANNEL_LABEL[channel] ?? channel}</span>
+                                                            {channel !== 'whatsapp' && (
+                                                                <span title="Для этого канала на схеме сейчас нет привязки сообщения к конкретному аккаунту. Поэтому сбор возьмёт всю историю канала, даже если снять отметку. Точечный фильтр появится позже."
+                                                                      className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
+                                                                    фильтр в работе
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {conns.map(conn => {
+                                                            const checked = selectedConnectionIds.has(conn.id)
+                                                            const disabled = onlyConnectedNow && !conn.isReady
+                                                            const statusLabel = STATUS_LABEL[conn.status] ?? conn.status
+                                                            const dotColor =
+                                                                conn.isReady ? 'bg-green-500' :
+                                                                conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
+                                                                'bg-gray-300'
+                                                            return (
+                                                                <label key={conn.id}
+                                                                    className={`flex items-center gap-2 px-3 py-2 border-t border-[#F0F0F0] first:border-t-0 ${
+                                                                        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-[#FAFBFC]'
+                                                                    }`}>
+                                                                    <input type="checkbox"
+                                                                        checked={checked && !disabled}
+                                                                        disabled={disabled}
+                                                                        onChange={() => !disabled && toggleConnectionSelection(conn.id)} />
+                                                                    <span className="flex-1 text-[13px] text-[#111]">
+                                                                        {/* label like "WhatsApp +7922•••5750" — duplicate
+                                                                            channel префикса не нужно, group header его уже даёт */}
+                                                                        {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '') || 'безымянное подключение'}
+                                                                    </span>
+                                                                    <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
+                                                                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                                                        {statusLabel}
+                                                                    </span>
+                                                                </label>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )
+                                    })()}
+                                    <label className="flex items-center gap-2 mt-2.5 cursor-pointer text-[12px] text-gray-600">
+                                        <input type="checkbox"
+                                            checked={onlyConnectedNow}
+                                            onChange={e => setOnlyConnectedNow(e.target.checked)} />
+                                        <span>Только подключённые сейчас</span>
+                                        <Hint text="Если включено — отключённые/ждущие QR аккаунты не попадут в сбор, даже если у них есть сохранённая история. Защита от случайного использования тестовых подключений." />
+                                    </label>
+                                </>
+                            )}
+                        </div>
+
                         <div>
                             <label className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1.5">
                                 Модель анализа переписок
