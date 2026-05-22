@@ -35,103 +35,125 @@ function buildDisplayName(user) {
     const fn = (user.firstName ?? '').trim()
     const ln = (user.lastName  ?? '').trim()
     const full = [fn, ln].filter(Boolean).join(' ').trim()
-    if (full) return full
+    // Реальное имя — содержит буквы и не сплошные символы-мусор (".", "$$", "...")
+    const hasRealName = /[А-Яа-яA-Za-z]/.test(full) && !/^[.\s\-_$]+$/.test(full)
+    if (hasRealName) return full
     if (user.username) return `@${user.username}`
+    if (full) return full  // last resort — хоть какой-то
     return null
 }
 
 async function main() {
     console.log(`[backfill-tg] ${DRY_RUN ? 'DRY RUN — no DB changes' : 'LIVE'} mode`)
 
-    // 1. Сессия
-    const conn = await prisma.telegramConnection.findFirst({
+    // 1. Все активные TG сессии — chats могли быть созданы через разные.
+    const connections = await prisma.telegramConnection.findMany({
         where: { isActive: true, sessionString: { not: null } },
         select: { id: true, name: true, sessionString: true, apiId: true, apiHash: true },
+        orderBy: { isDefault: 'desc' },
     })
-    if (!conn || !conn.sessionString) {
-        console.error('[backfill-tg] No active TelegramConnection with sessionString. Подключи TG-аккаунт в /settings/integrations/telegram сначала.')
+    if (connections.length === 0) {
+        console.error('[backfill-tg] No active TelegramConnection with sessionString.')
         await prisma.$disconnect()
         process.exit(1)
     }
-    console.log(`[backfill-tg] using connection ${conn.id} (${conn.name})`)
+    console.log(`[backfill-tg] ${connections.length} active connections found`)
 
-    const session = new StringSession(conn.sessionString)
-    const client = new TelegramClient(session, conn.apiId, conn.apiHash, {
-        connectionRetries: 3,
-    })
-    await client.connect()
-    if (!(await client.isUserAuthorized())) {
-        console.error('[backfill-tg] Session not authorized')
-        await prisma.$disconnect()
-        process.exit(1)
-    }
-    console.log(`[backfill-tg] connected to Telegram`)
+    const proxyConfig = process.env.TG_PROXY_PORT
+        ? { ip: '127.0.0.1', port: Number(process.env.TG_PROXY_PORT), socksType: 5, timeout: 5 }
+        : { ip: '127.0.0.1', port: 10808, socksType: 5, timeout: 5 }
+    console.log(`[backfill-tg] using SOCKS5 proxy ${proxyConfig.ip}:${proxyConfig.port}`)
 
-    // 2. Найти TG чаты с placeholder name
+    // 2. TG чаты с placeholder name
     const chats = await prisma.chat.findMany({
         where: { channel: 'telegram' },
         select: { id: true, name: true, externalChatId: true, contactId: true },
     })
-    const candidates = chats.filter(c => {
+    let candidates = chats.filter(c => {
         if (!c.externalChatId?.startsWith('telegram:')) return false
-        if (c.externalChatId.startsWith('telegram:group:')) return false  // groups не трогаем
+        if (c.externalChatId.startsWith('telegram:group:')) return false
         return isPlaceholder(c.name)
     })
-    console.log(`[backfill-tg] found ${candidates.length} chats with placeholder name (of ${chats.length} total TG chats)`)
+    console.log(`[backfill-tg] ${candidates.length} placeholder TG chats to resolve`)
 
-    let updated = 0, skipped = 0, failed = 0
-    for (let i = 0; i < candidates.length; i++) {
-        const chat = candidates[i]
-        const idStr = chat.externalChatId.replace('telegram:', '')
-        const idNum = Number(idStr)
-        if (!Number.isFinite(idNum)) {
-            console.warn(`  [${i+1}/${candidates.length}] skip ${chat.id}: bad id «${idStr}»`)
-            skipped++
-            continue
-        }
+    let totalUpdated = 0, totalSkipped = 0, totalFailed = 0
+    const resolved = new Set()  // chat.id уже разрешённые
 
+    // 3. Идём по каждой сессии и пробуем разрешить
+    for (const conn of connections) {
+        if (candidates.length === resolved.size) break  // все разрешены
+        console.log(`\n[backfill-tg] === session ${conn.id} (${conn.name}) ===`)
+
+        const session = new StringSession(conn.sessionString)
+        const client = new TelegramClient(session, conn.apiId, conn.apiHash, {
+            connectionRetries: 2,
+            proxy: proxyConfig,
+        })
         try {
-            const user = await client.getEntity(idNum)
-            const newName = buildDisplayName(user)
-            if (!newName) {
-                console.log(`  [${i+1}/${candidates.length}] ${idStr}: TG user has no name/username, skip`)
-                skipped++
-            } else {
-                console.log(`  [${i+1}/${candidates.length}] ${idStr}: «${chat.name}» → «${newName}»`)
-                if (!DRY_RUN) {
-                    await prisma.chat.update({
-                        where: { id: chat.id },
-                        data: { name: newName },
-                    })
-                    if (chat.contactId) {
-                        // Обновим Contact.displayName только если он тоже placeholder
-                        const contact = await prisma.contact.findUnique({
-                            where: { id: chat.contactId },
-                            select: { id: true, displayName: true },
+            await client.connect()
+            if (!(await client.isUserAuthorized())) {
+                console.warn(`  session not authorized, skip`)
+                await client.disconnect()
+                continue
+            }
+            console.log(`  connected, loading dialogs...`)
+            const dialogs = await client.getDialogs({ limit: 500 })
+            console.log(`  loaded ${dialogs.length} dialogs`)
+
+            for (let i = 0; i < candidates.length; i++) {
+                const chat = candidates[i]
+                if (resolved.has(chat.id)) continue
+                const idStr = chat.externalChatId.replace('telegram:', '')
+                const idNum = Number(idStr)
+                if (!Number.isFinite(idNum)) continue
+
+                try {
+                    const user = await client.getEntity(idNum)
+                    const newName = buildDisplayName(user)
+                    if (!newName) {
+                        console.log(`  [${i+1}/${candidates.length}] ${idStr}: no name/username`)
+                        resolved.add(chat.id)  // нечего ещё пробовать
+                        totalSkipped++
+                        continue
+                    }
+                    const usernameStr = user.username ? ` (@${user.username})` : ''
+                    console.log(`  [${i+1}/${candidates.length}] ${idStr}: «${chat.name}» → «${newName}»${usernameStr}`)
+                    if (!DRY_RUN) {
+                        await prisma.chat.update({
+                            where: { id: chat.id },
+                            data: { name: newName },
                         })
-                        if (contact && isPlaceholder(contact.displayName)) {
-                            await prisma.contact.update({
-                                where: { id: contact.id },
-                                data: { displayName: newName },
+                        if (chat.contactId) {
+                            const contact = await prisma.contact.findUnique({
+                                where: { id: chat.contactId },
+                                select: { id: true, displayName: true },
                             })
+                            if (contact && isPlaceholder(contact.displayName)) {
+                                await prisma.contact.update({
+                                    where: { id: contact.id },
+                                    data: { displayName: newName },
+                                })
+                            }
                         }
                     }
+                    resolved.add(chat.id)
+                    totalUpdated++
+                } catch (e) {
+                    // не в этой сессии — попробуем следующую
                 }
-                updated++
+                await new Promise(r => setTimeout(r, RATE_LIMIT_MS))
             }
+            await client.disconnect()
         } catch (e) {
-            console.warn(`  [${i+1}/${candidates.length}] ${idStr}: error ${e.message}`)
-            failed++
+            console.warn(`  session error: ${e.message}`)
+            try { await client.disconnect() } catch {}
         }
-
-        // Rate limit
-        await new Promise(r => setTimeout(r, RATE_LIMIT_MS))
     }
 
-    await client.disconnect()
-    await prisma.$disconnect()
+    totalFailed = candidates.length - totalUpdated - totalSkipped
 
-    console.log(`\n[backfill-tg] done. updated=${updated} skipped=${skipped} failed=${failed}`)
+    await prisma.$disconnect()
+    console.log(`\n[backfill-tg] done. updated=${totalUpdated} skipped=${totalSkipped} failed=${totalFailed}`)
 }
 
 main().catch(e => {
