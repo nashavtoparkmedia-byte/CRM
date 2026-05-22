@@ -2117,7 +2117,11 @@ export default function AiControlCenterClient({
     // главные, как user попросил.
 
     const [rulesSaving,   setRulesSaving]   = useState(false)
-    const [showAdvanced,  setShowAdvanced]  = useState(false)
+    // PR9.34/PR9.35: дополнительные настройки видны по умолчанию.
+    // User: «Чтобы его было видно, но он тут не главный.» —
+    // default expanded + de-emphasized стиль (под профилями).
+    // Свернуть можно вручную, если профили на первом плане.
+    const [showAdvanced,  setShowAdvanced]  = useState(true)
 
     const handleSaveRules = async () => {
         // Промпт-поля (role/tone/allowed/forbidden) больше не идут через
@@ -2161,33 +2165,30 @@ export default function AiControlCenterClient({
                 showToast={showToast}
             />
 
-            {/* PR9.34: «Дополнительные настройки» — collapsible.
-                Режим (Что AI делает) + каналы + пороги уверенности.
-                Видно, но не главное — раньше занимало 40% экрана сверху,
-                сдвигая профили в самый низ. */}
-            <div className="border-t border-[#E8E8E8] pt-4">
+            {/* PR9.34/PR9.35: «Дополнительные настройки» — collapsible-блок,
+                по умолчанию открыт (видно, но не главное). De-emphasized
+                стиль: серый фон карточки, мелкий заголовок, без primary-цвета.
+                Раньше эти настройки занимали 40% экрана сверху и сдвигали
+                профили в самый низ. */}
+            <div className="rounded-lg bg-[#FAFBFC] border border-[#E8E8E8]">
                 <button
                     type="button"
                     onClick={() => setShowAdvanced(v => !v)}
-                    className="w-full flex items-center justify-between gap-2 text-[13px] text-gray-600 hover:text-[#111] transition-colors"
+                    className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-[13px] text-gray-700 hover:bg-[#F4F5F7] transition-colors rounded-t-lg"
                 >
-                    <span className="font-semibold">Дополнительные настройки</span>
-                    <span className="flex items-center gap-1 text-[11px] text-gray-400">
-                        {showAdvanced ? 'свернуть' : 'развернуть'}
-                        {showAdvanced
-                            ? <ChevronUp size={13} />
-                            : <ChevronDown size={13} />}
+                    <span className="flex items-center gap-2">
+                        <Settings size={13} className="text-gray-500" />
+                        <span className="font-semibold">Дополнительные настройки</span>
+                        <span className="text-[11px] text-gray-400 font-normal">
+                            режим работы AI, каналы, пороги
+                        </span>
                     </span>
+                    {showAdvanced
+                        ? <ChevronUp size={14} className="text-gray-400" />
+                        : <ChevronDown size={14} className="text-gray-400" />}
                 </button>
-                {!showAdvanced && (
-                    <div className="text-[11px] text-gray-400 mt-1">
-                        Режим работы AI, активные каналы, порог уверенности
-                    </div>
-                )}
-            </div>
-
-            {showAdvanced && (
-                <>
+                {showAdvanced && (
+                    <div className="border-t border-[#E8E8E8] px-4 py-4 space-y-4">
             <InlineInfo>
                 Начните с «Советует». Когда в Журнале увидите, что AI отвечает правильно — переключитесь на «Автоответ».
             </InlineInfo>
@@ -2295,10 +2296,10 @@ export default function AiControlCenterClient({
                 </div>
             </div>
 
-            {/* PR9.34: ProfilesEditor вынесен наверх в RulesTab — это главное
-                содержимое вкладки «Стиль общения». Кнопка «Сохранить»
-                сохраняет operational settings (режим / каналы / пороги).
-                Профили save'ятся отдельно через свои кнопки внутри редактора. */}
+            {/* PR9.34/PR9.35: кнопка «Сохранить» сохраняет operational settings
+                (режим / каналы / пороги). Внутри collapsible-блока — рядом
+                с тем что сохраняет. Профили сохраняются отдельно через
+                свои кнопки внутри ProfilesEditor сверху. */}
             <button
                 onClick={handleSaveRules}
                 disabled={rulesSaving}
@@ -2307,8 +2308,9 @@ export default function AiControlCenterClient({
                 <Save size={11} />
                 {rulesSaving ? 'Сохраняем...' : 'Сохранить настройки'}
             </button>
-                </>
-            )}
+                    </div>
+                )}
+            </div>
         </div>
     )
 
