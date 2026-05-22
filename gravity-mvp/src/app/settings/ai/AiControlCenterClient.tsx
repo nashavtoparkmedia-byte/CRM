@@ -1737,88 +1737,131 @@ export default function AiControlCenterClient({
 
     const providerDef = PROVIDER_DEFAULTS[config.provider] ?? PROVIDER_DEFAULTS.anthropic
 
+    // PR9.15: derive effective статус ключа из state + DB.
+    // Логика осталась из PR5: testStatus → config.connectionStatus → unchecked → empty.
+    const effectiveStatus = (() => {
+        if (testStatus === 'testing') return 'testing'
+        if (testStatus === 'ok')      return 'ok'
+        if (testStatus === 'error')   return 'error'
+        if (config.connectionStatus === 'ok')    return 'ok'
+        if (config.connectionStatus === 'error') return 'error'
+        if (apiKey.trim() || config.apiKeyEncrypted) return 'unchecked'
+        return 'empty'
+    })()
+    // Color theme + texts per status
+    const STATUS_THEME: Record<string, {
+        cardBg: string; pillBg: string; titleColor: string;
+        title: string; subtitle: string; buttonLabel: string;
+    }> = {
+        ok: {
+            cardBg: 'bg-emerald-50 border-emerald-300',
+            pillBg: 'bg-emerald-600 text-white',
+            titleColor: 'text-emerald-900',
+            title: 'Ключ активен',
+            subtitle: 'AI отвечает через выбранный провайдер.',
+            buttonLabel: 'Перепроверить',
+        },
+        error: {
+            cardBg: 'bg-red-50 border-red-300',
+            pillBg: 'bg-red-600 text-white',
+            titleColor: 'text-red-900',
+            title: 'Ключ не работает',
+            subtitle: testError || 'Проверьте ключ, баланс и доступ к модели.',
+            buttonLabel: 'Проверить снова',
+        },
+        testing: {
+            cardBg: 'bg-amber-50 border-amber-300',
+            pillBg: 'bg-amber-600 text-white',
+            titleColor: 'text-amber-900',
+            title: 'Проверяем…',
+            subtitle: 'Отправляем тестовый запрос провайдеру.',
+            buttonLabel: 'Проверяем…',
+        },
+        unchecked: {
+            cardBg: 'bg-gray-50 border-gray-300',
+            pillBg: 'bg-gray-600 text-white',
+            titleColor: 'text-gray-900',
+            title: 'Ключ не проверен',
+            subtitle: 'Ключ есть, но мы ещё не проверяли, работает ли он.',
+            buttonLabel: 'Проверить',
+        },
+        empty: {
+            cardBg: 'bg-amber-50 border-amber-300',
+            pillBg: 'bg-amber-600 text-white',
+            titleColor: 'text-amber-900',
+            title: 'Ключ не задан',
+            subtitle: 'Введите API-ключ от Anthropic или OpenAI ниже.',
+            buttonLabel: 'Проверить',
+        },
+    }
+    const theme = STATUS_THEME[effectiveStatus]
+
     return (
         <div className="space-y-5">
             <InlineInfo>
                 AI работает через внешнюю модель: Anthropic (Claude) или OpenAI (GPT).
                 Claude лучше понимает русский, GPT дешевле и быстрее на коротких ответах.
             </InlineInfo>
+
+            {/* PR9.15: prominent status card — пользователь сразу видит
+                работает ли ключ, не нажимая «Проверить». */}
+            <div className={`rounded-xl border-2 px-5 py-4 ${theme.cardBg}`}>
+                <div className="flex items-start justify-between gap-3 mb-2">
+                    <div>
+                        <div className={`text-[10px] uppercase tracking-wide font-bold mb-1 ${theme.titleColor} opacity-70`}>
+                            Статус AI Провайдера
+                        </div>
+                        <div className={`text-[20px] font-bold leading-none ${theme.titleColor}`}>
+                            {theme.title}
+                        </div>
+                        <div className={`text-[12px] mt-1 ${theme.titleColor} opacity-80`}>
+                            {theme.subtitle}
+                        </div>
+                    </div>
+                    <span className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full shrink-0 ${theme.pillBg}`}>
+                        {effectiveStatus === 'ok' ? '✓ OK' :
+                         effectiveStatus === 'error' ? '✗ Ошибка' :
+                         effectiveStatus === 'testing' ? '… проверка' :
+                         effectiveStatus === 'unchecked' ? 'нет проверки' :
+                         'нет ключа'}
+                    </span>
+                </div>
+                {config.lastConnectionCheckAt && (
+                    <div className={`text-[11px] mt-2 ${theme.titleColor} opacity-60`}>
+                        Последняя проверка: {new Date(config.lastConnectionCheckAt).toLocaleString('ru')}
+                    </div>
+                )}
+            </div>
+
             <div className="space-y-4 pt-1">
-                <div className="flex gap-2">
-                    {['anthropic', 'openai'].map(p => (
-                        <button
-                            key={p}
-                            onClick={() => switchProvider(p)}
-                            className={`px-4 h-[30px] rounded-lg text-[12px] font-semibold border transition-colors ${
-                                config.provider === p
-                                    ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                    : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
-                            }`}
-                        >
-                            {p === 'anthropic' ? 'Anthropic' : 'OpenAI'}
-                        </button>
-                    ))}
+                <div>
+                    <label className="text-[12px] text-gray-500 mb-1.5 block">Провайдер</label>
+                    <div className="flex gap-2">
+                        {['anthropic', 'openai'].map(p => (
+                            <button
+                                key={p}
+                                onClick={() => switchProvider(p)}
+                                className={`px-4 h-[34px] rounded-lg text-[13px] font-semibold border transition-colors ${
+                                    config.provider === p
+                                        ? 'bg-[#3390EC] text-white border-[#3390EC]'
+                                        : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
+                                }`}
+                            >
+                                {p === 'anthropic' ? 'Anthropic (Claude)' : 'OpenAI (GPT)'}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div>
-                    {/* Статус-точка рядом с label: «живой» ключ виден
-                        сразу, без клика «Проверить» и без отдельной
-                        строки текста ниже.
-
-                        Effective status — приоритет:
-                          1) testStatus (только что нажали «Проверить»)
-                          2) config.connectionStatus (последняя проверка
-                             из БД, set'ится в saveAiConfig() при успехе)
-                          3) есть apiKeyEncrypted без статуса → unchecked
-
-                        После любого изменения input testStatus → 'idle'
-                        и connectionStatus сбрасывается, потому что новый
-                        ключ заведомо не проверен. */}
-                    {(() => {
-                        const effective = (() => {
-                            if (testStatus === 'testing') return 'testing'
-                            if (testStatus === 'ok')      return 'ok'
-                            if (testStatus === 'error')   return 'error'
-                            if (config.connectionStatus === 'ok')    return 'ok'
-                            if (config.connectionStatus === 'error') return 'error'
-                            // Есть ключ, но не проверен ни разу:
-                            if (apiKey.trim() || config.apiKeyEncrypted) return 'unchecked'
-                            return 'empty'
-                        })()
-                        const dot: Record<string, { color: string; label: string; titleSuffix?: string }> = {
-                            ok:        { color: 'bg-green-500',              label: 'ключ активен' },
-                            error:     { color: 'bg-red-500',                label: 'ключ не работает', titleSuffix: testError },
-                            testing:   { color: 'bg-yellow-400 animate-pulse', label: 'проверяем…' },
-                            unchecked: { color: 'bg-gray-300',               label: 'ключ не проверен' },
-                            empty:     { color: '',                          label: '' },
-                        }
-                        const d = dot[effective]
-                        return (
-                            <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-2">
-                                <span>API ключ{' '}
-                                    {config.provider === 'anthropic' ? (
-                                        <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
-                                    ) : (
-                                        <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
-                                    )}
-                                </span>
-                                {d.label && (
-                                    <span
-                                        title={d.titleSuffix ? `${d.label}: ${d.titleSuffix}` : d.label}
-                                        className={`ml-auto inline-flex items-center gap-1.5 text-[11px] ${
-                                            effective === 'ok'    ? 'text-green-600'
-                                          : effective === 'error' ? 'text-red-500'
-                                          : effective === 'testing' ? 'text-yellow-700'
-                                          : 'text-gray-400'
-                                        }`}
-                                    >
-                                        <span className={`w-2 h-2 rounded-full ${d.color}`} />
-                                        {d.label}
-                                    </span>
-                                )}
-                            </label>
-                        )
-                    })()}
+                    <label className="text-[12px] text-gray-500 mb-1.5 flex items-center gap-1.5">
+                        API ключ
+                        {config.provider === 'anthropic' ? (
+                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
+                        ) : (
+                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
+                        )}
+                    </label>
                     <div className="flex gap-2">
                         <input
                             type="password"
@@ -1826,26 +1869,27 @@ export default function AiControlCenterClient({
                             onChange={e => {
                                 setApiKey(e.target.value)
                                 setTestStatus('idle')
-                                // Сбрасываем statusDot — новый ключ
-                                // заведомо ещё не проверен.
                                 if (config.connectionStatus) {
                                     setConfig(c => ({ ...c, connectionStatus: null }))
                                 }
                             }}
                             placeholder={config.apiKeyEncrypted ? '••••••••••••••••' : providerDef.keyPlaceholder}
-                            className="flex-1 h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC] font-mono"
+                            className="flex-1 h-[36px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC] font-mono"
                         />
                         <button
                             onClick={handleTestConnection}
                             disabled={testStatus === 'testing'}
-                            className="h-[32px] px-3 bg-gray-100 text-gray-700 text-[11px] font-semibold rounded-lg hover:bg-gray-200 disabled:opacity-50 transition-colors"
+                            className={`h-[36px] px-4 text-[12px] font-semibold rounded-lg disabled:opacity-50 transition-colors ${
+                                effectiveStatus === 'ok'
+                                    ? 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
+                                    : effectiveStatus === 'error'
+                                    ? 'bg-red-600 text-white hover:bg-red-700'
+                                    : 'bg-[#3390EC] text-white hover:bg-[#2B7FD4]'
+                            }`}
                         >
-                            {testStatus === 'testing' ? 'Проверка...' : 'Проверить'}
+                            {testStatus === 'testing' ? 'Проверка...' : theme.buttonLabel}
                         </button>
                     </div>
-                    {/* Расшифровка ошибки — точка наверху уже сообщает
-                        «не работает», но текст ошибки от провайдера
-                        полезен (401 / 403 / wrong model / etc). */}
                     {testStatus === 'error' && testError && (
                         <div className="flex items-center gap-1 mt-1.5 text-[11px] text-red-500">
                             <XCircle size={11} /> {testError}
@@ -1925,20 +1969,15 @@ export default function AiControlCenterClient({
                     </div>
                 </details>
 
-                {config.lastConnectionCheckAt && (
-                    <div className="text-[10px] text-gray-400">
-                        Последняя проверка: {new Date(config.lastConnectionCheckAt).toLocaleString('ru')}
-                        {' · '}
-                        Статус: <span className={config.connectionStatus === 'ok' ? 'text-green-600' : 'text-red-500'}>{config.connectionStatus ?? '—'}</span>
-                    </div>
-                )}
+                {/* PR9.15: lastConnectionCheckAt уже виден в карточке
+                    статуса сверху — duplicate-строка убрана. */}
 
                 <button
                     onClick={handleSaveProvider}
                     disabled={providerSaving}
-                    className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    className="h-[36px] px-5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
                 >
-                    <Save size={11} />
+                    <Save size={12} />
                     {providerSaving ? 'Сохраняем...' : 'Сохранить'}
                 </button>
             </div>
