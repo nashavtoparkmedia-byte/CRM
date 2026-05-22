@@ -3,6 +3,7 @@ import { ClassificationResult } from './IntentClassifier'
 import { DecisionResult } from './DecisionEngine'
 import { channelRegistry } from './ChannelAdapterRegistry'
 import { formatRetrievedFactsForPrompt } from '@/lib/ai/knowledge/Retriever'
+import { callForText } from './llmClient'
 
 export interface GeneratedResponse {
   reply: string | null
@@ -54,28 +55,18 @@ export class ResponseGenerator {
 
     const systemPrompt = parts.join(' ')
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key':         config.apiKey!,
-        'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
-      },
-      body: JSON.stringify({
-        model:      config.responseModel,
-        max_tokens: 500,
-        system:     systemPrompt,
-        messages:   recentMessages,
-      }),
+    // PR9.52: multi-provider routing через llmClient. Раньше всегда
+    // шёл в Anthropic — для OpenAI пользователей возвращало
+    // «invalid x-api-key».
+    const reply = await callForText({
+      provider:     config.provider,
+      model:        config.responseModel,
+      apiKey:       config.apiKey!,
+      systemPrompt,
+      messages:     recentMessages,
+      maxTokens:    500,
+      temperature:  0.3,
     })
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}))
-      throw new Error(`Anthropic response error: ${err?.error?.message || response.status}`)
-    }
-
-    const data = await response.json()
-    const reply = data.content?.[0]?.text?.trim() || ''
     if (!reply) return { reply: null, sent: false }
 
     // Send only in auto_reply mode (not suggest_only — that's just a suggestion)

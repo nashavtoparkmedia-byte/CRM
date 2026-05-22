@@ -1,4 +1,5 @@
 import { MessageContext } from './ContextBuilder'
+import { callForJson } from './llmClient'
 
 export interface ClassificationResult {
   intent: string
@@ -30,28 +31,17 @@ ${kbText}
 Отвечай ТОЛЬКО валидным JSON без markdown-блоков:
 {"intent":"краткое_описание","confidence":0.0,"matchedKbEntryId":"id_или_null"}`
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key':         config.apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
-      },
-      body: JSON.stringify({
-        model:      config.classificationModel,
-        max_tokens: 200,
-        system:     systemPrompt,
-        messages:   [{ role: 'user', content: userMessage }],
-      }),
+    // PR9.52: multi-provider routing через llmClient. Раньше всегда
+    // шёл в Anthropic — отсюда «invalid x-api-key» при OpenAI provider.
+    const text = await callForJson({
+      provider:     config.provider,
+      model:        config.classificationModel,
+      apiKey:       config.apiKey,
+      systemPrompt,
+      userMessage,
+      maxTokens:    200,
+      temperature:  0,
     })
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}))
-      throw new Error(`Anthropic classify error: ${err?.error?.message || response.status}`)
-    }
-
-    const data = await response.json()
-    const text = data.content?.[0]?.text || ''
 
     try {
       const parsed = JSON.parse(text)
