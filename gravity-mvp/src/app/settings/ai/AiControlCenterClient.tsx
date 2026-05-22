@@ -802,6 +802,37 @@ export default function AiControlCenterClient({
         return () => { cancelled = true }
     }, [])
 
+    // PR9.23: auto-refresh «База сообщений» — убрали ручной клик по
+    // карточке. Карточка теперь — зеркало БД, а не интерактивный
+    // элемент. Триггеры:
+    //   1. Пользователь переключается на вкладку «База сообщений»
+    //      (tab === 'sync') — мгновенный refresh.
+    //   2. Документ становится видимым (visibilitychange / focus) —
+    //      когда пользователь возвращается из соседней вкладки
+    //      браузера (например, загрузил историю в /settings/
+    //      integrations/whatsapp и вернулся сюда).
+    //
+    // refreshDbStats определён в теле компонента, новый объект каждый
+    // ререндер — eslint-disable для exhaustive-deps оправдан: useEffect
+    // должен реагировать только на смену tab, а closure-захват
+    // refreshDbStats при каждом fire даёт актуальную ссылку.
+    useEffect(() => {
+        if (tab !== 'sync') return
+        refreshDbStats()
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') {
+                refreshDbStats()
+            }
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        window.addEventListener('focus', onVisible)
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible)
+            window.removeEventListener('focus', onVisible)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tab])
+
     async function refreshCurrentSection() {
         if (!selectedSectionId) return
         const arr = await listItemsBySection(selectedSectionId, {
@@ -1269,8 +1300,8 @@ export default function AiControlCenterClient({
         <div className="space-y-5">
             <InlineInfo>
                 Сколько сообщений из каждого аккаунта уже в базе.
-                Чтобы догрузить старую историю — открой карточку аккаунта ниже
-                и перейди на страницу мессенджера.
+                Чтобы изменить период истории — открой настройки нужного аккаунта
+                (ссылка в карточке).
                 Чтобы AI прочитал базу и собрал знания — перейди на вкладку «Ядро знаний».
             </InlineInfo>
 
@@ -1385,27 +1416,23 @@ export default function AiControlCenterClient({
                             // PR9.10: color-coded background
                             // зелёный для подключённых, красный — отключённых,
                             // амбер — переходное состояние (qr/authenticating).
+                            // PR9.23: карточка больше не интерактивна — auto-refresh
+                            // на tab switch + visibilitychange делает клик ненужным.
+                            // Убрали hover-классы — карточка визуально статична.
                             const isConnected = conn.isReady
                             const isPending   = conn.status === 'qr' || conn.status === 'authenticating'
                             const cardBg =
-                                isConnected ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100' :
-                                isPending   ? 'bg-amber-50 border-amber-300 hover:bg-amber-100' :
-                                              'bg-red-50 border-red-300 hover:bg-red-100'
+                                isConnected ? 'bg-emerald-50 border-emerald-300' :
+                                isPending   ? 'bg-amber-50 border-amber-300' :
+                                              'bg-red-50 border-red-300'
                             const statusPillBg =
                                 isConnected ? 'bg-emerald-600 text-white' :
                                 isPending   ? 'bg-amber-600 text-white' :
                                               'bg-red-600 text-white'
                             return (
-                                <button
+                                <div
                                     key={conn.id}
-                                    type="button"
-                                    onClick={async () => {
-                                        await refreshDbStats()
-                                        showToast(`Обновлено: ${conn.label}`)
-                                    }}
-                                    disabled={dbStatsRefreshing}
-                                    className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 disabled:opacity-70 ${cardBg}`}
-                                    title="Кликнуть по карточке — обновить счётчики. Чтобы изменить период истории в БД — нажми «Открыть настройки» внизу карточки."
+                                    className={`text-left rounded-xl border-2 px-4 py-3.5 ${cardBg}`}
                                 >
                                     {/* Header: label + status pill */}
                                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -1437,20 +1464,18 @@ export default function AiControlCenterClient({
                                         )}
                                     </div>
                                     {/* PR9.14: cross-ref всегда видимая.
-                                        Раньше показывалась только на hover —
-                                        пользователь не понимал что внутри карточки
-                                        есть ссылка. Tooltip к ней ссылается, так
-                                        что она должна быть прямо видна. */}
+                                        PR9.23: карточка-обёртка теперь <div>, а не
+                                        <button>, поэтому stopPropagation у ссылки
+                                        больше не нужен. */}
                                     <div className="text-[11px] mt-2">
                                         <a
                                             href={channelHref}
-                                            onClick={e => e.stopPropagation()}
                                             className="text-[#3390EC] hover:underline font-semibold"
                                         >
                                             Открыть настройки →
                                         </a>
                                     </div>
-                                </button>
+                                </div>
                             )
                         })}
                                 </div>
