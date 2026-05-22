@@ -204,3 +204,94 @@ export async function listExtractionJobs(limit = 10): Promise<any[]> {
         return []
     }
 }
+
+// ─── PR7.12 — compact source badges per item ──────────────────────
+//
+// Возвращает для batch item-ids разбивку источников по connectionId.
+// Используется в UI карточки знания: «WA +7922•••5750 · TG Support · ещё 3».
+// Без новых таблиц — простой GROUP BY по уже существующему
+// AiKnowledgeSource. Не вызывается из retrieval/extraction pipeline,
+// только из настроек.
+
+export interface ItemSourceBadgeRow {
+    /** id known connection или null для legacy/manual sources. */
+    connectionId: string | null
+    /** Сколько sources у этого item с таким connectionId. */
+    count:        number
+    /** Хотя бы один из этих sources активен (для UI «отключены»). */
+    anyActive:    boolean
+}
+
+export interface ItemSourceBadges {
+    /** Группировка по connectionId, отсортирована по count DESC.
+     *  Первая запись с connectionId=null означает legacy/manual sources
+     *  без точной привязки. UI обрабатывает её отдельно. */
+    rows:        ItemSourceBadgeRow[]
+    /** Distinct count non-null connectionId — сколько разных аккаунтов
+     *  «доказывают» этот item. */
+    distinctConnections: number
+    /** Хотя бы один source с connectionId IS NULL. */
+    hasUnknownSource: boolean
+    /** Все sources isActive=false. UI badge «источники отключены». */
+    allDisabled: boolean
+    /** Сколько всего sources у item (исключая superseded chain). */
+    totalSources: number
+}
+
+/** Batch query badges для N items. Возвращает Map itemId → badges.
+ *  Если item не найден, в Map его не будет — UI fallback на пустой. */
+export async function getItemSourceBadges(
+    itemIds: string[]
+): Promise<Map<string, ItemSourceBadges>> {
+    const out = new Map<string, ItemSourceBadges>()
+    if (itemIds.length === 0) return out
+    try {
+        const rows = await prisma.$queryRaw<Array<{
+            itemId: string
+            connectionId: string | null
+            cnt: number
+            anyActive: boolean
+        }>>`
+            SELECT
+                "itemId",
+                "connectionId",
+                COUNT(*)::int       AS cnt,
+                BOOL_OR("isActive") AS "anyActive"
+            FROM "AiKnowledgeSource"
+            WHERE "itemId" = ANY(${itemIds})
+            GROUP BY "itemId", "connectionId"
+        `
+        // Группируем по itemId, сортируем по count DESC внутри группы.
+        const byItem = new Map<string, Array<{
+            connectionId: string | null
+            count: number
+            anyActive: boolean
+        }>>()
+        for (const r of rows) {
+            const arr = byItem.get(r.itemId) ?? []
+            arr.push({
+                connectionId: r.connectionId,
+                count:        Number(r.cnt),
+                anyActive:    Boolean(r.anyActive),
+            })
+            byItem.set(r.itemId, arr)
+        }
+        for (const [itemId, arr] of byItem.entries()) {
+            arr.sort((a, b) => b.count - a.count)
+            const total           = arr.reduce((s, x) => s + x.count, 0)
+            const distinct        = arr.filter(x => x.connectionId !== null).length
+            const hasUnknown      = arr.some(x => x.connectionId === null)
+            const allDisabled     = arr.every(x => !x.anyActive)
+            out.set(itemId, {
+                rows:                arr,
+                distinctConnections: distinct,
+                hasUnknownSource:    hasUnknown,
+                allDisabled,
+                totalSources:        total,
+            })
+        }
+        return out
+    } catch {
+        return out
+    }
+}

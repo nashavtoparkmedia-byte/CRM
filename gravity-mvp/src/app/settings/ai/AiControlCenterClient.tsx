@@ -30,6 +30,7 @@ import {
     getLegacyMigrationPreview, migrateLegacyKnowledgeBase,
     listChannelConnections,
     getSourceStatsByConnection, disableKnowledgeSource, resetKnowledgeCore,
+    getItemSourceBadges,
     bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
@@ -42,6 +43,7 @@ import {
     type AiProfileData,
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
     type ExtractionScope,
+    type ItemSourceBadges,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -205,9 +207,9 @@ const DECISION_HUMAN: Record<string, string> = {
     skip:       'Не отвечал',
 }
 const RETRIEVAL_MODE_HUMAN: Record<string, string> = {
-    legacy:  'Legacy — старая база FAQ',
-    shadow:  'Shadow — новое ядро работало в фоне',
-    runtime: 'Runtime — ответ из ядра знаний',
+    legacy:  'Старая база FAQ',
+    shadow:  'Тестовый режим — новое ядро работало в фоне',
+    runtime: 'Активный режим — ответ из ядра знаний',
 }
 const ESCALATION_HUMAN: Record<string, string> = {
     conflict:       'Конфликт в знаниях компании — два правила противоречат друг другу',
@@ -336,18 +338,34 @@ export default function AiControlCenterClient({
     )
     const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([])
     const [knowledgeItemsLoading, setKnowledgeItemsLoading] = useState(false)
+    // PR7.12: compact source badges per item — «откуда взято» одной
+    // строкой на карточке. Map itemId → badges. Загружается batch'ем
+    // после items, чтобы не делать N+1 запрос на render.
+    const [itemBadges, setItemBadges] = useState<Record<string, ItemSourceBadges>>({})
     // Подгружаем items при смене секции / подвкладки (Ядро ↔ Архив).
     // В "Источники" items не нужны — там показывается список jobs.
     useEffect(() => {
-        if (!selectedSectionId) { setKnowledgeItems([]); return }
+        if (!selectedSectionId) { setKnowledgeItems([]); setItemBadges({}); return }
         if (knowledgeSubtab === 'sources') return
         let cancelled = false
         setKnowledgeItemsLoading(true)
         listItemsBySection(selectedSectionId, {
             includeArchived: knowledgeSubtab === 'archive',
         })
-            .then(arr => { if (!cancelled) setKnowledgeItems(arr as KnowledgeItem[]) })
-            .catch(() => { if (!cancelled) setKnowledgeItems([]) })
+            .then(async arr => {
+                if (cancelled) return
+                const items = arr as KnowledgeItem[]
+                setKnowledgeItems(items)
+                // Batch fetch badges. Не блокирует render — items уже
+                // показаны, badges дойдут до 200ms позже.
+                try {
+                    const badges = await getItemSourceBadges(items.map(i => i.id))
+                    if (!cancelled) setItemBadges(badges as Record<string, ItemSourceBadges>)
+                } catch {
+                    if (!cancelled) setItemBadges({})
+                }
+            })
+            .catch(() => { if (!cancelled) { setKnowledgeItems([]); setItemBadges({}) } })
             .finally(() => { if (!cancelled) setKnowledgeItemsLoading(false) })
         return () => { cancelled = true }
     }, [selectedSectionId, knowledgeSubtab])
@@ -727,11 +745,18 @@ export default function AiControlCenterClient({
         const arr = await listItemsBySection(selectedSectionId, {
             includeArchived: knowledgeSubtab === 'archive',
         })
-        setKnowledgeItems(arr as KnowledgeItem[])
+        const items = arr as KnowledgeItem[]
+        setKnowledgeItems(items)
         const stats = await getKnowledgeStatsAction()
         setKnowledgeStats(stats as KnowledgeStats)
         const secs = await listKnowledgeSections()
         setSections(secs as KnowledgeSection[])
+        // PR7.12: refresh compact source badges — disable/archive могут
+        // изменить allDisabled статус.
+        try {
+            const badges = await getItemSourceBadges(items.map(i => i.id))
+            setItemBadges(badges as Record<string, ItemSourceBadges>)
+        } catch { /* silent */ }
         // PR5: governance операции (verify/archive/etc) меняют readiness,
         // обновляем безшумно — UI не блокируется на этом запросе.
         refreshReadiness()
@@ -1344,7 +1369,10 @@ export default function AiControlCenterClient({
                 )}
 
                 {/* PR7.5 + 7.12: honest sync stamp с информацией про
-                    конкретный аккаунт, если он известен. */}
+                    конкретный аккаунт, если он известен. PR7.12.2:
+                    + multi-account summary по всем недавним completed
+                    jobs (а не только last). Пользователь сразу видит,
+                    из скольких аккаунтов вообще собирался импорт. */}
                 {lastJob && lastJob.status === 'completed' && lastJob.finishedAt && (() => {
                     const conn = (lastJob as any).connectionId
                         ? channelConnections.find(c => c.id === (lastJob as any).connectionId)
@@ -1354,6 +1382,23 @@ export default function AiControlCenterClient({
                         idle: 'не активен', disconnected: 'отключён',
                         inactive: 'отключён', unknown: '—',
                     }
+                    // Multi-account summary: distinct WA connectionId
+                    // среди всех completed jobs + список каналов TG/MAX
+                    // (для которых impl detail точная привязка не сохранена).
+                    const completed = importJobs.filter(j => j.status === 'completed')
+                    const waConnIds = new Set<string>()
+                    const channelsWithoutAccount = new Set<string>()
+                    for (const j of completed) {
+                        const cid = (j as any).connectionId as string | null
+                        if (cid) waConnIds.add(cid)
+                        else for (const ch of j.channels) {
+                            if (ch !== 'whatsapp') channelsWithoutAccount.add(ch)
+                        }
+                    }
+                    const distinctWa = Array.from(waConnIds)
+                        .map(id => channelConnections.find(c => c.id === id))
+                        .filter(Boolean) as ChannelConnection[]
+                    const showMulti = distinctWa.length > 1 || channelsWithoutAccount.size > 0
                     return (
                         <div className="mt-2 space-y-1">
                             <div className="text-[11px] text-gray-500">
@@ -1371,6 +1416,26 @@ export default function AiControlCenterClient({
                             ) : (
                                 <div className="text-[11px] text-gray-500">
                                     Точный аккаунт не сохранён — это импорт до того, как мы стали запоминать привязку к аккаунту.
+                                </div>
+                            )}
+                            {/* Multi-account summary — отдельная строка ниже */}
+                            {showMulti && (
+                                <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-200">
+                                    {distinctWa.length > 1 && (
+                                        <div>
+                                            Всего за всё время импорт шёл из{' '}
+                                            <b className="text-gray-700">{distinctWa.length}</b> аккаунтов WhatsApp:{' '}
+                                            <span className="text-gray-600">
+                                                {distinctWa.slice(0, 3).map(c => c.label.replace(/^WhatsApp /, '')).join(' · ')}
+                                                {distinctWa.length > 3 && ` · ещё ${distinctWa.length - 3}`}
+                                            </span>
+                                        </div>
+                                    )}
+                                    {Array.from(channelsWithoutAccount).map(ch => (
+                                        <div key={ch} className="text-gray-400">
+                                            {ch === 'telegram' ? 'Telegram' : ch === 'max' ? 'MAX' : ch}: источник аккаунта пока определяется по каналу
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </div>
@@ -1542,33 +1607,54 @@ export default function AiControlCenterClient({
                                         ><X size={12} /></button>
                                     )}
                                 </div>
-                                {/* PR7.6: connection label + live status.
-                                    Видно «из какого аккаунта импорт» и
-                                    «жив ли он сейчас» — не путать с
-                                    job status выше. */}
+                                {/* PR7.6 + PR7.12: connection label + live
+                                    status или явный fallback «источник
+                                    аккаунта неизвестен» для legacy/TG/MAX
+                                    jobs. Пользователь всегда видит ответ
+                                    на «из какого аккаунта». */}
                                 {(() => {
-                                    const conn = (job as any).connectionId
-                                        ? channelConnections.find(c => c.id === (job as any).connectionId)
+                                    const connId = (job as any).connectionId as string | null
+                                    const conn = connId
+                                        ? channelConnections.find(c => c.id === connId)
                                         : null
-                                    if (!conn) return null
                                     const STATUS_LABEL: Record<string, string> = {
                                         ready: 'подключён',     qr: 'ждёт QR',
                                         authenticating: 'входит', idle: 'не активен',
                                         disconnected: 'отключён', inactive: 'отключён',
                                         unknown: '—',
                                     }
-                                    const dotColor =
-                                        conn.isReady ? 'bg-green-500' :
-                                        conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
-                                        'bg-gray-300'
+                                    if (conn) {
+                                        const dotColor =
+                                            conn.isReady ? 'bg-green-500' :
+                                            conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
+                                            'bg-gray-300'
+                                        return (
+                                            <div className="mt-1 ml-5 flex items-center gap-2 text-[11px] text-gray-500">
+                                                <span>{conn.label}</span>
+                                                <span className="text-gray-300">·</span>
+                                                <span className="inline-flex items-center gap-1">
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                                    <span>аккаунт сейчас: {STATUS_LABEL[conn.status] ?? conn.status}</span>
+                                                </span>
+                                            </div>
+                                        )
+                                    }
+                                    if (connId) {
+                                        return (
+                                            <div className="mt-1 ml-5 text-[11px] text-gray-400"
+                                                 title="Этот импорт был привязан к подключению, которого сейчас нет — возможно его удалили.">
+                                                Аккаунт-источник недоступен (возможно подключение удалили)
+                                            </div>
+                                        )
+                                    }
+                                    // connectionId IS NULL — legacy WA или TG/MAX
+                                    const isOnlyWa = job.channels.length === 1 && job.channels[0] === 'whatsapp'
                                     return (
-                                        <div className="mt-1 ml-5 flex items-center gap-2 text-[11px] text-gray-500">
-                                            <span>{conn.label}</span>
-                                            <span className="text-gray-300">·</span>
-                                            <span className="inline-flex items-center gap-1">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                                                <span>аккаунт сейчас: {STATUS_LABEL[conn.status] ?? conn.status}</span>
-                                            </span>
+                                        <div className="mt-1 ml-5 text-[11px] text-gray-400"
+                                             title="Точный аккаунт-источник для этого импорта не сохранён. Для WhatsApp это значит, что импорт был сделан до сохранения привязки. Для Telegram/MAX точечный выбор аккаунта пока в работе.">
+                                            {isOnlyWa
+                                                ? 'Источник аккаунта неизвестен — импорт сделан до сохранения привязки к аккаунтам'
+                                                : 'Источник аккаунта пока определяется по каналу (точечный выбор аккаунта в работе)'}
                                         </div>
                                     )
                                 })()}
@@ -2298,7 +2384,7 @@ export default function AiControlCenterClient({
                         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-gray-500 hover:bg-[#FAFBFC] transition-colors"
                     >
                         <span>
-                            <span className="font-medium text-[#111]">Legacy записи</span>
+                            <span className="font-medium text-[#111]">Старая база FAQ</span>
                             <span className="ml-2 text-gray-400">{kb.length}</span>
                         </span>
                         <span className="text-[11px] text-gray-400">
@@ -2477,6 +2563,55 @@ export default function AiControlCenterClient({
                             <span>· {displayTags.map(t => `#${t}`).join(' ')}</span>
                         )}
                     </div>
+                    {/* PR7.12: compact source-account line — «откуда взято»
+                        одной строкой. Не дублирует existing sources_all_disabled
+                        badge выше (тот amber-warning), а просто перечисляет
+                        конкретные аккаунты. Для manual-entry (sourceCount=0)
+                        и не-доступных badges — не рисуем. */}
+                    {(() => {
+                        const badges = itemBadges[item.id]
+                        if (!badges || item.sourceCount === 0) return null
+                        const named = badges.rows
+                            .filter(r => r.connectionId !== null)
+                            .slice(0, 2)
+                            .map(r => channelConnections.find(c => c.id === r.connectionId))
+                            .filter(Boolean) as ChannelConnection[]
+                        const extra = badges.distinctConnections - named.length
+                        // case 1: только NULL connectionIds (legacy/manual_entry)
+                        if (named.length === 0 && badges.hasUnknownSource) {
+                            return (
+                                <div className="mt-1 text-[10px] text-gray-400 leading-[1.4]"
+                                     title="Эти сообщения были загружены до того, как мы стали запоминать привязку к аккаунту, поэтому точный источник не сохранён.">
+                                    Источник аккаунта неизвестен
+                                </div>
+                            )
+                        }
+                        // case 2: есть известные connectionIds — рисуем список
+                        if (named.length > 0) {
+                            return (
+                                <div className="mt-1 text-[10px] text-gray-500 leading-[1.4] flex flex-wrap gap-x-1.5">
+                                    <span className="text-gray-400">Откуда взято:</span>
+                                    {named.map((c, i) => (
+                                        <span key={c.id} className={i === 0 ? 'text-gray-600' : 'text-gray-500'}>
+                                            {c.label}
+                                        </span>
+                                    ))}
+                                    {extra > 0 && (
+                                        <span className="text-gray-400">
+                                            · ещё {extra}
+                                        </span>
+                                    )}
+                                    {badges.hasUnknownSource && (
+                                        <span className="text-gray-400"
+                                              title="Часть источников этого знания была загружена до того, как мы стали запоминать привязку к аккаунту.">
+                                            · и часть без точного аккаунта
+                                        </span>
+                                    )}
+                                </div>
+                            )
+                        }
+                        return null
+                    })()}
                 </div>
                 {canEdit && (
                     <div className="shrink-0 flex items-start gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2838,7 +2973,7 @@ export default function AiControlCenterClient({
             no_relevant:     'нечего ответить',
             only_drafts:     'только черновики',
             ambiguous:       'неоднозначно',
-            safety_block:    'safety-фильтр',
+            safety_block:    'сработал защитный фильтр',
         }
         const isShadow = trace.retrievalMode === 'shadow'
         const dec = trace.retrievalDecision ?? '—'
@@ -2859,7 +2994,10 @@ export default function AiControlCenterClient({
                         </span>
                     )}
                     {isShadow && (
-                        <span className="text-[10px] text-amber-600">· shadow</span>
+                        <span className="text-[10px] text-amber-600"
+                              title="Это наблюдение из тестового режима — ядро работало в фоне, водителю отвечала старая система.">
+                            · тестовый режим
+                        </span>
                     )}
                     {trace.channel && (
                         <span className="text-[10px] text-gray-400">
@@ -3072,9 +3210,19 @@ export default function AiControlCenterClient({
                                         <span className="text-[13px] font-medium text-[#111]">
                                             {STATUS_LABEL[j.status] ?? j.status}
                                         </span>
-                                        {j.scope?.mode && (
-                                            <span className="text-[11px] text-gray-400">· scope: {j.scope.mode}</span>
-                                        )}
+                                        {j.scope?.mode && (() => {
+                                            // PR7.12: убрали «scope: <mode>» — это
+                                            // внутренний термин. Подменяем human label.
+                                            const SCOPE_HUMAN: Record<string, string> = {
+                                                last_30d: 'за 30 дней',
+                                                last_90d: 'за 90 дней',
+                                                all:      'вся доступная история',
+                                            }
+                                            const lbl = SCOPE_HUMAN[j.scope!.mode!] ?? j.scope!.mode!
+                                            return (
+                                                <span className="text-[11px] text-gray-400">· {lbl}</span>
+                                            )
+                                        })()}
                                         {j.extractionQualityTier && (
                                             <span className="text-[11px] text-gray-400">
                                                 · {TIER_LABEL[j.extractionQualityTier] ?? j.extractionQualityTier}
@@ -3303,13 +3451,35 @@ export default function AiControlCenterClient({
                                     </p>
                                     {/* PR7.12: preview итогового scope —
                                         пользователь видит «откуда» ещё до
-                                        открытия Extraction modal. */}
+                                        открытия Extraction modal. Также
+                                        блок «Не участвуют» — какие
+                                        аккаунты сейчас не попадут и почему. */}
                                     {(() => {
-                                        const ready = channelConnections.filter(c => c.isReady)
                                         const willInclude = channelConnections.filter(c =>
                                             selectedConnectionIds.has(c.id) && (!onlyConnectedNow || c.isReady)
                                         )
-                                        if (willInclude.length === 0) {
+                                        // Не участвуют: либо не отмечен, либо
+                                        // отмечен но не ready при включённом
+                                        // onlyConnectedNow filter.
+                                        const willNotInclude = channelConnections.filter(c =>
+                                            !willInclude.some(w => w.id === c.id)
+                                        )
+                                        // Источник отключённый администратором —
+                                        // sourceStats.sourcesActive === 0 при
+                                        // sourcesTotal > 0.
+                                        const disabledByAdmin = new Set(sourceStats
+                                            .filter(s => s.connectionId && s.sourcesTotal > 0 && s.sourcesActive === 0)
+                                            .map(s => s.connectionId!) as string[])
+                                        const reasonFor = (c: ChannelConnection): string => {
+                                            if (disabledByAdmin.has(c.id)) return 'источник отключён администратором'
+                                            if (!c.isReady && onlyConnectedNow) {
+                                                if (c.status === 'qr' || c.status === 'authenticating') return 'ждёт QR'
+                                                return 'не активен'
+                                            }
+                                            if (!selectedConnectionIds.has(c.id)) return 'не отмечен'
+                                            return ''
+                                        }
+                                        if (willInclude.length === 0 && willNotInclude.length === 0) {
                                             return (
                                                 <div className="text-[11px] text-gray-500">
                                                     Сейчас не выбрано ни одного аккаунта — сбор пройдёт только по уже загруженной истории.
@@ -3317,17 +3487,36 @@ export default function AiControlCenterClient({
                                             )
                                         }
                                         return (
-                                            <div className="text-[11px] text-gray-600 space-y-0.5">
-                                                <div className="text-gray-500">Будет участвовать:</div>
-                                                {willInclude.slice(0, 5).map(c => (
-                                                    <div key={c.id}>· {c.label}</div>
-                                                ))}
-                                                {willInclude.length > 5 && (
-                                                    <div className="text-gray-400">и ещё {willInclude.length - 5}</div>
+                                            <div className="text-[11px] text-gray-600 space-y-1.5">
+                                                {willInclude.length > 0 && (
+                                                    <div className="space-y-0.5">
+                                                        <div className="text-gray-500">Будет участвовать:</div>
+                                                        {willInclude.slice(0, 5).map(c => (
+                                                            <div key={c.id}>· {c.label}</div>
+                                                        ))}
+                                                        {willInclude.length > 5 && (
+                                                            <div className="text-gray-400">и ещё {willInclude.length - 5}</div>
+                                                        )}
+                                                    </div>
                                                 )}
-                                                {ready.length > willInclude.length && (
-                                                    <div className="text-gray-400 pt-0.5">
-                                                        {ready.length - willInclude.length} {ready.length - willInclude.length === 1 ? 'аккаунт не выбран' : 'аккаунта не выбрано'} — можно изменить в модале сбора.
+                                                {willNotInclude.length > 0 && (
+                                                    <div className="space-y-0.5 pt-1">
+                                                        <div className="text-gray-500">Не участвуют:</div>
+                                                        {willNotInclude.slice(0, 5).map(c => {
+                                                            const reason = reasonFor(c)
+                                                            return (
+                                                                <div key={c.id} className="text-gray-500">
+                                                                    · {c.label}
+                                                                    {reason && <span className="text-gray-400"> — {reason}</span>}
+                                                                </div>
+                                                            )
+                                                        })}
+                                                        {willNotInclude.length > 5 && (
+                                                            <div className="text-gray-400">и ещё {willNotInclude.length - 5}</div>
+                                                        )}
+                                                        <div className="text-gray-400 pt-0.5">
+                                                            Можно скорректировать в модале сбора.
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
@@ -3993,7 +4182,7 @@ export default function AiControlCenterClient({
                                                     <span className="font-medium">{CHANNEL_LABEL_LOCAL[channel] ?? channel}:</span>{' '}
                                                     {conns.length} {conns.length === 1 ? 'аккаунт' : conns.length < 5 ? 'аккаунта' : 'аккаунтов'}
                                                     {channel !== 'whatsapp' && (
-                                                        <span className="text-amber-700 text-[11px]"> · фильтр по аккаунту в работе, берётся вся история канала</span>
+                                                        <span className="text-amber-700 text-[11px]"> · точечный выбор аккаунта пока в работе — берётся вся история канала</span>
                                                     )}
                                                 </li>
                                             ))}
@@ -4088,9 +4277,9 @@ export default function AiControlCenterClient({
                                                         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] rounded-t-lg flex items-center justify-between">
                                                             <span>{CHANNEL_LABEL[channel] ?? channel}</span>
                                                             {channel !== 'whatsapp' && (
-                                                                <span title="Для этого канала на схеме сейчас нет привязки сообщения к конкретному аккаунту. Поэтому сбор возьмёт всю историю канала, даже если снять отметку. Точечный фильтр появится позже."
+                                                                <span title="Сейчас для этого канала нельзя точечно выбрать конкретный аккаунт — сбор берёт всю историю канала. Это временно, точечный выбор появится позже."
                                                                       className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
-                                                                    фильтр в работе
+                                                                    точечный выбор аккаунта пока в работе
                                                                 </span>
                                                             )}
                                                         </div>

@@ -546,6 +546,10 @@ export type {
     KnowledgeSource,
     KnowledgeStats,
 } from '@/lib/ai/knowledge/queries'
+export type {
+    ItemSourceBadges,
+    ItemSourceBadgeRow,
+} from '@/lib/ai/knowledge/queries'
 
 export async function listKnowledgeSections() {
     return knowledgeQueries.listKnowledgeSections()
@@ -553,6 +557,20 @@ export async function listKnowledgeSections() {
 
 export async function listItemsBySection(sectionId: string, opts?: { includeArchived?: boolean }) {
     return knowledgeQueries.listItemsBySection(sectionId, opts ?? {})
+}
+
+/** PR7.12: batch source badges для compact preview на карточке item.
+ *  «Откуда взято» одной строкой. Read-only, без permission-фильтра —
+ *  возвращает только агрегаты count'ов и connectionId, без PII excerpt. */
+export async function getItemSourceBadges(itemIds: string[]) {
+    if (itemIds.length === 0) {
+        return {} as Record<string, knowledgeQueries.ItemSourceBadges>
+    }
+    const map = await knowledgeQueries.getItemSourceBadges(itemIds)
+    // Server actions сериализуют только plain объекты, не Map.
+    const out: Record<string, knowledgeQueries.ItemSourceBadges> = {}
+    for (const [k, v] of map.entries()) out[k] = v
+    return out
 }
 
 // getItemWithSources объявлен ниже (PR2.5) с permission-фильтром sources.
