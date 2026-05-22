@@ -2110,9 +2110,14 @@ export default function AiControlCenterClient({
     )
     }
 
-    // ─── Вкладка: Правила ─────────────────────────────────────────
+    // ─── Вкладка: Стиль общения ────────────────────────────────────
+    // PR9.34: переименована из «Правила». Главное содержимое — профили
+    // общения (ProfilesEditor). Operational settings (режим / каналы /
+    // пороги) свернуты в «Дополнительные настройки» — видны, но не
+    // главные, как user попросил.
 
-    const [rulesSaving, setRulesSaving] = useState(false)
+    const [rulesSaving,   setRulesSaving]   = useState(false)
+    const [showAdvanced,  setShowAdvanced]  = useState(false)
 
     const handleSaveRules = async () => {
         // Промпт-поля (role/tone/allowed/forbidden) больше не идут через
@@ -2127,7 +2132,7 @@ export default function AiControlCenterClient({
                 maxAutoRepliesPerChat: config.maxAutoRepliesPerChat,
                 activeChannels:        config.activeChannels,
             })
-            showToast('Правила сохранены')
+            showToast('Настройки сохранены')
         } catch (e: any) {
             showToast('Ошибка: ' + e.message)
         } finally {
@@ -2137,6 +2142,52 @@ export default function AiControlCenterClient({
 
     const RulesTab = () => (
         <div className="space-y-6">
+            {/* PR9.34: верхнее InlineInfo — про стиль общения (главное),
+                а не «Начните с Советует» (это про operational mode, его
+                перенесли вниз в «Дополнительные настройки»). */}
+            <InlineInfo>
+                Стиль общения определяет, как AI разговаривает с водителями: на «ты»
+                или на «вы», какие фразы использует, что отвечать и что не отвечать.
+                Можно держать несколько стилей и переключать активный.
+            </InlineInfo>
+
+            {/* Главное содержимое — профили стиля общения */}
+            <ProfilesEditor
+                profiles={profiles}
+                setProfiles={setProfiles}
+                activeProfileId={activeProfileId}
+                setActiveProfileId={setActiveProfileId}
+                canEdit={canEdit}
+                showToast={showToast}
+            />
+
+            {/* PR9.34: «Дополнительные настройки» — collapsible.
+                Режим (Что AI делает) + каналы + пороги уверенности.
+                Видно, но не главное — раньше занимало 40% экрана сверху,
+                сдвигая профили в самый низ. */}
+            <div className="border-t border-[#E8E8E8] pt-4">
+                <button
+                    type="button"
+                    onClick={() => setShowAdvanced(v => !v)}
+                    className="w-full flex items-center justify-between gap-2 text-[13px] text-gray-600 hover:text-[#111] transition-colors"
+                >
+                    <span className="font-semibold">Дополнительные настройки</span>
+                    <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                        {showAdvanced ? 'свернуть' : 'развернуть'}
+                        {showAdvanced
+                            ? <ChevronUp size={13} />
+                            : <ChevronDown size={13} />}
+                    </span>
+                </button>
+                {!showAdvanced && (
+                    <div className="text-[11px] text-gray-400 mt-1">
+                        Режим работы AI, активные каналы, порог уверенности
+                    </div>
+                )}
+            </div>
+
+            {showAdvanced && (
+                <>
             <InlineInfo>
                 Начните с «Советует». Когда в Журнале увидите, что AI отвечает правильно — переключитесь на «Автоответ».
             </InlineInfo>
@@ -2244,29 +2295,20 @@ export default function AiControlCenterClient({
                 </div>
             </div>
 
-            {/* Стиль общения — управляется через профили. Раньше тут
-                жили 4 textarea, напрямую писавшие в AiAgentConfig
-                (promptRole/Tone/Allowed/Forbidden). Теперь — отдельная
-                сущность AiAgentProfile, можно держать несколько стилей
-                и переключать активный (по аналогии с проектами в
-                /settings/integrations/ai-call-scenarios). */}
-            <ProfilesEditor
-                profiles={profiles}
-                setProfiles={setProfiles}
-                activeProfileId={activeProfileId}
-                setActiveProfileId={setActiveProfileId}
-                canEdit={canEdit}
-                showToast={showToast}
-            />
-
+            {/* PR9.34: ProfilesEditor вынесен наверх в RulesTab — это главное
+                содержимое вкладки «Стиль общения». Кнопка «Сохранить»
+                сохраняет operational settings (режим / каналы / пороги).
+                Профили save'ятся отдельно через свои кнопки внутри редактора. */}
             <button
                 onClick={handleSaveRules}
                 disabled={rulesSaving}
                 className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
             >
                 <Save size={11} />
-                {rulesSaving ? 'Сохраняем...' : 'Сохранить правила'}
+                {rulesSaving ? 'Сохраняем...' : 'Сохранить настройки'}
             </button>
+                </>
+            )}
         </div>
     )
 
@@ -5290,7 +5332,7 @@ export default function AiControlCenterClient({
     const ALL_TABS = [
         { key: 'sync',      label: 'База сообщений', icon: Database },
         { key: 'provider',  label: 'AI Провайдер',  icon: Zap },
-        { key: 'rules',     label: 'Правила',        icon: Settings },
+        { key: 'rules',     label: 'Стиль общения',  icon: Settings },
         { key: 'kb',        label: 'База знаний',    icon: BookOpen },
         // "Ядро знаний" — AI Knowledge Core (PR1 read-only).
         { key: 'knowledge', label: 'Ядро знаний',    icon: Library },
