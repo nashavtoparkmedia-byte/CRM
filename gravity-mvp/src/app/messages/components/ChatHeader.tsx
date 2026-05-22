@@ -170,16 +170,41 @@ export default function ChatHeader({
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
                                 <h3 className="font-semibold text-[15px] text-[#111] leading-none shrink-0">
-                                    {/* Header priority: linked driver ФИО → resolved contact displayName
-                                        → raw chat.name (channel username) → fallback. Contact is the
-                                        right answer for chats opened from "+ search by phone" where
-                                        chat.name is just the messenger handle ("Check"). */}
-                                    {chat.driver?.fullName || chat.contact?.displayName || chat.name || "Водитель"}
+                                    {/* PR9.56: Header title priority. Раньше дублировал subtitle
+                                        для WA/TG/MAX, где externalChatId это внутренний ID
+                                        ("69501244690559@lid", "telegram:620303840", "51849311").
+                                        Чистая иерархия:
+                                          1. ФИО водителя (если привязан)
+                                          2. Имя контакта (displayName из CRM)
+                                          3. chat.name (то что прислал мессенджер — номер или ник)
+                                          4. Fallback "Контакт"
+                                        Subtitle ниже показывается ТОЛЬКО если содержит инфу,
+                                        отличную от title (например другой телефон). */}
+                                    {chat.driver?.fullName || chat.contact?.displayName || chat.name || "Контакт"}
                                 </h3>
-                                <span className="text-[11px] text-gray-400">·</span>
-                                <span className="text-[11px] text-gray-500 font-mono truncate">{chat.driver?.phone || chat.externalChatId?.split(':')[1] || chat.externalChatId}</span>
-                                <span className="text-[11px] text-gray-400">·</span>
-                                <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
+                                {/* PR9.56: subtitle — только если несёт новую инфу.
+                                    Скрываем сырые externalChatId типа "69501244690559@lid"
+                                    или "telegram:620303840" — пользователю они не нужны. */}
+                                {(() => {
+                                    const title    = chat.driver?.fullName || chat.contact?.displayName || chat.name || ''
+                                    const phone    = chat.driver?.phone
+                                    // Показываем номер только если он реально отличается от title
+                                    // (часто chat.name = номер для WA — тогда subtitle не нужна)
+                                    const subtitle = phone && phone !== title ? phone : null
+                                    if (!subtitle) {
+                                        return (
+                                            <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
+                                        )
+                                    }
+                                    return (
+                                        <>
+                                            <span className="text-[11px] text-gray-400">·</span>
+                                            <span className="text-[11px] text-gray-500 font-mono truncate">{subtitle}</span>
+                                            <span className="text-[11px] text-gray-400">·</span>
+                                            <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
+                                        </>
+                                    )
+                                })()}
                             </div>
                         </div>
 
