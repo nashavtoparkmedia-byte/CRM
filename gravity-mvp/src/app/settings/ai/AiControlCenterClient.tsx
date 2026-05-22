@@ -3828,6 +3828,17 @@ export default function AiControlCenterClient({
             arr.push({ conn, stat, participated })
             participatingByChannel.set(conn.channel, arr)
         }
+        // PR7.16.2: channel-level entries для TG/MAX источников
+        // с connectionId=NULL. Schema пока не хранит точечную
+        // привязку chat→connection для TG/MAX, поэтому в
+        // AiKnowledgeSource они идут с NULL. Без этого блока
+        // пользователь не видит что TG/MAX «участвовали» в ядре
+        // — он видит только WA-аккаунты. Channel-level entries
+        // покрывают этот пробел honest-way: «канал участвовал,
+        // точечный аккаунт не сохранён».
+        const channelLevelParticipation = sourceStats
+            .filter(s => s.connectionId === null && s.sourcesActive > 0)
+            .map(s => ({ channel: s.channel, stat: s }))
 
         // Last extraction progress — pull человеческие counts из
         // progress JSON блоба (без типизации со стороны readiness).
@@ -3923,40 +3934,66 @@ export default function AiControlCenterClient({
                                 <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                                     Собрано из
                                 </div>
-                                {participatingByChannel.size === 0 ? (
+                                {participatingByChannel.size === 0 && channelLevelParticipation.length === 0 ? (
                                     <div className="text-[12px] text-gray-500">
                                         Источники недоступны. Нужно подключить мессенджер.
                                     </div>
                                 ) : (
                                     <div className="space-y-1.5">
-                                        {[...participatingByChannel.entries()].map(([channel, conns]) => (
-                                            <div key={channel} className="text-[12px]">
-                                                <div className="font-medium text-[#111]">
-                                                    {CHANNEL_LABEL_LOCAL[channel] ?? channel}
-                                                </div>
-                                                {conns.slice(0, 4).map(({ conn, participated }) => {
-                                                    const status = STATUS_LABEL_LOCAL[conn.status] ?? conn.status
-                                                    return (
-                                                        <div key={conn.id} className="text-[11px] text-gray-600 leading-snug pl-2">
-                                                            — {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '')}
-                                                            <span className="text-gray-400"> · {status}</span>
-                                                            <span className={participated ? 'text-green-700' : 'text-gray-400'}>
-                                                                {' '}· {participated ? 'участвовал' : 'не участвовал'}
+                                        {/* PR7.16.2: показываем каналы в стабильном порядке.
+                                            Сначала те у которых есть per-account inputs (WA),
+                                            потом channel-level only (TG/MAX). */}
+                                        {(['whatsapp', 'telegram', 'max'] as const).map(channel => {
+                                            const conns = participatingByChannel.get(channel) ?? []
+                                            const channelLevel = channelLevelParticipation.find(p => p.channel === channel)
+                                            // Если у канала ни per-account, ни channel-level
+                                            // активных sources — не показываем (пропускаем
+                                            // «не участвовал» entries чтобы не загромождать).
+                                            const hasParticipated = conns.some(c => c.participated) || !!channelLevel
+                                            if (!hasParticipated && conns.length === 0) return null
+                                            return (
+                                                <div key={channel} className="text-[12px]">
+                                                    <div className="font-medium text-[#111]">
+                                                        {CHANNEL_LABEL_LOCAL[channel] ?? channel}
+                                                    </div>
+                                                    {/* Per-account rows (только WA сейчас имеет реальное mapping) */}
+                                                    {conns.slice(0, 4).map(({ conn, participated }) => {
+                                                        const status = STATUS_LABEL_LOCAL[conn.status] ?? conn.status
+                                                        return (
+                                                            <div key={conn.id} className="text-[11px] text-gray-600 leading-snug pl-2">
+                                                                — {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '')}
+                                                                <span className="text-gray-400"> · {status}</span>
+                                                                <span className={participated ? 'text-green-700' : 'text-gray-400'}>
+                                                                    {' '}· {participated ? 'участвовал' : 'не участвовал'}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                    {conns.length > 4 && (
+                                                        <div className="text-[11px] text-gray-400 pl-2">
+                                                            и ещё {conns.length - 4}
+                                                        </div>
+                                                    )}
+                                                    {/* Channel-level entry: если у канала есть sources
+                                                        без connectionId (TG/MAX legacy) — отдельная
+                                                        строка с явным пояснением. */}
+                                                    {channelLevel && (
+                                                        <div className="text-[11px] text-gray-600 leading-snug pl-2">
+                                                            — <span className="text-green-700">канал участвовал</span>
+                                                            <span className="text-gray-400">
+                                                                {' '}· {channelLevel.stat.sourcesActive} источников
+                                                                {' '}· точечный аккаунт не сохранён
                                                             </span>
                                                         </div>
-                                                    )
-                                                })}
-                                                {conns.length > 4 && (
-                                                    <div className="text-[11px] text-gray-400 pl-2">
-                                                        и ещё {conns.length - 4}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
+                                                    )}
+                                                </div>
+                                            )
+                                        })}
                                         {/* Honest disclaimer about unknown-source items */}
-                                        {knowledgeStats.totalSources > 0 && readiness.counts.activeItems > 0 && (
+                                        {knowledgeStats.totalSources > 0 && readiness.counts.activeItems > 0 && channelLevelParticipation.length > 0 && (
                                             <div className="text-[11px] text-gray-400 pt-1.5 border-t border-[#F0F0F0] leading-relaxed">
-                                                Часть старых знаний может быть без точной привязки к аккаунту — это импорт до сохранения привязки.
+                                                Для Telegram и MAX точечная привязка знания к конкретному
+                                                аккаунту пока не сохраняется — будет в следующих обновлениях.
                                             </div>
                                         )}
                                     </div>
