@@ -7,6 +7,7 @@ import ChatChannelTabs from "./ChatChannelTabs"
 import MessageFeed from "./MessageFeed"
 import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
 import AiProposedReplyBubble from "./AiProposedReplyBubble"
+import AiCoachModal from "./AiCoachModal"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import { useProposedReply } from "../hooks/useProposedReply"
@@ -126,12 +127,20 @@ function ChatWorkspaceInner({
     const ai = useProposedReply(effectiveChatId)
     const [aiPrefillText, setAiPrefillText] = useState<string>('')
     const [aiPrefillToken, setAiPrefillToken] = useState<number>(0)
+    // PR9.55: «Поправить» теперь открывает Coach modal вместо простого copy
+    const [coachOpen, setCoachOpen] = useState<{
+        proposalId: string
+        draft:      string
+    } | null>(null)
     const handleAiTake = useCallback(async () => {
-        const text = await ai.take()
-        if (text) {
-            setAiPrefillText(text)
-            setAiPrefillToken(t => t + 1)
-        }
+        // proposal нужен ДО take() — после take() он становится null
+        if (!ai.proposal) return
+        setCoachOpen({
+            proposalId: ai.proposal.id,
+            draft:      ai.proposal.text,
+        })
+        // Mark proposal as taken (для analytics — менеджер начал редактировать)
+        await ai.take()
     }, [ai])
     // PR9.54: 👍 «Правильно» — confirmCorrect + copy в input + toast.
     const handleAiConfirmCorrect = useCallback(async () => {
@@ -291,6 +300,27 @@ function ChatWorkspaceInner({
                 onConfirmCorrect={handleAiConfirmCorrect}
                 onDismiss={ai.dismiss}
             />
+
+            {/* PR9.55: AI Coach modal — открывается по «Поправить». User правит
+                draft, AI понимает diff vs Ядро, предлагает обновить items.
+                После apply (или skip) — корректный текст копируется в input. */}
+            {coachOpen && (
+                <AiCoachModal
+                    proposalId={coachOpen.proposalId}
+                    originalDraft={coachOpen.draft}
+                    onClose={() => setCoachOpen(null)}
+                    onApply={(correctedText, applyRes) => {
+                        // Текст идёт в input bar для отправки
+                        setAiPrefillText(correctedText)
+                        setAiPrefillToken(t => t + 1)
+                        // Лог в console (можно расширить toast'ом)
+                        if (applyRes && applyRes.applied.length > 0) {
+                            console.log(`[ai-coach] обновлено в Ядре: ${applyRes.applied.length}`)
+                        }
+                        setCoachOpen(null)
+                    }}
+                />
+            )}
 
             <MessageInputArea
                 chatId={chatId}

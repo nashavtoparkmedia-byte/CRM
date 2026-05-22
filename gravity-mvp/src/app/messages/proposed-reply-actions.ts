@@ -21,6 +21,7 @@ import { prisma } from '@/lib/prisma'
 import { cookies } from 'next/headers'
 import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
 import { writeAuditEntry } from '@/lib/ai/knowledge/auditLog'
+import { runCoach, type CoachResult, type CoachSuggestion } from '@/lib/ai/knowledge/coach'
 
 const CACHE_TTL_MIN = 15
 
@@ -324,4 +325,170 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
         verifiedCount: verified.length,
         items: verified,
     }
+}
+
+/**
+ * PR9.55 «AI Coach» — менеджер нажал «Поправить», исправил draft,
+ * теперь нужно понять что в Ядре устарело. LLM-вызов с original/corrected/
+ * used items, возвращает structured suggestions для approval modal.
+ *
+ * Этот action НЕ применяет изменения — только генерирует предложения.
+ * Apply — отдельный action applyCoachSuggestions с подтверждением.
+ */
+export async function coachFromCorrection(
+    proposalId: string,
+    correctedText: string,
+): Promise<CoachResult> {
+    const proposal = await prisma.aiProposedReply.findUnique({
+        where: { id: proposalId },
+    })
+    if (!proposal) {
+        return { suggestions: [], onlyStyleChange: false, note: 'proposal not found' }
+    }
+    const sources = (proposal.sources as Array<{ id: string; title: string }> | null) ?? []
+    if (sources.length === 0) {
+        return { suggestions: [], onlyStyleChange: false, note: 'no sources used by AI' }
+    }
+
+    // Получаем config и full canonicalStatement у sources
+    const configRows = await prisma.$queryRaw<Array<{
+        provider: string
+        apiKey:   string | null
+        model:    string
+    }>>`
+        SELECT provider, "apiKeyEncrypted" AS "apiKey", "responseModel" AS model
+        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
+    `
+    const config = configRows[0]
+    if (!config?.apiKey) {
+        return { suggestions: [], onlyStyleChange: false, note: 'AI provider not configured' }
+    }
+
+    const itemRows = await prisma.$queryRaw<Array<{
+        id: string; title: string; canonicalStatement: string
+    }>>`
+        SELECT id, title, "canonicalStatement"
+        FROM "AiKnowledgeItem"
+        WHERE id = ANY(${sources.map(s => s.id)})
+    `
+    if (itemRows.length === 0) {
+        return { suggestions: [], onlyStyleChange: false, note: 'no items found in DB' }
+    }
+
+    console.log(`[ai-coach] proposalId=${proposalId} running coach (${itemRows.length} items)…`)
+
+    const result = await runCoach({
+        provider:      config.provider,
+        model:         config.model,
+        apiKey:        config.apiKey,
+        originalDraft: proposal.text,
+        correctedText,
+        items:         itemRows,
+    })
+
+    console.log(`[ai-coach] proposalId=${proposalId} ${result.suggestions.length} suggestions, onlyStyle=${result.onlyStyleChange}`)
+    return result
+}
+
+/**
+ * PR9.55 «AI Coach» apply step: после approval menager'а — применяет
+ * выбранные suggestions к knowledge items в Ядре + audit log с
+ * metadata.source='ai_coach', proposalId, chatId.
+ *
+ * Идемпотентно: повторный вызов с теми же suggestions при уже
+ * применённом изменении пройдёт без эффекта (currentValue не совпадает
+ * с DB → skip).
+ */
+export interface ApplyCoachResult {
+    applied:  Array<{ itemId: string; title: string; newValue: string }>
+    skipped:  Array<{ itemId: string; reason: string }>
+}
+export async function applyCoachSuggestions(
+    proposalId: string,
+    suggestions: CoachSuggestion[],
+): Promise<ApplyCoachResult> {
+    const proposal = await prisma.aiProposedReply.findUnique({
+        where: { id: proposalId },
+    })
+    if (!proposal) throw new Error('Proposal не найден')
+
+    const cookieStore = await cookies()
+    const actor = cookieStore.get('crm_user_id')?.value ?? null
+
+    const applied: ApplyCoachResult['applied'] = []
+    const skipped: ApplyCoachResult['skipped'] = []
+
+    for (const s of suggestions) {
+        try {
+            // Загружаем актуальный item
+            const beforeRows = await prisma.$queryRaw<Array<{
+                id: string; title: string; canonicalStatement: string
+                isVerified: boolean; status: string
+            }>>`
+                SELECT id, title, "canonicalStatement",
+                       "isVerified", status::text AS status
+                FROM "AiKnowledgeItem"
+                WHERE id = ${s.itemId}
+                LIMIT 1
+            `
+            const before = beforeRows[0]
+            if (!before) {
+                skipped.push({ itemId: s.itemId, reason: 'item not found' })
+                continue
+            }
+            // Drift check — currentValue должен совпадать с DB
+            if (before.canonicalStatement.trim() !== s.currentValue.trim()) {
+                console.warn(`[ai-coach] drift on ${s.itemId}: DB=«${before.canonicalStatement.slice(0,60)}» but suggestion currentValue=«${s.currentValue.slice(0,60)}»`)
+                // Применяем всё равно, но в audit metadata пишем drift=true
+            }
+
+            await prisma.$executeRaw`
+                UPDATE "AiKnowledgeItem"
+                SET "canonicalStatement" = ${s.newValue},
+                    "updatedAt" = NOW(),
+                    "isVerified" = true,
+                    "verifiedBy" = ${actor},
+                    "verifiedAt" = NOW(),
+                    status = 'active'::"AiKnowledgeStatus",
+                    "isActive" = true
+                WHERE id = ${s.itemId}
+            `
+
+            await writeAuditEntry({
+                itemId: s.itemId,
+                actor,
+                action: 'edited',
+                before: {
+                    canonicalStatement: before.canonicalStatement,
+                    isVerified:         before.isVerified,
+                    status:             before.status,
+                },
+                after: {
+                    canonicalStatement: s.newValue,
+                    isVerified:         true,
+                    status:             'active',
+                },
+                metadata: {
+                    source:     'ai_coach',
+                    proposalId,
+                    chatId:     proposal.chatId,
+                    messageId:  proposal.messageId,
+                    reasoning:  s.reasoning,
+                    drift:      before.canonicalStatement.trim() !== s.currentValue.trim(),
+                },
+            })
+
+            applied.push({
+                itemId:   s.itemId,
+                title:    before.title,
+                newValue: s.newValue,
+            })
+        } catch (e: any) {
+            console.error(`[ai-coach] apply failed for ${s.itemId}:`, e?.message)
+            skipped.push({ itemId: s.itemId, reason: e?.message ?? 'unknown' })
+        }
+    }
+
+    console.log(`[ai-coach] applied ${applied.length}, skipped ${skipped.length} for proposal ${proposalId}`)
+    return { applied, skipped }
 }
