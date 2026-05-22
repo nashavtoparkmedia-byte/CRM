@@ -1406,15 +1406,19 @@ export default function AiControlCenterClient({
                         Ни одного подключения нет. Добавьте WhatsApp / Telegram / MAX в разделе «Интеграции».
                     </div>
                 ) : (
-                    // PR9.12: группировка по каналу в фиксированном порядке WA → TG → MAX
+                    // PR9.12 + PR9.41: группировка по каналу в фиксированном
+                    // порядке WA → TG → MAX → Звонки. Voice появляется только
+                    // если listChannelConnections вернул voice_all entry (есть
+                    // транскрипты в БД).
                     <div className="space-y-4">
-                        {(['whatsapp', 'telegram', 'max'] as const).map(channel => {
+                        {(['whatsapp', 'telegram', 'max', 'phone'] as const).map(channel => {
                             const channelConns = channelConnections.filter(c => c.channel === channel)
                             if (channelConns.length === 0) return null
                             const CHANNEL_TITLE: Record<string, string> = {
                                 whatsapp: 'WhatsApp',
                                 telegram: 'Telegram',
                                 max:      'MAX',
+                                phone:    'Звонки',
                             }
                             return (
                             <div key={channel}>
@@ -1438,6 +1442,7 @@ export default function AiControlCenterClient({
                             const channelHref =
                                 conn.channel === 'whatsapp' ? '/settings/integrations/whatsapp' :
                                 conn.channel === 'telegram' ? '/settings/integrations/telegram' :
+                                conn.channel === 'phone'    ? '/settings/integrations/telephony' :
                                 '/settings/integrations/max'
                             // PR9.10: color-coded background
                             // зелёный для подключённых, красный — отключённых,
@@ -1474,9 +1479,11 @@ export default function AiControlCenterClient({
                                     <div className="space-y-0.5">
                                         <div className="text-[13px] text-[#111]">
                                             <b className="text-[18px] font-bold">{messages.toLocaleString('ru')}</b>{' '}
-                                            <span className="text-gray-600">сообщ. в БД</span>
+                                            <span className="text-gray-600">
+                                                {conn.channel === 'phone' ? 'разгов. в БД' : 'сообщ. в БД'}
+                                            </span>
                                         </div>
-                                        {chats > 0 && (
+                                        {chats > 0 && conn.channel !== 'phone' && (
                                             <div className="text-[12px] text-gray-600">
                                                 {chats.toLocaleString('ru')} {chats === 1 ? 'чат' : chats < 5 ? 'чата' : 'чатов'}
                                             </div>

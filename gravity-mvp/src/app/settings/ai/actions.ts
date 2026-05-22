@@ -1785,7 +1785,8 @@ function maskPhone(raw: string | null): string | null {
  *
  *  Read-only, без cookie checks — counts не несут PII. */
 export interface ChannelTotalsRow {
-    channel:        'whatsapp' | 'telegram' | 'max'
+    // PR9.41: 'phone' добавлен — voice звонки как 4-й канал в counts.
+    channel:        'whatsapp' | 'telegram' | 'max' | 'phone'
     messages:       number
     chats:          number
     contacts:       number
@@ -1900,7 +1901,7 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
             WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
             GROUP BY COALESCE(wc."connectionId", c.metadata->>'connectionId')
         `
-        return rows
+        const result: ConnectionMessageCount[] = rows
             .filter(r => r.connectionId !== null)
             .map(r => ({
                 connectionId:   r.connectionId!,
@@ -1910,6 +1911,47 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
                 earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
                 latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
             }))
+
+        // PR9.41: добавляем virtual voice_all entry из Call таблицы.
+        // Звонки хранятся в Call, а не Message — отдельный COUNT.
+        // messages = транскрипты звонков, chats = звонки же
+        // (1 transcript = 1 conversation), contacts — distinct contactId.
+        try {
+            const voiceRows = await prisma.$queryRaw<Array<{
+                messages:       number
+                contacts:       number
+                earliestSentAt: Date | null
+                latestSentAt:   Date | null
+            }>>`
+                SELECT
+                    COUNT(*)::int                              AS messages,
+                    COUNT(DISTINCT "contactId")::int           AS contacts,
+                    MIN("startedAt")                           AS "earliestSentAt",
+                    MAX("startedAt")                           AS "latestSentAt"
+                FROM "Call"
+                WHERE transcript IS NOT NULL
+                  AND length(transcript) > 50
+            `
+            const v = voiceRows[0]
+            if (v && Number(v.messages ?? 0) > 0) {
+                result.push({
+                    connectionId:   'voice_all',
+                    messages:       Number(v.messages ?? 0),
+                    // chats = messages (1 transcript = 1 conversation),
+                    // показывается на UI как «N разговоров».
+                    chats:          Number(v.messages ?? 0),
+                    contacts:       Number(v.contacts ?? 0),
+                    earliestSentAt: v.earliestSentAt ? new Date(v.earliestSentAt).toISOString() : null,
+                    latestSentAt:   v.latestSentAt   ? new Date(v.latestSentAt).toISOString()   : null,
+                })
+            }
+        } catch (e: any) {
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[getMessageCountsByConnection] voice failed:', e?.message)
+            }
+        }
+
+        return result
     } catch (e: any) {
         if (process.env.NODE_ENV !== 'production') {
             console.error('[getMessageCountsByConnection] failed:', e?.message)
@@ -1935,13 +1977,47 @@ export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
             WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
             GROUP BY m.channel
         `
-        return rows.map(r => ({
+        const result: ChannelTotalsRow[] = rows.map(r => ({
             channel:       r.channel as ChannelTotalsRow['channel'],
             messages:      Number(r.messages ?? 0),
             chats:         Number(r.chats ?? 0),
             contacts:      Number(r.contacts ?? 0),
             lastMessageAt: r.lastMessageAt ? new Date(r.lastMessageAt).toISOString() : null,
         }))
+
+        // PR9.41: добавляем phone channel из Call таблицы. Транскрипты
+        // хранятся отдельно от Message, считаем напрямую: каждый Call
+        // c transcript = «один разговор» (chats=messages), contacts —
+        // distinct contactId.
+        try {
+            const voiceRows = await prisma.$queryRaw<Array<{
+                messages: number; contacts: number; lastMessageAt: Date | null
+            }>>`
+                SELECT
+                    COUNT(*)::int                              AS messages,
+                    COUNT(DISTINCT "contactId")::int           AS contacts,
+                    MAX("startedAt")                           AS "lastMessageAt"
+                FROM "Call"
+                WHERE transcript IS NOT NULL
+                  AND length(transcript) > 50
+            `
+            const v = voiceRows[0]
+            if (v && Number(v.messages ?? 0) > 0) {
+                result.push({
+                    channel:       'phone',
+                    messages:      Number(v.messages ?? 0),
+                    chats:         Number(v.messages ?? 0),
+                    contacts:      Number(v.contacts ?? 0),
+                    lastMessageAt: v.lastMessageAt ? new Date(v.lastMessageAt).toISOString() : null,
+                })
+            }
+        } catch (e: any) {
+            if (process.env.NODE_ENV !== 'production') {
+                console.error('[getChannelTotalsForUi] voice failed:', e?.message)
+            }
+        }
+
+        return result
     } catch (e: any) {
         if (process.env.NODE_ENV !== 'production') {
             console.error('[getChannelTotalsForUi] failed:', e?.message)
