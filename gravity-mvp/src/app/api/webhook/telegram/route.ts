@@ -91,6 +91,18 @@ export async function POST(req: NextRequest) {
             // USE BOT TIMESTAMP FOR STABLE SORTING
             const sentAt = timestamp ? new Date(timestamp) : new Date()
 
+            // PR-А: Chat.name приоритет — real name > @username > TG id.
+            // firstName/lastName приходят от tg-bot в payload (он их уже шлёт),
+            // но раньше webhook их игнорировал, fallback'ом был `TG <id>`.
+            const tgDisplayName = (() => {
+                const fn = (firstName ?? '').trim()
+                const ln = (lastName  ?? '').trim()
+                const fullName = [fn, ln].filter(Boolean).join(' ').trim()
+                if (fullName) return fullName
+                if (username)  return `@${username}`
+                return `TG ${telegramId}`
+            })()
+
             // RETRY LOOP FOR UPSERT (concurrency protection)
             let unifiedChat;
             let retries = 3;
@@ -98,11 +110,14 @@ export async function POST(req: NextRequest) {
                 try {
                     unifiedChat = await (prisma.chat as any).upsert({
                         where: { externalChatId },
-                        update: { lastMessageAt: sentAt },
+                        // PR-А: при update тоже обновляем name — для existing
+                        // чатов с устаревшим `TG <id>` имя приходит c новым
+                        // inbound и автоматически апдейтится. Live backfill.
+                        update: { lastMessageAt: sentAt, name: tgDisplayName },
                         create: {
                             externalChatId,
                             channel: 'telegram',
-                            name: username ? `@${username}` : `TG ${telegramId}`,
+                            name: tgDisplayName,
                             lastMessageAt: sentAt
                         }
                     })
@@ -128,11 +143,12 @@ export async function POST(req: NextRequest) {
 
             // ── Contact Model dual write ──────────────────────────────
             try {
+                // PR-А: Contact.displayName тоже приоритет — real name > @username
                 const contactResult = await ContactService.resolveContact(
                     'telegram',
                     telegramId.toString(),
                     null,  // Bot webhook не передаёт номер телефона
-                    username ? `@${username}` : null,
+                    tgDisplayName === `TG ${telegramId}` ? null : tgDisplayName,
                 )
                 await ContactService.ensureChatLinked(
                     unifiedChat.id,

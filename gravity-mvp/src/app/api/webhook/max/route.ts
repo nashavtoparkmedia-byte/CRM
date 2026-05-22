@@ -1,8 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { DriverMatchService } from '@/lib/DriverMatchService'
+import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import crypto from 'crypto'
+
+// PR-Г: placeholder detection — name = "..", ". .", "TG NNN", pure digits.
+// Используется для умного update: новое реальное имя замещает placeholder
+// без overwrite уже хорошего имени.
+function isPlaceholderName(name?: string | null): boolean {
+    if (!name) return true
+    const t = name.trim()
+    if (!t) return true
+    if (/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+\d+$/i.test(t)) return true
+    if (/^\d+$/.test(t)) return true
+    if (/^[.\s\-]+$/.test(t)) return true
+    return false
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -114,25 +128,71 @@ export async function POST(req: NextRequest) {
             where: { externalChatId }
         })
 
+        // PR-Г: name приоритет — реальное имя > телефон > "MAX user".
+        // Не overwrite-им хорошее имя placeholder'ом.
+        const bestName = (() => {
+            const dn = (driverName ?? '').trim()
+            if (dn && !isPlaceholderName(dn)) return dn
+            if (phoneDigits) return `+${phoneDigits}`
+            if (dn) return dn  // placeholder лучше чем ничего
+            return `MAX ${externalChatId}`
+        })()
+
         if (!unifiedChat) {
             unifiedChat = await (prisma.chat as any).create({
                 data: {
                     externalChatId,
                     channel: 'max',
-                    name: driverName || phone,
+                    name: bestName,
                     lastMessageAt: sentAt,
                     status: 'new'
                 }
             })
         } else {
+            // Update name только если current placeholder, а новое — лучше
+            const shouldUpdateName = isPlaceholderName(unifiedChat.name) && !isPlaceholderName(bestName)
             unifiedChat = await (prisma.chat as any).update({
                 where: { id: unifiedChat.id },
-                data: { 
+                data: {
                     lastMessageAt: sentAt,
-                    // Optionally update name if scraper found a better one and current is just a number
-                    ...(driverName && unifiedChat.name === phone ? { name: driverName } : {})
+                    ...(shouldUpdateName ? { name: bestName } : {})
                 }
             })
+        }
+
+        // PR-Г: ContactService integration. Раньше для MAX не вызывался —
+        // Contact не создавался, displayName не сохранялся. Теперь:
+        // — если есть phone, используем его как identity
+        // — displayName = bestName (реальное имя или номер)
+        try {
+            if (phoneDigits && phoneDigits.length >= 10) {
+                const contactResult = await ContactService.resolveContact(
+                    'max',
+                    phoneDigits,
+                    phoneDigits,
+                    isPlaceholderName(bestName) ? null : bestName,
+                )
+                await ContactService.ensureChatLinked(
+                    unifiedChat.id,
+                    contactResult.contact.id,
+                    contactResult.identity.id,
+                )
+            } else {
+                // Phone не извлекли — используем externalChatId как identity-id
+                const contactResult = await ContactService.resolveContact(
+                    'max',
+                    externalChatId,
+                    null,
+                    isPlaceholderName(bestName) ? null : bestName,
+                )
+                await ContactService.ensureChatLinked(
+                    unifiedChat.id,
+                    contactResult.contact.id,
+                    contactResult.identity.id,
+                )
+            }
+        } catch (contactErr: any) {
+            console.error(`[WEBHOOK-MAX] ContactService error (non-blocking): ${contactErr.message}`)
         }
 
         // 2. Relink driver on every inbound if missing
