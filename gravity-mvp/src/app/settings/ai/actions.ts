@@ -1735,7 +1735,12 @@ export async function migrateLegacyKnowledgeBase() {
 // панели «Источники» с возможностью disable. Без cookie permission —
 // counts/labels не несут PII (телефон маскируется).
 
-export type ChannelType = 'whatsapp' | 'telegram' | 'max'
+// PR9.40: 'phone' добавлен в ChannelType — это виртуальный канал
+// телефонных звонков (Call.transcript). Соответствует ChatChannel='phone'
+// в Prisma enum. В UI label = «Звонки», AiKnowledgeSource.originType =
+// 'voice_transcript'. Селектор источников и passport «Собрано из»
+// рендерят его рядом с whatsapp/telegram/max.
+export type ChannelType = 'whatsapp' | 'telegram' | 'max' | 'phone'
 
 export interface ChannelConnection {
     channel:      ChannelType
@@ -2175,6 +2180,44 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
     } catch (e: any) {
         if (process.env.NODE_ENV !== 'production') {
             console.error('[listChannelConnections] MAX failed:', e?.message)
+        }
+    }
+
+    // PR9.40: Voice channel — один виртуальный entry для всех звонков.
+    // Появляется только если в БД есть хотя бы один Call с transcript.
+    // isReady = true если есть свежий transcript за последние 30 дней
+    // (тоже эвристика как для MAX).
+    try {
+        const voiceRows = await prisma.$queryRaw<Array<{
+            transcripts: number
+            lastTranscriptAt: Date | null
+        }>>`
+            SELECT
+                COUNT(*)::int        AS transcripts,
+                MAX("startedAt")     AS "lastTranscriptAt"
+            FROM "Call"
+            WHERE transcript IS NOT NULL
+              AND length(transcript) > 50
+        `
+        const v = voiceRows[0]
+        if (v && v.transcripts > 0) {
+            const thirtyDaysAgoMs = Date.now() - 30 * 24 * 3600 * 1000
+            const lastSeen = v.lastTranscriptAt ? new Date(v.lastTranscriptAt).getTime() : 0
+            const isReadyHeuristic = lastSeen > thirtyDaysAgoMs
+            result.push({
+                channel: 'phone',
+                id: 'voice_all',
+                label: 'Звонки',
+                phoneMasked: null,
+                name: null,
+                status: isReadyHeuristic ? 'ready' : 'inactive',
+                isActive: true,  // voice всегда «active» — это просто наличие транскриптов в БД
+                isReady: isReadyHeuristic,
+            })
+        }
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[listChannelConnections] Voice failed:', e?.message)
         }
     }
 

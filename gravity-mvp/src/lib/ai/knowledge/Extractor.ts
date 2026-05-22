@@ -31,6 +31,10 @@ import {
     type ExtractionScope,
     type PromptPair,
 } from './pairBuilder'
+// PR9.39: интеграция voice transcripts в knowledge extraction.
+// callTranscriptBuilder читает Call.transcript и собирает в
+// PromptPair[]-совместимые объекты с originType='voice_transcript'.
+import { buildCallChunks } from './callTranscriptBuilder'
 import {
     similarity,
     maskPII,
@@ -343,7 +347,7 @@ async function createBlockedByTrustedItem(
             "connectionId",
             excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
         ) VALUES (
-            ${sourceId}, ${itemId}, 'chat_message',
+            ${sourceId}, ${itemId}, ${pair.originType}::"AiKnowledgeSourceOrigin",
             ${pair.managerMessageId}, ${pair.chatId},
             ${pair.channel}::"ChatChannel", ${pair.managerUserId},
             ${pair.connectionId},
@@ -390,7 +394,7 @@ async function createItemWithSource(
             "connectionId",
             excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
         ) VALUES (
-            ${sourceId}, ${itemId}, 'chat_message',
+            ${sourceId}, ${itemId}, ${pair.originType}::"AiKnowledgeSourceOrigin",
             ${pair.managerMessageId}, ${pair.chatId},
             ${pair.channel}::"ChatChannel", ${pair.managerUserId},
             ${pair.connectionId},
@@ -418,7 +422,7 @@ async function mergeIntoItem(
                 "connectionId",
                 excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
             ) VALUES (
-                ${sourceId}, ${item.id}, 'chat_message',
+                ${sourceId}, ${item.id}, ${pair.originType}::"AiKnowledgeSourceOrigin",
                 ${pair.managerMessageId}, ${pair.chatId},
                 ${pair.channel}::"ChatChannel", ${pair.managerUserId},
                 ${pair.connectionId},
@@ -723,12 +727,21 @@ export async function runExtraction(jobId: string): Promise<void> {
         }
 
         const built = await buildPairs(scope)
+        // PR9.39: дополнительно собираем voice transcripts если в scope
+        // 'phone' канал. Без diarization — один Call = один PromptPair с
+        // transcript в managerText. Сливаем с chat-парами в общий
+        // массив, дальше Extractor не различает источники — pipeline
+        // та же (batches, parallel waves, LLM, dedup).
+        // buildCallChunks сам проверит scope.channels — если 'phone'
+        // там нет, вернёт пустой массив.
+        const builtCalls = await buildCallChunks(scope)
+        const allPairs   = [...built.pairs, ...builtCalls.pairs]
         progress.messagesScanned = built.messagesScanned
         progress.chatsScanned    = built.chatsScanned
-        progress.pairsBuilt      = built.pairs.length
+        progress.pairsBuilt      = allPairs.length
         await updateJobProgress(jobId, progress)
 
-        if (built.pairs.length === 0) {
+        if (allPairs.length === 0) {
             await finalizeJob(jobId, 'completed', null, progress)
             return
         }
@@ -744,9 +757,9 @@ export async function runExtraction(jobId: string): Promise<void> {
         // волны идут последовательно (чтобы видеть progress + не выйти
         // за rate limit). Раньше был чистый for+await — медленно.
         let batchFailures = 0
-        const allBatches: typeof built.pairs[] = []
-        for (let i = 0; i < built.pairs.length; i += BATCH_SIZE) {
-            allBatches.push(built.pairs.slice(i, i + BATCH_SIZE))
+        const allBatches: PromptPair[][] = []
+        for (let i = 0; i < allPairs.length; i += BATCH_SIZE) {
+            allBatches.push(allPairs.slice(i, i + BATCH_SIZE))
         }
         for (let waveIdx = 0; waveIdx < allBatches.length; waveIdx += BATCH_CONCURRENCY) {
             const wave = allBatches.slice(waveIdx, waveIdx + BATCH_CONCURRENCY)

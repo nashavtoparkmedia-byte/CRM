@@ -56,6 +56,10 @@ export interface PromptPair {
      *  (через Chat → WhatsAppChat.connectionId JOIN). Для TG/MAX
      *  остаётся NULL — schema не хранит chat-level mapping. */
     connectionId:     string | null
+    /** PR9.39: тип источника — чат или транскрипт звонка. Влияет на
+     *  AiKnowledgeSource.originType при записи. Для chat-сообщений
+     *  всегда `chat_message`, для звонков — `voice_transcript`. */
+    originType:       'chat_message' | 'voice_transcript'
 }
 
 interface RawMessage {
@@ -230,6 +234,7 @@ function buildPairsForChat(chatMsgs: RawMessage[]): PromptPair[] {
             // же WA connection). connectionId совпадает у inbound/
             // outbound в пределах одного чата.
             connectionId:     m.connectionId,
+            originType:       'chat_message',
         })
     }
     return pairs

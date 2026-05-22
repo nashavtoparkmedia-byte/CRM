@@ -683,8 +683,13 @@ export default function AiControlCenterClient({
 
         setDisableInFlight(conn.id)
         try {
+            // PR9.40: cast — disableKnowledgeSource accepts только chat-каналы
+            // (WA/TG/MAX). Для virtual 'phone' source (Звонки) disable пока
+            // не реализован — кнопку отключения для voice пользователь UI
+            // не видит, так что попасть сюда не должно. Future PR может
+            // добавить voice disable как отдельный flow.
             const r = await disableKnowledgeSource({
-                channel:      conn.channel,
+                channel:      conn.channel as 'whatsapp' | 'telegram' | 'max',
                 connectionId: conn.id,
             }) as DisableSourceResult
             showToast(
@@ -3295,7 +3300,7 @@ export default function AiControlCenterClient({
                         <div className="space-y-2">
                             {[...connsByChannel.entries()].map(([channel, conns]) => {
                                 const CHANNEL_LABEL_LOCAL: Record<string, string> = {
-                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX', phone: 'Звонки',
                                 }
                                 return (
                                     <div key={channel} className="rounded-lg border border-[#E8E8E8] overflow-hidden">
@@ -3541,7 +3546,7 @@ export default function AiControlCenterClient({
                             </div>
                             {orphanStats.map(s => {
                                 const CHANNEL_LABEL_LOCAL: Record<string, string> = {
-                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX', phone: 'Звонки',
                                 }
                                 return (
                                     <div key={s.channel} className="text-[11px]">
@@ -3924,7 +3929,7 @@ export default function AiControlCenterClient({
         // sources в текущем ядре. Раньше эта инфа была разбросана —
         // sourceStats показывалась только в Sources sub-tab.
         const CHANNEL_LABEL_LOCAL: Record<string, string> = {
-            whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+            whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX', phone: 'Звонки',
         }
         const STATUS_LABEL_LOCAL: Record<string, string> = {
             ready: 'подключён', qr: 'ждёт QR', authenticating: 'входит',
@@ -4210,7 +4215,11 @@ export default function AiControlCenterClient({
                                             у канала вообще нет per-account participated entries.
                                             Это убирает дубль типа «TG +79221853150 · участвовал»
                                             И «канал участвовал · 15 источников» рядом. */}
-                                        {(['whatsapp', 'telegram', 'max'] as const).map(channel => {
+                                        {/* PR9.40: 'phone' добавлен — voice transcripts как
+                                            ещё один источник в passport. Если звонков
+                                            нет в БД — listChannelConnections() не вернёт
+                                            voice entry, render автоматически пропустится. */}
+                                        {(['whatsapp', 'telegram', 'max', 'phone'] as const).map(channel => {
                                             const conns = participatingByChannel.get(channel) ?? []
                                             const channelLevel = channelLevelParticipation.find(p => p.channel === channel)
                                             const anyPerAccountParticipated = conns.some(c => c.participated)
@@ -5012,6 +5021,7 @@ export default function AiControlCenterClient({
                                             whatsapp: 'WhatsApp',
                                             telegram: 'Telegram',
                                             max:      'MAX',
+                                            phone:    'Звонки',
                                         }
                                         // group by channel
                                         const byChannel = new Map<string, ChannelConnection[]>()
@@ -5195,7 +5205,7 @@ export default function AiControlCenterClient({
                                     !willInclude.some(w => w.id === c.id)
                                 )
                                 const CHANNEL_LABEL_LOCAL: Record<string, string> = {
-                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX', phone: 'Звонки',
                                 }
                                 const includedByChannel = new Map<string, number>()
                                 for (const c of willInclude) {
