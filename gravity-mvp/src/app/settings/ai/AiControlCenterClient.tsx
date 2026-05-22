@@ -1248,15 +1248,9 @@ export default function AiControlCenterClient({
     const SyncTab = () => (
         <div className="space-y-5">
             <InlineInfo>
-                Эта страница — про <strong>загрузку сообщений в БД</strong>.
-                Свежие сообщения приходят сами в реальном времени (WA / TG-скрапер пишут live).
-                Эта кнопка нужна только когда хочешь подтянуть <strong>старую историю</strong>:
-                первое подключение нового аккаунта, дозагрузка прошлых 30/90 дней, восстановление после wipe.
-                <br/>
-                <span className="text-gray-500">
-                    После того как сообщения в БД — иди в <strong>«Ядро знаний»</strong> и нажми
-                    «Собрать ядро», чтобы AI превратил их в структурированную память.
-                </span>
+                Статус сообщений в БД — сколько и из каких мессенджеров уже загружено.
+                Подгрузить старую историю можно на странице подключения мессенджера
+                (ссылки ниже). Собрать ядро — на вкладке «Ядро знаний».
             </InlineInfo>
             {/* Индикатор состояния */}
             <div className={`border rounded-xl p-4 transition-colors ${
@@ -1637,89 +1631,44 @@ export default function AiControlCenterClient({
                 })()}
             </div>
 
-            {/* Настройки импорта — без border/bg, чтобы не создавать
-                «коробку в коробке» после status-блока выше. Заголовок
-                плюс отступ работают как разделитель. */}
+            {/* PR9.8: убрали дубль «Подгрузить старую историю» с этой
+                страницы. Импорт истории делается на странице подключения
+                конкретного мессенджера — там per-account контекст. Здесь
+                просто навигация туда + cross-ref на следующий шаг. */}
             <div className="space-y-3 pt-1">
-                <h4 className="text-[14px] font-semibold text-[#111]">Подгрузить старую историю</h4>
+                <h4 className="text-[14px] font-semibold text-[#111]">Что делать дальше</h4>
                 <p className="text-[12px] text-gray-500 leading-relaxed -mt-1">
-                    Новые сообщения уже идут в БД live. Эта кнопка качает <strong>прошлые сообщения</strong>
-                    из API мессенджера (например за 30 / 90 дней назад). Это разовая операция.
+                    Эта страница — статус БД. Действия — в других местах:
                 </p>
-
-                {/* Каналы */}
-                <div>
-                    <label className="text-[12px] text-gray-500 mb-1.5 block">Мессенджеры</label>
-                    <div className="flex gap-2">
-                        {(['max', 'telegram', 'whatsapp'] as const).map(ch => (
-                            <button
-                                key={ch}
-                                onClick={() => setImportChannels(prev =>
-                                    prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]
-                                )}
-                                className={`px-3 h-[28px] rounded-lg text-[11px] font-semibold border transition-colors ${
-                                    importChannels.includes(ch)
-                                        ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                        : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
-                                }`}
-                            >
-                                {CHANNEL_LABELS[ch]}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Режим */}
-                <div>
-                    <label className="text-[12px] text-gray-500 mb-1.5 block">Режим импорта</label>
-                    <div className="space-y-1.5">
-                        {[
-                            { val: 'from_connection_time', label: 'С момента подключения', hint: 'Только сообщения, появившиеся после того, как мессенджер был подключён к CRM.' },
-                            { val: 'available_history',    label: 'Доступная история',     hint: 'Всё, что мессенджер отдаёт, — обычно последние ~3 месяца. Самый полный вариант.' },
-                            { val: 'last_n_days',          label: 'За последние N дней',   hint: 'Точный диапазон. Удобно для пере-синхронизации без полного импорта.' },
-                        ].map(opt => (
-                            <label key={opt.val} className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="importMode"
-                                    value={opt.val}
-                                    checked={importMode === opt.val}
-                                    onChange={() => setImportMode(opt.val)}
-                                    className="accent-[#3390EC]"
-                                />
-                                <span className="text-[12px] text-[#111]">{opt.label}</span>
-                                <Hint text={opt.hint} />
-                                {opt.val === 'last_n_days' && importMode === 'last_n_days' && (
-                                    <input
-                                        type="number"
-                                        value={importDays}
-                                        onChange={e => setImportDays(Number(e.target.value))}
-                                        min={1} max={365}
-                                        className="w-[60px] h-[24px] border border-[#E0E0E0] rounded px-2 text-[12px] outline-none focus:border-[#3390EC]"
-                                    />
-                                )}
-                            </label>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                    <button
-                        onClick={() => handleStartImport(false)}
-                        disabled={importLoading || importChannels.length === 0}
-                        className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    <a
+                        href="/settings/integrations/whatsapp"
+                        className="block rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#F0F4FA] transition-colors px-3 py-2.5"
                     >
-                        <Play size={11} />
-                        {importLoading ? 'Запускаем...' : 'Подгрузить старую историю'}
-                    </button>
-                    {/* PR9.7: cross-reference к Ядру знаний. После импорта
-                        пользователь должен знать что дальше — собрать ядро. */}
+                        <div className="text-[12px] font-semibold text-[#111]">Подключить / импорт WhatsApp →</div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">QR-сканирование, синхронизация истории, отключение</div>
+                    </a>
+                    <a
+                        href="/settings/integrations/telegram"
+                        className="block rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#F0F4FA] transition-colors px-3 py-2.5"
+                    >
+                        <div className="text-[12px] font-semibold text-[#111]">Подключить / импорт Telegram →</div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">MTProto-аккаунты, синхронизация истории</div>
+                    </a>
+                    <a
+                        href="/settings/integrations/max"
+                        className="block rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#F0F4FA] transition-colors px-3 py-2.5"
+                    >
+                        <div className="text-[12px] font-semibold text-[#111]">Подключить / импорт MAX →</div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">Боты и личный аккаунт через скрейпер</div>
+                    </a>
                     <button
                         type="button"
                         onClick={() => setTab('knowledge')}
-                        className="h-[32px] px-3 text-[12px] text-[#3390EC] hover:underline inline-flex items-center gap-1"
+                        className="block text-left rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA] hover:bg-[#E1ECFA] transition-colors px-3 py-2.5"
                     >
-                        Готов собрать ядро? →
+                        <div className="text-[12px] font-semibold text-[#3390EC]">Собрать ядро знаний →</div>
+                        <div className="text-[11px] text-gray-500 mt-0.5">AI прочитает сообщения из БД и соберёт структурированную память</div>
                     </button>
                 </div>
             </div>
