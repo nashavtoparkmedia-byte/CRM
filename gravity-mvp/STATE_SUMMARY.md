@@ -1,10 +1,12 @@
 # AI Knowledge Core — STATE_SUMMARY
 
-Snapshot текущего состояния модуля на момент **safety checkpoint после PR7.11**.
+Snapshot текущего состояния модуля на момент **safety checkpoint после PR7.12.2**.
 
 - **Branch:** `feature/ai-knowledge-core`
-- **Latest safety tag:** `ai-knowledge-core-pr7-complete`
-- **Last commit:** PR7.11 source control smoke + full regression
+- **Latest safety tag:** `ai-knowledge-core-pr7-12-stable` (этот snapshot)
+- **Предыдущий safety tag:** `ai-knowledge-core-pr7-complete` (после PR7.11)
+- **Last commit:** `e7a5582` chore(deps): sync package-lock
+- **Last feature commit:** `eb4ae92` PR7.12.2 provenance UX deepening
 - **Smoke total:** 195/195 PASS (11 suites)
 
 ---
@@ -42,6 +44,14 @@ Snapshot текущего состояния модуля на момент **sa
 | Источники panel с list connections + disable button | PR7.9 |
 | Reset modal: NO default, typed confirm для full | PR7.9 |
 | Rebuild flow: post-reset CTA + context summary + safety warnings | PR7.10 |
+| Header card «Источники памяти AI» в Источники sub-tab | PR7.12 |
+| Sync card last-import account info + multi-account summary | PR7.12, PR7.12.2 |
+| Sync per-job fallback «источник аккаунта неизвестен» | PR7.12.2 |
+| Item-card compact source badges «Откуда взято: …» | PR7.12.2 |
+| Selector: «есть история» / «истории нет» hint per row | PR7.12 |
+| Selector: TG/MAX явное «точечный выбор аккаунта пока в работе» | PR7.12.2 |
+| Rebuild CTA: «Будет участвовать» + «Не участвуют» preview | PR7.12, PR7.12.2 |
+| Terminology cleanup (scope/legacy/shadow/safety-фильтр → human) | PR7.12.2 |
 
 ## Что НЕ поддерживается (намеренно или ограничения схемы)
 
@@ -174,8 +184,9 @@ Total:                         195/195 ✅
 | Что | Команда |
 |---|---|
 | Branch | `git checkout feature/ai-knowledge-core` |
-| Latest safety tag | `git checkout ai-knowledge-core-pr7-complete` |
-| Previous safety tag | `git checkout ai-knowledge-core-pr6_1-stable` |
+| Latest safety tag | `git checkout ai-knowledge-core-pr7-12-stable` |
+| Previous safety tag | `git checkout ai-knowledge-core-pr7-complete` |
+| Старая safety tag | `git checkout ai-knowledge-core-pr6_1-stable` |
 | Pre-merge snapshot | `git checkout pre-telephony-merge-rev2` |
 | Post-merge stable | `git checkout post-telephony-merge` |
 | Remote origin | `https://github.com/nashavtoparkmedia-byte/CRM` |
