@@ -13,6 +13,7 @@ import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch
 import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
 import { LeadStatusBadge } from "./LeadStatusBadge"
+import { formatChatTitle } from "../utils/message-utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat, initialPhone }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void, initialPhone?: string | null }) {
@@ -519,18 +520,18 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                         or TG username) → phone fallback. Same logic as
                                         ChatHeader so list and conversation panel stay
                                         consistent. */}
-                                    {chat.driver?.fullName
-                                        || chat.contact?.displayName
-                                        || chat.name
-                                        || chat.driver?.phone
-                                        || (() => {
-                                            // Extract phone from externalChatId (e.g. "whatsapp:79221853150" → "+79221853150")
-                                            const ext = chat.externalChatId || ''
-                                            const digits = ext.replace(/\D/g, '')
-                                            if (digits.length >= 10) return '+' + digits
-                                            return null
-                                        })()
-                                        || (isGroupChat ? 'Группа' : 'Водитель')}
+                                    {/* PR9.57: единый formatChatTitle helper —
+                                        очищает "TG <userId>", ". .", numeric IDs.
+                                        Same logic как в ChatHeader. */}
+                                    {isGroupChat
+                                        ? (chat.name || 'Группа')
+                                        : formatChatTitle({
+                                            driverFullName:     chat.driver?.fullName,
+                                            contactDisplayName: chat.contact?.displayName,
+                                            chatName:           chat.name,
+                                            externalChatId:     chat.externalChatId,
+                                        })
+                                    }
                                 </span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">

@@ -1,5 +1,45 @@
 import { Message } from "../hooks/useMessages";
 
+/**
+ * PR9.57: единая функция для title чата.
+ *
+ * Контекст: для TG/MAX без имени пользователя ingest сохраняет
+ * "TG <userId>" / "MAX <userId>" в chat.name, либо ". ." для
+ * MAX-юзеров с дефолтным "точечным" first_name. Сырой ID + префикс
+ * "TG"/"MAX" в UI смотрится мусорно — менеджеру не нужны системные
+ * метки.
+ *
+ * Логика очистки:
+ *   1. driver.fullName / contact.displayName / chat.name — первый
+ *      непустой
+ *   2. Убрать generated префикс "TG "/"MAX "/"WA "/"Telegram "/"Max "
+ *   3. Если осталось placeholder (". .", пустота, дефисы) — fallback
+ *      на externalChatId без channel-префикса
+ *   4. Если и того нет — "Контакт"
+ *
+ * Используется в ChatHeader.tsx + ChatList.tsx для consistent
+ * отображения по всему UI чатов.
+ */
+export function formatChatTitle(input: {
+    driverFullName?:    string | null
+    contactDisplayName?: string | null
+    chatName?:          string | null
+    externalChatId?:    string | null
+}): string {
+    const raw = input.driverFullName
+             || input.contactDisplayName
+             || input.chatName
+             || ''
+    // Strip generated channel-prefix
+    const cleaned = raw.replace(/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+/i, '').trim()
+    // Placeholder detection: only dots/dashes/spaces
+    const isPlaceholder = !cleaned || /^[.\s\-]+$/.test(cleaned)
+    if (!isPlaceholder) return cleaned
+    // Fallback: ID без channel-префикса
+    const id = (input.externalChatId ?? '').split(':').pop()?.trim()
+    return id || 'Контакт'
+}
+
 export type MessageUIPosition = 'single' | 'start' | 'middle' | 'end';
 export type StatusPlacement = 'inline' | 'overlay';
 
