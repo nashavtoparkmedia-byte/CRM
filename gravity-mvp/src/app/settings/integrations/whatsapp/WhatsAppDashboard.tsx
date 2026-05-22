@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut } from 'lucide-react'
-import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession } from './whatsapp-actions'
+import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut, Pencil, Check, X } from 'lucide-react'
+import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession, renameWhatsAppConnection } from './whatsapp-actions'
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,7 @@ type WaConnection = {
     status: string
     phoneNumber: string | null
     sessionData: string | null
+    createdAt?: string | Date
     // Derived fields from getActualStatus — may be undefined for stale connections
     actualState?: string
     actualLabel?: string
@@ -22,6 +23,38 @@ type WaConnection = {
     canForceQR?: boolean
     canForceReset?: boolean
     lastError?: string | null
+}
+
+// PR7.14: маскировка телефона +79221855750 → +7922•••5750.
+// Используется для secondary line в header карточки.
+function maskPhoneInCard(raw: string | null | undefined): string | null {
+    if (!raw) return null
+    const digits = String(raw).replace(/\D/g, '')
+    if (digits.length < 7) return raw ? `+${raw}` : null
+    return `+${digits.slice(0, 4)}•••${digits.slice(-4)}`
+}
+
+// PR7.14: smart-имя для карточки и нового канала.
+// Приоритет: custom name → masked phone → дата создания.
+// Legacy «WhatsApp Account» считается отсутствием имени.
+const LEGACY_DEFAULT_NAMES = new Set([
+    'WhatsApp Account', 'WhatsApp Аккаунт', 'whatsapp account',
+])
+
+function deriveDisplayName(conn: WaConnection): { primary: string; isPlaceholder: boolean } {
+    const raw = conn.name?.trim() ?? ''
+    if (raw.length > 0 && !LEGACY_DEFAULT_NAMES.has(raw)) {
+        return { primary: raw, isPlaceholder: false }
+    }
+    const phone = maskPhoneInCard(conn.phoneNumber)
+    if (phone) return { primary: phone, isPlaceholder: false }
+    if (conn.createdAt) {
+        const d = new Date(conn.createdAt)
+        if (!isNaN(d.getTime())) {
+            return { primary: `Подключение от ${d.toLocaleDateString('ru')}`, isPlaceholder: true }
+        }
+    }
+    return { primary: 'Новое подключение', isPlaceholder: true }
 }
 
 function StatusDot({ status }: { status: string }) {
@@ -63,6 +96,12 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
     const [resumeDialog, setResumeDialog] = useState(false)
     const [syncKey, setSyncKey] = useState(0)
     const [disconnectDialog, setDisconnectDialog] = useState(false)
+    // PR7.14: inline rename state. Активируется кликом на pencil-икoнку
+    // рядом с именем — открывается inline-input, без модала.
+    const [editingName, setEditingName] = useState(false)
+    const [nameDraft, setNameDraft] = useState(conn.name ?? '')
+    const [renaming, setRenaming] = useState(false)
+    const nameInputRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => {
         setIsClient(true)
@@ -151,6 +190,32 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         }
     }
 
+    const handleRenameStart = () => {
+        // Pre-populate с тем что реально в БД, не с derived display.
+        // Если name был legacy default или null — input пустой.
+        const raw = conn.name?.trim() ?? ''
+        setNameDraft(LEGACY_DEFAULT_NAMES.has(raw) ? '' : raw)
+        setEditingName(true)
+        setTimeout(() => nameInputRef.current?.focus(), 30)
+    }
+    const handleRenameCancel = () => {
+        setEditingName(false)
+        setNameDraft(conn.name ?? '')
+    }
+    const handleRenameSave = async () => {
+        if (renaming) return
+        setRenaming(true)
+        try {
+            await renameWhatsAppConnection(conn.id, nameDraft)
+            setEditingName(false)
+            onRefresh()
+        } catch (err) {
+            console.error('[WA] Rename failed:', err)
+        } finally {
+            setRenaming(false)
+        }
+    }
+
     const handleDisconnectConfirm = async (deleteMessages: boolean) => {
         setLoading(true)
         try {
@@ -175,17 +240,84 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         return <div className="h-[220px] animate-pulse rounded-2xl border bg-muted/50 p-5" />
     }
 
+    // PR7.14: derived display name. Если custom не задано — fallback
+    // на phone/дата, без литерала «WhatsApp Account».
+    const display = deriveDisplayName(conn)
+    const maskedPhone = maskPhoneInCard(conn.phoneNumber)
+    // Phone показываем как secondary line ТОЛЬКО если оно отличается
+    // от primary (т.е. primary = custom name, не сам phone).
+    const showPhoneSecondary = maskedPhone && display.primary !== maskedPhone
+
     return (
         <div className="flex flex-col gap-3 rounded-2xl border bg-card p-5 shadow-sm transition-all">
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600">
                         <MessageCircle size={18} />
                     </div>
-                    <div>
-                        <div className="font-semibold text-sm text-foreground">{conn.name || 'WhatsApp Аккаунт'}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                            {conn.phoneNumber && <span className="text-xs text-muted-foreground">+{conn.phoneNumber}</span>}
+                    <div className="min-w-0 flex-1">
+                        {/* PR7.14: имя — primary, c inline-rename. Если
+                            редактируем — input + save/cancel. Если нет —
+                            text + pencil-icon (виден на hover). */}
+                        {editingName ? (
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    ref={nameInputRef}
+                                    type="text"
+                                    value={nameDraft}
+                                    maxLength={80}
+                                    placeholder="Например: Поддержка водителей"
+                                    onChange={e => setNameDraft(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') handleRenameSave()
+                                        if (e.key === 'Escape') handleRenameCancel()
+                                    }}
+                                    disabled={renaming}
+                                    className="flex-1 min-w-0 h-7 px-2 text-sm font-semibold border border-input rounded-md outline-none focus:border-primary bg-background"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleRenameSave}
+                                    disabled={renaming}
+                                    title="Сохранить"
+                                    className="h-7 w-7 inline-flex items-center justify-center text-emerald-600 hover:bg-emerald-50 rounded-md disabled:opacity-50"
+                                >
+                                    {renaming ? <Loader2 size={13} className="animate-spin" /> : <Check size={14} />}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleRenameCancel}
+                                    disabled={renaming}
+                                    title="Отмена"
+                                    className="h-7 w-7 inline-flex items-center justify-center text-muted-foreground hover:bg-muted rounded-md disabled:opacity-50"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="group/name flex items-center gap-1.5">
+                                <span
+                                    className={`font-semibold text-sm truncate ${display.isPlaceholder ? 'text-muted-foreground italic' : 'text-foreground'}`}
+                                    title={display.isPlaceholder ? 'Имя не задано — нажмите карандашик чтобы задать' : conn.name ?? undefined}
+                                >
+                                    {display.primary}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={handleRenameStart}
+                                    disabled={loading}
+                                    title="Переименовать аккаунт"
+                                    className="h-6 w-6 inline-flex items-center justify-center text-muted-foreground/60 hover:text-primary hover:bg-primary/10 rounded-md opacity-0 group-hover/name:opacity-100 transition-opacity"
+                                >
+                                    <Pencil size={11} />
+                                </button>
+                            </div>
+                        )}
+                        {/* PR7.14: secondary line — phone + status + paused */}
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {showPhoneSecondary && (
+                                <span className="text-xs text-muted-foreground">{maskedPhone}</span>
+                            )}
                             <StatusDot status={liveStatus} />
                             {livePaused && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
@@ -193,6 +325,19 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                                 </span>
                             )}
                         </div>
+                        {/* PR7.14: placeholder hint — подсказка «задайте имя»
+                            видна только когда display = placeholder И
+                            пользователь не редактирует. Помогает понять
+                            «откуда у меня два одинаковых ватсапа». */}
+                        {display.isPlaceholder && !editingName && (
+                            <button
+                                type="button"
+                                onClick={handleRenameStart}
+                                className="mt-1 text-[11px] text-primary hover:underline inline-flex items-center gap-1"
+                            >
+                                <Pencil size={10} /> Задайте имя — будет проще отличать аккаунты
+                            </button>
+                        )}
                     </div>
                 </div>
             </div>

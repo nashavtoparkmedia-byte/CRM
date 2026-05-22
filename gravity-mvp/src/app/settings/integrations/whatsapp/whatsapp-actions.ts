@@ -16,14 +16,36 @@ export async function createWhatsAppConnection(name?: string) {
         return pending
     }
 
+    // PR7.14: дефолтное имя теперь NULL вместо "WhatsApp Account".
+    // UI сам подберёт fallback — телефон, дата или «Новое подключение».
+    // Без литеральных дефолтов исключаем ситуацию «два WhatsApp Account».
+    const trimmed = name?.trim() || null
     const connection = await prisma.whatsAppConnection.create({
-        data: { name: name || 'WhatsApp Account', status: 'idle' }
+        data: { name: trimmed, status: 'idle' }
     })
 
-    console.log(`[WA-ACTIONS] Created connection: ${connection.id}`)
+    console.log(`[WA-ACTIONS] Created connection: ${connection.id} name=${trimmed ?? '<null>'}`)
     initializeWhatsAppConnection(connection.id).catch(console.error)
     revalidatePath('/whatsapp')
+    revalidatePath('/settings/integrations/whatsapp')
     return connection
+}
+
+/** PR7.14: переименование подключения. Допустимо переименовывать в
+ *  любой момент — не влияет на сессию Baileys / phoneNumber. Пустая
+ *  строка → NULL (UI снова покажет fallback по телефону). */
+export async function renameWhatsAppConnection(id: string, name: string) {
+    const trimmed = name?.trim() ?? ''
+    const next = trimmed.length === 0 ? null : trimmed.slice(0, 80)
+    console.log(`[WA-ACTIONS] renameWhatsAppConnection id=${id} → ${next ?? '<null>'}`)
+    await prisma.whatsAppConnection.update({
+        where: { id },
+        data: { name: next },
+    })
+    revalidatePath('/settings/integrations/whatsapp')
+    revalidatePath('/whatsapp')
+    revalidatePath('/settings/ai')
+    return { id, name: next }
 }
 
 export async function initializeWhatsAppConnection(connectionId: string) {

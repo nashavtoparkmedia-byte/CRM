@@ -1700,20 +1700,32 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
     // WhatsApp
     try {
         const rows = await prisma.$queryRaw<any[]>`
-            SELECT id, name, "phoneNumber", status::text AS status
+            SELECT id, name, "phoneNumber", status::text AS status, "createdAt"
             FROM "WhatsAppConnection"
         `
+        // PR7.14: literal legacy defaults считаем за «нет имени» —
+        // они появлялись на старом createWhatsAppConnection до того,
+        // как мы стали хранить NULL по умолчанию. Если все 2+ ватсапа
+        // назывались «WhatsApp Account», в UI они выглядели одинаково.
+        const LEGACY_DEFAULT_NAMES = new Set([
+            'WhatsApp Account', 'WhatsApp Аккаунт', 'whatsapp account',
+        ])
         for (const r of rows) {
             const phoneMasked = maskPhone(r.phoneNumber)
-            const label = r.name?.trim()
-                ? `WhatsApp ${r.name.trim()}`
+            const rawName = r.name?.trim() ?? ''
+            const hasCustomName = rawName.length > 0 && !LEGACY_DEFAULT_NAMES.has(rawName)
+            const label = hasCustomName
+                ? `WhatsApp ${rawName}`
                 : phoneMasked
                     ? `WhatsApp ${phoneMasked}`
-                    : 'WhatsApp · безымянное подключение'
+                    : `WhatsApp · подключение от ${new Date(r.createdAt).toLocaleDateString('ru')}`
             const isReady = r.status === 'ready'
             result.push({
                 channel: 'whatsapp', id: r.id, label,
-                phoneMasked, name: r.name ?? null,
+                phoneMasked,
+                // Возвращаем null если name — legacy default, чтобы
+                // другие UI участки тоже видели «без имени».
+                name: hasCustomName ? rawName : null,
                 status: r.status as ChannelConnection['status'],
                 isActive: isReady, isReady,
             })
