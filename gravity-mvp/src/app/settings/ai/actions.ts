@@ -1708,6 +1708,77 @@ export interface ChannelTotalsRow {
     contacts:       number
     lastMessageAt:  string | null
 }
+/** PR9.3: реальный диапазон данных в БД для отображения в extraction
+ *  modal. Без этого пользователь не понимал, что выбор «Всю историю»
+ *  не означает «качай новое» — а просто берёт что есть в БД. */
+export interface ExtractionDataRange {
+    earliestSentAt: string | null  // ISO, или null если нет сообщений
+    latestSentAt:   string | null
+    totalMessages:  number          // total в scope.channels + scope.connectionIds
+    last30dMessages: number          // сколько попадёт под last_30d
+    last90dMessages: number          // сколько попадёт под last_90d
+}
+
+/** Возвращает реальное состояние БД для предполагаемого scope.
+ *  Если connectionIds null — берёт все каналы целиком. */
+export async function getExtractionDataRange(
+    connectionIds: string[] | null
+): Promise<ExtractionDataRange> {
+    const empty: ExtractionDataRange = {
+        earliestSentAt: null, latestSentAt: null,
+        totalMessages: 0, last30dMessages: 0, last90dMessages: 0,
+    }
+    try {
+        if (connectionIds && connectionIds.length === 0) return empty
+        const ids = connectionIds ?? []
+        const useFilter = ids.length > 0
+        const rows = await prisma.$queryRaw<Array<{
+            earliestSentAt: Date | null
+            latestSentAt:   Date | null
+            totalMessages:  number
+            last30dMessages: number
+            last90dMessages: number
+        }>>`
+            WITH base AS (
+                SELECT
+                    m."sentAt",
+                    COALESCE(wc."connectionId", c.metadata->>'connectionId') AS "resolvedConnId"
+                FROM "Message" m
+                LEFT JOIN "Chat" c           ON c.id = m."chatId"
+                LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
+                WHERE m.direction IN ('inbound', 'outbound')
+                  AND m.type NOT IN ('system', 'call')
+                  AND m.content IS NOT NULL
+                  AND length(m.content) > 1
+                  AND m.channel::text IN ('whatsapp', 'telegram', 'max')
+            )
+            SELECT
+                MIN("sentAt")                                                  AS "earliestSentAt",
+                MAX("sentAt")                                                  AS "latestSentAt",
+                COUNT(*)::int                                                  AS "totalMessages",
+                COUNT(*) FILTER (WHERE "sentAt" >= NOW() - INTERVAL '30 days')::int AS "last30dMessages",
+                COUNT(*) FILTER (WHERE "sentAt" >= NOW() - INTERVAL '90 days')::int AS "last90dMessages"
+            FROM base
+            WHERE ${useFilter}::boolean = false
+               OR "resolvedConnId" = ANY(${ids})
+        `
+        const r = rows[0]
+        if (!r) return empty
+        return {
+            earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
+            latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
+            totalMessages:  Number(r.totalMessages ?? 0),
+            last30dMessages: Number(r.last30dMessages ?? 0),
+            last90dMessages: Number(r.last90dMessages ?? 0),
+        }
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[getExtractionDataRange] failed:', e?.message)
+        }
+        return empty
+    }
+}
+
 /** PR8.D: per-connection message counts из реальной БД. Используется
  *  в passport empty-state и в Sync «доступно для анализа», чтобы
  *  показывать реальные числа (включая live-streamed MAX/TG), а не

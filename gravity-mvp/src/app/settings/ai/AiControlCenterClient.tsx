@@ -33,6 +33,7 @@ import {
     getItemSourceBadges,
     getChannelTotalsForUi,
     getMessageCountsByConnection,
+    getExtractionDataRange,
     bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
@@ -48,6 +49,7 @@ import {
     type ItemSourceBadges,
     type ChannelTotalsRow,
     type ConnectionMessageCount,
+    type ExtractionDataRange,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -742,6 +744,11 @@ export default function AiControlCenterClient({
     // Sync «доступно для анализа», чтобы показывать реальные числа.
     const [connectionCounts, setConnectionCounts] = useState<ConnectionMessageCount[]>([])
 
+    // PR9.3: реальный диапазон данных в БД для extraction modal.
+    // Перезагружается при открытии модала и при изменении selection.
+    const [extractionRange, setExtractionRange] = useState<ExtractionDataRange | null>(null)
+    const [extractionRangeLoading, setExtractionRangeLoading] = useState(false)
+
     // На mount fetch runtime state + recent traces.
     useEffect(() => {
         let cancelled = false
@@ -946,6 +953,29 @@ export default function AiControlCenterClient({
             return next
         })
     }
+
+    // PR9.3: подгружаем диапазон данных в БД для текущего выбора.
+    // Перезапускается на открытие модала и на смену selectedConnectionIds /
+    // onlyConnectedNow. Это чтобы пользователь видел «в БД с DATE по DATE
+    // лежит N сообщений» прежде чем выбрать scope.
+    useEffect(() => {
+        if (!extractionModalOpen) return
+        let cancelled = false
+        setExtractionRangeLoading(true)
+        // Вычисляем effective set с учётом onlyConnectedNow.
+        const readyIds = new Set(channelConnections.filter(c => c.isReady).map(c => c.id))
+        const effective = onlyConnectedNow
+            ? [...selectedConnectionIds].filter(id => readyIds.has(id))
+            : [...selectedConnectionIds]
+        const filter = effective.length > 0 && effective.length < channelConnections.length
+            ? effective
+            : null
+        getExtractionDataRange(filter)
+            .then(r => { if (!cancelled) setExtractionRange(r as ExtractionDataRange) })
+            .catch(() => { if (!cancelled) setExtractionRange(null) })
+            .finally(() => { if (!cancelled) setExtractionRangeLoading(false) })
+        return () => { cancelled = true }
+    }, [extractionModalOpen, selectedConnectionIds, onlyConnectedNow, channelConnections])
 
     async function handleStartExtraction() {
         setExtractionStarting(true)
@@ -4684,27 +4714,67 @@ export default function AiControlCenterClient({
                             <label className="text-[11px] uppercase tracking-wide text-[#3390EC] font-semibold mb-1.5 block">
                                 Шаг 1 · Что анализировать
                             </label>
+                            {/* PR9.3: показываем РЕАЛЬНЫЙ диапазон данных
+                                в БД для выбранных аккаунтов. Без этого
+                                пользователь думал что «Всю историю» = качай
+                                из мессенджера; на самом деле AI работает
+                                только с тем что физически в БД. */}
+                            {extractionRange && extractionRange.totalMessages > 0 && (
+                                <div className="mb-2 rounded-md bg-[#F0F4FA] border border-[#E0E8F4] px-3 py-2 text-[11px] text-gray-700 leading-relaxed">
+                                    <div>
+                                        <strong className="text-[#111]">В БД сейчас есть:</strong>{' '}
+                                        {extractionRange.totalMessages.toLocaleString('ru')} сообщений
+                                        {extractionRange.earliestSentAt && extractionRange.latestSentAt && (
+                                            <>
+                                                {' '}с <b>{new Date(extractionRange.earliestSentAt).toLocaleDateString('ru')}</b>
+                                                {' '}по <b>{new Date(extractionRange.latestSentAt).toLocaleDateString('ru')}</b>
+                                            </>
+                                        )}.
+                                    </div>
+                                    <div className="text-gray-500 mt-0.5">
+                                        AI анализирует то, что уже загружено в БД. Чтобы дозагрузить — «Синхронизация».
+                                    </div>
+                                </div>
+                            )}
+                            {extractionRange && extractionRange.totalMessages === 0 && !extractionRangeLoading && (
+                                <div className="mb-2 rounded-md bg-[#FFFBED] border border-[#FFE8B0] px-3 py-2 text-[11px] text-[#8B6914] leading-relaxed">
+                                    Для выбранных аккаунтов в БД ещё нет сообщений. Сначала загрузите историю через «Синхронизацию».
+                                </div>
+                            )}
                             <div className="flex flex-col gap-1.5">
-                                {([
-                                    { v: 'last_30d', label: 'Последние 30 дней',  hint: 'быстро, частичный обзор' },
-                                    { v: 'last_90d', label: 'Последние 90 дней',  hint: 'рекомендуется для первой сборки' },
-                                    { v: 'all',      label: 'Всю доступную историю', hint: 'дольше, максимум знаний' },
-                                ] as const).map(opt => (
-                                    <label key={opt.v}
-                                        className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
-                                            extractionScopeMode === opt.v
-                                                ? 'border-[#3390EC] bg-[#F0F4FA]'
-                                                : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
-                                        }`}>
-                                        <input type="radio" name="extraction-scope" className="mt-0.5"
-                                            checked={extractionScopeMode === opt.v}
-                                            onChange={() => setExtractionScopeMode(opt.v)} />
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[13px] font-medium text-[#111]">{opt.label}</div>
-                                            <div className="text-[11px] text-gray-500">{opt.hint}</div>
-                                        </div>
-                                    </label>
-                                ))}
+                                {(() => {
+                                    // PR9.3: per-scope real counts из extractionRange.
+                                    // Пользователь видит «Последние 30 дней (450 сообщ.)»
+                                    // вместо абстрактного «быстро».
+                                    const opts = [
+                                        { v: 'last_30d' as const, label: 'Последние 30 дней',  count: extractionRange?.last30dMessages, hint: 'быстро, свежие данные' },
+                                        { v: 'last_90d' as const, label: 'Последние 90 дней',  count: extractionRange?.last90dMessages, hint: 'рекомендуется для первой сборки' },
+                                        { v: 'all'      as const, label: 'Все что есть в БД',  count: extractionRange?.totalMessages,   hint: 'максимум знаний из загруженной истории' },
+                                    ]
+                                    return opts.map(opt => (
+                                        <label key={opt.v}
+                                            className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
+                                                extractionScopeMode === opt.v
+                                                    ? 'border-[#3390EC] bg-[#F0F4FA]'
+                                                    : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
+                                            }`}>
+                                            <input type="radio" name="extraction-scope" className="mt-0.5"
+                                                checked={extractionScopeMode === opt.v}
+                                                onChange={() => setExtractionScopeMode(opt.v)} />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-[13px] font-medium text-[#111] flex items-baseline gap-1.5">
+                                                    {opt.label}
+                                                    {opt.count !== undefined && (
+                                                        <span className="text-[11px] font-normal text-gray-500">
+                                                            ({opt.count.toLocaleString('ru')} сообщ.)
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="text-[11px] text-gray-500">{opt.hint}</div>
+                                            </div>
+                                        </label>
+                                    ))
+                                })()}
                             </div>
                         </div>
                         {/* PR7.4 + 7.13: Шаг 2 — Из каких источников.
