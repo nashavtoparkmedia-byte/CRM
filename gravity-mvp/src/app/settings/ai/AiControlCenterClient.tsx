@@ -1461,39 +1461,106 @@ export default function AiControlCenterClient({
                     )
                 })()}
 
-                {/* Факт последнего импорта (завершённого) */}
-                {lastJob && (lastJob.status === 'completed' || lastJob.status === 'failed') && (
-                    <>
-                        <div className="grid grid-cols-3 gap-3 mt-3">
-                            {[
-                                { label: 'Сообщений', value: lastJob.messagesImported },
-                                { label: 'Чатов',     value: lastJob.chatsScanned },
-                                { label: 'Контактов', value: lastJob.contactsFound },
-                            ].map(s => (
-                                <div key={s.label} title={STAT_HINT[s.label]} className="bg-white rounded-lg p-2.5 text-center cursor-help">
-                                    <div className="text-[18px] font-bold text-[#111]">{s.value.toLocaleString()}</div>
-                                    <div className="text-[10px] text-gray-500">{s.label}</div>
+                {/* PR7.16: top-card stats теперь по всем каналам, не
+                    только по last job. Агрегируем последний successful
+                    job per (connectionId || channelKey) — это даёт
+                    точную картину «что есть в системе сейчас» без
+                    double-counting от повторных синхронизаций. */}
+                {lastJob && (lastJob.status === 'completed' || lastJob.status === 'failed') && (() => {
+                    // Group jobs: каждый импорт идентифицируется по
+                    // connectionId (если есть) или по channel-set
+                    // (для legacy/TG/MAX без connectionId).
+                    type LatestPerSource = {
+                        key: string
+                        channels: string[]
+                        connectionId: string | null
+                        messages: number
+                        chats: number
+                        contacts: number
+                        finishedAt: string | null
+                    }
+                    const latestBySource = new Map<string, LatestPerSource>()
+                    const completed = importJobs.filter(j => j.status === 'completed')
+                    for (const j of completed) {
+                        const cid = (j as any).connectionId as string | null
+                        const key = cid ?? `channels:${[...j.channels].sort().join(',')}`
+                        const finishedAt = j.finishedAt ?? j.createdAt
+                        const existing = latestBySource.get(key)
+                        if (!existing || (finishedAt && existing.finishedAt && new Date(finishedAt) > new Date(existing.finishedAt))) {
+                            latestBySource.set(key, {
+                                key, channels: j.channels, connectionId: cid,
+                                messages: j.messagesImported,
+                                chats: j.chatsScanned,
+                                contacts: j.contactsFound,
+                                finishedAt,
+                            })
+                        }
+                    }
+                    const totals = { messages: 0, chats: 0, contacts: 0 }
+                    const byChannel = new Map<string, { messages: number; chats: number; contacts: number }>()
+                    for (const v of latestBySource.values()) {
+                        totals.messages += v.messages
+                        totals.chats    += v.chats
+                        totals.contacts += v.contacts
+                        // Если у job несколько каналов — относим к первому
+                        // (legacy job до per-connection import'а).
+                        const primaryChannel = v.channels[0] ?? 'unknown'
+                        const cur = byChannel.get(primaryChannel) ?? { messages: 0, chats: 0, contacts: 0 }
+                        cur.messages += v.messages
+                        cur.chats    += v.chats
+                        cur.contacts += v.contacts
+                        byChannel.set(primaryChannel, cur)
+                    }
+                    return (
+                        <>
+                            <div className="grid grid-cols-3 gap-3 mt-3">
+                                {[
+                                    { label: 'Сообщений', value: totals.messages },
+                                    { label: 'Чатов',     value: totals.chats },
+                                    { label: 'Контактов', value: totals.contacts },
+                                ].map(s => (
+                                    <div key={s.label} title={STAT_HINT[s.label]} className="bg-white rounded-lg p-2.5 text-center cursor-help">
+                                        <div className="text-[18px] font-bold text-[#111]">{s.value.toLocaleString()}</div>
+                                        <div className="text-[10px] text-gray-500">{s.label}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            {/* PR7.16: breakdown по каналам — пользователь сразу
+                                видит сколько на WhatsApp / Telegram / MAX, а не
+                                только цифру последнего импорта. */}
+                            {byChannel.size > 1 && (
+                                <div className="mt-2 text-[11px] text-gray-500 space-y-0.5">
+                                    <div className="text-gray-400 uppercase tracking-wide text-[10px] font-semibold">
+                                        По каналам
+                                    </div>
+                                    {(['whatsapp', 'telegram', 'max'] as const).map(ch => {
+                                        const v = byChannel.get(ch)
+                                        if (!v) return null
+                                        return (
+                                            <div key={ch}>
+                                                <b className="text-gray-700">{CHANNEL_LABELS[ch] ?? ch}:</b>{' '}
+                                                <span>{v.messages.toLocaleString()} сообщ.</span>
+                                                <span className="text-gray-400"> · {v.chats.toLocaleString()} чатов</span>
+                                                <span className="text-gray-400"> · {v.contacts.toLocaleString()} контактов</span>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
-                            ))}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500">
-                            <span>Каналы: <b className="text-gray-700">{lastJob.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}</b></span>
-                            {lastJob.resultType && (
-                                <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${
-                                    lastJob.resultType === 'full' ? 'bg-blue-50 text-blue-700' :
-                                    lastJob.resultType === 'partial' ? 'bg-yellow-50 text-yellow-700' :
-                                    lastJob.resultType === 'failed'  ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
-                                }`}>{lastJob.resultType === 'full' ? 'Вся доступная история' : lastJob.resultType === 'partial' ? 'Частичный' : lastJob.resultType}</span>
                             )}
-                            {lastJob.coveredPeriodFrom && lastJob.coveredPeriodTo && (
-                                <span>Период: <b className="text-gray-700">{new Date(lastJob.coveredPeriodFrom).toLocaleDateString('ru')} — {new Date(lastJob.coveredPeriodTo).toLocaleDateString('ru')}</b></span>
-                            )}
-                            {lastJob.startedAt && lastJob.finishedAt && (
-                                <span>Время: {Math.round((new Date(lastJob.finishedAt).getTime() - new Date(lastJob.startedAt).getTime()) / 1000)}с</span>
-                            )}
-                        </div>
-                    </>
-                )}
+                            {/* PR7.16: meta строка про сам last job — оставлена
+                                как контекст «когда было последнее обновление». */}
+                            <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500 border-t border-[#E0E8F4] pt-2">
+                                <span className="text-gray-400">Последнее обновление:</span>
+                                {lastJob.coveredPeriodFrom && lastJob.coveredPeriodTo && (
+                                    <span>{new Date(lastJob.coveredPeriodFrom).toLocaleDateString('ru')} — {new Date(lastJob.coveredPeriodTo).toLocaleDateString('ru')}</span>
+                                )}
+                                {lastJob.startedAt && lastJob.finishedAt && (
+                                    <span className="text-gray-400">· {Math.round((new Date(lastJob.finishedAt).getTime() - new Date(lastJob.startedAt).getTime()) / 1000)}с</span>
+                                )}
+                            </div>
+                        </>
+                    )
+                })()}
             </div>
 
             {/* Настройки импорта — без border/bg, чтобы не создавать
@@ -1666,18 +1733,18 @@ export default function AiControlCenterClient({
                                         unknown: '—',
                                     }
                                     if (conn) {
+                                        // PR7.16: убрали дубликат conn.label —
+                                        // он уже отображается в верхней строке
+                                        // job-row (1608). Здесь оставляем только
+                                        // live-статус аккаунта.
                                         const dotColor =
                                             conn.isReady ? 'bg-green-500' :
                                             conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
                                             'bg-gray-300'
                                         return (
-                                            <div className="mt-1 ml-5 flex items-center gap-2 text-[11px] text-gray-500">
-                                                <span>{conn.label}</span>
-                                                <span className="text-gray-300">·</span>
-                                                <span className="inline-flex items-center gap-1">
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                                                    <span>аккаунт сейчас: {STATUS_LABEL[conn.status] ?? conn.status}</span>
-                                                </span>
+                                            <div className="mt-1 ml-5 inline-flex items-center gap-1 text-[11px] text-gray-500">
+                                                <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                                <span>аккаунт сейчас: {STATUS_LABEL[conn.status] ?? conn.status}</span>
                                             </div>
                                         )
                                     }
