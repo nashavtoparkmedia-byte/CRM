@@ -118,10 +118,14 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
     const hasConnectionFilter = !!scope.connectionIds && scope.connectionIds.length > 0
     const connectionIds = scope.connectionIds ?? []
 
+    // PR8.B1: resolve connectionId через COALESCE:
+    //   — WA: WhatsAppChat.connectionId (FK relation)
+    //   — TG/MAX: Chat.metadata->>'connectionId' (хранится в JSONB при
+    //     ингесте сообщений из telegram-mtproto и max-web-scraper)
+    // Это даёт честный per-account provenance для всех трёх каналов
+    // без миграции схемы — данные уже в БД.
+
     if (!hasConnectionFilter) {
-        // Fast path: no filter, но всё равно LEFT JOIN на WhatsAppChat
-        // ради PR7.6.5 source provenance — resolve connectionId для
-        // WA messages. JOIN дешёвый (FK + index), TG/MAX дают NULL.
         return await prisma.$queryRaw<RawMessage[]>`
             SELECT
                 m.id,
@@ -132,7 +136,10 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
                 m.content,
                 m."sentAt",
                 m."aiStatus"::text              AS "aiStatus",
-                wc."connectionId"               AS "connectionId"
+                COALESCE(
+                    wc."connectionId",
+                    c.metadata->>'connectionId'
+                )                               AS "connectionId"
             FROM "Message" m
             LEFT JOIN "Chat" c           ON c.id = m."chatId"
             LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
@@ -147,8 +154,11 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
         `
     }
 
-    // Connection-filtered path: WA real-filter via JOIN, TG/MAX include-all.
-    // PR7.6.5: SELECT wc.connectionId — resolve provenance для WA.
+    // PR8.B6: connection-filtered path — теперь HONEST filter для
+    // ВСЕХ каналов через COALESCE. Раньше TG/MAX include-all через
+    // `OR channel IN (telegram, max)` — это was lie. Теперь:
+    //   resolvedConnId = WA.connectionId || Chat.metadata.connectionId
+    //   match if resolvedConnId in ${connectionIds}
     return await prisma.$queryRaw<RawMessage[]>`
         SELECT
             m.id,
@@ -159,7 +169,10 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
             m.content,
             m."sentAt",
             m."aiStatus"::text              AS "aiStatus",
-            wc."connectionId"               AS "connectionId"
+            COALESCE(
+                wc."connectionId",
+                c.metadata->>'connectionId'
+            )                               AS "connectionId"
         FROM "Message" m
         LEFT JOIN "Chat" c           ON c.id = m."chatId"
         LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
@@ -170,14 +183,10 @@ async function loadCandidateMessages(scope: ExtractionScope): Promise<RawMessage
           AND m.channel::text = ANY(${channels})
           AND (${from}::timestamp IS NULL OR m."sentAt" >= ${from})
           AND (${to}::timestamp   IS NULL OR m."sentAt" <= ${to})
-          AND (
-              -- WA: only messages from chats of selected WA-connections.
-              (m.channel::text = 'whatsapp' AND wc."connectionId" = ANY(${connectionIds}))
-              -- TG/MAX: schema doesn't store connection at chat level,
-              -- so include all messages of these channels when channel
-              -- is in scope.channels. UI must communicate this caveat.
-              OR m.channel::text IN ('telegram', 'max')
-          )
+          AND COALESCE(
+              wc."connectionId",
+              c.metadata->>'connectionId'
+          ) = ANY(${connectionIds})
         ORDER BY m."chatId" ASC, m."sentAt" ASC
     `
 }

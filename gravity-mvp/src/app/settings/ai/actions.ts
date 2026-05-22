@@ -1782,13 +1782,18 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
         }
     }
 
-    // Telegram
+    // Telegram — like MAX, also union with virtual entries from
+    // Chat.metadata.connectionId (PR8.B4). Это покрывает кейсы
+    // где chat metadata содержит connectionId, которого нет в
+    // TelegramConnection (например legacy 'default' id).
     try {
+        const knownTg = new Set<string>()
         const rows = await prisma.$queryRaw<any[]>`
             SELECT id, name, "phoneNumber", "isActive"
             FROM "TelegramConnection"
         `
         for (const r of rows) {
+            knownTg.add(r.id)
             const phoneMasked = maskPhone(r.phoneNumber)
             const label = r.name?.trim()
                 ? `Telegram ${r.name.trim()}`
@@ -1800,6 +1805,33 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
                 channel: 'telegram', id: r.id, label,
                 phoneMasked, name: r.name ?? null,
                 status, isActive: !!r.isActive, isReady: !!r.isActive,
+            })
+        }
+        // PR8.B4: virtual TG entries из Chat.metadata.connectionId.
+        // Покрывает кейсы где connection id есть в metadata, но
+        // нет в TelegramConnection (legacy 'default' например).
+        const virtualTgRows = await prisma.$queryRaw<any[]>`
+            SELECT
+                metadata->>'connectionId'             AS "connectionId",
+                COUNT(*)::int                         AS "chatCount",
+                MAX("updatedAt")                      AS "lastSeenAt"
+            FROM "Chat"
+            WHERE channel = 'telegram'
+              AND metadata->>'connectionId' IS NOT NULL
+            GROUP BY metadata->>'connectionId'
+        `
+        const sevenDaysAgoMs = Date.now() - 7 * 24 * 3600 * 1000
+        for (const r of virtualTgRows) {
+            const id = r.connectionId as string
+            if (!id || knownTg.has(id)) continue
+            const lastSeen = r.lastSeenAt ? new Date(r.lastSeenAt).getTime() : 0
+            const isReadyHeuristic = lastSeen > sevenDaysAgoMs
+            const label = `Telegram · ${id}`
+            result.push({
+                channel: 'telegram', id, label,
+                phoneMasked: null, name: null,
+                status: isReadyHeuristic ? 'ready' : 'inactive',
+                isActive: isReadyHeuristic, isReady: isReadyHeuristic,
             })
         }
     } catch (e: any) {

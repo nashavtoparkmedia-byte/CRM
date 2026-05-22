@@ -1764,14 +1764,11 @@ export default function AiControlCenterClient({
                                             </div>
                                         )
                                     }
-                                    // connectionId IS NULL — legacy WA или TG/MAX
-                                    const isOnlyWa = job.channels.length === 1 && job.channels[0] === 'whatsapp'
+                                    // connectionId IS NULL — legacy job до PR7/PR8 backfill
                                     return (
                                         <div className="mt-1 ml-5 text-[11px] text-gray-400"
-                                             title="Точный аккаунт-источник для этого импорта не сохранён. Для WhatsApp это значит, что импорт был сделан до сохранения привязки. Для Telegram/MAX точечный выбор аккаунта пока в работе.">
-                                            {isOnlyWa
-                                                ? 'Источник аккаунта неизвестен — импорт сделан до сохранения привязки к аккаунтам'
-                                                : 'Источник аккаунта пока определяется по каналу (точечный выбор аккаунта в работе)'}
+                                             title="Точный аккаунт-источник для этого импорта не сохранён — импорт был сделан до того, как мы стали запоминать привязку.">
+                                            Источник аккаунта неизвестен — импорт сделан до сохранения привязки
                                         </div>
                                     )
                                 })()}
@@ -3211,12 +3208,9 @@ export default function AiControlCenterClient({
                                     <div key={channel} className="rounded-lg border border-[#E8E8E8] overflow-hidden">
                                         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] flex items-center justify-between">
                                             <span>{CHANNEL_LABEL_LOCAL[channel] ?? channel}</span>
-                                            {channel !== 'whatsapp' && (
-                                                <span title="Точная привязка знания к конкретному аккаунту для этого мессенджера пока не сохраняется на уровне базы. Отключить знания одного аккаунта Telegram/MAX нельзя — это в работе."
-                                                      className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
-                                                    точечный disable в работе
-                                                </span>
-                                            )}
+                                            {/* PR8.B5: disclaimer «точечный disable в работе»
+                                                удалён — теперь disable работает для всех каналов
+                                                через Chat.metadata.connectionId. */}
                                         </div>
                                         {conns.map(conn => {
                                             const stat = statsByConnId.get(conn.id)
@@ -3229,8 +3223,10 @@ export default function AiControlCenterClient({
                                             const verified     = stat?.itemsVerified ?? 0
                                             const manual       = stat?.itemsManual ?? 0
                                             const sourcesActive = stat?.sourcesActive ?? 0
+                                            // PR8.B3: disable теперь для всех каналов
+                                            // (TG/MAX тоже после backfill через
+                                            // Chat.metadata.connectionId).
                                             const canDisable = canEdit
-                                                && channel === 'whatsapp'
                                                 && itemsActive > 0
                                                 && disableInFlight !== conn.id
                                             return (
@@ -3270,11 +3266,6 @@ export default function AiControlCenterClient({
                                                                 ? <Loader2 size={11} className="animate-spin inline" />
                                                                 : 'Отключить знания'}
                                                         </button>
-                                                    ) : channel !== 'whatsapp' && itemsActive > 0 && canEdit ? (
-                                                        <span title="Disable для этого канала пока не работает — нет привязки сообщений к аккаунту в БД. Это будет в следующем апдейте."
-                                                              className="h-[28px] px-2.5 text-[11px] text-gray-400 inline-flex items-center cursor-help shrink-0">
-                                                            недоступно
-                                                        </span>
                                                     ) : null}
                                                 </div>
                                             )
@@ -3440,7 +3431,8 @@ export default function AiControlCenterClient({
                                 )
                             })}
                             <div className="text-[11px] leading-relaxed">
-                                Для Telegram и MAX точечный disable пока не работает — это в работе.
+                                После PR8 для новых сборов точная привязка работает для всех каналов.
+                                Эти записи остались из старых сборов до сохранения провенанс.
                             </div>
                         </div>
                     </div>
@@ -3992,8 +3984,8 @@ export default function AiControlCenterClient({
                                         {/* Honest disclaimer about unknown-source items */}
                                         {knowledgeStats.totalSources > 0 && readiness.counts.activeItems > 0 && channelLevelParticipation.length > 0 && (
                                             <div className="text-[11px] text-gray-400 pt-1.5 border-t border-[#F0F0F0] leading-relaxed">
-                                                Для Telegram и MAX точечная привязка знания к конкретному
-                                                аккаунту пока не сохраняется — будет в следующих обновлениях.
+                                                Часть старых TG/MAX знаний может быть без точной привязки к аккаунту —
+                                                это сборы до того, как мы стали сохранять привязку для этих каналов.
                                             </div>
                                         )}
                                     </div>
@@ -4112,15 +4104,22 @@ export default function AiControlCenterClient({
                                 {coreEmpty ? 'Собрать ядро' : 'Собрать / обновить ядро'}
                             </button>
                         )}
-                        {!coreEmpty && canEdit && (
+                        {/* PR8.A: reset button всегда видна. Раньше пряталась
+                            при coreEmpty — но даже если activeItems=0, могут
+                            быть черновики или архивные записи, которые
+                            пользователь хочет полностью очистить перед
+                            новым сбором. */}
+                        {canEdit && (
                             <button
                                 type="button"
                                 onClick={openResetModal}
-                                title="Перевести активные знания в архив (мягкое действие, обратимо) и собрать ядро заново."
+                                title={coreEmpty
+                                    ? 'Активных знаний сейчас нет — но можно очистить черновики и архив, чтобы начать с чистого листа перед новым сбором.'
+                                    : 'Перевести активные знания в архив (мягкое действие, обратимо) и собрать ядро заново.'}
                                 className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
                             >
                                 <Trash2 size={12} />
-                                Очистить и собрать заново
+                                {coreEmpty ? 'Очистить ядро' : 'Очистить и собрать заново'}
                             </button>
                         )}
                         <button
@@ -4687,13 +4686,12 @@ export default function AiControlCenterClient({
                                                     <div key={channel} className="rounded-lg border border-[#E8E8E8]">
                                                         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] rounded-t-lg flex items-center justify-between">
                                                             <span>{CHANNEL_LABEL[channel] ?? channel}</span>
-                                                            {channel !== 'whatsapp' && (
-                                                                channelHasEffective ? (
-                                                                    <span title="Снимите все галочки этого канала, если не хотите включать его в сбор. Если оставлена хотя бы одна — сбор берёт всю историю канала (точечный выбор конкретного аккаунта для Telegram/MAX пока в работе)."
-                                                                          className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
-                                                                        ⚠ берётся вся история канала
-                                                                    </span>
-                                                                ) : allRowsBlockedByFilter ? (
+                                                            {/* PR8.B5: убран amber-дисклеймер «берётся вся
+                                                                история канала» — теперь TG/MAX тоже точечно
+                                                                фильтруются через Chat.metadata.connectionId.
+                                                                Оставлены useful action-buttons для всех каналов. */}
+                                                            {!channelHasEffective && (
+                                                                allRowsBlockedByFilter ? (
                                                                     <button
                                                                         type="button"
                                                                         onClick={(e) => { e.preventDefault(); handleEnableChannel() }}
@@ -4879,9 +4877,6 @@ export default function AiControlCenterClient({
                                                     return (
                                                         <div key={ch} className="pl-2">
                                                             — {CHANNEL_LABEL_LOCAL[ch]}: {n} {n === 1 ? 'аккаунт' : n < 5 ? 'аккаунта' : 'аккаунтов'}
-                                                            {ch !== 'whatsapp' && (
-                                                                <span className="text-amber-700 text-[10px]"> · берётся вся история канала (точечный выбор для TG/MAX в работе)</span>
-                                                            )}
                                                         </div>
                                                     )
                                                 })}
