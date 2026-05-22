@@ -16,6 +16,7 @@ const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
 const { MessageSync }              = require('./sync/MessageSync')
 const { InitialHistorySync }       = require('./sync/InitialHistorySync')
+const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const QRCode                       = require('qrcode')
@@ -401,6 +402,7 @@ let page          = null
 let context       = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
 let mediaPipeline = null
 let initialSync   = null
+let nameSync      = null  // PR-П: NameSync — раз в час подтягивает имена placeholder-чатов из MAX UI
 let isReady       = false
 
 // Exponential backoff для WS reconnect
@@ -522,6 +524,17 @@ async function init() {
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
     console.log('[App] Initial sync:', syncResult)
 
+    // PR-П: периодический name-sync для outbound-only placeholder-чатов.
+    // Запускается раз в час: спрашивает CRM список Без-Имени MAX-чатов,
+    // навигирует каждый в page, читает header, шлёт обратно. Использует
+    // ту же page что и live ingest — на время sync ingest на этой странице
+    // приостанавливается (TransportInterceptor продолжает работать через CDP).
+    if (!nameSync) {
+        const crmBase = (CRM_WEBHOOK_URL || '').replace(/\/api\/.*$/, '') || 'http://127.0.0.1:3002'
+        nameSync = new NameSync({ page, crmBaseUrl: crmBase })
+        nameSync.start()
+    }
+
     // Записываем время ПОСЛЕ catch-up — следующий рестарт будет подтягивать с этого момента
     try {
       fs.writeFileSync(
@@ -533,6 +546,7 @@ async function init() {
 
   session.onLogout(() => {
     isReady = false
+    if (nameSync) { nameSync.stop(); nameSync = null }
     console.log('[App] Сессия завершена')
   })
 

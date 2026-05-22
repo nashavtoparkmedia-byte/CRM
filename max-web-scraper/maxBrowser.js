@@ -177,9 +177,6 @@ class MaxBrowser {
                     this.isLoggedIn = true;
                     this._loggedInSince = Date.now();
                     this.startPassivePolling();
-                    // PR-П: периодический sync имён placeholder-чатов из MAX UI.
-                    // Запускается раз в час, paused passive polling на время навигации.
-                    this.startNameSyncLoop();
                     try {
                         await this.context.storageState({ path: path.join(this.userDataDir, 'state.json') });
                     } catch(e) {}
@@ -495,15 +492,9 @@ class MaxBrowser {
     }
 
     /**
-     * PR-П: периодический sync имён из MAX UI для placeholder-чатов CRM.
-     *
-     * Логика (раз в час):
-     *   1. GET CRM /api/webhook/max/unlinked-chats → массив chatIds
-     *   2. Для каждого: page.goto(/<chatId>), wait, читаем header text
-     *   3. POST CRM /api/webhook/max/sync-names с парами {chatId, name}
-     *
-     * Pause passive polling на время sync — навигация в чат сбивает live ingest.
-     * Возобновляем после.
+     * @deprecated Этот файл (maxBrowser.js) — legacy, в production не подключается.
+     * Текущая архитектура: index.js → SessionController/TransportInterceptor/MessageSync.
+     * Name-sync теперь живёт в sync/NameSync.js, подключается в index.js на onWsAuth.
      */
     startNameSyncLoop() {
         if (this.nameSyncInterval) clearInterval(this.nameSyncInterval);
