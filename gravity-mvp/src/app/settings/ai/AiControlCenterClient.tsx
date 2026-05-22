@@ -1335,8 +1335,23 @@ export default function AiControlCenterClient({
                         Ни одного подключения нет. Добавьте WhatsApp / Telegram / MAX в разделе «Интеграции».
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                        {channelConnections.map(conn => {
+                    // PR9.12: группировка по каналу в фиксированном порядке WA → TG → MAX
+                    <div className="space-y-4">
+                        {(['whatsapp', 'telegram', 'max'] as const).map(channel => {
+                            const channelConns = channelConnections.filter(c => c.channel === channel)
+                            if (channelConns.length === 0) return null
+                            const CHANNEL_TITLE: Record<string, string> = {
+                                whatsapp: 'WhatsApp',
+                                telegram: 'Telegram',
+                                max:      'MAX',
+                            }
+                            return (
+                            <div key={channel}>
+                                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                    {CHANNEL_TITLE[channel]} · {channelConns.length} {channelConns.length === 1 ? 'аккаунт' : channelConns.length < 5 ? 'аккаунта' : 'аккаунтов'}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                    {channelConns.map(conn => {
                             const stat = connectionCounts.find(c => c.connectionId === conn.id)
                             const messages = stat?.messages ?? 0
                             const chats    = stat?.chats ?? 0
@@ -1418,6 +1433,10 @@ export default function AiControlCenterClient({
                                         </a>
                                     </div>
                                 </button>
+                            )
+                        })}
+                                </div>
+                            </div>
                             )
                         })}
                     </div>
