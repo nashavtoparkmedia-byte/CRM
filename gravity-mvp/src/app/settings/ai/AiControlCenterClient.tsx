@@ -1719,9 +1719,6 @@ export default function AiControlCenterClient({
         setConfig(c => {
             const def = PROVIDER_DEFAULTS[newProvider]
             if (!def) return { ...c, provider: newProvider }
-            // Только если текущие модели всё ещё дефолтные ДРУГОГО провайдера —
-            // подменяем на дефолты нового. Если админ уже руками задал имена,
-            // не трогаем (не хотим терять его выбор).
             const allDefaults = Object.values(PROVIDER_DEFAULTS).flatMap(d => [d.classification, d.response])
             const classIsKnownDefault = allDefaults.includes(c.classificationModel)
             const responseIsKnownDefault = allDefaults.includes(c.responseModel)
@@ -1732,6 +1729,11 @@ export default function AiControlCenterClient({
                 responseModel: responseIsKnownDefault ? def.response : c.responseModel,
             }
         })
+        // PR9.18: очищаем local input при switch — иначе ключ от
+        // предыдущего провайдера остаётся в input field, что выглядит
+        // как баг. БД-сохранённый ключ (config.apiKeyEncrypted)
+        // продолжает работать; input просто пустой.
+        setApiKey('')
         setTestStatus('idle')
     }
 
@@ -1823,18 +1825,15 @@ export default function AiControlCenterClient({
                 активного. Старая большая info-карточка статуса удалена —
                 ту же инфу даёт цвет конкретной карточки. */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(['anthropic', 'openai'] as const).map(p => {
+                {/* PR9.18: порядок поменян — OpenAI первая (чаще используется),
+                    Anthropic вторая. */}
+                {(['openai', 'anthropic'] as const).map(p => {
                     const meta = PROVIDER_META[p]
                     const isActive = config.provider === p
-                    // PR9.17: бинарная семантика для активной карточки —
-                    // либо зелёная (точно работает), либо красная (НЕ
-                    // подтверждено что работает). «unchecked» / «empty»
-                    // считаем красным, потому что мы не знаем работает ли.
-                    // testing → промежуточный амбер на короткое время.
                     const isWorking = effectiveStatus === 'ok'
                     const isTesting = effectiveStatus === 'testing'
                     const cardBg = !isActive
-                        ? 'bg-white border-gray-200 hover:border-[#3390EC] hover:bg-[#FAFBFC]'
+                        ? 'bg-white border-gray-200 hover:border-[#3390EC] hover:bg-[#FAFBFC] cursor-pointer'
                         : isTesting
                             ? 'bg-amber-50 border-amber-400'
                             : isWorking
@@ -1850,14 +1849,18 @@ export default function AiControlCenterClient({
                     const pillText = !isActive ? 'не используется'
                         : isTesting ? '… проверяем'
                         : isWorking ? '✓ ключ работает'
-                        // Все остальные красные — но pill text разный
-                        // чтобы пользователь понимал ЧТО именно не так.
                         : effectiveStatus === 'error' ? '✗ ключ не работает'
                         : effectiveStatus === 'unchecked' ? '✗ нужна проверка'
                         : '✗ ключ не задан'
+                    // PR9.18: вся карточка кликабельна когда неактивна
+                    // → switchProvider. Раньше нужно было целить в
+                    // мелкую ссылку «Сделать активным».
+                    const handleCardClick = !isActive ? () => switchProvider(p) : undefined
                     return (
                         <div
                             key={p}
+                            onClick={handleCardClick}
+                            title={!isActive ? `Кликни чтобы переключиться на ${meta.name}` : undefined}
                             className={`rounded-xl border-2 px-4 py-3.5 transition-colors ${cardBg}`}
                         >
                             <div className="flex items-start justify-between gap-2 mb-2">
@@ -1874,18 +1877,14 @@ export default function AiControlCenterClient({
                                     Последняя проверка: {new Date(config.lastConnectionCheckAt).toLocaleString('ru')}
                                 </div>
                             )}
-                            {!isActive && (
-                                <button
-                                    type="button"
-                                    onClick={() => switchProvider(p)}
-                                    className="mt-2 text-[12px] font-semibold text-[#3390EC] hover:underline"
-                                >
-                                    Сделать активным →
-                                </button>
-                            )}
                             {isActive && (
                                 <div className="text-[11px] text-[#3390EC] font-semibold mt-1">
                                     ● активный провайдер
+                                </div>
+                            )}
+                            {!isActive && (
+                                <div className="text-[12px] font-semibold text-[#3390EC] mt-2">
+                                    Кликни чтобы переключиться →
                                 </div>
                             )}
                         </div>
@@ -1932,6 +1931,16 @@ export default function AiControlCenterClient({
                             <XCircle size={11} /> {testError}
                         </div>
                     )}
+                    {/* PR9.18: явное пояснение про сохранённый ключ */}
+                    <div className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+                        {config.apiKeyEncrypted && !apiKey.trim() ? (
+                            <>Сохранённый ключ есть в БД. Поле пустое — введи новый чтобы заменить, или просто нажми «Перепроверить» для теста существующего.</>
+                        ) : apiKey.trim() ? (
+                            <>Чтобы сохранить введённый ключ — нажми «Проверить» (при успехе сохранится автоматически) или «Сохранить» внизу.</>
+                        ) : (
+                            <>Введите API-ключ от {PROVIDER_META[config.provider]?.name ?? config.provider}.</>
+                        )}
+                    </div>
                 </div>
 
                 {/* Расширенные настройки — в свёрнутом блоке, чтобы основной
