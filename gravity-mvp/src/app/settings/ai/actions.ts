@@ -1858,11 +1858,15 @@ export async function getExtractionDataRange(
 }
 
 /** PR8.D + PR9.9: per-connection message counts + период из реальной БД.
- *  Используется в passport empty-state и в Sync per-account dashboard. */
+ *  Используется в passport empty-state и в Sync per-account dashboard.
+ *  PR9.32: добавлено поле contacts — нужно чтобы top-card на странице
+ *  «База сообщений» мог суммировать per-account contacts (раньше использовал
+ *  channelTotals → не сходилось с суммой per-account карточек). */
 export interface ConnectionMessageCount {
     connectionId:   string
     messages:       number
     chats:          number
+    contacts:       number
     /** Самое раннее сообщение в БД для этой connection (по sentAt). */
     earliestSentAt: string | null
     /** Самое свежее сообщение в БД для этой connection. */
@@ -1874,6 +1878,7 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
             connectionId: string | null
             messages: number
             chats: number
+            contacts: number
             earliestSentAt: Date | null
             latestSentAt: Date | null
         }>>`
@@ -1881,6 +1886,7 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
                 COALESCE(wc."connectionId", c.metadata->>'connectionId') AS "connectionId",
                 COUNT(*)::int                       AS messages,
                 COUNT(DISTINCT m."chatId")::int     AS chats,
+                COUNT(DISTINCT c."contactId")::int  AS contacts,
                 MIN(m."sentAt")                     AS "earliestSentAt",
                 MAX(m."sentAt")                     AS "latestSentAt"
             FROM "Message" m
@@ -1895,6 +1901,7 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
                 connectionId:   r.connectionId!,
                 messages:       Number(r.messages ?? 0),
                 chats:          Number(r.chats ?? 0),
+                contacts:       Number(r.contacts ?? 0),
                 earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
                 latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
             }))

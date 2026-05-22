@@ -1305,11 +1305,25 @@ export default function AiControlCenterClient({
                   — период (earliest sentAt — latest sentAt)
                   — клик на карточку = refresh per-connection stats. */}
             <div className="space-y-3 pt-1">
-                {/* PR9.13: глобальный дашборд — 3 prominent карточки. */}
+                {/* PR9.13: глобальный дашборд — 3 prominent карточки.
+                    PR9.32: топ-карточки теперь суммируют per-account counts
+                    (раньше использовали channelTotals = вся таблица Message),
+                    чтобы математика «топ = сумма по аккаунтам» сходилась.
+                    Если в БД есть orphan-сообщения без привязки к аккаунту
+                    (старые/legacy), показываем их отдельной строкой
+                    «+ N без привязки к аккаунту». */}
                 {(() => {
-                    const totalMessages = channelTotals.reduce((s, t) => s + t.messages, 0)
-                    const totalChats    = channelTotals.reduce((s, t) => s + t.chats, 0)
-                    const totalContacts = channelTotals.reduce((s, t) => s + t.contacts, 0)
+                    const totalMessages = connectionCounts.reduce((s, c) => s + c.messages, 0)
+                    const totalChats    = connectionCounts.reduce((s, c) => s + c.chats, 0)
+                    const totalContacts = connectionCounts.reduce((s, c) => s + c.contacts, 0)
+                    // Orphan = всё в Message minus всё по аккаунтам
+                    const channelMessages = channelTotals.reduce((s, t) => s + t.messages, 0)
+                    const channelChats    = channelTotals.reduce((s, t) => s + t.chats, 0)
+                    const channelContacts = channelTotals.reduce((s, t) => s + t.contacts, 0)
+                    const orphanMessages = Math.max(0, channelMessages - totalMessages)
+                    const orphanChats    = Math.max(0, channelChats    - totalChats)
+                    const orphanContacts = Math.max(0, channelContacts - totalContacts)
+                    const hasOrphan = orphanMessages > 0 || orphanChats > 0 || orphanContacts > 0
                     return (
                         <div>
                             {/* PR9.24: убрали кнопку «Обновить» + таймстамп
@@ -1348,6 +1362,20 @@ export default function AiControlCenterClient({
                                     </div>
                                 </div>
                             </div>
+                            {hasOrphan && (
+                                <div
+                                    className="mt-2 text-[11px] text-gray-500 leading-snug"
+                                    title="Это сообщения / чаты / контакты, которые лежат в базе CRM, но не привязаны ни к одному из подключённых сейчас аккаунтов. Обычно — наследие от старых импортов или удалённых подключений. AI их не анализирует в обычной выборке по аккаунтам."
+                                >
+                                    Без привязки к аккаунту:{' '}
+                                    {orphanMessages > 0 && <span><b>{orphanMessages.toLocaleString('ru')}</b> сообщ.</span>}
+                                    {orphanMessages > 0 && (orphanChats > 0 || orphanContacts > 0) && ', '}
+                                    {orphanChats > 0 && <span><b>{orphanChats.toLocaleString('ru')}</b> чат.</span>}
+                                    {orphanChats > 0 && orphanContacts > 0 && ', '}
+                                    {orphanContacts > 0 && <span><b>{orphanContacts.toLocaleString('ru')}</b> контакт.</span>}
+                                    {' '}— наследие старых импортов
+                                </div>
+                            )}
                         </div>
                     )
                 })()}
