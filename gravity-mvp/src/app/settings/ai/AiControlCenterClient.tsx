@@ -1410,6 +1410,7 @@ export default function AiControlCenterClient({
                                 <div
                                     key={conn.id}
                                     className={`text-left rounded-xl border-2 px-4 py-3.5 ${cardBg}`}
+                                    title="Чтобы изменить период истории в БД — нажми «Открыть настройки» внизу карточки."
                                 >
                                     {/* Header: label + status pill */}
                                     <div className="flex items-start justify-between gap-2 mb-2">
