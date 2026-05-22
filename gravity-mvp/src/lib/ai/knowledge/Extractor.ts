@@ -47,6 +47,12 @@ import {
 // ─── Tunable constants ────────────────────────────────────────────
 
 const BATCH_SIZE = 8
+// PR9: параллельные batch'и для скорости. OpenAI rate limit для
+// gpt-4o-mini = 10 000 RPM — 4 одновременных запроса (≈ 2400 RPM
+// при 5 сек/запрос) запас огромный. Время сбора: было 38 batch
+// × 5с = 190с → стало 10 «волн» × 5с = 50с (3.8×). Если batch
+// падает — это просто один failure, остальные продолжают.
+const BATCH_CONCURRENCY = 4
 const MIN_CONFIDENCE = 0.5
 const MERGE_SIMILARITY = 0.60
 const CONFLICT_TITLE_SIM = 0.50
@@ -733,21 +739,34 @@ export async function runExtraction(jobId: string): Promise<void> {
             itemsBySection: new Map(),
             progress,
         }
+        // PR9: разбиваем pairs на batches, batches группируем в «волны»
+        // по BATCH_CONCURRENCY штук. Внутри волны — Promise.all (паралл.),
+        // волны идут последовательно (чтобы видеть progress + не выйти
+        // за rate limit). Раньше был чистый for+await — медленно.
         let batchFailures = 0
+        const allBatches: typeof built.pairs[] = []
         for (let i = 0; i < built.pairs.length; i += BATCH_SIZE) {
-            const batch = built.pairs.slice(i, i + BATCH_SIZE)
-            try {
-                await processBatch(batch, ctx, provider, model, config.apiKey!)
-            } catch (e: any) {
-                batchFailures++
-                progress.llmErrors++
-                if (process.env.NODE_ENV !== 'production') {
-                    console.error('[extractor] batch error:', e?.message)
+            allBatches.push(built.pairs.slice(i, i + BATCH_SIZE))
+        }
+        for (let waveIdx = 0; waveIdx < allBatches.length; waveIdx += BATCH_CONCURRENCY) {
+            const wave = allBatches.slice(waveIdx, waveIdx + BATCH_CONCURRENCY)
+            // Promise.allSettled — один сбойный batch не валит остальные.
+            const results = await Promise.allSettled(wave.map(batch =>
+                processBatch(batch, ctx, provider, model, config.apiKey!)
+            ))
+            for (const r of results) {
+                if (r.status === 'rejected') {
+                    batchFailures++
+                    progress.llmErrors++
+                    if (process.env.NODE_ENV !== 'production') {
+                        const reason = r.reason instanceof Error ? r.reason.message : String(r.reason)
+                        console.error('[extractor] batch error:', reason)
+                    }
                 }
             }
-            if (i % (BATCH_SIZE * 5) === 0) {
-                await updateJobProgress(jobId, progress)
-            }
+            // Прогресс обновляется после каждой «волны» — пользователь
+            // видит движение в UI каждые ~5 секунд.
+            await updateJobProgress(jobId, progress)
         }
 
         const finalStatus: 'completed' | 'partial' =
