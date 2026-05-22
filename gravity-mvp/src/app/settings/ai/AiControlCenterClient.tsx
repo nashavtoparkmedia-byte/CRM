@@ -1790,13 +1790,17 @@ export default function AiControlCenterClient({
         cardBg: string; pillBg: string; titleColor: string;
         title: string; subtitle: string; buttonLabel: string;
     }> = {
+        // PR9.26: статус всегда отображается корректно (auto-test + persist),
+        // поэтому единый action verb «Подключить» вместо «Проверить» — кнопка
+        // не верифицирует абстрактную истину, она именно подключает / переподключает
+        // ключ к провайдеру. Так короче и совпадает с ментальной моделью пользователя.
         ok: {
             cardBg: 'bg-emerald-50 border-emerald-300',
             pillBg: 'bg-emerald-600 text-white',
             titleColor: 'text-emerald-900',
             title: 'Ключ активен',
             subtitle: 'AI отвечает через выбранный провайдер.',
-            buttonLabel: 'Перепроверить',
+            buttonLabel: 'Подключить',
         },
         error: {
             cardBg: 'bg-red-50 border-red-300',
@@ -1804,15 +1808,15 @@ export default function AiControlCenterClient({
             titleColor: 'text-red-900',
             title: 'Ключ не работает',
             subtitle: testError || 'Проверьте ключ, баланс и доступ к модели.',
-            buttonLabel: 'Проверить снова',
+            buttonLabel: 'Подключить',
         },
         testing: {
             cardBg: 'bg-amber-50 border-amber-300',
             pillBg: 'bg-amber-600 text-white',
             titleColor: 'text-amber-900',
-            title: 'Проверяем…',
+            title: 'Подключаем…',
             subtitle: 'Отправляем тестовый запрос провайдеру.',
-            buttonLabel: 'Проверяем…',
+            buttonLabel: 'Подключаем…',
         },
         unchecked: {
             cardBg: 'bg-gray-50 border-gray-300',
@@ -1820,7 +1824,7 @@ export default function AiControlCenterClient({
             titleColor: 'text-gray-900',
             title: 'Ключ не проверен',
             subtitle: 'Ключ есть, но мы ещё не проверяли, работает ли он.',
-            buttonLabel: 'Проверить',
+            buttonLabel: 'Подключить',
         },
         empty: {
             cardBg: 'bg-amber-50 border-amber-300',
@@ -1828,7 +1832,7 @@ export default function AiControlCenterClient({
             titleColor: 'text-amber-900',
             title: 'Ключ не задан',
             subtitle: 'Введите API-ключ от Anthropic или OpenAI ниже.',
-            buttonLabel: 'Проверить',
+            buttonLabel: 'Подключить',
         },
     }
     const theme = STATUS_THEME[effectiveStatus]
@@ -1958,7 +1962,7 @@ export default function AiControlCenterClient({
                                     : 'bg-[#3390EC] text-white hover:bg-[#2B7FD4]'
                             }`}
                         >
-                            {testStatus === 'testing' ? 'Проверка...' : theme.buttonLabel}
+                            {testStatus === 'testing' ? 'Подключаем…' : theme.buttonLabel}
                         </button>
                     </div>
                     {testStatus === 'error' && testError && (
@@ -1977,7 +1981,7 @@ export default function AiControlCenterClient({
                         </div>
                     ) : apiKey.trim() ? (
                         <div className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
-                            Чтобы сохранить введённый ключ — нажми «Проверить» (при успехе сохранится автоматически) или «Сохранить» внизу.
+                            Чтобы сохранить введённый ключ — нажми «Подключить» (при успехе сохранится автоматически) или «Сохранить» внизу.
                         </div>
                     ) : (
                         <div className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
@@ -3894,7 +3898,7 @@ export default function AiControlCenterClient({
                             </div>
                             <p>
                                 Все {pn('llmCalls')} запросов к AI завершились ошибкой. Ядро не собралось.
-                                Проверьте на вкладке <strong>AI Провайдер</strong> — нажмите «Проверить»,
+                                Проверьте на вкладке <strong>AI Провайдер</strong> — нажмите «Подключить»,
                                 чтобы убедиться что API-ключ действителен и модель доступна.
                                 Частые причины: неверный ключ, исчерпан баланс, rate limit.
                             </p>
