@@ -4558,6 +4558,19 @@ export default function AiControlCenterClient({
                                                     // (б) галочки disabled фильтром «Только подключённые сейчас»
                                                     // (в) хоть одна effective ☑ — канал в сборе
                                                     const allRowsBlockedByFilter = conns.every(c => onlyConnectedNow && !c.isReady)
+                                                    // PR7.15.2: one-click «включить канал» — снимает фильтр И
+                                                    // автоматически добавляет все подключения этого канала
+                                                    // в выбор. Раньше пользователь сначала кликал «снять
+                                                    // фильтр», потом ещё раз должен был явно тыкнуть чекбокс
+                                                    // — и это было неочевидно.
+                                                    const handleEnableChannel = () => {
+                                                        setOnlyConnectedNow(false)
+                                                        setSelectedConnectionIds(prev => {
+                                                            const next = new Set(prev)
+                                                            for (const c of conns) next.add(c.id)
+                                                            return next
+                                                        })
+                                                    }
                                                     return (
                                                     <div key={channel} className="rounded-lg border border-[#E8E8E8]">
                                                         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] rounded-t-lg flex items-center justify-between">
@@ -4571,20 +4584,34 @@ export default function AiControlCenterClient({
                                                                 ) : allRowsBlockedByFilter ? (
                                                                     <button
                                                                         type="button"
-                                                                        onClick={(e) => { e.preventDefault(); setOnlyConnectedNow(false) }}
-                                                                        title="Все аккаунты этого канала помечены как неактивные, поэтому фильтр «Только подключённые сейчас» их блокирует. Нажмите, чтобы снять фильтр и иметь возможность их выбрать."
+                                                                        onClick={(e) => { e.preventDefault(); handleEnableChannel() }}
+                                                                        title="Снимет фильтр «Только подключённые сейчас» И автоматически поставит галки на все аккаунты этого канала. Один клик вместо двух."
                                                                         className="text-[10px] font-medium text-amber-700 hover:underline normal-case tracking-normal cursor-pointer"
                                                                     >
-                                                                        заблокирован фильтром — снять?
+                                                                        включить канал в сбор
                                                                     </button>
                                                                 ) : (
-                                                                    <span title="Ни одного аккаунта этого канала не выбрано — канал НЕ попадёт в сбор."
-                                                                          className="text-[10px] font-medium text-gray-400 cursor-help normal-case tracking-normal">
-                                                                        канал не участвует
-                                                                    </span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.preventDefault(); handleEnableChannel() }}
+                                                                        title="Поставить галки на все аккаунты этого канала, чтобы они попали в сбор."
+                                                                        className="text-[10px] font-medium text-gray-500 hover:text-[#3390EC] hover:underline normal-case tracking-normal cursor-pointer"
+                                                                    >
+                                                                        канал не участвует — включить?
+                                                                    </button>
                                                                 )
                                                             )}
                                                         </div>
+                                                        {/* PR7.15.2: explanation для MAX-архитектуры.
+                                                            Пользователь видит «Бот поддержка Yoko» и ищет
+                                                            «обычный MAX-аккаунт». Объясняем что таких нет —
+                                                            MAX интегрирован через бота. */}
+                                                        {channel === 'max' && (
+                                                            <div className="px-3 py-1.5 text-[10px] text-gray-500 leading-relaxed border-t border-[#F0F0F0] bg-[#FAFBFC]">
+                                                                MAX интегрирован через корпоративного бота — других «аккаунтов» нет.
+                                                                Чтобы включить MAX в сбор — поставьте галку на бота.
+                                                            </div>
+                                                        )}
                                                         {conns.map(conn => {
                                                             const checked = selectedConnectionIds.has(conn.id)
                                                             const disabled = onlyConnectedNow && !conn.isReady
