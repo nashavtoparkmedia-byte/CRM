@@ -4007,23 +4007,29 @@ export default function AiControlCenterClient({
                                     </div>
                                 ) : (
                                     <div className="space-y-1.5">
-                                        {/* PR7.16.2: показываем каналы в стабильном порядке.
-                                            Сначала те у которых есть per-account inputs (WA),
-                                            потом channel-level only (TG/MAX). */}
+                                        {/* PR7.16.2 + PR9.2: показываем каналы в стабильном порядке.
+                                            Сначала per-account entries (WA + TG + MAX через
+                                            metadata), потом — channel-level orphan ТОЛЬКО когда
+                                            у канала вообще нет per-account participated entries.
+                                            Это убирает дубль типа «TG +79221853150 · участвовал»
+                                            И «канал участвовал · 15 источников» рядом. */}
                                         {(['whatsapp', 'telegram', 'max'] as const).map(channel => {
                                             const conns = participatingByChannel.get(channel) ?? []
                                             const channelLevel = channelLevelParticipation.find(p => p.channel === channel)
-                                            // Если у канала ни per-account, ни channel-level
-                                            // активных sources — не показываем (пропускаем
-                                            // «не участвовал» entries чтобы не загромождать).
-                                            const hasParticipated = conns.some(c => c.participated) || !!channelLevel
+                                            const anyPerAccountParticipated = conns.some(c => c.participated)
+                                            // Channel-level orphan показываем ТОЛЬКО когда нет
+                                            // per-account participated. Если есть — orphan-данные
+                                            // это legacy, они уже косвенно отражены в общем числе
+                                            // знаний; отдельную строку убираем.
+                                            const showChannelLevel = !!channelLevel && !anyPerAccountParticipated
+                                            const hasParticipated = anyPerAccountParticipated || showChannelLevel
                                             if (!hasParticipated && conns.length === 0) return null
                                             return (
                                                 <div key={channel} className="text-[12px]">
                                                     <div className="font-medium text-[#111]">
                                                         {CHANNEL_LABEL_LOCAL[channel] ?? channel}
                                                     </div>
-                                                    {/* Per-account rows (только WA сейчас имеет реальное mapping) */}
+                                                    {/* Per-account rows */}
                                                     {conns.slice(0, 4).map(({ conn, participated }) => {
                                                         const status = STATUS_LABEL_LOCAL[conn.status] ?? conn.status
                                                         return (
@@ -4041,28 +4047,42 @@ export default function AiControlCenterClient({
                                                             и ещё {conns.length - 4}
                                                         </div>
                                                     )}
-                                                    {/* Channel-level entry: если у канала есть sources
-                                                        без connectionId (TG/MAX legacy) — отдельная
-                                                        строка с явным пояснением. */}
-                                                    {channelLevel && (
-                                                        <div className="text-[11px] text-gray-600 leading-snug pl-2">
-                                                            — <span className="text-green-700">канал участвовал</span>
+                                                    {/* Channel-level orphan — ТОЛЬКО если нет
+                                                        per-account participated. Honest wording:
+                                                        это legacy данные, не относятся к
+                                                        выбору пользователя в Шаге 2. */}
+                                                    {showChannelLevel && (
+                                                        <div className="text-[11px] text-gray-500 leading-snug pl-2">
+                                                            — <span className="text-gray-500">из старых сборов:</span>
                                                             <span className="text-gray-400">
-                                                                {' '}· {channelLevel.stat.sourcesActive} источников
-                                                                {' '}· точечный аккаунт не сохранён
+                                                                {' '}{channelLevel!.stat.sourcesActive} источников · аккаунт не сохранён
                                                             </span>
                                                         </div>
                                                     )}
                                                 </div>
                                             )
                                         })}
-                                        {/* Honest disclaimer about unknown-source items */}
-                                        {knowledgeStats.totalSources > 0 && readiness.counts.activeItems > 0 && channelLevelParticipation.length > 0 && (
-                                            <div className="text-[11px] text-gray-400 pt-1.5 border-t border-[#F0F0F0] leading-relaxed">
-                                                Часть старых TG/MAX знаний может быть без точной привязки к аккаунту —
-                                                это сборы до того, как мы стали сохранять привязку для этих каналов.
-                                            </div>
-                                        )}
+                                        {/* PR9.2: honest disclaimer ТОЛЬКО когда есть orphan
+                                            БЕЗ per-account конкурента у того же канала. Если
+                                            пользователь видит TG +XXX · участвовал, ему не нужно
+                                            знать про 15 legacy orphan'ов — они не относятся к
+                                            его текущему выбору. */}
+                                        {knowledgeStats.totalSources > 0 && readiness.counts.activeItems > 0 && (() => {
+                                            // Показываем disclaimer только если есть orphan каналы
+                                            // без participated per-account.
+                                            const hasOrphanOnly = channelLevelParticipation.some(p => {
+                                                const conns = participatingByChannel.get(p.channel) ?? []
+                                                return !conns.some(c => c.participated)
+                                            })
+                                            if (!hasOrphanOnly) return null
+                                            return (
+                                                <div className="text-[11px] text-gray-400 pt-1.5 border-t border-[#F0F0F0] leading-relaxed">
+                                                    Часть знаний из старых сборов без точной привязки к аккаунту —
+                                                    это можно очистить через «Очистить ядро» (режим «Только авто-собранные»),
+                                                    тогда новый сбор пересоберёт всё с точной привязкой.
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
                                 )}
                             </div>
