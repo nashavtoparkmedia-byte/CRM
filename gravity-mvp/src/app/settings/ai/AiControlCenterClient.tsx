@@ -1442,8 +1442,12 @@ export default function AiControlCenterClient({
                             const channelHref =
                                 conn.channel === 'whatsapp' ? '/settings/integrations/whatsapp' :
                                 conn.channel === 'telegram' ? '/settings/integrations/telegram' :
-                                conn.channel === 'phone'    ? '/settings/integrations/telephony' :
+                                conn.channel === 'phone'    ? '/calls' :
                                 '/settings/integrations/max'
+                            // PR9.42: для voice — другой текст ссылки. Это список
+                            // звонков (где видно расшифровки), а не настройки.
+                            const channelLinkLabel =
+                                conn.channel === 'phone' ? 'Открыть список звонков →' : 'Открыть настройки →'
                             // PR9.10: color-coded background
                             // зелёный для подключённых, красный — отключённых,
                             // амбер — переходное состояние (qr/authenticating).
@@ -1464,7 +1468,9 @@ export default function AiControlCenterClient({
                                 <div
                                     key={conn.id}
                                     className={`text-left rounded-xl border-2 px-4 py-3.5 ${cardBg}`}
-                                    title="Чтобы изменить период истории в БД — нажми «Открыть настройки» внизу карточки."
+                                    title={conn.channel === 'phone'
+                                        ? 'Список звонков с записями и расшифровкой — по ссылке внизу карточки.'
+                                        : 'Чтобы изменить период истории в БД — нажми «Открыть настройки» внизу карточки.'}
                                 >
                                     {/* Header: label + status pill */}
                                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -1506,7 +1512,7 @@ export default function AiControlCenterClient({
                                             href={channelHref}
                                             className="text-[#3390EC] hover:underline font-semibold"
                                         >
-                                            Открыть настройки →
+                                            {channelLinkLabel}
                                         </a>
                                     </div>
                                 </div>
