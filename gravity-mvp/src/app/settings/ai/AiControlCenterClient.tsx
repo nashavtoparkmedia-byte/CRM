@@ -1252,384 +1252,6 @@ export default function AiControlCenterClient({
                 Подгрузить старую историю можно на странице подключения мессенджера
                 (ссылки ниже). Собрать ядро — на вкладке «Ядро знаний».
             </InlineInfo>
-            {/* Индикатор состояния */}
-            <div className={`border rounded-xl p-4 transition-colors ${
-                preflightState === 'unavailable' || preflightState === 'needs_auth'
-                    ? 'bg-red-50/40 border-red-200'
-                    : (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline'
-                    ? 'bg-red-50/40 border-red-200'
-                    : preflightState === 'checking' || transportStatus === 'unknown' || transportStatus === 'initializing'
-                    ? 'bg-blue-50/30 border-blue-200'
-                    : importStatus === 'queued' || importStatus === 'running'
-                    ? 'bg-yellow-50/50 border-yellow-200'
-                    : 'bg-[#F8F9FA] border-[#E8E8E8]'
-            }`}>
-                <div className="flex items-center gap-3">
-                    <StatusDot status={
-                        preflightState === 'unavailable' ? 'error' :
-                        preflightState === 'needs_auth' ? 'error' :
-                        preflightState === 'checking' ? 'queued' :
-                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'error' :
-                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'queued' :
-                        importStatus
-                    } />
-                    <span className="text-[13px] font-semibold text-[#111]">База сообщений</span>
-                    {(preflightState === 'checking' || ((importStatus === 'queued' || importStatus === 'running') && transportStatus !== 'offline')) && (
-                        <RefreshCw size={13} className={`animate-spin ${transportStatus === 'offline' ? 'text-red-500' : 'text-yellow-600'}`} />
-                    )}
-                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto ${
-                        preflightState === 'unavailable' || preflightState === 'needs_auth' ? 'bg-red-50 text-red-700' :
-                        preflightState === 'checking' ? 'bg-blue-50 text-blue-700' :
-                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'bg-red-50 text-red-700' :
-                        (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'bg-blue-50 text-blue-700' :
-                        importStatus === 'completed' ? 'bg-green-50 text-green-700' :
-                        importStatus === 'running' || importStatus === 'queued' ? 'bg-yellow-50 text-yellow-700' :
-                        importStatus === 'partial' ? 'bg-orange-50 text-orange-700' :
-                        importStatus === 'failed' ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                        {preflightState === 'checking' ? 'Проверка…' :
-                         preflightState === 'unavailable' ? 'Сервис не запущен' :
-                         preflightState === 'needs_auth' ? 'Сервис ещё запускается' :
-                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'offline' ? 'Сервис не запущен' :
-                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'Запускается…' :
-                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'unknown' ? 'Проверка…' :
-                         importStatus === 'completed' ? 'Импорт завершён' :
-                         importStatus === 'running' ? 'Идёт импорт' :
-                         importStatus === 'queued' ? 'В очереди' :
-                         importStatus === 'partial' ? 'Частично' :
-                         importStatus === 'failed' ? 'Ошибка' : 'Не запускался'}
-                    </span>
-                </div>
-
-                {/* ── Preflight: проверка транспорта ── */}
-                {preflightState === 'checking' && (
-                    <div className="mt-3 flex items-center gap-2 text-[12px] text-blue-700">
-                        <RefreshCw size={12} className="animate-spin shrink-0" />
-                        <span>Проверяем подключение к {importChannels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}…</span>
-                    </div>
-                )}
-
-                {/* ── Preflight: транспорт недоступен ── */}
-                {(preflightState === 'unavailable' || preflightState === 'needs_auth') && (
-                    <div className="mt-3 space-y-2">
-                        <div className="flex items-start gap-2 text-[12px] text-red-700">
-                            <XCircle size={14} className="shrink-0 mt-0.5" />
-                            <div>
-                                <p className="font-semibold">
-                                    {preflightState === 'needs_auth'
-                                        ? 'Сервис ещё запускается'
-                                        : 'Сервис мессенджера не отвечает — импорт не начат'}
-                                </p>
-                                {preflightError && (
-                                    <p className="text-red-500 text-[11px] mt-0.5">{preflightError}</p>
-                                )}
-                                <p className="text-gray-500 text-[11px] mt-1">
-                                    {preflightState === 'needs_auth'
-                                        ? 'Подождите 10-30 секунд или войдите в аккаунт мессенджера, затем повторите.'
-                                        : 'Включите MAX Web Scraper (иконка в трее или start-all.bat) и повторите.'}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                            <button
-                                onClick={handleRetryPreflight}
-                                className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-gray-700 bg-white border border-[#E0E0E0] rounded-lg hover:border-[#3390EC] hover:text-[#3390EC] transition-colors"
-                            >
-                                <RefreshCw size={11} />
-                                Повторить проверку
-                            </button>
-                            {/* PR9.4: «Всё равно запустить» — health check
-                                может фолзить (puppeteer занят, network hiccup),
-                                но если пользователь уверен что подключение
-                                работает — можно принудительно стартовать. */}
-                            <button
-                                onClick={() => handleStartImport(true)}
-                                disabled={importLoading}
-                                className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-[#3390EC] bg-white border border-[#3390EC] rounded-lg hover:bg-[#F0F4FA] transition-colors disabled:opacity-50"
-                            >
-                                <Play size={11} />
-                                Всё равно запустить
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Live-прогресс / статус транспорта — только при активном задании */}
-                {preflightState === 'idle' && lastJob && (lastJob.status === 'queued' || lastJob.status === 'running') && (
-                    <div className="mt-3">
-                        {/* Состояние: транспорт офлайн */}
-                        {transportStatus === 'offline' && (
-                            <div className="space-y-2">
-                                <div className="flex items-start gap-2 text-[12px] text-red-700">
-                                    <XCircle size={14} className="shrink-0 mt-0.5" />
-                                    <div>
-                                        <p className="font-semibold">MAX не отвечает — импорт приостановлен</p>
-                                        <p className="text-gray-500 text-[11px] mt-1">
-                                            Сервис не запущен или потерял соединение. Включите MAX Web Scraper — импорт продолжится автоматически.
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={async () => {
-                                            setTransportStatus('unknown')
-                                            transportFailCount.current = 0
-                                            const health = await checkScraperHealth(['max'])
-                                            if (health.max?.ok) {
-                                                setTransportStatus('online')
-                                            } else if (health.max?.status === 'initializing') {
-                                                setTransportStatus('initializing')
-                                            } else {
-                                                setTransportStatus('offline')
-                                            }
-                                        }}
-                                        className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-gray-700 bg-white border border-[#E0E0E0] rounded-lg hover:border-[#3390EC] hover:text-[#3390EC] transition-colors"
-                                    >
-                                        <RefreshCw size={11} />
-                                        Проверить снова
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            await cancelImportJob(lastJob.id)
-                                            const fresh = await getAllImportJobs(10)
-                                            setImportJobs(fresh)
-                                            setTransportStatus('unknown')
-                                        }}
-                                        className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                                    >
-                                        <Square size={11} />
-                                        Отменить импорт
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Состояние: транспорт инициализируется */}
-                        {transportStatus === 'initializing' && (
-                            <div className="flex items-center gap-2 text-[12px] text-yellow-700">
-                                <RefreshCw size={12} className="animate-spin shrink-0" />
-                                <div>
-                                    <p className="font-semibold">Скрапер запускается, ожидаем готовности…</p>
-                                    <p className="text-gray-500 text-[11px] mt-0.5">Обычно это занимает 10–30 секунд</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Состояние: проверяем транспорт (первая загрузка) */}
-                        {transportStatus === 'unknown' && (
-                            <div className="flex items-center gap-2 text-[12px] text-blue-700">
-                                <RefreshCw size={12} className="animate-spin shrink-0" />
-                                <span>Проверяем подключение к {lastJob.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}…</span>
-                            </div>
-                        )}
-
-                        {/* Состояние: транспорт онлайн — показываем реальный прогресс */}
-                        {transportStatus === 'online' && (
-                            <>
-                                {/* Анимированная полоса */}
-                                <div className="w-full h-1.5 bg-yellow-100 rounded-full overflow-hidden mb-3">
-                                    <div className="h-full bg-yellow-400 rounded-full animate-pulse" style={{
-                                        width: '100%',
-                                        animation: 'progress-indeterminate 2s ease-in-out infinite',
-                                    }} />
-                                </div>
-                                <style>{`
-                                    @keyframes progress-indeterminate {
-                                        0% { transform: translateX(-100%); width: 40%; }
-                                        50% { transform: translateX(50%); width: 60%; }
-                                        100% { transform: translateX(200%); width: 40%; }
-                                    }
-                                `}</style>
-                                <div className="flex items-center gap-4 text-[12px]">
-                                    <span className="text-yellow-700 font-semibold flex items-center gap-1.5">
-                                        <RefreshCw size={12} className="animate-spin" />
-                                        Импорт выполняется…
-                                    </span>
-                                    <span className="text-gray-500">
-                                        {lastJob.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}
-                                    </span>
-                                    {elapsedSec !== null && (
-                                        <span className="text-gray-400 text-[11px] ml-auto font-mono">
-                                            {Math.floor(elapsedSec / 60)}:{String(elapsedSec % 60).padStart(2, '0')}
-                                        </span>
-                                    )}
-                                </div>
-                                {/* Живые счётчики от скрапера */}
-                                <div className="grid grid-cols-3 gap-3 mt-3">
-                                    {[
-                                        { label: 'Сообщений', value: liveProgress?.messagesImported ?? lastJob.messagesImported },
-                                        { label: 'Чатов',     value: liveProgress?.chatsScanned ?? lastJob.chatsScanned },
-                                        { label: 'Контактов', value: liveProgress?.contactsFound ?? lastJob.contactsFound },
-                                    ].map(s => (
-                                        <div key={s.label} title={STAT_HINT[s.label]} className="bg-white/70 rounded-lg p-2.5 text-center cursor-help">
-                                            <div className="text-[18px] font-bold text-yellow-700 tabular-nums">{s.value.toLocaleString()}</div>
-                                            <div className="text-[10px] text-gray-500">{s.label}</div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
-
-                {/* PR7.5 + 7.12: honest sync stamp с информацией про
-                    конкретный аккаунт, если он известен. PR7.12.2:
-                    + multi-account summary по всем недавним completed
-                    jobs (а не только last). Пользователь сразу видит,
-                    из скольких аккаунтов вообще собирался импорт. */}
-                {lastJob && lastJob.status === 'completed' && lastJob.finishedAt && (() => {
-                    const conn = (lastJob as any).connectionId
-                        ? channelConnections.find(c => c.id === (lastJob as any).connectionId)
-                        : null
-                    const STATUS_LABEL_LOCAL: Record<string, string> = {
-                        ready: 'подключён', qr: 'ждёт QR', authenticating: 'входит',
-                        idle: 'не активен', disconnected: 'отключён',
-                        inactive: 'отключён', unknown: '—',
-                    }
-                    // PR9.6: считаем источники из РЕАЛЬНОГО состояния БД
-                    // (connectionCounts), а не из HistoryImportJob. Раньше
-                    // MAX-сообщения (live от scraper, без manual import)
-                    // не попадали в summary — пользователь видел только WA.
-                    // Теперь берём все connection-id у которых есть messages
-                    // в БД и группируем по channel.
-                    const connIdsByChannel = new Map<string, Set<string>>()
-                    for (const c of connectionCounts) {
-                        const cc = channelConnections.find(x => x.id === c.connectionId)
-                        if (!cc) continue
-                        const set = connIdsByChannel.get(cc.channel) ?? new Set<string>()
-                        set.add(c.connectionId)
-                        connIdsByChannel.set(cc.channel, set)
-                    }
-                    // Каналы где есть >0 источников вообще (для отображения)
-                    const channelsToShow = [...connIdsByChannel.entries()]
-                        .filter(([, ids]) => ids.size > 0)
-                    const showMulti = channelsToShow.length > 0
-                    return (
-                        <div className="mt-2 space-y-1">
-                            <div className="text-[11px] text-gray-500">
-                                Последний импорт: <b className="text-gray-700">{new Date(lastJob.finishedAt).toLocaleString('ru')}</b>
-                            </div>
-                            {conn ? (
-                                <div className="text-[11px] text-gray-500">
-                                    Из аккаунта: <b className="text-gray-700">{conn.label}</b>
-                                    <span className="text-gray-400"> · аккаунт сейчас: {STATUS_LABEL_LOCAL[conn.status] ?? conn.status}</span>
-                                </div>
-                            ) : (lastJob as any).connectionId ? (
-                                <div className="text-[11px] text-gray-500">
-                                    Из аккаунта: <span className="text-gray-400">имя недоступно (возможно подключение удалили)</span>
-                                </div>
-                            ) : (
-                                <div className="text-[11px] text-gray-500">
-                                    Точный аккаунт не сохранён — это импорт до того, как мы стали запоминать привязку к аккаунту.
-                                </div>
-                            )}
-                            {/* PR9.6: показываем все каналы где есть источники
-                                в реальной БД (включая MAX live-streamed). */}
-                            {showMulti && (
-                                <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-200 space-y-0.5">
-                                    {(['whatsapp', 'telegram', 'max'] as const).map(ch => {
-                                        const ids = connIdsByChannel.get(ch)
-                                        if (!ids || ids.size === 0) return null
-                                        const labels = Array.from(ids)
-                                            .map(id => channelConnections.find(c => c.id === id))
-                                            .filter(Boolean) as ChannelConnection[]
-                                        const channelName = ch === 'telegram' ? 'Telegram' : ch === 'max' ? 'MAX' : 'WhatsApp'
-                                        // Убираем channel-prefix у label, т.к. он
-                                        // повторяется. «WhatsApp +7922•••3150» → «+7922•••3150».
-                                        const stripped = labels.slice(0, 3).map(c => c.label.replace(/^(WhatsApp|Telegram|MAX) /, ''))
-                                        return (
-                                            <div key={ch}>
-                                                <b className="text-gray-700">{channelName}:</b>{' '}
-                                                <span className="text-gray-600">{stripped.join(' · ')}</span>
-                                                {labels.length > 3 && (
-                                                    <span className="text-gray-400"> · ещё {labels.length - 3}</span>
-                                                )}
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
-                        </div>
-                    )
-                })()}
-
-                {/* PR7.16.1: top-card stats теперь из РЕАЛЬНОЙ БД
-                    (Chat + Message), а не из HistoryImportJob.
-                    Это покрывает live-streamed каналы (MAX, TG)
-                    которые могут не иметь явных import jobs. */}
-                {channelTotals.length > 0 && (() => {
-                    const totals = channelTotals.reduce(
-                        (acc, t) => {
-                            acc.messages += t.messages
-                            acc.chats += t.chats
-                            acc.contacts += t.contacts
-                            return acc
-                        },
-                        { messages: 0, chats: 0, contacts: 0 }
-                    )
-                    const lastMsgOverall = channelTotals
-                        .map(t => t.lastMessageAt)
-                        .filter(Boolean)
-                        .map(d => new Date(d!).getTime())
-                        .reduce((max, t) => Math.max(max, t), 0)
-                    return (
-                        <>
-                            <div className="grid grid-cols-3 gap-3 mt-3">
-                                {[
-                                    { label: 'Сообщений', value: totals.messages },
-                                    { label: 'Чатов',     value: totals.chats },
-                                    { label: 'Контактов', value: totals.contacts },
-                                ].map(s => (
-                                    <div key={s.label} title={STAT_HINT[s.label]} className="bg-white rounded-lg p-2.5 text-center cursor-help">
-                                        <div className="text-[18px] font-bold text-[#111]">{s.value.toLocaleString()}</div>
-                                        <div className="text-[10px] text-gray-500">{s.label}</div>
-                                    </div>
-                                ))}
-                            </div>
-                            {/* PR7.16.1: breakdown по каналам — теперь
-                                включает все каналы где есть сообщения,
-                                включая MAX от live-скрейпера. */}
-                            {channelTotals.length > 1 && (
-                                <div className="mt-2 text-[11px] text-gray-500 space-y-0.5">
-                                    <div className="text-gray-400 uppercase tracking-wide text-[10px] font-semibold">
-                                        По каналам (всего в системе)
-                                    </div>
-                                    {(['whatsapp', 'telegram', 'max'] as const).map(ch => {
-                                        const v = channelTotals.find(t => t.channel === ch)
-                                        if (!v) return null
-                                        return (
-                                            <div key={ch}>
-                                                <b className="text-gray-700">{CHANNEL_LABELS[ch] ?? ch}:</b>{' '}
-                                                <span>{v.messages.toLocaleString()} сообщ.</span>
-                                                <span className="text-gray-400"> · {v.chats.toLocaleString()} чатов</span>
-                                                <span className="text-gray-400"> · {v.contacts.toLocaleString()} контактов</span>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
-                            {/* PR7.16.1: meta строка про last activity — на основе
-                                реальной БД (последнее сообщение из любого канала). */}
-                            {(lastMsgOverall > 0 || (lastJob?.finishedAt)) && (
-                                <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500 border-t border-[#E0E8F4] pt-2">
-                                    {lastMsgOverall > 0 && (
-                                        <>
-                                            <span className="text-gray-400">Последнее сообщение:</span>
-                                            <span>{new Date(lastMsgOverall).toLocaleString('ru')}</span>
-                                        </>
-                                    )}
-                                    {lastJob?.finishedAt && (
-                                        <>
-                                            <span className="text-gray-400">· последний ручной импорт:</span>
-                                            <span>{new Date(lastJob.finishedAt).toLocaleString('ru')}</span>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    )
-                })()}
-            </div>
 
             {/* PR9.9: per-account dashboard cards.
                 Для каждого подключения показываем:
@@ -1667,12 +1289,9 @@ export default function AiControlCenterClient({
                         {channelConnections.map(conn => {
                             const stat = connectionCounts.find(c => c.connectionId === conn.id)
                             const messages = stat?.messages ?? 0
+                            const chats    = stat?.chats ?? 0
                             const earliest = stat?.earliestSentAt
                             const latest   = stat?.latestSentAt
-                            const dotColor =
-                                conn.isReady ? 'bg-green-500' :
-                                conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
-                                'bg-red-400'
                             const statusText =
                                 conn.isReady ? 'подключён' :
                                 conn.status === 'qr' ? 'ждёт QR' :
@@ -1684,6 +1303,19 @@ export default function AiControlCenterClient({
                                 conn.channel === 'whatsapp' ? '/settings/integrations/whatsapp' :
                                 conn.channel === 'telegram' ? '/settings/integrations/telegram' :
                                 '/settings/integrations/max'
+                            // PR9.10: color-coded background
+                            // зелёный для подключённых, красный — отключённых,
+                            // амбер — переходное состояние (qr/authenticating).
+                            const isConnected = conn.isReady
+                            const isPending   = conn.status === 'qr' || conn.status === 'authenticating'
+                            const cardBg =
+                                isConnected ? 'bg-emerald-50 border-emerald-300 hover:bg-emerald-100' :
+                                isPending   ? 'bg-amber-50 border-amber-300 hover:bg-amber-100' :
+                                              'bg-red-50 border-red-300 hover:bg-red-100'
+                            const statusPillBg =
+                                isConnected ? 'bg-emerald-600 text-white' :
+                                isPending   ? 'bg-amber-600 text-white' :
+                                              'bg-red-600 text-white'
                             return (
                                 <button
                                     key={conn.id}
@@ -1696,37 +1328,44 @@ export default function AiControlCenterClient({
                                         setConnectionCounts(fresh as ConnectionMessageCount[])
                                         setChannelTotals(totals as ChannelTotalsRow[])
                                     }}
-                                    className="text-left rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#FAFBFC] transition-colors px-3 py-2.5 group"
+                                    className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 group ${cardBg}`}
                                     title={`Кликнуть — обновить счётчики из БД. Подробнее об аккаунте — ${channelHref}`}
                                 >
-                                    {/* Header: status dot + label */}
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
-                                        <span className="text-[13px] font-semibold text-[#111] truncate">
+                                    {/* Header: label + status pill */}
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                        <span className="text-[15px] font-semibold text-[#111] truncate">
                                             {conn.label}
                                         </span>
-                                        <span className="text-[10px] text-gray-400 ml-auto">{statusText}</span>
+                                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${statusPillBg}`}>
+                                            {statusText}
+                                        </span>
                                     </div>
-                                    {/* Stats */}
-                                    <div className="text-[11px] text-gray-600 leading-relaxed">
-                                        <div>
-                                            <b className="text-gray-700">{messages.toLocaleString('ru')}</b> сообщ. в БД
+                                    {/* Stats — увеличенные */}
+                                    <div className="space-y-0.5">
+                                        <div className="text-[13px] text-[#111]">
+                                            <b className="text-[18px] font-bold">{messages.toLocaleString('ru')}</b>{' '}
+                                            <span className="text-gray-600">сообщ. в БД</span>
                                         </div>
-                                        {earliest && latest && (
-                                            <div className="text-gray-400">
-                                                период: {new Date(earliest).toLocaleDateString('ru')} — {new Date(latest).toLocaleDateString('ru')}
+                                        {chats > 0 && (
+                                            <div className="text-[12px] text-gray-600">
+                                                {chats.toLocaleString('ru')} {chats === 1 ? 'чат' : chats < 5 ? 'чата' : 'чатов'}
                                             </div>
                                         )}
-                                        {!earliest && (
-                                            <div className="text-gray-400">истории нет в БД</div>
+                                        {earliest && latest && (
+                                            <div className="text-[11px] text-gray-500 pt-0.5">
+                                                {new Date(earliest).toLocaleDateString('ru')} — {new Date(latest).toLocaleDateString('ru')}
+                                            </div>
+                                        )}
+                                        {!earliest && messages === 0 && (
+                                            <div className="text-[11px] text-gray-500">истории в БД пока нет</div>
                                         )}
                                     </div>
-                                    {/* Cross-ref: открыть страницу подключения */}
-                                    <div className="text-[10px] text-[#3390EC] mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {/* Cross-ref */}
+                                    <div className="text-[11px] mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <a
                                             href={channelHref}
                                             onClick={e => e.stopPropagation()}
-                                            className="hover:underline"
+                                            className="text-[#3390EC] hover:underline"
                                         >
                                             Открыть настройки →
                                         </a>
