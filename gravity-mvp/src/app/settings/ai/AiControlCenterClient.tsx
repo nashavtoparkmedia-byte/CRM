@@ -75,6 +75,10 @@ interface AiConfig {
     promptForbidden?: string | null
     connectionStatus?: string | null
     lastConnectionCheckAt?: string | null
+    /** PR9.49: AI стажёр (shadow drafts в чате при focus). Independent
+     *  от mode — даже при mode='off' стажёр работает, потому что он
+     *  ничего не отправляет реально, это подсказки для менеджера. */
+    internEnabled?: boolean
 }
 
 interface KbEntry {
@@ -1135,24 +1139,52 @@ export default function AiControlCenterClient({
                     <span className="text-gray-400">· за сутки: {stats24h}</span>
                 )}
                 {canEdit && (
-                    <button
-                        onClick={() => {
-                            const newEnabled = !config.enabled
-                            if (config.enabled && !confirm('Выключить AI? Авто-ответы во всех каналах остановятся.')) return
-                            setConfig(c => ({ ...c, enabled: newEnabled }))
-                            startTransition(async () => {
-                                await saveAiConfig({ enabled: newEnabled })
-                                showToast(newEnabled ? 'AI включён' : 'AI выключен')
-                            })
-                        }}
-                        className={`ml-auto h-[26px] px-3 rounded-md text-[12px] font-medium transition-colors ${
-                            config.enabled
-                                ? 'text-red-600 hover:bg-red-50'
-                                : 'text-green-600 hover:bg-green-50'
-                        }`}
-                    >
-                        {config.enabled ? 'Выключить' : 'Включить'}
-                    </button>
+                    <>
+                        {/* PR9.49: AI стажёр toggle. Independent от mode — даже при
+                            mode='off' стажёр генерирует shadow-черновики в чатах
+                            (они не отправляются клиентам, только подсказка менеджеру).
+                            Дефолт = true (default в schema), false = выключено. */}
+                        <button
+                            onClick={() => {
+                                const current = config.internEnabled ?? true
+                                const newVal = !current
+                                setConfig(c => ({ ...c, internEnabled: newVal }))
+                                startTransition(async () => {
+                                    await saveAiConfig({ internEnabled: newVal })
+                                    showToast(newVal ? 'AI стажёр включён' : 'AI стажёр выключен')
+                                })
+                            }}
+                            title={(config.internEnabled ?? true)
+                                ? 'AI стажёр работает — в чатах при фокусе в input bar появляется черновик ответа. Нажми чтобы выключить.'
+                                : 'AI стажёр выключен — черновики в чатах не генерируются. Нажми чтобы включить.'}
+                            className={`ml-auto h-[26px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium transition-colors ${
+                                (config.internEnabled ?? true)
+                                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                            }`}
+                        >
+                            <span className={`w-1.5 h-1.5 rounded-full ${(config.internEnabled ?? true) ? 'bg-emerald-600' : 'bg-gray-400'}`} />
+                            AI стажёр · {(config.internEnabled ?? true) ? 'ВКЛ' : 'ВЫКЛ'}
+                        </button>
+                        <button
+                            onClick={() => {
+                                const newEnabled = !config.enabled
+                                if (config.enabled && !confirm('Выключить AI? Авто-ответы во всех каналах остановятся.')) return
+                                setConfig(c => ({ ...c, enabled: newEnabled }))
+                                startTransition(async () => {
+                                    await saveAiConfig({ enabled: newEnabled })
+                                    showToast(newEnabled ? 'AI включён' : 'AI выключен')
+                                })
+                            }}
+                            className={`h-[26px] px-3 rounded-md text-[12px] font-medium transition-colors ${
+                                config.enabled
+                                    ? 'text-red-600 hover:bg-red-50'
+                                    : 'text-green-600 hover:bg-green-50'
+                            }`}
+                        >
+                            {config.enabled ? 'Выключить' : 'Включить'}
+                        </button>
+                    </>
                 )}
             </div>
         )
