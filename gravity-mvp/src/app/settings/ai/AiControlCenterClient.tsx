@@ -1148,10 +1148,22 @@ export default function AiControlCenterClient({
                             onClick={() => {
                                 const current = config.internEnabled ?? true
                                 const newVal = !current
+                                // Optimistic update + откат при ошибке.
+                                // PR9.50: раньше throw из saveAiConfig (например
+                                // «Недостаточно прав» при expired session) поднимал
+                                // unhandled promise rejection и валил страницу
+                                // через Next.js error overlay. Теперь catch +
+                                // toast + revert.
                                 setConfig(c => ({ ...c, internEnabled: newVal }))
                                 startTransition(async () => {
-                                    await saveAiConfig({ internEnabled: newVal })
-                                    showToast(newVal ? 'AI стажёр включён' : 'AI стажёр выключен')
+                                    try {
+                                        await saveAiConfig({ internEnabled: newVal })
+                                        showToast(newVal ? 'AI стажёр включён' : 'AI стажёр выключен')
+                                    } catch (e: any) {
+                                        // Revert optimistic update
+                                        setConfig(c => ({ ...c, internEnabled: current }))
+                                        showToast(`Не удалось сохранить: ${e?.message ?? 'ошибка'}`)
+                                    }
                                 })
                             }}
                             title={(config.internEnabled ?? true)
@@ -1170,10 +1182,16 @@ export default function AiControlCenterClient({
                             onClick={() => {
                                 const newEnabled = !config.enabled
                                 if (config.enabled && !confirm('Выключить AI? Авто-ответы во всех каналах остановятся.')) return
+                                const oldVal = config.enabled
                                 setConfig(c => ({ ...c, enabled: newEnabled }))
                                 startTransition(async () => {
-                                    await saveAiConfig({ enabled: newEnabled })
-                                    showToast(newEnabled ? 'AI включён' : 'AI выключен')
+                                    try {
+                                        await saveAiConfig({ enabled: newEnabled })
+                                        showToast(newEnabled ? 'AI включён' : 'AI выключен')
+                                    } catch (e: any) {
+                                        setConfig(c => ({ ...c, enabled: oldVal }))
+                                        showToast(`Не удалось сохранить: ${e?.message ?? 'ошибка'}`)
+                                    }
                                 })
                             }}
                             className={`h-[26px] px-3 rounded-md text-[12px] font-medium transition-colors ${
