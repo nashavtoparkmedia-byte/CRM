@@ -105,10 +105,9 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
         console.log(`[ai-intern] chatId=${chatId} skip: intern feature flag off`)
         return null
     }
-    if (config.mode === 'off') {
-        console.log(`[ai-intern] chatId=${chatId} skip: AI mode='off'`)
-        return null
-    }
+    // PR9.48: AI mode='off' раньше блокировал стажёра. Теперь стажёр
+    // работает независимо — он не отправляет реально, это shadow-черновик
+    // для менеджера. Logика моде влияет только на runtime auto-reply.
     if (!config.apiKeyEncrypted) {
         console.log(`[ai-intern] chatId=${chatId} skip: no API key configured`)
         return null

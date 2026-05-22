@@ -53,10 +53,13 @@ export async function generateShadowReplyForChat(chatId: string): Promise<Shadow
     })
     if (!lastInbound) return null
 
-    const ctx = await contextBuilder.build(lastInbound)
+    // PR9.48: ignoreModeOff=true — стажёр работает независимо от mode.
+    // mode='off' значит «AI не отправляет ответы клиентам», но shadow-
+    // черновики для менеджера — отдельная история. Они не отправляются
+    // никогда, генерируются только по запросу UI (фокус в input bar).
+    // Проверка config.enabled остаётся — это полный disable AI.
+    const ctx = await contextBuilder.build(lastInbound, { ignoreModeOff: true })
     if (!ctx) {
-        // AI выключен глобально (config.enabled=false или mode=off) или
-        // ConfigBuilder вернул null по другой причине.
         return null
     }
 

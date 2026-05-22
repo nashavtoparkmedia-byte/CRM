@@ -53,7 +53,18 @@ export interface MessageContext {
 }
 
 export class ContextBuilder {
-  async build(message: Message): Promise<MessageContext | null> {
+  /**
+   * Build context для AI pipeline.
+   *
+   * @param message — inbound message который будем обрабатывать
+   * @param opts.ignoreModeOff — если true, не блокируем при `config.mode='off'`.
+   *   Используется в shadowReply (PR9.44 «AI стажёр»): даже если глобально
+   *   AI выключен (mode='off'), стажёр должен генерировать черновики
+   *   для менеджера — они не отправляются реально, это просто подсказки.
+   *   Проверка `enabled=false` сохраняется (это полный disable, без него
+   *   не настроено даже AI-юзеры).
+   */
+  async build(message: Message, opts?: { ignoreModeOff?: boolean }): Promise<MessageContext | null> {
     // Load AI config
     const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
     if (!rows[0]) return null
@@ -76,7 +87,8 @@ export class ContextBuilder {
       promptForbidden:      raw.promptForbidden ?? null,
     }
 
-    if (!config.enabled || config.mode === 'off') return null
+    if (!config.enabled) return null
+    if (config.mode === 'off' && !opts?.ignoreModeOff) return null
 
     // Load chat
     const chat = await prisma.chat.findUnique({
