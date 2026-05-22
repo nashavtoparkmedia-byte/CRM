@@ -2112,26 +2112,34 @@ export default function AiControlCenterClient({
                 разделяют её от Промпта ниже. */}
             <div className="space-y-3 pt-1">
                 <h4 className="text-[14px] font-semibold text-[#111]">Что AI делает</h4>
-                <div className="grid grid-cols-2 gap-2">
+                {/* PR9.27: компактные pills вместо 2×2 grid'а на всю ширину.
+                    Раньше выглядело «размазано» — широкие плашки с одиноким
+                    текстом по центру. Сделали как Telegram-фильтры в чат-листе:
+                    инлайн-ряд, иконка + лейбл, активный — заполненный primary. */}
+                <div className="flex flex-wrap gap-2">
                     {([
-                        { val: 'off',             label: 'Выключен', hint: 'AI не работает совсем.' },
-                        { val: 'suggest_only',    label: 'Советует', hint: 'AI пишет ответ в подсказку. Отправляет менеджер вручную.' },
-                        { val: 'auto_reply',      label: 'Автоответ', hint: 'AI отвечает сам, если уверен. Иначе передаёт менеджеру.' },
-                        { val: 'operator_locked', label: 'Оператор', hint: 'AI не отвечает — все диалоги уходят менеджеру.' },
-                    ]).map(({ val, label, hint }) => (
-                        <button
-                            key={val}
-                            onClick={() => setConfig(c => ({ ...c, mode: val }))}
-                            title={hint}
-                            className={`h-[36px] rounded-lg text-[12px] font-semibold border transition-colors ${
-                                config.mode === val
-                                    ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                    : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
+                        { val: 'off',             label: 'Выключен', hint: 'AI не работает совсем.',                                          Icon: Ban },
+                        { val: 'suggest_only',    label: 'Советует', hint: 'AI пишет ответ в подсказку. Отправляет менеджер вручную.',         Icon: MessageSquare },
+                        { val: 'auto_reply',      label: 'Автоответ', hint: 'AI отвечает сам, если уверен. Иначе передаёт менеджеру.',         Icon: Zap },
+                        { val: 'operator_locked', label: 'Оператор', hint: 'AI не отвечает — все диалоги уходят менеджеру.',                   Icon: Phone },
+                    ]).map(({ val, label, hint, Icon }) => {
+                        const active = config.mode === val
+                        return (
+                            <button
+                                key={val}
+                                onClick={() => setConfig(c => ({ ...c, mode: val }))}
+                                title={hint}
+                                className={`inline-flex items-center gap-1.5 h-[34px] px-3.5 rounded-full text-[12px] font-semibold border transition-colors ${
+                                    active
+                                        ? 'bg-[#3390EC] text-white border-[#3390EC]'
+                                        : 'bg-white text-gray-700 border-[#E4ECFC] hover:border-[#3390EC] hover:text-[#3390EC]'
+                                }`}
+                            >
+                                <Icon size={13} className={active ? 'opacity-90' : 'opacity-70'} />
+                                {label}
+                            </button>
+                        )
+                    })}
                 </div>
 
                 {/* Каналы */}
