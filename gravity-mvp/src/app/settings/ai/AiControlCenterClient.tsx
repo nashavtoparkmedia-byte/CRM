@@ -923,6 +923,18 @@ export default function AiControlCenterClient({
             const effective = onlyConnectedNow
                 ? [...selectedConnectionIds].filter(id => readyIds.has(id))
                 : [...selectedConnectionIds]
+            // PR7.15: вычисляем effective channels — те, у которых
+            // выбран хоть один аккаунт. Раньше scope.channels оставался
+            // undefined → pairBuilder фоллбэчил на все 3 канала, и MAX
+            // попадал в сбор даже если ни одного MAX-чекбокса не стояло.
+            // Теперь если у канала 0 selected → канал не идёт в scope.
+            // Исключение: если effective=0 в принципе — оставляем
+            // null (legacy fast-path по всем каналам).
+            const effectiveSet = new Set(effective)
+            const channelsWithSelection = new Set<string>()
+            for (const c of channelConnections) {
+                if (effectiveSet.has(c.id)) channelsWithSelection.add(c.channel)
+            }
             const scope: ExtractionScope = {
                 mode: extractionScopeMode,
                 // Передаём connectionIds только если выбор не совпадает
@@ -932,6 +944,13 @@ export default function AiControlCenterClient({
                     ? effective
                     : null,
                 onlyConnectedNow,
+                // PR7.15: явно ограничиваем каналы выбранными. Только
+                // если пользователь хоть что-то выбрал — иначе legacy
+                // behaviour (все 3 канала, для сбора из уже загруженной
+                // истории без активных connections).
+                channels: effective.length > 0
+                    ? Array.from(channelsWithSelection)
+                    : undefined,
             }
             const job = await startKnowledgeExtraction(scope, extractionTier)
             setExtractionModalOpen(false)
@@ -4525,15 +4544,31 @@ export default function AiControlCenterClient({
                                         }
                                         return (
                                             <div className="flex flex-col gap-2">
-                                                {[...byChannel.entries()].map(([channel, conns]) => (
+                                                {[...byChannel.entries()].map(([channel, conns]) => {
+                                                    // PR7.15: вычисляем, есть ли у канала хоть один effective-selected
+                                                    // (с учётом onlyConnectedNow), чтобы показывать честный header.
+                                                    const channelHasEffective = conns.some(c => {
+                                                        const isEffectivelySelected =
+                                                            selectedConnectionIds.has(c.id)
+                                                            && (!onlyConnectedNow || c.isReady)
+                                                        return isEffectivelySelected
+                                                    })
+                                                    return (
                                                     <div key={channel} className="rounded-lg border border-[#E8E8E8]">
                                                         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] rounded-t-lg flex items-center justify-between">
                                                             <span>{CHANNEL_LABEL[channel] ?? channel}</span>
                                                             {channel !== 'whatsapp' && (
-                                                                <span title="Сейчас для этого канала нельзя точечно выбрать конкретный аккаунт — сбор берёт всю историю канала. Это временно, точечный выбор появится позже."
-                                                                      className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
-                                                                    точечный выбор аккаунта пока в работе
-                                                                </span>
+                                                                channelHasEffective ? (
+                                                                    <span title="Снимите все галочки этого канала, если не хотите включать его в сбор. Если оставлена хотя бы одна — сбор берёт всю историю канала (точечный выбор конкретного аккаунта для Telegram/MAX пока в работе)."
+                                                                          className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
+                                                                        ⚠ берётся вся история канала
+                                                                    </span>
+                                                                ) : (
+                                                                    <span title="Ни одного аккаунта этого канала не выбрано — канал НЕ попадёт в сбор."
+                                                                          className="text-[10px] font-medium text-gray-400 cursor-help normal-case tracking-normal">
+                                                                        канал не участвует
+                                                                    </span>
+                                                                )
                                                             )}
                                                         </div>
                                                         {conns.map(conn => {
@@ -4580,7 +4615,8 @@ export default function AiControlCenterClient({
                                                             )
                                                         })}
                                                     </div>
-                                                ))}
+                                                    )
+                                                })}
                                             </div>
                                         )
                                     })()}
@@ -4664,8 +4700,19 @@ export default function AiControlCenterClient({
                                                         <div key={ch} className="pl-2">
                                                             — {CHANNEL_LABEL_LOCAL[ch]}: {n} {n === 1 ? 'аккаунт' : n < 5 ? 'аккаунта' : 'аккаунтов'}
                                                             {ch !== 'whatsapp' && (
-                                                                <span className="text-amber-700 text-[10px]"> · точечный выбор аккаунта пока в работе — берётся вся история канала</span>
+                                                                <span className="text-amber-700 text-[10px]"> · берётся вся история канала (точечный выбор для TG/MAX в работе)</span>
                                                             )}
+                                                        </div>
+                                                    )
+                                                })}
+                                                {/* PR7.15: явно показать какие каналы НЕ участвуют — у них 0 selected */}
+                                                {(['whatsapp','telegram','max'] as const).map(ch => {
+                                                    const n = includedByChannel.get(ch) ?? 0
+                                                    const hasConnections = channelConnections.some(c => c.channel === ch)
+                                                    if (n > 0 || !hasConnections) return null
+                                                    return (
+                                                        <div key={`exc-${ch}`} className="pl-2 text-gray-400 text-[11px]">
+                                                            — {CHANNEL_LABEL_LOCAL[ch]}: не участвует — нет выбранных аккаунтов
                                                         </div>
                                                     )
                                                 })}
