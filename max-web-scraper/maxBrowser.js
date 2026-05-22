@@ -177,6 +177,9 @@ class MaxBrowser {
                     this.isLoggedIn = true;
                     this._loggedInSince = Date.now();
                     this.startPassivePolling();
+                    // PR-П: периодический sync имён placeholder-чатов из MAX UI.
+                    // Запускается раз в час, paused passive polling на время навигации.
+                    this.startNameSyncLoop();
                     try {
                         await this.context.storageState({ path: path.join(this.userDataDir, 'state.json') });
                     } catch(e) {}
@@ -488,8 +491,101 @@ class MaxBrowser {
             } catch (e) {
                 // Ignore errors (context could be destroyed during navigation)
             }
-        }, 2000); 
+        }, 2000);
     }
+
+    /**
+     * PR-П: периодический sync имён из MAX UI для placeholder-чатов CRM.
+     *
+     * Логика (раз в час):
+     *   1. GET CRM /api/webhook/max/unlinked-chats → массив chatIds
+     *   2. Для каждого: page.goto(/<chatId>), wait, читаем header text
+     *   3. POST CRM /api/webhook/max/sync-names с парами {chatId, name}
+     *
+     * Pause passive polling на время sync — навигация в чат сбивает live ingest.
+     * Возобновляем после.
+     */
+    startNameSyncLoop() {
+        if (this.nameSyncInterval) clearInterval(this.nameSyncInterval);
+        const intervalMs = Number(process.env.MAX_NAME_SYNC_INTERVAL_MS) || (60 * 60 * 1000); // 1 час
+        logToFile(`[NAME-SYNC] starting (interval=${intervalMs}ms)`);
+
+        const runSync = async () => {
+            if (!this.isLoggedIn || !this.page) return;
+            try {
+                const crmBase = process.env.CRM_WEBHOOK_URL?.replace(/\/api\/webhook\/max$/, '') || 'http://127.0.0.1:3002';
+                // 1. Получить список placeholder-чатов
+                const resp = await fetch(`${crmBase}/api/webhook/max/unlinked-chats`);
+                if (!resp.ok) {
+                    logToFile(`[NAME-SYNC] CRM endpoint returned ${resp.status}`);
+                    return;
+                }
+                const { chatIds } = await resp.json();
+                if (!chatIds || chatIds.length === 0) {
+                    logToFile(`[NAME-SYNC] no placeholder chats, nothing to do`);
+                    return;
+                }
+                logToFile(`[NAME-SYNC] resolving ${chatIds.length} placeholder chats from MAX UI`);
+
+                // 2. Приостановить passive polling — навигация ломает ingest
+                const savedPoll = this.pollInterval;
+                if (savedPoll) clearInterval(this.pollInterval);
+                this.pollInterval = null;
+
+                const pairs = [];
+                const startUrl = await this.page.url();
+                try {
+                    for (const chatId of chatIds) {
+                        try {
+                            await this.page.goto(`https://web.max.ru/${chatId}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                            await this.page.waitForTimeout(1500); // wait header to render
+                            const name = await this.page.evaluate(() => {
+                                const mainArea = document.querySelector('main');
+                                if (!mainArea) return null;
+                                const header = mainArea.querySelector('.chat-header, .top-bar, .user-name, header');
+                                const headerEl = header?.querySelector('.title, .header-title, h2, .name')
+                                              || mainArea.querySelector('.title, .header-title, h2, .name');
+                                return headerEl ? headerEl.innerText.trim() : null;
+                            });
+                            if (name) {
+                                pairs.push({ chatId: String(chatId), name });
+                                logToFile(`[NAME-SYNC] resolved ${chatId} → "${name}"`);
+                            } else {
+                                logToFile(`[NAME-SYNC] ${chatId}: header not found`);
+                            }
+                        } catch (e) {
+                            logToFile(`[NAME-SYNC] ${chatId}: nav error ${e.message}`);
+                        }
+                        await this.page.waitForTimeout(300); // rate-limit pacing
+                    }
+                } finally {
+                    // Восстановить URL и возобновить polling
+                    try {
+                        await this.page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 10000 });
+                    } catch {}
+                    this.startPassivePolling();
+                }
+
+                // 3. POST обратно
+                if (pairs.length > 0) {
+                    const postResp = await fetch(`${crmBase}/api/webhook/max/sync-names`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pairs }),
+                    });
+                    const result = await postResp.json();
+                    logToFile(`[NAME-SYNC] POST result: ${JSON.stringify(result)}`);
+                }
+            } catch (e) {
+                logToFile(`[NAME-SYNC] fatal: ${e.message}`);
+            }
+        };
+
+        // Первый запуск через 1 минуту после login (даём ingest стабилизироваться)
+        setTimeout(runSync, 60 * 1000);
+        this.nameSyncInterval = setInterval(runSync, intervalMs);
+    }
+
     // Очередь отправки для предотвращения потери сообщений при быстрой печати 11,12,13...
     async sendMessage(phone, text, name = "") {
         return new Promise((resolve, reject) => {
