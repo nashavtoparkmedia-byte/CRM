@@ -2117,11 +2117,11 @@ export default function AiControlCenterClient({
     // главные, как user попросил.
 
     const [rulesSaving,   setRulesSaving]   = useState(false)
-    // PR9.34/PR9.35: дополнительные настройки видны по умолчанию.
-    // User: «Чтобы его было видно, но он тут не главный.» —
-    // default expanded + de-emphasized стиль (под профилями).
-    // Свернуть можно вручную, если профили на первом плане.
-    const [showAdvanced,  setShowAdvanced]  = useState(true)
+    // PR9.36: дополнительные настройки в модальном окне.
+    // User: «Внизу не видно. Выведи в кнопку модалку и наверх.»
+    // Раньше был inline collapsible под профилями — терялся при скролле.
+    // Теперь — компактная кнопка сверху, модалка с настройками по клику.
+    const [rulesModalOpen,  setRulesModalOpen]  = useState(false)
 
     const handleSaveRules = async () => {
         // Промпт-поля (role/tone/allowed/forbidden) больше не идут через
@@ -2145,15 +2145,25 @@ export default function AiControlCenterClient({
     }
 
     const RulesTab = () => (
-        <div className="space-y-6">
-            {/* PR9.34: верхнее InlineInfo — про стиль общения (главное),
-                а не «Начните с Советует» (это про operational mode, его
-                перенесли вниз в «Дополнительные настройки»). */}
-            <InlineInfo>
-                Стиль общения определяет, как AI разговаривает с водителями: на «ты»
-                или на «вы», какие фразы использует, что отвечать и что не отвечать.
-                Можно держать несколько стилей и переключать активный.
-            </InlineInfo>
+        <div className="space-y-5">
+            {/* PR9.36: верхний ряд — InlineInfo + компактная кнопка
+                открытия модала с дополнительными настройками. */}
+            <div className="flex items-start justify-between gap-3">
+                <InlineInfo>
+                    Стиль общения определяет, как AI разговаривает с водителями: на «ты»
+                    или на «вы», какие фразы использует, что отвечать и что не отвечать.
+                    Можно держать несколько стилей и переключать активный.
+                </InlineInfo>
+                <button
+                    type="button"
+                    onClick={() => setRulesModalOpen(true)}
+                    title="Режим работы AI, активные каналы, пороги уверенности"
+                    className="shrink-0 inline-flex items-center gap-1.5 h-[32px] px-3 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:border-[#3390EC] hover:text-[#3390EC] transition-colors"
+                >
+                    <Settings size={13} />
+                    Дополнительные настройки
+                </button>
+            </div>
 
             {/* Главное содержимое — профили стиля общения */}
             <ProfilesEditor
@@ -2164,36 +2174,34 @@ export default function AiControlCenterClient({
                 canEdit={canEdit}
                 showToast={showToast}
             />
+        </div>
+    )
 
-            {/* PR9.34/PR9.35: «Дополнительные настройки» — collapsible-блок,
-                по умолчанию открыт (видно, но не главное). De-emphasized
-                стиль: серый фон карточки, мелкий заголовок, без primary-цвета.
-                Раньше эти настройки занимали 40% экрана сверху и сдвигали
-                профили в самый низ. */}
-            <div className="rounded-lg bg-[#FAFBFC] border border-[#E8E8E8]">
-                <button
-                    type="button"
-                    onClick={() => setShowAdvanced(v => !v)}
-                    className="w-full flex items-center justify-between gap-2 px-4 py-2.5 text-[13px] text-gray-700 hover:bg-[#F4F5F7] transition-colors rounded-t-lg"
+    // PR9.36: модалка «Дополнительные настройки» — выведена в отдельный
+    // компонент-секцию (рендерится глобально внутри AiControlCenterClient,
+    // открывается по rulesModalOpen). Содержит operational settings:
+    // режим работы AI, активные каналы, пороги уверенности.
+    const AdvancedSettingsModal = () => {
+        if (!rulesModalOpen) return null
+        return (
+            <div
+                className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                onClick={() => !rulesSaving && setRulesModalOpen(false)}
+            >
+                <div
+                    className="bg-white rounded-xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden"
+                    onClick={e => e.stopPropagation()}
                 >
-                    <span className="flex items-center gap-2">
-                        <Settings size={13} className="text-gray-500" />
-                        <span className="font-semibold">Дополнительные настройки</span>
-                        <span className="text-[11px] text-gray-400 font-normal">
-                            режим работы AI, каналы, пороги
-                        </span>
-                    </span>
-                    {showAdvanced
-                        ? <ChevronUp size={14} className="text-gray-400" />
-                        : <ChevronDown size={14} className="text-gray-400" />}
-                </button>
-                {showAdvanced && (
-                    <div className="border-t border-[#E8E8E8] px-4 py-4 space-y-4">
-            <InlineInfo>
-                Начните с «Советует». Когда в Журнале увидите, что AI отвечает правильно — переключитесь на «Автоответ».
-            </InlineInfo>
-            {/* Режим — flat-секция, без обёртки. Заголовок + spacing
-                разделяют её от Промпта ниже. */}
+                    <div className="px-6 py-4 border-b border-[#F0F0F0]">
+                        <h2 className="text-[16px] font-semibold text-[#111]">Дополнительные настройки</h2>
+                        <p className="text-[12px] text-gray-500 mt-0.5">
+                            Режим работы AI, активные каналы, пороги уверенности.
+                        </p>
+                    </div>
+                    <div className="px-6 py-5 overflow-y-auto space-y-5">
+                        <InlineInfo>
+                            Начните с «Советует». Когда в Журнале увидите, что AI отвечает правильно — переключитесь на «Автоответ».
+                        </InlineInfo>
             <div className="space-y-3 pt-1">
                 <h4 className="text-[14px] font-semibold text-[#111]">Что AI делает</h4>
                 {/* PR9.27: компактные pills вместо 2×2 grid'а на всю ширину.
@@ -2296,23 +2304,33 @@ export default function AiControlCenterClient({
                 </div>
             </div>
 
-            {/* PR9.34/PR9.35: кнопка «Сохранить» сохраняет operational settings
-                (режим / каналы / пороги). Внутри collapsible-блока — рядом
-                с тем что сохраняет. Профили сохраняются отдельно через
-                свои кнопки внутри ProfilesEditor сверху. */}
-            <button
-                onClick={handleSaveRules}
-                disabled={rulesSaving}
-                className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
-            >
-                <Save size={11} />
-                {rulesSaving ? 'Сохраняем...' : 'Сохранить настройки'}
-            </button>
                     </div>
-                )}
+                    {/* Footer модалки — действия */}
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                        <button
+                            type="button"
+                            onClick={() => !rulesSaving && setRulesModalOpen(false)}
+                            disabled={rulesSaving}
+                            className="h-[34px] px-4 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
+                        >
+                            Закрыть
+                        </button>
+                        <button
+                            onClick={async () => {
+                                await handleSaveRules()
+                                setRulesModalOpen(false)
+                            }}
+                            disabled={rulesSaving}
+                            className="h-[34px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                        >
+                            {rulesSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                            {rulesSaving ? 'Сохраняем...' : 'Сохранить'}
+                        </button>
+                    </div>
+                </div>
             </div>
-        </div>
-    )
+        )
+    }
 
     // ─── Вкладка: База знаний ─────────────────────────────────────
 
@@ -5357,6 +5375,11 @@ export default function AiControlCenterClient({
 
             {/* PR7.9: Reset Knowledge Core modal (3 modes + typed confirm) */}
             <ResetCoreModal />
+
+            {/* PR9.36: Дополнительные настройки modal — operational settings
+                (mode / каналы / пороги). Кнопка-открытие на вкладке «Стиль
+                общения» сверху справа. */}
+            <AdvancedSettingsModal />
 
             {/* PR5: Legacy KB → Knowledge Core migration modal */}
             {migrationOpen && (
