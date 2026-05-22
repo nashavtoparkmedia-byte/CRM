@@ -1486,28 +1486,24 @@ export default function AiControlCenterClient({
                         idle: 'не активен', disconnected: 'отключён',
                         inactive: 'отключён', unknown: '—',
                     }
-                    // PR7.16.1: fix multi-account summary —
-                    // раньше waConnIds смешивал все connectionIds
-                    // (WA + TG) и подписывал «N аккаунтов WhatsApp».
-                    // Теперь группируем по channel из ChannelConnection.
-                    const completed = importJobs.filter(j => j.status === 'completed')
+                    // PR9.6: считаем источники из РЕАЛЬНОГО состояния БД
+                    // (connectionCounts), а не из HistoryImportJob. Раньше
+                    // MAX-сообщения (live от scraper, без manual import)
+                    // не попадали в summary — пользователь видел только WA.
+                    // Теперь берём все connection-id у которых есть messages
+                    // в БД и группируем по channel.
                     const connIdsByChannel = new Map<string, Set<string>>()
-                    const channelsWithoutAccount = new Set<string>()
-                    for (const j of completed) {
-                        const cid = (j as any).connectionId as string | null
-                        if (cid) {
-                            const cc = channelConnections.find(c => c.id === cid)
-                            const ch = cc?.channel ?? 'whatsapp'
-                            const set = connIdsByChannel.get(ch) ?? new Set<string>()
-                            set.add(cid)
-                            connIdsByChannel.set(ch, set)
-                        } else {
-                            for (const ch of j.channels) channelsWithoutAccount.add(ch)
-                        }
+                    for (const c of connectionCounts) {
+                        const cc = channelConnections.find(x => x.id === c.connectionId)
+                        if (!cc) continue
+                        const set = connIdsByChannel.get(cc.channel) ?? new Set<string>()
+                        set.add(c.connectionId)
+                        connIdsByChannel.set(cc.channel, set)
                     }
-                    const multiChannels = [...connIdsByChannel.entries()]
-                        .filter(([, ids]) => ids.size > 1)
-                    const showMulti = multiChannels.length > 0 || channelsWithoutAccount.size > 0
+                    // Каналы где есть >0 источников вообще (для отображения)
+                    const channelsToShow = [...connIdsByChannel.entries()]
+                        .filter(([, ids]) => ids.size > 0)
+                    const showMulti = channelsToShow.length > 0
                     return (
                         <div className="mt-2 space-y-1">
                             <div className="text-[11px] text-gray-500">
@@ -1527,11 +1523,13 @@ export default function AiControlCenterClient({
                                     Точный аккаунт не сохранён — это импорт до того, как мы стали запоминать привязку к аккаунту.
                                 </div>
                             )}
-                            {/* PR7.16.1: правильная multi-account сводка — теперь
-                                группировка по каналу, а не общий waConnIds-mix. */}
+                            {/* PR9.6: показываем все каналы где есть источники
+                                в реальной БД (включая MAX live-streamed). */}
                             {showMulti && (
                                 <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-200 space-y-0.5">
-                                    {multiChannels.map(([ch, ids]) => {
+                                    {(['whatsapp', 'telegram', 'max'] as const).map(ch => {
+                                        const ids = connIdsByChannel.get(ch)
+                                        if (!ids || ids.size === 0) return null
                                         const labels = Array.from(ids)
                                             .map(id => channelConnections.find(c => c.id === id))
                                             .filter(Boolean) as ChannelConnection[]
@@ -1549,10 +1547,6 @@ export default function AiControlCenterClient({
                                             </div>
                                         )
                                     })}
-                                    {/* PR8: убрал legacy «источник аккаунта пока определяется по каналу» —
-                                        теперь chat-level provenance работает для TG/MAX через
-                                        Chat.metadata.connectionId. Старые HistoryImportJob записи
-                                        без connectionId — это legacy импорты, просто пропускаем. */}
                                 </div>
                             )}
                         </div>
