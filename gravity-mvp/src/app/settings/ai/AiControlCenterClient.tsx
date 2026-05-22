@@ -1796,71 +1796,105 @@ export default function AiControlCenterClient({
     }
     const theme = STATUS_THEME[effectiveStatus]
 
+    // PR9.16: per-provider card. Карточка показывает свой статус ТОЛЬКО
+    // когда это активный провайдер (config.provider === p). Иначе —
+    // нейтральный «не используется» с кнопкой «Сделать активным».
+    const PROVIDER_META: Record<string, { name: string; sub: string; keysUrl: string }> = {
+        anthropic: {
+            name: 'Anthropic (Claude)',
+            sub:  'Лучше понимает русский, выше качество на длинных ответах.',
+            keysUrl: 'https://console.anthropic.com/settings/keys',
+        },
+        openai: {
+            name: 'OpenAI (GPT)',
+            sub:  'Дешевле и быстрее на коротких ответах, шире выбор моделей.',
+            keysUrl: 'https://platform.openai.com/api-keys',
+        },
+    }
+
     return (
         <div className="space-y-5">
             <InlineInfo>
-                AI работает через внешнюю модель: Anthropic (Claude) или OpenAI (GPT).
-                Claude лучше понимает русский, GPT дешевле и быстрее на коротких ответах.
+                AI работает через одного провайдера за раз: Anthropic (Claude) или OpenAI (GPT).
+                Выберите карточку — это станет активным провайдером для всех ответов AI.
             </InlineInfo>
 
-            {/* PR9.15: prominent status card — пользователь сразу видит
-                работает ли ключ, не нажимая «Проверить». */}
-            <div className={`rounded-xl border-2 px-5 py-4 ${theme.cardBg}`}>
-                <div className="flex items-start justify-between gap-3 mb-2">
-                    <div>
-                        <div className={`text-[10px] uppercase tracking-wide font-bold mb-1 ${theme.titleColor} opacity-70`}>
-                            Статус AI Провайдера
+            {/* PR9.16: 2 карточки провайдеров, color-coded по статусу
+                активного. Старая большая info-карточка статуса удалена —
+                ту же инфу даёт цвет конкретной карточки. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(['anthropic', 'openai'] as const).map(p => {
+                    const meta = PROVIDER_META[p]
+                    const isActive = config.provider === p
+                    // Активный — color reflects effectiveStatus.
+                    // Неактивный — нейтральный белый.
+                    const cardBg = !isActive
+                        ? 'bg-white border-gray-200 hover:border-[#3390EC] hover:bg-[#FAFBFC]'
+                        : effectiveStatus === 'ok'
+                            ? 'bg-emerald-50 border-emerald-400'
+                            : effectiveStatus === 'error'
+                                ? 'bg-red-50 border-red-400'
+                                : effectiveStatus === 'testing'
+                                    ? 'bg-amber-50 border-amber-400'
+                                    : 'bg-gray-50 border-gray-400'
+                    const pillBg = !isActive
+                        ? 'bg-gray-200 text-gray-600'
+                        : effectiveStatus === 'ok'
+                            ? 'bg-emerald-600 text-white'
+                            : effectiveStatus === 'error'
+                                ? 'bg-red-600 text-white'
+                                : effectiveStatus === 'testing'
+                                    ? 'bg-amber-600 text-white'
+                                    : 'bg-gray-600 text-white'
+                    const pillText = !isActive ? 'не используется'
+                        : effectiveStatus === 'ok' ? '✓ ключ активен'
+                        : effectiveStatus === 'error' ? '✗ ключ не работает'
+                        : effectiveStatus === 'testing' ? '… проверяем'
+                        : effectiveStatus === 'unchecked' ? 'ключ не проверен'
+                        : 'ключ не задан'
+                    return (
+                        <div
+                            key={p}
+                            className={`rounded-xl border-2 px-4 py-3.5 transition-colors ${cardBg}`}
+                        >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0">
+                                    <div className="text-[15px] font-semibold text-[#111]">{meta.name}</div>
+                                    <div className="text-[11px] text-gray-600 leading-snug mt-0.5">{meta.sub}</div>
+                                </div>
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${pillBg}`}>
+                                    {pillText}
+                                </span>
+                            </div>
+                            {isActive && config.lastConnectionCheckAt && (
+                                <div className="text-[10px] text-gray-500 mt-1">
+                                    Последняя проверка: {new Date(config.lastConnectionCheckAt).toLocaleString('ru')}
+                                </div>
+                            )}
+                            {!isActive && (
+                                <button
+                                    type="button"
+                                    onClick={() => switchProvider(p)}
+                                    className="mt-2 text-[12px] font-semibold text-[#3390EC] hover:underline"
+                                >
+                                    Сделать активным →
+                                </button>
+                            )}
+                            {isActive && (
+                                <div className="text-[11px] text-[#3390EC] font-semibold mt-1">
+                                    ● активный провайдер
+                                </div>
+                            )}
                         </div>
-                        <div className={`text-[20px] font-bold leading-none ${theme.titleColor}`}>
-                            {theme.title}
-                        </div>
-                        <div className={`text-[12px] mt-1 ${theme.titleColor} opacity-80`}>
-                            {theme.subtitle}
-                        </div>
-                    </div>
-                    <span className={`text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full shrink-0 ${theme.pillBg}`}>
-                        {effectiveStatus === 'ok' ? '✓ OK' :
-                         effectiveStatus === 'error' ? '✗ Ошибка' :
-                         effectiveStatus === 'testing' ? '… проверка' :
-                         effectiveStatus === 'unchecked' ? 'нет проверки' :
-                         'нет ключа'}
-                    </span>
-                </div>
-                {config.lastConnectionCheckAt && (
-                    <div className={`text-[11px] mt-2 ${theme.titleColor} opacity-60`}>
-                        Последняя проверка: {new Date(config.lastConnectionCheckAt).toLocaleString('ru')}
-                    </div>
-                )}
+                    )
+                })}
             </div>
 
             <div className="space-y-4 pt-1">
                 <div>
-                    <label className="text-[12px] text-gray-500 mb-1.5 block">Провайдер</label>
-                    <div className="flex gap-2">
-                        {['anthropic', 'openai'].map(p => (
-                            <button
-                                key={p}
-                                onClick={() => switchProvider(p)}
-                                className={`px-4 h-[34px] rounded-lg text-[13px] font-semibold border transition-colors ${
-                                    config.provider === p
-                                        ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                        : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
-                                }`}
-                            >
-                                {p === 'anthropic' ? 'Anthropic (Claude)' : 'OpenAI (GPT)'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div>
                     <label className="text-[12px] text-gray-500 mb-1.5 flex items-center gap-1.5">
-                        API ключ
-                        {config.provider === 'anthropic' ? (
-                            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
-                        ) : (
-                            <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
-                        )}
+                        API ключ для <b className="text-[#111]">{PROVIDER_META[config.provider]?.name ?? config.provider}</b>
+                        <a href={PROVIDER_META[config.provider]?.keysUrl ?? '#'} target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
                     </label>
                     <div className="flex gap-2">
                         <input
