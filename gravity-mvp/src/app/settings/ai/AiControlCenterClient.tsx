@@ -1405,7 +1405,7 @@ export default function AiControlCenterClient({
                                     }}
                                     disabled={dbStatsRefreshing}
                                     className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 disabled:opacity-70 ${cardBg}`}
-                                    title="Кликнуть по карточке — обновить счётчики. Подробнее об аккаунте — нажми «Открыть настройки» внизу карточки."
+                                    title="Кликнуть по карточке — обновить счётчики. Чтобы загрузить старую историю или сменить настройки аккаунта — нажми «Открыть настройки» внизу карточки."
                                 >
                                     {/* Header: label + status pill */}
                                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -1661,13 +1661,12 @@ export default function AiControlCenterClient({
                     lastConnectionCheckAt: new Date().toISOString(),
                 }))
             } else {
-                setTestStatus('error')
+                // PR9.20: при провале auto-test НЕ переводим карточку в
+                // красное и не перетираем БД. Сохранённый ok-статус
+                // остаётся. Только UI testStatus='idle' и
+                // показываем silent warning в badge.
+                setTestStatus('idle')
                 setTestError(result.error ?? 'Ошибка')
-                setConfig(c => ({
-                    ...c,
-                    connectionStatus: 'error',
-                    lastConnectionCheckAt: new Date().toISOString(),
-                }))
             }
         }).catch(() => {
             setTestStatus('idle')

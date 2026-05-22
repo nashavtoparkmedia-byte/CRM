@@ -124,15 +124,21 @@ export async function testSavedConnection() {
             cfg.apiKeyEncrypted as string,
             cfg.classificationModel as string,
         )
-        // Persist в БД для следующих reload'ов.
-        try {
-            await prisma.$executeRaw`
-                UPDATE "AiAgentConfig"
-                SET "connectionStatus" = ${result.ok ? 'ok' : 'error'},
-                    "lastConnectionCheckAt" = NOW()
-                WHERE id = 'singleton'
-            `
-        } catch { /* silent */ }
+        // PR9.20: persist в БД только при УСПЕХЕ. Если auto-test
+        // упал (network glitch, прокси отвалился, rate limit) —
+        // не перетираем сохранённый ok-статус. Иначе один временный
+        // сбой убивает «ключ работает» из БД, и user после reload
+        // снова видит «нужна проверка».
+        if (result.ok) {
+            try {
+                await prisma.$executeRaw`
+                    UPDATE "AiAgentConfig"
+                    SET "connectionStatus" = 'ok',
+                        "lastConnectionCheckAt" = NOW()
+                    WHERE id = 'singleton'
+                `
+            } catch { /* silent */ }
+        }
         return result
     } catch (e: any) {
         return { ok: false, error: e?.message ?? 'unknown' }
