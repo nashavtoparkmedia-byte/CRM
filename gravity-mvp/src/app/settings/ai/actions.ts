@@ -1938,6 +1938,64 @@ export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
     }
 }
 
+/** PR9.29: per-connection totals из РЕАЛЬНОЙ БД для конкретного аккаунта.
+ *  Используется в ChannelSyncBlock на странице мессенджера, чтобы число
+ *  «сообщений» совпадало с тем, что видит пользователь в AI → «База
+ *  сообщений». Раньше WA-страница показывала lastJob.messagesImported
+ *  (результат последней синхронизации, обычно меньше), а AI — реальный
+ *  total из таблицы Message. Пользователь читал это как «кто-то обманывает».
+ *  Источник правды один — Message COUNT, агрегированный по
+ *  COALESCE(wc.connectionId, c.metadata->>'connectionId'). */
+export interface ConnectionTotalsForUi {
+    messages:       number
+    chats:          number
+    contacts:       number
+    earliestSentAt: string | null
+    latestSentAt:   string | null
+}
+export async function getConnectionTotalsForUi(connectionId: string): Promise<ConnectionTotalsForUi> {
+    const empty: ConnectionTotalsForUi = {
+        messages: 0, chats: 0, contacts: 0,
+        earliestSentAt: null, latestSentAt: null,
+    }
+    if (!connectionId) return empty
+    try {
+        const rows = await prisma.$queryRaw<Array<{
+            messages: number
+            chats:    number
+            contacts: number
+            earliestSentAt: Date | null
+            latestSentAt:   Date | null
+        }>>`
+            SELECT
+                COUNT(*)::int                              AS messages,
+                COUNT(DISTINCT m."chatId")::int            AS chats,
+                COUNT(DISTINCT c."contactId")::int         AS contacts,
+                MIN(m."sentAt")                            AS "earliestSentAt",
+                MAX(m."sentAt")                            AS "latestSentAt"
+            FROM "Message" m
+            LEFT JOIN "Chat" c          ON c.id = m."chatId"
+            LEFT JOIN "WhatsAppChat" wc ON wc.id = c."externalChatId"
+            WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
+              AND COALESCE(wc."connectionId", c.metadata->>'connectionId') = ${connectionId}
+        `
+        const r = rows[0]
+        if (!r) return empty
+        return {
+            messages:       Number(r.messages ?? 0),
+            chats:          Number(r.chats ?? 0),
+            contacts:       Number(r.contacts ?? 0),
+            earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
+            latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
+        }
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[getConnectionTotalsForUi] failed:', e?.message)
+        }
+        return empty
+    }
+}
+
 export async function listChannelConnections(): Promise<ChannelConnection[]> {
     const result: ChannelConnection[] = []
 

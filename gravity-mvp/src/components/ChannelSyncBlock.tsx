@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { RefreshCw, Download, CheckCircle2, AlertCircle, Clock, ExternalLink, Square } from "lucide-react"
-import { createImportJob, getAllImportJobs, cancelImportJob } from "@/app/settings/ai/actions"
+import { createImportJob, getAllImportJobs, cancelImportJob, getConnectionTotalsForUi } from "@/app/settings/ai/actions"
 
 type SyncMode = 'from_connection_time' | 'available_history' | 'last_n_days'
 
@@ -54,6 +54,11 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
     const [liveProgress, setLiveProgress] = useState<{ messagesImported: number; chatsScanned: number } | null>(null)
     const [elapsed, setElapsed] = useState(0)
     const [newMsgs, setNewMsgs] = useState<number | null>(null)
+    // PR9.29: реальные DB-totals для этого connectionId, чтобы число
+    // «сообщений» на странице мессенджера совпадало с AI «База сообщений».
+    // Раньше показывали lastJob.messagesImported (одна синхронизация) —
+    // отличалось от total-in-DB в N раз, выглядело как «обман».
+    const [dbTotals, setDbTotals] = useState<{ messages: number; chats: number; contacts: number } | null>(null)
     const pollRef = useRef<NodeJS.Timeout | null>(null)
     const timerRef = useRef<NodeJS.Timeout | null>(null)
     const btnRef = useRef<HTMLDivElement | null>(null)
@@ -71,9 +76,27 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
         }
     }
 
+    // PR9.29: подтянуть реальные DB-totals для этого connection.
+    // Вызывается на mount + после завершения синхронизации, чтобы
+    // три большие плашки «Сообщений / Чатов / Контактов» показывали
+    // правду из таблицы Message, а не результат одной синхронизации.
+    const loadDbTotals = async () => {
+        if (!connectionId) return
+        try {
+            const totals = await getConnectionTotalsForUi(connectionId)
+            setDbTotals({
+                messages: totals.messages,
+                chats:    totals.chats,
+                contacts: totals.contacts,
+            })
+        } catch { /* silent — фолбэк на lastJob */ }
+    }
+
     useEffect(() => {
         loadLastJob()
+        loadDbTotals()
         return () => stopPolling()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const startPolling = () => {
@@ -109,6 +132,9 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                     setIsImporting(false)
                     setLiveProgress(null)
                     stopPolling()
+                    // PR9.29: после завершения синка обновить DB-totals,
+                    // чтобы три большие плашки показывали свежие числа.
+                    loadDbTotals()
                 }
             }
         }, 2000)
@@ -211,10 +237,23 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
             {/* Done / Partial */}
             {(historyStatus === 'done' || historyStatus === 'partial') && lastJob && (
                 <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                        <StatMini label="Сообщений" value={lastJob.messagesImported} color="green" />
-                        <StatMini label="Чатов"     value={lastJob.chatsScanned}     color="green" />
-                        <StatMini label="Контактов" value={lastJob.contactsFound}    color="green" />
+                    {/* PR9.29: три большие плашки — реальные DB-totals (Message COUNT)
+                        для этого аккаунта. Должны совпадать с числом, которое
+                        пользователь видит в AI → «База сообщений». Раньше показывали
+                        lastJob.messagesImported (результат одной синхронизации) —
+                        отличалось от total-in-DB и читалось как обман.
+                        Fallback на lastJob если connectionId не задан (MAX без
+                        explicit connectionId — там пока channel-level total). */}
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+                        Всего в базе
+                    </div>
+                    <div
+                        className="grid grid-cols-3 gap-2 text-center"
+                        title="Сколько сообщений / чатов / контактов лежит в базе CRM для этого аккаунта прямо сейчас. То же число видно в настройках AI → «База сообщений»."
+                    >
+                        <StatMini label="Сообщений" value={dbTotals?.messages ?? lastJob.messagesImported} color="green" />
+                        <StatMini label="Чатов"     value={dbTotals?.chats    ?? lastJob.chatsScanned}     color="green" />
+                        <StatMini label="Контактов" value={dbTotals?.contacts ?? lastJob.contactsFound}    color="green" />
                     </div>
                     {(() => {
                         const details = lastJob.detailsJson as any
