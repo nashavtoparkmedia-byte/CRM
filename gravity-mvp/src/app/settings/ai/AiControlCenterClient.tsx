@@ -31,6 +31,7 @@ import {
     listChannelConnections,
     getSourceStatsByConnection, disableKnowledgeSource, resetKnowledgeCore,
     getItemSourceBadges,
+    getChannelTotalsForUi,
     bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
@@ -44,6 +45,7 @@ import {
     type KnowledgeSection, type KnowledgeItem, type KnowledgeStats,
     type ExtractionScope,
     type ItemSourceBadges,
+    type ChannelTotalsRow,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -713,6 +715,11 @@ export default function AiControlCenterClient({
         } catch { /* silent */ }
     }
 
+    // PR7.16.1: per-channel totals из реальной БД (Chat + Message).
+    // Используется на Sync top-card вместо importJobs aggregation,
+    // потому что MAX/TG могут приходить live без HistoryImportJob.
+    const [channelTotals, setChannelTotals] = useState<ChannelTotalsRow[]>([])
+
     // На mount fetch runtime state + recent traces.
     useEffect(() => {
         let cancelled = false
@@ -725,12 +732,15 @@ export default function AiControlCenterClient({
             listChannelConnections(),
             // PR7.9: per-connection статистика для «Источники» panel.
             getSourceStatsByConnection(),
-        ]).then(([state, traces, conns, stats]) => {
+            // PR7.16.1: per-channel totals из БД — для Sync top-card.
+            getChannelTotalsForUi(),
+        ]).then(([state, traces, conns, stats, totals]) => {
             if (cancelled) return
             setRuntimeState(state)
             setRetrievalTraces(traces as RetrievalTrace[])
             setChannelConnections(conns as ChannelConnection[])
             setSourceStats(stats as SourceStatsRow[])
+            setChannelTotals(totals as ChannelTotalsRow[])
             // Если ещё не было user-выбора в селекторе — preselect
             // все ready. При повторном открытии модала PR7.4 проверяет
             // selectedConnectionIds.size > 0 и оставляет user choice.
@@ -1401,23 +1411,28 @@ export default function AiControlCenterClient({
                         idle: 'не активен', disconnected: 'отключён',
                         inactive: 'отключён', unknown: '—',
                     }
-                    // Multi-account summary: distinct WA connectionId
-                    // среди всех completed jobs + список каналов TG/MAX
-                    // (для которых impl detail точная привязка не сохранена).
+                    // PR7.16.1: fix multi-account summary —
+                    // раньше waConnIds смешивал все connectionIds
+                    // (WA + TG) и подписывал «N аккаунтов WhatsApp».
+                    // Теперь группируем по channel из ChannelConnection.
                     const completed = importJobs.filter(j => j.status === 'completed')
-                    const waConnIds = new Set<string>()
+                    const connIdsByChannel = new Map<string, Set<string>>()
                     const channelsWithoutAccount = new Set<string>()
                     for (const j of completed) {
                         const cid = (j as any).connectionId as string | null
-                        if (cid) waConnIds.add(cid)
-                        else for (const ch of j.channels) {
-                            if (ch !== 'whatsapp') channelsWithoutAccount.add(ch)
+                        if (cid) {
+                            const cc = channelConnections.find(c => c.id === cid)
+                            const ch = cc?.channel ?? 'whatsapp'
+                            const set = connIdsByChannel.get(ch) ?? new Set<string>()
+                            set.add(cid)
+                            connIdsByChannel.set(ch, set)
+                        } else {
+                            for (const ch of j.channels) channelsWithoutAccount.add(ch)
                         }
                     }
-                    const distinctWa = Array.from(waConnIds)
-                        .map(id => channelConnections.find(c => c.id === id))
-                        .filter(Boolean) as ChannelConnection[]
-                    const showMulti = distinctWa.length > 1 || channelsWithoutAccount.size > 0
+                    const multiChannels = [...connIdsByChannel.entries()]
+                        .filter(([, ids]) => ids.size > 1)
+                    const showMulti = multiChannels.length > 0 || channelsWithoutAccount.size > 0
                     return (
                         <div className="mt-2 space-y-1">
                             <div className="text-[11px] text-gray-500">
@@ -1437,19 +1452,28 @@ export default function AiControlCenterClient({
                                     Точный аккаунт не сохранён — это импорт до того, как мы стали запоминать привязку к аккаунту.
                                 </div>
                             )}
-                            {/* Multi-account summary — отдельная строка ниже */}
+                            {/* PR7.16.1: правильная multi-account сводка — теперь
+                                группировка по каналу, а не общий waConnIds-mix. */}
                             {showMulti && (
-                                <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-200">
-                                    {distinctWa.length > 1 && (
-                                        <div>
-                                            Всего за всё время импорт шёл из{' '}
-                                            <b className="text-gray-700">{distinctWa.length}</b> аккаунтов WhatsApp:{' '}
-                                            <span className="text-gray-600">
-                                                {distinctWa.slice(0, 3).map(c => c.label.replace(/^WhatsApp /, '')).join(' · ')}
-                                                {distinctWa.length > 3 && ` · ещё ${distinctWa.length - 3}`}
-                                            </span>
-                                        </div>
-                                    )}
+                                <div className="text-[11px] text-gray-500 pt-1 border-t border-gray-200 space-y-0.5">
+                                    {multiChannels.map(([ch, ids]) => {
+                                        const labels = Array.from(ids)
+                                            .map(id => channelConnections.find(c => c.id === id))
+                                            .filter(Boolean) as ChannelConnection[]
+                                        const channelName = ch === 'telegram' ? 'Telegram' : ch === 'max' ? 'MAX' : 'WhatsApp'
+                                        // Убираем channel-prefix у label, т.к. он
+                                        // повторяется. «WhatsApp +7922•••3150» → «+7922•••3150».
+                                        const stripped = labels.slice(0, 3).map(c => c.label.replace(/^(WhatsApp|Telegram|MAX) /, ''))
+                                        return (
+                                            <div key={ch}>
+                                                <b className="text-gray-700">{channelName}:</b>{' '}
+                                                <span className="text-gray-600">{stripped.join(' · ')}</span>
+                                                {labels.length > 3 && (
+                                                    <span className="text-gray-400"> · ещё {labels.length - 3}</span>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
                                     {Array.from(channelsWithoutAccount).map(ch => (
                                         <div key={ch} className="text-gray-400">
                                             {ch === 'telegram' ? 'Telegram' : ch === 'max' ? 'MAX' : ch}: источник аккаунта пока определяется по каналу
@@ -1461,56 +1485,25 @@ export default function AiControlCenterClient({
                     )
                 })()}
 
-                {/* PR7.16: top-card stats теперь по всем каналам, не
-                    только по last job. Агрегируем последний successful
-                    job per (connectionId || channelKey) — это даёт
-                    точную картину «что есть в системе сейчас» без
-                    double-counting от повторных синхронизаций. */}
-                {lastJob && (lastJob.status === 'completed' || lastJob.status === 'failed') && (() => {
-                    // Group jobs: каждый импорт идентифицируется по
-                    // connectionId (если есть) или по channel-set
-                    // (для legacy/TG/MAX без connectionId).
-                    type LatestPerSource = {
-                        key: string
-                        channels: string[]
-                        connectionId: string | null
-                        messages: number
-                        chats: number
-                        contacts: number
-                        finishedAt: string | null
-                    }
-                    const latestBySource = new Map<string, LatestPerSource>()
-                    const completed = importJobs.filter(j => j.status === 'completed')
-                    for (const j of completed) {
-                        const cid = (j as any).connectionId as string | null
-                        const key = cid ?? `channels:${[...j.channels].sort().join(',')}`
-                        const finishedAt = j.finishedAt ?? j.createdAt
-                        const existing = latestBySource.get(key)
-                        if (!existing || (finishedAt && existing.finishedAt && new Date(finishedAt) > new Date(existing.finishedAt))) {
-                            latestBySource.set(key, {
-                                key, channels: j.channels, connectionId: cid,
-                                messages: j.messagesImported,
-                                chats: j.chatsScanned,
-                                contacts: j.contactsFound,
-                                finishedAt,
-                            })
-                        }
-                    }
-                    const totals = { messages: 0, chats: 0, contacts: 0 }
-                    const byChannel = new Map<string, { messages: number; chats: number; contacts: number }>()
-                    for (const v of latestBySource.values()) {
-                        totals.messages += v.messages
-                        totals.chats    += v.chats
-                        totals.contacts += v.contacts
-                        // Если у job несколько каналов — относим к первому
-                        // (legacy job до per-connection import'а).
-                        const primaryChannel = v.channels[0] ?? 'unknown'
-                        const cur = byChannel.get(primaryChannel) ?? { messages: 0, chats: 0, contacts: 0 }
-                        cur.messages += v.messages
-                        cur.chats    += v.chats
-                        cur.contacts += v.contacts
-                        byChannel.set(primaryChannel, cur)
-                    }
+                {/* PR7.16.1: top-card stats теперь из РЕАЛЬНОЙ БД
+                    (Chat + Message), а не из HistoryImportJob.
+                    Это покрывает live-streamed каналы (MAX, TG)
+                    которые могут не иметь явных import jobs. */}
+                {channelTotals.length > 0 && (() => {
+                    const totals = channelTotals.reduce(
+                        (acc, t) => {
+                            acc.messages += t.messages
+                            acc.chats += t.chats
+                            acc.contacts += t.contacts
+                            return acc
+                        },
+                        { messages: 0, chats: 0, contacts: 0 }
+                    )
+                    const lastMsgOverall = channelTotals
+                        .map(t => t.lastMessageAt)
+                        .filter(Boolean)
+                        .map(d => new Date(d!).getTime())
+                        .reduce((max, t) => Math.max(max, t), 0)
                     return (
                         <>
                             <div className="grid grid-cols-3 gap-3 mt-3">
@@ -1525,16 +1518,16 @@ export default function AiControlCenterClient({
                                     </div>
                                 ))}
                             </div>
-                            {/* PR7.16: breakdown по каналам — пользователь сразу
-                                видит сколько на WhatsApp / Telegram / MAX, а не
-                                только цифру последнего импорта. */}
-                            {byChannel.size > 1 && (
+                            {/* PR7.16.1: breakdown по каналам — теперь
+                                включает все каналы где есть сообщения,
+                                включая MAX от live-скрейпера. */}
+                            {channelTotals.length > 1 && (
                                 <div className="mt-2 text-[11px] text-gray-500 space-y-0.5">
                                     <div className="text-gray-400 uppercase tracking-wide text-[10px] font-semibold">
-                                        По каналам
+                                        По каналам (всего в системе)
                                     </div>
                                     {(['whatsapp', 'telegram', 'max'] as const).map(ch => {
-                                        const v = byChannel.get(ch)
+                                        const v = channelTotals.find(t => t.channel === ch)
                                         if (!v) return null
                                         return (
                                             <div key={ch}>
@@ -1547,17 +1540,24 @@ export default function AiControlCenterClient({
                                     })}
                                 </div>
                             )}
-                            {/* PR7.16: meta строка про сам last job — оставлена
-                                как контекст «когда было последнее обновление». */}
-                            <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500 border-t border-[#E0E8F4] pt-2">
-                                <span className="text-gray-400">Последнее обновление:</span>
-                                {lastJob.coveredPeriodFrom && lastJob.coveredPeriodTo && (
-                                    <span>{new Date(lastJob.coveredPeriodFrom).toLocaleDateString('ru')} — {new Date(lastJob.coveredPeriodTo).toLocaleDateString('ru')}</span>
-                                )}
-                                {lastJob.startedAt && lastJob.finishedAt && (
-                                    <span className="text-gray-400">· {Math.round((new Date(lastJob.finishedAt).getTime() - new Date(lastJob.startedAt).getTime()) / 1000)}с</span>
-                                )}
-                            </div>
+                            {/* PR7.16.1: meta строка про last activity — на основе
+                                реальной БД (последнее сообщение из любого канала). */}
+                            {(lastMsgOverall > 0 || (lastJob?.finishedAt)) && (
+                                <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-gray-500 border-t border-[#E0E8F4] pt-2">
+                                    {lastMsgOverall > 0 && (
+                                        <>
+                                            <span className="text-gray-400">Последнее сообщение:</span>
+                                            <span>{new Date(lastMsgOverall).toLocaleString('ru')}</span>
+                                        </>
+                                    )}
+                                    {lastJob?.finishedAt && (
+                                        <>
+                                            <span className="text-gray-400">· последний ручной импорт:</span>
+                                            <span>{new Date(lastJob.finishedAt).toLocaleString('ru')}</span>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </>
                     )
                 })()}
@@ -1640,7 +1640,15 @@ export default function AiControlCenterClient({
                 теперь это просто секция страницы. */}
             {importJobs.length > 0 && (
                 <div className="pt-1">
-                    <h4 className="text-[13px] font-semibold text-[#111] mb-2">Прошлые загрузки</h4>
+                    <h4 className="text-[13px] font-semibold text-[#111] mb-1">Прошлые загрузки</h4>
+                    {/* PR7.16.1: пояснение почему здесь могут не появляться
+                        MAX/TG записи. MAX-скрейпер пишет сообщения live в
+                        реальном времени без явного импорта истории. */}
+                    <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+                        Здесь только ручные импорты истории (по кнопке «Запустить импорт»).
+                        Сообщения из MAX и Telegram, которые приходят онлайн (через бота или скрейпер),
+                        не появляются в этом списке — но видны в общей статистике сверху.
+                    </p>
                     <div className="divide-y divide-[#F0F0F0] border-t border-b border-[#F0F0F0]">
                         {importJobs.slice(0, 5).map(job => {
                             const RESULT_LABELS: Record<string, string> = { full: 'Вся доступная история', partial: 'Частичный', 'live only': 'Только live', failed: 'Ошибка' }

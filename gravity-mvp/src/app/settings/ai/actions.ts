@@ -1694,6 +1694,52 @@ function maskPhone(raw: string | null): string | null {
 
 /** Возвращает все известные channel-connections, unified shape.
  *  Read-only, без cookie checks — labels не несут PII. */
+/** PR7.16.1: per-channel totals из РЕАЛЬНОЙ БД (Chat + Message).
+ *  Используется в top-card на /settings/ai → Синхронизация чтобы
+ *  показывать «что есть в системе сейчас», а не только агрегаты
+ *  HistoryImportJob (которые не покрывают live-streamed каналы
+ *  типа MAX-скрейпера).
+ *
+ *  Read-only, без cookie checks — counts не несут PII. */
+export interface ChannelTotalsRow {
+    channel:        'whatsapp' | 'telegram' | 'max'
+    messages:       number
+    chats:          number
+    contacts:       number
+    lastMessageAt:  string | null
+}
+export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
+    try {
+        const rows = await prisma.$queryRaw<Array<{
+            channel: string; messages: number; chats: number;
+            contacts: number; lastMessageAt: Date | null
+        }>>`
+            SELECT
+                m.channel::text                              AS channel,
+                COUNT(*)::int                                AS messages,
+                COUNT(DISTINCT m."chatId")::int              AS chats,
+                COUNT(DISTINCT c."contactId")::int           AS contacts,
+                MAX(m."sentAt")                              AS "lastMessageAt"
+            FROM "Message" m
+            LEFT JOIN "Chat" c ON c.id = m."chatId"
+            WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
+            GROUP BY m.channel
+        `
+        return rows.map(r => ({
+            channel:       r.channel as ChannelTotalsRow['channel'],
+            messages:      Number(r.messages ?? 0),
+            chats:         Number(r.chats ?? 0),
+            contacts:      Number(r.contacts ?? 0),
+            lastMessageAt: r.lastMessageAt ? new Date(r.lastMessageAt).toISOString() : null,
+        }))
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[getChannelTotalsForUi] failed:', e?.message)
+        }
+        return []
+    }
+}
+
 export async function listChannelConnections(): Promise<ChannelConnection[]> {
     const result: ChannelConnection[] = []
 
