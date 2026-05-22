@@ -1762,8 +1762,19 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
         }
     }
 
-    // MAX
+    // MAX — две группы записей:
+    //   (а) MaxConnection table — для корпоративных ботов webhook
+    //   (б) virtual entries из Chat.metadata.connectionId — личные
+    //       MAX-аккаунты через web-scraper. Они НЕ регистрируются как
+    //       MaxConnection (scraper использует hardcoded 'max_scraper'),
+    //       но физически сообщения хранятся в Chat + Message и могут
+    //       быть включены в сбор ядра.
+    //
+    // PR7.15.3: до этого пользователь видел в селекторе только бот,
+    // но реальные сообщения шли из max_scraper → бот не имел чатов
+    // и пользователь думал «MAX недоступен». Теперь оба источника видны.
     try {
+        const known = new Set<string>()
         const rows = await prisma.$queryRaw<any[]>`
             SELECT id, name, "isActive"
             FROM "MaxConnection"
@@ -1777,6 +1788,47 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
                 channel: 'max', id: r.id, label,
                 phoneMasked: null, name: r.name ?? null,
                 status, isActive: !!r.isActive, isReady: !!r.isActive,
+            })
+            known.add(r.id)
+        }
+
+        // (б) Virtual entries из Chat.metadata.
+        // Каждый distinct metadata->>'connectionId' WHERE channel='max'
+        // — это отдельный источник сообщений (личный аккаунт через
+        // скрейпер). Read-only — нельзя disable/rename, но в сбор
+        // ядра включается через тот же selector.
+        const virtualRows = await prisma.$queryRaw<any[]>`
+            SELECT
+                metadata->>'connectionId'             AS "connectionId",
+                COUNT(*)::int                         AS "chatCount",
+                MAX("updatedAt")                      AS "lastSeenAt"
+            FROM "Chat"
+            WHERE channel = 'max'
+              AND metadata->>'connectionId' IS NOT NULL
+            GROUP BY metadata->>'connectionId'
+        `
+        // Свежесть: если последний chat обновился за 7 дней → активен.
+        // Это эвристика, не строгое определение — нам важно показать
+        // что источник "живой" для UX, а не gating.
+        const sevenDaysAgoMs = Date.now() - 7 * 24 * 3600 * 1000
+        for (const r of virtualRows) {
+            const id = r.connectionId as string
+            if (!id || known.has(id)) continue
+            const lastSeen = r.lastSeenAt ? new Date(r.lastSeenAt).getTime() : 0
+            const isReadyHeuristic = lastSeen > sevenDaysAgoMs
+            // Human-readable label. max_scraper — это известный hardcoded
+            // virtual id из max-web-scraper.
+            const label = id === 'max_scraper'
+                ? 'MAX · личный аккаунт (через скрейпер)'
+                : `MAX · ${id}`
+            result.push({
+                channel: 'max', id, label,
+                phoneMasked: null,
+                // name=null — UI трактует как «без custom-имени»
+                name: null,
+                status: isReadyHeuristic ? 'ready' : 'inactive',
+                isActive: isReadyHeuristic,
+                isReady: isReadyHeuristic,
             })
         }
     } catch (e: any) {
