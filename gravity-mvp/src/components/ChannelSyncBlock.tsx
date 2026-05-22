@@ -243,18 +243,38 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                         lastJob.messagesImported (результат одной синхронизации) —
                         отличалось от total-in-DB и читалось как обман.
                         Fallback на lastJob если connectionId не задан (MAX без
-                        explicit connectionId — там пока channel-level total). */}
-                    <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
-                        Всего в базе
-                    </div>
-                    <div
-                        className="grid grid-cols-3 gap-2 text-center"
-                        title="Сколько сообщений / чатов / контактов лежит в базе CRM для этого аккаунта прямо сейчас. То же число видно в настройках AI → «База сообщений»."
-                    >
-                        <StatMini label="Сообщений" value={dbTotals?.messages ?? lastJob.messagesImported} color="green" />
-                        <StatMini label="Чатов"     value={dbTotals?.chats    ?? lastJob.chatsScanned}     color="green" />
-                        <StatMini label="Контактов" value={dbTotals?.contacts ?? lastJob.contactsFound}    color="green" />
-                    </div>
+                        explicit connectionId — там пока channel-level total).
+                        PR9.30: если total = 0/0/0 (пустой аккаунт без истории) —
+                        вместо трёх нулевых плашек дружелюбное empty-state. */}
+                    {(() => {
+                        const msgs     = dbTotals?.messages ?? lastJob.messagesImported
+                        const chats    = dbTotals?.chats    ?? lastJob.chatsScanned
+                        const contacts = dbTotals?.contacts ?? lastJob.contactsFound
+                        const allZero  = msgs === 0 && chats === 0 && contacts === 0
+                        if (allZero) {
+                            return (
+                                <div className="text-[12px] px-3 py-2.5 rounded-lg bg-gray-50 text-gray-500">
+                                    Сообщений по этому аккаунту в базе пока нет.
+                                    Запусти синхронизацию ниже, чтобы скачать переписку.
+                                </div>
+                            )
+                        }
+                        return (
+                            <>
+                                <div className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+                                    Всего в базе
+                                </div>
+                                <div
+                                    className="grid grid-cols-3 gap-2 text-center"
+                                    title="Сколько сообщений / чатов / контактов лежит в базе CRM для этого аккаунта прямо сейчас. То же число видно в настройках AI → «База сообщений»."
+                                >
+                                    <StatMini label="Сообщений" value={msgs}     color="green" />
+                                    <StatMini label="Чатов"     value={chats}    color="green" />
+                                    <StatMini label="Контактов" value={contacts} color="green" />
+                                </div>
+                            </>
+                        )
+                    })()}
                     {(() => {
                         const details = lastJob.detailsJson as any
                         const newCount = details?.newMessages ?? 0
