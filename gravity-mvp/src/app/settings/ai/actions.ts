@@ -361,6 +361,15 @@ export async function checkScraperHealth(channels: string[]): Promise<
     const results: Record<string, { ok: boolean; status?: string; error?: string }> = {}
 
     if (channels.includes('max')) {
+        // PR9.4: сначала HTTP health, потом DB-fallback. Раньше любой
+        // network timeout/ECONNREFUSED блокировал импорт жёстко, даже
+        // если MAX scraper фактически работает (просто /health дёрнули
+        // в момент когда puppeteer был занят). Теперь — fallback на БД:
+        // если за последний час пришло хотя бы 1 MAX-сообщение, scraper
+        // живой.
+        let httpOk = false
+        let httpStatus: string | undefined
+        let httpError: string | undefined
         try {
             const scraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
             const res = await fetch(`${scraperUrl}/health`, {
@@ -369,12 +378,40 @@ export async function checkScraperHealth(channels: string[]): Promise<
             })
             if (res.ok) {
                 const data = await res.json()
-                results.max = { ok: !!data.isReady, status: data.status }
+                httpOk = !!data.isReady
+                httpStatus = data.status
+                if (!httpOk) httpError = `статус ${data.status}`
             } else {
-                results.max = { ok: false, error: `HTTP ${res.status}` }
+                httpError = `HTTP ${res.status}`
             }
         } catch {
-            results.max = { ok: false, error: 'Недоступен' }
+            httpError = 'health endpoint не отвечает'
+        }
+        if (httpOk) {
+            results.max = { ok: true, status: httpStatus }
+        } else {
+            // DB-fallback: есть ли MAX-сообщения за последний час?
+            try {
+                const fresh = await prisma.$queryRaw<Array<{ n: number }>>`
+                    SELECT COUNT(*)::int AS n
+                    FROM "Message"
+                    WHERE channel::text = 'max'
+                      AND "sentAt" >= NOW() - INTERVAL '1 hour'
+                `
+                const liveCount = Number(fresh[0]?.n ?? 0)
+                if (liveCount > 0) {
+                    results.max = {
+                        ok: true,
+                        status: 'db_active',
+                        error: `health endpoint молчит, но за час пришло ${liveCount} сообщ. — пропускаем`,
+                    }
+                } else {
+                    // Ни health, ни свежих сообщений — настоящая проблема.
+                    results.max = { ok: false, error: httpError || 'Недоступен' }
+                }
+            } catch {
+                results.max = { ok: false, error: httpError || 'Недоступен' }
+            }
         }
     }
 

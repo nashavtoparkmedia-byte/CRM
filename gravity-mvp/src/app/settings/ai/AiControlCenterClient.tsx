@@ -1190,31 +1190,37 @@ export default function AiControlCenterClient({
     // Таймер только от скрапера (server-side), чтобы не было проблем с часовыми поясами
     const elapsedSec = liveProgress?.active ? liveProgress.elapsed : null
 
-    const handleStartImport = async () => {
+    // PR9.4: handleStartImport теперь принимает forceProceed — позволяет
+    // пользователю запустить импорт даже если health-check провалился
+    // (например MAX scraper занят puppeteer'ом и не ответил за 3 сек,
+    // но фактически работает). Раньше health был жёстким gate'ом.
+    const handleStartImport = async (forceProceed: boolean = false) => {
         setPreflightState('checking')
         setPreflightError(null)
 
         try {
-            // 1. Preflight: проверяем доступность транспортов
-            const health = await checkScraperHealth(importChannels)
+            if (!forceProceed) {
+                // 1. Preflight: проверяем доступность транспортов
+                const health = await checkScraperHealth(importChannels)
 
-            // Ищем первый недоступный канал
-            for (const ch of importChannels) {
-                const h = health[ch]
-                if (!h) continue
-                if (!h.ok) {
-                    if (h.status === 'initializing') {
-                        setPreflightState('needs_auth')
-                        setPreflightError(`${CHANNEL_LABELS[ch] ?? ch}: скрапер запущен, но ещё инициализируется`)
-                    } else {
-                        setPreflightState('unavailable')
-                        setPreflightError(`${CHANNEL_LABELS[ch] ?? ch}: ${h.error ?? 'скрапер не отвечает'}`)
+                // Ищем первый недоступный канал
+                for (const ch of importChannels) {
+                    const h = health[ch]
+                    if (!h) continue
+                    if (!h.ok) {
+                        if (h.status === 'initializing') {
+                            setPreflightState('needs_auth')
+                            setPreflightError(`${CHANNEL_LABELS[ch] ?? ch}: скрапер запущен, но ещё инициализируется`)
+                        } else {
+                            setPreflightState('unavailable')
+                            setPreflightError(`${CHANNEL_LABELS[ch] ?? ch}: ${h.error ?? 'скрапер не отвечает'}. Если уверены что подключение работает — нажмите «Всё равно запустить».`)
+                        }
+                        return
                     }
-                    return
                 }
             }
 
-            // 2. Всё ок — запускаем джобу
+            // 2. Всё ок (либо forceProceed) — запускаем джобу
             setPreflightState('idle')
             setTransportStatus('online')
             transportFailCount.current = 0
@@ -1324,13 +1330,27 @@ export default function AiControlCenterClient({
                                 </p>
                             </div>
                         </div>
-                        <button
-                            onClick={handleRetryPreflight}
-                            className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-gray-700 bg-white border border-[#E0E0E0] rounded-lg hover:border-[#3390EC] hover:text-[#3390EC] transition-colors"
-                        >
-                            <RefreshCw size={11} />
-                            Повторить проверку
-                        </button>
+                        <div className="flex gap-2 flex-wrap">
+                            <button
+                                onClick={handleRetryPreflight}
+                                className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-gray-700 bg-white border border-[#E0E0E0] rounded-lg hover:border-[#3390EC] hover:text-[#3390EC] transition-colors"
+                            >
+                                <RefreshCw size={11} />
+                                Повторить проверку
+                            </button>
+                            {/* PR9.4: «Всё равно запустить» — health check
+                                может фолзить (puppeteer занят, network hiccup),
+                                но если пользователь уверен что подключение
+                                работает — можно принудительно стартовать. */}
+                            <button
+                                onClick={() => handleStartImport(true)}
+                                disabled={importLoading}
+                                className="flex items-center gap-1.5 h-[26px] px-3 text-[11px] font-semibold text-[#3390EC] bg-white border border-[#3390EC] rounded-lg hover:bg-[#F0F4FA] transition-colors disabled:opacity-50"
+                            >
+                                <Play size={11} />
+                                Всё равно запустить
+                            </button>
+                        </div>
                     </div>
                 )}
 
@@ -1680,7 +1700,7 @@ export default function AiControlCenterClient({
                 </div>
 
                 <button
-                    onClick={handleStartImport}
+                    onClick={() => handleStartImport(false)}
                     disabled={importLoading || importChannels.length === 0}
                     className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
                 >
