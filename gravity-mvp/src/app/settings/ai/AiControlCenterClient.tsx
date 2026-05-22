@@ -1405,7 +1405,7 @@ export default function AiControlCenterClient({
                                     }}
                                     disabled={dbStatsRefreshing}
                                     className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 disabled:opacity-70 ${cardBg}`}
-                                    title="Кликнуть по карточке — обновить счётчики. Чтобы загрузить старую историю или сменить настройки аккаунта — нажми «Открыть настройки» внизу карточки."
+                                    title="Кликнуть по карточке — обновить счётчики. Чтобы загрузить историю в БД или сменить настройки аккаунта — нажми «Открыть настройки» внизу карточки."
                                 >
                                     {/* Header: label + status pill */}
                                     <div className="flex items-start justify-between gap-2 mb-2">
