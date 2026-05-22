@@ -1708,6 +1708,45 @@ export interface ChannelTotalsRow {
     contacts:       number
     lastMessageAt:  string | null
 }
+/** PR8.D: per-connection message counts из реальной БД. Используется
+ *  в passport empty-state и в Sync «доступно для анализа», чтобы
+ *  показывать реальные числа (включая live-streamed MAX/TG), а не
+ *  только HistoryImportJob.messagesImported. */
+export interface ConnectionMessageCount {
+    connectionId: string
+    messages:     number
+    chats:        number
+}
+export async function getMessageCountsByConnection(): Promise<ConnectionMessageCount[]> {
+    try {
+        const rows = await prisma.$queryRaw<Array<{
+            connectionId: string | null; messages: number; chats: number
+        }>>`
+            SELECT
+                COALESCE(wc."connectionId", c.metadata->>'connectionId') AS "connectionId",
+                COUNT(*)::int                       AS messages,
+                COUNT(DISTINCT m."chatId")::int     AS chats
+            FROM "Message" m
+            LEFT JOIN "Chat" c           ON c.id = m."chatId"
+            LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
+            WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
+            GROUP BY COALESCE(wc."connectionId", c.metadata->>'connectionId')
+        `
+        return rows
+            .filter(r => r.connectionId !== null)
+            .map(r => ({
+                connectionId: r.connectionId!,
+                messages: Number(r.messages ?? 0),
+                chats:    Number(r.chats ?? 0),
+            }))
+    } catch (e: any) {
+        if (process.env.NODE_ENV !== 'production') {
+            console.error('[getMessageCountsByConnection] failed:', e?.message)
+        }
+        return []
+    }
+}
+
 export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
     try {
         const rows = await prisma.$queryRaw<Array<{

@@ -32,6 +32,7 @@ import {
     getSourceStatsByConnection, disableKnowledgeSource, resetKnowledgeCore,
     getItemSourceBadges,
     getChannelTotalsForUi,
+    getMessageCountsByConnection,
     bulkVerifyItems, bulkArchiveDraftsInSection,
     type ExplainabilityBundle,
     type KnowledgeReadinessBundle,
@@ -46,6 +47,7 @@ import {
     type ExtractionScope,
     type ItemSourceBadges,
     type ChannelTotalsRow,
+    type ConnectionMessageCount,
 } from './actions'
 
 // ─── Типы ─────────────────────────────────────────────────────────
@@ -719,6 +721,10 @@ export default function AiControlCenterClient({
     // Используется на Sync top-card вместо importJobs aggregation,
     // потому что MAX/TG могут приходить live без HistoryImportJob.
     const [channelTotals, setChannelTotals] = useState<ChannelTotalsRow[]>([])
+    // PR8.D: per-connection message counts из реальной БД. Используется
+    // в passport empty-state «Сейчас доступно для анализа» и в
+    // Sync «доступно для анализа», чтобы показывать реальные числа.
+    const [connectionCounts, setConnectionCounts] = useState<ConnectionMessageCount[]>([])
 
     // На mount fetch runtime state + recent traces.
     useEffect(() => {
@@ -734,13 +740,16 @@ export default function AiControlCenterClient({
             getSourceStatsByConnection(),
             // PR7.16.1: per-channel totals из БД — для Sync top-card.
             getChannelTotalsForUi(),
-        ]).then(([state, traces, conns, stats, totals]) => {
+            // PR8.D: per-connection counts для passport empty-state.
+            getMessageCountsByConnection(),
+        ]).then(([state, traces, conns, stats, totals, connCounts]) => {
             if (cancelled) return
             setRuntimeState(state)
             setRetrievalTraces(traces as RetrievalTrace[])
             setChannelConnections(conns as ChannelConnection[])
             setSourceStats(stats as SourceStatsRow[])
             setChannelTotals(totals as ChannelTotalsRow[])
+            setConnectionCounts(connCounts as ConnectionMessageCount[])
             // Если ещё не было user-выбора в селекторе — preselect
             // все ready. При повторном открытии модала PR7.4 проверяет
             // selectedConnectionIds.size > 0 и оставляет user choice.
@@ -1474,11 +1483,10 @@ export default function AiControlCenterClient({
                                             </div>
                                         )
                                     })}
-                                    {Array.from(channelsWithoutAccount).map(ch => (
-                                        <div key={ch} className="text-gray-400">
-                                            {ch === 'telegram' ? 'Telegram' : ch === 'max' ? 'MAX' : ch}: источник аккаунта пока определяется по каналу
-                                        </div>
-                                    ))}
+                                    {/* PR8: убрал legacy «источник аккаунта пока определяется по каналу» —
+                                        теперь chat-level provenance работает для TG/MAX через
+                                        Chat.metadata.connectionId. Старые HistoryImportJob записи
+                                        без connectionId — это legacy импорты, просто пропускаем. */}
                                 </div>
                             )}
                         </div>
@@ -3332,6 +3340,34 @@ export default function AiControlCenterClient({
                                     {j.errorMessage && (
                                         <p className="text-[11px] text-red-600 mb-1">{j.errorMessage}</p>
                                     )}
+                                    {/* PR8.D: явный алерт о массовых LLM-ошибках.
+                                        Если pairsBuilt > 0 но itemsCreated == 0 и
+                                        llmErrors > 0 — extraction провалился по
+                                        AI-провайдеру, а не по данным. Пользователь
+                                        иначе видит «completed» зелёненький, но
+                                        в ядре пусто. */}
+                                    {(() => {
+                                        const p = j.progress ?? {} as Record<string, unknown>
+                                        const llmErrors = typeof p.llmErrors === 'number' ? p.llmErrors : 0
+                                        const llmCalls  = typeof p.llmCalls === 'number' ? p.llmCalls : 0
+                                        const itemsCreated = typeof p.itemsCreated === 'number' ? p.itemsCreated : 0
+                                        if (llmErrors === 0 || llmCalls === 0) return null
+                                        const allFailed = llmErrors === llmCalls && itemsCreated === 0
+                                        return (
+                                            <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-2 mb-1 text-[11px] text-red-700 leading-relaxed">
+                                                <div className="font-semibold">
+                                                    {allFailed
+                                                        ? `Сбор не удался: все ${llmCalls} запросов к AI завершились ошибкой`
+                                                        : `Часть запросов к AI завершилась ошибкой: ${llmErrors} из ${llmCalls}`}
+                                                </div>
+                                                <div className="text-[10px] text-red-600 mt-0.5">
+                                                    Проверьте API-ключ AI Провайдера и доступность модели{' '}
+                                                    ({j.extractionProvider}/{j.extractionModel}) — частые причины:
+                                                    неверный ключ, исчерпан баланс, rate limit, сетевая ошибка.
+                                                </div>
+                                            </div>
+                                        )
+                                    })()}
                                     {/* PR7.6: scope source info — из каких аккаунтов
                                         собирали ядро. Если scope.connectionIds
                                         задан — показываем list labels из
@@ -3839,16 +3875,22 @@ export default function AiControlCenterClient({
             const v = lastExtrProgress[k]
             return typeof v === 'number' ? v : null
         }
+        // PR8.D: детект полного провала last extraction по AI-провайдеру.
+        // Если llmErrors == llmCalls > 0 и itemsCreated == 0 — все
+        // запросы упали, ядро не собралось из-за provider настроек.
+        const lastExtrAllFailed =
+            !!lastExtr
+            && (pn('llmCalls') ?? 0) > 0
+            && (pn('llmErrors') ?? 0) === (pn('llmCalls') ?? 0)
+            && (pn('itemsCreated') ?? 0) === 0
 
-        // Сообщения «доступные для анализа» для empty-state.
-        // Сумма messagesImported по последним completed jobs per
-        // connection. Если данных нет — показываем «нет истории».
+        // PR8.D: сообщения «доступные для анализа» для empty-state
+        // из реальной БД (connectionCounts), а не из importJobs.
+        // Это покрывает live-streamed MAX/TG которые не имеют
+        // HistoryImportJob записей.
         const importsByConnection = new Map<string, number>()
-        for (const j of importJobs) {
-            if (j.status !== 'completed') continue
-            const cid = (j as any).connectionId as string | null
-            if (!cid) continue
-            importsByConnection.set(cid, (importsByConnection.get(cid) ?? 0) + j.messagesImported)
+        for (const c of connectionCounts) {
+            importsByConnection.set(c.connectionId, c.messages)
         }
 
         return (
@@ -3890,6 +3932,23 @@ export default function AiControlCenterClient({
                         </button>
                     </header>
 
+                    {/* PR8.D: prominent alert если последний сбор полностью
+                        провалился по AI-провайдеру. Показываем ВСЕГДА (не
+                        только в empty-state), потому что пользователь должен
+                        видеть это первым, а не разглядывать stats. */}
+                    {lastExtrAllFailed && (
+                        <div className="rounded-md border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[12px] text-red-900 leading-relaxed">
+                            <div className="font-semibold text-[13px] mb-1">
+                                ⚠ Последний сбор не удался — AI Провайдер не отвечает
+                            </div>
+                            <p>
+                                Все {pn('llmCalls')} запросов к AI завершились ошибкой. Ядро не собралось.
+                                Проверьте на вкладке <strong>AI Провайдер</strong> — нажмите «Проверить»,
+                                чтобы убедиться что API-ключ действителен и модель доступна.
+                                Частые причины: неверный ключ, исчерпан баланс, rate limit.
+                            </p>
+                        </div>
+                    )}
                     {coreEmpty ? (
                         /* PR7.13: empty state — «Ядро ещё не собрано» */
                         <div className="rounded-md border border-[#E0E8F4] bg-white px-4 py-4 space-y-3">
