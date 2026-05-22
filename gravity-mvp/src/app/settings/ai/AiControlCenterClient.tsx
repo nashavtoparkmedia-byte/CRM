@@ -743,23 +743,17 @@ export default function AiControlCenterClient({
     // в passport empty-state «Сейчас доступно для анализа» и в
     // Sync «доступно для анализа», чтобы показывать реальные числа.
     const [connectionCounts, setConnectionCounts] = useState<ConnectionMessageCount[]>([])
-    // PR9.11: timestamp последнего refresh + loading flag для фидбэка пользователю
-    // когда кликает на карточку или «Обновить всё».
-    const [dbStatsRefreshedAt, setDbStatsRefreshedAt] = useState<Date | null>(null)
-    const [dbStatsRefreshing,  setDbStatsRefreshing]  = useState(false)
+    // PR9.24: refresh DB stats. Раньше выставляли отдельные state-флаги
+    // (dbStatsRefreshing / dbStatsRefreshedAt) под «Обновить» и
+    // таймстамп — оба элемента удалены, флаги больше не нужны.
+    // Функция вызывается auto-refresh useEffect'ом.
     async function refreshDbStats() {
-        setDbStatsRefreshing(true)
-        try {
-            const [fresh, totals] = await Promise.all([
-                getMessageCountsByConnection(),
-                getChannelTotalsForUi(),
-            ])
-            setConnectionCounts(fresh as ConnectionMessageCount[])
-            setChannelTotals(totals as ChannelTotalsRow[])
-            setDbStatsRefreshedAt(new Date())
-        } finally {
-            setDbStatsRefreshing(false)
-        }
+        const [fresh, totals] = await Promise.all([
+            getMessageCountsByConnection(),
+            getChannelTotalsForUi(),
+        ])
+        setConnectionCounts(fresh as ConnectionMessageCount[])
+        setChannelTotals(totals as ChannelTotalsRow[])
     }
 
     // PR9.3: реальный диапазон данных в БД для extraction modal.
@@ -791,8 +785,6 @@ export default function AiControlCenterClient({
             setSourceStats(stats as SourceStatsRow[])
             setChannelTotals(totals as ChannelTotalsRow[])
             setConnectionCounts(connCounts as ConnectionMessageCount[])
-            // PR9.11: метка времени для пользовательского контекста
-            setDbStatsRefreshedAt(new Date())
             // Если ещё не было user-выбора в селекторе — preselect
             // все ready. При повторном открытии модала PR7.4 проверяет
             // selectedConnectionIds.size > 0 и оставляет user choice.
@@ -1320,28 +1312,13 @@ export default function AiControlCenterClient({
                     const totalContacts = channelTotals.reduce((s, t) => s + t.contacts, 0)
                     return (
                         <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <h3 className="text-[15px] font-semibold text-[#111]">База сообщений</h3>
-                                <div className="flex items-center gap-2">
-                                    {dbStatsRefreshedAt && (
-                                        <span className="text-[11px] text-gray-500">
-                                            обновлено {dbStatsRefreshedAt.toLocaleTimeString('ru')}
-                                        </span>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={refreshDbStats}
-                                        disabled={dbStatsRefreshing}
-                                        title="Перезагрузить счётчики из БД"
-                                        className="h-[28px] px-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#3390EC] border border-[#3390EC]/40 rounded-md hover:bg-[#F0F4FA] disabled:opacity-50 transition-colors"
-                                    >
-                                        {dbStatsRefreshing
-                                            ? <Loader2 size={11} className="animate-spin" />
-                                            : <RefreshCw size={11} />}
-                                        {dbStatsRefreshing ? 'Обновляем…' : 'Обновить'}
-                                    </button>
-                                </div>
-                            </div>
+                            {/* PR9.24: убрали кнопку «Обновить» + таймстамп
+                                «обновлено HH:MM:SS». Auto-refresh из PR9.23
+                                (tab switch + visibilitychange + focus) делает
+                                ручное обновление лишним. Telegram-style:
+                                данные просто свежие, без UI-шума о том,
+                                «когда последний раз». */}
+                            <h3 className="text-[15px] font-semibold text-[#111] mb-2">База сообщений</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div className="rounded-xl border-2 border-[#3390EC]/30 bg-gradient-to-br from-[#F0F4FA] to-[#E1ECFA] px-4 py-4">
                                     <div className="text-[10px] uppercase tracking-wide text-[#3390EC] font-bold mb-1">Сообщений</div>
