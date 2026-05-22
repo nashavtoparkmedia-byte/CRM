@@ -1268,9 +1268,10 @@ export default function AiControlCenterClient({
     const SyncTab = () => (
         <div className="space-y-5">
             <InlineInfo>
-                Статус сообщений в БД — сколько и из каких мессенджеров уже загружено.
-                Подгрузить старую историю можно на странице подключения мессенджера
-                (ссылки ниже). Собрать ядро — на вкладке «Ядро знаний».
+                Сколько сообщений из каждого аккаунта уже в базе.
+                Чтобы догрузить старую историю — открой карточку аккаунта ниже
+                и перейди на страницу мессенджера.
+                Чтобы AI прочитал базу и собрал знания — перейди на вкладку «Ядро знаний».
             </InlineInfo>
 
             {/* PR9.9: per-account dashboard cards.
@@ -1403,8 +1404,8 @@ export default function AiControlCenterClient({
                                         showToast(`Обновлено: ${conn.label}`)
                                     }}
                                     disabled={dbStatsRefreshing}
-                                    className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 group disabled:opacity-70 ${cardBg}`}
-                                    title={`Кликнуть — обновить счётчики из БД. Подробнее об аккаунте — ${channelHref}`}
+                                    className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 disabled:opacity-70 ${cardBg}`}
+                                    title="Кликнуть по карточке — обновить счётчики. Подробнее об аккаунте — нажми «Открыть настройки» внизу карточки."
                                 >
                                     {/* Header: label + status pill */}
                                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -1435,12 +1436,16 @@ export default function AiControlCenterClient({
                                             <div className="text-[11px] text-gray-500">истории в БД пока нет</div>
                                         )}
                                     </div>
-                                    {/* Cross-ref */}
-                                    <div className="text-[11px] mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {/* PR9.14: cross-ref всегда видимая.
+                                        Раньше показывалась только на hover —
+                                        пользователь не понимал что внутри карточки
+                                        есть ссылка. Tooltip к ней ссылается, так
+                                        что она должна быть прямо видна. */}
+                                    <div className="text-[11px] mt-2">
                                         <a
                                             href={channelHref}
                                             onClick={e => e.stopPropagation()}
-                                            className="text-[#3390EC] hover:underline"
+                                            className="text-[#3390EC] hover:underline font-semibold"
                                         >
                                             Открыть настройки →
                                         </a>
