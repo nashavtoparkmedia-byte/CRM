@@ -73,7 +73,10 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
         orderBy: { sentAt: 'desc' },
         select: { id: true },
     })
-    if (!lastInbound) return null
+    if (!lastInbound) {
+        console.log(`[ai-intern] chatId=${chatId} skip: no inbound messages in chat`)
+        return null
+    }
 
     // 2. Cache lookup — UNIQUE на messageId, поэтому findUnique.
     const cached = await prisma.aiProposedReply.findUnique({
@@ -81,27 +84,50 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     })
     if (cached && cached.expiresAt > new Date() && !cached.dismissedAt) {
         // Свежий и не скрытый — отдаём как есть, новой LLM-call не нужен.
+        console.log(`[ai-intern] chatId=${chatId} cached: msgId=${lastInbound.id} mode=${cached.decisionMode}`)
         return serialize(cached)
     }
 
     // 3. Check feature flag (default true, но админ может выключить)
     const config = await prisma.aiAgentConfig.findUnique({
         where: { id: 'singleton' },
-        select: { enabled: true, internEnabled: true },
+        select: { enabled: true, internEnabled: true, mode: true, apiKeyEncrypted: true },
     })
-    if (!config?.enabled || !config.internEnabled) {
+    if (!config) {
+        console.log(`[ai-intern] chatId=${chatId} skip: AiAgentConfig singleton missing`)
+        return null
+    }
+    if (!config.enabled) {
+        console.log(`[ai-intern] chatId=${chatId} skip: AI globally disabled (enabled=false)`)
+        return null
+    }
+    if (!config.internEnabled) {
+        console.log(`[ai-intern] chatId=${chatId} skip: intern feature flag off`)
+        return null
+    }
+    if (config.mode === 'off') {
+        console.log(`[ai-intern] chatId=${chatId} skip: AI mode='off'`)
+        return null
+    }
+    if (!config.apiKeyEncrypted) {
+        console.log(`[ai-intern] chatId=${chatId} skip: no API key configured`)
         return null
     }
 
     // 4. Generate fresh
+    console.log(`[ai-intern] chatId=${chatId} generating for msgId=${lastInbound.id}…`)
     let result
     try {
         result = await generateShadowReplyForChat(chatId)
     } catch (e: any) {
-        console.error('[proposed-reply] generation error:', e?.message)
+        console.error(`[ai-intern] chatId=${chatId} generation error:`, e?.message)
         return null
     }
-    if (!result) return null
+    if (!result) {
+        console.log(`[ai-intern] chatId=${chatId} pipeline returned null (контекст пуст или AI off)`)
+        return null
+    }
+    console.log(`[ai-intern] chatId=${chatId} generated: mode=${result.decisionMode} conf=${result.confidence.toFixed(2)} textLen=${result.text.length}`)
 
     // 5. Upsert (race-safe — UNIQUE constraint на messageId)
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000)

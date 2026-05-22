@@ -32,6 +32,9 @@ import type { ProposedReplyDTO } from '../proposed-reply-actions'
 interface AiProposedReplyBubbleProps {
     proposal: ProposedReplyDTO | null
     loading:  boolean
+    /** PR9.47: AI вернул null (промолчал) — показываем мини-pill вместо
+     *  моментального исчезновения skeleton'а. */
+    silent:    boolean
     /** «Взять в работу» — копирует текст в input bar родителя. */
     onTake:    () => void
     /** «Скрыть» — больше не показывается пока не пришёт новое inbound. */
@@ -41,6 +44,7 @@ interface AiProposedReplyBubbleProps {
 export default function AiProposedReplyBubble({
     proposal,
     loading,
+    silent,
     onTake,
     onDismiss,
 }: AiProposedReplyBubbleProps) {
@@ -59,6 +63,29 @@ export default function AiProposedReplyBubble({
                         <div className="h-3 bg-[#E4ECFC] rounded animate-pulse w-64" />
                         <div className="h-3 bg-[#E4ECFC] rounded animate-pulse w-32" />
                     </div>
+                </div>
+            </div>
+        )
+    }
+
+    // PR9.47: silent — AI промолчал (отключен, нет inbound, no_match).
+    // Показываем компактную мини-pill чтобы пользователь видел что
+    // запрос сделался, но AI ничего не предлагает. Иначе UI выглядит
+    // багово — skeleton мелькнул и пропал.
+    if (silent && !proposal) {
+        return (
+            <div className="flex justify-start px-4 py-2">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1 text-[11px] text-gray-500">
+                    <Bot size={11} className="opacity-60" />
+                    AI пока ничего не предлагает
+                    <button
+                        type="button"
+                        onClick={onDismiss}
+                        className="ml-1 text-gray-400 hover:text-gray-600"
+                        aria-label="Скрыть"
+                    >
+                        <X size={10} />
+                    </button>
                 </div>
             </div>
         )

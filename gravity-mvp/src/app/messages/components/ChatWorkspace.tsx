@@ -269,6 +269,7 @@ function ChatWorkspaceInner({
             <AiProposedReplyBubble
                 proposal={ai.proposal}
                 loading={ai.loading}
+                silent={ai.silent}
                 onTake={handleAiTake}
                 onDismiss={ai.dismiss}
             />

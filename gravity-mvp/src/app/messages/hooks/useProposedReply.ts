@@ -28,6 +28,13 @@ import {
 export interface UseProposedReplyResult {
     proposal: ProposedReplyDTO | null
     loading:  boolean
+    /**
+     * PR9.47: была попытка fetch завершиться, но proposal=null —
+     * AI решил промолчать (отключен, нет inbound, no_match и т.п.).
+     * UI показывает мини-pill «AI промолчал» вместо моментального
+     * исчезновения skeleton'а.
+     */
+    silent:   boolean
     /** Триггер — UI вызывает на focus в input bar. Идемпотентно. */
     trigger:  () => void
     /** Очистить proposal в UI (например при смене чата). */
@@ -41,6 +48,7 @@ export interface UseProposedReplyResult {
 export function useProposedReply(chatId: string | null): UseProposedReplyResult {
     const [proposal, setProposal] = useState<ProposedReplyDTO | null>(null)
     const [loading,  setLoading]  = useState(false)
+    const [silent,   setSilent]   = useState(false)
     // Защита от двойных вызовов: пока loading=true игнорируем повторные trigger.
     // Плюс — после успешного fetch не запрашиваем повторно для того же chatId
     // пока пользователь не сделает reset() или не сменит чат.
@@ -53,12 +61,17 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
         if (fetchedForChatRef.current === chatId) return
 
         setLoading(true)
+        setSilent(false)
         fetchedForChatRef.current = chatId
         getOrGenerateProposedReply(chatId)
-            .then(p => setProposal(p))
+            .then(p => {
+                setProposal(p)
+                setSilent(p === null)  // AI ничего не предложил — показываем мини-pill
+            })
             .catch(e => {
                 console.error('[useProposedReply] error', e)
                 setProposal(null)
+                setSilent(true)  // ошибка тоже = AI «промолчал», но в UI мы это покажем
             })
             .finally(() => setLoading(false))
     }, [chatId, loading])
@@ -66,6 +79,7 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
     const reset = useCallback(() => {
         setProposal(null)
         setLoading(false)
+        setSilent(false)
         fetchedForChatRef.current = null
     }, [])
 
@@ -83,14 +97,17 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
     }, [proposal])
 
     const dismiss = useCallback(async (): Promise<void> => {
-        if (!proposal) return
-        try {
-            await dismissProposedReply(proposal.id)
-        } catch (e) {
-            console.error('[useProposedReply] dismiss error', e)
+        if (proposal) {
+            try {
+                await dismissProposedReply(proposal.id)
+            } catch (e) {
+                console.error('[useProposedReply] dismiss error', e)
+            }
         }
+        // silent тоже dismissable — пользователь может скрыть мини-pill
         setProposal(null)
+        setSilent(false)
     }, [proposal])
 
-    return { proposal, loading, trigger, reset, take, dismiss }
+    return { proposal, loading, silent, trigger, reset, take, dismiss }
 }
