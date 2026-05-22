@@ -281,14 +281,26 @@ function AiPane({ analysis, summary, score }: { analysis: CallAnalysisShape | nu
                 </div>
             )}
 
-            <div>
-                <div className="text-[13px] font-medium text-muted-foreground mb-2">Критерии</div>
-                <div className="flex flex-col gap-3">
-                    {criteria.map(c => (
-                        <ScoreBar key={c.key} label={c.label} hint={c.hint} score={analysis.scores[c.key]} />
-                    ))}
+            {/* PR9.43: analysis.scores может быть undefined для звонков с
+                aiAnalysis старого формата (Whisper-only без rubric-LLM)
+                или с частичным анализом. Раньше падало TypeError
+                «Cannot read properties of undefined (reading 'greeting')».
+                Теперь — graceful skip с empty-state. */}
+            {analysis.scores && (
+                <div>
+                    <div className="text-[13px] font-medium text-muted-foreground mb-2">Критерии</div>
+                    <div className="flex flex-col gap-3">
+                        {criteria.map(c => (
+                            <ScoreBar
+                                key={c.key}
+                                label={c.label}
+                                hint={c.hint}
+                                score={analysis.scores?.[c.key] ?? 0}
+                            />
+                        ))}
+                    </div>
                 </div>
-            </div>
+            )}
 
             {analysis.red_flags && analysis.red_flags.length > 0 && (
                 <div>
