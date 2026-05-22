@@ -614,6 +614,12 @@ export default function AiControlCenterClient({
     // сверху вкладки «Ядро знаний» — отодвигал primary actions и
     // sub-tabs. Теперь — компактная кнопка-«паспорт», модалка по клику.
     const [coreInfoOpen, setCoreInfoOpen] = useState(false)
+    // PR9.38: вкладки внутри «Текущее ядро AI» модалки.
+    // User: «При нажатии на тестовый режим открывается ещё модальное
+    // окно. Давай внутри модального окна типа вкладок сделаем.»
+    // Раньше pill «Тестовый режим» открывал отдельную RuntimeRolloutModal
+    // — modal-on-modal, плохой UX. Теперь это вторая вкладка.
+    const [coreInfoTab, setCoreInfoTab] = useState<'state' | 'readiness'>('state')
     // PR5: фильтр items в "Ядро" под-табе. Раньше показывались все
     // активные — теперь админ может быстро отфильтровать конфликты
     // или черновики, не покидая текущую секцию.
@@ -4093,8 +4099,8 @@ export default function AiControlCenterClient({
                     className="bg-white rounded-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
                     onClick={e => e.stopPropagation()}
                 >
-                <div className="px-6 py-4 border-b border-[#F0F0F0]">
-                    <header className="flex items-start justify-between gap-3 flex-wrap">
+                <div className="px-6 pt-4 pb-0 border-b border-[#F0F0F0]">
+                    <header className="flex items-start justify-between gap-3 flex-wrap mb-3">
                         <div className="min-w-0">
                             <h2 className="text-[16px] font-semibold text-[#111]">Текущее ядро AI</h2>
                             <p className="text-[12px] text-gray-600 leading-relaxed mt-0.5 max-w-2xl">
@@ -4104,17 +4110,41 @@ export default function AiControlCenterClient({
                         </div>
                         <button
                             type="button"
-                            onClick={() => setRolloutOpen(true)}
-                            title={statusCfg.desc + ' Нажмите для проверки готовности.'}
+                            onClick={() => setCoreInfoTab('readiness')}
+                            title={statusCfg.desc + ' Нажмите чтобы посмотреть готовность.'}
                             className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium hover:opacity-80 transition-opacity ${statusCfg.bg} ${statusCfg.txt}`}
                         >
                             <span>{statusCfg.dot}</span>
                             <span>{statusCfg.label}</span>
                         </button>
                     </header>
+                    {/* PR9.38: вкладки внутри модалки. «Состояние» — что в ядре
+                        сейчас (Собрано из, Последнее обновление, counters).
+                        «Готовность» — runtime mode, checklist, активность 7d. */}
+                    <div className="flex gap-1 -mb-px">
+                        {([
+                            { key: 'state',     label: 'Состояние' },
+                            { key: 'readiness', label: 'Готовность' },
+                        ] as const).map(({ key, label }) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setCoreInfoTab(key)}
+                                className={`px-3 py-2 text-[12px] font-semibold border-b-2 transition-colors ${
+                                    coreInfoTab === key
+                                        ? 'border-[#3390EC] text-[#3390EC]'
+                                        : 'border-transparent text-gray-500 hover:text-[#111]'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
                 <div className="px-6 py-5 overflow-y-auto space-y-4">
 
+                    {coreInfoTab === 'state' && (
+                    <>
                     {/* PR8.D: prominent alert если последний сбор полностью
                         провалился по AI-провайдеру. Показываем ВСЕГДА (не
                         только в empty-state), потому что пользователь должен
@@ -4335,6 +4365,93 @@ export default function AiControlCenterClient({
                             })()}
                         </div>
                     )}
+                    </>
+                    )}
+
+                    {/* PR9.38: вкладка «Готовность» — runtime mode, checklist
+                        готовности, активность 7d. Содержимое перенесено из
+                        RuntimeRolloutModal — раньше открывалось как modal-on-modal
+                        по клику на pill «Тестовый режим». */}
+                    {coreInfoTab === 'readiness' && (() => {
+                        const r = readiness
+                        const checkIcon = (status: 'ok' | 'warn' | 'fail') =>
+                            status === 'ok'   ? <span className="text-green-600">●</span> :
+                            status === 'warn' ? <span className="text-amber-600">●</span> :
+                                                <span className="text-red-600">●</span>
+                        const CHECK_HELP: Record<string, string> = {
+                            conflicts:          'Когда AI извлёк из переписок два противоречащих факта (например, разные цифры комиссии), он не может выбрать сам — нужен админ. Чем меньше противоречий, тем увереннее AI отвечает.',
+                            verified_coverage:  'Подтверждённые знания — это факты, точность которых уже проверил админ. AI делает на них упор. Чем больше подтверждено, тем безопаснее переключать AI на ответы из ядра.',
+                            extraction_recency: 'Сбор знаний из переписок нужно повторять время от времени — иначе ядро отстанет от живой жизни компании. Свежее = ближе к реальности.',
+                            shadow_activity:    'Прежде чем доверить AI отвечать из ядра, мы наблюдаем — какие ответы он БЫ дал, если бы отвечал сам. Чем больше таких наблюдений, тем точнее видно, готов он или нет.',
+                            escalation_rate:    'Процент диалогов, где AI решил «не отвечать сам, передать менеджеру». Здоровый уровень — небольшой процент. Если AI почти всегда передаёт менеджеру, значит ему не хватает знаний.',
+                        }
+                        const modeDescription =
+                            runtimeState.mode === 'runtime' ? {
+                                title: 'AI отвечает из ядра знаний',
+                                body:  'AI уже использует новое ядро для ответов водителям. Старая база больше не применяется.',
+                            } : runtimeState.mode === 'shadow' ? {
+                                title: 'Тестовый режим',
+                                body:  'Новое ядро работает в фоне для наблюдения. Водителям отвечает старая система ответов — никаких рисков для реальных диалогов.',
+                            } : {
+                                title: 'Старая система ответов',
+                                body:  'Новое ядро ещё не подключено. AI отвечает по старым правилам / FAQ-карточкам.',
+                            }
+                        return (
+                            <div className="space-y-5">
+                                {/* Текущий режим */}
+                                <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
+                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Сейчас</div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <RuntimeModePill state={runtimeState} />
+                                        <span className="text-[13px] font-semibold text-[#111]">{modeDescription.title}</span>
+                                    </div>
+                                    <p className="text-[12px] text-gray-600 leading-relaxed">{modeDescription.body}</p>
+                                </div>
+
+                                {/* Checklist готовности */}
+                                <div>
+                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Готовность ядра</div>
+                                    <ul className="space-y-2">
+                                        {r.checks.map(ch => (
+                                            <li key={ch.id} className="flex items-start gap-2 text-[13px]">
+                                                <span className="mt-[2px] text-[14px] leading-none">{checkIcon(ch.status)}</span>
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-medium text-[#111]">{ch.label}</span>
+                                                        <span
+                                                            title={CHECK_HELP[ch.id] ?? ''}
+                                                            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-300 text-[9px] text-gray-400 cursor-help"
+                                                            aria-label="Подсказка"
+                                                        >?</span>
+                                                    </div>
+                                                    <div className="text-[12px] text-gray-500">{ch.detail}</div>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                {/* Активность за 7 дней */}
+                                <div>
+                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Что было за 7 дней</div>
+                                    <div className="grid grid-cols-2 gap-2 text-[12px]">
+                                        <Stat label="Всего ответов AI" value={r.activity7d.decisionsTotal} />
+                                        <Stat label="Тестовых наблюдений" value={r.activity7d.shadowDecisions} />
+                                        <Stat label="Передано менеджеру" value={r.activity7d.escalated} />
+                                        <Stat label="AI не нашёл ответ" value={r.activity7d.noMatch} />
+                                    </div>
+                                </div>
+
+                                {/* Disclaimer про процесс */}
+                                <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] p-3 text-[12px] text-[#8B6914] leading-relaxed">
+                                    <strong className="block mb-1 text-[#8B6914]">Новый режим включается отдельно</strong>
+                                    Сейчас новое ядро знаний работает только в тестовом режиме — водителям
+                                    отвечает старая система. Прежде чем перевести AI на ответы из ядра, нужно
+                                    дождаться зелёного по всем пунктам выше.
+                                </div>
+                            </div>
+                        )
+                    })()}
 
                 </div>
                 <div className="px-6 py-3 border-t border-[#F0F0F0] flex justify-end">
