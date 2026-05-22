@@ -608,6 +608,12 @@ export default function AiControlCenterClient({
     // PR5: модал runtime-rollout (объяснение что runtime контролируется
     // env-флагом + checklist).
     const [rolloutOpen, setRolloutOpen] = useState(false)
+    // PR9.37: модал «Текущее ядро AI» — passport (Собрано из, Последнее
+    // обновление, counters) выведен в модальное окно. User: «Положи
+    // этот блок в кнопку. Текущее ядро.» Раньше passport занимал ~250px
+    // сверху вкладки «Ядро знаний» — отодвигал primary actions и
+    // sub-tabs. Теперь — компактная кнопка-«паспорт», модалка по клику.
+    const [coreInfoOpen, setCoreInfoOpen] = useState(false)
     // PR5: фильтр items в "Ядро" под-табе. Раньше показывались все
     // активные — теперь админ может быстро отфильтровать конфликты
     // или черновики, не покидая текущую секцию.
@@ -3983,12 +3989,114 @@ export default function AiControlCenterClient({
                     </a>
                 </InlineInfo>
 
-                {/* PR7.13: Current Core Passport — главный блок-паспорт */}
-                <section className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] p-4 space-y-3">
-                    {/* Header: title + status */}
+                {/* PR9.37: компактная кнопка-«паспорт» — открывает модалку
+                    с детальным состоянием ядра (Собрано из, Последнее
+                    обновление, counters). Раньше passport занимал ~250px
+                    сверху вкладки и отодвигал primary actions / sub-tabs. */}
+                <button
+                    type="button"
+                    onClick={() => setCoreInfoOpen(true)}
+                    className="w-full rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] hover:bg-[#F0F4FA] transition-colors p-3 flex items-center justify-between gap-3 text-left"
+                >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                        <Library size={16} className="text-[#3390EC] shrink-0" />
+                        <span className="min-w-0">
+                            <span className="block text-[14px] font-semibold text-[#111]">Текущее ядро AI</span>
+                            <span className="block text-[11px] text-gray-500">
+                                {coreEmpty
+                                    ? 'ещё не собрано — нажмите чтобы посмотреть готовность'
+                                    : `${readiness.counts.activeItems} знаний · нажмите чтобы посмотреть детали`}
+                            </span>
+                        </span>
+                    </span>
+                    <span className="flex items-center gap-2 shrink-0">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${statusCfg.bg} ${statusCfg.txt}`}>
+                            <span>{statusCfg.dot}</span>
+                            <span>{statusCfg.label}</span>
+                        </span>
+                        <ChevronRight size={14} className="text-gray-400" />
+                    </span>
+                </button>
+
+                {/* PR9.37: primary actions ВЫНЕСЕНЫ за пределы passport —
+                    они должны быть видны сразу, без открытия модалки.
+                    Раньше жили внутри section, прятались вместе с passport. */}
+                <div className="flex flex-wrap gap-2">
+                    {extractionRunning ? (
+                        <div className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC]/10 text-[#3390EC] text-[12px] font-semibold">
+                            <Loader2 size={12} className="animate-spin" />
+                            {activeExtractionJob!.status === 'queued' ? 'В очереди' : 'Идёт сбор'}
+                            {activeExtractionJob!.progress?.pairsProcessed != null && activeExtractionJob!.progress?.pairsBuilt != null && activeExtractionJob!.progress.pairsBuilt > 0 && (
+                                <span className="text-gray-500 font-normal">
+                                    · {activeExtractionJob!.progress.pairsProcessed}/{activeExtractionJob!.progress.pairsBuilt}
+                                </span>
+                            )}
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => canEdit && !noKey && openExtractionModal()}
+                            disabled={!canEdit || noKey}
+                            title={!canEdit
+                                ? 'Доступно только Администратору'
+                                : noKey
+                                    ? 'Сначала настройте AI Провайдер (вкладка слева) — добавьте API ключ'
+                                    : coreEmpty
+                                        ? 'Запустить первый сбор ядра из истории переписок'
+                                        : 'Дособрать ядро из свежих переписок (старые знания сохранятся)'}
+                            className="h-[32px] px-3.5 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <Sparkles size={12} />
+                            {coreEmpty ? 'Собрать ядро' : 'Собрать / обновить ядро'}
+                        </button>
+                    )}
+                    {canEdit && (
+                        <button
+                            type="button"
+                            onClick={openResetModal}
+                            title={coreEmpty
+                                ? 'Активных знаний сейчас нет — но можно очистить черновики и архив, чтобы начать с чистого листа перед новым сбором.'
+                                : 'Перевести активные знания в архив (мягкое действие, обратимо) и собрать ядро заново.'}
+                            className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
+                        >
+                            <Trash2 size={12} />
+                            {coreEmpty ? 'Очистить ядро' : 'Очистить и собрать заново'}
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        onClick={() => setKnowledgeSubtab('sources')}
+                        className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-gray-700 border border-[#E0E0E0] hover:bg-[#F0F4FA] hover:text-[#3390EC] transition-colors"
+                    >
+                        Посмотреть источники
+                    </button>
+                    <a
+                        href="/settings/integrations/ai-knowledge-help"
+                        target="_blank"
+                        rel="noopener"
+                        className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-gray-700 border border-[#E0E0E0] hover:bg-[#F0F4FA] hover:text-[#3390EC] transition-colors"
+                    >
+                        Инструкция
+                    </a>
+                </div>
+
+                {/* PR9.37: passport вынесен в модальное окно. Кнопка-открытие
+                    выше + primary actions снаружи. Сама модалка рендерится
+                    inline через {coreInfoOpen && (...)} — содержит header,
+                    lastExtrAllFailed alert, coreEmpty/grid и counters. */}
+                {coreInfoOpen && (
+                <div
+                    className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                    onClick={() => setCoreInfoOpen(false)}
+                >
+                <div
+                    className="bg-white rounded-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+                    onClick={e => e.stopPropagation()}
+                >
+                <div className="px-6 py-4 border-b border-[#F0F0F0]">
                     <header className="flex items-start justify-between gap-3 flex-wrap">
                         <div className="min-w-0">
-                            <h2 className="text-[15px] font-semibold text-[#111]">Текущее ядро AI</h2>
+                            <h2 className="text-[16px] font-semibold text-[#111]">Текущее ядро AI</h2>
                             <p className="text-[12px] text-gray-600 leading-relaxed mt-0.5 max-w-2xl">
                                 Это память AI: тарифы, условия, документы, частые вопросы и ограничения.
                                 AI использует эти знания, когда отвечает клиентам.
@@ -4004,6 +4112,8 @@ export default function AiControlCenterClient({
                             <span>{statusCfg.label}</span>
                         </button>
                     </header>
+                </div>
+                <div className="px-6 py-5 overflow-y-auto space-y-4">
 
                     {/* PR8.D: prominent alert если последний сбор полностью
                         провалился по AI-провайдеру. Показываем ВСЕГДА (не
@@ -4226,71 +4336,19 @@ export default function AiControlCenterClient({
                         </div>
                     )}
 
-                    {/* PR7.13: Основные действия — primary actions сверху */}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                        {extractionRunning ? (
-                            <div className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC]/10 text-[#3390EC] text-[12px] font-semibold">
-                                <Loader2 size={12} className="animate-spin" />
-                                {activeExtractionJob!.status === 'queued' ? 'В очереди' : 'Идёт сбор'}
-                                {activeExtractionJob!.progress?.pairsProcessed != null && activeExtractionJob!.progress?.pairsBuilt != null && activeExtractionJob!.progress.pairsBuilt > 0 && (
-                                    <span className="text-gray-500 font-normal">
-                                        · {activeExtractionJob!.progress.pairsProcessed}/{activeExtractionJob!.progress.pairsBuilt}
-                                    </span>
-                                )}
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => canEdit && !noKey && openExtractionModal()}
-                                disabled={!canEdit || noKey}
-                                title={!canEdit
-                                    ? 'Доступно только Администратору'
-                                    : noKey
-                                        ? 'Сначала настройте AI Провайдер (вкладка слева) — добавьте API ключ'
-                                        : coreEmpty
-                                            ? 'Запустить первый сбор ядра из истории переписок'
-                                            : 'Дособрать ядро из свежих переписок (старые знания сохранятся)'}
-                                className="h-[32px] px-3.5 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <Sparkles size={12} />
-                                {coreEmpty ? 'Собрать ядро' : 'Собрать / обновить ядро'}
-                            </button>
-                        )}
-                        {/* PR8.A: reset button всегда видна. Раньше пряталась
-                            при coreEmpty — но даже если activeItems=0, могут
-                            быть черновики или архивные записи, которые
-                            пользователь хочет полностью очистить перед
-                            новым сбором. */}
-                        {canEdit && (
-                            <button
-                                type="button"
-                                onClick={openResetModal}
-                                title={coreEmpty
-                                    ? 'Активных знаний сейчас нет — но можно очистить черновики и архив, чтобы начать с чистого листа перед новым сбором.'
-                                    : 'Перевести активные знания в архив (мягкое действие, обратимо) и собрать ядро заново.'}
-                                className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
-                            >
-                                <Trash2 size={12} />
-                                {coreEmpty ? 'Очистить ядро' : 'Очистить и собрать заново'}
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={() => setKnowledgeSubtab('sources')}
-                            className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-gray-700 border border-[#E0E0E0] hover:bg-[#F0F4FA] hover:text-[#3390EC] transition-colors"
-                        >
-                            Посмотреть источники
-                        </button>
-                        <a
-                            href="/settings/integrations/ai-knowledge-help"
-                            target="_blank"
-                            rel="noopener"
-                            className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-gray-700 border border-[#E0E0E0] hover:bg-[#F0F4FA] hover:text-[#3390EC] transition-colors"
-                        >
-                            Инструкция
-                        </a>
-                    </div>
-                </section>
+                </div>
+                <div className="px-6 py-3 border-t border-[#F0F0F0] flex justify-end">
+                    <button
+                        type="button"
+                        onClick={() => setCoreInfoOpen(false)}
+                        className="h-[34px] px-4 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
+                    >
+                        Закрыть
+                    </button>
+                </div>
+                </div>
+                </div>
+                )}
 
                 {/* PR5: detailed readiness row — оставлен как secondary
                     view для technical health 7d (escalation%, no_match%,
