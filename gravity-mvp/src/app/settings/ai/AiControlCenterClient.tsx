@@ -1281,50 +1281,63 @@ export default function AiControlCenterClient({
                   — период (earliest sentAt — latest sentAt)
                   — клик на карточку = refresh per-connection stats. */}
             <div className="space-y-3 pt-1">
-                {/* PR9.11: глобальная сводка + статус обновления */}
+                {/* PR9.13: глобальный дашборд — 3 prominent карточки. */}
                 {(() => {
                     const totalMessages = channelTotals.reduce((s, t) => s + t.messages, 0)
                     const totalChats    = channelTotals.reduce((s, t) => s + t.chats, 0)
                     const totalContacts = channelTotals.reduce((s, t) => s + t.contacts, 0)
                     return (
-                        <div className="rounded-lg border border-[#E0E8F4] bg-[#F8FBFF] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                            <div className="flex items-baseline gap-3 flex-wrap">
-                                <span className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">
-                                    Всего в БД:
-                                </span>
-                                <span className="text-[15px] font-bold text-[#111]">
-                                    {totalMessages.toLocaleString('ru')}
-                                </span>
-                                <span className="text-[12px] text-gray-600">сообщ.</span>
-                                <span className="text-gray-300">·</span>
-                                <span className="text-[13px] font-semibold text-[#111]">
-                                    {totalChats.toLocaleString('ru')}
-                                </span>
-                                <span className="text-[12px] text-gray-600">чатов</span>
-                                <span className="text-gray-300">·</span>
-                                <span className="text-[13px] font-semibold text-[#111]">
-                                    {totalContacts.toLocaleString('ru')}
-                                </span>
-                                <span className="text-[12px] text-gray-600">контактов</span>
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-[15px] font-semibold text-[#111]">База сообщений</h3>
+                                <div className="flex items-center gap-2">
+                                    {dbStatsRefreshedAt && (
+                                        <span className="text-[11px] text-gray-500">
+                                            обновлено {dbStatsRefreshedAt.toLocaleTimeString('ru')}
+                                        </span>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={refreshDbStats}
+                                        disabled={dbStatsRefreshing}
+                                        title="Перезагрузить счётчики из БД"
+                                        className="h-[28px] px-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#3390EC] border border-[#3390EC]/40 rounded-md hover:bg-[#F0F4FA] disabled:opacity-50 transition-colors"
+                                    >
+                                        {dbStatsRefreshing
+                                            ? <Loader2 size={11} className="animate-spin" />
+                                            : <RefreshCw size={11} />}
+                                        {dbStatsRefreshing ? 'Обновляем…' : 'Обновить'}
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                {dbStatsRefreshedAt && (
-                                    <span className="text-[11px] text-gray-500">
-                                        обновлено {dbStatsRefreshedAt.toLocaleTimeString('ru')}
-                                    </span>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={refreshDbStats}
-                                    disabled={dbStatsRefreshing}
-                                    title="Перезагрузить счётчики из БД"
-                                    className="h-[28px] px-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#3390EC] border border-[#3390EC]/40 rounded-md hover:bg-[#F0F4FA] disabled:opacity-50 transition-colors"
-                                >
-                                    {dbStatsRefreshing
-                                        ? <Loader2 size={11} className="animate-spin" />
-                                        : <RefreshCw size={11} />}
-                                    {dbStatsRefreshing ? 'Обновляем…' : 'Обновить'}
-                                </button>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="rounded-xl border-2 border-[#3390EC]/30 bg-gradient-to-br from-[#F0F4FA] to-[#E1ECFA] px-4 py-4">
+                                    <div className="text-[10px] uppercase tracking-wide text-[#3390EC] font-bold mb-1">Сообщений</div>
+                                    <div className="text-[28px] font-bold text-[#111] leading-none">
+                                        {totalMessages.toLocaleString('ru')}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 mt-1">
+                                        входящие и исходящие, все каналы
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border-2 border-[#E0E8F4] bg-white px-4 py-4">
+                                    <div className="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Чатов</div>
+                                    <div className="text-[28px] font-bold text-[#111] leading-none">
+                                        {totalChats.toLocaleString('ru')}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 mt-1">
+                                        диалогов с водителями
+                                    </div>
+                                </div>
+                                <div className="rounded-xl border-2 border-[#E0E8F4] bg-white px-4 py-4">
+                                    <div className="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Контактов</div>
+                                    <div className="text-[28px] font-bold text-[#111] leading-none">
+                                        {totalContacts.toLocaleString('ru')}
+                                    </div>
+                                    <div className="text-[11px] text-gray-500 mt-1">
+                                        уникальных собеседников
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )
