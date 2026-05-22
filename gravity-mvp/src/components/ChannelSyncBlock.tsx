@@ -80,10 +80,20 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
     // Вызывается на mount + после завершения синхронизации, чтобы
     // три большие плашки «Сообщений / Чатов / Контактов» показывали
     // правду из таблицы Message, а не результат одной синхронизации.
+    //
+    // PR9.31: для MAX внутри derive 'max_scraper' (virtual ID, под
+    // которым все MAX-сообщения лежат в Chat.metadata.connectionId).
+    // MaxLoginClient не передаёт connectionId как prop, поэтому
+    // подставляем сами — иначе на странице MAX будет 0/0/0, а в AI
+    // «База сообщений» 1330 (там используется та же агрегация по
+    // COALESCE с virtual ID). Для WA/TG connectionId всегда задан
+    // явно, ничего не меняется. Job-filter использует оригинальный
+    // connectionId (undefined) → видит старые MAX-jobs с conn=NULL.
+    const effectiveDbConnId = connectionId ?? (channel === 'max' ? 'max_scraper' : undefined)
     const loadDbTotals = async () => {
-        if (!connectionId) return
+        if (!effectiveDbConnId) return
         try {
-            const totals = await getConnectionTotalsForUi(connectionId)
+            const totals = await getConnectionTotalsForUi(effectiveDbConnId)
             setDbTotals({
                 messages: totals.messages,
                 chats:    totals.chats,
