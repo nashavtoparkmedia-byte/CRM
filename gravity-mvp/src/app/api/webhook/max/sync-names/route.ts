@@ -23,6 +23,19 @@ function isPlaceholderName(name?: string | null): boolean {
     return false
 }
 
+/**
+ * Нормализация имени из MAX UI: убирает a11y-префиксы.
+ * MAX-веб для screen readers оборачивает имя как "Окно чата с <Имя>".
+ * Также есть EN-вариант "Chat with <Name>".
+ */
+function normalizeMaxName(name: string): string {
+    let t = name.trim()
+    const rus = t.match(/^Окно чата с\s+(.+)$/i)
+    if (rus) t = rus[1].trim()
+    t = t.replace(/^(Chat with|Чат с)\s+/i, '').trim()
+    return t
+}
+
 function isUsefulName(name?: string | null): boolean {
     if (!name) return false
     const t = name.trim()
@@ -51,7 +64,7 @@ export async function POST(req: NextRequest) {
         for (const pair of pairs) {
             if (!pair?.chatId || !pair?.name) continue
 
-            const newName = pair.name.trim()
+            const newName = normalizeMaxName(pair.name)
             if (!isUsefulName(newName)) {
                 skipped_placeholder_input++
                 continue

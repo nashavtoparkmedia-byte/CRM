@@ -95,8 +95,14 @@ class NameSync {
                             const header   = mainArea.querySelector('.chat-header, .top-bar, .user-name, header')
                             const headerEl = header?.querySelector('.title, .header-title, h2, .name')
                                           || mainArea.querySelector('.title, .header-title, h2, .name')
-                            const text = headerEl ? headerEl.innerText.trim() : null
-                            // фильтруем заведомый мусор
+                            let text = headerEl ? headerEl.innerText.trim() : null
+                            if (!text) return null
+                            // MAX UI a11y wrapper: "Окно чата с <Имя>" → "<Имя>"
+                            const accessPrefix = text.match(/^Окно чата с\s+(.+)$/i)
+                            if (accessPrefix) text = accessPrefix[1].trim()
+                            // Дополнительно срезаем общие префиксы
+                            text = text.replace(/^(Chat with|Чат с)\s+/i, '').trim()
+                            // Фильтр мусора
                             if (!text || text.length > 100) return null
                             if (/^[.\s\-]+$/.test(text)) return null
                             return text
