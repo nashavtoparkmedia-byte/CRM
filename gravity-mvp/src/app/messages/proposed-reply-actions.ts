@@ -38,6 +38,17 @@ export interface ProposedReplyDTO {
     dismissedAt:   string | null
 }
 
+/**
+ * PR9.53: explicit-skip result — AI промолчал по конкретной причине.
+ * Возвращается вместо null чтобы UI мог показать человеку «почему».
+ */
+export interface ProposedReplySkip {
+    skipped: true
+    reason:  'no_inbound' | 'ai_disabled' | 'intern_disabled' | 'no_api_key' | 'pipeline_returned_null' | 'error'
+    /** Человеко-читаемая фраза для UI. */
+    message: string
+}
+
 function serialize(row: any): ProposedReplyDTO {
     return {
         id:            row.id,
@@ -66,7 +77,7 @@ function serialize(row: any): ProposedReplyDTO {
  *   - internEnabled=false в AiAgentConfig
  *   - Pipeline вернул error / no_match без текста (UI отобразит пустоту)
  */
-export async function getOrGenerateProposedReply(chatId: string): Promise<ProposedReplyDTO | null> {
+export async function getOrGenerateProposedReply(chatId: string): Promise<ProposedReplyDTO | ProposedReplySkip | null> {
     // 1. Last inbound — определяет «к чему» относится proposal
     const lastInbound = await prisma.message.findFirst({
         where: { chatId, direction: 'inbound' },
@@ -75,7 +86,11 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     })
     if (!lastInbound) {
         console.log(`[ai-intern] chatId=${chatId} skip: no inbound messages in chat`)
-        return null
+        return {
+            skipped: true,
+            reason: 'no_inbound',
+            message: 'Собеседник пока ничего не написал — AI отвечать не на что.',
+        }
     }
 
     // 2. Cache lookup — UNIQUE на messageId, поэтому findUnique.
@@ -95,22 +110,22 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     })
     if (!config) {
         console.log(`[ai-intern] chatId=${chatId} skip: AiAgentConfig singleton missing`)
-        return null
+        return { skipped: true, reason: 'ai_disabled', message: 'AI не настроен.' }
     }
     if (!config.enabled) {
         console.log(`[ai-intern] chatId=${chatId} skip: AI globally disabled (enabled=false)`)
-        return null
+        return { skipped: true, reason: 'ai_disabled', message: 'AI глобально выключен в настройках.' }
     }
     if (!config.internEnabled) {
         console.log(`[ai-intern] chatId=${chatId} skip: intern feature flag off`)
-        return null
+        return { skipped: true, reason: 'intern_disabled', message: 'AI стажёр выключен.' }
     }
     // PR9.48: AI mode='off' раньше блокировал стажёра. Теперь стажёр
     // работает независимо — он не отправляет реально, это shadow-черновик
-    // для менеджера. Logика моде влияет только на runtime auto-reply.
+    // для менеджера. Логика моде влияет только на runtime auto-reply.
     if (!config.apiKeyEncrypted) {
         console.log(`[ai-intern] chatId=${chatId} skip: no API key configured`)
-        return null
+        return { skipped: true, reason: 'no_api_key', message: 'Не указан API-ключ AI Провайдера.' }
     }
 
     // 4. Generate fresh
@@ -120,11 +135,11 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
         result = await generateShadowReplyForChat(chatId)
     } catch (e: any) {
         console.error(`[ai-intern] chatId=${chatId} generation error:`, e?.message)
-        return null
+        return { skipped: true, reason: 'error', message: `Ошибка генерации: ${e?.message ?? 'unknown'}` }
     }
     if (!result) {
         console.log(`[ai-intern] chatId=${chatId} pipeline returned null (контекст пуст или AI off)`)
-        return null
+        return { skipped: true, reason: 'pipeline_returned_null', message: 'Pipeline не смог построить контекст для этого чата.' }
     }
     console.log(`[ai-intern] chatId=${chatId} generated: mode=${result.decisionMode} conf=${result.confidence.toFixed(2)} textLen=${result.text.length}`)
 

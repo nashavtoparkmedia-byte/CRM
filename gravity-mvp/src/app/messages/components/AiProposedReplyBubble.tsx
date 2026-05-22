@@ -34,7 +34,10 @@ interface AiProposedReplyBubbleProps {
     loading:  boolean
     /** PR9.47: AI вернул null (промолчал) — показываем мини-pill вместо
      *  моментального исчезновения skeleton'а. */
-    silent:    boolean
+    silent:        boolean
+    /** PR9.53: конкретная причина молчания («Собеседник пока ничего
+     *  не написал», «AI выключен», и т.д.). */
+    silentMessage: string | null
     /** «Взять в работу» — копирует текст в input bar родителя. */
     onTake:    () => void
     /** «Скрыть» — больше не показывается пока не пришёт новое inbound. */
@@ -45,6 +48,7 @@ export default function AiProposedReplyBubble({
     proposal,
     loading,
     silent,
+    silentMessage,
     onTake,
     onDismiss,
 }: AiProposedReplyBubbleProps) {
@@ -68,20 +72,21 @@ export default function AiProposedReplyBubble({
         )
     }
 
-    // PR9.47: silent — AI промолчал (отключен, нет inbound, no_match).
-    // Показываем компактную мини-pill чтобы пользователь видел что
-    // запрос сделался, но AI ничего не предлагает. Иначе UI выглядит
-    // багово — skeleton мелькнул и пропал.
+    // PR9.47/PR9.53: silent — AI промолчал с конкретной причиной.
+    // silentMessage explains «почему», например «Собеседник пока ничего
+    // не написал». Если message не пришёл — generic fallback.
     if (silent && !proposal) {
         return (
             <div className="flex justify-start px-4 py-2">
-                <div className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1 text-[11px] text-gray-500">
-                    <Bot size={11} className="opacity-60" />
-                    AI пока ничего не предлагает
+                <div className="inline-flex items-start gap-1.5 rounded-lg bg-gray-100 border border-gray-200 px-3 py-1.5 text-[11px] text-gray-600 max-w-[80%]">
+                    <Bot size={11} className="opacity-60 mt-[2px] shrink-0" />
+                    <span className="flex-1">
+                        {silentMessage ?? 'AI пока ничего не предлагает'}
+                    </span>
                     <button
                         type="button"
                         onClick={onDismiss}
-                        className="ml-1 text-gray-400 hover:text-gray-600"
+                        className="ml-1 text-gray-400 hover:text-gray-600 shrink-0"
                         aria-label="Скрыть"
                     >
                         <X size={10} />

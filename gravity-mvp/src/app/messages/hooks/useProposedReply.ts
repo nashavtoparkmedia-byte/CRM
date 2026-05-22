@@ -23,6 +23,7 @@ import {
     markProposedReplyTaken,
     dismissProposedReply,
     type ProposedReplyDTO,
+    type ProposedReplySkip,
 } from '../proposed-reply-actions'
 
 export interface UseProposedReplyResult {
@@ -33,8 +34,11 @@ export interface UseProposedReplyResult {
      * AI решил промолчать (отключен, нет inbound, no_match и т.п.).
      * UI показывает мини-pill «AI промолчал» вместо моментального
      * исчезновения skeleton'а.
+     * PR9.53: silent теперь несёт message — конкретную причину
+     * молчания, чтобы UI показывал «AI промолчал: <причина>».
      */
-    silent:   boolean
+    silent:        boolean
+    silentMessage: string | null
     /** Триггер — UI вызывает на focus в input bar. Идемпотентно. */
     trigger:  () => void
     /** Очистить proposal в UI (например при смене чата). */
@@ -49,29 +53,44 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
     const [proposal, setProposal] = useState<ProposedReplyDTO | null>(null)
     const [loading,  setLoading]  = useState(false)
     const [silent,   setSilent]   = useState(false)
+    const [silentMessage, setSilentMessage] = useState<string | null>(null)
     // Защита от двойных вызовов: пока loading=true игнорируем повторные trigger.
-    // Плюс — после успешного fetch не запрашиваем повторно для того же chatId
-    // пока пользователь не сделает reset() или не сменит чат.
     const fetchedForChatRef = useRef<string | null>(null)
 
     const trigger = useCallback(() => {
         if (!chatId) return
         if (loading) return
-        // Уже фетчили для этого чата — не повторяем (cached серверным action'ом тоже).
         if (fetchedForChatRef.current === chatId) return
 
         setLoading(true)
         setSilent(false)
+        setSilentMessage(null)
         fetchedForChatRef.current = chatId
         getOrGenerateProposedReply(chatId)
-            .then(p => {
-                setProposal(p)
-                setSilent(p === null)  // AI ничего не предложил — показываем мини-pill
+            .then(result => {
+                // result может быть: ProposedReplyDTO | ProposedReplySkip | null
+                if (result && 'skipped' in result && result.skipped) {
+                    // Explicit skip с причиной
+                    setProposal(null)
+                    setSilent(true)
+                    setSilentMessage((result as ProposedReplySkip).message)
+                } else if (result === null) {
+                    // Старый fallback — null без причины
+                    setProposal(null)
+                    setSilent(true)
+                    setSilentMessage(null)
+                } else {
+                    // Нормальный proposal
+                    setProposal(result as ProposedReplyDTO)
+                    setSilent(false)
+                    setSilentMessage(null)
+                }
             })
             .catch(e => {
                 console.error('[useProposedReply] error', e)
                 setProposal(null)
-                setSilent(true)  // ошибка тоже = AI «промолчал», но в UI мы это покажем
+                setSilent(true)
+                setSilentMessage(`Ошибка: ${e?.message ?? 'unknown'}`)
             })
             .finally(() => setLoading(false))
     }, [chatId, loading])
@@ -80,6 +99,7 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
         setProposal(null)
         setLoading(false)
         setSilent(false)
+        setSilentMessage(null)
         fetchedForChatRef.current = null
     }, [])
 
@@ -107,7 +127,8 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
         // silent тоже dismissable — пользователь может скрыть мини-pill
         setProposal(null)
         setSilent(false)
+        setSilentMessage(null)
     }, [proposal])
 
-    return { proposal, loading, silent, trigger, reset, take, dismiss }
+    return { proposal, loading, silent, silentMessage, trigger, reset, take, dismiss }
 }

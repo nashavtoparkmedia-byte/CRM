@@ -270,6 +270,7 @@ function ChatWorkspaceInner({
                 proposal={ai.proposal}
                 loading={ai.loading}
                 silent={ai.silent}
+                silentMessage={ai.silentMessage}
                 onTake={handleAiTake}
                 onDismiss={ai.dismiss}
             />
