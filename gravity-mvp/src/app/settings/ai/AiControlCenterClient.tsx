@@ -1343,16 +1343,39 @@ export default function AiControlCenterClient({
                     </div>
                 )}
 
-                {/* PR7.5: honest sync stamp. Badge выше говорит про
-                    статус последнего job, а здесь — конкретная дата
-                    последнего успешного импорта. Не смешиваем «когда
-                    в последний раз скачали» и «жив ли аккаунт сейчас». */}
-                {lastJob && lastJob.status === 'completed' && lastJob.finishedAt && (
-                    <div className="mt-2 text-[11px] text-gray-500">
-                        Последний импорт: <b className="text-gray-700">{new Date(lastJob.finishedAt).toLocaleString('ru')}</b>.
-                        {' '}Статус подключения смотрите в списке загрузок ниже.
-                    </div>
-                )}
+                {/* PR7.5 + 7.12: honest sync stamp с информацией про
+                    конкретный аккаунт, если он известен. */}
+                {lastJob && lastJob.status === 'completed' && lastJob.finishedAt && (() => {
+                    const conn = (lastJob as any).connectionId
+                        ? channelConnections.find(c => c.id === (lastJob as any).connectionId)
+                        : null
+                    const STATUS_LABEL_LOCAL: Record<string, string> = {
+                        ready: 'подключён', qr: 'ждёт QR', authenticating: 'входит',
+                        idle: 'не активен', disconnected: 'отключён',
+                        inactive: 'отключён', unknown: '—',
+                    }
+                    return (
+                        <div className="mt-2 space-y-1">
+                            <div className="text-[11px] text-gray-500">
+                                Последний импорт: <b className="text-gray-700">{new Date(lastJob.finishedAt).toLocaleString('ru')}</b>
+                            </div>
+                            {conn ? (
+                                <div className="text-[11px] text-gray-500">
+                                    Из аккаунта: <b className="text-gray-700">{conn.label}</b>
+                                    <span className="text-gray-400"> · аккаунт сейчас: {STATUS_LABEL_LOCAL[conn.status] ?? conn.status}</span>
+                                </div>
+                            ) : (lastJob as any).connectionId ? (
+                                <div className="text-[11px] text-gray-500">
+                                    Из аккаунта: <span className="text-gray-400">имя недоступно (возможно подключение удалили)</span>
+                                </div>
+                            ) : (
+                                <div className="text-[11px] text-gray-500">
+                                    Точный аккаунт не сохранён — это импорт до того, как мы стали запоминать привязку к аккаунту.
+                                </div>
+                            )}
+                        </div>
+                    )
+                })()}
 
                 {/* Факт последнего импорта (завершённого) */}
                 {lastJob && (lastJob.status === 'completed' || lastJob.status === 'failed') && (
@@ -2897,6 +2920,19 @@ export default function AiControlCenterClient({
 
         return (
             <div className="border-t border-[#F0F0F0] pt-4 space-y-6">
+                {/* PR7.12: Заглавный блок «Источники памяти AI» —
+                    точка опоры для пользователя на этой sub-tab. */}
+                <div className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] px-3 py-2.5">
+                    <div className="text-[13px] font-semibold text-[#111] mb-0.5">
+                        Источники памяти AI
+                    </div>
+                    <p className="text-[12px] text-gray-600 leading-relaxed">
+                        Источник — это аккаунт мессенджера, из переписок которого AI собирал знания.
+                        Здесь видно, какие аккаунты подключены, что из них уже взято и как
+                        отключить знания, если аккаунт оказался тестовым или больше не нужен.
+                    </p>
+                </div>
+
                 {/* Sub-section 0 (PR7.9): Подключённые аккаунты */}
                 <div>
                     <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
@@ -3265,6 +3301,38 @@ export default function AiControlCenterClient({
                                         Теперь можно проанализировать переписки и собрать обновлённое ядро.{' '}
                                         Выбор аккаунтов сохранится — можно скорректировать перед запуском.
                                     </p>
+                                    {/* PR7.12: preview итогового scope —
+                                        пользователь видит «откуда» ещё до
+                                        открытия Extraction modal. */}
+                                    {(() => {
+                                        const ready = channelConnections.filter(c => c.isReady)
+                                        const willInclude = channelConnections.filter(c =>
+                                            selectedConnectionIds.has(c.id) && (!onlyConnectedNow || c.isReady)
+                                        )
+                                        if (willInclude.length === 0) {
+                                            return (
+                                                <div className="text-[11px] text-gray-500">
+                                                    Сейчас не выбрано ни одного аккаунта — сбор пройдёт только по уже загруженной истории.
+                                                </div>
+                                            )
+                                        }
+                                        return (
+                                            <div className="text-[11px] text-gray-600 space-y-0.5">
+                                                <div className="text-gray-500">Будет участвовать:</div>
+                                                {willInclude.slice(0, 5).map(c => (
+                                                    <div key={c.id}>· {c.label}</div>
+                                                ))}
+                                                {willInclude.length > 5 && (
+                                                    <div className="text-gray-400">и ещё {willInclude.length - 5}</div>
+                                                )}
+                                                {ready.length > willInclude.length && (
+                                                    <div className="text-gray-400 pt-0.5">
+                                                        {ready.length - willInclude.length} {ready.length - willInclude.length === 1 ? 'аккаунт не выбран' : 'аккаунта не выбрано'} — можно изменить в модале сбора.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })()}
                                     <div className="pt-1">
                                         <button
                                             type="button"
@@ -4034,6 +4102,11 @@ export default function AiControlCenterClient({
                                                                 conn.isReady ? 'bg-green-500' :
                                                                 conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
                                                                 'bg-gray-300'
+                                                            // PR7.12: hint о наличии загруженной истории —
+                                                            // помогает понять «есть ли что собирать»
+                                                            // именно из этого аккаунта.
+                                                            const stat = sourceStats.find(s => s.connectionId === conn.id)
+                                                            const hasHistory = !!stat && stat.itemsTouched > 0
                                                             return (
                                                                 <label key={conn.id}
                                                                     className={`flex items-center gap-2 px-3 py-2 border-t border-[#F0F0F0] first:border-t-0 ${
@@ -4044,13 +4117,22 @@ export default function AiControlCenterClient({
                                                                         disabled={disabled}
                                                                         onChange={() => !disabled && toggleConnectionSelection(conn.id)} />
                                                                     <span className="flex-1 text-[13px] text-[#111]">
-                                                                        {/* label like "WhatsApp +7922•••5750" — duplicate
-                                                                            channel префикса не нужно, group header его уже даёт */}
                                                                         {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '') || 'безымянное подключение'}
                                                                     </span>
-                                                                    <span className="inline-flex items-center gap-1 text-[10px] text-gray-500">
-                                                                        <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
-                                                                        {statusLabel}
+                                                                    <span className="inline-flex items-center gap-2 text-[10px] text-gray-500">
+                                                                        {hasHistory ? (
+                                                                            <span className="text-green-700" title="Этот аккаунт уже участвовал в сборе — есть сохранённая история">
+                                                                                есть история
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-gray-400" title="Этот аккаунт ещё не участвовал в сборе ядра">
+                                                                                истории нет
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="inline-flex items-center gap-1">
+                                                                            <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                                                            {statusLabel}
+                                                                        </span>
                                                                     </span>
                                                                 </label>
                                                             )
