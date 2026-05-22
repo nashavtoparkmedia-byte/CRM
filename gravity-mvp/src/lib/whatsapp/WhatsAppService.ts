@@ -5,6 +5,7 @@ import fs from 'fs'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
@@ -534,6 +535,15 @@ async function syncHistory(connectionId: string, client: Client) {
                         if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
                             const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
                             await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                            // PR-Л: если у этого нового chat name=null/placeholder, но
+                            // у sibling-чата того же contactId уже есть pushname —
+                            // подтягиваем. Закрывает источник «Без имени» @lid дубликатов.
+                            await enrichWaChatNameFromSibling(
+                                unifiedSyncChat.id,
+                                unifiedSyncChat.name,
+                                contactResult.contact.id,
+                                null,
+                            ).catch(err => console.warn(`[WA-SERVICE] enrichChatName failed: ${err.message}`))
                         }
                     } catch (contactErr: any) {
                         // Non-blocking — don't break sync
@@ -1887,7 +1897,17 @@ export async function importWhatsAppHistory(
                     try {
                         const rawPhone = chatRaw.id._serialized?.split('@')[0]
                         if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
+                            // PR-Л: тот же sibling-lookup как в syncHistory.
+                            // Если этот chat дубликат @lid existing-чата с pushname —
+                            // подтянем имя автоматически.
+                            await enrichWaChatNameFromSibling(
+                                unifiedChat.id,
+                                unifiedChat.name,
+                                contactResult.contact.id,
+                                null,
+                            ).catch(err => console.warn(`[WA-SERVICE] importHistory enrichChatName failed: ${err.message}`))
                             totalContacts++
                         }
                     } catch {}
