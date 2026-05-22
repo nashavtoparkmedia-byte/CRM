@@ -212,10 +212,14 @@ const DECISION_HUMAN: Record<string, string> = {
     escalate:   'Передал менеджеру',
     skip:       'Не отвечал',
 }
+// PR9.33: «Старая база FAQ» переименована — здесь имеется в виду
+// pipeline-режим, при котором AI ищет ТОЛЬКО в ручной базе знаний,
+// без обращения к автособранному Ядру. Сам FAQ — главный источник
+// (а не «старый»), поэтому маркируем режим как «Только FAQ».
 const RETRIEVAL_MODE_HUMAN: Record<string, string> = {
-    legacy:  'Старая база FAQ',
-    shadow:  'Тестовый режим — новое ядро работало в фоне',
-    runtime: 'Активный режим — ответ из ядра знаний',
+    legacy:  'Только FAQ (без Ядра)',
+    shadow:  'Тестовый режим — Ядро работало в фоне',
+    runtime: 'Активный режим — ответ из Ядра',
 }
 const ESCALATION_HUMAN: Record<string, string> = {
     conflict:       'Конфликт в знаниях компании — два правила противоречат друг другу',
@@ -2356,7 +2360,7 @@ export default function AiControlCenterClient({
             const stats = await getKnowledgeStatsAction()
             setKnowledgeStats(stats as KnowledgeStats)
             if ((r as LegacyMigrationResult).migrated > 0) {
-                showToast(`Перенесено в ядро: ${(r as LegacyMigrationResult).migrated}`)
+                showToast(`Скопировано в Ядро: ${(r as LegacyMigrationResult).migrated}`)
             }
         } catch (e: any) {
             showToast('Ошибка миграции: ' + (e?.message ?? 'unknown'))
@@ -2367,28 +2371,33 @@ export default function AiControlCenterClient({
 
     const KbTab = () => (
         <div className="space-y-4">
-            {/* PR5: deprecation banner — старая база остаётся доступной,
-                но рекомендуем переносить в Ядро знаний. Без physical
-                delete — reversible path. */}
-            <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] px-4 py-3 text-[12px] text-[#8B6914] leading-relaxed">
-                <strong className="block mb-1 text-[#8B6914]">База знаний — устаревший раздел</strong>
-                Это ручные FAQ-карточки старого формата. Теперь AI берёт ответы из{' '}
-                <strong>Ядра знаний</strong> — оно собирается автоматически из реальных
-                переписок. Старые записи остаются доступными до миграции, потом их
-                можно скрыть.{' '}
+            {/* PR9.33: убрана deprecation-плашка «устаревший раздел».
+                User feedback: «У нас же база знаний главная отсюда,
+                а Ядро в помощь? Если это так, информация с этого раздела
+                не может в принципе устареть.»
+
+                Архитектурная иерархия (по факту):
+                  — БАЗА ЗНАНИЙ (FAQ) — первичный источник, человеком
+                    курируемые точные ответы, истина.
+                  — ЯДРО ЗНАНИЙ — вспомогательный слой, автоматически
+                    собираемый из переписок. Дополняет FAQ, не заменяет.
+
+                AI отвечая ищет сначала здесь (FAQ), потом — в Ядре,
+                только если оба пусты — передаёт менеджеру. */}
+            <InlineInfo>
+                Главный источник для AI. Сюда вручную пишутся точные ответы,
+                которым AI следует строго: цены, тарифы, условия, документы.
+                При ответе AI сначала ищет здесь, потом — в{' '}
+                <strong>Ядре знаний</strong> (там автоматически собранные
+                факты из переписок), и только если оба пусты — передаёт менеджеру.{' '}
                 <a
                     href="/settings/integrations/ai-knowledge-help#a-overview"
                     target="_blank"
                     rel="noopener"
                     className="text-[#3390EC] hover:underline"
                 >
-                    В чём разница →
+                    Подробнее →
                 </a>
-            </div>
-
-            <InlineInfo>
-                Точные ответы, которые AI должен знать без выдумок: условия работы,
-                цены, график, частые вопросы.
             </InlineInfo>
             <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="text-[12px] text-gray-500">{kb.length} {kb.length === 1 ? 'запись' : kb.length >= 2 && kb.length <= 4 ? 'записи' : 'записей'}</span>
@@ -2398,11 +2407,11 @@ export default function AiControlCenterClient({
                             onClick={openMigrationModal}
                             disabled={!canEdit}
                             title={canEdit
-                                ? 'Перенести записи из базы знаний в Ядро (как verified-факты). Базу не удаляет.'
+                                ? 'Скопировать FAQ-карточки в Ядро (как verified-факты), чтобы они участвовали в общей AI-выборке. База остаётся как есть — это копирование, не перенос.'
                                 : 'Доступно только Администратору'}
                             className="h-[28px] px-3 inline-flex items-center gap-1 rounded-lg border border-[#3390EC] text-[#3390EC] text-[11px] font-semibold hover:bg-[#F0F4FA] disabled:opacity-40 transition-colors"
                         >
-                            Перенести в Ядро
+                            Скопировать в Ядро
                         </button>
                     )}
                     <button
@@ -2496,9 +2505,10 @@ export default function AiControlCenterClient({
                 </div>
             )}
 
-            {/* PR5: список обёрнут в свёртываемый "Legacy" блок.
-                Не physical delete — reversible: можно развернуть и
-                продолжить работу со старой базой при необходимости. */}
+            {/* PR9.33: collapsible-блок раньше назывался «Старая база FAQ»
+                с интентом deprecation. По обратной связи user'а — FAQ
+                это главный источник, не legacy. Переименовали в
+                «FAQ-карточки» (просто список), без коннотации старости. */}
             {kb.length > 0 && (
                 <div className="rounded-md border border-[#E8E8E8]">
                     <button
@@ -2507,7 +2517,7 @@ export default function AiControlCenterClient({
                         className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-gray-500 hover:bg-[#FAFBFC] transition-colors"
                     >
                         <span>
-                            <span className="font-medium text-[#111]">Старая база FAQ</span>
+                            <span className="font-medium text-[#111]">FAQ-карточки</span>
                             <span className="ml-2 text-gray-400">{kb.length}</span>
                         </span>
                         <span className="text-[11px] text-gray-400">
@@ -5313,15 +5323,16 @@ export default function AiControlCenterClient({
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="px-6 py-4 border-b border-[#F0F0F0]">
-                            <h2 className="text-[16px] font-semibold text-[#111]">Перенести базу знаний в Ядро</h2>
+                            <h2 className="text-[16px] font-semibold text-[#111]">Скопировать FAQ в Ядро</h2>
                             <p className="text-[12px] text-gray-500 mt-0.5">
-                                Записи копируются как verified-факты. Сама база знаний не удаляется.
+                                FAQ-записи копируются в Ядро как verified-факты. Сама база знаний
+                                остаётся как есть — это копирование, не перенос.
                             </p>
                         </div>
                         <div className="px-6 py-4 overflow-y-auto space-y-4">
                             {migrationLoading && (
                                 <div className="flex items-center gap-2 text-[12px] text-gray-400 py-6">
-                                    <Loader2 size={13} className="animate-spin" /> Считаем что переносить…
+                                    <Loader2 size={13} className="animate-spin" /> Считаем что копировать…
                                 </div>
                             )}
                             {!migrationLoading && migrationPreview && !migrationResult && (
@@ -5329,9 +5340,9 @@ export default function AiControlCenterClient({
                                     <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
                                         <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Сводка</div>
                                         <div className="space-y-0.5 text-[12px]">
-                                            <div>Активных записей в базе: <strong>{migrationPreview.legacyTotalActive}</strong></div>
-                                            <div>Уже перенесено: <strong>{migrationPreview.alreadyMigrated}</strong></div>
-                                            <div>Будет перенесено сейчас: <strong className="text-[#3390EC]">{migrationPreview.toMigrate}</strong></div>
+                                            <div>Активных FAQ-карточек: <strong>{migrationPreview.legacyTotalActive}</strong></div>
+                                            <div>Уже скопировано: <strong>{migrationPreview.alreadyMigrated}</strong></div>
+                                            <div>Будет скопировано сейчас: <strong className="text-[#3390EC]">{migrationPreview.toMigrate}</strong></div>
                                         </div>
                                     </div>
                                     {migrationPreview.bySection.length > 0 && (
@@ -5346,13 +5357,13 @@ export default function AiControlCenterClient({
                                                 ))}
                                             </ul>
                                             <p className="text-[11px] text-gray-400 mt-2">
-                                                Категории сопоставлены автоматически. После переноса вы можете переместить факты в другой раздел через карточку знания.
+                                                Категории сопоставлены автоматически. После копирования вы можете переместить факты в другой раздел через карточку знания.
                                             </p>
                                         </div>
                                     )}
                                     {migrationPreview.toMigrate === 0 && (
                                         <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3 text-[12px] text-gray-600">
-                                            Все активные записи уже перенесены. Повторный запуск ничего не добавит.
+                                            Все активные FAQ-карточки уже скопированы в Ядро. Повторный запуск ничего не добавит.
                                         </div>
                                     )}
                                 </div>
@@ -5365,7 +5376,7 @@ export default function AiControlCenterClient({
                                             : 'border-green-200 bg-green-50 text-green-800'
                                     }`}>
                                         <strong className="block mb-1">Готово</strong>
-                                        Перенесено: {migrationResult.migrated} ·{' '}
+                                        Скопировано: {migrationResult.migrated} ·{' '}
                                         Пропущено: {migrationResult.skipped} ·{' '}
                                         С ошибкой: {migrationResult.failed}
                                     </div>
@@ -5399,7 +5410,7 @@ export default function AiControlCenterClient({
                                     className="h-9 px-4 rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
                                 >
                                     {migrationRunning && <Loader2 size={13} className="animate-spin" />}
-                                    Перенести {migrationPreview.toMigrate}
+                                    Скопировать {migrationPreview.toMigrate}
                                 </button>
                             )}
                         </div>
@@ -5487,8 +5498,8 @@ export default function AiControlCenterClient({
                                         </div>
                                         {usedUsages.length === 0 ? (
                                             <div className="text-[12px] text-gray-400 italic">
-                                                Знания из ядра не использовались
-                                                {decision.retrievalMode === 'legacy' && ' (старая база FAQ)'}.
+                                                Знания из Ядра не использовались
+                                                {decision.retrievalMode === 'legacy' && ' (режим «Только FAQ»)'}.
                                             </div>
                                         ) : (
                                             <div className="space-y-2">
