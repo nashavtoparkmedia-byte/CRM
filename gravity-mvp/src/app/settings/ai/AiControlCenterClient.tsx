@@ -2142,39 +2142,49 @@ export default function AiControlCenterClient({
                     })}
                 </div>
 
-                {/* Каналы */}
-                <div>
-                    <label className="text-[12px] text-gray-500 block mb-1.5">Активные каналы</label>
-                    <div className="flex gap-2">
-                        {(['max', 'telegram', 'whatsapp'] as const).map(ch => (
-                            <button
-                                key={ch}
-                                onClick={() => setConfig(c => ({
-                                    ...c,
-                                    activeChannels: c.activeChannels.includes(ch)
-                                        ? c.activeChannels.filter(x => x !== ch)
-                                        : [...c.activeChannels, ch]
-                                }))}
-                                className={`px-3 h-[28px] rounded-lg text-[11px] font-semibold border transition-colors ${
-                                    config.activeChannels.includes(ch)
-                                        ? 'bg-[#3390EC] text-white border-[#3390EC]'
-                                        : 'bg-white text-gray-600 border-[#E0E0E0] hover:border-[#3390EC]'
-                                }`}
-                            >
-                                {CHANNEL_LABELS[ch]}
-                            </button>
-                        ))}
+                {/* Каналы — PR9.28: визуально выровнены под «Что AI делает».
+                    Тот же h4-заголовок, те же pill-кнопки (rounded-full,
+                    h-[34px], px-3.5, text-[12px] font-semibold, border-[#E4ECFC]).
+                    Раньше использовался form-label-style (gray 12px) + укороченные
+                    pill'ы — выглядело как «отдельный блок из другого UI». */}
+                <div className="space-y-2 pt-1">
+                    <h4 className="text-[14px] font-semibold text-[#111]">Активные каналы</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {(['max', 'telegram', 'whatsapp'] as const).map(ch => {
+                            const active = config.activeChannels.includes(ch)
+                            return (
+                                <button
+                                    key={ch}
+                                    onClick={() => setConfig(c => ({
+                                        ...c,
+                                        activeChannels: c.activeChannels.includes(ch)
+                                            ? c.activeChannels.filter(x => x !== ch)
+                                            : [...c.activeChannels, ch]
+                                    }))}
+                                    className={`inline-flex items-center h-[34px] px-3.5 rounded-full text-[12px] font-semibold border transition-colors ${
+                                        active
+                                            ? 'bg-[#3390EC] text-white border-[#3390EC]'
+                                            : 'bg-white text-gray-700 border-[#E4ECFC] hover:border-[#3390EC] hover:text-[#3390EC]'
+                                    }`}
+                                >
+                                    {CHANNEL_LABELS[ch]}
+                                </button>
+                            )
+                        })}
                     </div>
                 </div>
 
-                {/* Пороги */}
-                <div className="grid grid-cols-2 gap-3">
-                    <div>
-                        <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
+                {/* Пороги — PR9.28: лейблы выровнены под h4-заголовки секций
+                    выше. Раньше использовался form-label-style (gray 12px),
+                    из-за чего пороги визуально отрывались от блоков
+                    «Что AI делает» / «Активные каналы». */}
+                <div className="grid grid-cols-2 gap-4 pt-1">
+                    <div className="space-y-2">
+                        <h4 className="text-[14px] font-semibold text-[#111] flex items-center gap-1.5">
                             Уверенность для автоответа
                             <Hint text="Чем выше порог, тем реже AI отвечает сам и чаще передаёт менеджеру. 0.75 — рекомендуемое стартовое значение." />
-                            <span className="ml-auto text-[12px] font-mono font-semibold text-[#111]">{Math.round(config.confidenceThreshold * 100)}%</span>
-                        </label>
+                            <span className="ml-auto text-[13px] font-mono font-semibold text-[#3390EC]">{Math.round(config.confidenceThreshold * 100)}%</span>
+                        </h4>
                         <input
                             type="range" min={0} max={1} step={0.05}
                             value={config.confidenceThreshold}
@@ -2186,18 +2196,18 @@ export default function AiControlCenterClient({
                             <span>отвечает реже</span>
                         </div>
                     </div>
-                    <div>
-                        <label className="text-[12px] text-gray-500 mb-1 flex items-center gap-1.5">
+                    <div className="space-y-2">
+                        <h4 className="text-[14px] font-semibold text-[#111] flex items-center gap-1.5">
                             Макс. автоответов подряд
                             <Hint text="После N автоответов в одном чате AI замолкает и передаёт диалог менеджеру — даже если уверен. Защита от бесконечного диалога с ботом." />
-                        </label>
+                        </h4>
                         <input
                             type="number" min={1} max={50}
                             value={config.maxAutoRepliesPerChat}
                             onChange={e => setConfig(c => ({ ...c, maxAutoRepliesPerChat: parseInt(e.target.value) }))}
-                            className="w-full h-[32px] border border-[#E0E0E0] rounded-lg px-3 text-[12px] outline-none focus:border-[#3390EC]"
+                            className="w-full h-[34px] border border-[#E4ECFC] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]"
                         />
-                        <div className="text-[10px] text-gray-400 mt-0.5">После — диалог уходит менеджеру</div>
+                        <div className="text-[10px] text-gray-400">После — диалог уходит менеджеру</div>
                     </div>
                 </div>
             </div>
