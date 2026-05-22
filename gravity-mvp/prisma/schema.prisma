@@ -993,6 +993,13 @@ model AiAgentConfig {
   /// изменениях — даёт regression analysis: сравнить ядро, собранное
   /// разными версиями prompt'а.
   extractionPromptVersion String?
+  /// PR9.44 «AI стажёр»: фича генерации proposed reply в чатах.
+  /// При true: когда менеджер фокусится в input bar открытого чата,
+  /// AI генерирует черновик ответа на последний inbound message и
+  /// показывает в timeline как ghost-bubble. Менеджер берёт в работу
+  /// (редактирует/одобряет) или скрывает. По умолчанию on — фича
+  /// под наблюдением, легко выключить из админки.
+  internEnabled         Boolean         @default(true)
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
 }
@@ -1352,6 +1359,49 @@ model AiDecisionLog {
   @@index([detectedIntent])
   @@index([decision])
   @@index([retrievalMode, createdAt(sort: Desc)])
+}
+
+/// PR9.44 «AI стажёр»: черновик ответа, сгенерированный AI on-demand
+/// при фокусе менеджера в input bar открытого чата. Не отправляется
+/// автоматически — только для просмотра, редактирования и approve.
+///
+/// Один proposal на messageId (последний inbound). Если пришло новое
+/// inbound — старый proposal становится stale (expiresAt либо
+/// фильтр по messageId). TTL 15 минут.
+///
+/// Lifecycle:
+///   1. ready    — текст сгенерирован, показан в timeline
+///   2. takenAt  — менеджер нажал «Взять в работу» (копируется в input)
+///   3. sentMessageId — реально отправленное сообщение (для track approved vs edited)
+///   4. dismissedAt — менеджер скрыл предложение
+model AiProposedReply {
+  id            String   @id @default(cuid())
+  /// Inbound message, на который генерируется ответ. UNIQUE — один
+  /// proposal per message; повторный fetch вернёт cached.
+  messageId     String   @unique
+  chatId        String
+  /// Текст черновика, который AI бы написал.
+  text          String
+  confidence    Float
+  /// 'auto_reply' (есть ответ) | 'escalate' (передать менеджеру) | 'no_match' (не нашёл данных)
+  decisionMode  String
+  /// Короткое объяснение «почему AI так решил» (для UI tooltip).
+  reasoning     String?
+  /// [{itemId, title, excerpt}] — какие знания использовал retriever.
+  sources       Json?
+  generatedAt   DateTime @default(now())
+  /// TTL — после этого момента proposal считается устаревшим.
+  expiresAt     DateTime
+  /// Когда менеджер нажал «Взять в работу» (текст скопирован в input).
+  takenAt       DateTime?
+  /// FK на Message который менеджер реально отправил (после edit).
+  /// Если совпадает с originalText — approved as-is, если отличается — edited.
+  sentMessageId String?
+  /// Когда менеджер нажал «Скрыть».
+  dismissedAt   DateTime?
+
+  @@index([chatId, generatedAt(sort: Desc)])
+  @@index([expiresAt])
 }
 
 /// Задания на импорт истории из мессенджеров

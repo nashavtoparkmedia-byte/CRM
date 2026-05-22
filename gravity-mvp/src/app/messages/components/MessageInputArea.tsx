@@ -35,6 +35,25 @@ interface MessageInputAreaProps {
     manualSendChannelMode: string | null
     setManualSendChannelMode: (channel: string) => void
     onSendMessage: (content: string, effectiveChannel: string) => void
+    /**
+     * PR9.46 «AI стажёр»: триггер при фокусе в textarea. Родитель
+     * (ChatWorkspace) дёргает proposed-reply generation. Дёшево и
+     * безопасно — hook сам дедуплицирует повторные вызовы.
+     */
+    onTextareaFocus?: () => void
+    /**
+     * PR9.46: текст для предзаполнения textarea. Когда менеджер
+     * нажимает «Взять в работу» в AiProposedReplyBubble, родитель
+     * передаёт сюда текст черновика + увеличивает prefillToken.
+     */
+    prefillText?: string
+    /**
+     * PR9.46: увеличиваемый счётчик — каждое увеличение триггерит
+     * установку prefillText в textarea (даже если текст тот же).
+     * Нужен потому что useEffect на `prefillText` не сработает если
+     * текст не изменился.
+     */
+    prefillToken?: number
 }
 
 const CHANNELS = [
@@ -50,7 +69,10 @@ export default function MessageInputArea({
     onClearReply,
     manualSendChannelMode,
     setManualSendChannelMode,
-    onSendMessage
+    onSendMessage,
+    onTextareaFocus,
+    prefillText,
+    prefillToken,
 }: MessageInputAreaProps) {
     const cacheKey = `${chatId}-${activeChannelTab}`
     const [text, setText] = useState(() => draftCache.get(cacheKey) || "")
@@ -77,6 +99,27 @@ export default function MessageInputArea({
             }
         }, 10)
     }, [cacheKey])
+
+    // PR9.46 «AI стажёр»: prefill из AI-черновика по клику «Взять в работу».
+    // Token-based trigger — каждое увеличение prefillToken вызывает setText +
+    // фокус курсора в конец, даже если текст тот же что был.
+    useEffect(() => {
+        if (prefillToken == null || prefillToken === 0) return
+        if (prefillText == null) return
+        setText(prefillText)
+        draftCache.set(cacheKey, prefillText)
+        setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus()
+                const len = prefillText.length
+                textareaRef.current.setSelectionRange(len, len)
+                textareaRef.current.style.height = 'auto'
+                const scrollHeight = textareaRef.current.scrollHeight
+                textareaRef.current.style.height = `${Math.min(scrollHeight, 120)}px`
+            }
+        }, 10)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefillToken])
 
     // Close channel dropdown on outside click
     useEffect(() => {
@@ -433,7 +476,7 @@ export default function MessageInputArea({
                 <div className={`flex-1 bg-[#F4F5F7] rounded-[18px] flex items-end min-h-[36px] border border-transparent transition-colors ${
                     hasText ? 'focus-within:border-[#3390EC]/30 focus-within:bg-white' : 'focus-within:bg-[#EEEFF1]'
                 } relative`}>
-                    <textarea 
+                    <textarea
                         id="message-composer"
                         ref={textareaRef}
                         value={text}
@@ -442,7 +485,8 @@ export default function MessageInputArea({
                             handleInput()
                         }}
                         onKeyDown={handleKeyDown}
-                        placeholder="Написать сообщение..." 
+                        onFocus={onTextareaFocus}
+                        placeholder="Написать сообщение..."
                         className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-4 resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
                         rows={1}
                     />

@@ -6,8 +6,10 @@ import ChatHeader from "./ChatHeader"
 import ChatChannelTabs from "./ChatChannelTabs"
 import MessageFeed from "./MessageFeed"
 import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
+import AiProposedReplyBubble from "./AiProposedReplyBubble"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
+import { useProposedReply } from "../hooks/useProposedReply"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 
 export default function ChatWorkspace({
@@ -117,6 +119,20 @@ function ChatWorkspaceInner({
     const [lastSentAt, setLastSentAt] = useState<number>(0)
     const [taskModalContext, setTaskModalContext] = useState<Message | null>(null)
     const [isTaskModalOpenForChat, setIsTaskModalOpenForChat] = useState(false)
+
+    // PR9.46 «AI стажёр»: hook генерирует proposed reply on-demand, когда
+    // менеджер фокусится в textarea. По «Взять в работу» возвращает текст
+    // — мы кладём его в MessageInputArea через prefillText + prefillToken.
+    const ai = useProposedReply(effectiveChatId)
+    const [aiPrefillText, setAiPrefillText] = useState<string>('')
+    const [aiPrefillToken, setAiPrefillToken] = useState<number>(0)
+    const handleAiTake = useCallback(async () => {
+        const text = await ai.take()
+        if (text) {
+            setAiPrefillText(text)
+            setAiPrefillToken(t => t + 1)
+        }
+    }, [ai])
 
     // No need for chatId-based reset useEffect — remount handles it
 
@@ -246,6 +262,17 @@ function ChatWorkspaceInner({
                 />
             )}
 
+            {/* PR9.46 «AI стажёр»: призрачное сообщение между MessageFeed и input.
+                Появляется когда менеджер фокусится в textarea (см. onTextareaFocus
+                пропс ниже). Не загромождает timeline — позиция фиксирована
+                выше input bar, после последнего сообщения. */}
+            <AiProposedReplyBubble
+                proposal={ai.proposal}
+                loading={ai.loading}
+                onTake={handleAiTake}
+                onDismiss={ai.dismiss}
+            />
+
             <MessageInputArea
                 chatId={chatId}
                 activeChannelTab={activeChannelTab}
@@ -254,6 +281,9 @@ function ChatWorkspaceInner({
                 manualSendChannelMode={manualSendChannelMode}
                 setManualSendChannelMode={setManualSendChannelMode}
                 onSendMessage={handleSendMessage}
+                onTextareaFocus={ai.trigger}
+                prefillText={aiPrefillText}
+                prefillToken={aiPrefillToken}
             />
 
             {(taskModalContext || isTaskModalOpenForChat) && (
