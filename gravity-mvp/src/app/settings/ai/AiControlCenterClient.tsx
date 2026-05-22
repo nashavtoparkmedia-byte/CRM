@@ -1826,32 +1826,35 @@ export default function AiControlCenterClient({
                 {(['anthropic', 'openai'] as const).map(p => {
                     const meta = PROVIDER_META[p]
                     const isActive = config.provider === p
-                    // Активный — color reflects effectiveStatus.
-                    // Неактивный — нейтральный белый.
+                    // PR9.17: бинарная семантика для активной карточки —
+                    // либо зелёная (точно работает), либо красная (НЕ
+                    // подтверждено что работает). «unchecked» / «empty»
+                    // считаем красным, потому что мы не знаем работает ли.
+                    // testing → промежуточный амбер на короткое время.
+                    const isWorking = effectiveStatus === 'ok'
+                    const isTesting = effectiveStatus === 'testing'
                     const cardBg = !isActive
                         ? 'bg-white border-gray-200 hover:border-[#3390EC] hover:bg-[#FAFBFC]'
-                        : effectiveStatus === 'ok'
-                            ? 'bg-emerald-50 border-emerald-400'
-                            : effectiveStatus === 'error'
-                                ? 'bg-red-50 border-red-400'
-                                : effectiveStatus === 'testing'
-                                    ? 'bg-amber-50 border-amber-400'
-                                    : 'bg-gray-50 border-gray-400'
+                        : isTesting
+                            ? 'bg-amber-50 border-amber-400'
+                            : isWorking
+                                ? 'bg-emerald-50 border-emerald-400'
+                                : 'bg-red-50 border-red-400'
                     const pillBg = !isActive
                         ? 'bg-gray-200 text-gray-600'
-                        : effectiveStatus === 'ok'
-                            ? 'bg-emerald-600 text-white'
-                            : effectiveStatus === 'error'
-                                ? 'bg-red-600 text-white'
-                                : effectiveStatus === 'testing'
-                                    ? 'bg-amber-600 text-white'
-                                    : 'bg-gray-600 text-white'
+                        : isTesting
+                            ? 'bg-amber-600 text-white'
+                            : isWorking
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-red-600 text-white'
                     const pillText = !isActive ? 'не используется'
-                        : effectiveStatus === 'ok' ? '✓ ключ активен'
+                        : isTesting ? '… проверяем'
+                        : isWorking ? '✓ ключ работает'
+                        // Все остальные красные — но pill text разный
+                        // чтобы пользователь понимал ЧТО именно не так.
                         : effectiveStatus === 'error' ? '✗ ключ не работает'
-                        : effectiveStatus === 'testing' ? '… проверяем'
-                        : effectiveStatus === 'unchecked' ? 'ключ не проверен'
-                        : 'ключ не задан'
+                        : effectiveStatus === 'unchecked' ? '✗ нужна проверка'
+                        : '✗ ключ не задан'
                     return (
                         <div
                             key={p}
