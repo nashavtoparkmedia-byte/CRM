@@ -47,30 +47,37 @@ export interface ShadowReplyResult {
  * Возвращает null если: нет inbound, AI off, config отсутствует.
  */
 export async function generateShadowReplyForChat(chatId: string): Promise<ShadowReplyResult | null> {
+    console.log(`[shadow-reply] chatId=${chatId} start`)
     const lastInbound = await prisma.message.findFirst({
         where: { chatId, direction: 'inbound' },
         orderBy: { sentAt: 'desc' },
     })
-    if (!lastInbound) return null
-
-    // PR9.48: ignoreModeOff=true — стажёр работает независимо от mode.
-    // mode='off' значит «AI не отправляет ответы клиентам», но shadow-
-    // черновики для менеджера — отдельная история. Они не отправляются
-    // никогда, генерируются только по запросу UI (фокус в input bar).
-    // Проверка config.enabled остаётся — это полный disable AI.
-    const ctx = await contextBuilder.build(lastInbound, { ignoreModeOff: true })
-    if (!ctx) {
+    if (!lastInbound) {
+        console.log(`[shadow-reply] chatId=${chatId} fail: no lastInbound`)
         return null
     }
+    console.log(`[shadow-reply] chatId=${chatId} lastInbound=${lastInbound.id} text=«${(lastInbound.content ?? '').slice(0, 40)}»`)
+
+    // PR9.48: ignoreModeOff=true — стажёр работает независимо от mode.
+    let ctx
+    try {
+        ctx = await contextBuilder.build(lastInbound, { ignoreModeOff: true })
+    } catch (e: any) {
+        console.error(`[shadow-reply] chatId=${chatId} ContextBuilder threw: ${e?.message}`)
+        return null
+    }
+    if (!ctx) {
+        console.log(`[shadow-reply] chatId=${chatId} fail: ContextBuilder returned null (config.enabled=false?)`)
+        return null
+    }
+    console.log(`[shadow-reply] chatId=${chatId} ctx ok: provider=${ctx.config.provider} hasKey=${!!ctx.config.apiKey} recentMsgs=${ctx.recentMessages.length}`)
 
     // Override mode — чтобы ResponseGenerator точно не отправил.
-    // ResponseGenerator проверяет `decision.decision === 'auto_reply' &&
-    // config.mode === 'auto_reply'` для send. Подменив на 'suggest_only'
-    // блокируем send-ветку без изменений самого generator'а.
     ctx.config.mode = 'suggest_only'
 
     const userMessage = lastInbound.content?.trim() || ''
     if (!userMessage) {
+        console.log(`[shadow-reply] chatId=${chatId} fail: empty content`)
         return { text: '', confidence: 0, decisionMode: 'no_match', reasoning: 'empty inbound', sources: null }
     }
 
@@ -78,8 +85,11 @@ export async function generateShadowReplyForChat(chatId: string): Promise<Shadow
     let decision
     try {
         classification = await intentClassifier.classify(userMessage, ctx)
+        console.log(`[shadow-reply] chatId=${chatId} classified: intent=${classification.intent} conf=${classification.confidence.toFixed(2)}`)
         decision = await decisionEngine.decide(classification, ctx)
+        console.log(`[shadow-reply] chatId=${chatId} decision=${decision.decision} reason=${decision.reason ?? '-'}`)
     } catch (e: any) {
+        console.error(`[shadow-reply] chatId=${chatId} classifier/decision threw: ${e?.message}`)
         return { text: '', confidence: 0, decisionMode: 'no_match', reasoning: `pipeline error: ${e?.message}`, sources: null }
     }
 
