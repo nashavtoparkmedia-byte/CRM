@@ -1248,9 +1248,15 @@ export default function AiControlCenterClient({
     const SyncTab = () => (
         <div className="space-y-5">
             <InlineInfo>
-                Синхронизация загружает историю чатов из MAX / Telegram / WhatsApp,
-                чтобы AI понимал контекст диалогов. Запускается один раз на старте;
-                переписка остаётся в CRM, наружу ничего не отправляется.
+                Эта страница — про <strong>загрузку сообщений в БД</strong>.
+                Свежие сообщения приходят сами в реальном времени (WA / TG-скрапер пишут live).
+                Эта кнопка нужна только когда хочешь подтянуть <strong>старую историю</strong>:
+                первое подключение нового аккаунта, дозагрузка прошлых 30/90 дней, восстановление после wipe.
+                <br/>
+                <span className="text-gray-500">
+                    После того как сообщения в БД — иди в <strong>«Ядро знаний»</strong> и нажми
+                    «Собрать ядро», чтобы AI превратил их в структурированную память.
+                </span>
             </InlineInfo>
             {/* Индикатор состояния */}
             <div className={`border rounded-xl p-4 transition-colors ${
@@ -1635,7 +1641,11 @@ export default function AiControlCenterClient({
                 «коробку в коробке» после status-блока выше. Заголовок
                 плюс отступ работают как разделитель. */}
             <div className="space-y-3 pt-1">
-                <h4 className="text-[14px] font-semibold text-[#111]">Загрузить ещё историю</h4>
+                <h4 className="text-[14px] font-semibold text-[#111]">Подгрузить старую историю</h4>
+                <p className="text-[12px] text-gray-500 leading-relaxed -mt-1">
+                    Новые сообщения уже идут в БД live. Эта кнопка качает <strong>прошлые сообщения</strong>
+                    из API мессенджера (например за 30 / 90 дней назад). Это разовая операция.
+                </p>
 
                 {/* Каналы */}
                 <div>
@@ -1693,14 +1703,25 @@ export default function AiControlCenterClient({
                     </div>
                 </div>
 
-                <button
-                    onClick={() => handleStartImport(false)}
-                    disabled={importLoading || importChannels.length === 0}
-                    className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                >
-                    <Play size={11} />
-                    {importLoading ? 'Запускаем...' : 'Запустить импорт'}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={() => handleStartImport(false)}
+                        disabled={importLoading || importChannels.length === 0}
+                        className="h-[32px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    >
+                        <Play size={11} />
+                        {importLoading ? 'Запускаем...' : 'Подгрузить старую историю'}
+                    </button>
+                    {/* PR9.7: cross-reference к Ядру знаний. После импорта
+                        пользователь должен знать что дальше — собрать ядро. */}
+                    <button
+                        type="button"
+                        onClick={() => setTab('knowledge')}
+                        className="h-[32px] px-3 text-[12px] text-[#3390EC] hover:underline inline-flex items-center gap-1"
+                    >
+                        Готов собрать ядро? →
+                    </button>
+                </div>
             </div>
 
             {/* История заданий — flat-список с divide-y, без внешней
