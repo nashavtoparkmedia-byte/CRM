@@ -743,6 +743,24 @@ export default function AiControlCenterClient({
     // в passport empty-state «Сейчас доступно для анализа» и в
     // Sync «доступно для анализа», чтобы показывать реальные числа.
     const [connectionCounts, setConnectionCounts] = useState<ConnectionMessageCount[]>([])
+    // PR9.11: timestamp последнего refresh + loading flag для фидбэка пользователю
+    // когда кликает на карточку или «Обновить всё».
+    const [dbStatsRefreshedAt, setDbStatsRefreshedAt] = useState<Date | null>(null)
+    const [dbStatsRefreshing,  setDbStatsRefreshing]  = useState(false)
+    async function refreshDbStats() {
+        setDbStatsRefreshing(true)
+        try {
+            const [fresh, totals] = await Promise.all([
+                getMessageCountsByConnection(),
+                getChannelTotalsForUi(),
+            ])
+            setConnectionCounts(fresh as ConnectionMessageCount[])
+            setChannelTotals(totals as ChannelTotalsRow[])
+            setDbStatsRefreshedAt(new Date())
+        } finally {
+            setDbStatsRefreshing(false)
+        }
+    }
 
     // PR9.3: реальный диапазон данных в БД для extraction modal.
     // Перезагружается при открытии модала и при изменении selection.
@@ -773,6 +791,8 @@ export default function AiControlCenterClient({
             setSourceStats(stats as SourceStatsRow[])
             setChannelTotals(totals as ChannelTotalsRow[])
             setConnectionCounts(connCounts as ConnectionMessageCount[])
+            // PR9.11: метка времени для пользовательского контекста
+            setDbStatsRefreshedAt(new Date())
             // Если ещё не было user-выбора в селекторе — preselect
             // все ready. При повторном открытии модала PR7.4 проверяет
             // selectedConnectionIds.size > 0 и оставляет user choice.
@@ -1261,25 +1281,55 @@ export default function AiControlCenterClient({
                   — период (earliest sentAt — latest sentAt)
                   — клик на карточку = refresh per-connection stats. */}
             <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-between">
-                    <h4 className="text-[14px] font-semibold text-[#111]">По аккаунтам</h4>
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            const [fresh, totals] = await Promise.all([
-                                getMessageCountsByConnection(),
-                                getChannelTotalsForUi(),
-                            ])
-                            setConnectionCounts(fresh as ConnectionMessageCount[])
-                            setChannelTotals(totals as ChannelTotalsRow[])
-                            showToast('Обновлено')
-                        }}
-                        title="Перезагрузить счётчики из БД"
-                        className="h-[26px] px-2.5 inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#3390EC] hover:bg-[#F0F4FA] rounded-md"
-                    >
-                        <RefreshCw size={11} /> Обновить всё
-                    </button>
-                </div>
+                {/* PR9.11: глобальная сводка + статус обновления */}
+                {(() => {
+                    const totalMessages = channelTotals.reduce((s, t) => s + t.messages, 0)
+                    const totalChats    = channelTotals.reduce((s, t) => s + t.chats, 0)
+                    const totalContacts = channelTotals.reduce((s, t) => s + t.contacts, 0)
+                    return (
+                        <div className="rounded-lg border border-[#E0E8F4] bg-[#F8FBFF] px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                            <div className="flex items-baseline gap-3 flex-wrap">
+                                <span className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">
+                                    Всего в БД:
+                                </span>
+                                <span className="text-[15px] font-bold text-[#111]">
+                                    {totalMessages.toLocaleString('ru')}
+                                </span>
+                                <span className="text-[12px] text-gray-600">сообщ.</span>
+                                <span className="text-gray-300">·</span>
+                                <span className="text-[13px] font-semibold text-[#111]">
+                                    {totalChats.toLocaleString('ru')}
+                                </span>
+                                <span className="text-[12px] text-gray-600">чатов</span>
+                                <span className="text-gray-300">·</span>
+                                <span className="text-[13px] font-semibold text-[#111]">
+                                    {totalContacts.toLocaleString('ru')}
+                                </span>
+                                <span className="text-[12px] text-gray-600">контактов</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {dbStatsRefreshedAt && (
+                                    <span className="text-[11px] text-gray-500">
+                                        обновлено {dbStatsRefreshedAt.toLocaleTimeString('ru')}
+                                    </span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={refreshDbStats}
+                                    disabled={dbStatsRefreshing}
+                                    title="Перезагрузить счётчики из БД"
+                                    className="h-[28px] px-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#3390EC] border border-[#3390EC]/40 rounded-md hover:bg-[#F0F4FA] disabled:opacity-50 transition-colors"
+                                >
+                                    {dbStatsRefreshing
+                                        ? <Loader2 size={11} className="animate-spin" />
+                                        : <RefreshCw size={11} />}
+                                    {dbStatsRefreshing ? 'Обновляем…' : 'Обновить'}
+                                </button>
+                            </div>
+                        </div>
+                    )
+                })()}
+                <h4 className="text-[14px] font-semibold text-[#111] pt-1">По аккаунтам</h4>
                 {channelConnections.length === 0 ? (
                     <div className="text-[12px] text-gray-500 px-3 py-3 rounded-lg border border-[#E8E8E8] bg-[#FAFBFC]">
                         Ни одного подключения нет. Добавьте WhatsApp / Telegram / MAX в разделе «Интеграции».
@@ -1321,14 +1371,11 @@ export default function AiControlCenterClient({
                                     key={conn.id}
                                     type="button"
                                     onClick={async () => {
-                                        const [fresh, totals] = await Promise.all([
-                                            getMessageCountsByConnection(),
-                                            getChannelTotalsForUi(),
-                                        ])
-                                        setConnectionCounts(fresh as ConnectionMessageCount[])
-                                        setChannelTotals(totals as ChannelTotalsRow[])
+                                        await refreshDbStats()
+                                        showToast(`Обновлено: ${conn.label}`)
                                     }}
-                                    className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 group ${cardBg}`}
+                                    disabled={dbStatsRefreshing}
+                                    className={`text-left rounded-xl border-2 transition-colors px-4 py-3.5 group disabled:opacity-70 ${cardBg}`}
                                     title={`Кликнуть — обновить счётчики из БД. Подробнее об аккаунте — ${channelHref}`}
                                 >
                                     {/* Header: label + status pill */}
