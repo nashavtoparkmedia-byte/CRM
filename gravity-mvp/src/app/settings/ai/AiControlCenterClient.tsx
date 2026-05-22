@@ -435,14 +435,30 @@ export default function AiControlCenterClient({
                 const merged = (activeExtractionJob.progress as Record<string, number> | null)?.itemsMerged ?? 0
                 showToast(`Сбор завершён: ${created} ${plural(created,'новое','новых','новых')} ${plural(created,'знание','знания','знаний')}` + (merged > 0 ? ` · ${merged} обновлено` : ''))
             }
+            // PR9.1: после terminal status'а обновляем ВЕСЬ kernel state —
+            // не только sections+stats, но и readiness + sourceStats +
+            // channelTotals + connectionCounts. Без этого:
+            //   1) passport «Текущее ядро AI» остаётся coreEmpty
+            //      (readiness.counts.activeItems = SSR initial)
+            //   2) red alert «Последний сбор не удался» висит, потому что
+            //      readiness.lastExtraction указывает на старый failed job
+            //   3) «Собрано из» не показывает свежие sources
             Promise.all([
                 listKnowledgeSections(),
                 getKnowledgeStatsAction(),
                 listExtractionJobs(10),
-            ]).then(([s, st, jobs]) => {
+                getKnowledgeReadinessForUi(),
+                getSourceStatsByConnection(),
+                getChannelTotalsForUi(),
+                getMessageCountsByConnection(),
+            ]).then(([s, st, jobs, readinessFresh, sourceStatsFresh, totalsFresh, connCountsFresh]) => {
                 setSections(s as KnowledgeSection[])
                 setKnowledgeStats(st as KnowledgeStats)
                 setExtractionJobs(jobs)
+                setReadiness(readinessFresh as KnowledgeReadinessBundle)
+                setSourceStats(sourceStatsFresh as SourceStatsRow[])
+                setChannelTotals(totalsFresh as ChannelTotalsRow[])
+                setConnectionCounts(connCountsFresh as ConnectionMessageCount[])
                 if (selectedSectionId) {
                     listItemsBySection(selectedSectionId, {
                         includeArchived: knowledgeSubtab === 'archive',
