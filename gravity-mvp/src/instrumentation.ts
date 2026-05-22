@@ -6,6 +6,19 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+    // ── PR8.D: HTTPS_PROXY init ─────────────────────────────────────────
+    // Node.js fetch (undici) НЕ читает HTTPS_PROXY env по дефолту. Из РФ
+    // OpenAI возвращает 403 unsupported_country_region. Initializer ставит
+    // setGlobalDispatcher(ProxyAgent(HTTPS_PROXY)) для всех outbound fetch.
+    // Это ДОЛЖНО быть первым — до любого dynamic import'а, который может
+    // сделать сетевой запрос на старте.
+    try {
+        const { initProxy } = await import('@/lib/ai-call/init-proxy')
+        initProxy()
+    } catch (err: any) {
+        console.error('[instrumentation] initProxy failed:', err?.message)
+    }
+
     const { opsLog } = await import('@/lib/opsLog')
     opsLog('info', 'server_starting', { operation: 'instrumentation' })
 
