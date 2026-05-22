@@ -12,7 +12,7 @@ import {
     MessageCircle, AlertTriangle, CheckSquare, Ban, ChevronRight, Sparkles,
 } from 'lucide-react'
 import {
-    saveAiConfig, testAiConnection,
+    saveAiConfig, testAiConnection, testSavedConnection,
     getKnowledgeBase, createKnowledgeEntry, updateKnowledgeEntry, deleteKnowledgeEntry,
     getDecisionLogs, setOperatorVerdict,
     createImportJob, getAllImportJobs, cancelImportJob, deleteImportJob,
@@ -1640,6 +1640,39 @@ export default function AiControlCenterClient({
     const [testStatus, setTestStatus]     = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
     const [testError, setTestError]       = useState('')
     const [providerSaving, setProviderSaving] = useState(false)
+    // PR9.19: auto-verify saved key при первом mount страницы.
+    // Если БД хранит ключ + connectionStatus != 'ok' (мог устареть)
+    // — тихо проверяем без необходимости user'у вводить заново.
+    // useRef чтобы запуск был один раз за сессию, не на каждое
+    // переключение tab'а.
+    const autoTestedRef = useRef(false)
+    useEffect(() => {
+        if (autoTestedRef.current) return
+        if (!config.apiKeyEncrypted) return
+        if (config.connectionStatus === 'ok') return  // уже OK, ничего не делаем
+        autoTestedRef.current = true
+        setTestStatus('testing')
+        testSavedConnection().then(result => {
+            if (result.ok) {
+                setTestStatus('ok')
+                setConfig(c => ({
+                    ...c,
+                    connectionStatus: 'ok',
+                    lastConnectionCheckAt: new Date().toISOString(),
+                }))
+            } else {
+                setTestStatus('error')
+                setTestError(result.error ?? 'Ошибка')
+                setConfig(c => ({
+                    ...c,
+                    connectionStatus: 'error',
+                    lastConnectionCheckAt: new Date().toISOString(),
+                }))
+            }
+        }).catch(() => {
+            setTestStatus('idle')
+        })
+    }, [config.apiKeyEncrypted, config.connectionStatus])
 
     const handleTestConnection = async () => {
         if (!apiKey.trim()) { showToast('Введите API ключ'); return }
@@ -1931,16 +1964,24 @@ export default function AiControlCenterClient({
                             <XCircle size={11} /> {testError}
                         </div>
                     )}
-                    {/* PR9.18: явное пояснение про сохранённый ключ */}
-                    <div className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
-                        {config.apiKeyEncrypted && !apiKey.trim() ? (
-                            <>Сохранённый ключ есть в БД. Поле пустое — введи новый чтобы заменить, или просто нажми «Перепроверить» для теста существующего.</>
-                        ) : apiKey.trim() ? (
-                            <>Чтобы сохранить введённый ключ — нажми «Проверить» (при успехе сохранится автоматически) или «Сохранить» внизу.</>
-                        ) : (
-                            <>Введите API-ключ от {PROVIDER_META[config.provider]?.name ?? config.provider}.</>
-                        )}
-                    </div>
+                    {/* PR9.19: явное пояснение про сохранённый ключ +
+                        last-4 chars для уверенности «он реально есть». */}
+                    {config.apiKeyEncrypted && !apiKey.trim() ? (
+                        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-600">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded font-mono text-emerald-700">
+                                <CheckCircle2 size={11} /> сохранён ключ •••{(config.apiKeyEncrypted as string).slice(-4)}
+                            </span>
+                            <span className="text-gray-500">— работает автоматически. Введи новый чтобы заменить.</span>
+                        </div>
+                    ) : apiKey.trim() ? (
+                        <div className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+                            Чтобы сохранить введённый ключ — нажми «Проверить» (при успехе сохранится автоматически) или «Сохранить» внизу.
+                        </div>
+                    ) : (
+                        <div className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+                            Введите API-ключ от {PROVIDER_META[config.provider]?.name ?? config.provider}.
+                        </div>
+                    )}
                 </div>
 
                 {/* Расширенные настройки — в свёрнутом блоке, чтобы основной

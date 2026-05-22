@@ -104,6 +104,41 @@ export async function saveAiConfig(data: Record<string, any>) {
     }
 }
 
+/** PR9.19: проверить сохранённый ключ из БД без необходимости вводить
+ *  его в input. Используется на mount ProviderTab чтобы карточка
+ *  сразу подсветилась реальным статусом. Не возвращает сам key —
+ *  только ok/error. Persistуется connectionStatus в БД. */
+export async function testSavedConnection() {
+    await assertCanEditAi()
+    try {
+        const rows = await prisma.$queryRaw<any[]>`
+            SELECT provider, "apiKeyEncrypted", "classificationModel"
+            FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
+        `
+        const cfg = rows[0]
+        if (!cfg?.apiKeyEncrypted) {
+            return { ok: false, error: 'Ключ не сохранён в БД' }
+        }
+        const result = await testAiConnection(
+            cfg.provider as string,
+            cfg.apiKeyEncrypted as string,
+            cfg.classificationModel as string,
+        )
+        // Persist в БД для следующих reload'ов.
+        try {
+            await prisma.$executeRaw`
+                UPDATE "AiAgentConfig"
+                SET "connectionStatus" = ${result.ok ? 'ok' : 'error'},
+                    "lastConnectionCheckAt" = NOW()
+                WHERE id = 'singleton'
+            `
+        } catch { /* silent */ }
+        return result
+    } catch (e: any) {
+        return { ok: false, error: e?.message ?? 'unknown' }
+    }
+}
+
 export async function testAiConnection(provider: string, apiKey: string, model: string) {
     await assertCanEditAi()
     // Минимальный тест — попытка обратиться к API провайдера. Outbound
