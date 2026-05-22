@@ -1399,6 +1399,12 @@ model AiProposedReply {
   sentMessageId String?
   /// Когда менеджер нажал «Скрыть».
   dismissedAt   DateTime?
+  /// PR9.54: когда менеджер нажал «👍 Правильно». Триггерит
+  /// auto-verify всех used knowledge items + audit log entries
+  /// с metadata.source='chat_usage'. Items получают isVerified=true,
+  /// статус active (если был draft). Это превращает каждый чат в
+  /// естественный verification-механизм — Ядро подтверждается работой.
+  confirmedCorrectAt DateTime?
 
   @@index([chatId, generatedAt(sort: Desc)])
   @@index([expiresAt])

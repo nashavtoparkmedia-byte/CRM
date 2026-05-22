@@ -18,7 +18,9 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { cookies } from 'next/headers'
 import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
+import { writeAuditEntry } from '@/lib/ai/knowledge/auditLog'
 
 const CACHE_TTL_MIN = 15
 
@@ -195,4 +197,131 @@ export async function dismissProposedReply(id: string): Promise<void> {
         where: { id },
         data:  { dismissedAt: new Date() },
     })
+}
+
+/**
+ * PR9.54 «AI Trainer Loop»: менеджер нажал 👍 «Правильно» — все
+ * knowledge items, которые AI использовал для генерации этого черновика,
+ * автоматически:
+ *   - isVerified = true
+ *   - status = 'active' (если был 'draft')
+ *   - audit log entry с metadata.source='chat_usage', proposalId, chatId
+ *
+ * Идея пользователя: вместо отдельной рутины «зайти в Ядро и тыкать
+ * Подтвердить на каждом факте» — verification происходит попутно,
+ * через 👍 на реальных ответах AI. Только items, которые AI РЕАЛЬНО
+ * использует и менеджер ОДОБРИЛ, становятся verified — это правильный
+ * quality signal.
+ *
+ * Threshold = 1 (одного 👍 достаточно) — выбран user'ом для скорости.
+ * Если в будущем будут ложные verify — переключим на 2-3.
+ *
+ * Возвращает: количество items которые были verified этим действием
+ * (если уже verified — не считаются).
+ */
+export interface ConfirmCorrectResult {
+    verifiedCount: number
+    items: Array<{ id: string; title: string }>
+}
+export async function confirmProposedReplyCorrect(proposalId: string): Promise<ConfirmCorrectResult> {
+    // 1. Загружаем proposal с sources
+    const proposal = await prisma.aiProposedReply.findUnique({
+        where: { id: proposalId },
+    })
+    if (!proposal) {
+        throw new Error('Proposal не найден')
+    }
+    if (proposal.confirmedCorrectAt) {
+        // Уже был 👍 — идемпотентно, возвращаем 0
+        return { verifiedCount: 0, items: [] }
+    }
+
+    const sources = proposal.sources as Array<{ id: string; title: string }> | null
+    if (!sources || sources.length === 0) {
+        // Нет используемых items — нечего verified. Mark anyway чтобы не пере-fetch.
+        await prisma.aiProposedReply.update({
+            where: { id: proposalId },
+            data: { confirmedCorrectAt: new Date() },
+        })
+        return { verifiedCount: 0, items: [] }
+    }
+
+    // 2. Определяем actor — current user из cookie
+    const cookieStore = await cookies()
+    const actor = cookieStore.get('crm_user_id')?.value ?? null
+
+    // 3. Для каждого item — verify + audit
+    const verified: Array<{ id: string; title: string }> = []
+    for (const src of sources) {
+        try {
+            // Загружаем before snapshot
+            const beforeRows = await prisma.$queryRaw<Array<{
+                id: string
+                title: string
+                isVerified: boolean
+                status: string
+            }>>`
+                SELECT id, title, "isVerified", status::text AS status
+                FROM "AiKnowledgeItem"
+                WHERE id = ${src.id}
+                LIMIT 1
+            `
+            const before = beforeRows[0]
+            if (!before) continue
+            if (before.isVerified && before.status === 'active') {
+                // Уже verified+active — нет смысла дёргать
+                continue
+            }
+
+            // Update: isVerified=true, status='active' (промоция draft→active)
+            await prisma.$executeRaw`
+                UPDATE "AiKnowledgeItem"
+                SET "isVerified" = true,
+                    "verifiedBy" = ${actor},
+                    "verifiedAt" = NOW(),
+                    status = 'active'::"AiKnowledgeStatus",
+                    "isActive" = true,
+                    "updatedAt" = NOW()
+                WHERE id = ${src.id}
+            `
+
+            // Audit log с metadata о источнике этого verify
+            await writeAuditEntry({
+                itemId: src.id,
+                actor,
+                action: 'verified',
+                before: {
+                    isVerified: before.isVerified,
+                    status:     before.status,
+                },
+                after: {
+                    isVerified: true,
+                    status:     'active',
+                },
+                metadata: {
+                    source:     'chat_usage',
+                    proposalId,
+                    chatId:     proposal.chatId,
+                    messageId:  proposal.messageId,
+                },
+            })
+
+            verified.push({ id: src.id, title: src.title })
+        } catch (e: any) {
+            console.error(`[ai-intern] confirm: failed to verify item ${src.id}:`, e?.message)
+        }
+    }
+
+    // 4. Mark proposal as confirmed
+    await prisma.aiProposedReply.update({
+        where: { id: proposalId },
+        data: { confirmedCorrectAt: new Date() },
+    })
+
+    console.log(`[ai-intern] confirmed proposal ${proposalId}: verified ${verified.length} items`)
+
+    return {
+        verifiedCount: verified.length,
+        items: verified,
+    }
 }

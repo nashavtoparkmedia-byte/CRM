@@ -26,7 +26,7 @@
  *                        не пришёт новое inbound
  */
 
-import { Bot, Pencil, X, Loader2 } from 'lucide-react'
+import { Bot, ThumbsUp, Pencil, X, Loader2 } from 'lucide-react'
 import type { ProposedReplyDTO } from '../proposed-reply-actions'
 
 interface AiProposedReplyBubbleProps {
@@ -40,6 +40,8 @@ interface AiProposedReplyBubbleProps {
     silentMessage: string | null
     /** «Взять в работу» — копирует текст в input bar родителя. */
     onTake:    () => void
+    /** PR9.54: «Правильно» — auto-verify used items + копирует текст. */
+    onConfirmCorrect: () => void
     /** «Скрыть» — больше не показывается пока не пришёт новое inbound. */
     onDismiss: () => void
 }
@@ -50,6 +52,7 @@ export default function AiProposedReplyBubble({
     silent,
     silentMessage,
     onTake,
+    onConfirmCorrect,
     onDismiss,
 }: AiProposedReplyBubbleProps) {
     // Loading state — пока AI думает
@@ -153,14 +156,28 @@ export default function AiProposedReplyBubble({
                         </>
                     )}
                 </div>
+                {/* PR9.54: 3 кнопки.
+                    👍 «Правильно» — auto-verify используемых items + копирует в input
+                    ✏ «Поправить» — copy в input (Coach flow в PR9.55)
+                    ✗ «Пропустить» — dismiss */}
                 <div className="mt-3 flex items-center gap-2">
                     <button
                         type="button"
+                        onClick={onConfirmCorrect}
+                        title="Ответ AI правильный — подтверждаю. Подсветится в Ядре как verified-via-chat. Текст копируется в поле ввода — можно сразу отправить."
+                        className="inline-flex items-center gap-1.5 h-[28px] px-3 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700 transition-colors"
+                    >
+                        <ThumbsUp size={11} />
+                        Правильно
+                    </button>
+                    <button
+                        type="button"
                         onClick={onTake}
+                        title="Скопировать в поле ввода — можно отредактировать перед отправкой."
                         className="inline-flex items-center gap-1.5 h-[28px] px-3 rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] transition-colors"
                     >
                         <Pencil size={11} />
-                        Взять в работу
+                        Поправить
                     </button>
                     <button
                         type="button"
@@ -168,7 +185,7 @@ export default function AiProposedReplyBubble({
                         className="inline-flex items-center gap-1.5 h-[28px] px-3 rounded-lg text-[12px] text-gray-600 hover:bg-[#E4ECFC] transition-colors"
                     >
                         <X size={11} />
-                        Скрыть
+                        Пропустить
                     </button>
                 </div>
             </div>

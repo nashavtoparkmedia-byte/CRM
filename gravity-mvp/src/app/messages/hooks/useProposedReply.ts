@@ -22,8 +22,10 @@ import {
     getOrGenerateProposedReply,
     markProposedReplyTaken,
     dismissProposedReply,
+    confirmProposedReplyCorrect,
     type ProposedReplyDTO,
     type ProposedReplySkip,
+    type ConfirmCorrectResult,
 } from '../proposed-reply-actions'
 
 export interface UseProposedReplyResult {
@@ -47,6 +49,13 @@ export interface UseProposedReplyResult {
     take:     () => Promise<string | null>
     /** «Скрыть» — лог в БД, очищает proposal. */
     dismiss:  () => Promise<void>
+    /**
+     * PR9.54: 👍 «Правильно» — auto-verify всех used knowledge items.
+     * Возвращает результат (сколько items было verified) для toast.
+     * Также копирует текст в input bar (как take), чтобы менеджер
+     * мог сразу отправить — verify+send одной операцией.
+     */
+    confirmCorrect: () => Promise<{ text: string; result: ConfirmCorrectResult } | null>
 }
 
 export function useProposedReply(chatId: string | null): UseProposedReplyResult {
@@ -130,5 +139,22 @@ export function useProposedReply(chatId: string | null): UseProposedReplyResult 
         setSilentMessage(null)
     }, [proposal])
 
-    return { proposal, loading, silent, silentMessage, trigger, reset, take, dismiss }
+    // PR9.54: 👍 «Правильно» — auto-verify used items + copy text в input.
+    // Семантика: «AI ответил правильно, могу пользоваться» одновременно
+    // подтверждает knowledge items в Ядре (verified-via-chat-usage).
+    const confirmCorrect = useCallback(async (): Promise<{ text: string; result: ConfirmCorrectResult } | null> => {
+        if (!proposal) return null
+        let result: ConfirmCorrectResult
+        try {
+            result = await confirmProposedReplyCorrect(proposal.id)
+        } catch (e) {
+            console.error('[useProposedReply] confirm error', e)
+            return null
+        }
+        const text = proposal.text
+        setProposal(null)
+        return { text, result }
+    }, [proposal])
+
+    return { proposal, loading, silent, silentMessage, trigger, reset, take, dismiss, confirmCorrect }
 }

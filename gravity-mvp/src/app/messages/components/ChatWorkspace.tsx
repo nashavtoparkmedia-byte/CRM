@@ -133,6 +133,22 @@ function ChatWorkspaceInner({
             setAiPrefillToken(t => t + 1)
         }
     }, [ai])
+    // PR9.54: 👍 «Правильно» — confirmCorrect + copy в input + toast.
+    const handleAiConfirmCorrect = useCallback(async () => {
+        const res = await ai.confirmCorrect()
+        if (!res) return
+        // Копируем в input (как take)
+        setAiPrefillText(res.text)
+        setAiPrefillToken(t => t + 1)
+        // Toast — менеджер видит сколько фактов подтверждено в Ядре
+        const n = res.result.verifiedCount
+        if (n > 0) {
+            const word = n === 1 ? 'факт' : n < 5 ? 'факта' : 'фактов'
+            console.log(`[ai-intern] ✓ Подтверждено в Ядре: ${n} ${word}`)
+        } else {
+            console.log(`[ai-intern] ✓ Ответ одобрен (новых фактов для verify не было)`)
+        }
+    }, [ai])
 
     // No need for chatId-based reset useEffect — remount handles it
 
@@ -272,6 +288,7 @@ function ChatWorkspaceInner({
                 silent={ai.silent}
                 silentMessage={ai.silentMessage}
                 onTake={handleAiTake}
+                onConfirmCorrect={handleAiConfirmCorrect}
                 onDismiss={ai.dismiss}
             />
 
