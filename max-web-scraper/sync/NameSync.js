@@ -37,8 +37,13 @@ class NameSync {
     constructor({ page, crmBaseUrl, intervalMs, firstDelayMs, onPause, onResume }) {
         this.page         = page
         this.crmBaseUrl   = (crmBaseUrl || 'http://127.0.0.1:3002').replace(/\/$/, '')
-        this.intervalMs   = intervalMs ?? Number(process.env.MAX_NAME_SYNC_INTERVAL_MS) ?? (60 * 60 * 1000)
-        this.firstDelayMs = firstDelayMs ?? 60 * 1000
+        // ВАЖНО: Number(undefined) = NaN, и `??` его не отлавливает.
+        // Используем `||` чтобы NaN/0 fallthrough'нуло на default.
+        const envInterval = Number(process.env.MAX_NAME_SYNC_INTERVAL_MS)
+        this.intervalMs   = (Number.isFinite(intervalMs) && intervalMs > 0) ? intervalMs
+                          : (Number.isFinite(envInterval) && envInterval > 0) ? envInterval
+                          : (60 * 60 * 1000)
+        this.firstDelayMs = (Number.isFinite(firstDelayMs) && firstDelayMs > 0) ? firstDelayMs : 60 * 1000
         this.onPause      = typeof onPause === 'function' ? onPause : () => {}
         this.onResume     = typeof onResume === 'function' ? onResume : () => {}
         this._timer       = null
@@ -61,12 +66,10 @@ class NameSync {
     }
 
     async runOnce() {
-        if (this._running) {
-            console.log('[NameSync] previous run still in progress, skip')
-            return
-        }
+        if (this._running) return  // silent skip — interval может тикнуть пока предыдущий ещё идёт
         if (!this.page) return
         this._running = true
+        const startedAt = Date.now()
         try {
             const placeholderIds = await this._fetchPlaceholderChatIds()
             if (!placeholderIds.length) {
@@ -81,30 +84,39 @@ class NameSync {
             try {
                 for (const chatId of placeholderIds) {
                     try {
-                        await this.page.goto(`https://web.max.ru/${chatId}`, { waitUntil: 'domcontentloaded', timeout: 15000 })
-                        await this.page.waitForTimeout(1500)
+                        // SPA-friendly навигация: меняем location.href через evaluate
+                        // (page.goto в MAX-веб SPA может зависнуть, ждать reload который не происходит).
+                        // Затем ждём фиксированное время чтобы SPA-роутер прорисовал header.
+                        await this.page.evaluate((id) => { window.location.href = '/' + id }, String(chatId))
+                        await this.page.waitForTimeout(2000)
                         const name = await this.page.evaluate(() => {
                             const mainArea = document.querySelector('main')
                             if (!mainArea) return null
                             const header   = mainArea.querySelector('.chat-header, .top-bar, .user-name, header')
                             const headerEl = header?.querySelector('.title, .header-title, h2, .name')
                                           || mainArea.querySelector('.title, .header-title, h2, .name')
-                            return headerEl ? headerEl.innerText.trim() : null
+                            const text = headerEl ? headerEl.innerText.trim() : null
+                            // фильтруем заведомый мусор
+                            if (!text || text.length > 100) return null
+                            if (/^[.\s\-]+$/.test(text)) return null
+                            return text
                         })
                         if (name) {
                             pairs.push({ chatId: String(chatId), name })
                             console.log(`[NameSync] ${chatId} → "${name}"`)
                         } else {
-                            console.log(`[NameSync] ${chatId}: header not found`)
+                            console.log(`[NameSync] ${chatId}: header not found or placeholder`)
                         }
                     } catch (e) {
                         console.log(`[NameSync] ${chatId}: nav error ${e.message}`)
                     }
-                    await this.page.waitForTimeout(300)
+                    await this.page.waitForTimeout(500)
                 }
             } finally {
                 try {
-                    await this.page.goto(startUrl || 'https://web.max.ru/', { waitUntil: 'domcontentloaded', timeout: 10000 })
+                    // Восстанавливаем начальный URL — обычно главная страница MAX.
+                    await this.page.evaluate((u) => { window.location.href = u }, startUrl || 'https://web.max.ru/')
+                    await this.page.waitForTimeout(1500)
                 } catch {}
                 this.onResume()
             }
@@ -113,6 +125,9 @@ class NameSync {
                 const result = await this._postPairs(pairs)
                 console.log(`[NameSync] POST result: ${JSON.stringify(result)}`)
             }
+            console.log(`[NameSync] run done in ${Math.round((Date.now() - startedAt) / 1000)}s, ${pairs.length} pairs`)
+        } catch (e) {
+            console.error('[NameSync] runOnce error:', e.message)
         } finally {
             this._running = false
         }
