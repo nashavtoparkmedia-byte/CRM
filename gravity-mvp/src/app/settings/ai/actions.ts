@@ -1816,24 +1816,32 @@ export async function getExtractionDataRange(
     }
 }
 
-/** PR8.D: per-connection message counts из реальной БД. Используется
- *  в passport empty-state и в Sync «доступно для анализа», чтобы
- *  показывать реальные числа (включая live-streamed MAX/TG), а не
- *  только HistoryImportJob.messagesImported. */
+/** PR8.D + PR9.9: per-connection message counts + период из реальной БД.
+ *  Используется в passport empty-state и в Sync per-account dashboard. */
 export interface ConnectionMessageCount {
-    connectionId: string
-    messages:     number
-    chats:        number
+    connectionId:   string
+    messages:       number
+    chats:          number
+    /** Самое раннее сообщение в БД для этой connection (по sentAt). */
+    earliestSentAt: string | null
+    /** Самое свежее сообщение в БД для этой connection. */
+    latestSentAt:   string | null
 }
 export async function getMessageCountsByConnection(): Promise<ConnectionMessageCount[]> {
     try {
         const rows = await prisma.$queryRaw<Array<{
-            connectionId: string | null; messages: number; chats: number
+            connectionId: string | null
+            messages: number
+            chats: number
+            earliestSentAt: Date | null
+            latestSentAt: Date | null
         }>>`
             SELECT
                 COALESCE(wc."connectionId", c.metadata->>'connectionId') AS "connectionId",
                 COUNT(*)::int                       AS messages,
-                COUNT(DISTINCT m."chatId")::int     AS chats
+                COUNT(DISTINCT m."chatId")::int     AS chats,
+                MIN(m."sentAt")                     AS "earliestSentAt",
+                MAX(m."sentAt")                     AS "latestSentAt"
             FROM "Message" m
             LEFT JOIN "Chat" c           ON c.id = m."chatId"
             LEFT JOIN "WhatsAppChat" wc  ON wc.id = c."externalChatId"
@@ -1843,9 +1851,11 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
         return rows
             .filter(r => r.connectionId !== null)
             .map(r => ({
-                connectionId: r.connectionId!,
-                messages: Number(r.messages ?? 0),
-                chats:    Number(r.chats ?? 0),
+                connectionId:   r.connectionId!,
+                messages:       Number(r.messages ?? 0),
+                chats:          Number(r.chats ?? 0),
+                earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
+                latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
             }))
     } catch (e: any) {
         if (process.env.NODE_ENV !== 'production') {

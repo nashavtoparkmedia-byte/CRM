@@ -1273,7 +1273,7 @@ export default function AiControlCenterClient({
                         (importStatus === 'queued' || importStatus === 'running') && transportStatus === 'initializing' ? 'queued' :
                         importStatus
                     } />
-                    <span className="text-[13px] font-semibold text-[#111]">Синхронизация истории</span>
+                    <span className="text-[13px] font-semibold text-[#111]">База сообщений</span>
                     {(preflightState === 'checking' || ((importStatus === 'queued' || importStatus === 'running') && transportStatus !== 'offline')) && (
                         <RefreshCw size={13} className={`animate-spin ${transportStatus === 'offline' ? 'text-red-500' : 'text-yellow-600'}`} />
                     )}
@@ -1631,61 +1631,131 @@ export default function AiControlCenterClient({
                 })()}
             </div>
 
-            {/* PR9.8: убрали дубль «Подгрузить старую историю» с этой
-                страницы. Импорт истории делается на странице подключения
-                конкретного мессенджера — там per-account контекст. Здесь
-                просто навигация туда + cross-ref на следующий шаг. */}
+            {/* PR9.9: per-account dashboard cards.
+                Для каждого подключения показываем:
+                  — channel + label (имя или телефон)
+                  — статус-точка (зелёная live / красная отключён)
+                  — сообщений в БД (real count)
+                  — период (earliest sentAt — latest sentAt)
+                  — клик на карточку = refresh per-connection stats. */}
             <div className="space-y-3 pt-1">
-                <h4 className="text-[14px] font-semibold text-[#111]">Что делать дальше</h4>
-                <p className="text-[12px] text-gray-500 leading-relaxed -mt-1">
-                    Эта страница — статус БД. Действия — в других местах:
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                    <a
-                        href="/settings/integrations/whatsapp"
-                        className="block rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#F0F4FA] transition-colors px-3 py-2.5"
-                    >
-                        <div className="text-[12px] font-semibold text-[#111]">Подключить / импорт WhatsApp →</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">QR-сканирование, синхронизация истории, отключение</div>
-                    </a>
-                    <a
-                        href="/settings/integrations/telegram"
-                        className="block rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#F0F4FA] transition-colors px-3 py-2.5"
-                    >
-                        <div className="text-[12px] font-semibold text-[#111]">Подключить / импорт Telegram →</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">MTProto-аккаунты, синхронизация истории</div>
-                    </a>
-                    <a
-                        href="/settings/integrations/max"
-                        className="block rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#F0F4FA] transition-colors px-3 py-2.5"
-                    >
-                        <div className="text-[12px] font-semibold text-[#111]">Подключить / импорт MAX →</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">Боты и личный аккаунт через скрейпер</div>
-                    </a>
+                <div className="flex items-center justify-between">
+                    <h4 className="text-[14px] font-semibold text-[#111]">По аккаунтам</h4>
                     <button
                         type="button"
-                        onClick={() => setTab('knowledge')}
-                        className="block text-left rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA] hover:bg-[#E1ECFA] transition-colors px-3 py-2.5"
+                        onClick={async () => {
+                            const [fresh, totals] = await Promise.all([
+                                getMessageCountsByConnection(),
+                                getChannelTotalsForUi(),
+                            ])
+                            setConnectionCounts(fresh as ConnectionMessageCount[])
+                            setChannelTotals(totals as ChannelTotalsRow[])
+                            showToast('Обновлено')
+                        }}
+                        title="Перезагрузить счётчики из БД"
+                        className="h-[26px] px-2.5 inline-flex items-center gap-1 text-[11px] text-gray-500 hover:text-[#3390EC] hover:bg-[#F0F4FA] rounded-md"
                     >
-                        <div className="text-[12px] font-semibold text-[#3390EC]">Собрать ядро знаний →</div>
-                        <div className="text-[11px] text-gray-500 mt-0.5">AI прочитает сообщения из БД и соберёт структурированную память</div>
+                        <RefreshCw size={11} /> Обновить всё
                     </button>
                 </div>
+                {channelConnections.length === 0 ? (
+                    <div className="text-[12px] text-gray-500 px-3 py-3 rounded-lg border border-[#E8E8E8] bg-[#FAFBFC]">
+                        Ни одного подключения нет. Добавьте WhatsApp / Telegram / MAX в разделе «Интеграции».
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {channelConnections.map(conn => {
+                            const stat = connectionCounts.find(c => c.connectionId === conn.id)
+                            const messages = stat?.messages ?? 0
+                            const earliest = stat?.earliestSentAt
+                            const latest   = stat?.latestSentAt
+                            const dotColor =
+                                conn.isReady ? 'bg-green-500' :
+                                conn.status === 'qr' || conn.status === 'authenticating' ? 'bg-amber-500' :
+                                'bg-red-400'
+                            const statusText =
+                                conn.isReady ? 'подключён' :
+                                conn.status === 'qr' ? 'ждёт QR' :
+                                conn.status === 'authenticating' ? 'входит' :
+                                conn.status === 'idle' ? 'не активен' :
+                                conn.status === 'inactive' ? 'отключён' :
+                                conn.status === 'disconnected' ? 'отключён' : '—'
+                            const channelHref =
+                                conn.channel === 'whatsapp' ? '/settings/integrations/whatsapp' :
+                                conn.channel === 'telegram' ? '/settings/integrations/telegram' :
+                                '/settings/integrations/max'
+                            return (
+                                <button
+                                    key={conn.id}
+                                    type="button"
+                                    onClick={async () => {
+                                        const [fresh, totals] = await Promise.all([
+                                            getMessageCountsByConnection(),
+                                            getChannelTotalsForUi(),
+                                        ])
+                                        setConnectionCounts(fresh as ConnectionMessageCount[])
+                                        setChannelTotals(totals as ChannelTotalsRow[])
+                                    }}
+                                    className="text-left rounded-lg border border-[#E8E8E8] hover:border-[#3390EC] hover:bg-[#FAFBFC] transition-colors px-3 py-2.5 group"
+                                    title={`Кликнуть — обновить счётчики из БД. Подробнее об аккаунте — ${channelHref}`}
+                                >
+                                    {/* Header: status dot + label */}
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                                        <span className="text-[13px] font-semibold text-[#111] truncate">
+                                            {conn.label}
+                                        </span>
+                                        <span className="text-[10px] text-gray-400 ml-auto">{statusText}</span>
+                                    </div>
+                                    {/* Stats */}
+                                    <div className="text-[11px] text-gray-600 leading-relaxed">
+                                        <div>
+                                            <b className="text-gray-700">{messages.toLocaleString('ru')}</b> сообщ. в БД
+                                        </div>
+                                        {earliest && latest && (
+                                            <div className="text-gray-400">
+                                                период: {new Date(earliest).toLocaleDateString('ru')} — {new Date(latest).toLocaleDateString('ru')}
+                                            </div>
+                                        )}
+                                        {!earliest && (
+                                            <div className="text-gray-400">истории нет в БД</div>
+                                        )}
+                                    </div>
+                                    {/* Cross-ref: открыть страницу подключения */}
+                                    <div className="text-[10px] text-[#3390EC] mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <a
+                                            href={channelHref}
+                                            onClick={e => e.stopPropagation()}
+                                            className="hover:underline"
+                                        >
+                                            Открыть настройки →
+                                        </a>
+                                    </div>
+                                </button>
+                            )
+                        })}
+                    </div>
+                )}
+                {/* Primary CTA: collect knowledge core */}
+                <button
+                    type="button"
+                    onClick={() => setTab('knowledge')}
+                    className="w-full text-left rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA] hover:bg-[#E1ECFA] transition-colors px-3 py-2.5 mt-2"
+                >
+                    <div className="text-[12px] font-semibold text-[#3390EC]">Собрать ядро знаний →</div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">AI прочитает сообщения из БД и соберёт структурированную память</div>
+                </button>
             </div>
 
-            {/* История заданий — flat-список с divide-y, без внешней
-                рамки. Раньше была вложенная card с заголовком + border;
-                теперь это просто секция страницы. */}
-            {importJobs.length > 0 && (
+            {/* PR9.9: блок «Прошлые загрузки» удалён — user feedback:
+                «мусорный». Информация про импорты теперь видна
+                per-account на странице конкретного мессенджера
+                (/settings/integrations/{whatsapp|telegram|max}). */}
+            {false && importJobs.length > 0 && (
                 <div className="pt-1">
                     <h4 className="text-[13px] font-semibold text-[#111] mb-1">Прошлые загрузки</h4>
-                    {/* PR7.16.1: пояснение почему здесь могут не появляться
-                        MAX/TG записи. MAX-скрейпер пишет сообщения live в
-                        реальном времени без явного импорта истории. */}
                     <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
-                        Здесь только ручные импорты истории (по кнопке «Запустить импорт»).
-                        Сообщения из MAX и Telegram, которые приходят онлайн (через бота или скрейпер),
-                        не появляются в этом списке — но видны в общей статистике сверху.
+                        ARCHIVED — see git history.
                     </p>
                     <div className="divide-y divide-[#F0F0F0] border-t border-b border-[#F0F0F0]">
                         {importJobs.slice(0, 5).map(job => {
@@ -5307,7 +5377,7 @@ export default function AiControlCenterClient({
     // ─── Tabs навигация ───────────────────────────────────────────
 
     const ALL_TABS = [
-        { key: 'sync',      label: 'Синхронизация', icon: RefreshCw },
+        { key: 'sync',      label: 'База сообщений', icon: Database },
         { key: 'provider',  label: 'AI Провайдер',  icon: Zap },
         { key: 'rules',     label: 'Правила',        icon: Settings },
         { key: 'kb',        label: 'База знаний',    icon: BookOpen },
