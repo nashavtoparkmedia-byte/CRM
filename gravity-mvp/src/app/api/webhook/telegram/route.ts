@@ -91,15 +91,22 @@ export async function POST(req: NextRequest) {
             // USE BOT TIMESTAMP FOR STABLE SORTING
             const sentAt = timestamp ? new Date(timestamp) : new Date()
 
-            // PR-А: Chat.name приоритет — real name > @username > TG id.
-            // firstName/lastName приходят от tg-bot в payload (он их уже шлёт),
-            // но раньше webhook их игнорировал, fallback'ом был `TG <id>`.
+            // PR-А + PR-М: Chat.name приоритет — REAL name > @username > TG id.
+            // first_name в TG может быть мусором: ".", "...", "$$", emoji-only.
+            // Раньше мы сохраняли такой first_name как chat.name, и UI показывал
+            // ". " вместо нормального username. Теперь:
+            //   1. Если first_name+last_name содержит буквы и не сплошные
+            //      точки/символы — это РЕАЛЬНОЕ имя, используем
+            //   2. Иначе — @username (часто это лучше "Денис" vs "@Ognevskjj")
+            //   3. Иначе — `TG <id>` (placeholder, будет показано как «Без имени»)
             const tgDisplayName = (() => {
                 const fn = (firstName ?? '').trim()
                 const ln = (lastName  ?? '').trim()
                 const fullName = [fn, ln].filter(Boolean).join(' ').trim()
-                if (fullName) return fullName
-                if (username)  return `@${username}`
+                const hasRealName = /[А-Яа-яA-Za-z]/.test(fullName) && !/^[.\s\-_$]+$/.test(fullName)
+                if (hasRealName) return fullName
+                if (username)    return `@${username}`
+                if (fullName)    return fullName  // last resort — хоть какой-то
                 return `TG ${telegramId}`
             })()
 
