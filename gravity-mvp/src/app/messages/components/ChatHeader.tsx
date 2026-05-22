@@ -8,6 +8,7 @@ import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
+import LinkContactModal from "./LinkContactModal"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
@@ -46,6 +47,8 @@ export default function ChatHeader({
     const searchInputRef = useRef<HTMLInputElement>(null)
     const [showTasksPopover, setShowTasksPopover] = useState(false)
     const tasksPopoverRef = useRef<HTMLDivElement>(null)
+    // PR-О: modal для привязки чата к водителю
+    const [showLinkModal, setShowLinkModal] = useState(false)
 
     // Contact metadata for 2nd line
     const { contact } = useContact(chat.contactId)
@@ -192,12 +195,13 @@ export default function ChatHeader({
                                                 {detailed.title}
                                             </h3>
                                             {detailed.isUnlinked && (
-                                                <span
-                                                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0"
-                                                    title="У этого чата нет привязки к Контакту/Водителю. Привяжите вручную, чтобы видеть имя и номер."
+                                                <button
+                                                    onClick={() => setShowLinkModal(true)}
+                                                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0 hover:bg-amber-100 transition-colors cursor-pointer"
+                                                    title="Кликните чтобы привязать чат к водителю"
                                                 >
-                                                    Не привязан
-                                                </span>
+                                                    Привязать
+                                                </button>
                                             )}
                                             {subtitle && (
                                                 <>
@@ -468,6 +472,15 @@ export default function ChatHeader({
                 </div>
             )}
             </div>
+            {/* PR-О: modal привязки чата к водителю */}
+            <LinkContactModal
+                chatId={chat.id}
+                isOpen={showLinkModal}
+                onClose={() => setShowLinkModal(false)}
+                onLinked={() => {
+                    onConversationUpdate?.()
+                }}
+            />
         </div>
     )
 }
