@@ -76,10 +76,7 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     if (!lastInbound) return null
 
     // 2. Cache lookup — UNIQUE на messageId, поэтому findUnique.
-    // (prisma as any) — Prisma client регенерируется при следующем
-    // рестарте dev-сервера (Windows EPERM на запущенном dev). После
-    // регена cast не нужен.
-    const cached = await (prisma as any).aiProposedReply.findUnique({
+    const cached = await prisma.aiProposedReply.findUnique({
         where: { messageId: lastInbound.id },
     })
     if (cached && cached.expiresAt > new Date() && !cached.dismissedAt) {
@@ -88,12 +85,10 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     }
 
     // 3. Check feature flag (default true, но админ может выключить)
-    const configRows = await prisma.$queryRaw<Array<{ internEnabled: boolean; enabled: boolean }>>`
-        SELECT "internEnabled", enabled
-        FROM "AiAgentConfig"
-        WHERE id = 'singleton' LIMIT 1
-    `
-    const config = configRows[0]
+    const config = await prisma.aiAgentConfig.findUnique({
+        where: { id: 'singleton' },
+        select: { enabled: true, internEnabled: true },
+    })
     if (!config?.enabled || !config.internEnabled) {
         return null
     }
@@ -110,7 +105,7 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
 
     // 5. Upsert (race-safe — UNIQUE constraint на messageId)
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000)
-    const saved = await (prisma as any).aiProposedReply.upsert({
+    const saved = await prisma.aiProposedReply.upsert({
         where: { messageId: lastInbound.id },
         create: {
             messageId:    lastInbound.id,
@@ -140,7 +135,7 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
 
 /** Менеджер нажал «Взять в работу» — записываем timestamp. */
 export async function markProposedReplyTaken(id: string): Promise<void> {
-    await (prisma as any).aiProposedReply.update({
+    await prisma.aiProposedReply.update({
         where: { id },
         data:  { takenAt: new Date() },
     })
@@ -148,7 +143,7 @@ export async function markProposedReplyTaken(id: string): Promise<void> {
 
 /** После реальной отправки сообщения менеджером — link на Message.id. */
 export async function markProposedReplySent(id: string, sentMessageId: string): Promise<void> {
-    await (prisma as any).aiProposedReply.update({
+    await prisma.aiProposedReply.update({
         where: { id },
         data:  { sentMessageId },
     })
@@ -156,7 +151,7 @@ export async function markProposedReplySent(id: string, sentMessageId: string): 
 
 /** Менеджер нажал «Скрыть» — не показываем proposal пока не пришёт новое inbound. */
 export async function dismissProposedReply(id: string): Promise<void> {
-    await (prisma as any).aiProposedReply.update({
+    await prisma.aiProposedReply.update({
         where: { id },
         data:  { dismissedAt: new Date() },
     })
