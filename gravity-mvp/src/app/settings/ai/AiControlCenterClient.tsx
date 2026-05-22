@@ -4553,6 +4553,11 @@ export default function AiControlCenterClient({
                                                             && (!onlyConnectedNow || c.isReady)
                                                         return isEffectivelySelected
                                                     })
+                                                    // PR7.15.1: дополнительно различаем кейсы:
+                                                    // (а) все галочки сняты руками — пользователь сам исключил канал
+                                                    // (б) галочки disabled фильтром «Только подключённые сейчас»
+                                                    // (в) хоть одна effective ☑ — канал в сборе
+                                                    const allRowsBlockedByFilter = conns.every(c => onlyConnectedNow && !c.isReady)
                                                     return (
                                                     <div key={channel} className="rounded-lg border border-[#E8E8E8]">
                                                         <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-500 uppercase tracking-wide bg-[#FAFBFC] rounded-t-lg flex items-center justify-between">
@@ -4563,6 +4568,15 @@ export default function AiControlCenterClient({
                                                                           className="text-[10px] font-medium text-amber-700 cursor-help normal-case tracking-normal">
                                                                         ⚠ берётся вся история канала
                                                                     </span>
+                                                                ) : allRowsBlockedByFilter ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={(e) => { e.preventDefault(); setOnlyConnectedNow(false) }}
+                                                                        title="Все аккаунты этого канала помечены как неактивные, поэтому фильтр «Только подключённые сейчас» их блокирует. Нажмите, чтобы снять фильтр и иметь возможность их выбрать."
+                                                                        className="text-[10px] font-medium text-amber-700 hover:underline normal-case tracking-normal cursor-pointer"
+                                                                    >
+                                                                        заблокирован фильтром — снять?
+                                                                    </button>
                                                                 ) : (
                                                                     <span title="Ни одного аккаунта этого канала не выбрано — канал НЕ попадёт в сбор."
                                                                           className="text-[10px] font-medium text-gray-400 cursor-help normal-case tracking-normal">
@@ -4584,10 +4598,18 @@ export default function AiControlCenterClient({
                                                             // именно из этого аккаунта.
                                                             const stat = sourceStats.find(s => s.connectionId === conn.id)
                                                             const hasHistory = !!stat && stat.itemsTouched > 0
+                                                            // PR7.15.1: явная причина disabled — без неё
+                                                            // пользователь не понимает почему чекбокс
+                                                            // не реагирует. Главная причина — фильтр
+                                                            // «Только подключённые сейчас» внизу.
+                                                            const disabledTitle = disabled
+                                                                ? `Снимите галку «Только подключённые сейчас» ниже, чтобы включить этот аккаунт в сбор. Сейчас он помечен как «${statusLabel}» и фильтр его блокирует.`
+                                                                : ''
                                                             return (
                                                                 <label key={conn.id}
+                                                                    title={disabledTitle || undefined}
                                                                     className={`flex items-center gap-2 px-3 py-2 border-t border-[#F0F0F0] first:border-t-0 ${
-                                                                        disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-[#FAFBFC]'
+                                                                        disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-[#FAFBFC]'
                                                                     }`}>
                                                                     <input type="checkbox"
                                                                         checked={checked && !disabled}
@@ -4595,6 +4617,11 @@ export default function AiControlCenterClient({
                                                                         onChange={() => !disabled && toggleConnectionSelection(conn.id)} />
                                                                     <span className="flex-1 text-[13px] text-[#111]">
                                                                         {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '') || 'безымянное подключение'}
+                                                                        {disabled && (
+                                                                            <span className="ml-1.5 text-[10px] text-amber-700 font-normal">
+                                                                                · заблокирован фильтром
+                                                                            </span>
+                                                                        )}
                                                                     </span>
                                                                     <span className="inline-flex items-center gap-2 text-[10px] text-gray-500">
                                                                         {hasHistory ? (
@@ -4620,13 +4647,27 @@ export default function AiControlCenterClient({
                                             </div>
                                         )
                                     })()}
-                                    <label className="flex items-center gap-2 mt-2.5 cursor-pointer text-[12px] text-gray-600">
-                                        <input type="checkbox"
-                                            checked={onlyConnectedNow}
-                                            onChange={e => setOnlyConnectedNow(e.target.checked)} />
-                                        <span>Только подключённые сейчас</span>
-                                        <Hint text="Если включено — отключённые/ждущие QR аккаунты не попадут в сбор, даже если у них есть сохранённая история. Защита от случайного использования тестовых подключений." />
-                                    </label>
+                                    {/* PR7.15.1: показываем, сколько подключений заблокировано
+                                        этим фильтром — даже если у них есть история. */}
+                                    {(() => {
+                                        const blockedCount = onlyConnectedNow
+                                            ? channelConnections.filter(c => !c.isReady).length
+                                            : 0
+                                        return (
+                                            <label className="flex items-center gap-2 mt-2.5 cursor-pointer text-[12px] text-gray-600">
+                                                <input type="checkbox"
+                                                    checked={onlyConnectedNow}
+                                                    onChange={e => setOnlyConnectedNow(e.target.checked)} />
+                                                <span>Только подключённые сейчас</span>
+                                                {blockedCount > 0 && (
+                                                    <span className="text-[11px] text-amber-700">
+                                                        · сейчас блокирует {blockedCount} {blockedCount === 1 ? 'аккаунт' : blockedCount < 5 ? 'аккаунта' : 'аккаунтов'}
+                                                    </span>
+                                                )}
+                                                <Hint text="Если включено — отключённые/ждущие QR аккаунты не попадут в сбор, даже если у них есть сохранённая история. Защита от случайного использования тестовых подключений. Снимите если хотите вручную выбрать неактивный аккаунт (например, MAX-бот, чей статус не обновлён, но сообщения приходят)." />
+                                            </label>
+                                        )
+                                    })()}
                                 </>
                             )}
                         </div>
