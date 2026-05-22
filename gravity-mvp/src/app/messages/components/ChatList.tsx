@@ -13,7 +13,7 @@ import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch
 import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
 import { LeadStatusBadge } from "./LeadStatusBadge"
-import { formatChatTitle } from "../utils/message-utils"
+import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat, initialPhone }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void, initialPhone?: string | null }) {
@@ -514,25 +514,44 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                     chat.status === 'waiting_internal' ? 'bg-orange-400' :
                                     'bg-gray-300'
                                 }`} />
-                                <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
-                                    {/* Display priority: linked driver ФИО → resolved contact
-                                        displayName → raw chat.name (channel handle like "Check"
-                                        or TG username) → phone fallback. Same logic as
-                                        ChatHeader so list and conversation panel stay
-                                        consistent. */}
-                                    {/* PR9.57: единый formatChatTitle helper —
-                                        очищает "TG <userId>", ". .", numeric IDs.
-                                        Same logic как в ChatHeader. */}
-                                    {isGroupChat
-                                        ? (chat.name || 'Группа')
-                                        : formatChatTitle({
-                                            driverFullName:     chat.driver?.fullName,
-                                            contactDisplayName: chat.contact?.displayName,
-                                            chatName:           chat.name,
-                                            externalChatId:     chat.externalChatId,
-                                        })
+                                {/* PR-З: title с правильным приоритетом источников + badge «Не привязан».
+                                    Реальное имя/телефон или явный indicator вместо мусорного ID. */}
+                                {(() => {
+                                    if (isGroupChat) {
+                                        return (
+                                            <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
+                                                {chat.name || 'Группа'}
+                                            </span>
+                                        )
                                     }
-                                </span>
+                                    const detailed = formatChatTitleDetailed({
+                                        driverFullName:     chat.driver?.fullName,
+                                        contactDisplayName: chat.contact?.displayName,
+                                        chatName:           chat.name,
+                                        externalChatId:     chat.externalChatId,
+                                    })
+                                    return (
+                                        <>
+                                            <span className={`font-bold text-[14px] truncate leading-tight ${
+                                                detailed.isUnlinked
+                                                    ? (isSelected ? 'text-white/70 italic' : 'text-gray-400 italic')
+                                                    : (isSelected ? 'text-white' : 'text-[#111]')
+                                            }`}>
+                                                {detailed.title}
+                                            </span>
+                                            {detailed.isUnlinked && (
+                                                <span
+                                                    className={`text-[9px] font-semibold px-1 py-0.5 rounded shrink-0 ${
+                                                        isSelected ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                                    }`}
+                                                    title="Чат не привязан к Контакту/Водителю"
+                                                >
+                                                    ⚠
+                                                </span>
+                                            )}
+                                        </>
+                                    )
+                                })()}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                                 {/* Assigned operator initials */}

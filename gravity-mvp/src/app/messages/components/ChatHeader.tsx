@@ -7,7 +7,7 @@ import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
 import { LeadStatusBadge } from "./LeadStatusBadge"
-import { formatChatTitle } from "../utils/message-utils"
+import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
@@ -170,49 +170,45 @@ export default function ChatHeader({
                         <div className="h-[48px] flex items-center justify-between">
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="flex items-center gap-1.5 min-w-0">
-                                <h3 className="font-semibold text-[15px] text-[#111] leading-none shrink-0">
-                                    {/* PR9.56/PR9.57: title с очисткой generated-имён.
-                                        Для TG/MAX ingest сохраняет name = "TG <userId>"
-                                        / "MAX <userId>" если у юзера пустой first_name.
-                                        Для MAX встречается ". ." (точки вместо имени).
-                                        UI-чисткой:
-                                          1. Strip "TG "/"MAX "/"WA " префиксы → "620303840"
-                                          2. ". .." / "  " → fallback на сырой ID без префикса
-                                          3. Чистый ID лучше чем "TG ID" — короче, понятнее
-                                        Полное решение (бэкфилл реальных имён через TG/MAX API)
-                                        — отдельный backend PR. */}
-                                    {formatChatTitle({
-                                        driverFullName:     chat.driver?.fullName,
-                                        contactDisplayName: chat.contact?.displayName,
-                                        chatName:           chat.name,
-                                        externalChatId:     chat.externalChatId,
-                                    })}
-                                </h3>
-                                {/* PR9.56: subtitle — только если несёт новую инфу.
-                                    Скрываем сырые externalChatId типа "69501244690559@lid"
-                                    или "telegram:620303840" — пользователю они не нужны. */}
                                 {(() => {
-                                    const title    = formatChatTitle({
+                                    /* PR-З: title с правильным приоритетом источников.
+                                       Раньше formatChatTitle брал contact.displayName раньше chat.name,
+                                       и для WA-чатов отображал fake @lid номер вместо реального
+                                       pushname из chat.name. Также для placeholder TG/MAX показывал
+                                       голый internal user ID, выглядящий как телефон.
+                                       Теперь: реальное имя/телефон или явное «Без имени» + badge. */
+                                    const detailed = formatChatTitleDetailed({
                                         driverFullName:     chat.driver?.fullName,
                                         contactDisplayName: chat.contact?.displayName,
                                         chatName:           chat.name,
                                         externalChatId:     chat.externalChatId,
                                     })
-                                    const phone    = chat.driver?.phone
-                                    // Показываем номер только если он реально отличается от title
-                                    // (часто chat.name = номер для WA — тогда subtitle не нужна)
-                                    const subtitle = phone && phone !== title ? phone : null
-                                    if (!subtitle) {
-                                        return (
-                                            <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
-                                        )
-                                    }
+                                    const driverPhone = chat.driver?.phone
+                                    // Показываем номер из linked Driver если он не дубль title
+                                    const subtitle = driverPhone && driverPhone !== detailed.title ? driverPhone : null
                                     return (
                                         <>
+                                            <h3 className={`font-semibold text-[15px] leading-none shrink-0 ${detailed.isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}>
+                                                {detailed.title}
+                                            </h3>
+                                            {detailed.isUnlinked && (
+                                                <span
+                                                    className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0"
+                                                    title="У этого чата нет привязки к Контакту/Водителю. Привяжите вручную, чтобы видеть имя и номер."
+                                                >
+                                                    Не привязан
+                                                </span>
+                                            )}
+                                            {subtitle && (
+                                                <>
+                                                    <span className="text-[11px] text-gray-400">·</span>
+                                                    <span className="text-[11px] text-gray-500 font-mono truncate">{subtitle}</span>
+                                                </>
+                                            )}
                                             <span className="text-[11px] text-gray-400">·</span>
-                                            <span className="text-[11px] text-gray-500 font-mono truncate">{subtitle}</span>
-                                            <span className="text-[11px] text-gray-400">·</span>
-                                            <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
+                                            <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>
+                                                {getStatusLabel(chat.status)}
+                                            </span>
                                         </>
                                     )
                                 })()}
