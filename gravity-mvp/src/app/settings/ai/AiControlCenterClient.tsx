@@ -1567,15 +1567,38 @@ export default function AiControlCenterClient({
                             const newMsgs = isRepeat && prevSameJob ? Math.max(0, job.messagesImported - prevSameJob.messagesImported) : null
                             return (
                             <div key={job.id} className="px-4 py-3">
-                                {/* Верхняя строка: каналы, режим, статус, дата */}
+                                {/* Верхняя строка: аккаунт (если известен) или
+                                    каналы, режим, статус, дата.
+                                    PR7.13: связываем аккаунт раньше каналов
+                                    чтобы пользователь сразу видел «откуда импорт». */}
                                 <div className="flex items-center gap-3 text-[12px]">
                                     {(job.status === 'queued' || job.status === 'running')
                                         ? <RefreshCw size={12} className="animate-spin text-yellow-500 shrink-0" />
                                         : <StatusDot status={job.status} />
                                     }
-                                    <span className="font-medium text-gray-700">{job.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}</span>
-                                    <span className="text-gray-400">{job.mode === 'available_history' ? 'Вся доступная история' : job.mode === 'from_connection_time' ? 'С подключения' : job.mode === 'last_n_days' ? `${(job as any).daysBack ?? 'N'} дней` : job.mode}</span>
-                                    {isRepeat && <span className="text-[10px] text-gray-400 italic">Повторная синхронизация</span>}
+                                    {(() => {
+                                        // PR7.13: показываем имя аккаунта на верхней строке
+                                        // если он известен — это primary identifier.
+                                        // Иначе fallback на список каналов.
+                                        const connId = (job as any).connectionId as string | null
+                                        const conn = connId
+                                            ? channelConnections.find(c => c.id === connId)
+                                            : null
+                                        if (conn) {
+                                            return (
+                                                <span className="font-medium text-[#111]">{conn.label}</span>
+                                            )
+                                        }
+                                        return (
+                                            <span className="font-medium text-gray-700">
+                                                {job.channels.map(c => CHANNEL_LABELS[c] ?? c).join(', ')}
+                                            </span>
+                                        )
+                                    })()}
+                                    <span className="text-gray-400">
+                                        Импорт: {job.mode === 'available_history' ? 'вся доступная история' : job.mode === 'from_connection_time' ? 'с момента подключения' : job.mode === 'last_n_days' ? `${(job as any).daysBack ?? 'N'} дней` : job.mode}
+                                    </span>
+                                    {isRepeat && <span className="text-[10px] text-gray-400 italic">повторная синхронизация</span>}
                                     <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                         job.status === 'completed' ? 'bg-green-50 text-green-700' :
                                         job.status === 'running'   ? 'bg-yellow-50 text-yellow-700' :
@@ -3071,11 +3094,14 @@ export default function AiControlCenterClient({
                     </p>
                 </div>
 
-                {/* Sub-section 0 (PR7.9): Подключённые аккаунты */}
+                {/* PR7.13 Block 1: Аккаунты и каналы — главный блок
+                    источников. Раньше был «Подключённые аккаунты» —
+                    переименовали, чтобы выделить, что это и есть
+                    «откуда AI берёт память». */}
                 <div>
-                    <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-                        Подключённые аккаунты
-                        <Hint text="Эти подключения сейчас могут принимать сообщения от водителей и попадать в сбор ядра. Можно отключить знания из конкретного аккаунта — записи из него уйдут в архив (подтверждённые и ручные останутся с пометкой)." />
+                    <div className="text-[12px] font-semibold text-[#111] mb-1 flex items-center gap-2">
+                        Аккаунты и каналы
+                        <Hint text="Это все мессенджеры, которые когда-либо были подключены к CRM. AI собирает память из их переписок. Можно отключить знания одного WhatsApp-аккаунта — записи из него уйдут в архив (подтверждённые и ручные останутся с пометкой)." />
                     </div>
                     {channelConnections.length === 0 ? (
                         <div className="text-[12px] text-gray-400 px-3 py-3 rounded-lg border border-[#E8E8E8] bg-[#FAFBFC]">
@@ -3162,32 +3188,16 @@ export default function AiControlCenterClient({
                                     </div>
                                 )
                             })}
-                            {orphanStats.length > 0 && (
-                                <div className="rounded-lg border border-[#FFE8B0] bg-[#FFFBED] px-3 py-2.5 text-[12px] text-[#8B6914]">
-                                    <div className="font-medium mb-1">Старые записи без точной привязки к аккаунту</div>
-                                    {orphanStats.map(s => {
-                                        const CHANNEL_LABEL_LOCAL: Record<string, string> = {
-                                            whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
-                                        }
-                                        return (
-                                            <div key={s.channel} className="text-[11px]">
-                                                {CHANNEL_LABEL_LOCAL[s.channel] ?? s.channel}: {s.itemsActive} активных знаний из {s.itemsTouched} затронутых, {s.sourcesActive} активных источников.
-                                            </div>
-                                        )
-                                    })}
-                                    <div className="text-[11px] mt-1 leading-relaxed">
-                                        Это знания, которые AI собрал до того, как мы стали сохранять, из какого аккаунта они пришли. Для них точечного disable пока нет. Будут охвачены, когда добавим chat-level привязку для Telegram/MAX.
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Sub-section 1: Извлечения (PR2) */}
+                {/* PR7.13 Block 2: Последние сборы ядра. Раньше
+                    был «Сбор ядра из истории» — переименовали,
+                    чтобы было понятнее, что это история сборов. */}
                 <div>
-                    <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        Сбор ядра из истории
+                    <div className="text-[12px] font-semibold text-[#111] mb-1">
+                        Последние сборы ядра
                     </div>
                 {extractionJobs.length === 0 ? (
                     <div className="text-center py-12 text-[12px] text-gray-400">
@@ -3307,7 +3317,42 @@ export default function AiControlCenterClient({
                 )}
                 </div>
 
-                {/* Sub-section 2: Активность ответов (PR3 shadow/runtime) */}
+                {/* PR7.13 Block 3: Неизвестные источники. Раньше
+                    жил как маленький orphan-блок внутри «Аккаунты и
+                    каналы» — теперь выделен в самостоятельный блок
+                    с явным заголовком и пояснением, как просил
+                    пользователь в спеке. */}
+                {orphanStats.length > 0 && (
+                    <div>
+                        <div className="text-[12px] font-semibold text-[#111] mb-1">
+                            Неизвестные источники
+                        </div>
+                        <div className="rounded-lg border border-[#FFE8B0] bg-[#FFFBED] px-3 py-2.5 text-[12px] text-[#8B6914] space-y-1.5">
+                            <div className="leading-relaxed">
+                                Есть знания без точной привязки к аккаунту.
+                                Они были собраны до того, как система начала сохранять точный аккаунт.
+                                Их можно проверить вручную или архивировать.
+                            </div>
+                            {orphanStats.map(s => {
+                                const CHANNEL_LABEL_LOCAL: Record<string, string> = {
+                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                }
+                                return (
+                                    <div key={s.channel} className="text-[11px]">
+                                        <b>{CHANNEL_LABEL_LOCAL[s.channel] ?? s.channel}:</b>{' '}
+                                        {s.itemsActive} активных знаний из {s.itemsTouched} затронутых,{' '}
+                                        {s.sourcesActive} активных источников.
+                                    </div>
+                                )
+                            })}
+                            <div className="text-[11px] leading-relaxed">
+                                Для Telegram и MAX точечный disable пока не работает — это в работе.
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* PR7.13 Block 4: Активность ответов (PR3 shadow/runtime) */}
                 <div>
                     <div className="flex items-baseline gap-2 mb-2">
                         <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
@@ -3354,23 +3399,10 @@ export default function AiControlCenterClient({
                     </div>
                 </div>
 
-                {/* PR7.9: Опасная зона — «Очистить ядро». Открывает
-                    modal с 3 вариантами + typed confirm для full. */}
-                {canEdit && (
-                    <div className="rounded-lg border border-[#FFD8D8] bg-[#FFF8F8] p-3 space-y-2">
-                        <div className="text-[12px] font-semibold text-red-700">Опасная зона</div>
-                        <p className="text-[12px] text-gray-600 leading-relaxed">
-                            «Очистить ядро» переводит активные знания в архив. Это мягкое действие — данные не удаляются, можно восстановить отдельные карточки в разделе «Архив».
-                        </p>
-                        <button
-                            type="button"
-                            onClick={openResetModal}
-                            className="h-[28px] px-3 inline-flex items-center gap-1.5 text-[11px] font-semibold text-red-700 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
-                        >
-                            Очистить ядро…
-                        </button>
-                    </div>
-                )}
+                {/* PR7.13: Опасная зона удалена отсюда — кнопка
+                    «Очистить и собрать заново» теперь в Current Core
+                    Passport сверху как primary action. Чтобы не
+                    дублировать одно и то же действие в двух местах. */}
             </div>
         )
     }
@@ -3534,6 +3566,21 @@ export default function AiControlCenterClient({
                                             <Sparkles size={13} />
                                             Собрать заново
                                         </button>
+                                        {/* PR7.13: «Открыть архив» — второй
+                                            путь после reset для тех, кто
+                                            хочет проверить что было
+                                            заархивировано до повторного
+                                            сбора. */}
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                closeResetModal()
+                                                setKnowledgeSubtab('archive')
+                                            }}
+                                            className="h-9 px-3 inline-flex items-center gap-1.5 rounded-md border border-[#E0E0E0] text-[13px] font-semibold text-gray-700 hover:bg-[#F0F4FA] hover:text-[#3390EC]"
+                                        >
+                                            Открыть архив
+                                        </button>
                                     </div>
                                     <p className="text-[11px] text-gray-500 leading-relaxed pt-1">
                                         Восстановить отдельные знания из архива можно в разделе «Архив» в любой момент.
@@ -3543,9 +3590,16 @@ export default function AiControlCenterClient({
                         ) : (
                             <>
                                 {runtimeOn && (
-                                    <div className="rounded-md border border-[#FFE8B0] bg-[#FFFBED] p-3 text-[12px] text-[#8B6914] leading-relaxed">
-                                        <strong className="block mb-1">AI сейчас отвечает из ядра</strong>
-                                        После очистки ответы AI станут беднее — пока ядро не пересобрано. Если это не запланированный rollout, лучше отложить.
+                                    /* PR7.13: strong warning при runtime — было
+                                       спокойное «лучше отложить», теперь явный
+                                       красный alert с прямой рекомендацией
+                                       выключить runtime сначала. */
+                                    <div className="rounded-md border-2 border-red-300 bg-red-50 p-3 text-[12px] text-red-900 leading-relaxed">
+                                        <strong className="block mb-1 text-[13px]">⚠ AI сейчас может отвечать из ядра</strong>
+                                        <p>
+                                            После очистки ответы клиентам изменятся — AI будет отдавать пустые или неполные ответы, пока ядро не пересобрано.{' '}
+                                            <strong>Рекомендуется сначала выключить активный режим</strong> (через переменную окружения AI_KNOWLEDGE_RUNTIME_ENABLED=0 + перезапуск сервера).
+                                        </p>
                                     </div>
                                 )}
 
@@ -3621,6 +3675,85 @@ export default function AiControlCenterClient({
 
     const KnowledgeTab = () => {
         const selectedSection = sections.find(s => s.id === selectedSectionId) ?? null
+
+        // ─── PR7.13: Current Core Passport ─────────────────────────
+        //
+        // Главный блок вкладки. До PR7.13 пользователь видел только
+        // technical readiness row и stats line — не было «паспорта»
+        // current core. Теперь сверху — единый блок со статусом,
+        // sources participation, last update summary, counters и
+        // основными actions (включая reset). Reset больше не спрятан
+        // внизу sources panel — он primary action.
+        const coreEmpty = readiness.counts.activeItems === 0
+        const lastExtr = readiness.lastExtraction
+        const noKey = !config.apiKeyEncrypted || (config.apiKeyEncrypted as string).trim() === ''
+        const extractionRunning = activeExtractionJob &&
+            (activeExtractionJob.status === 'queued' || activeExtractionJob.status === 'running')
+
+        // Status config — берётся из runtimeState. Совпадает с
+        // RuntimeModePill, но в passport отрисовывается крупнее.
+        const STATUS_CFG: Record<string, {
+            dot: string; label: string; bg: string; txt: string; desc: string
+        }> = {
+            legacy: {
+                dot:   '⚪', label: 'Старая система',
+                bg:    'bg-gray-100', txt: 'text-gray-700',
+                desc:  'AI пока отвечает по старой базе FAQ. Новое ядро ещё не подключено к ответам.',
+            },
+            shadow: {
+                dot:   '🟡', label: 'Тестовый режим',
+                bg:    'bg-amber-100', txt: 'text-amber-700',
+                desc:  'Новое ядро работает в фоне для наблюдения. Клиентам пока отвечает старая система — никаких рисков.',
+            },
+            runtime: {
+                dot:   '🟢', label: 'AI отвечает из ядра',
+                bg:    'bg-green-100', txt: 'text-green-700',
+                desc:  'Новое ядро активно: AI отвечает клиентам из собранной памяти.',
+            },
+        }
+        const statusCfg = STATUS_CFG[runtimeState.mode] ?? STATUS_CFG.legacy
+
+        // Participating connections: те, у которых есть активные
+        // sources в текущем ядре. Раньше эта инфа была разбросана —
+        // sourceStats показывалась только в Sources sub-tab.
+        const CHANNEL_LABEL_LOCAL: Record<string, string> = {
+            whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+        }
+        const STATUS_LABEL_LOCAL: Record<string, string> = {
+            ready: 'подключён', qr: 'ждёт QR', authenticating: 'входит',
+            idle: 'не активен', disconnected: 'отключён',
+            inactive: 'отключён', unknown: '—',
+        }
+        const participatingByChannel = new Map<string, Array<{
+            conn: ChannelConnection; stat: SourceStatsRow | undefined; participated: boolean
+        }>>()
+        for (const conn of channelConnections) {
+            const stat = sourceStats.find(s => s.connectionId === conn.id)
+            const participated = !!stat && stat.sourcesActive > 0
+            const arr = participatingByChannel.get(conn.channel) ?? []
+            arr.push({ conn, stat, participated })
+            participatingByChannel.set(conn.channel, arr)
+        }
+
+        // Last extraction progress — pull человеческие counts из
+        // progress JSON блоба (без типизации со стороны readiness).
+        const lastExtrProgress = (lastExtr?.progress ?? {}) as Record<string, unknown>
+        const pn = (k: string) => {
+            const v = lastExtrProgress[k]
+            return typeof v === 'number' ? v : null
+        }
+
+        // Сообщения «доступные для анализа» для empty-state.
+        // Сумма messagesImported по последним completed jobs per
+        // connection. Если данных нет — показываем «нет истории».
+        const importsByConnection = new Map<string, number>()
+        for (const j of importJobs) {
+            if (j.status !== 'completed') continue
+            const cid = (j as any).connectionId as string | null
+            if (!cid) continue
+            importsByConnection.set(cid, (importsByConnection.get(cid) ?? 0) + j.messagesImported)
+        }
+
         return (
             <>
             <div className="space-y-4">
@@ -3638,10 +3771,251 @@ export default function AiControlCenterClient({
                     </a>
                 </InlineInfo>
 
-                {/* PR5: operational readiness row */}
+                {/* PR7.13: Current Core Passport — главный блок-паспорт */}
+                <section className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] p-4 space-y-3">
+                    {/* Header: title + status */}
+                    <header className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                            <h2 className="text-[15px] font-semibold text-[#111]">Текущее ядро AI</h2>
+                            <p className="text-[12px] text-gray-600 leading-relaxed mt-0.5 max-w-2xl">
+                                Это память AI: тарифы, условия, документы, частые вопросы и ограничения.
+                                AI использует эти знания, когда отвечает клиентам.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setRolloutOpen(true)}
+                            title={statusCfg.desc + ' Нажмите для проверки готовности.'}
+                            className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium hover:opacity-80 transition-opacity ${statusCfg.bg} ${statusCfg.txt}`}
+                        >
+                            <span>{statusCfg.dot}</span>
+                            <span>{statusCfg.label}</span>
+                        </button>
+                    </header>
+
+                    {coreEmpty ? (
+                        /* PR7.13: empty state — «Ядро ещё не собрано» */
+                        <div className="rounded-md border border-[#E0E8F4] bg-white px-4 py-4 space-y-3">
+                            <div>
+                                <h3 className="text-[14px] font-semibold text-[#111]">Ядро ещё не собрано</h3>
+                                <p className="text-[12px] text-gray-600 leading-relaxed mt-1">
+                                    AI пока не собрал память компании. Сначала выберите источники — WhatsApp,
+                                    Telegram или MAX. Затем AI прочитает историю переписок и соберёт знания:
+                                    тарифы, документы, ограничения и частые вопросы.
+                                </p>
+                            </div>
+                            {channelConnections.length > 0 && (
+                                <div className="text-[11px] text-gray-600 space-y-0.5">
+                                    <div className="text-gray-500 font-medium">Сейчас доступно для анализа:</div>
+                                    {channelConnections.slice(0, 6).map(conn => {
+                                        const msgs = importsByConnection.get(conn.id) ?? 0
+                                        return (
+                                            <div key={conn.id} className="flex flex-wrap items-center gap-1.5">
+                                                <span>· {conn.label}</span>
+                                                <span className="text-gray-400">
+                                                    {msgs > 0 ? `${msgs.toLocaleString('ru')} сообщений` : 'нет истории'}
+                                                </span>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        /* PR7.13: «Собрано из» + «Последнее обновление» — 2 column layout */
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                            {/* «Собрано из» */}
+                            <div className="rounded-md border border-[#E0E8F4] bg-white px-3 py-2.5">
+                                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                    Собрано из
+                                </div>
+                                {participatingByChannel.size === 0 ? (
+                                    <div className="text-[12px] text-gray-500">
+                                        Источники недоступны. Нужно подключить мессенджер.
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1.5">
+                                        {[...participatingByChannel.entries()].map(([channel, conns]) => (
+                                            <div key={channel} className="text-[12px]">
+                                                <div className="font-medium text-[#111]">
+                                                    {CHANNEL_LABEL_LOCAL[channel] ?? channel}
+                                                </div>
+                                                {conns.slice(0, 4).map(({ conn, participated }) => {
+                                                    const status = STATUS_LABEL_LOCAL[conn.status] ?? conn.status
+                                                    return (
+                                                        <div key={conn.id} className="text-[11px] text-gray-600 leading-snug pl-2">
+                                                            — {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '')}
+                                                            <span className="text-gray-400"> · {status}</span>
+                                                            <span className={participated ? 'text-green-700' : 'text-gray-400'}>
+                                                                {' '}· {participated ? 'участвовал' : 'не участвовал'}
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                })}
+                                                {conns.length > 4 && (
+                                                    <div className="text-[11px] text-gray-400 pl-2">
+                                                        и ещё {conns.length - 4}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {/* Honest disclaimer about unknown-source items */}
+                                        {knowledgeStats.totalSources > 0 && readiness.counts.activeItems > 0 && (
+                                            <div className="text-[11px] text-gray-400 pt-1.5 border-t border-[#F0F0F0] leading-relaxed">
+                                                Часть старых знаний может быть без точной привязки к аккаунту — это импорт до сохранения привязки.
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* «Последнее обновление» */}
+                            <div className="rounded-md border border-[#E0E8F4] bg-white px-3 py-2.5">
+                                <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                                    Последнее обновление
+                                </div>
+                                {!lastExtr ? (
+                                    <div className="text-[12px] text-gray-500">
+                                        Сбор ещё не запускался.
+                                    </div>
+                                ) : (
+                                    <div className="text-[12px] text-gray-600 space-y-1">
+                                        <div>
+                                            <b className="text-[#111]">
+                                                {new Date(lastExtr.finishedAt ?? lastExtr.startedAt ?? lastExtr.createdAt).toLocaleString('ru')}
+                                            </b>
+                                            <span className="text-gray-400"> · {humanizeAgo(lastExtr.finishedAt ?? lastExtr.startedAt ?? lastExtr.createdAt)}</span>
+                                        </div>
+                                        {lastExtr.status === 'failed' ? (
+                                            <div className="text-red-600 text-[11px]">
+                                                Сбор завершился с ошибкой{lastExtr.errorMessage ? `: ${lastExtr.errorMessage}` : ''}
+                                            </div>
+                                        ) : (
+                                            <div className="text-[11px] text-gray-500 space-y-0.5">
+                                                {pn('itemsCreated') != null && pn('itemsCreated')! > 0 && (
+                                                    <div>· создано {pn('itemsCreated')} {plural(pn('itemsCreated')!,'знание','знания','знаний')}</div>
+                                                )}
+                                                {pn('itemsMerged') != null && pn('itemsMerged')! > 0 && (
+                                                    <div>· объединено {pn('itemsMerged')}</div>
+                                                )}
+                                                {pn('itemsAsDraft') != null && pn('itemsAsDraft')! > 0 && (
+                                                    <div>· черновиков {pn('itemsAsDraft')}</div>
+                                                )}
+                                                {pn('trustedConflictsBlocked') != null && pn('trustedConflictsBlocked')! > 0 && (
+                                                    <div className="text-red-600">⛔ заблокировано противоречий с правилами: {pn('trustedConflictsBlocked')}</div>
+                                                )}
+                                                {pn('trustedMatchesBoosted') != null && pn('trustedMatchesBoosted')! > 0 && (
+                                                    <div className="text-green-700">✓ подтверждает проверенные правила: {pn('trustedMatchesBoosted')}</div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Состояние ядра — counters line */}
+                    {!coreEmpty && (
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] text-gray-600 pt-1 border-t border-[#E4ECFC]">
+                            <span><b className="text-[#111]">{readiness.counts.activeItems}</b> активных знаний</span>
+                            <span className="text-gray-400">·</span>
+                            <span><b className="text-[#111]">{readiness.counts.verifiedItems}</b> подтверждено</span>
+                            {readiness.counts.draftItems > 0 && (
+                                <>
+                                    <span className="text-gray-400">·</span>
+                                    <span>{readiness.counts.draftItems} {plural(readiness.counts.draftItems,'черновик','черновика','черновиков')}</span>
+                                </>
+                            )}
+                            {readiness.counts.conflictGroups > 0 && (
+                                <>
+                                    <span className="text-gray-400">·</span>
+                                    <span className="text-amber-600">{readiness.counts.conflictGroups} {plural(readiness.counts.conflictGroups,'спорное','спорных','спорных')}</span>
+                                </>
+                            )}
+                            {(() => {
+                                const fromDisabled = sourceStats
+                                    .filter(s => s.connectionId && s.sourcesTotal > 0 && s.sourcesActive === 0)
+                                    .reduce((sum, s) => sum + s.itemsActive, 0)
+                                if (fromDisabled === 0) return null
+                                return (
+                                    <>
+                                        <span className="text-gray-400">·</span>
+                                        <span className="text-gray-500"
+                                              title="Знания, у которых все исходные аккаунты отключены администратором. Сохранены, потому что подтверждены вручную или добавлены как ручная запись.">
+                                            {fromDisabled} из отключённых источников
+                                        </span>
+                                    </>
+                                )
+                            })()}
+                        </div>
+                    )}
+
+                    {/* PR7.13: Основные действия — primary actions сверху */}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                        {extractionRunning ? (
+                            <div className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC]/10 text-[#3390EC] text-[12px] font-semibold">
+                                <Loader2 size={12} className="animate-spin" />
+                                {activeExtractionJob!.status === 'queued' ? 'В очереди' : 'Идёт сбор'}
+                                {activeExtractionJob!.progress?.pairsProcessed != null && activeExtractionJob!.progress?.pairsBuilt != null && activeExtractionJob!.progress.pairsBuilt > 0 && (
+                                    <span className="text-gray-500 font-normal">
+                                        · {activeExtractionJob!.progress.pairsProcessed}/{activeExtractionJob!.progress.pairsBuilt}
+                                    </span>
+                                )}
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => canEdit && !noKey && openExtractionModal()}
+                                disabled={!canEdit || noKey}
+                                title={!canEdit
+                                    ? 'Доступно только Администратору'
+                                    : noKey
+                                        ? 'Сначала настройте AI Провайдер (вкладка слева) — добавьте API ключ'
+                                        : coreEmpty
+                                            ? 'Запустить первый сбор ядра из истории переписок'
+                                            : 'Дособрать ядро из свежих переписок (старые знания сохранятся)'}
+                                className="h-[32px] px-3.5 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                <Sparkles size={12} />
+                                {coreEmpty ? 'Собрать ядро' : 'Собрать / обновить ядро'}
+                            </button>
+                        )}
+                        {!coreEmpty && canEdit && (
+                            <button
+                                type="button"
+                                onClick={openResetModal}
+                                title="Перевести активные знания в архив (мягкое действие, обратимо) и собрать ядро заново."
+                                className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
+                            >
+                                <Trash2 size={12} />
+                                Очистить и собрать заново
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setKnowledgeSubtab('sources')}
+                            className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-gray-700 border border-[#E0E0E0] hover:bg-[#F0F4FA] hover:text-[#3390EC] transition-colors"
+                        >
+                            Посмотреть источники
+                        </button>
+                        <a
+                            href="/settings/integrations/ai-knowledge-help"
+                            target="_blank"
+                            rel="noopener"
+                            className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-semibold text-gray-700 border border-[#E0E0E0] hover:bg-[#F0F4FA] hover:text-[#3390EC] transition-colors"
+                        >
+                            Инструкция
+                        </a>
+                    </div>
+                </section>
+
+                {/* PR5: detailed readiness row — оставлен как secondary
+                    view для technical health 7d (escalation%, no_match%,
+                    verified%, mismatch%). Passport выше — primary UX. */}
                 <KnowledgeReadinessRow />
 
-                {/* Под-табы + disabled "Собрать ядро" */}
+                {/* Под-табы. Кнопка «Собрать ядро» теперь в passport выше. */}
                 <div className="flex items-center justify-between">
                     <div className="flex gap-1">
                         {(['core','sources','archive'] as const).map(k => (
@@ -3658,57 +4032,6 @@ export default function AiControlCenterClient({
                             </button>
                         ))}
                     </div>
-                    {activeExtractionJob && (activeExtractionJob.status === 'queued' || activeExtractionJob.status === 'running') ? (
-                        <div className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC]/10 text-[#3390EC] text-[11px] font-semibold">
-                            <Loader2 size={11} className="animate-spin" />
-                            {activeExtractionJob.status === 'queued' ? 'В очереди' : 'Идёт сбор'}
-                            {activeExtractionJob.progress?.pairsProcessed != null && activeExtractionJob.progress?.pairsBuilt != null && activeExtractionJob.progress.pairsBuilt > 0 && (
-                                <span className="text-gray-500 font-normal">
-                                    · {activeExtractionJob.progress.pairsProcessed}/{activeExtractionJob.progress.pairsBuilt}
-                                </span>
-                            )}
-                        </div>
-                    ) : (() => {
-                        // UX-фикс: блокируем кнопку если AI provider не настроен.
-                        const noKey = !config.apiKeyEncrypted || (config.apiKeyEncrypted as string).trim() === ''
-                        const disabledReason = !canEdit
-                            ? 'Доступно только Администратору'
-                            : noKey
-                                ? 'Сначала настройте AI Провайдер (вкладка слева) — добавьте API ключ'
-                                : 'Запустить сбор ядра знаний из истории переписок'
-                        return (
-                            <button
-                                onClick={() => canEdit && !noKey && openExtractionModal()}
-                                disabled={!canEdit || noKey}
-                                title={disabledReason}
-                                className="h-[28px] px-3 inline-flex items-center gap-1.5 rounded-lg bg-[#3390EC] text-white text-[11px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                            >
-                                <Sparkles size={11} />
-                                Собрать ядро
-                            </button>
-                        )
-                    })()}
-                </div>
-
-                {/* Сводка по ядру */}
-                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-[11px] text-gray-400">
-                    <span>{knowledgeStats.activeSections} {plural(knowledgeStats.activeSections,'раздел','раздела','разделов')}</span>
-                    <span>·</span>
-                    <span>{knowledgeStats.activeItems} {plural(knowledgeStats.activeItems,'знание','знания','знаний')}</span>
-                    <span>·</span>
-                    <span>{knowledgeStats.totalSources} {plural(knowledgeStats.totalSources,'источник','источника','источников')}</span>
-                    {knowledgeStats.draftItems > 0 && (
-                        <>
-                            <span>·</span>
-                            <span className="text-gray-500">{knowledgeStats.draftItems} на проверке</span>
-                        </>
-                    )}
-                    {knowledgeStats.conflictingItems > 0 && (
-                        <>
-                            <span>·</span>
-                            <span className="text-amber-600">{knowledgeStats.conflictingItems} в конфликте</span>
-                        </>
-                    )}
                 </div>
 
                 {knowledgeSubtab === 'sources' ? (
@@ -4120,7 +4443,7 @@ export default function AiControlCenterClient({
                     onClick={() => !extractionStarting && setExtractionModalOpen(false)}
                 >
                     <div onClick={e => e.stopPropagation()}
-                         className="bg-white rounded-xl shadow-xl p-6 w-[440px] max-w-[94vw] space-y-4">
+                         className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-w-[94vw] space-y-4 max-h-[90vh] overflow-y-auto">
                         <div>
                             <h2 className="text-[17px] font-semibold text-[#111]">Сбор ядра знаний</h2>
                             <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
@@ -4129,83 +4452,13 @@ export default function AiControlCenterClient({
                             </p>
                         </div>
 
-                        {/* PR7.10: Context Summary — сводка по
-                            аккаунтам, безопасности и отключённым
-                            источникам. Считается из channelConnections
-                            + sourceStats + readiness. */}
-                        {channelConnections.length > 0 && (() => {
-                            const selectedConns = channelConnections.filter(c => selectedConnectionIds.has(c.id))
-                            const byChannel = new Map<string, ChannelConnection[]>()
-                            for (const c of selectedConns) {
-                                const arr = byChannel.get(c.channel) ?? []
-                                arr.push(c)
-                                byChannel.set(c.channel, arr)
-                            }
-                            const CHANNEL_LABEL_LOCAL: Record<string, string> = {
-                                whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
-                            }
-                            // disabled sources estimate: sourceStats где !sourcesActive
-                            const disabledConnIds = sourceStats
-                                .filter(s => s.connectionId && s.sourcesTotal > 0 && s.sourcesActive === 0)
-                                .map(s => s.connectionId!) as string[]
-                            const disabledLabels = disabledConnIds
-                                .map(id => channelConnections.find(c => c.id === id)?.label)
-                                .filter(Boolean) as string[]
-                            // Safety warnings
-                            const warnings: string[] = []
-                            if (runtimeState.runtimeOn) {
-                                warnings.push('AI сейчас отвечает из ядра — пересборка временно изменит его. Это нормально, но имейте в виду.')
-                            }
-                            if (readiness.overall === 'warn' || readiness.overall === 'fail') {
-                                const conflictsCheck = readiness.checks.find(c => c.id === 'conflicts')
-                                if (conflictsCheck && conflictsCheck.status === 'fail') {
-                                    warnings.push('В ядре есть неразрешённые спорные знания. Лучше сначала разобрать их — иначе они унаследуются и в новом сборе.')
-                                }
-                                const verifiedCheck = readiness.checks.find(c => c.id === 'verified_coverage')
-                                if (verifiedCheck && verifiedCheck.status !== 'ok') {
-                                    warnings.push('В ядре мало подтверждённых правил. Это не блок, но AI может ошибиться в свежесобранных фактах — проверяйте после сбора.')
-                                }
-                            }
-                            return (
-                                <div className="rounded-lg border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2.5 space-y-2">
-                                    <div className="text-[11px] uppercase tracking-wide text-gray-500">
-                                        Сейчас будет использовано
-                                    </div>
-                                    {selectedConns.length === 0 ? (
-                                        <div className="text-[12px] text-gray-500">
-                                            Не выбрано ни одного аккаунта — сбор пройдёт только по уже загруженной истории.
-                                        </div>
-                                    ) : (
-                                        <ul className="text-[12px] text-gray-700 space-y-0.5">
-                                            {[...byChannel.entries()].map(([channel, conns]) => (
-                                                <li key={channel}>
-                                                    <span className="font-medium">{CHANNEL_LABEL_LOCAL[channel] ?? channel}:</span>{' '}
-                                                    {conns.length} {conns.length === 1 ? 'аккаунт' : conns.length < 5 ? 'аккаунта' : 'аккаунтов'}
-                                                    {channel !== 'whatsapp' && (
-                                                        <span className="text-amber-700 text-[11px]"> · точечный выбор аккаунта пока в работе — берётся вся история канала</span>
-                                                    )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                    {disabledLabels.length > 0 && (
-                                        <div className="text-[11px] text-gray-500 pt-1 border-t border-[#E8E8E8]">
-                                            {disabledLabels.length} {disabledLabels.length === 1 ? 'источник отключён и не участвует' : 'источника отключены и не участвуют'} в сборе.
-                                        </div>
-                                    )}
-                                    {warnings.length > 0 && (
-                                        <div className="rounded border border-[#FFE8B0] bg-[#FFFBED] px-2.5 py-2 text-[11px] text-[#8B6914] leading-relaxed space-y-1">
-                                            {warnings.map((w, i) => (
-                                                <div key={i}>⚠ {w}</div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            )
-                        })()}
-
+                        {/* PR7.13: явный 3-шаговый flow. Контекст-summary
+                            переехал в Шаг 3 «Что будет сделано» как
+                            итоговый блок перед запуском. */}
                         <div>
-                            <label className="text-[11px] text-gray-500 mb-1.5 block">Что анализировать</label>
+                            <label className="text-[11px] uppercase tracking-wide text-[#3390EC] font-semibold mb-1.5 block">
+                                Шаг 1 · Что анализировать
+                            </label>
                             <div className="flex flex-col gap-1.5">
                                 {([
                                     { v: 'last_30d', label: 'Последние 30 дней',  hint: 'быстро, частичный обзор' },
@@ -4229,13 +4482,13 @@ export default function AiControlCenterClient({
                                 ))}
                             </div>
                         </div>
-                        {/* PR7.4: source selector. Показывает реальные
-                            подключения с честным разделением на WA
-                            (filter работает) и TG/MAX (best-effort,
-                            берётся вся история канала). */}
+                        {/* PR7.4 + 7.13: Шаг 2 — Из каких источников.
+                            Показывает реальные подключения с честным
+                            разделением на WA (filter работает) и TG/MAX
+                            (best-effort, берётся вся история канала). */}
                         <div>
-                            <label className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1.5">
-                                Из каких источников собрать знания?
+                            <label className="text-[11px] uppercase tracking-wide text-[#3390EC] font-semibold mb-1.5 flex items-center gap-1.5">
+                                Шаг 2 · Из каких источников собрать знания
                                 <Hint text="Выбрать конкретные аккаунты WhatsApp работает напрямую — будут проанализированы только их чаты. Для Telegram и MAX сбор пока берёт всю историю канала независимо от отметок." />
                             </label>
                             {channelConnectionsLoading ? (
@@ -4342,6 +4595,121 @@ export default function AiControlCenterClient({
                             )}
                         </div>
 
+                        {/* PR7.13: Шаг 3 — Что будет сделано.
+                            Подытоживает выбор + явно описывает что
+                            произойдёт после запуска. Раньше Context
+                            Summary висел сверху и был отрезан от
+                            submit; теперь это последний блок перед
+                            кнопкой «Запустить сбор». */}
+                        <div className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] px-3 py-2.5 space-y-2">
+                            <div className="text-[11px] uppercase tracking-wide text-[#3390EC] font-semibold">
+                                Шаг 3 · Что будет сделано
+                            </div>
+                            {(() => {
+                                // selected = чекбокс ☑ И (не онли-ready ИЛИ ready)
+                                const willInclude = channelConnections.filter(c =>
+                                    selectedConnectionIds.has(c.id) && (!onlyConnectedNow || c.isReady)
+                                )
+                                const willNotInclude = channelConnections.filter(c =>
+                                    !willInclude.some(w => w.id === c.id)
+                                )
+                                const CHANNEL_LABEL_LOCAL: Record<string, string> = {
+                                    whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX',
+                                }
+                                const includedByChannel = new Map<string, number>()
+                                for (const c of willInclude) {
+                                    includedByChannel.set(c.channel, (includedByChannel.get(c.channel) ?? 0) + 1)
+                                }
+                                const disabledByAdmin = new Set(sourceStats
+                                    .filter(s => s.connectionId && s.sourcesTotal > 0 && s.sourcesActive === 0)
+                                    .map(s => s.connectionId!) as string[])
+                                const reasonFor = (c: ChannelConnection): string => {
+                                    if (disabledByAdmin.has(c.id)) return 'источник отключён администратором'
+                                    if (!c.isReady && onlyConnectedNow) {
+                                        if (c.status === 'qr' || c.status === 'authenticating') return 'ждёт QR'
+                                        return 'не активен'
+                                    }
+                                    if (!selectedConnectionIds.has(c.id)) {
+                                        // No history hint
+                                        const stat = sourceStats.find(s => s.connectionId === c.id)
+                                        if (!stat || stat.itemsTouched === 0) return 'нет истории'
+                                        return 'снят галкой'
+                                    }
+                                    return ''
+                                }
+                                // Safety warnings
+                                const warnings: string[] = []
+                                if (runtimeState.runtimeOn) {
+                                    warnings.push('AI сейчас отвечает из ядра — пересборка временно изменит его. Это нормально, но имейте в виду.')
+                                }
+                                if (readiness.overall === 'warn' || readiness.overall === 'fail') {
+                                    const conflictsCheck = readiness.checks.find(c => c.id === 'conflicts')
+                                    if (conflictsCheck && conflictsCheck.status === 'fail') {
+                                        warnings.push('В ядре есть неразрешённые спорные знания. Лучше сначала разобрать их.')
+                                    }
+                                }
+                                return (
+                                    <>
+                                        {willInclude.length === 0 ? (
+                                            <div className="text-[12px] text-gray-600">
+                                                Не выбрано ни одного аккаунта — сбор пройдёт только по уже загруженной истории.
+                                            </div>
+                                        ) : (
+                                            <div className="text-[12px] text-gray-700 space-y-0.5">
+                                                <div className="text-gray-500">AI проанализирует:</div>
+                                                {(['whatsapp','telegram','max'] as const).map(ch => {
+                                                    const n = includedByChannel.get(ch) ?? 0
+                                                    if (n === 0) return null
+                                                    return (
+                                                        <div key={ch} className="pl-2">
+                                                            — {CHANNEL_LABEL_LOCAL[ch]}: {n} {n === 1 ? 'аккаунт' : n < 5 ? 'аккаунта' : 'аккаунтов'}
+                                                            {ch !== 'whatsapp' && (
+                                                                <span className="text-amber-700 text-[10px]"> · точечный выбор аккаунта пока в работе — берётся вся история канала</span>
+                                                            )}
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+                                        {willNotInclude.length > 0 && (
+                                            <div className="text-[12px] text-gray-700 space-y-0.5 pt-1">
+                                                <div className="text-gray-500">Не участвуют:</div>
+                                                {willNotInclude.slice(0, 4).map(c => {
+                                                    const r = reasonFor(c)
+                                                    return (
+                                                        <div key={c.id} className="pl-2 text-gray-500">
+                                                            — {c.label}
+                                                            {r && <span className="text-gray-400"> · {r}</span>}
+                                                        </div>
+                                                    )
+                                                })}
+                                                {willNotInclude.length > 4 && (
+                                                    <div className="text-gray-400 pl-2">и ещё {willNotInclude.length - 4}</div>
+                                                )}
+                                            </div>
+                                        )}
+                                        <div className="text-[11px] text-gray-600 leading-relaxed pt-1.5 border-t border-[#E4ECFC] space-y-0.5">
+                                            <div className="text-gray-500">После запуска AI:</div>
+                                            <div className="pl-2">— соберёт знания из выбранных аккаунтов</div>
+                                            <div className="pl-2">— заблокирует противоречия с проверенными правилами</div>
+                                            <div className="pl-2">
+                                                — {runtimeState.runtimeOn
+                                                    ? 'постепенно начнёт отвечать клиентам из обновлённого ядра'
+                                                    : 'не изменит ответы клиентам — runtime пока выключен'}
+                                            </div>
+                                        </div>
+                                        {warnings.length > 0 && (
+                                            <div className="rounded border border-[#FFE8B0] bg-[#FFFBED] px-2.5 py-2 text-[11px] text-[#8B6914] leading-relaxed space-y-1">
+                                                {warnings.map((w, i) => (
+                                                    <div key={i}>⚠ {w}</div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
+                                )
+                            })()}
+                        </div>
+
                         <div>
                             <label className="text-[11px] text-gray-500 mb-1.5 flex items-center gap-1.5">
                                 Модель анализа переписок
@@ -4378,7 +4746,7 @@ export default function AiControlCenterClient({
                             <button onClick={handleStartExtraction} disabled={extractionStarting}
                                 className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors">
                                 {extractionStarting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                                Запустить
+                                Запустить сбор
                             </button>
                         </div>
                     </div>

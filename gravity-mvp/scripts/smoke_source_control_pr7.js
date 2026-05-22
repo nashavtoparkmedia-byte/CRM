@@ -377,7 +377,9 @@ async function main() {
         check('UI has Reset modal', /ResetCoreModal/.test(clientFile))
         check('UI has source disable handler', /handleDisableSource/.test(clientFile))
         check('UI has rebuild CTA', /Собрать заново/.test(clientFile))
-        check('UI has context summary', /Сейчас будет использовано/.test(clientFile))
+        // PR7.13: «Сейчас будет использовано» переехало в Шаг 3 модала
+        // и теперь называется «Что будет сделано» (с подблоком «AI проанализирует:»).
+        check('UI has context summary', /Что будет сделано/.test(clientFile) && /AI проанализирует/.test(clientFile))
         check('UI has sources_all_disabled badge', /sources_all_disabled/.test(clientFile))
         check('UI has typed confirm "ОЧИСТИТЬ"', /ОЧИСТИТЬ/.test(clientFile))
         check('UI has TG/MAX honest disclaimer', /точечный disable в работе/.test(clientFile))
