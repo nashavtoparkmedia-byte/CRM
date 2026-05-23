@@ -17,6 +17,7 @@
   <!-- Manager SIP extension passwords. Hardcoded — same reason. -->
   <X-PRE-PROCESS cmd="set" data="manager_101_password=changeme101"/>
   <X-PRE-PROCESS cmd="set" data="manager_102_password=changeme102"/>
+  <X-PRE-PROCESS cmd="set" data="manager_103_password=changeme103"/>
 
   <!-- ESL password — consumed by autoload_configs/event_socket.conf.xml -->
   <X-PRE-PROCESS cmd="set" data="ESL_PASSWORD=ClueCon"/>

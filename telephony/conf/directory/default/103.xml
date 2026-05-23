@@ -1,0 +1,23 @@
+<include>
+  <!--
+    Extension 103 — manager #3.
+    Создан для пользователя CRM, привязанного через
+    /settings/integrations/telephony к extension 103.
+    Структура идентична 101/102.
+  -->
+  <user id="103">
+    <params>
+      <param name="password" value="$${manager_103_password}"/>
+      <param name="vm-password" value="103"/>
+    </params>
+    <variables>
+      <variable name="toll_allow" value="domestic,international"/>
+      <variable name="accountcode" value="103"/>
+      <variable name="user_context" value="default"/>
+      <variable name="effective_caller_id_name" value="Manager 103"/>
+      <variable name="effective_caller_id_number" value="103"/>
+      <variable name="outbound_caller_id_name" value="$${megafon_username}"/>
+      <variable name="outbound_caller_id_number" value="$${megafon_username}"/>
+    </variables>
+  </user>
+</include>

@@ -27,6 +27,7 @@ services:
       # Manager extension passwords (Linphone + browser WebRTC)
       - MANAGER_101_PASSWORD=${MANAGER_101_PASSWORD:-changeme101}
       - MANAGER_102_PASSWORD=${MANAGER_102_PASSWORD:-changeme102}
+      - MANAGER_103_PASSWORD=${MANAGER_103_PASSWORD:-changeme103}
       # RTP port range — must match the port mapping above
       - RTP_START_PORT=16384
       - RTP_END_PORT=16484
