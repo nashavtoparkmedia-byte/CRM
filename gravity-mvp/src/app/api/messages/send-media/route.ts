@@ -95,24 +95,32 @@ export async function POST(req: NextRequest) {
             const result = await sendTelegramMedia(target, base64, filename, mimeType, caption, profileId)
             externalId = result.externalId || null
         } else if (channel === 'max') {
-            // PR-Щ TODO: реальная отправка файла через max-web-scraper API.
-            // Требует:
-            //   1. POST /send-media endpoint в max-web-scraper/index.js
-            //   2. Метод _doSendFile(chatId, buffer, filename) в SessionController
-            //      или новый MediaUpload модуль (Playwright setInputFiles +
-            //      ожидание progress bar + click send)
-            //   3. DOM-селекторы для attach-button + file-input + send в MAX-веб
-            //      (нужны живые dump'ы DOM для точности — конкретные классы svelte-*
-            //      меняются между релизами MAX)
-            // Пока возвращаем 501 с понятным сообщением для оператора.
-            return NextResponse.json(
-                {
-                    error: 'Отправка файлов через MAX пока не реализована. ' +
-                           'Используйте WhatsApp/Telegram для медиа или продублируйте ссылкой в текст.',
-                    todo: 'PR-Щ',
-                },
-                { status: 501 }
-            )
+            // PR-Щ: max-web-scraper уже имеет POST /send-media (использует
+            // sendImage / sendGenericMedia через MAX WebSocket protocol).
+            // Просто проксируем туда.
+            const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+            // Target — MAX internal chatId из externalChatId (без префикса)
+            // или phone digits если scraper умеет резолвить.
+            const target = chat.externalChatId?.replace(/^max:/, '') ||
+                           chat.driver?.phone?.replace(/\D/g, '') || ''
+            const cleanBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64
+            const resp = await fetch(`${maxScraperUrl}/send-media`, {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body:    JSON.stringify({
+                    chatId:    target,
+                    base64:    cleanBase64,
+                    filename,
+                    mimeType,
+                    caption:   caption || '',
+                    mediaType,
+                }),
+            })
+            if (!resp.ok) {
+                const errData = await resp.json().catch(() => ({ error: `MAX scraper ${resp.status}` }))
+                throw new Error(errData.error || `MAX send-media failed: ${resp.status}`)
+            }
+            externalId = null
         } else {
             return NextResponse.json(
                 { error: `Media send not implemented for channel: ${channel}` },
