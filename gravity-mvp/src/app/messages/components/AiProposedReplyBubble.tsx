@@ -28,6 +28,7 @@
 
 import { Bot, ThumbsUp, Pencil, X, Loader2 } from 'lucide-react'
 import type { ProposedReplyDTO } from '../proposed-reply-actions'
+import { humanizeAiReason } from '../utils/humanize-ai-reason'
 
 interface AiProposedReplyBubbleProps {
     proposal: ProposedReplyDTO | null
@@ -84,7 +85,8 @@ export default function AiProposedReplyBubble({
                 <div className="inline-flex items-start gap-1.5 rounded-lg bg-gray-100 border border-gray-200 px-3 py-1.5 text-[11px] text-gray-600 max-w-[80%]">
                     <Bot size={11} className="opacity-60 mt-[2px] shrink-0" />
                     <span className="flex-1">
-                        {silentMessage ?? 'AI пока ничего не предлагает'}
+                        {/* PR-Р: переводим технические причины на понятный язык. */}
+                        {humanizeAiReason(silentMessage)}
                     </span>
                     <button
                         type="button"
@@ -113,7 +115,8 @@ export default function AiProposedReplyBubble({
                         AI предлагает передать менеджеру
                     </div>
                     <div className="text-[13px] text-[#5C4807] leading-snug">
-                        {proposal.reasoning ?? 'Не хватает данных в Ядре знаний, чтобы ответить уверенно.'}
+                        {/* PR-Р: технические причины (confidence=X < threshold=Y) → человеческий язык. */}
+                        {humanizeAiReason(proposal.reasoning) || 'Не хватает данных в Ядре знаний, чтобы ответить уверенно.'}
                     </div>
                     <div className="mt-2.5 flex items-center gap-2">
                         <button
