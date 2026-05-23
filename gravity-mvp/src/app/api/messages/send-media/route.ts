@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
                            chat.driver?.phone ||
                            chat.externalChatId?.replace('telegram:', '') || ''
             const result = await sendTelegramMedia(target, base64, filename, mimeType, caption, profileId)
-            externalId = result.externalId || null
+            // PR-Щ hotfix: TG может вернуть BigInt — приводим к string явно
+            externalId = result.externalId != null ? String(result.externalId) : null
         } else if (channel === 'max') {
             // PR-Щ: max-web-scraper уже имеет POST /send-media (использует
             // sendImage / sendGenericMedia через MAX WebSocket protocol).
@@ -146,22 +147,36 @@ export async function POST(req: NextRequest) {
         const dataUrl = `data:${mimeType};base64,${cleanBase64}`
         const approxSize = Math.round(cleanBase64.length * 0.75)
 
-        // Save outbound message + attachment
-        const message = await prisma.message.create({
-            data: {
-                chatId,
-                direction: 'outbound',
-                type: unifiedType as any,
-                content: contentFallback(mediaType, caption),
-                channel: channel as any,
-                externalId,
-                status: 'delivered',
-                sentAt: new Date(),
-                metadata: { origin: 'operator', filename, mimeType },
-            },
-        })
+        // Save outbound message + attachment.
+        // Channel already delivered — если БД упадёт, лог + return 200 чтобы
+        // оператор не пересылал. UI просто не покажет attachment, но клиент
+        // его уже получил.
+        let message: any = null
+        try {
+            message = await prisma.message.create({
+                data: {
+                    chatId,
+                    direction: 'outbound',
+                    type: unifiedType as any,
+                    content: contentFallback(mediaType, caption),
+                    channel: channel as any,
+                    externalId,
+                    status: 'delivered',
+                    sentAt: new Date(),
+                    metadata: { origin: 'operator', filename, mimeType },
+                },
+            })
+        } catch (dbErr: any) {
+            console.error('[send-media] DB message.create failed (channel уже доставил):', dbErr?.message)
+            return NextResponse.json({
+                success: true,
+                delivered: true,
+                warning: `Сообщение доставлено клиенту, но не сохранилось в БД: ${dbErr?.message}`,
+            })
+        }
 
-        await prisma.messageAttachment.create({
+        try {
+            await prisma.messageAttachment.create({
             data: {
                 messageId: message.id,
                 type: unifiedType,
@@ -170,12 +185,17 @@ export async function POST(req: NextRequest) {
                 fileSize: approxSize,
                 mimeType,
             }
-        })
+            })
+        } catch (attErr: any) {
+            console.warn('[send-media] DB attachment.create failed (non-blocking):', attErr?.message)
+        }
 
-        await prisma.chat.update({
-            where: { id: chatId },
-            data: { lastMessageAt: new Date() },
-        })
+        try {
+            await prisma.chat.update({
+                where: { id: chatId },
+                data: { lastMessageAt: new Date() },
+            })
+        } catch {}
 
         return NextResponse.json({ success: true, messageId: message.id, externalId })
     } catch (err: any) {
