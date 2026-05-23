@@ -5,6 +5,7 @@ import { SendHorizonal, Paperclip, X, ChevronDown, Plus, Zap } from "lucide-reac
 import QuickReplySuggestions from "./QuickReplySuggestions"
 import type { QuickReplyTemplate } from "./QuickReplySuggestions"
 import QuickReplyPopover from "./QuickReplyPopover"
+import ImproveDraftPopover from "./ImproveDraftPopover"
 
 // In-memory Draft cache globally preserved across mounts (by chatId + channel)
 const draftCache = new Map<string, string>()
@@ -415,17 +416,27 @@ export default function MessageInputArea({
                 </button>
 
                 {/* ⚡ Quick Reply button */}
-                <button 
+                <button
                     onClick={() => setShowQuickReplyPopover(!showQuickReplyPopover)}
                     className={`h-[36px] w-[36px] rounded-full flex items-center justify-center transition-colors shrink-0 ${
-                        showQuickReplyPopover 
-                        ? 'bg-amber-100 text-amber-600' 
+                        showQuickReplyPopover
+                        ? 'bg-amber-100 text-amber-600'
                         : 'hover:bg-gray-100 text-gray-400 hover:text-amber-500'
                     }`}
                     title="Быстрые ответы"
                 >
                     <Zap size={16} />
                 </button>
+
+                {/* PR-Т: ✨ «Улучшить с ИИ» — popover с пресетами + diff preview.
+                    Активна только когда в input есть осмысленный черновик. */}
+                <div className="relative">
+                    <ImproveDraftPopover
+                        chatId={chatId}
+                        draft={text}
+                        onApply={(improved) => handleTextChange(improved)}
+                    />
+                </div>
 
                 {/* Channel + Account selector */}
                 <div className="relative" ref={dropdownRef}>
