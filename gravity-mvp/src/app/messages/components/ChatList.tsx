@@ -15,6 +15,7 @@ import NewChatPopover from "./NewChatPopover"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
 import AiInternToggle from "./AiInternToggle"
+import CallToolbar from "@/components/sip/CallToolbar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat, initialPhone }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void, initialPhone?: string | null }) {
@@ -637,11 +638,11 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                 </div>
             </div>
 
-            {/* PR-У: AI стажёр toggle — компактная кнопка под top-bar.
-                Дублирует тот же контрол что в /settings/ai, чтобы оператор
-                мог быстро вкл/выкл стажёра прямо из чатов. */}
-            <div className="px-3 pt-1 pb-1 shrink-0 flex items-center">
+            {/* PR-У/Ф: AI стажёр toggle + телефония-индикатор.
+                Дублируют контролы из /settings — быстрый доступ из чатов. */}
+            <div className="px-3 pt-1 pb-1 shrink-0 flex items-center gap-2 flex-wrap">
                 <AiInternToggle />
+                <CallToolbar />
             </div>
 
             {/* Search */}
