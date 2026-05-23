@@ -37,11 +37,24 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Get chat to determine channel
+        // Get chat to determine channel.
+        // telegramId живёт в отдельной модели DriverTelegram, не на Driver —
+        // raw query чтобы достать его одним запросом без рисков сломать schema.
         const chat = await prisma.chat.findUnique({
             where: { id: chatId },
-            select: { channel: true, externalChatId: true, driver: { select: { phone: true, telegramId: true } } }
-        })
+            select: { channel: true, externalChatId: true, driver: { select: { phone: true, id: true } } }
+        }) as any
+        // Подтягиваем telegramId опционально через raw query (избегаем падения если relation отсутствует)
+        if (chat?.driver?.id) {
+            try {
+                const rows = await prisma.$queryRaw<Array<{ telegramId: bigint }>>`
+                    SELECT "telegramId" FROM "DriverTelegram" WHERE "driverId" = ${chat.driver.id} LIMIT 1
+                `
+                if (rows[0]?.telegramId != null) {
+                    chat.driver.telegramId = rows[0].telegramId.toString()
+                }
+            } catch {}
+        }
 
         if (!chat) {
             return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
