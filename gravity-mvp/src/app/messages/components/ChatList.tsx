@@ -14,6 +14,7 @@ import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
+import AiInternToggle from "./AiInternToggle"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat, initialPhone }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void, initialPhone?: string | null }) {
@@ -635,6 +636,14 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                     {showNewChat && <NewChatPopover onClose={() => setShowNewChat(false)} onSelectChat={handleChatSelect} initialQuery={initialPhone || undefined} />}
                 </div>
             </div>
+
+            {/* PR-У: AI стажёр toggle — компактная кнопка под top-bar.
+                Дублирует тот же контрол что в /settings/ai, чтобы оператор
+                мог быстро вкл/выкл стажёра прямо из чатов. */}
+            <div className="px-3 pt-1 pb-1 shrink-0 flex items-center">
+                <AiInternToggle />
+            </div>
+
             {/* Search */}
             <div className="px-3.5 pt-2 pb-1.5 shrink-0">
                 <div className="relative group">
