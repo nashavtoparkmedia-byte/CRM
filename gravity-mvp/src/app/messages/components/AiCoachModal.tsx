@@ -18,7 +18,7 @@
  * в input bar родителя (через onApply callback).
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Bot, Loader2, Check, X, ChevronRight } from 'lucide-react'
 import {
     coachFromCorrection,
@@ -34,6 +34,12 @@ interface AiCoachModalProps {
     /** Callback после успешного apply (или skip) — родитель копирует
      *  текст в input bar и закрывает modal. */
     onApply:       (correctedText: string, result: ApplyCoachResult | null) => void
+    /** PR-С: если задан, textarea предзаполняется этим текстом
+     *  (используется когда оператор уже отправил ответ и мы учим AI на нём). */
+    initialCorrectedText?: string
+    /** PR-С: если true, сразу пропускаем шаг EDIT и запускаем coach.
+     *  Применимо когда initialCorrectedText заранее задан. */
+    autoStart?: boolean
 }
 
 type Step = 'edit' | 'loading' | 'approval' | 'applying' | 'done'
@@ -43,13 +49,25 @@ export default function AiCoachModal({
     originalDraft,
     onClose,
     onApply,
+    initialCorrectedText,
+    autoStart,
 }: AiCoachModalProps) {
     const [step, setStep] = useState<Step>('edit')
-    const [correctedText, setCorrectedText] = useState(originalDraft)
+    const [correctedText, setCorrectedText] = useState(initialCorrectedText ?? originalDraft)
     const [coachResult, setCoachResult] = useState<CoachResult | null>(null)
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [applyResult, setApplyResult] = useState<ApplyCoachResult | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const autoStartRef = useRef(false)
+
+    // PR-С: если открыт с initialCorrectedText + autoStart → сразу запустить coach
+    useEffect(() => {
+        if (autoStart && initialCorrectedText && !autoStartRef.current) {
+            autoStartRef.current = true
+            handleStartCoach()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoStart, initialCorrectedText])
 
     const handleStartCoach = async () => {
         if (!correctedText.trim()) return

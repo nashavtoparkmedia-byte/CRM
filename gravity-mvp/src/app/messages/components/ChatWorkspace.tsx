@@ -8,6 +8,8 @@ import MessageFeed from "./MessageFeed"
 import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
 import AiProposedReplyBubble from "./AiProposedReplyBubble"
 import AiCoachModal from "./AiCoachModal"
+import LearnFromReplyBanner from "./LearnFromReplyBanner"
+import { learnFromOutboundAction } from "../learn-from-outbound-actions"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import { useProposedReply } from "../hooks/useProposedReply"
@@ -129,8 +131,17 @@ function ChatWorkspaceInner({
     const [aiPrefillToken, setAiPrefillToken] = useState<number>(0)
     // PR9.55: «Поправить» теперь открывает Coach modal вместо простого copy
     const [coachOpen, setCoachOpen] = useState<{
-        proposalId: string
-        draft:      string
+        proposalId:    string
+        draft:         string
+        initialText?:  string  // PR-С: для autoStart при обучении из outbound
+        autoStart?:    boolean
+    } | null>(null)
+    // PR-С: banner после отправки, когда AI-черновик отличается от выбора оператора
+    const [learnBanner, setLearnBanner] = useState<{
+        proposalId:    string
+        aiText:        string
+        sentText:      string
+        similarityPct: number
     } | null>(null)
     const handleAiTake = useCallback(async () => {
         // proposal нужен ДО take() — после take() он становится null
@@ -204,6 +215,25 @@ function ChatWorkspaceInner({
                 }).catch(() => {})
             }
         }
+
+        // PR-С: «AI учится из ответа оператора».
+        // Сравниваем sent с активным AI-черновиком (если был).
+        // — similarity ≥ 80% → оператор взял AI-черновик (auto-verify, без UI)
+        // — similarity < 80% → показываем banner «Обучить AI»
+        // Async — не блокирует основной flow отправки.
+        learnFromOutboundAction(chatId, content)
+            .then(result => {
+                if (result.mode === 'show_banner') {
+                    setLearnBanner({
+                        proposalId:    result.proposalId,
+                        aiText:        result.aiText,
+                        sentText:      content,
+                        similarityPct: result.similarityPct,
+                    })
+                }
+                // 'auto_verified', 'no_proposal', 'error' — silent
+            })
+            .catch(err => console.warn('[learnFromOutbound] non-blocking:', err))
     }
 
     const handleRetry = (msg: Message) => {
@@ -308,17 +338,40 @@ function ChatWorkspaceInner({
                 <AiCoachModal
                     proposalId={coachOpen.proposalId}
                     originalDraft={coachOpen.draft}
+                    initialCorrectedText={coachOpen.initialText}
+                    autoStart={coachOpen.autoStart}
                     onClose={() => setCoachOpen(null)}
                     onApply={(correctedText, applyRes) => {
-                        // Текст идёт в input bar для отправки
-                        setAiPrefillText(correctedText)
-                        setAiPrefillToken(t => t + 1)
-                        // Лог в console (можно расширить toast'ом)
+                        // Текст идёт в input bar для отправки. PR-С: если модал
+                        // открыт из banner после уже отправленного сообщения —
+                        // initialText был = sent message, в input копировать не надо.
+                        if (!coachOpen.autoStart) {
+                            setAiPrefillText(correctedText)
+                            setAiPrefillToken(t => t + 1)
+                        }
                         if (applyRes && applyRes.applied.length > 0) {
                             console.log(`[ai-coach] обновлено в Ядре: ${applyRes.applied.length}`)
                         }
                         setCoachOpen(null)
                     }}
+                />
+            )}
+
+            {/* PR-С: banner «Обучить AI» после отправки если sent != AI-черновик. */}
+            {learnBanner && !coachOpen && (
+                <LearnFromReplyBanner
+                    similarityPct={learnBanner.similarityPct}
+                    onTrain={() => {
+                        // Открываем Coach modal с pre-filled correctedText = sentText, autoStart
+                        setCoachOpen({
+                            proposalId:    learnBanner.proposalId,
+                            draft:         learnBanner.aiText,
+                            initialText:   learnBanner.sentText,
+                            autoStart:     true,
+                        })
+                        setLearnBanner(null)
+                    }}
+                    onDismiss={() => setLearnBanner(null)}
                 />
             )}
 
