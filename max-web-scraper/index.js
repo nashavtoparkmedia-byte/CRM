@@ -165,10 +165,21 @@ async function handleIncoming(msg, mediaPipeline, messageSync) {
       if (!att.url) { downloaded.push(att); continue }
       try {
         const file = await mediaPipeline.downloadAttachment(att.url, att.mimeType)
-        downloaded.push({ ...att, localPath: file.localPath, size: file.size })
+        downloaded.push({
+          ...att,
+          localPath: file.localPath,
+          size:      file.size,
+          downloadStatus: 'ok',  // PR-Ч
+        })
       } catch (e) {
         console.error('[App] Ошибка скачивания вложения:', e.message)
-        downloaded.push(att)
+        // PR-Ч: сохраняем оригинальный URL чтобы UI/admin мог сделать manual retry.
+        // downloadStatus='failed' + downloadError для диагностики.
+        downloaded.push({
+          ...att,
+          downloadStatus: 'failed',
+          downloadError:  e.message,
+        })
       }
     }
     payload = { ...payload, attachments: downloaded }

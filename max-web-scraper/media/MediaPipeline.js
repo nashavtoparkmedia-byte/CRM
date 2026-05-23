@@ -39,34 +39,52 @@ class MediaPipeline {
   async downloadAttachment(url, mimeType) {
     if (!url) throw new Error('URL вложения не указан')
 
-    // Скачиваем через браузерный контекст — используем сессионные куки
-    const result = await this._page.evaluate(async ({ url }) => {
-      try {
-        const resp = await fetch(url, { credentials: 'include' })
-        if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}` }
-
-        const buffer = await resp.arrayBuffer()
-        const bytes  = new Uint8Array(buffer)
-
-        // Конвертируем в base64 для передачи из браузера в Node.js
-        let binary = ''
-        const chunk = 8192
-        for (let i = 0; i < bytes.length; i += chunk) {
-          binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-        }
-
-        return {
-          ok:       true,
-          base64:   btoa(binary),
-          mimeType: resp.headers.get('content-type') || null,
-          size:     buffer.byteLength
-        }
-      } catch (e) {
-        return { ok: false, error: e.message }
+    // PR-Ч: retry 3 раза с backoff. MAX даёт signed URL который может
+    // протухнуть за секунды; первая попытка фейлится, но через WebSocket
+    // прилетает refreshed URL — даём шанс ему попасть в очередь.
+    const MAX_RETRIES = 3
+    let lastError = null
+    let result = null
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 500 * attempt))
       }
-    }, { url })
+      result = await this._page.evaluate(async ({ url }) => {
+        try {
+          const resp = await fetch(url, { credentials: 'include' })
+          if (!resp.ok) return { ok: false, error: `HTTP ${resp.status}`, status: resp.status }
 
-    if (!result.ok) throw new Error(`Download failed: ${result.error}`)
+          const buffer = await resp.arrayBuffer()
+          const bytes  = new Uint8Array(buffer)
+
+          // Конвертируем в base64 для передачи из браузера в Node.js
+          let binary = ''
+          const chunk = 8192
+          for (let i = 0; i < bytes.length; i += chunk) {
+            binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+          }
+
+          return {
+            ok:       true,
+            base64:   btoa(binary),
+            mimeType: resp.headers.get('content-type') || null,
+            size:     buffer.byteLength
+          }
+        } catch (e) {
+          return { ok: false, error: e.message }
+        }
+      }, { url })
+
+      if (result.ok) break
+      lastError = result.error
+      // 4xx (кроме 408 timeout / 429 rate-limit) — не имеет смысла retry
+      if (result.status && result.status >= 400 && result.status < 500 &&
+          result.status !== 408 && result.status !== 429) {
+        break
+      }
+    }
+
+    if (!result || !result.ok) throw new Error(`Download failed after retries: ${lastError}`)
     if (result.size > MAX_FILE_SIZE) {
       throw new Error(`Файл слишком большой: ${result.size} байт (лимит ${MAX_FILE_SIZE})`)
     }
