@@ -31,14 +31,84 @@ class CrmIntegrationService {
                 const firstName = ctx.from?.first_name || null;
                 const lastName  = ctx.from?.last_name || null;
 
-                // Handle media messages that have no text/callback data
-                if (!text && ctx.message) {
-                    if (ctx.message.photo) text = '[Фото]';
-                    else if (ctx.message.voice) text = '[Голосовое сообщение]';
-                    else if (ctx.message.video) text = '[Видео]';
-                    else if (ctx.message.document) text = '[Документ]';
-                    else if (ctx.message.location) text = '[Локация]';
-                    else if (ctx.message.contact) text = '[Контакт]';
+                // PR-Ц: media attachments — собираем file_id и пробрасываем
+                // в webhook CRM. CRM при необходимости резолвит через Bot API
+                // (см. /api/tg-media proxy endpoint).
+                const attachments = [];
+                if (ctx.message) {
+                    const m = ctx.message;
+                    if (m.photo && m.photo.length > 0) {
+                        const largest = m.photo[m.photo.length - 1];
+                        attachments.push({
+                            type: 'image',
+                            fileId: largest.file_id,
+                            mimeType: 'image/jpeg',
+                            fileSize: largest.file_size || null,
+                            width: largest.width, height: largest.height,
+                        });
+                        if (!text) text = m.caption || '[Фото]';
+                    } else if (m.video) {
+                        attachments.push({
+                            type: 'video',
+                            fileId: m.video.file_id,
+                            mimeType: m.video.mime_type || 'video/mp4',
+                            fileSize: m.video.file_size || null,
+                            fileName: m.video.file_name || null,
+                            width: m.video.width, height: m.video.height,
+                            duration: m.video.duration,
+                        });
+                        if (!text) text = m.caption || '[Видео]';
+                    } else if (m.voice) {
+                        attachments.push({
+                            type: 'voice',
+                            fileId: m.voice.file_id,
+                            mimeType: m.voice.mime_type || 'audio/ogg',
+                            fileSize: m.voice.file_size || null,
+                            duration: m.voice.duration,
+                        });
+                        if (!text) text = m.caption || '[Голосовое сообщение]';
+                    } else if (m.audio) {
+                        attachments.push({
+                            type: 'audio',
+                            fileId: m.audio.file_id,
+                            mimeType: m.audio.mime_type || 'audio/mpeg',
+                            fileSize: m.audio.file_size || null,
+                            fileName: m.audio.file_name || null,
+                            duration: m.audio.duration,
+                        });
+                        if (!text) text = m.caption || '[Аудио]';
+                    } else if (m.document) {
+                        attachments.push({
+                            type: 'document',
+                            fileId: m.document.file_id,
+                            mimeType: m.document.mime_type || 'application/octet-stream',
+                            fileSize: m.document.file_size || null,
+                            fileName: m.document.file_name || 'document',
+                        });
+                        if (!text) text = m.caption || `[Документ: ${m.document.file_name || ''}]`;
+                    } else if (m.sticker) {
+                        attachments.push({
+                            type: 'sticker',
+                            fileId: m.sticker.file_id,
+                            mimeType: m.sticker.is_animated ? 'application/x-tgsticker' : 'image/webp',
+                            fileSize: m.sticker.file_size || null,
+                            width: m.sticker.width, height: m.sticker.height,
+                        });
+                        if (!text) text = m.sticker.emoji || '[Стикер]';
+                    } else if (m.video_note) {
+                        attachments.push({
+                            type: 'video',
+                            fileId: m.video_note.file_id,
+                            mimeType: 'video/mp4',
+                            fileSize: m.video_note.file_size || null,
+                            duration: m.video_note.duration,
+                        });
+                        if (!text) text = '[Видеосообщение]';
+                    } else if (m.location) {
+                        if (!text) text = `[Локация: ${m.location.latitude},${m.location.longitude}]`;
+                    } else if (m.contact) {
+                        if (!text) text = `[Контакт: ${m.contact.first_name || ''} ${m.contact.phone_number || ''}]`.trim();
+                    }
                 }
 
                 if (!telegramId || !text) return resolve();
@@ -54,6 +124,7 @@ class CrmIntegrationService {
                     chatTitle: chatTitle,
                     firstName: firstName,
                     lastName: lastName,
+                    attachments: attachments.length > 0 ? attachments : undefined,  // PR-Ц
                 };
 
                 const parsed = new URL(this.crmWebhookUrl);

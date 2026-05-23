@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
         // Structure expected from Bot's webhook payload
         const { telegramId, text, direction, username, timestamp,
                 chatType, chatId: tgChatId, chatTitle,
-                firstName, lastName } = body
+                firstName, lastName,
+                attachments } = body  // PR-Ц: media attachments from tg-bot
 
         if (!telegramId || !text) {
             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
@@ -183,15 +184,24 @@ export async function POST(req: NextRequest) {
 
             if (!existing) {
                 const msgDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
+                // PR-Ц: определяем тип сообщения по первому attachment.
+                // text → текст без медиа; image/video/voice/audio/document/sticker → media-сообщение.
+                const firstAtt = Array.isArray(attachments) && attachments.length > 0 ? attachments[0] : null
+                const msgType = firstAtt?.type || 'text'
+                const msgMetadata: any = {}
+                if (Array.isArray(attachments) && attachments.length > 0) {
+                    msgMetadata.attachments = attachments
+                }
                 await (prisma.message as any).create({
                     data: {
                         chatId: unifiedChat.id,
                         direction: msgDirection,
                         content: text,
                         channel: 'telegram',
-                        type: 'text',
+                        type: msgType,
                         sentAt: sentAt,
-                        status: 'delivered'
+                        status: 'delivered',
+                        metadata: msgMetadata,
                     }
                 })
 
