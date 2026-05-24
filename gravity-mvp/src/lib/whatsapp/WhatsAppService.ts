@@ -531,8 +531,21 @@ async function syncHistory(connectionId: string, client: Client) {
                 // the JID is the group id, not a phone — no contact to link.
                 if (!isGroupChat && !unifiedSyncChat.contactId) {
                     try {
-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+                        const serialized: string = chatRaw.id._serialized || ''
+                        const isLid = serialized.endsWith('@lid')
+                        const rawPhone = serialized.split('@')[0]
+                        if (isLid) {
+                            // Для @lid передаём identity externalId = весь LID-JID, phone=null.
+                            // НЕ цифры из @lid (это linked-device id, не phone) — иначе фабрикуем phantom phone.
+                            const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
+                            await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                            await enrichWaChatNameFromSibling(
+                                unifiedSyncChat.id,
+                                unifiedSyncChat.name,
+                                contactResult.contact.id,
+                                null,
+                            ).catch(err => console.warn(`[WA-SERVICE] enrichChatName failed: ${err.message}`))
+                        } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
                             const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
                             await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
                             // PR-Л: если у этого нового chat name=null/placeholder, но
@@ -935,9 +948,23 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                         contact = await msg.getContact()
                     }
                     if (contact && contact.number) {
-                        console.log(`[WA-SERVICE] Translated LID ${rawChatId} to contact number ${contact.number}`)
-                        rawChatId = `${contact.number}@c.us`
-                        lidResolved = true
+                        // Sanity check: whatsapp-web.js иногда возвращает в contact.number
+                        // последние цифры самого LID (а не реальный phone). Это происходит
+                        // на multi-device аккаунтах и приводит к созданию фантомных phones
+                        // вида '+70945844415' (= 7 + last10 of '124360945844415@lid'),
+                        // которые системно не принадлежат пользователю.
+                        // См. инцидент с дублем «Исаков Алексей Yoko» (mergeRecord cmmpjbywb9vkv95mh4).
+                        const lidTail10 = rawChatId.split('@')[0].replace(/\D/g, '').slice(-10)
+                        const contactTail10 = contact.number.replace(/\D/g, '').slice(-10)
+                        if (lidTail10 && contactTail10 === lidTail10) {
+                            console.warn(`[WA-SERVICE] LID ${rawChatId} → contact.number "${contact.number}" совпадает с tail LID — это фантом, не resolving. Чат останется @lid до прихода настоящего phone.`)
+                            // НЕ ставим lidResolved=true и НЕ перезаписываем rawChatId.
+                            // Identity создастся с externalId=raw LID, phone=null (line 1068-1069).
+                        } else {
+                            console.log(`[WA-SERVICE] Translated LID ${rawChatId} to contact number ${contact.number}`)
+                            rawChatId = `${contact.number}@c.us`
+                            lidResolved = true
+                        }
                     } else {
                         console.warn(`[WA-SERVICE] LID ${rawChatId} has no .number — keeping JID as-is, will not invent a phone`)
                     }
@@ -1895,8 +1922,21 @@ export async function importWhatsAppHistory(
                 // Group JIDs are room ids, not phones.
                 if (!isGroupChat && !unifiedChat.contactId) {
                     try {
-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+                        const serialized: string = chatRaw.id._serialized || ''
+                        const isLid = serialized.endsWith('@lid')
+                        const rawPhone = serialized.split('@')[0]
+                        if (isLid) {
+                            // Для @lid: externalId = весь LID-JID, phone=null. См. live-path выше.
+                            const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
+                            await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
+                            await enrichWaChatNameFromSibling(
+                                unifiedChat.id,
+                                unifiedChat.name,
+                                contactResult.contact.id,
+                                null,
+                            ).catch(err => console.warn(`[WA-SERVICE] importHistory enrichChatName failed: ${err.message}`))
+                            totalContacts++
+                        } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
                             const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
                             await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
                             // PR-Л: тот же sibling-lookup как в syncHistory.
@@ -2106,7 +2146,10 @@ async function updateImportJob(jobId: string, data: {
 export async function checkReachability(
     phone: string,
     connectionId?: string
-): Promise<{ reachable: boolean; error?: string }> {
+): Promise<{ reachable: boolean; confirmed?: boolean; error?: string }> {
+    // `confirmed: true` помечает РЕАЛЬНЫЙ positive answer от WhatsApp client.isRegisteredUser().
+    // Soft fallback'и (no connection / stale client / short phone / timeout / exception) возвращают reachable:true
+    // БЕЗ confirmed — чтобы route /api/channels/check-reachability не персистил status='confirmed' ложно.
     const TIMEOUT_MS = 8_000
 
     try {
@@ -2142,7 +2185,7 @@ export async function checkReachability(
         if (result === null) return { reachable: true }
 
         if (result) {
-            return { reachable: true }
+            return { reachable: true, confirmed: true }  // ← реально найден в WA
         } else {
             return { reachable: false, error: 'Номер не зарегистрирован в WhatsApp' }
         }

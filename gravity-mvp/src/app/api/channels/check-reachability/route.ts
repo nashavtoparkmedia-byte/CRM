@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    let result: { reachable: boolean; telegramId?: string; error?: string }
+    let result: { reachable: boolean; telegramId?: string; confirmed?: boolean; error?: string }
 
     if (channel === 'telegram') {
       const { checkTelegramReachability } = await import('@/app/tg-actions')
@@ -57,7 +57,9 @@ export async function POST(req: NextRequest) {
     // so we only persist when we got a real answer (reachable:false is always real;
     // reachable:true with telegramId is real for TG; for WA reachable:true without
     // error is a real positive check).
-    const isDefinitive = result.reachable === false || result.telegramId
+    // Definitive если: явный negative, либо явный positive с маркером (TG: telegramId, WA: confirmed).
+    // Без маркера reachable:true — это soft fallback (timeout/no connection/etc), не персистим.
+    const isDefinitive = result.reachable === false || !!result.telegramId || !!result.confirmed
     if (isDefinitive) {
       const identityId = await findIdentityByPhoneAndChannel(normalized, channel)
       if (identityId) {

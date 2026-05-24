@@ -202,6 +202,12 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         identities: contact.identities.filter(i => i.phoneId === phone.id),
     })) : []
     const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
+    // Каналы, в которых у contact есть ХОТЯ БЫ ОДИН confirmed identity (включая orphan).
+    // Используется в missing-channels блоке: для MAX live-check phone-reachability не делается,
+    // но если orphan MAX identity confirmed (auto-link через scraper) — точка должна быть зелёной.
+    const confirmedChannelsAny = contact
+        ? new Set(contact.identities.filter(i => i.reachabilityStatus === 'confirmed').map(i => i.channel))
+        : new Set<string>()
 
     return (
         <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
@@ -470,13 +476,17 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const isWriting = writingIdentityId === identity.id
                                             const chStatus = channelStatus[identity.channel]
                                             const hasFailed = chStatus?.status === 'failed'
-                                            const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp'
+                                            // Все 3 канала (TG/WA/MAX) считаются checkable. MAX берёт persisted reachabilityStatus
+                                            // (live-check для него не делается, но если scraper auto-link проставил confirmed — покажем зелёный).
+                                            const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp' || identity.channel === 'max'
                                             const reachable = getReachability(identity)
+                                            // Bug fix: getReachability возвращает null для 'unknown'. Прежнее условие `!== undefined`
+                                            // отправляло null в красную ветку (null ? emerald : red → red). Теперь null → серый.
                                             return (
                                                 <div key={identity.id}>
                                                     <div className="flex items-center justify-between h-[26px]">
                                                         <div className="flex items-center gap-1.5">
-                                                            {isCheckable && reachable !== undefined ? (
+                                                            {isCheckable && reachable !== null && reachable !== undefined ? (
                                                                 <span className={`inline-block w-[7px] h-[7px] rounded-full ${reachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={reachable ? 'Номер найден' : 'Номер не найден'} />
                                                             ) : (
                                                                 <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверка недоступна" />
@@ -519,12 +529,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {missingChannels.map(ch => {
                                             const cfg = CHANNEL_CONFIG[ch]
                                             const isWriting = writingIdentityId === `phone_${ch}`
-                                            const isMissingCheckable = ch === 'telegram' || ch === 'whatsapp'
-                                            const missingReachable = liveReachability[ch] !== undefined ? liveReachability[ch] : null
+                                            // Расширили до MAX. liveReachability[max] обычно undefined,
+                                            // но если у contact есть confirmed identity в этом канале (даже orphan) — берём его статус.
+                                            const isMissingCheckable = ch === 'telegram' || ch === 'whatsapp' || ch === 'max'
+                                            const liveVal = liveReachability[ch] !== undefined ? liveReachability[ch] : null
+                                            const missingReachable = liveVal !== null ? liveVal : (confirmedChannelsAny.has(ch) ? true : null)
                                             return (
                                                 <div key={`missing-${ch}`} className="flex items-center justify-between h-[26px]">
                                                     <div className="flex items-center gap-1.5">
-                                                        {isMissingCheckable && missingReachable !== undefined ? (
+                                                        {/* Bug fix: same null-vs-undefined trap as above */}
+                                                        {isMissingCheckable && missingReachable !== null && missingReachable !== undefined ? (
                                                             <span className={`inline-block w-[7px] h-[7px] rounded-full ${missingReachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={missingReachable ? 'Номер найден' : 'Номер не найден'} />
                                                         ) : (
                                                             <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверка недоступна" />
