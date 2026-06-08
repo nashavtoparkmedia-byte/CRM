@@ -3,3 +3,7 @@ node_modules
 .env
 
 /generated/prisma
+
+# Scraper runtime — persistent browser profile, screenshots and HTML dumps
+.bot_profile/
+.artifacts/

@@ -8,6 +8,9 @@
     "start:worker": "tsx src/worker.ts",
     "login": "tsx src/scripts/login.ts",
     "probe:driver-actions": "tsx src/scripts/probe-driver-actions.ts",
+    "probe:driver-actions-cdp": "tsx src/scripts/probe-driver-actions-cdp.ts",
+    "import:chrome-cookies": "tsx src/scripts/import-chrome-cookies.ts",
+    "login:auto": "tsx src/scripts/auto-login.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],
@@ -34,6 +37,7 @@
     "@types/node": "^25.3.3",
     "@types/node-cron": "^3.0.11",
     "@types/supertest": "^7.2.0",
+    "better-sqlite3": "^12.10.0",
     "jest": "^30.2.0",
     "prisma": "^6.19.2",
     "supertest": "^7.2.2",
