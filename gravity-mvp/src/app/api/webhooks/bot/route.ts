@@ -24,6 +24,14 @@ export async function POST(request: Request) {
                 return await handleSearchCarByPlate(payload)
             case 'update_driver_car':
                 return await handleUpdateDriverCar(payload)
+            case 'get_order_price':
+                return await handleDriverAction(payload, 'GET_PRICE')
+            case 'complete_order':
+                return await handleDriverAction(payload, 'COMPLETE_ORDER')
+            case 'cancel_order':
+                return await handleDriverAction(payload, 'CANCEL_ORDER')
+            case 'poll_driver_action':
+                return await handlePollDriverAction(payload)
             default:
                 return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
         }
@@ -430,4 +438,150 @@ async function handleUpdateDriverCar(payload: any) {
         console.error('[update_driver_car] Error:', err.message)
         return NextResponse.json({ error: err.message }, { status: 500 })
     }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Driver-actions bridge — proxies "Цена / Завершить / Отменить" between
+// TG bot and yandex-fleet-scraper. Resolves telegramId → Driver →
+// yandexDriverId, persists a DriverAction audit row, enqueues a scraper task,
+// returns taskId so the bot can poll.
+// ────────────────────────────────────────────────────────────────────────────
+
+const SCRAPER_URL = process.env.YANDEX_FLEET_SCRAPER_URL || 'http://localhost:3003'
+const DRIVER_ACTIONS_PARK_ID = process.env.DRIVER_ACTIONS_PARK_ID ||
+    '45e30e9d6b824c608e5d28719cb19a6e' // Наш Автопарк / Екатеринбург (new UI)
+
+type DriverActionKind = 'GET_PRICE' | 'COMPLETE_ORDER' | 'CANCEL_ORDER'
+
+async function handleDriverAction(payload: any, kind: DriverActionKind) {
+    const { telegramId, reason } = payload || {}
+    if (!telegramId) {
+        return NextResponse.json({ ok: false, error: 'Missing telegramId' }, { status: 400 })
+    }
+
+    // 1. Resolve telegram → driver → yandexDriverId
+    const mapping = await prisma.driverTelegram.findFirst({
+        where: { telegramId: BigInt(telegramId) }
+    })
+    if (!mapping?.driverId) {
+        return NextResponse.json({
+            ok: false,
+            error: 'NOT_LINKED',
+            message: 'Профиль не привязан. Нажмите «Мой автомобиль» и поделитесь номером.',
+        })
+    }
+    const driver = await prisma.driver.findUnique({
+        where: { id: mapping.driverId },
+        select: { id: true, fullName: true, yandexDriverId: true },
+    })
+    if (!driver?.yandexDriverId) {
+        // Audit even when we can't proceed — useful for support.
+        await prisma.driverAction.create({
+            data: {
+                driverId: mapping.driverId,
+                kind,
+                requestedBy: String(telegramId),
+                status: 'ESCALATED_TO_MANAGER',
+                errorMessage: 'driver has no yandexDriverId',
+            },
+        }).catch(() => {})
+        return NextResponse.json({
+            ok: false,
+            error: 'NO_YANDEX_ID',
+            message: 'Не нашли ваш профиль в Яндексе. Менеджер обработает запрос.',
+        })
+    }
+
+    // 2. Enqueue scraper task
+    let scraperTaskId: string | null = null
+    try {
+        const res = await fetch(`${SCRAPER_URL}/api/driver-actions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                kind,
+                driverYandexId: driver.yandexDriverId,
+                parkId: DRIVER_ACTIONS_PARK_ID,
+                reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
+            }),
+        })
+        const json = await res.json()
+        if (!res.ok || !json.taskId) {
+            throw new Error(json.error || `scraper ${res.status}`)
+        }
+        scraperTaskId = json.taskId
+    } catch (e: any) {
+        await prisma.driverAction.create({
+            data: {
+                driverId: driver.id,
+                kind,
+                requestedBy: String(telegramId),
+                status: 'FAILED',
+                errorMessage: `scraper unreachable: ${e.message}`,
+            },
+        }).catch(() => {})
+        return NextResponse.json({
+            ok: false,
+            error: 'SCRAPER_DOWN',
+            message: 'Система временно недоступна. Менеджер обработает запрос.',
+        })
+    }
+
+    // 3. Audit row in CRM
+    const action = await prisma.driverAction.create({
+        data: {
+            driverId: driver.id,
+            kind,
+            requestedBy: String(telegramId),
+            status: 'PENDING',
+            scraperTaskId,
+        },
+    })
+
+    return NextResponse.json({
+        ok: true,
+        actionId: action.id,
+        taskId: scraperTaskId,
+        status: 'PENDING',
+        message: '⏳ Передаю в систему…',
+    })
+}
+
+async function handlePollDriverAction(payload: any) {
+    const { taskId } = payload || {}
+    if (!taskId) return NextResponse.json({ ok: false, error: 'Missing taskId' }, { status: 400 })
+
+    let scraperState: any
+    try {
+        const res = await fetch(`${SCRAPER_URL}/api/driver-actions/${taskId}`)
+        scraperState = await res.json()
+        if (!res.ok) {
+            return NextResponse.json({ ok: false, error: scraperState?.error || `scraper ${res.status}` })
+        }
+    } catch (e: any) {
+        return NextResponse.json({ ok: false, error: `scraper unreachable: ${e.message}` })
+    }
+
+    // Mirror state into DriverAction row (best-effort — race with parallel polls is fine).
+    if (scraperState.status && scraperState.status !== 'PENDING') {
+        await prisma.driverAction.updateMany({
+            where: { scraperTaskId: taskId, status: 'PENDING' },
+            data: {
+                status: scraperState.status,
+                result: scraperState.result ?? undefined,
+                errorMessage: scraperState.errorMessage ?? null,
+                shortOrderId: scraperState.result?.shortOrderId ?? undefined,
+                orderId: scraperState.result?.orderLongId ?? undefined,
+                completedAt: new Date(),
+            },
+        }).catch(() => {})
+    }
+
+    return NextResponse.json({
+        ok: true,
+        taskId,
+        status: scraperState.status,
+        result: scraperState.result || null,
+        errorMessage: scraperState.errorMessage || null,
+    })
 }
