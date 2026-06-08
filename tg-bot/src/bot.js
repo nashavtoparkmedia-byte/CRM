@@ -13,6 +13,7 @@ const crmIntegration = require('./services/crmIntegration');
 const limitManagementScene = require('./handlers/balanceLimit');
 const carManagementScene = require('./handlers/carManagement');
 const driverOrderScene = require('./handlers/driverOrder');
+const quickLimitScene = require('./handlers/quickLimit');
 
 // Validate configuration
 config.validate();
@@ -52,7 +53,9 @@ const staticButtons = [
     '🚖 Yandex Taxi Fun',
     '🚗 Подключиться',
     '🚘 Мой автомобиль',
-    '🚖 Текущий заказ'
+    '🚖 Текущий заказ',
+    '💳 Только безнал',
+    '💵 Включить наличку'
 ];
 
 bot.use(async (ctx, next) => {
@@ -109,7 +112,7 @@ bot.use(async (ctx, next) => {
 });
 
 // 2. Stage initialization
-const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene]);
+const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene, quickLimitScene]);
 
 // 2.1 Universal Commands within Stage
 stage.start(startHandler.handleStart);
@@ -188,6 +191,19 @@ bot.hears('🚖 Текущий заказ', async (ctx) => {
     const userId = ctx.from.id;
     console.log(`[BUTTON CLICK] 🚖 Текущий заказ ${userId}`);
     return await ctx.scene.enter('driverOrder');
+});
+
+// Quick limit presets (one tap each)
+bot.hears('💳 Только безнал', async (ctx) => {
+    const userId = ctx.from.id;
+    console.log(`[BUTTON CLICK] 💳 Только безнал ${userId}`);
+    return await ctx.scene.enter('quick_limit', { targetLimit: 200000, label: '💳 Только безнал (лимит 200 000 ₽)' });
+});
+
+bot.hears('💵 Включить наличку', async (ctx) => {
+    const userId = ctx.from.id;
+    console.log(`[BUTTON CLICK] 💵 Включить наличку ${userId}`);
+    return await ctx.scene.enter('quick_limit', { targetLimit: 5, label: '💵 Включить наличку (лимит 5 ₽)' });
 });
 
 // Handle contact (phone number) sharing

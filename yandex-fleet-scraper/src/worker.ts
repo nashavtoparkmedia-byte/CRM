@@ -627,12 +627,11 @@ async function locateActiveOrder(page: Page, driverYandexId: string, parkId: str
 }
 
 /**
- * Lightweight 1-page scrape — open /map/drivers/<id>, read ONLY the
- * "Фиксированная стоимость" value (the live order price). Other fields
- * on this page (addresses, tariff, etc.) are noisier than /orders/<long>
- * and we skip them. Returns null if no price label.
+ * Lightweight scrape of /map/drivers/<id> — pulls the live "Фиксированная
+ * стоимость" (only place Yandex shows the order price) and "Время поездки"
+ * (cheaper to read here than to open another /orders/<long> tab).
  */
-async function getOrderPriceFromMap(page: Page, driverYandexId: string, parkId: string): Promise<number | null> {
+async function getOrderPriceFromMap(page: Page, driverYandexId: string, parkId: string): Promise<{ priceRub: number | null; durationText: string | null }> {
     const url = `https://fleet.yandex.ru/map/drivers/${driverYandexId}?park_id=${parkId}`;
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3500);
@@ -659,14 +658,21 @@ async function getOrderPriceFromMap(page: Page, driverYandexId: string, parkId: 
             }
             return null;
         };
-        var s = valueNextTo('Фиксированная стоимость');
-        if (!s) return null;
-        var m = s.match(/([\\d\\s.,]+)/);
-        if (!m) return null;
-        var n = parseFloat(m[1].replace(/\\s+/g, '').replace(',', '.'));
-        return isNaN(n) ? null : n;
+        var priceStr = valueNextTo('Фиксированная стоимость');
+        var priceRub = null;
+        if (priceStr) {
+            var m = priceStr.match(/([\\d\\s.,]+)/);
+            if (m) {
+                var n = parseFloat(m[1].replace(/\\s+/g, '').replace(',', '.'));
+                if (!isNaN(n)) priceRub = n;
+            }
+        }
+        return {
+            priceRub: priceRub,
+            durationText: valueNextTo('Время поездки')
+        };
     })()`;
-    return await page.evaluate(evalScript) as number | null;
+    return await page.evaluate(evalScript) as any;
 }
 
 /**
@@ -792,6 +798,69 @@ async function enrichOrderFromPage(page: Page, orderHref: string, parkId: string
     return await page.evaluate(evalScript) as any;
 }
 
+/**
+ * Capture a screenshot of the full-screen route map for the given order.
+ * Yandex's /orders/<long>/map page renders a viewport-wide map with the
+ * pickup, drops, and current driver position. We return base64 PNG so the
+ * bot can `replyWithPhoto({ source: buffer })` without a separate endpoint.
+ */
+async function captureOrderMapScreenshot(page: Page, orderLongId: string, parkId: string): Promise<{ base64: string | null; distanceText: string | null }> {
+    const url = `https://fleet.yandex.ru/orders/${orderLongId}/map?park_id=${parkId}`;
+    try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        // The map tiles + route line need extra time after DOM is ready.
+        await page.waitForTimeout(5500);
+
+        // Pull "Расстояние" from the right-side details panel before we crop it out.
+        const distanceText = await page.evaluate(`(() => {
+            var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+            for (var i = 0; i < all.length; i++) {
+                var el = all[i];
+                var t = (el.textContent || '').trim();
+                if (t !== 'Расстояние') continue;
+                if (Array.prototype.slice.call(el.children).some(function(c){ return (c.textContent || '').trim() === 'Расстояние'; })) continue;
+                var sib = el.nextElementSibling;
+                while (sib) {
+                    var st = (sib.textContent || '').trim();
+                    if (st && st !== 'Расстояние' && st.length < 60) return st;
+                    sib = sib.nextElementSibling;
+                }
+                var p = el.parentElement;
+                for (var j = 0; j < 4 && p; j++, p = p.parentElement) {
+                    var kids = Array.prototype.slice.call(p.children);
+                    for (var k = 0; k < kids.length; k++) {
+                        var ch = kids[k];
+                        if (ch.contains(el) || el.contains(ch)) continue;
+                        var ct = (ch.textContent || '').trim();
+                        if (ct && ct !== 'Расстояние' && ct.length < 60) return ct;
+                    }
+                }
+            }
+            return null;
+        })()`) as string | null;
+
+        // Crop out the Yandex Fleet left nav rail and the right-side
+        // "Заказ" details panel so the screenshot is map-only.
+        // Defaults match observed UI; can be overridden via env.
+        const leftPad = parseInt(process.env.MAP_LEFT_PAD || '80', 10);
+        const rightPad = parseInt(process.env.MAP_RIGHT_PAD || '480', 10);
+        const dims = await page.evaluate(() =>
+            ({ w: window.innerWidth, h: window.innerHeight })
+        );
+        const clipW = Math.max(200, dims.w - leftPad - rightPad);
+        const clipH = dims.h;
+        const buf = await page.screenshot({
+            type: 'jpeg',
+            quality: 70,
+            clip: { x: leftPad, y: 0, width: clipW, height: clipH },
+        });
+        return { base64: buf.toString('base64'), distanceText };
+    } catch (e: any) {
+        console.warn(`captureOrderMapScreenshot failed: ${e?.message || e}`);
+        return { base64: null, distanceText: null };
+    }
+}
+
 async function processGetPrice(job: DriverActionJob) {
     const { taskId, driverYandexId, parkId } = job;
 
@@ -820,14 +889,25 @@ async function processGetPrice(job: DriverActionJob) {
         }
         // 2) Enrich from /orders/<long_id> — dates, source, tariff, payment, addresses.
         const enrich = await enrichOrderFromPage(page, active.orderHref, parkId, active.orderLongId);
-        // 3) One-shot read of "Фиксированная стоимость" from /map/drivers/<id>.
+        // 3) "Фиксированная стоимость" + "Время поездки" from /map/drivers/<id>.
         let priceRub: number | null = null;
+        let durationText: string | null = null;
         try {
-            priceRub = await getOrderPriceFromMap(page, driverYandexId, parkId);
+            const mp = await getOrderPriceFromMap(page, driverYandexId, parkId);
+            priceRub = mp.priceRub;
+            durationText = mp.durationText;
         } catch (e: any) {
             console.warn(`[Worker][${taskId}] price-from-map failed: ${e.message}`);
         }
-        console.log(`[Worker][${taskId}] short=${active.shortOrderId} priceRub=${priceRub} enrich=${JSON.stringify(enrich)}`);
+        // 4) Full-screen route map screenshot + Расстояние.
+        let mapImageBase64: string | null = null;
+        let distanceText: string | null = null;
+        if (active.orderLongId) {
+            const cap = await captureOrderMapScreenshot(page, active.orderLongId, parkId);
+            mapImageBase64 = cap.base64;
+            distanceText = cap.distanceText;
+        }
+        console.log(`[Worker][${taskId}] short=${active.shortOrderId} priceRub=${priceRub} duration=${durationText} distance=${distanceText} mapImage=${mapImageBase64 ? mapImageBase64.length + ' chars b64' : 'null'} enrich=${JSON.stringify(enrich)}`);
 
         await patchDriverActionState(taskId, {
             status: 'DONE',
@@ -842,6 +922,9 @@ async function processGetPrice(job: DriverActionJob) {
                 fromAddress:   enrich?.fromAddress || null,
                 toAddress:     enrich?.toAddress || null,
                 stops:         enrich?.stops || [],
+                durationText,
+                distanceText,
+                mapImageBase64,
             },
         });
     });

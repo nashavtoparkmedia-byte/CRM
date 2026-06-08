@@ -56,7 +56,8 @@ async function getMainMenu(ctx) {
     // Standard buttons for regular users
     const userButtons = [
         ['🛠 Поддержка', ...surveyButtons.slice(0, 1)], // First row: Support + First Survey
-        ['💳 Управление лимитом', '🚘 Мой автомобиль'],
+        ['🚘 Мой автомобиль'],
+        ['💳 Только безнал', '💵 Включить наличку'],
         ['🚖 Текущий заказ'],
         ['🚖 Yandex Taxi Fun', '🚗 Подключиться'],
         ['📖 Новости']

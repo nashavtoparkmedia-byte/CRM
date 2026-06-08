@@ -165,6 +165,16 @@ function renderOrderCard(state) {
 
 async function showOrderCard(ctx, state) {
     await ctx.reply(renderOrderCard(state), { parse_mode: 'Markdown', ...orderKeyboard() });
+    // If scraper attached a route map screenshot, send it as a photo.
+    const b64 = state?.result?.mapImageBase64;
+    if (b64 && typeof b64 === 'string' && b64.length > 100) {
+        try {
+            const buf = Buffer.from(b64, 'base64');
+            await ctx.replyWithPhoto({ source: buf }, { caption: '🗺 Маршрут' });
+        } catch (e) {
+            logger.warn(`[DriverOrder] map photo send failed: ${e?.message || e}`);
+        }
+    }
 }
 
 async function reportFailure(ctx, state) {
