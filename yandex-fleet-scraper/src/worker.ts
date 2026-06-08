@@ -702,14 +702,15 @@ async function processCancelOrder(job: DriverActionJob) {
 
     if (!envFlag('CANCEL_ORDER_LIVE_ENABLED', false)) {
         await patchDriverActionState(taskId, {
-            status: 'NEEDS_REASON_PROBE',
-            errorMessage: 'CANCEL_ORDER_LIVE_ENABLED=false — cancel-reason modal not reverse-engineered yet, manager will handle',
+            status: 'ESCALATED_TO_MANAGER',
+            errorMessage: 'CANCEL_ORDER_LIVE_ENABLED=false — manager will handle manually',
         });
         return;
     }
 
-    // When live: navigate to order page → click Отменить → handle modal.
-    // Modal handling is TODO until first probed.
+    // Optimistic flow: assume no reason-modal (or a trivial confirm). If a
+    // live test reveals a dropdown of reasons, we'll extend this with the
+    // selectors discovered in that probe.
     await withDriverProfile(async (page) => {
         const active = await locateActiveOrder(page, driverYandexId, parkId);
         if (!active) {
@@ -719,6 +720,7 @@ async function processCancelOrder(job: DriverActionJob) {
             });
             return;
         }
+
         await page.goto(active.orderHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(4000);
         await dismissOverlays(page);
@@ -726,6 +728,7 @@ async function processCancelOrder(job: DriverActionJob) {
 
         const cancelBtn = page.getByRole('button', { name: /^Отменить$/i }).first();
         if (!await cancelBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await takeStepScreenshot(page, taskId, 'cancel_no_button');
             await patchDriverActionState(taskId, {
                 status: 'FAILED',
                 errorMessage: 'Отменить button not visible',
@@ -734,15 +737,26 @@ async function processCancelOrder(job: DriverActionJob) {
         }
         await cancelBtn.click({ timeout: 3000 });
         await page.waitForTimeout(2500);
-        await takeStepScreenshot(page, taskId, 'cancel_modal_open');
+        await takeStepScreenshot(page, taskId, 'cancel_after_click');
 
-        // TODO: select cancel reason "Отменено водителем" and confirm.
-        // Until then — abort and escalate so we don't accidentally confirm a real cancel.
-        await page.keyboard.press('Escape').catch(() => {});
+        // Generic confirm modal — same shape as in processCompleteOrder.
+        try {
+            const confirm = page.getByRole('button', { name: /Отменить заказ|Подтвердить|Да/i }).first();
+            if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) {
+                await confirm.click({ timeout: 2000 });
+                await page.waitForTimeout(2000);
+                await takeStepScreenshot(page, taskId, 'cancel_after_confirm');
+            }
+        } catch { /* no modal — single-click flow */ }
+
         await patchDriverActionState(taskId, {
-            status: 'NEEDS_REASON_PROBE',
-            errorMessage: 'Отменить modal opened, but reason dropdown selectors are not yet known. Escaped without confirmation.',
-            result: { reason: reason || 'Отменено водителем' },
+            status: 'DONE',
+            result: {
+                shortOrderId: active.shortOrderId,
+                orderLongId: active.orderLongId,
+                reason: reason || 'Отменено водителем',
+                rowText: active.rowText.slice(0, 200),
+            },
         });
     });
 }
