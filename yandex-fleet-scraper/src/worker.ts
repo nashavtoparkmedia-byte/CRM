@@ -573,6 +573,17 @@ async function withDriverProfile<T>(fn: (page: Page) => Promise<T>): Promise<T> 
  * Open the driver's "Заказы" tab (last 30 days) and return the active order
  * info — the topmost row that is NOT in "Выполнен" / "Отменён" state.
  */
+/**
+ * Step 1: locate the active order via /contractors/<driver>/orders.
+ *
+ * This is the proven approach — the orders tab table includes the order
+ * code as a numeric <a href="/orders/<long_id>"> in the topmost non-terminal
+ * row, giving us BOTH the long id (needed for Complete/Cancel) and the
+ * direct URL for enrichment. Returns null when no active order.
+ *
+ * NOTE: the orders tab does NOT carry the live price. For that we make a
+ * separate one-shot trip to /map/drivers/<id> in `getOrderPriceFromMap`.
+ */
 async function locateActiveOrder(page: Page, driverYandexId: string, parkId: string) {
     const periodFrom = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 19) + 'Z';
     const periodTo   = new Date(Date.now() +  1 * 86400_000).toISOString().slice(0, 19) + 'Z';
@@ -604,35 +615,181 @@ async function locateActiveOrder(page: Page, driverYandexId: string, parkId: str
             const shortOrderId = (orderLink.textContent || '').trim();
             const orderIdMatch = orderLink.href.match(/\/orders\/([a-f0-9]{24,})/);
 
-            // Find the address cell — heuristic: a <td> whose text contains "→"
-            // (Yandex separates from-address and to-address with a U+2192 arrow).
-            // Fallback: a <td> with the longest non-numeric text in the row.
-            const cells = Array.from(row.querySelectorAll<HTMLElement>('td'));
-            let fromAddress: string | null = null;
-            let toAddress: string | null = null;
-            for (const td of cells) {
-                const t = (td.textContent || '').trim();
-                if (t.includes('→') || t.includes('->')) {
-                    const parts = t.split(/→|->/).map(s => s.trim()).filter(Boolean);
-                    if (parts.length >= 2) {
-                        fromAddress = parts[0].slice(0, 200);
-                        toAddress = parts[parts.length - 1].slice(0, 200);
-                    }
-                    break;
-                }
-            }
-
             return {
                 shortOrderId,
                 orderHref: orderLink.href,
                 orderLongId: orderIdMatch?.[1] || null,
-                fromAddress,
-                toAddress,
                 rowText: text.slice(0, 200),
             };
         }
         return null;
     });
+}
+
+/**
+ * Lightweight 1-page scrape — open /map/drivers/<id>, read ONLY the
+ * "Фиксированная стоимость" value (the live order price). Other fields
+ * on this page (addresses, tariff, etc.) are noisier than /orders/<long>
+ * and we skip them. Returns null if no price label.
+ */
+async function getOrderPriceFromMap(page: Page, driverYandexId: string, parkId: string): Promise<number | null> {
+    const url = `https://fleet.yandex.ru/map/drivers/${driverYandexId}?park_id=${parkId}`;
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3500);
+    await dismissOverlays(page);
+
+    const evalScript = `(() => {
+        var valueNextTo = function(labelExact) {
+            var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+            var labelEls = all.filter(function(el) {
+                var t = (el.textContent || '').trim();
+                if (t !== labelExact) return false;
+                return !Array.prototype.slice.call(el.children).some(function(c) {
+                    return (c.textContent || '').trim() === labelExact;
+                });
+            });
+            for (var i = 0; i < labelEls.length; i++) {
+                var el = labelEls[i];
+                var sib = el.nextElementSibling;
+                while (sib) {
+                    var t = (sib.textContent || '').trim();
+                    if (t && t !== labelExact && t.length < 200) return t;
+                    sib = sib.nextElementSibling;
+                }
+            }
+            return null;
+        };
+        var s = valueNextTo('Фиксированная стоимость');
+        if (!s) return null;
+        var m = s.match(/([\\d\\s.,]+)/);
+        if (!m) return null;
+        var n = parseFloat(m[1].replace(/\\s+/g, '').replace(',', '.'));
+        return isNaN(n) ? null : n;
+    })()`;
+    return await page.evaluate(evalScript) as number | null;
+}
+
+/**
+ * Step 2: enrich with fields from the order page (/orders/<long_id>).
+ *
+ * The order page is what gives stable, fully-qualified data:
+ *   - Дата подачи заказа  → e.g. "9 июня в 00:03"
+ *   - Чей заказ           → e.g. "Яндекс Такси"
+ *   - Тариф               → e.g. "Эконом"
+ *   - Оплата              → e.g. "Безналичные"
+ *   - Откуда / Куда       → the addresses with trailing "· Откуда" / "· Куда"
+ *                            (we pick the *shortest* match so we land on the
+ *                            individual <li> with the FINAL Куда, not a parent
+ *                            <ul> that concatenates intermediate stops)
+ */
+async function enrichOrderFromPage(page: Page, orderHref: string, parkId: string, orderLongId: string | null) {
+    const url = orderHref || (orderLongId
+        ? `https://fleet.yandex.ru/orders/${orderLongId}?park_id=${parkId}`
+        : null);
+    if (!url) return null;
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3500);
+    await dismissOverlays(page);
+
+    const evalScript = `(() => {
+        var valueNextTo = function(labelExact) {
+            var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+            var labelEls = all.filter(function(el) {
+                var t = (el.textContent || '').trim();
+                if (t !== labelExact) return false;
+                return !Array.prototype.slice.call(el.children).some(function(c) {
+                    return (c.textContent || '').trim() === labelExact;
+                });
+            });
+            for (var i = 0; i < labelEls.length; i++) {
+                var el = labelEls[i];
+                var sib = el.nextElementSibling;
+                while (sib) {
+                    var t = (sib.textContent || '').trim();
+                    if (t && t !== labelExact && t.length < 200) return t;
+                    sib = sib.nextElementSibling;
+                }
+                var p = el.parentElement;
+                for (var j = 0; j < 5 && p; j++, p = p.parentElement) {
+                    var kids = Array.prototype.slice.call(p.children);
+                    for (var k = 0; k < kids.length; k++) {
+                        var ch = kids[k];
+                        if (ch.contains(el) || el.contains(ch)) continue;
+                        var ct = (ch.textContent || '').trim();
+                        if (ct && ct !== labelExact && ct.length < 200) return ct;
+                    }
+                    var pt = (p.textContent || '').trim();
+                    if (pt.length > labelExact.length && pt.length < labelExact.length + 200) {
+                        var idx = pt.indexOf(labelExact);
+                        if (idx === 0) {
+                            var rest = pt.slice(labelExact.length).trim();
+                            if (rest) return rest.slice(0, 200);
+                        } else if (idx > 0) {
+                            var head = pt.slice(0, idx).trim();
+                            var tail = pt.slice(idx + labelExact.length).trim();
+                            var cand = tail || head;
+                            if (cand) return cand.slice(0, 200);
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+        var addressByTrailingLabel = function(label) {
+            var re = new RegExp('(.+?)\\\\s*[·•]\\\\s*' + label + '\\\\s*$');
+            var all = Array.prototype.slice.call(document.querySelectorAll('li, div, p, span'));
+            var best = null;
+            for (var i = 0; i < all.length; i++) {
+                var el = all[i];
+                var t = (el.textContent || '').trim();
+                if (t.length < 5 || t.length > 250) continue;
+                var m = t.match(re);
+                if (m && m[1].trim().length >= 3) {
+                    var v = m[1].trim();
+                    v = v.split(/[·•]\\s*(?:Откуда|Куда|Остановка)\\s*\\d*\\s*/).pop().trim();
+                    if (v.length >= 3 && (best === null || v.length < best.length)) {
+                        best = v;
+                    }
+                }
+            }
+            return best ? best.slice(0, 200) : null;
+        };
+        // Intermediate stops — Yandex marks them as "· Остановка 1",
+        // "· Остановка 2" etc. Pick the shortest match per stop number
+        // (avoids parents that concatenate the whole list).
+        var collectStops = function() {
+            var re = /(.+?)\\s*[·•]\\s*Остановка\\s+(\\d+)\\s*$/;
+            var all = Array.prototype.slice.call(document.querySelectorAll('li, div, p, span'));
+            var bestByIdx = {};
+            for (var i = 0; i < all.length; i++) {
+                var el = all[i];
+                var t = (el.textContent || '').trim();
+                if (t.length < 5 || t.length > 250) continue;
+                var m = t.match(re);
+                if (!m) continue;
+                var addr = m[1].trim();
+                var n = parseInt(m[2], 10);
+                addr = addr.split(/[·•]\\s*(?:Откуда|Куда|Остановка)\\s*\\d*\\s*/).pop().trim();
+                if (addr.length < 3) continue;
+                if (!bestByIdx[n] || addr.length < bestByIdx[n].length) {
+                    bestByIdx[n] = addr.slice(0, 200);
+                }
+            }
+            var nums = Object.keys(bestByIdx).map(function(s){return parseInt(s, 10);}).sort(function(a,b){return a-b;});
+            return nums.map(function(n){return bestByIdx[n];});
+        };
+
+        return {
+            bookedAt:      valueNextTo('Дата подачи заказа'),
+            orderSource:   valueNextTo('Чей заказ'),
+            tariff:        valueNextTo('Тариф'),
+            paymentMethod: valueNextTo('Оплата'),
+            fromAddress:   addressByTrailingLabel('Откуда'),
+            toAddress:     addressByTrailingLabel('Куда'),
+            stops:         collectStops()
+        };
+    })()`;
+    return await page.evaluate(evalScript) as any;
 }
 
 async function processGetPrice(job: DriverActionJob) {
@@ -652,6 +809,7 @@ async function processGetPrice(job: DriverActionJob) {
     }
 
     await withDriverProfile(async (page) => {
+        // 1) Find active order via the proven /contractors/<id>/orders tab.
         const active = await locateActiveOrder(page, driverYandexId, parkId);
         if (!active) {
             await patchDriverActionState(taskId, {
@@ -660,132 +818,30 @@ async function processGetPrice(job: DriverActionJob) {
             });
             return;
         }
-
-        // Enrich from the order page (/orders/<long_id>) — fields shown in
-        // the left card: "Дата подачи заказа", "Чей заказ", "Тип заказа",
-        // "Статус". The dynamic price (e.g. 1340,67 ₽) is hidden here;
-        // user will show the price-discovery route later.
-        let bookedAt: string | null = null;
-        let orderSource: string | null = null;   // "Яндекс Такси" / etc.
-        let orderType: string | null = null;     // "Платформа" / etc.
-        let statusText: string | null = null;    // "Везёт клиента" / "Выехал"
-        let debugFromHref: string = active.orderHref || '';
-        let debugRawFields: any = null;
-        console.log(`[Worker][${taskId}] active.orderLongId=${active.orderLongId} active.orderHref=${active.orderHref}`);
-        if (active.orderLongId) {
-            try {
-                const orderUrl = `https://fleet.yandex.ru/orders/${active.orderLongId}?park_id=${parkId}`;
-                await page.goto(orderUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-                await page.waitForTimeout(3500);
-                await dismissOverlays(page);
-
-                // NOTE: page.evaluate(fn) fails with `ReferenceError: __name is not defined`
-                // because tsx/esbuild annotates EVEN const-assigned arrow funcs with
-                // `__name(...)` for stack traces, and `__name` doesn't exist in the
-                // browser. The fix is to pass evaluate a STRING — esbuild doesn't
-                // touch string contents.
-                const evalScript = `(() => {
-                    var valueNextTo = function(labelExact) {
-                        var all = Array.prototype.slice.call(document.querySelectorAll('*'));
-                        var labelEls = all.filter(function(el) {
-                            var t = (el.textContent || '').trim();
-                            if (t !== labelExact) return false;
-                            return !Array.prototype.slice.call(el.children).some(function(c) {
-                                return (c.textContent || '').trim() === labelExact;
-                            });
-                        });
-                        for (var i = 0; i < labelEls.length; i++) {
-                            var el = labelEls[i];
-                            var sib = el.nextElementSibling;
-                            while (sib) {
-                                var t = (sib.textContent || '').trim();
-                                if (t && t !== labelExact && t.length < 200) return t;
-                                sib = sib.nextElementSibling;
-                            }
-                            var p = el.parentElement;
-                            for (var j = 0; j < 5 && p; j++, p = p.parentElement) {
-                                var kids = Array.prototype.slice.call(p.children);
-                                for (var k = 0; k < kids.length; k++) {
-                                    var ch = kids[k];
-                                    if (ch.contains(el) || el.contains(ch)) continue;
-                                    var ct = (ch.textContent || '').trim();
-                                    if (ct && ct !== labelExact && ct.length < 200) return ct;
-                                }
-                                var pt = (p.textContent || '').trim();
-                                if (pt.length > labelExact.length && pt.length < labelExact.length + 200) {
-                                    var idx = pt.indexOf(labelExact);
-                                    if (idx === 0) {
-                                        var rest = pt.slice(labelExact.length).trim();
-                                        if (rest) return rest.slice(0, 200);
-                                    } else if (idx > 0) {
-                                        var head = pt.slice(0, idx).trim();
-                                        var tail = pt.slice(idx + labelExact.length).trim();
-                                        var cand = tail || head;
-                                        if (cand) return cand.slice(0, 200);
-                                    }
-                                }
-                            }
-                        }
-                        return null;
-                    };
-                    var addressByTrailingLabel = function(label) {
-                        var re = new RegExp('(.+?)\\\\s*[·•]\\\\s*' + label + '\\\\s*$');
-                        var all = Array.prototype.slice.call(document.querySelectorAll('li, div, p, span'));
-                        var best = null;
-                        for (var i = 0; i < all.length; i++) {
-                            var el = all[i];
-                            var t = (el.textContent || '').trim();
-                            if (t.length < 5 || t.length > 250) continue;
-                            var m = t.match(re);
-                            if (m && m[1].trim().length >= 3) {
-                                var v = m[1].trim();
-                                // If captured value still embeds another label row
-                                // (e.g. "addrA · Откудаaddrb"), split and take the last segment.
-                                v = v.split(/[·•]\\s*(?:Откуда|Куда)\\s*/).pop().trim();
-                                // Prefer the SHORTEST candidate — that's the per-row <li>
-                                // rather than a parent that concatenates both addresses.
-                                if (v.length >= 3 && (best === null || v.length < best.length)) {
-                                    best = v;
-                                }
-                            }
-                        }
-                        return best ? best.slice(0, 200) : null;
-                    };
-                    return {
-                        bookedAt:    valueNextTo('Дата подачи заказа'),
-                        orderSource: valueNextTo('Чей заказ'),
-                        orderType:   valueNextTo('Тип заказа'),
-                        statusText:  valueNextTo('Статус'),
-                        fromAddressOnPage: addressByTrailingLabel('Откуда'),
-                        toAddressOnPage:   addressByTrailingLabel('Куда')
-                    };
-                })()`;
-                const fields: any = await page.evaluate(evalScript);
-                bookedAt    = fields.bookedAt;
-                orderSource = fields.orderSource;
-                orderType   = fields.orderType;
-                statusText  = fields.statusText;
-                debugRawFields = fields;
-                console.log(`[Worker][${taskId}] fields=${JSON.stringify(fields)}`);
-                if (fields.fromAddressOnPage) active.fromAddress = fields.fromAddressOnPage;
-                if (fields.toAddressOnPage)   active.toAddress   = fields.toAddressOnPage;
-            } catch (e: any) {
-                console.warn(`[Worker][${taskId}] enrich from order page failed: ${e.message}`);
-            }
+        // 2) Enrich from /orders/<long_id> — dates, source, tariff, payment, addresses.
+        const enrich = await enrichOrderFromPage(page, active.orderHref, parkId, active.orderLongId);
+        // 3) One-shot read of "Фиксированная стоимость" from /map/drivers/<id>.
+        let priceRub: number | null = null;
+        try {
+            priceRub = await getOrderPriceFromMap(page, driverYandexId, parkId);
+        } catch (e: any) {
+            console.warn(`[Worker][${taskId}] price-from-map failed: ${e.message}`);
         }
+        console.log(`[Worker][${taskId}] short=${active.shortOrderId} priceRub=${priceRub} enrich=${JSON.stringify(enrich)}`);
 
         await patchDriverActionState(taskId, {
             status: 'DONE',
             result: {
                 shortOrderId: active.shortOrderId,
                 orderLongId: active.orderLongId,
-                fromAddress: active.fromAddress,
-                toAddress: active.toAddress,
-                bookedAt,
-                orderSource,
-                orderType,
-                statusText,
-                _debug: { fromHref: debugFromHref, rawFields: debugRawFields },
+                priceRub:      priceRub,
+                bookedAt:      enrich?.bookedAt || null,
+                orderSource:   enrich?.orderSource || null,
+                tariff:        enrich?.tariff || null,
+                paymentMethod: enrich?.paymentMethod || null,
+                fromAddress:   enrich?.fromAddress || null,
+                toAddress:     enrich?.toAddress || null,
+                stops:         enrich?.stops || [],
             },
         });
     });

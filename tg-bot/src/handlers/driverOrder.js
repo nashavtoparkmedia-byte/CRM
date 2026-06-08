@@ -139,18 +139,26 @@ function renderOrderCard(state) {
     if (r.fromAddress && r.fromAddress !== 'мок') {
         lines.push(`📍 Откуда: ${r.fromAddress}`);
     }
-    // toAddress может быть пустым пока водитель не доехал до точки А
+    if (Array.isArray(r.stops) && r.stops.length > 0) {
+        for (const stop of r.stops) {
+            lines.push(`🔸 Промежуточная: ${stop}`);
+        }
+    }
     if (r.toAddress && r.toAddress !== 'мок' && r.toAddress.trim().length > 0) {
         lines.push(`🏁 Куда: ${r.toAddress}`);
     } else {
         lines.push(`🏁 Куда: _данные пока отсутствуют_`);
     }
-    // Цена — пока placeholder, реальный путь к ней пользователь покажет позже
     if (typeof r.priceRub === 'number' && r.priceRub > 0) {
-        lines.push(`💵 Цена: *${r.priceRub} ₽*`);
+        const priceStr = Number.isInteger(r.priceRub)
+            ? r.priceRub.toLocaleString('ru-RU')
+            : r.priceRub.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        lines.push(`💵 Цена: *${priceStr} ₽*`);
     } else {
         lines.push(`💵 Цена: _уточняется_`);
     }
+    if (r.tariff) lines.push(`🚗 Тариф: ${r.tariff}`);
+    if (r.paymentMethod) lines.push(`💳 Оплата: ${r.paymentMethod}`);
     if (r.mock) lines.push('_(временно — мок-данные)_');
     return lines.join('\n');
 }
