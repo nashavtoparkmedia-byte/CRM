@@ -7,6 +7,7 @@
     "start:api": "tsx src/api.ts",
     "start:worker": "tsx src/worker.ts",
     "login": "tsx src/scripts/login.ts",
+    "probe:driver-actions": "tsx src/scripts/probe-driver-actions.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],

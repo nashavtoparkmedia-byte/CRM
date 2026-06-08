@@ -3,7 +3,23 @@ const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
 
-const CRM_URL = () => process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
+// IMPORTANT: this scene uses ACTION-based webhook /api/webhooks/bot,
+// NOT the per-message webhook /api/webhook/telegram. They are two different
+// endpoints. CRM_WEBHOOK_URL is reserved for the per-message forwarder
+// (crmIntegration.js), so we use a dedicated env var here. If unset, falls
+// back to the CRM origin from CRM_WEBHOOK_URL + the correct /api/webhooks/bot
+// path, then to localhost.
+const CRM_URL = () => {
+    if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
+    const fwd = process.env.CRM_WEBHOOK_URL;
+    if (fwd) {
+        try {
+            const u = new URL(fwd);
+            return `${u.protocol}//${u.host}/api/webhooks/bot`;
+        } catch { /* fall through */ }
+    }
+    return 'http://localhost:3002/api/webhooks/bot';
+};
 const CRM_SECRET = () => process.env.BOT_CRM_SECRET || 'secret';
 
 function postJSON(url, body, headers = {}) {

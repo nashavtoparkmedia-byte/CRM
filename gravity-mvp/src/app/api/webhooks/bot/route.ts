@@ -52,6 +52,21 @@ async function handleCheckLink(payload: any) {
     let carInfo: string | null = null
 
     try {
+        // mapping.driverId is the CRM Driver.id, NOT the Yandex contractor id.
+        // Yandex Fleet API expects yandexDriverId (Driver.yandexDriverId), so we
+        // look it up here. Without this, v2 returns 404 and the user sees
+        // "Alexander_yoko" (username fallback) with carInfo: null.
+        const driver = await prisma.driver.findUnique({
+            where: { id: mapping.driverId },
+            select: { yandexDriverId: true, fullName: true }
+        })
+        const yandexContractorId = driver?.yandexDriverId
+        if (driver?.fullName) driverName = driver.fullName
+        if (!yandexContractorId) {
+            console.warn('[check_link] driver has no yandexDriverId, skipping Yandex lookup:', mapping.driverId)
+            return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo })
+        }
+
         const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
         if (connection) {
             const headers: Record<string, string> = {
@@ -63,7 +78,7 @@ async function handleCheckLink(payload: any) {
             }
 
             // Use v2 API (same as CRM UI) — reliably returns car_id
-            const v2Url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${mapping.driverId}`
+            const v2Url = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${yandexContractorId}`
             const v2Res = await fetch(v2Url, { method: 'GET', headers })
 
             if (v2Res.ok) {
