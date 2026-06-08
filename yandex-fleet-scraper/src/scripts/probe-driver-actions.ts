@@ -68,10 +68,15 @@ async function dumpPriceCandidates(page: import('playwright').Page) {
 async function dumpActionButtons(page: import('playwright').Page) {
     return await page.evaluate(() => {
         const result: Array<{ tag: string; text: string; classes: string; testid?: string; disabled?: boolean }> = [];
-        const buttons = document.querySelectorAll<HTMLElement>('button, [role="button"], a');
+        // Wider selector — Yandex's new dispatcher uses <div role="button"> a lot.
+        const buttons = document.querySelectorAll<HTMLElement>('button, [role="button"], a, [class*="button" i], [class*="Button" i]');
+        const seen = new Set<HTMLElement>();
         buttons.forEach((el) => {
+            if (seen.has(el)) return;
+            seen.add(el);
             const text = (el.textContent || '').trim();
-            if (/^(Завершить|Отменить|Сохранить|Подтвердить|Отмена|Да|Нет)$/i.test(text)) {
+            // Partial match — anchor text might include extra whitespace/spans
+            if (/(Завершить|Отменить|Сохранить|Подтвердить|Перейти к заказу|Изменить статус)/i.test(text) && text.length < 80) {
                 result.push({
                     tag: el.tagName,
                     text: text.slice(0, 80),
@@ -144,15 +149,46 @@ async function main() {
         console.log(`   - <${p.tag}> "${p.text}"  ${p.testid ? `[data-testid=${p.testid}]` : ''}`);
     }
 
-    // ── STEP 2: Order page (Завершить/Отменить) ──
-    const orderUrl = `https://fleet.yandex.ru/orders/${ORDER_ID}?park_id=${PARK_ID}`;
-    console.log(`\n── STEP 2: order page ──\nnavigate -> ${orderUrl}`);
-    try {
-        await page.goto(orderUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    } catch (e: any) {
-        console.warn(`⚠️ goto failed: ${e.message}`);
+    // Also save the driver-card HTML so we can see the order id link offline
+    {
+        const html = await page.content();
+        await fs.writeFile(path.join(ARTIFACTS_DIR, '01_driver.html'), html, 'utf8');
+        console.log(`📄 saved 01_driver.html (${(html.length / 1024).toFixed(1)} KB)`);
     }
-    await page.waitForTimeout(4000);
+
+    // ── STEP 2: click "Перейти к заказу" on the driver card ──
+    console.log(`\n── STEP 2: click "Перейти к заказу" ──`);
+    let orderUrl = `https://fleet.yandex.ru/orders/${ORDER_ID}?park_id=${PARK_ID}`;
+    let clickedToOrder = false;
+    const orderLinkSelectors: Array<import('playwright').Locator> = [
+        page.getByRole('button', { name: /Перейти к заказу/i }).first(),
+        page.getByRole('link', { name: /Перейти к заказу/i }).first(),
+        page.locator(':text-is("Перейти к заказу")').first(),
+        page.locator('a[href*="/orders/"]').first(),
+    ];
+    for (const loc of orderLinkSelectors) {
+        try {
+            if (await loc.isVisible({ timeout: 1500 }).catch(() => false)) {
+                await loc.click({ timeout: 3000 });
+                clickedToOrder = true;
+                console.log(`✅ clicked "Перейти к заказу"`);
+                break;
+            }
+        } catch { /* try next */ }
+    }
+    if (clickedToOrder) {
+        await page.waitForTimeout(5000);
+        orderUrl = page.url();
+        console.log(`landed at: ${orderUrl}`);
+    } else {
+        console.warn(`⚠️ no "Перейти к заказу" link; falling back to ${orderUrl}`);
+        try {
+            await page.goto(orderUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        } catch (e: any) {
+            console.warn(`⚠️ goto failed: ${e.message}`);
+        }
+        await page.waitForTimeout(4000);
+    }
 
     await snap(page, '02_order_full');
     const actionButtons = await dumpActionButtons(page);

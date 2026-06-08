@@ -11,6 +11,10 @@
     "probe:driver-actions-cdp": "tsx src/scripts/probe-driver-actions-cdp.ts",
     "import:chrome-cookies": "tsx src/scripts/import-chrome-cookies.ts",
     "login:auto": "tsx src/scripts/auto-login.ts",
+    "probe:parks": "tsx src/scripts/probe-parks.ts",
+    "probe:active-flow": "tsx src/scripts/probe-active-flow.ts",
+    "probe:order-actions": "tsx src/scripts/probe-order-actions.ts",
+    "probe:map-driver-actions": "tsx src/scripts/probe-map-driver-actions.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],
