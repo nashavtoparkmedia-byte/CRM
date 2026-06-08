@@ -318,10 +318,65 @@ model Driver {
   maxProfile           DriverMax?
   managerTasks         ManagerTask[]
   tasks                Task[]
+  actions              DriverAction[]
 
   @@index([fullName])
   @@index([segment])
   @@index([primaryYandexId])
+}
+
+/// Driver-initiated actions on their active Yandex order, executed via the
+/// fleet.yandex.ru scraper. Created when the driver taps a button in the
+/// Telegram bot ("Цена / Завершить / Отменить"). Used both as a queue handle
+/// (scraperTaskId correlates with BullMQ) and as audit log.
+model DriverAction {
+  id            String              @id @default(cuid())
+  driverId      String
+  kind          DriverActionKind
+  /// Yandex long order id (32-hex). Optional for GET_PRICE — at request time we
+  /// may not know it yet; the scraper discovers it from the orders tab.
+  orderId       String?
+  /// Short human-readable order id (e.g. "3538965") for audit/UX. Populated
+  /// when scraper successfully resolves the active order.
+  shortOrderId  String?
+  status        DriverActionStatus  @default(PENDING)
+  /// Telegram numeric id of the driver who initiated this action.
+  requestedBy   String
+  /// BullMQ job id correlation with yandex-fleet-scraper.
+  scraperTaskId String?
+  /// Structured result from scraper. For GET_PRICE: { priceRub, fixedPriceRub,
+  /// paymentMethod, fromAddress, toAddress, durationMin }. For COMPLETE/CANCEL:
+  /// { ok, newStatus }.
+  result        Json?
+  errorMessage  String?
+  requestedAt   DateTime            @default(now())
+  completedAt   DateTime?
+
+  driver        Driver              @relation(fields: [driverId], references: [id])
+
+  @@index([driverId, kind, status])
+  @@index([requestedAt(sort: Desc)])
+  @@index([scraperTaskId])
+}
+
+enum DriverActionKind {
+  GET_PRICE
+  COMPLETE_ORDER
+  CANCEL_ORDER
+}
+
+enum DriverActionStatus {
+  PENDING
+  DONE
+  FAILED
+  TIMEOUT
+  /// Cancel flow stopped before confirming, because we haven't reverse-engineered
+  /// the cancel-reason modal yet. Treated by the bot as "передал менеджеру".
+  NEEDS_REASON_PROBE
+  /// Action was deliberately not attempted (feature flag off, no active order,
+  /// driver not linked to Yandex, etc.). Bot tells driver "передал менеджеру"
+  /// and we surface this as a pending notification for the manager.
+  ESCALATED_TO_MANAGER
 }
 
 model Chat {
