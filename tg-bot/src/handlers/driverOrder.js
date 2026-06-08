@@ -133,15 +133,25 @@ function confirmKeyboard(label) {
 function renderOrderCard(state) {
     const r = state?.result || {};
     const lines = ['🚖 *Текущий заказ*'];
-    if (r.mock) lines.push('_(временно — мок-данные, реальная цена подключим следом)_');
-    if (r.shortOrderId && r.shortOrderId !== '0000000') lines.push(`📋 #${r.shortOrderId}`);
-    if (r.fromAddress && r.fromAddress !== 'мок') lines.push(`📍 ${r.fromAddress}`);
-    if (r.toAddress && r.toAddress !== 'мок') lines.push(`🏁 ${r.toAddress}`);
-    if (typeof r.priceRub === 'number' && r.priceRub > 0) lines.push(`💵 *${r.priceRub} ₽*`);
-    else if (r.fixedPriceRub) lines.push(`💵 Фиксированная: ${r.fixedPriceRub} ₽`);
-    if (r.durationMin) lines.push(`⏱ ${r.durationMin} мин`);
-    if (r.paymentMethod && r.paymentMethod !== 'неизвестно') lines.push(`💳 ${r.paymentMethod}`);
-    if (lines.length === 1) lines.push('_Сейчас активного заказа нет_');
+    if (r.shortOrderId && r.shortOrderId !== '0000000') lines.push(`📋 Номер: *${r.shortOrderId}*`);
+    if (r.bookedAt) lines.push(`🗓 Дата подачи: ${r.bookedAt}`);
+    if (r.orderSource) lines.push(`🏷 Чей заказ: ${r.orderSource}`);
+    if (r.fromAddress && r.fromAddress !== 'мок') {
+        lines.push(`📍 Откуда: ${r.fromAddress}`);
+    }
+    // toAddress может быть пустым пока водитель не доехал до точки А
+    if (r.toAddress && r.toAddress !== 'мок' && r.toAddress.trim().length > 0) {
+        lines.push(`🏁 Куда: ${r.toAddress}`);
+    } else {
+        lines.push(`🏁 Куда: _данные пока отсутствуют_`);
+    }
+    // Цена — пока placeholder, реальный путь к ней пользователь покажет позже
+    if (typeof r.priceRub === 'number' && r.priceRub > 0) {
+        lines.push(`💵 Цена: *${r.priceRub} ₽*`);
+    } else {
+        lines.push(`💵 Цена: _уточняется_`);
+    }
+    if (r.mock) lines.push('_(временно — мок-данные)_');
     return lines.join('\n');
 }
 
@@ -181,6 +191,10 @@ const driverOrderScene = new Scenes.WizardScene(
             await reportFailure(ctx, state);
             return goToMainMenu(ctx);
         }
+        if (state.result?.noActiveOrder) {
+            await ctx.reply('🚫 Сейчас у вас нет активного заказа.\n\nКогда вы будете везти клиента — здесь появится карточка с действиями.');
+            return goToMainMenu(ctx);
+        }
         await showOrderCard(ctx, state);
         return ctx.wizard.next();
     },
@@ -195,6 +209,10 @@ const driverOrderScene = new Scenes.WizardScene(
             await ctx.reply('⏳ Обновляю…');
             const state = await actionAndPoll(ctx.from.id, 'get_order_price');
             if (!state.ok || state.status !== 'DONE') { await reportFailure(ctx, state); return goToMainMenu(ctx); }
+            if (state.result?.noActiveOrder) {
+                await ctx.reply('🚫 Заказ уже завершён или отменён.');
+                return goToMainMenu(ctx);
+            }
             await showOrderCard(ctx, state);
             return; // stay on this step
         }
@@ -227,7 +245,9 @@ const driverOrderScene = new Scenes.WizardScene(
         await ctx.reply('⏳ Передаю в систему…', Markup.removeKeyboard());
         const state = await actionAndPoll(ctx.from.id, action);
 
-        if (state.status === 'DONE') {
+        if (state.status === 'DONE' && state.result?.noActiveOrder) {
+            await ctx.reply('🚫 Заказа уже нет — наверное, его только что закрыли.');
+        } else if (state.status === 'DONE') {
             const verb = action === 'complete_order' ? 'завершён' : 'отменён';
             await ctx.reply(`✅ Заказ ${verb}.`);
         } else {

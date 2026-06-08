@@ -15,6 +15,7 @@
     "probe:active-flow": "tsx src/scripts/probe-active-flow.ts",
     "probe:order-actions": "tsx src/scripts/probe-order-actions.ts",
     "probe:map-driver-actions": "tsx src/scripts/probe-map-driver-actions.ts",
+    "probe:find-driver-id": "tsx src/scripts/probe-find-driver-id.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "keywords": [],

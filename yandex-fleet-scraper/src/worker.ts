@@ -594,18 +594,42 @@ async function locateActiveOrder(page: Page, driverYandexId: string, parkId: str
             if (/^\s*(Статус|Код заказа|Исполнитель)/i.test(text)) continue;
             if (/Выполнен|Отменён|Отменен/i.test(text)) continue;
             const links = Array.from(row.querySelectorAll<HTMLAnchorElement>('a'));
+            let orderLink: HTMLAnchorElement | null = null;
             for (const a of links) {
                 const t = (a.textContent || '').trim();
-                if (/^\d{6,}$/.test(t)) {
-                    const orderIdMatch = a.href.match(/\/orders\/([a-f0-9]{24,})/);
-                    return {
-                        shortOrderId: t,
-                        orderHref: a.href,
-                        orderLongId: orderIdMatch?.[1] || null,
-                        rowText: text.slice(0, 200),
-                    };
+                if (/^\d{6,}$/.test(t)) { orderLink = a; break; }
+            }
+            if (!orderLink) continue;
+
+            const shortOrderId = (orderLink.textContent || '').trim();
+            const orderIdMatch = orderLink.href.match(/\/orders\/([a-f0-9]{24,})/);
+
+            // Find the address cell — heuristic: a <td> whose text contains "→"
+            // (Yandex separates from-address and to-address with a U+2192 arrow).
+            // Fallback: a <td> with the longest non-numeric text in the row.
+            const cells = Array.from(row.querySelectorAll<HTMLElement>('td'));
+            let fromAddress: string | null = null;
+            let toAddress: string | null = null;
+            for (const td of cells) {
+                const t = (td.textContent || '').trim();
+                if (t.includes('→') || t.includes('->')) {
+                    const parts = t.split(/→|->/).map(s => s.trim()).filter(Boolean);
+                    if (parts.length >= 2) {
+                        fromAddress = parts[0].slice(0, 200);
+                        toAddress = parts[parts.length - 1].slice(0, 200);
+                    }
+                    break;
                 }
             }
+
+            return {
+                shortOrderId,
+                orderHref: orderLink.href,
+                orderLongId: orderIdMatch?.[1] || null,
+                fromAddress,
+                toAddress,
+                rowText: text.slice(0, 200),
+            };
         }
         return null;
     });
@@ -613,37 +637,16 @@ async function locateActiveOrder(page: Page, driverYandexId: string, parkId: str
 
 async function processGetPrice(job: DriverActionJob) {
     const { taskId, driverYandexId, parkId } = job;
-    if (envFlag('PRICE_MOCK', true)) {
-        // Mock — return deterministic stub so the bot can demo the UX end-to-end.
+
+    // Mock kept as an emergency escape hatch (PRICE_MOCK=true) — useful for
+    // demos when scraper Chromium is broken. Default false: real flow.
+    if (envFlag('PRICE_MOCK', false)) {
         await patchDriverActionState(taskId, {
             status: 'DONE',
             result: {
-                mock: true,
-                shortOrderId: '0000000',
-                priceRub: 0,
-                fixedPriceRub: 0,
-                paymentMethod: 'неизвестно',
-                fromAddress: 'мок',
-                toAddress: 'мок',
-                durationMin: null,
+                mock: true, shortOrderId: '0000000', priceRub: 0, fixedPriceRub: 0,
+                paymentMethod: 'неизвестно', fromAddress: 'мок', toAddress: 'мок', durationMin: null,
             },
-        });
-        return;
-    }
-    // Real flow — to be wired once the user shares the price-discovery route.
-    await patchDriverActionState(taskId, {
-        status: 'ESCALATED_TO_MANAGER',
-        errorMessage: 'GET_PRICE live flow not yet implemented — awaiting price-discovery route from user',
-    });
-}
-
-async function processCompleteOrder(job: DriverActionJob) {
-    const { taskId, driverYandexId, parkId } = job;
-
-    if (!envFlag('COMPLETE_ORDER_LIVE_ENABLED', false)) {
-        await patchDriverActionState(taskId, {
-            status: 'ESCALATED_TO_MANAGER',
-            errorMessage: 'COMPLETE_ORDER_LIVE_ENABLED=false — manager will handle manually',
         });
         return;
     }
@@ -652,8 +655,163 @@ async function processCompleteOrder(job: DriverActionJob) {
         const active = await locateActiveOrder(page, driverYandexId, parkId);
         if (!active) {
             await patchDriverActionState(taskId, {
+                status: 'DONE',
+                result: { noActiveOrder: true },
+            });
+            return;
+        }
+
+        // Enrich from the order page (/orders/<long_id>) — fields shown in
+        // the left card: "Дата подачи заказа", "Чей заказ", "Тип заказа",
+        // "Статус". The dynamic price (e.g. 1340,67 ₽) is hidden here;
+        // user will show the price-discovery route later.
+        let bookedAt: string | null = null;
+        let orderSource: string | null = null;   // "Яндекс Такси" / etc.
+        let orderType: string | null = null;     // "Платформа" / etc.
+        let statusText: string | null = null;    // "Везёт клиента" / "Выехал"
+        let debugFromHref: string = active.orderHref || '';
+        let debugRawFields: any = null;
+        console.log(`[Worker][${taskId}] active.orderLongId=${active.orderLongId} active.orderHref=${active.orderHref}`);
+        if (active.orderLongId) {
+            try {
+                const orderUrl = `https://fleet.yandex.ru/orders/${active.orderLongId}?park_id=${parkId}`;
+                await page.goto(orderUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+                await page.waitForTimeout(3500);
+                await dismissOverlays(page);
+
+                // NOTE: page.evaluate(fn) fails with `ReferenceError: __name is not defined`
+                // because tsx/esbuild annotates EVEN const-assigned arrow funcs with
+                // `__name(...)` for stack traces, and `__name` doesn't exist in the
+                // browser. The fix is to pass evaluate a STRING — esbuild doesn't
+                // touch string contents.
+                const evalScript = `(() => {
+                    var valueNextTo = function(labelExact) {
+                        var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+                        var labelEls = all.filter(function(el) {
+                            var t = (el.textContent || '').trim();
+                            if (t !== labelExact) return false;
+                            return !Array.prototype.slice.call(el.children).some(function(c) {
+                                return (c.textContent || '').trim() === labelExact;
+                            });
+                        });
+                        for (var i = 0; i < labelEls.length; i++) {
+                            var el = labelEls[i];
+                            var sib = el.nextElementSibling;
+                            while (sib) {
+                                var t = (sib.textContent || '').trim();
+                                if (t && t !== labelExact && t.length < 200) return t;
+                                sib = sib.nextElementSibling;
+                            }
+                            var p = el.parentElement;
+                            for (var j = 0; j < 5 && p; j++, p = p.parentElement) {
+                                var kids = Array.prototype.slice.call(p.children);
+                                for (var k = 0; k < kids.length; k++) {
+                                    var ch = kids[k];
+                                    if (ch.contains(el) || el.contains(ch)) continue;
+                                    var ct = (ch.textContent || '').trim();
+                                    if (ct && ct !== labelExact && ct.length < 200) return ct;
+                                }
+                                var pt = (p.textContent || '').trim();
+                                if (pt.length > labelExact.length && pt.length < labelExact.length + 200) {
+                                    var idx = pt.indexOf(labelExact);
+                                    if (idx === 0) {
+                                        var rest = pt.slice(labelExact.length).trim();
+                                        if (rest) return rest.slice(0, 200);
+                                    } else if (idx > 0) {
+                                        var head = pt.slice(0, idx).trim();
+                                        var tail = pt.slice(idx + labelExact.length).trim();
+                                        var cand = tail || head;
+                                        if (cand) return cand.slice(0, 200);
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    };
+                    var addressByTrailingLabel = function(label) {
+                        var re = new RegExp('(.+?)\\\\s*[·•]\\\\s*' + label + '\\\\s*$');
+                        var all = Array.prototype.slice.call(document.querySelectorAll('li, div, p, span'));
+                        var best = null;
+                        for (var i = 0; i < all.length; i++) {
+                            var el = all[i];
+                            var t = (el.textContent || '').trim();
+                            if (t.length < 5 || t.length > 250) continue;
+                            var m = t.match(re);
+                            if (m && m[1].trim().length >= 3) {
+                                var v = m[1].trim();
+                                // If captured value still embeds another label row
+                                // (e.g. "addrA · Откудаaddrb"), split and take the last segment.
+                                v = v.split(/[·•]\\s*(?:Откуда|Куда)\\s*/).pop().trim();
+                                // Prefer the SHORTEST candidate — that's the per-row <li>
+                                // rather than a parent that concatenates both addresses.
+                                if (v.length >= 3 && (best === null || v.length < best.length)) {
+                                    best = v;
+                                }
+                            }
+                        }
+                        return best ? best.slice(0, 200) : null;
+                    };
+                    return {
+                        bookedAt:    valueNextTo('Дата подачи заказа'),
+                        orderSource: valueNextTo('Чей заказ'),
+                        orderType:   valueNextTo('Тип заказа'),
+                        statusText:  valueNextTo('Статус'),
+                        fromAddressOnPage: addressByTrailingLabel('Откуда'),
+                        toAddressOnPage:   addressByTrailingLabel('Куда')
+                    };
+                })()`;
+                const fields: any = await page.evaluate(evalScript);
+                bookedAt    = fields.bookedAt;
+                orderSource = fields.orderSource;
+                orderType   = fields.orderType;
+                statusText  = fields.statusText;
+                debugRawFields = fields;
+                console.log(`[Worker][${taskId}] fields=${JSON.stringify(fields)}`);
+                if (fields.fromAddressOnPage) active.fromAddress = fields.fromAddressOnPage;
+                if (fields.toAddressOnPage)   active.toAddress   = fields.toAddressOnPage;
+            } catch (e: any) {
+                console.warn(`[Worker][${taskId}] enrich from order page failed: ${e.message}`);
+            }
+        }
+
+        await patchDriverActionState(taskId, {
+            status: 'DONE',
+            result: {
+                shortOrderId: active.shortOrderId,
+                orderLongId: active.orderLongId,
+                fromAddress: active.fromAddress,
+                toAddress: active.toAddress,
+                bookedAt,
+                orderSource,
+                orderType,
+                statusText,
+                _debug: { fromHref: debugFromHref, rawFields: debugRawFields },
+            },
+        });
+    });
+}
+
+async function processCompleteOrder(job: DriverActionJob) {
+    const { taskId, driverYandexId, parkId } = job;
+    const liveEnabled = envFlag('COMPLETE_ORDER_LIVE_ENABLED', false);
+
+    await withDriverProfile(async (page) => {
+        const active = await locateActiveOrder(page, driverYandexId, parkId);
+        if (!active) {
+            await patchDriverActionState(taskId, {
+                status: 'DONE',
+                result: { noActiveOrder: true },
+            });
+            return;
+        }
+
+        // Order exists. If live flag is off — escalate to manager but tell the
+        // bot what order we found so the message can be specific.
+        if (!liveEnabled) {
+            await patchDriverActionState(taskId, {
                 status: 'ESCALATED_TO_MANAGER',
-                errorMessage: 'no active order found',
+                result: { shortOrderId: active.shortOrderId, orderLongId: active.orderLongId },
+                errorMessage: 'COMPLETE_ORDER_LIVE_ENABLED=false — manager will close the order',
             });
             return;
         }
@@ -699,14 +857,7 @@ async function processCompleteOrder(job: DriverActionJob) {
 
 async function processCancelOrder(job: DriverActionJob) {
     const { taskId, driverYandexId, parkId, reason } = job;
-
-    if (!envFlag('CANCEL_ORDER_LIVE_ENABLED', false)) {
-        await patchDriverActionState(taskId, {
-            status: 'ESCALATED_TO_MANAGER',
-            errorMessage: 'CANCEL_ORDER_LIVE_ENABLED=false — manager will handle manually',
-        });
-        return;
-    }
+    const liveEnabled = envFlag('CANCEL_ORDER_LIVE_ENABLED', false);
 
     // Optimistic flow: assume no reason-modal (or a trivial confirm). If a
     // live test reveals a dropdown of reasons, we'll extend this with the
@@ -715,8 +866,17 @@ async function processCancelOrder(job: DriverActionJob) {
         const active = await locateActiveOrder(page, driverYandexId, parkId);
         if (!active) {
             await patchDriverActionState(taskId, {
+                status: 'DONE',
+                result: { noActiveOrder: true },
+            });
+            return;
+        }
+
+        if (!liveEnabled) {
+            await patchDriverActionState(taskId, {
                 status: 'ESCALATED_TO_MANAGER',
-                errorMessage: 'no active order found',
+                result: { shortOrderId: active.shortOrderId, orderLongId: active.orderLongId },
+                errorMessage: 'CANCEL_ORDER_LIVE_ENABLED=false — manager will cancel the order',
             });
             return;
         }
