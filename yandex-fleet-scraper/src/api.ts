@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { Queue } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
+import { Redis } from 'ioredis';
 import crypto from 'crypto';
 import client from 'prom-client';
 
@@ -16,6 +17,11 @@ const redisConnection = {
 };
 
 const checksQueue = new Queue('check-history', { connection: redisConnection });
+
+// Direct Redis client for driver-action task state. Result lives 1h.
+const redis = new Redis(redisConnection);
+const DRIVER_ACTION_TTL_SEC = 3600;
+const driverActionKey = (taskId: string) => `driver-action:${taskId}`;
 
 // Metrics Setup
 const register = new client.Registry();
@@ -261,6 +267,70 @@ fastify.put('/admin/accounts/:id/state', async (request, reply) => {
 fastify.get('/admin/stats', async () => {
     const counts = await checksQueue.getJobCounts('wait', 'active', 'completed', 'failed', 'delayed');
     return counts;
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Driver-Actions endpoints — used by gravity-mvp /api/webhooks/bot to
+// execute "Цена / Завершить / Отменить" on a driver's live Yandex order.
+//
+// Both endpoints reuse the existing BullMQ 'check-history' queue (job name
+// 'driver-action'). The worker dispatcher discriminates by job.data.kind.
+// Result state is mirrored into a Redis key with 1h TTL for fast polling.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type DriverActionKind = 'GET_PRICE' | 'COMPLETE_ORDER' | 'CANCEL_ORDER';
+
+interface DriverActionState {
+    taskId: string;
+    kind: DriverActionKind;
+    driverYandexId: string;
+    parkId: string;
+    reason: string | null;
+    status: 'PENDING' | 'DONE' | 'FAILED' | 'TIMEOUT' | 'NEEDS_REASON_PROBE' | 'ESCALATED_TO_MANAGER';
+    result?: any;
+    errorMessage?: string;
+    createdAt: number;
+    completedAt?: number;
+}
+
+fastify.post('/api/driver-actions', async (request, reply) => {
+    const { kind, driverYandexId, parkId, reason } = (request.body as any) || {};
+    if (!kind || !driverYandexId || !parkId) {
+        return reply.code(400).send({ error: 'kind, driverYandexId, parkId are required' });
+    }
+    if (!['GET_PRICE', 'COMPLETE_ORDER', 'CANCEL_ORDER'].includes(kind)) {
+        return reply.code(400).send({ error: `unknown kind: ${kind}` });
+    }
+    if (!/^[a-f0-9]{24,}$/.test(driverYandexId)) {
+        return reply.code(400).send({ error: 'driverYandexId must be a hex string ≥ 24 chars' });
+    }
+
+    const taskId = crypto.randomUUID();
+    const state: DriverActionState = {
+        taskId,
+        kind,
+        driverYandexId,
+        parkId,
+        reason: reason || null,
+        status: 'PENDING',
+        createdAt: Date.now(),
+    };
+    await redis.set(driverActionKey(taskId), JSON.stringify(state), 'EX', DRIVER_ACTION_TTL_SEC);
+    await checksQueue.add('driver-action', { kind, taskId, driverYandexId, parkId, reason: reason || null }, {
+        removeOnComplete: 200,
+        removeOnFail: 200,
+    });
+    fastify.log.info({ taskId, kind, driverYandexId, parkId }, 'driver-action enqueued');
+    return reply.code(202).send({ taskId, status: 'PENDING' });
+});
+
+fastify.get('/api/driver-actions/:taskId', async (request, reply) => {
+    const { taskId } = request.params as any;
+    const raw = await redis.get(driverActionKey(taskId));
+    if (!raw) {
+        return reply.code(404).send({ taskId, status: 'NOT_FOUND' });
+    }
+    return JSON.parse(raw);
 });
 
 // Health & Metrics

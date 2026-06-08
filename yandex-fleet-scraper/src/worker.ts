@@ -479,8 +479,297 @@ async function failCheck(checkId: string, errorMsg: string, artifactPaths: strin
     await fireWebhook(checkId, 'FAILED', null, errorCode, metadataStr, crmDriverId);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Driver-Actions processors (GET_PRICE / COMPLETE_ORDER / CANCEL_ORDER).
+//
+// All three reuse the same Chromium persistent profile (.bot_profile/) as
+// the legacy check-history worker — only one job runs at a time (concurrency
+// 1) because of the profile SingletonLock.
+//
+// Feature flags (yandex-fleet-scraper/.env):
+//   PRICE_MOCK=true                   — GET_PRICE returns mock data (default)
+//   COMPLETE_ORDER_LIVE_ENABLED=true  — COMPLETE_ORDER clicks "Завершить"
+//   CANCEL_ORDER_LIVE_ENABLED=false   — CANCEL_ORDER stops before confirming
+//                                       the cancel-reason modal (since the
+//                                       modal selectors aren't reversed yet)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const DRIVER_ACTION_TTL_SEC = 3600;
+const driverActionKey = (taskId: string) => `driver-action:${taskId}`;
+
+async function patchDriverActionState(taskId: string, patch: Record<string, any>) {
+    const raw = await redis.get(driverActionKey(taskId));
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    Object.assign(state, patch, { completedAt: patch.status && patch.status !== 'PENDING' ? Date.now() : state.completedAt });
+    await redis.set(driverActionKey(taskId), JSON.stringify(state), 'EX', DRIVER_ACTION_TTL_SEC);
+}
+
+function envFlag(name: string, fallback: boolean): boolean {
+    const v = process.env[name];
+    if (v === undefined) return fallback;
+    return /^(1|true|yes|on)$/i.test(v.trim());
+}
+
+async function dismissOverlays(page: Page): Promise<void> {
+    const labels = ['Вернуться позже', 'Позже', 'Понятно', 'Пропустить'];
+    for (const label of labels) {
+        try {
+            const btn = page.getByRole('button', { name: new RegExp(`^${label}$`, 'i') }).first();
+            if (await btn.isVisible({ timeout: 800 }).catch(() => false)) {
+                await btn.click({ timeout: 1500 });
+                await page.waitForTimeout(500);
+            }
+        } catch { /* fine */ }
+    }
+    for (let pass = 0; pass < 4; pass++) {
+        const closed = await page.evaluate(() => {
+            const cs = Array.from(document.querySelectorAll<HTMLElement>(
+                'button[aria-label*="закрыт" i], button[aria-label*="close" i], [data-testid*="close" i]'
+            ));
+            for (const el of cs) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) { (el as HTMLElement).click(); return true; }
+            }
+            return false;
+        });
+        if (!closed) break;
+        await page.waitForTimeout(300);
+    }
+}
+
+interface DriverActionJob {
+    kind: 'GET_PRICE' | 'COMPLETE_ORDER' | 'CANCEL_ORDER';
+    taskId: string;
+    driverYandexId: string;
+    parkId: string;
+    reason: string | null;
+}
+
+async function withDriverProfile<T>(fn: (page: Page) => Promise<T>): Promise<T> {
+    const userDataDir = path.join(process.cwd(), '.bot_profile');
+    const context = await chromium.launchPersistentContext(userDataDir, {
+        headless: false,
+        args: [
+            '--disable-blink-features=AutomationControlled',
+            '--no-sandbox',
+            '--start-maximized',
+            '--lang=ru-RU',
+        ],
+        locale: 'ru-RU',
+        viewport: null,
+        ignoreDefaultArgs: ['--enable-automation'],
+    });
+    await context.addInitScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+    try {
+        const page = context.pages()[0] ?? await context.newPage();
+        return await fn(page);
+    } finally {
+        await context.close().catch(() => {});
+    }
+}
+
+/**
+ * Open the driver's "Заказы" tab (last 30 days) and return the active order
+ * info — the topmost row that is NOT in "Выполнен" / "Отменён" state.
+ */
+async function locateActiveOrder(page: Page, driverYandexId: string, parkId: string) {
+    const periodFrom = new Date(Date.now() - 30 * 86400_000).toISOString().slice(0, 19) + 'Z';
+    const periodTo   = new Date(Date.now() +  1 * 86400_000).toISOString().slice(0, 19) + 'Z';
+    const url = `https://fleet.yandex.ru/contractors/${driverYandexId}/orders` +
+        `?park_id=${parkId}` +
+        `&metrics_period_start=${encodeURIComponent(periodFrom)}` +
+        `&metrics_period_end=${encodeURIComponent(periodTo)}`;
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(5000);
+
+    if (page.url().includes('passport.yandex.ru') || page.url().includes('/login')) {
+        throw new Error('NEED_REAUTH');
+    }
+
+    return await page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll<HTMLElement>('tr'));
+        for (const row of rows) {
+            const text = (row.textContent || '');
+            if (/^\s*(Статус|Код заказа|Исполнитель)/i.test(text)) continue;
+            if (/Выполнен|Отменён|Отменен/i.test(text)) continue;
+            const links = Array.from(row.querySelectorAll<HTMLAnchorElement>('a'));
+            for (const a of links) {
+                const t = (a.textContent || '').trim();
+                if (/^\d{6,}$/.test(t)) {
+                    const orderIdMatch = a.href.match(/\/orders\/([a-f0-9]{24,})/);
+                    return {
+                        shortOrderId: t,
+                        orderHref: a.href,
+                        orderLongId: orderIdMatch?.[1] || null,
+                        rowText: text.slice(0, 200),
+                    };
+                }
+            }
+        }
+        return null;
+    });
+}
+
+async function processGetPrice(job: DriverActionJob) {
+    const { taskId, driverYandexId, parkId } = job;
+    if (envFlag('PRICE_MOCK', true)) {
+        // Mock — return deterministic stub so the bot can demo the UX end-to-end.
+        await patchDriverActionState(taskId, {
+            status: 'DONE',
+            result: {
+                mock: true,
+                shortOrderId: '0000000',
+                priceRub: 0,
+                fixedPriceRub: 0,
+                paymentMethod: 'неизвестно',
+                fromAddress: 'мок',
+                toAddress: 'мок',
+                durationMin: null,
+            },
+        });
+        return;
+    }
+    // Real flow — to be wired once the user shares the price-discovery route.
+    await patchDriverActionState(taskId, {
+        status: 'ESCALATED_TO_MANAGER',
+        errorMessage: 'GET_PRICE live flow not yet implemented — awaiting price-discovery route from user',
+    });
+}
+
+async function processCompleteOrder(job: DriverActionJob) {
+    const { taskId, driverYandexId, parkId } = job;
+
+    if (!envFlag('COMPLETE_ORDER_LIVE_ENABLED', false)) {
+        await patchDriverActionState(taskId, {
+            status: 'ESCALATED_TO_MANAGER',
+            errorMessage: 'COMPLETE_ORDER_LIVE_ENABLED=false — manager will handle manually',
+        });
+        return;
+    }
+
+    await withDriverProfile(async (page) => {
+        const active = await locateActiveOrder(page, driverYandexId, parkId);
+        if (!active) {
+            await patchDriverActionState(taskId, {
+                status: 'ESCALATED_TO_MANAGER',
+                errorMessage: 'no active order found',
+            });
+            return;
+        }
+
+        await page.goto(active.orderHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(4000);
+        await dismissOverlays(page);
+        await takeStepScreenshot(page, taskId, 'complete_before');
+
+        const completeBtn = page.getByRole('button', { name: /^Завершить$/i }).first();
+        if (!await completeBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await takeStepScreenshot(page, taskId, 'complete_no_button');
+            await patchDriverActionState(taskId, {
+                status: 'FAILED',
+                errorMessage: 'Завершить button not visible',
+            });
+            return;
+        }
+        await completeBtn.click({ timeout: 3000 });
+        await page.waitForTimeout(2500);
+        await takeStepScreenshot(page, taskId, 'complete_after_click');
+
+        // A confirmation modal may appear — try a generic confirm.
+        try {
+            const confirm = page.getByRole('button', { name: /Завершить заказ|Подтвердить|Да/i }).first();
+            if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) {
+                await confirm.click({ timeout: 2000 });
+                await page.waitForTimeout(2000);
+                await takeStepScreenshot(page, taskId, 'complete_after_confirm');
+            }
+        } catch { /* no modal — single-click flow */ }
+
+        await patchDriverActionState(taskId, {
+            status: 'DONE',
+            result: {
+                shortOrderId: active.shortOrderId,
+                orderLongId: active.orderLongId,
+                rowText: active.rowText.slice(0, 200),
+            },
+        });
+    });
+}
+
+async function processCancelOrder(job: DriverActionJob) {
+    const { taskId, driverYandexId, parkId, reason } = job;
+
+    if (!envFlag('CANCEL_ORDER_LIVE_ENABLED', false)) {
+        await patchDriverActionState(taskId, {
+            status: 'NEEDS_REASON_PROBE',
+            errorMessage: 'CANCEL_ORDER_LIVE_ENABLED=false — cancel-reason modal not reverse-engineered yet, manager will handle',
+        });
+        return;
+    }
+
+    // When live: navigate to order page → click Отменить → handle modal.
+    // Modal handling is TODO until first probed.
+    await withDriverProfile(async (page) => {
+        const active = await locateActiveOrder(page, driverYandexId, parkId);
+        if (!active) {
+            await patchDriverActionState(taskId, {
+                status: 'ESCALATED_TO_MANAGER',
+                errorMessage: 'no active order found',
+            });
+            return;
+        }
+        await page.goto(active.orderHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await page.waitForTimeout(4000);
+        await dismissOverlays(page);
+        await takeStepScreenshot(page, taskId, 'cancel_before');
+
+        const cancelBtn = page.getByRole('button', { name: /^Отменить$/i }).first();
+        if (!await cancelBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await patchDriverActionState(taskId, {
+                status: 'FAILED',
+                errorMessage: 'Отменить button not visible',
+            });
+            return;
+        }
+        await cancelBtn.click({ timeout: 3000 });
+        await page.waitForTimeout(2500);
+        await takeStepScreenshot(page, taskId, 'cancel_modal_open');
+
+        // TODO: select cancel reason "Отменено водителем" and confirm.
+        // Until then — abort and escalate so we don't accidentally confirm a real cancel.
+        await page.keyboard.press('Escape').catch(() => {});
+        await patchDriverActionState(taskId, {
+            status: 'NEEDS_REASON_PROBE',
+            errorMessage: 'Отменить modal opened, but reason dropdown selectors are not yet known. Escaped without confirmation.',
+            result: { reason: reason || 'Отменено водителем' },
+        });
+    });
+}
+
+async function dispatchJob(job: Job) {
+    const data: any = job.data || {};
+    if (data.kind && ['GET_PRICE', 'COMPLETE_ORDER', 'CANCEL_ORDER'].includes(data.kind)) {
+        try {
+            if (data.kind === 'GET_PRICE') return await processGetPrice(data);
+            if (data.kind === 'COMPLETE_ORDER') return await processCompleteOrder(data);
+            if (data.kind === 'CANCEL_ORDER') return await processCancelOrder(data);
+        } catch (e: any) {
+            console.error(`[Worker][${data.taskId}] driver-action ${data.kind} failed:`, e.message);
+            await patchDriverActionState(data.taskId, {
+                status: /NEED_REAUTH/.test(e.message || '') ? 'FAILED' : 'FAILED',
+                errorMessage: e.message || String(e),
+            });
+            throw e;
+        }
+        return;
+    }
+    // Legacy: CHECK_HISTORY-style payload (license, checkId, ...)
+    return await processCheck(job);
+}
+
 // Start Worker
-const worker = new Worker('check-history', processCheck, {
+const worker = new Worker('check-history', dispatchJob, {
     connection: redisConnection,
     concurrency: 1
 });
@@ -488,4 +777,4 @@ const worker = new Worker('check-history', processCheck, {
 worker.on('completed', job => console.log(`✨ Job ${job.id} has completed!`));
 worker.on('failed', (job, err) => console.error(`❌ Job ${job?.id} has failed with ${err.message}`));
 
-console.log('👷 Worker started and listening to check-history queue...');
+console.log('👷 Worker started and listening to check-history queue (incl. driver-action jobs)...');
