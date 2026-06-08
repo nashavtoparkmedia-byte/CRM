@@ -57,6 +57,7 @@ async function getMainMenu(ctx) {
     const userButtons = [
         ['🛠 Поддержка', ...surveyButtons.slice(0, 1)], // First row: Support + First Survey
         ['💳 Управление лимитом', '🚘 Мой автомобиль'],
+        ['🚖 Текущий заказ'],
         ['🚖 Yandex Taxi Fun', '🚗 Подключиться'],
         ['📖 Новости']
     ];

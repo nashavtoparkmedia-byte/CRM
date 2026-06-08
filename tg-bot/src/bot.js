@@ -12,6 +12,7 @@ const adminHandler = require('./handlers/admin');
 const crmIntegration = require('./services/crmIntegration');
 const limitManagementScene = require('./handlers/balanceLimit');
 const carManagementScene = require('./handlers/carManagement');
+const driverOrderScene = require('./handlers/driverOrder');
 
 // Validate configuration
 config.validate();
@@ -50,7 +51,8 @@ const staticButtons = [
     '📖 Новости',
     '🚖 Yandex Taxi Fun',
     '🚗 Подключиться',
-    '🚘 Мой автомобиль'
+    '🚘 Мой автомобиль',
+    '🚖 Текущий заказ'
 ];
 
 bot.use(async (ctx, next) => {
@@ -107,7 +109,7 @@ bot.use(async (ctx, next) => {
 });
 
 // 2. Stage initialization
-const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene]);
+const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene]);
 
 // 2.1 Universal Commands within Stage
 stage.start(startHandler.handleStart);
@@ -180,6 +182,12 @@ bot.hears('🚘 Мой автомобиль', async (ctx) => {
     const userId = ctx.from.id;
     console.log(`[BUTTON CLICK] 🚘 Мой автомобиль ${userId}`);
     return await ctx.scene.enter('car_management_scene');
+});
+
+bot.hears('🚖 Текущий заказ', async (ctx) => {
+    const userId = ctx.from.id;
+    console.log(`[BUTTON CLICK] 🚖 Текущий заказ ${userId}`);
+    return await ctx.scene.enter('driverOrder');
 });
 
 // Handle contact (phone number) sharing
