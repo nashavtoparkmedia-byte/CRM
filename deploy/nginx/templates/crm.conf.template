@@ -2,30 +2,61 @@
 # crm.conf — основной CRM (gravity-mvp)
 #
 # ${CRM_DOMAIN} подставляется при старте nginx из env (см. compose).
-# Если домен не задан, server_name = _disabled_crm → блок неактивен.
-#
-# SSL: после получения сертификата Let's Encrypt раскомментировать listen 443.
-# До этого — работает только HTTP на 80 (для теста / ACME challenge).
+# SSL сертификат: nginx стартует с self-signed (создаётся init-container
+# certs-init). После запуска scripts/get-ssl.sh подменяется на Let's Encrypt.
+# Reload nginx подхватывает новый — без downtime.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Upstream — gravity-mvp слушает 3002 внутри Docker-сети
 upstream gravity_mvp_upstream {
     server gravity-mvp:3002 max_fails=3 fail_timeout=30s;
     keepalive 32;
 }
 
-# HTTP — редирект на HTTPS (когда SSL будет настроен) + ACME challenge
+# HTTP — ACME challenge + 301 на HTTPS
 server {
     listen 80;
     listen [::]:80;
     server_name ${CRM_DOMAIN};
 
+    # ACME http-01 challenge: certbot пишет файлы в /var/www/letsencrypt,
+    # nginx раздаёт их по этому пути. Без этого Let's Encrypt не подтвердит домен.
     location /.well-known/acme-challenge/ {
         root /var/www/letsencrypt;
     }
 
-    # Пока SSL нет — проксируем напрямую. После настройки SSL заменить на:
-    #   return 301 https://$host$request_uri;
+    # Всё остальное — редирект на HTTPS
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS — основной трафик
+server {
+    listen 443 ssl;
+    http2 on;
+    listen [::]:443 ssl;
+    server_name ${CRM_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${CRM_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CRM_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_prefer_server_ciphers off;
+
+    # HSTS включаем только после того, как боевой Let's Encrypt сертификат
+    # стабильно работает >= 1 неделю. До этого — комментировано:
+    # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Боковые заголовки безопасности
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Большие медиа в чатах (голосовые, видео)
+    client_max_body_size 64m;
+
     location / {
         proxy_pass http://gravity_mvp_upstream;
         proxy_http_version 1.1;
@@ -33,42 +64,10 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        # WebSocket upgrade для realtime (SSE/WS из gravity-mvp)
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
-        # Большие медиа (голосовые, видео) могут идти через CRM API
-        client_max_body_size 64m;
     }
 }
-
-# HTTPS — раскомментировать после получения сертификата:
-#
-# server {
-#     listen 443 ssl http2;
-#     listen [::]:443 ssl http2;
-#     server_name ${CRM_DOMAIN};
-#
-#     ssl_certificate     /etc/letsencrypt/live/${CRM_DOMAIN}/fullchain.pem;
-#     ssl_certificate_key /etc/letsencrypt/live/${CRM_DOMAIN}/privkey.pem;
-#     ssl_protocols TLSv1.2 TLSv1.3;
-#     ssl_ciphers HIGH:!aNULL:!MD5;
-#     ssl_session_cache shared:SSL:10m;
-#     ssl_session_timeout 1d;
-#
-#     # HSTS — год, включить только когда уверены что SSL стабильно
-#     # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-#
-#     location / {
-#         proxy_pass http://gravity_mvp_upstream;
-#         proxy_http_version 1.1;
-#         proxy_set_header Host $host;
-#         proxy_set_header X-Real-IP $remote_addr;
-#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-#         proxy_set_header X-Forwarded-Proto $scheme;
-#         proxy_set_header Upgrade $http_upgrade;
-#         proxy_set_header Connection "upgrade";
-#         proxy_read_timeout 300s;
-#         client_max_body_size 64m;
-#     }
-# }

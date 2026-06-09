@@ -135,6 +135,15 @@ docker exec crm-postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
   "SELECT schemaname, COUNT(*) AS tables FROM pg_tables WHERE schemaname='public' GROUP BY schemaname;" || true
 
 echo ""
+echo "==> Prisma migrations check (B-9 from audit):"
+echo "    Ожидается ровно 36 миграций для gravity-mvp, иначе при старте"
+echo "    gravity-mvp контейнера 'prisma migrate deploy' попытается применить"
+echo "    недостающие и упадёт."
+docker exec crm-postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c \
+  "SELECT COUNT(*) AS applied_migrations FROM _prisma_migrations WHERE finished_at IS NOT NULL;" || \
+  echo "    [warn] _prisma_migrations table нет — это OK для свежей БД, миграции применятся через CMD контейнера"
+
+echo ""
 echo "✓ Migration complete."
 echo ""
 echo "Next steps:"

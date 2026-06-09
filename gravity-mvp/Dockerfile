@@ -51,14 +51,25 @@ WORKDIR /app
 #   - openssl: Prisma engine
 #   - ffmpeg: голосовые / видео-сообщения в чатах
 #   - tini: правильный PID 1 (graceful shutdown SIGTERM)
+#   - chromium + libs: whatsapp-web.js использует puppeteer и требует системный
+#     Chromium с GUI-зависимостями. Без них instrumentation.ts whatsapp_warmup
+#     падает с "Failed to launch the browser process".
+#   - fonts-liberation: рендеринг шрифтов в Chromium (иначе emoji-крокозябры)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates ffmpeg tini \
+    chromium fonts-liberation \
+    libnss3 libatk-bridge2.0-0 libxkbcommon0 libpangocairo-1.0-0 \
+    libgbm1 libxss1 libasound2 libxshmfence1 libgtk-3-0 libdrm2 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3002
 ENV HOSTNAME=0.0.0.0
+# Подсказка puppeteer-у использовать системный Chromium вместо загрузки своего.
+# whatsapp-web.js → puppeteer → читает эти переменные.
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Непривилегированный пользователь — стандартная практика безопасности
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app

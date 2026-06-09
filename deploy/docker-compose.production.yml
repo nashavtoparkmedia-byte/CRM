@@ -58,16 +58,17 @@ services:
         max-size: "20m"
         max-file: "5"
 
-  # ─── Redis: очередь задач для scraper'а ──────────────────────────────────
+  # ─── Redis: очередь задач BullMQ (transcribe + analyze) ──────────────────
+  # AOF включён (everysec) — чтобы при рестарте Redis не потерять очередь.
   redis:
     image: redis:7-alpine
     container_name: crm-redis
     restart: unless-stopped
-    # AOF выключаем, RDB-снапшоты — экономно (раз в 5 минут если есть изменения)
     command: >
       redis-server
       --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set in .env.production}
-      --appendonly no
+      --appendonly yes
+      --appendfsync everysec
       --save "300 1"
       --maxmemory 256mb
       --maxmemory-policy allkeys-lru
@@ -89,38 +90,197 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ─── MinIO: S3-совместимое хранилище для recordings звонков ──────────────
+  # FreeSWITCH пишет MP3 в локальную папку, recording-upload-retry.js в
+  # gravity-mvp загружает их в MinIO. Бэкапы (backup-files.sh) тянут из этого
+  # же volume и отправляют в Selectel S3 как offsite-копию.
+  minio:
+    image: minio/minio:latest
+    container_name: crm-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "127.0.0.1:9000:9000"   # S3 API — только loopback, наружу не выдаём
+      - "127.0.0.1:9001:9001"   # MinIO console
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:?MINIO_ROOT_USER required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD required}
+    volumes:
+      - minio_data:/data
+    networks:
+      - crm_internal
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # MinIO bucket init — одноразовое создание bucket'а recordings
+  minio-init:
+    image: minio/mc:latest
+    container_name: crm-minio-init
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - crm_internal
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb -p local/"$${MINIO_RECORDINGS_BUCKET:-recordings}" 2>/dev/null || true
+        echo "MinIO bucket ready"
+    environment:
+      MINIO_ROOT_USER:          ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD:      ${MINIO_ROOT_PASSWORD}
+      MINIO_RECORDINGS_BUCKET:  ${MINIO_RECORDINGS_BUCKET:-recordings}
+
+  # ─── FreeSWITCH: SIP-стек, дозвон через МегаФон, mod_audio_fork ──────────
+  # Слушает SIP/UDP 5060, ESL 8021 (только loopback), RTP 16384-16484/UDP.
+  # На VPS UDP NAT работает через explicit port mappings (Linux bridge mode).
+  freeswitch:
+    build:
+      context: ../telephony
+      dockerfile: Dockerfile
+    image: crm/freeswitch:latest
+    container_name: crm-freeswitch
+    restart: unless-stopped
+    ports:
+      - "5060:5060/udp"             # internal SIP profile
+      - "5060:5060/tcp"
+      - "5080:5080/udp"             # external (МегаФон SBC)
+      - "7080:7080/tcp"             # WebRTC WS
+      - "16384-16484:16384-16484/udp"  # RTP media
+      - "127.0.0.1:8021:8021/tcp"   # ESL — только loopback
+    environment:
+      MEGAFON_SIP_USERNAME: ${MEGAFON_SIP_USERNAME:?MEGAFON_SIP_USERNAME required}
+      MEGAFON_SIP_PASSWORD: ${MEGAFON_SIP_PASSWORD:?MEGAFON_SIP_PASSWORD required}
+      ESL_PASSWORD:         ${ESL_PASSWORD:-ClueCon}
+      MANAGER_101_PASSWORD: ${MANAGER_101_PASSWORD:-changeme101}
+      MANAGER_102_PASSWORD: ${MANAGER_102_PASSWORD:-changeme102}
+      MANAGER_103_PASSWORD: ${MANAGER_103_PASSWORD:-changeme103}
+      RTP_START_PORT: 16384
+      RTP_END_PORT:   16484
+    volumes:
+      - freeswitch_recordings:/var/lib/freeswitch/recordings
+      - freeswitch_logs:/var/log/freeswitch
+    networks:
+      - crm_internal
+    depends_on:
+      minio:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ─── audio-bridge: WS-мост FreeSWITCH ↔ STT/LLM/TTS ──────────────────────
+  # Принимает mod_audio_fork стримы от FreeSWITCH, прогоняет через
+  # Yandex SpeechKit / OpenAI STT, формирует ответ через Anthropic Claude,
+  # синтезирует TTS, отдаёт обратно в звонок.
+  audio-bridge:
+    build:
+      context: ../tools/audio-bridge-day1
+      dockerfile: Dockerfile
+    image: crm/audio-bridge:latest
+    container_name: crm-audio-bridge
+    restart: unless-stopped
+    env_file:
+      - ../.env.production
+    environment:
+      AUDIO_BRIDGE_PORT: 3030
+      # ESL — bridge подключается к FreeSWITCH по ESL для подписки на события
+      FS_ESL_HOST: freeswitch
+      FS_ESL_PORT: 8021
+      ESL_PASSWORD: ${ESL_PASSWORD:-ClueCon}
+      # CRM webhook — для finalize POST после окончания звонка
+      CRM_BASE_URL: http://gravity-mvp:3002
+    networks:
+      - crm_internal
+    depends_on:
+      freeswitch:
+        condition: service_started
+      gravity-mvp:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ─── Init: bootstrap self-signed SSL ─────────────────────────────────────
+  # Без сертификата nginx падает на старте (SSL block в templates).
+  # Этот одноразовый контейнер создаёт self-signed cert ДО старта nginx.
+  # После scripts/get-ssl.sh реальный Let's Encrypt cert заменит self-signed
+  # и nginx подхватит его через `nginx -s reload` (без downtime).
+  certs-init:
+    image: alpine:3.19
+    container_name: crm-certs-init
+    restart: "no"
+    volumes:
+      - nginx_certs:/etc/letsencrypt
+    environment:
+      CRM_DOMAIN: ${CRM_DOMAIN:?CRM_DOMAIN required}
+      BOT_ADMIN_DOMAIN: ${BOT_ADMIN_DOMAIN:?BOT_ADMIN_DOMAIN required}
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache openssl >/dev/null
+        for d in "$$CRM_DOMAIN" "$$BOT_ADMIN_DOMAIN"; do
+          cert_dir="/etc/letsencrypt/live/$$d"
+          if [ -f "$$cert_dir/fullchain.pem" ]; then
+            echo "[$$d] cert exists, skip"
+            continue
+          fi
+          echo "[$$d] generating self-signed bootstrap cert (30 days)"
+          mkdir -p "$$cert_dir"
+          openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
+            -keyout "$$cert_dir/privkey.pem" \
+            -out "$$cert_dir/fullchain.pem" \
+            -subj "/CN=$$d" 2>/dev/null
+        done
+        echo "Done."
+
   # ─── Nginx: входная точка из интернета ───────────────────────────────────
   # Принимает все HTTPS-запросы и направляет в нужный сервис:
   #   crm.example.ru          → gravity-mvp:3002
   #   bot-admin.example.ru    → tg-bot-frontend:3004
-  #   и т.д.
-  # Конфиги маршрутизации будут добавлены вместе с сервисами в этапе 2.
   nginx:
     image: nginx:1.27-alpine
     container_name: crm-nginx
     restart: unless-stopped
     ports:
-      - "80:80"     # HTTP — для Let's Encrypt validation и редиректа на HTTPS
+      - "80:80"     # HTTP — Let's Encrypt validation + 301 на HTTPS
       - "443:443"   # HTTPS — основной
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       # Templates — envsubst делает подстановку ${CRM_DOMAIN}, ${BOT_ADMIN_DOMAIN}
-      # из переменных окружения nginx-контейнера
       - ./nginx/templates:/etc/nginx/templates:ro
       - nginx_certs:/etc/letsencrypt
       - nginx_www:/var/www/letsencrypt
     environment:
-      # Если домены не заданы — server-блоки будут "выключены" (server_name = invalid)
-      # и трафик попадёт на default_server из conf.d/default.conf
-      CRM_DOMAIN: ${CRM_DOMAIN:-_disabled_crm}
-      BOT_ADMIN_DOMAIN: ${BOT_ADMIN_DOMAIN:-_disabled_botadmin}
+      CRM_DOMAIN: ${CRM_DOMAIN:?CRM_DOMAIN required}
+      BOT_ADMIN_DOMAIN: ${BOT_ADMIN_DOMAIN:?BOT_ADMIN_DOMAIN required}
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx/conf.d
     networks:
       - crm_internal
     depends_on:
-      - postgres
-      - redis
+      certs-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
@@ -214,6 +374,9 @@ services:
         max-file: "3"
 
   # ─── yandex-fleet-scraper-api: HTTP API скрапера ────────────────────────
+  # ВАЖНО: yandex-fleet-scraper использует SQLite (provider="sqlite" в schema.prisma).
+  # DATABASE_URL = file:/app/data/dev.db — абсолютный путь в персистентный volume.
+  # API и worker делят один volume yfs_db, чтобы видеть одни и те же аккаунты.
   yandex-fleet-scraper-api:
     build:
       context: ../yandex-fleet-scraper
@@ -224,16 +387,18 @@ services:
     env_file:
       - ../.env.production
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: "file:/app/data/dev.db"
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
       PORT: 3003
-    command: ["npm", "run", "start:api"]
+    # yandex-fleet-scraper не имеет migrations/ — используем db push для создания
+    # схемы из schema.prisma. Идемпотентно: применяется только если есть diff.
+    command: ["sh", "-c", "mkdir -p /app/data && npx prisma db push --skip-generate --accept-data-loss=false && npm run start:api"]
+    volumes:
+      - yfs_db:/app/data
     networks:
       - crm_internal
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     logging:
@@ -251,12 +416,14 @@ services:
     env_file:
       - ../.env.production
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: "file:/app/data/dev.db"
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
       PLAYWRIGHT_HEADLESS: "true"
     command: ["npm", "run", "start:worker"]
     volumes:
+      # SQLite БД — общий с api
+      - yfs_db:/app/data
       # Профиль браузера fleet.yandex.ru — критично сохранять между рестартами
       - yfs_chrome_profile:/app/chrome_profile
       - yfs_chrome_user_data:/app/chrome_user_data
@@ -327,12 +494,20 @@ volumes:
     name: crm_gravity_recordings
   gravity_whatsapp:
     name: crm_gravity_whatsapp
+  yfs_db:
+    name: crm_yfs_db
   yfs_chrome_profile:
     name: crm_yfs_chrome_profile
   yfs_chrome_user_data:
     name: crm_yfs_chrome_user_data
   max_user_data:
     name: crm_max_user_data
+  minio_data:
+    name: crm_minio_data
+  freeswitch_recordings:
+    name: crm_freeswitch_recordings
+  freeswitch_logs:
+    name: crm_freeswitch_logs
 
 # ─── Networks: внутренняя сеть между контейнерами ───────────────────────
 # Postgres, Redis и приложения видят друг друга по имени (postgres, redis),

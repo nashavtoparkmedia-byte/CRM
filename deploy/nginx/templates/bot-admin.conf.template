@@ -1,6 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # bot-admin.conf — админка опросов (tg-bot-frontend)
-# Доступ только для админов — basic auth + IP whitelist (опционально).
+# Доступ только для админов (basic auth внутри Next.js).
+# SSL: тот же подход что и в crm.conf (self-signed → Let's Encrypt).
 # ─────────────────────────────────────────────────────────────────────────────
 
 upstream bot_admin_upstream {
@@ -8,6 +9,7 @@ upstream bot_admin_upstream {
     keepalive 16;
 }
 
+# HTTP — ACME + 301
 server {
     listen 80;
     listen [::]:80;
@@ -16,6 +18,32 @@ server {
     location /.well-known/acme-challenge/ {
         root /var/www/letsencrypt;
     }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS
+server {
+    listen 443 ssl;
+    http2 on;
+    listen [::]:443 ssl;
+    server_name ${BOT_ADMIN_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${BOT_ADMIN_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${BOT_ADMIN_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_prefer_server_ciphers off;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 16m;
 
     location / {
         proxy_pass http://bot_admin_upstream;
@@ -28,5 +56,3 @@ server {
         proxy_set_header Connection "upgrade";
     }
 }
-
-# HTTPS-вариант — см. crm.conf.template.

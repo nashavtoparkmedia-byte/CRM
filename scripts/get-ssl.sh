@@ -64,17 +64,23 @@ fi
 
 # ── Run certbot ──────────────────────────────────────────────────────────────
 if [ "$MODE" = "issue" ]; then
-  echo "==> Issuing new certificates..."
-  docker run --rm \
-    -v crm_nginx_certs:/etc/letsencrypt \
-    -v crm_nginx_www:/var/www/letsencrypt \
-    certbot/certbot:latest certonly \
-    --webroot -w /var/www/letsencrypt \
-    --non-interactive --agree-tos \
-    $STAGING_FLAG \
-    --email "$LETSENCRYPT_EMAIL" \
-    -d "$CRM_DOMAIN" \
-    -d "$BOT_ADMIN_DOMAIN"
+  # Выпускаем ДВА отдельных сертификата — по одному на каждый домен.
+  # Это потому что nginx templates ссылаются на /etc/letsencrypt/live/${DOMAIN}/
+  # и certbot создаёт папку по имени первого -d. Один сертификат с SAN на оба
+  # домена работал бы, но требовал бы symlinks — нежелательная сложность.
+  for domain in "$CRM_DOMAIN" "$BOT_ADMIN_DOMAIN"; do
+    echo "==> Issuing certificate for $domain..."
+    docker run --rm \
+      -v crm_nginx_certs:/etc/letsencrypt \
+      -v crm_nginx_www:/var/www/letsencrypt \
+      certbot/certbot:latest certonly \
+      --webroot -w /var/www/letsencrypt \
+      --non-interactive --agree-tos \
+      --force-renewal \
+      $STAGING_FLAG \
+      --email "$LETSENCRYPT_EMAIL" \
+      -d "$domain"
+  done
 else
   echo "==> Renewing existing certificates..."
   docker run --rm \

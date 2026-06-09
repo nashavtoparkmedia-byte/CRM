@@ -1,0 +1,13 @@
+node_modules
+.git
+.env
+.env.local
+.env.production
+*.log
+__tests__
+*.test.js
+.DS_Store
+Dockerfile
+.dockerignore
+README.md
+scripts/
