@@ -298,47 +298,106 @@ export default function MessageInputArea({
 
     return (
         <>
-        {/* Media preview modal */}
+        {/* Media preview modal — окрашивается по активному каналу
+            (WA emerald, TG blue, MAX purple) чтобы оператор видел куда отправит. */}
         {imagePreview && (() => {
             const mt = imagePreview.file.type || ''
             const isImage = mt.startsWith('image/')
             const isVideo = mt.startsWith('video/')
             const isAudio = mt.startsWith('audio/')
-            const title = isImage ? 'Отправить фото' : isVideo ? 'Отправить видео' : isAudio ? 'Отправить аудио' : 'Отправить файл'
+            const kindLabel = isImage ? 'фото' : isVideo ? 'видео' : isAudio ? 'аудио' : 'файл'
             const fileSizeKb = Math.round(imagePreview.file.size / 1024)
+            // Per-channel theme tokens. TG — оригинальный дизайн (без accent-полосы,
+            // без бейджа канала, серый file-card, синяя кнопка #3390EC) — пользователь
+            // привык. WA — emerald, MAX — purple — окрашивается, чтобы оператор
+            // визуально различал канал отправки.
+            const isTelegram = currentChannelInfo.id === 'telegram'
+            const theme = currentChannelInfo.id === 'whatsapp'
+                ? { accent: '#25D366', accentDark: '#1FAD55', soft: '#E8F8EE', text: '#0F7A3E' }
+                : currentChannelInfo.id === 'max'
+                ? { accent: '#7B61FF', accentDark: '#6648E0', soft: '#EFEBFF', text: '#4A37B8' }
+                : { accent: '#3390EC', accentDark: '#2B7FD4', soft: '#F3F4F6', text: '#3390EC' }
             return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setImagePreview(null)}>
-                <div className="bg-white rounded-2xl shadow-2xl p-4 max-w-sm w-full mx-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between">
-                        <span className="font-semibold text-[15px] text-gray-800">{title}</span>
-                        <button onClick={() => setImagePreview(null)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
-                            <X size={16} />
-                        </button>
-                    </div>
-                    {isImage ? (
-                        <img src={imagePreview.dataUrl} alt="preview" className="w-full max-h-[320px] object-contain rounded-lg bg-gray-50" />
-                    ) : isVideo ? (
-                        <video src={imagePreview.dataUrl} controls className="w-full max-h-[320px] rounded-lg bg-gray-50" />
-                    ) : isAudio ? (
-                        <audio src={imagePreview.dataUrl} controls className="w-full" />
-                    ) : (
-                        <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
-                            <div className="w-10 h-10 rounded-lg bg-[#3390EC]/10 flex items-center justify-center text-[#3390EC]">
-                                <Paperclip size={20} />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="truncate text-[14px] font-medium text-gray-800">{imagePreview.file.name}</div>
-                                <div className="text-[12px] text-gray-500">{fileSizeKb} KB</div>
-                            </div>
-                        </div>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full mx-4 flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+                    {/* Цветная полоса канала сверху — только для WA/MAX (TG = оригинал) */}
+                    {!isTelegram && (
+                        <div className="h-1" style={{ background: theme.accent }} />
                     )}
-                    <div className="flex gap-2">
-                        <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
-                            Отмена
-                        </button>
-                        <button onClick={handleSendImage} className="flex-1 h-10 rounded-xl bg-[#3390EC] text-white text-[14px] font-medium hover:bg-[#2B7FD4] transition-colors">
-                            Отправить
-                        </button>
+                    <div className="p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between">
+                            {isTelegram ? (
+                                <span className="font-semibold text-[15px] text-gray-800">
+                                    Отправить {kindLabel}
+                                </span>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-[15px] text-gray-800">Отправить {kindLabel} через</span>
+                                    <span
+                                        className="text-[13px] font-semibold px-2 py-0.5 rounded-full"
+                                        style={{ background: theme.soft, color: theme.text }}
+                                    >
+                                        {currentChannelInfo.label}
+                                    </span>
+                                </div>
+                            )}
+                            <button onClick={() => setImagePreview(null)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        {isImage ? (
+                            <img src={imagePreview.dataUrl} alt="preview" className="w-full max-h-[320px] object-contain rounded-lg bg-gray-50" />
+                        ) : isVideo ? (
+                            <video src={imagePreview.dataUrl} controls className="w-full max-h-[320px] rounded-lg bg-gray-50" />
+                        ) : isAudio ? (
+                            <audio src={imagePreview.dataUrl} controls className="w-full" />
+                        ) : isTelegram ? (
+                            <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 border border-gray-200">
+                                <div className="w-10 h-10 rounded-lg bg-[#3390EC]/10 flex items-center justify-center text-[#3390EC]">
+                                    <Paperclip size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="truncate text-[14px] font-medium text-gray-800">{imagePreview.file.name}</div>
+                                    <div className="text-[12px] text-gray-500">{fileSizeKb} KB</div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-3 p-3 rounded-lg border" style={{ background: theme.soft, borderColor: theme.accent + '33' }}>
+                                <div
+                                    className="w-10 h-10 rounded-lg flex items-center justify-center"
+                                    style={{ background: theme.accent + '1A', color: theme.accent }}
+                                >
+                                    <Paperclip size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="truncate text-[14px] font-medium text-gray-800">{imagePreview.file.name}</div>
+                                    <div className="text-[12px] text-gray-500">{fileSizeKb} KB</div>
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
+                                Отмена
+                            </button>
+                            {isTelegram ? (
+                                <button
+                                    onClick={handleSendImage}
+                                    className="flex-1 h-10 rounded-xl bg-[#3390EC] text-white text-[14px] font-medium hover:bg-[#2B7FD4] transition-colors"
+                                >
+                                    Отправить
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={handleSendImage}
+                                    className="flex-1 h-10 rounded-xl text-white text-[14px] font-medium transition-colors"
+                                    style={{ background: theme.accent }}
+                                    onMouseEnter={e => (e.currentTarget.style.background = theme.accentDark)}
+                                    onMouseLeave={e => (e.currentTarget.style.background = theme.accent)}
+                                >
+                                    Отправить
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>

@@ -240,13 +240,21 @@ async function sendText(transport, chatId, text) {
  * @param {string} filename
  * @param {string} mimeType
  * @param {string} fieldName - form field name (e.g. 'photo' for images, 'file' for others)
+ * @param {string} uploadType - MAX-API attach type (PHOTO/FILE/VIDEO/AUDIO).
+ *                              Без этого parameter сервер возвращает URL только для photo,
+ *                              и upload PDF падает с IMAGE_INVALID_FORMAT.
  * @returns {Promise<object>} upload response JSON
  */
-async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName = 'photo') {
-  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_URL, { count: 1 }, { waitResponse: true })
+async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName = 'photo', uploadType = 'PHOTO') {
+  // 80-й опкод: запрашиваем upload URL. Передаём type — для photo MAX отдаёт
+  // image-only endpoint, для FILE/VIDEO/AUDIO — соответствующие endpoints.
+  const payload = { count: 1, type: uploadType }
+  console.log(`[uploadFile] GET_UPLOAD_URL payload=${JSON.stringify(payload)} fieldName=${fieldName} mime=${mimeType}`)
+  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_URL, payload, { waitResponse: true })
   if (!uploadResp || !uploadResp.url) {
     throw new Error('Не получен URL для загрузки')
   }
+  console.log(`[uploadFile] got upload URL hostname=${new URL(uploadResp.url).hostname} path=${new URL(uploadResp.url).pathname.slice(0,80)}`)
 
   const uploadUrl = uploadResp.url
   const uploadData = await new Promise((resolve, reject) => {
@@ -272,7 +280,7 @@ async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldN
       let data = ''
       res.on('data', c => { data += c })
       res.on('end', () => {
-        console.log(`[uploadFile] Upload status: ${res.statusCode} response: ${data.slice(0, 300)}`)
+        console.log(`[uploadFile] Upload status: ${res.statusCode} response: ${data.slice(0, 500)}`)
         if (res.statusCode >= 400) { reject(new Error(`Upload HTTP ${res.statusCode}: ${data}`)); return }
         try { resolve(JSON.parse(data)) } catch { resolve(null) }
       })
@@ -289,7 +297,7 @@ async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldN
  * Send a photo message (opcode 80 upload + opcode 64 send).
  */
 async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType, caption) {
-  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, 'photo')
+  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, 'photo', 'PHOTO')
   const photoToken = uploadData?.photoToken
     || uploadData?.token
     || (uploadData?.photos && Object.values(uploadData.photos)[0]?.token)
@@ -309,11 +317,13 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
 
 /**
  * Send a generic media message (document, video, audio, voice).
- * Uses same upload endpoint but with different attach type.
+ * Uses opcode 80 with type=FILE/VIDEO/AUDIO to get a non-photo upload URL.
  */
 async function sendGenericMedia(transport, chatId, fileBuffer, filename, mimeType, caption, mediaType) {
   const fieldName = mediaType === 'video' ? 'video' : (mediaType === 'audio' || mediaType === 'voice' ? 'audio' : 'file')
-  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName)
+  const uploadTypeMap = { video: 'VIDEO', audio: 'AUDIO', voice: 'AUDIO', document: 'FILE' }
+  const uploadType = uploadTypeMap[mediaType] || 'FILE'
+  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName, uploadType)
   const token = uploadData?.token
     || uploadData?.fileToken
     || uploadData?.videoToken
