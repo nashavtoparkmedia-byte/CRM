@@ -1,0 +1,2406 @@
+diff --git a/.claude/launch.json b/.claude/launch.json
+index c456795..313ed25 100644
+--- a/.claude/launch.json
++++ b/.claude/launch.json
+@@ -6,7 +6,8 @@
+       "runtimeExecutable": "npm",
+       "runtimeArgs": ["run", "dev"],
+       "port": 3002,
+-      "cwd": "gravity-mvp"
++      "cwd": "gravity-mvp",
++      "autoPort": false
+     }
+   ]
+ }
+diff --git a/gravity-mvp/prisma/migrations/0_init/migration.sql b/gravity-mvp/prisma/migrations/0_init/migration.sql
+index 4fb5fd1..b8c4f1a 100644
+Binary files a/gravity-mvp/prisma/migrations/0_init/migration.sql and b/gravity-mvp/prisma/migrations/0_init/migration.sql differ
+diff --git a/gravity-mvp/prisma/schema.prisma b/gravity-mvp/prisma/schema.prisma
+index 6f50321..2585fb5 100644
+--- a/gravity-mvp/prisma/schema.prisma
++++ b/gravity-mvp/prisma/schema.prisma
+@@ -330,6 +330,7 @@ model Chat {
+   id                 String           @id @default(cuid())
+   driverId           String?
+   channel            ChatChannel
++  chatType           String           @default("private")  // 'private' | 'group' | 'supergroup' | 'channel'
+   externalChatId     String           @unique
+   name               String?
+   lastMessageAt      DateTime?
+@@ -353,6 +354,8 @@ model Chat {
+   contact            Contact?         @relation(fields: [contactId], references: [id])
+   contactIdentity    ContactIdentity? @relation(fields: [contactIdentityId], references: [id])
+   messages           Message[]
++  callSessions       CallSession[]
++  groupVisibility    GroupVisibility[]
+ 
+   @@index([driverId])
+   @@index([contactId])
+@@ -361,6 +364,7 @@ model Chat {
+   @@index([status])
+   @@index([assignedToUserId])
+   @@index([status, assignedToUserId])
++  @@index([chatType])
+ }
+ 
+ model Message {
+@@ -381,6 +385,7 @@ model Message {
+   chat            Chat                @relation(fields: [chatId], references: [id], onDelete: Cascade)
+   attachments     MessageAttachment[]
+   eventLogs       MessageEventLog[]
++  callSession     CallSession?
+ 
+   @@index([chatId, sentAt(sort: Desc)])
+   @@index([externalId])
+@@ -552,6 +557,7 @@ enum ChatChannel {
+   whatsapp
+   max
+   yandex_pro
++  phone
+ }
+ 
+ enum MessageStatus {
+@@ -571,6 +577,7 @@ enum MessageType {
+   voice
+   document
+   system
++  call
+ }
+ 
+ enum WhatsAppMessageType {
+@@ -626,6 +633,7 @@ model Contact {
+   identities        ContactIdentity[]
+   chats             Chat[]
+   tasks             Task[]
++  callSessions      CallSession[]
+   mergesAsSurvivor  ContactMerge[]   @relation("MergeSurvivor")
+   mergesAsMerged    ContactMerge[]   @relation("MergeMerged")
+   driver            Driver?          @relation(fields: [yandexDriverId], references: [yandexDriverId])
+@@ -717,6 +725,7 @@ enum ContactPhoneSource {
+   telegram
+   max
+   manual
++  phone
+ }
+ 
+ enum ContactIdentitySource {
+@@ -852,7 +861,7 @@ model TaskEvent {
+   taskId    String
+   eventType String                          // e.g. "created", "status_changed", "message_sent", "reply_received"
+   payload   Json?    @default("{}")
+-  actorType String?  @default("system")     // "system" | "user" | "auto"
++  actorType String?  @default("system")     // "system" | "user" | "auto" | "ai" | "driver"
+   actorId   String?
+   createdAt DateTime @default(now())
+ 
+@@ -1000,3 +1009,138 @@ model HistoryImportJob {
+ 
+   @@index([status, createdAt(sort: Desc)])
+ }
++
++// ═══════════════════════════════════════════════════════════════════
++// TELEPHONY MODULE — MVP Phase 1
++// ═══════════════════════════════════════════════════════════════════
++
++enum DeviceStatus {
++  online
++  offline
++}
++
++enum CallStatus {
++  ringing
++  active
++  completed
++  failed
++}
++
++enum CallDisposition {
++  answered
++  missed
++  busy
++  rejected
++  no_answer
++}
++
++enum CommandStatus {
++  pending
++  delivered
++  executed
++  failed
++}
++
++/// Android-устройство с SIM для телефонии
++model TelephonyDevice {
++  id            String       @id @default(cuid())
++  androidId     String       @unique
++  name          String
++  phoneNumber   String?
++  simOperator   String?
++  status        DeviceStatus @default(offline)
++  isActive      Boolean      @default(true)
++  revokedAt     DateTime?
++  lastHeartbeat DateTime?
++  appVersion    String?
++  deviceSecret  String       @unique
++  fcmToken      String?
++  metadata      Json?
++  createdAt     DateTime     @default(now())
++  updatedAt     DateTime     @updatedAt
++
++  callSessions  CallSession[]
++  commands      TelephonyCommand[]
++
++  @@index([status])
++  @@index([lastHeartbeat])
++  @@index([isActive])
++}
++
++/// Сессия звонка — от ringing до completed/failed
++model CallSession {
++  id             String           @id @default(cuid())
++  deviceId       String
++  device         TelephonyDevice  @relation(fields: [deviceId], references: [id])
++
++  chatId         String?
++  chat           Chat?            @relation(fields: [chatId], references: [id])
++  messageId      String?          @unique
++  message        Message?         @relation(fields: [messageId], references: [id])
++  contactId      String?
++  contact        Contact?         @relation(fields: [contactId], references: [id])
++
++  direction      MessageDirection
++  callerNumber   String
++  calleeNumber   String
++  status         CallStatus       @default(ringing)
++  startedAt      DateTime         @default(now())
++  answeredAt     DateTime?
++  endedAt        DateTime?
++  duration       Int?
++  disposition    CallDisposition?
++
++  androidCallId  String?
++  metadata       Json?
++
++  createdAt      DateTime         @default(now())
++  updatedAt      DateTime         @updatedAt
++
++  @@index([deviceId, startedAt(sort: Desc)])
++  @@index([deviceId, androidCallId])
++  @@index([deviceId, status])
++  @@index([callerNumber])
++  @@index([calleeNumber])
++  @@index([contactId])
++  @@index([chatId])
++}
++
++/// Команда от CRM к Android-устройству
++model TelephonyCommand {
++  id          String        @id @default(cuid())
++  deviceId    String
++  device      TelephonyDevice @relation(fields: [deviceId], references: [id])
++
++  type        String
++  payload     Json
++  status      CommandStatus @default(pending)
++
++  deliveredAt DateTime?
++  executedAt  DateTime?
++  failedAt    DateTime?
++  failReason  String?
++
++  createdAt   DateTime      @default(now())
++  updatedAt   DateTime      @updatedAt
++
++  @@index([deviceId, status])
++  @@index([status, createdAt])
++}
++
++// ═══════════════════════════════════════════════════════════════════
++// GROUP VISIBILITY — per-operator hide/show for group chats
++// ═══════════════════════════════════════════════════════════════════
++
++model GroupVisibility {
++  id         String   @id @default(cuid())
++  userId     String                    // CRM operator ID (from cookie crm_user_id, no FK — same pattern as Chat.assignedToUserId)
++  chatId     String
++  visibility String   @default("visible")  // 'visible' | 'hidden'
++  createdAt  DateTime @default(now())
++  updatedAt  DateTime @updatedAt
++
++  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
++
++  @@unique([userId, chatId])
++  @@index([userId])
++}
+diff --git a/gravity-mvp/src/app/api/channels/accounts/route.ts b/gravity-mvp/src/app/api/channels/accounts/route.ts
+index 19ed6d9..0f71e66 100644
+--- a/gravity-mvp/src/app/api/channels/accounts/route.ts
++++ b/gravity-mvp/src/app/api/channels/accounts/route.ts
+@@ -36,7 +36,7 @@ export async function GET() {
+                 }
+             }),
+             max: [
+-                { id: 'scraper', phone: 'Scraper', label: 'MAX Scraper (Личный)', isDefault: true },
++                { id: 'max_scraper', phone: process.env.MAX_SCRAPER_PHONE || 'MAX', label: 'MAX', isDefault: true },
+                 ...maxConnections.map(c => ({
+                     id: c.id,
+                     phone: 'Bot',
+diff --git a/gravity-mvp/src/app/api/contacts/search/route.ts b/gravity-mvp/src/app/api/contacts/search/route.ts
+index 5ebce9b..4217bab 100644
+--- a/gravity-mvp/src/app/api/contacts/search/route.ts
++++ b/gravity-mvp/src/app/api/contacts/search/route.ts
+@@ -123,19 +123,65 @@ export async function GET(req: NextRequest) {
+       },
+     })
+ 
++    // Find additional chats linked via Driver (same phone number)
++    // Contact.chats only includes chats with matching contactId,
++    // but TG/other chats may be linked via driverId (same phone → same Driver)
++    const contactPhones = new Map<string, string[]>() // contactId → phones
++    for (const c of contacts) {
++      const phones = c.phones.map(p => p.phone.replace(/\D/g, ''))
++      if (phones.length > 0) contactPhones.set(c.id, phones)
++    }
++
++    // Batch: find chats via driverId where driver.phone matches contact phones
++    const allPhones = [...new Set([...contactPhones.values()].flat())]
++    const driverChats = allPhones.length > 0
++      ? await prisma.chat.findMany({
++          where: {
++            driver: { phone: { in: allPhones.map(p => p.startsWith('7') ? `+${p}` : `+7${p}`) } },
++            chatType: 'private',
++          },
++          select: { id: true, channel: true, driverId: true, driver: { select: { phone: true } } },
++        })
++      : []
++
++    // Map driver chats to contacts by phone
++    const driverChatsByPhone = new Map<string, typeof driverChats>()
++    for (const dc of driverChats) {
++      const normPhone = dc.driver?.phone?.replace(/\D/g, '') || ''
++      if (!driverChatsByPhone.has(normPhone)) driverChatsByPhone.set(normPhone, [])
++      driverChatsByPhone.get(normPhone)!.push(dc)
++    }
++
+     // Build hasChat map per contact
+-    const formatted = contacts.map(c => ({
+-      id: c.id,
+-      displayName: c.displayName,
+-      masterSource: c.masterSource,
+-      phones: c.phones,
+-      identities: c.identities,
+-      channels: [...new Set(c.identities.map(i => i.channel))],
+-      hasChat: c.chats.reduce((acc, ch) => {
++    const formatted = contacts.map(c => {
++      // Direct chats (via contactId)
++      const hasChat = c.chats.reduce((acc, ch) => {
+         if (!acc[ch.channel]) acc[ch.channel] = ch.id
+         return acc
+-      }, {} as Record<string, string>),
+-    }))
++      }, {} as Record<string, string>)
++
++      // Additional chats via driver phone
++      const phones = contactPhones.get(c.id) || []
++      for (const phone of phones) {
++        const extraChats = driverChatsByPhone.get(phone) || []
++        for (const dc of extraChats) {
++          if (!hasChat[dc.channel]) hasChat[dc.channel] = dc.id
++        }
++      }
++
++      return {
++        id: c.id,
++        displayName: c.displayName,
++        masterSource: c.masterSource,
++        phones: c.phones,
++        identities: c.identities,
++        hasChat,
++        channels: [...new Set([
++          ...c.identities.map(i => i.channel),
++          ...Object.keys(hasChat),
++        ])],
++      }
++    })
+ 
+     // Preserve search result order
+     const orderMap = new Map(uniqueIds.map((id, i) => [id, i]))
+diff --git a/gravity-mvp/src/app/api/webhook/telegram/route.ts b/gravity-mvp/src/app/api/webhook/telegram/route.ts
+index ee5350f..ce773a2 100644
+--- a/gravity-mvp/src/app/api/webhook/telegram/route.ts
++++ b/gravity-mvp/src/app/api/webhook/telegram/route.ts
+@@ -13,12 +13,65 @@ export async function POST(req: NextRequest) {
+         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
+ 
+         // Structure expected from Bot's webhook payload
+-        const { telegramId, text, direction, username, timestamp } = body
++        const { telegramId, text, direction, username, timestamp,
++                chatType, chatId: tgChatId, chatTitle,
++                firstName, lastName } = body
+ 
+         if (!telegramId || !text) {
+             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
+         }
+ 
++        // ── GROUP BRANCH: route group/supergroup/channel messages separately ──
++        const isGroup = chatType && chatType !== 'private'
++        if (isGroup) {
++            const sentAt = timestamp ? new Date(timestamp) : new Date()
++            const groupExternalId = `telegram:group:${tgChatId}`
++
++            let unifiedChat = await (prisma.chat as any).upsert({
++                where: { externalChatId: groupExternalId },
++                update: { lastMessageAt: sentAt },
++                create: {
++                    externalChatId: groupExternalId,
++                    channel: 'telegram',
++                    chatType: chatType,       // 'group' | 'supergroup' | 'channel'
++                    name: chatTitle || `TG Group ${tgChatId}`,
++                    lastMessageAt: sentAt,
++                    metadata: { chatTitle, chatType }
++                }
++            })
++
++            // senderName priority: firstName > username > fallback ID
++            const senderDisplay = firstName
++                ? (lastName ? `${firstName} ${lastName}` : firstName)
++                : (username ? `@${username}` : `User ${telegramId}`)
++
++            await (prisma.message as any).create({
++                data: {
++                    chatId: unifiedChat.id,
++                    direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
++                    content: text,
++                    channel: 'telegram',
++                    type: 'text',
++                    sentAt,
++                    status: 'delivered',
++                    metadata: {
++                        senderId: telegramId.toString(),
++                        senderName: senderDisplay,
++                        senderUsername: username || null
++                    }
++                }
++            })
++
++            // Lightweight workflow: only unreadCount + lastInboundAt (no requiresResponse, no status transition)
++            if (direction !== 'OUTGOING') {
++                await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, sentAt)
++            }
++
++            console.log(`[WEBHOOK-TG] GROUP chatId=${unifiedChat.id} type=${chatType} title=${chatTitle} sender=${senderDisplay}`)
++            return NextResponse.json({ success: true, processed: 'group_message' })
++        }
++        // ── END GROUP BRANCH ──
++
+         const tgIdBigInt = BigInt(telegramId)
+ 
+         // Add the message to the DB for the CRM history
+@@ -34,7 +87,7 @@ export async function POST(req: NextRequest) {
+         // so inbound TG messages appear in the CRM Messenger UI
+         try {
+             const externalChatId = `telegram:${telegramId.toString()}`
+-            
++
+             // USE BOT TIMESTAMP FOR STABLE SORTING
+             const sentAt = timestamp ? new Date(timestamp) : new Date()
+ 
+diff --git a/gravity-mvp/src/app/api/webhooks/max/route.ts b/gravity-mvp/src/app/api/webhooks/max/route.ts
+index aa46aed..34b112a 100644
+--- a/gravity-mvp/src/app/api/webhooks/max/route.ts
++++ b/gravity-mvp/src/app/api/webhooks/max/route.ts
+@@ -38,6 +38,7 @@ export async function POST(request: Request) {
+           metadata: {
+             ...(senderId    ? { senderId: String(senderId) } : {}),
+             ...(senderPhone ? { phone: senderPhone }         : {}),
++            connectionId: 'max_scraper',
+           },
+         },
+       })
+@@ -54,6 +55,7 @@ export async function POST(request: Request) {
+               ...((chat.metadata as any) || {}),
+               ...(senderId    ? { senderId: String(senderId) } : {}),
+               ...(senderPhone ? { phone: senderPhone }         : {}),
++              connectionId: (chat.metadata as any)?.connectionId || 'max_scraper',
+             }
+           } : {}),
+         },
+diff --git a/gravity-mvp/src/app/messages/components/ChatChannelTabs.tsx b/gravity-mvp/src/app/messages/components/ChatChannelTabs.tsx
+index dffe639..c8bc03f 100644
+--- a/gravity-mvp/src/app/messages/components/ChatChannelTabs.tsx
++++ b/gravity-mvp/src/app/messages/components/ChatChannelTabs.tsx
+@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react"
+ import { useChatNavigation } from "../hooks/useChatNavigation"
+ import { useConversations, Conversation } from "../hooks/useConversations"
+ 
+-// Initial defaults (overwritten by dynamic fetch)
+ const SELECTED_ACCOUNTS_KEY = 'chat-selected-accounts-v1'
+ 
+ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels }: { activeChannelTab: string, chat: Conversation, failedChannels?: Set<string> }) {
+@@ -15,19 +14,14 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
+     const [selectedAccounts, setSelectedAccounts] = useState<Record<string, string>>({})
+     const dropdownRef = useRef<HTMLDivElement>(null)
+ 
+-    // 1. Fetch real accounts
+     useEffect(() => {
+         const fetchAccounts = async () => {
+             try {
+                 const res = await fetch('/api/channels/accounts')
+                 const data = await res.json()
+                 setChannelAccounts(data)
+-
+-                // Load saved selections from localStorage
+                 const saved = localStorage.getItem(SELECTED_ACCOUNTS_KEY)
+                 const initialSelections: Record<string, string> = saved ? JSON.parse(saved) : {}
+-
+-                // Ensure defaults are set for all channels
+                 Object.entries(data).forEach(([ch, accs]: [string, any]) => {
+                     if (!initialSelections[ch] && accs.length > 0) {
+                         const def = accs.find((a: any) => a.isDefault) || accs[0]
+@@ -53,31 +47,35 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
+     }, [])
+ 
+     const channels = [
+-        { id: 'all', label: 'Все', short: 'Все' },
+-        { id: 'wa', label: 'WhatsApp', short: 'WA', dot: 'bg-emerald-500' },
+-        { id: 'tg', label: 'Telegram', short: 'TG', dot: 'bg-blue-500' },
+-        { id: 'max', label: 'MAX', short: 'MAX', dot: 'bg-purple-500' },
+-        { id: 'ypro', label: 'Yandex Pro', short: 'YP', dot: 'bg-yellow-500' }
++        { id: 'all', label: 'Все', short: 'All', channelKey: '' },
++        { id: 'wa', label: 'WhatsApp', short: 'WhatsApp', dot: 'bg-emerald-500', channelKey: 'whatsapp' },
++        { id: 'tg', label: 'Telegram', short: 'Telegram', dot: 'bg-blue-500', channelKey: 'telegram' },
++        { id: 'max', label: 'MAX', short: 'MAX', dot: 'bg-purple-500', channelKey: 'max' },
++        { id: 'ypro', label: 'Yandex Pro', short: 'Yandex Pro', dot: 'bg-yellow-500', channelKey: 'yandex_pro' },
++        { id: 'phone', label: 'Телефон', short: 'Телефон', dot: 'bg-orange-500', channelKey: 'phone' }
+     ]
+ 
+-    // ONE CLICK = switch channel AND open account dropdown
++    // Get unread count for a channel
++    const getChannelUnread = (channelKey: string): number => {
++        if (!channelKey) {
++            // "All" tab — total unread
++            return chat.unreadCount || 0
++        }
++        return chat.channelUnread?.[channelKey] || 0
++    }
++
+     const handleChannelClick = (chId: string) => {
+         if (chId === 'all') {
+             updateQuery({ channel: null })
+             setExpandedChannel(null)
+             return
+         }
+-        
+-        // Use channelMap from the merged conversation to find the chatId for the target channel
+         const normalizedChannel = chId === 'wa' ? 'whatsapp' : chId === 'tg' ? 'telegram' : chId === 'ypro' ? 'yandex_pro' : chId
+         const targetChatId = chat.channelMap?.[normalizedChannel]
+-        
+-        // Atomic update: switch channel AND chatId if we have a specific chat for that channel
+         const updates: Record<string, string | null> = { channel: chId }
+         if (targetChatId && targetChatId !== chat.id) {
+             updates.id = targetChatId
+         }
+-        
+         updateQuery(updates)
+         setExpandedChannel(chId === expandedChannel ? null : chId)
+     }
+@@ -96,27 +94,34 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
+     }
+ 
+     return (
+-        <div className="h-[30px] flex items-center px-4 shrink-0 bg-[#FAFAFA] border-b border-[#E8E8E8] gap-0 relative" ref={dropdownRef}>
+-            {channels.map((ch, idx) => {
++        <div className="h-[40px] flex items-center px-4 shrink-0 bg-white border-b border-[#E8E8E8] gap-1 relative" ref={dropdownRef}>
++            {channels.map((ch) => {
+                 const isActive = activeChannelTab === ch.id
+-                const activeAccount = ch.id !== 'all' ? getActiveAccount(ch.id) : null
+-                
++                const unread = getChannelUnread(ch.channelKey)
++                const hasFailed = ch.id !== 'all' && failedChannels?.has(ch.channelKey)
++
+                 return (
+                     <div key={ch.id} className="relative flex items-center">
+-                        {idx > 0 && <span className="text-gray-300 text-[10px] mx-1.5">·</span>}
+                         <button
+                             onClick={() => handleChannelClick(ch.id)}
+-                            className={`text-[12px] transition-all whitespace-nowrap px-0.5 relative ${
++                            className={`h-[32px] px-3 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                                 isActive
+-                                ? 'text-[#111] font-bold'
+-                                : 'text-gray-400 hover:text-gray-600 font-medium'
++                                ? 'bg-[#3390EC] text-white'
++                                : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
+                             }`}
+                         >
+-                            {ch.short || ch.label}
+-                            {ch.id !== 'all' && failedChannels?.has(
+-                                ch.id === 'wa' ? 'whatsapp' : ch.id === 'tg' ? 'telegram' : ch.id === 'ypro' ? 'yandex_pro' : ch.id
+-                            ) && (
+-                                <span className="absolute -top-0.5 -right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
++                            {ch.short}
++                            {unread > 0 && (
++                                <span className={`h-[18px] min-w-[18px] px-1 rounded-full text-[11px] font-bold flex items-center justify-center leading-none ${
++                                    isActive
++                                    ? 'bg-white/25 text-white'
++                                    : 'bg-[#3390EC] text-white'
++                                }`}>
++                                    {unread > 99 ? '99+' : unread}
++                                </span>
++                            )}
++                            {hasFailed && !unread && (
++                                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                             )}
+                         </button>
+ 
+@@ -157,11 +162,11 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
+             })}
+ 
+             {/* Active channel's selected account info */}
+-            {activeChannelTab !== 'all' && (
+-                <div className="flex items-center gap-1.5 ml-2.5 text-[10px] text-gray-400 border-l border-[#E0E0E0] pl-2.5">
+-                    <span className="font-semibold text-gray-500">{getActiveAccount(activeChannelTab)?.label}</span>
++            {activeChannelTab !== 'all' && getActiveAccount(activeChannelTab) && (
++                <div className="flex items-center gap-1.5 ml-auto text-[11px] text-gray-400">
++                    <span className="font-medium text-gray-500">{getActiveAccount(activeChannelTab)?.label}</span>
+                     {getActiveAccount(activeChannelTab)?.phone && (
+-                        <span className="font-mono text-[9px] bg-gray-100 px-1 rounded">
++                        <span className="font-mono text-[10px] bg-gray-100 px-1.5 py-0.5 rounded">
+                             {getActiveAccount(activeChannelTab)?.phone}
+                         </span>
+                     )}
+diff --git a/gravity-mvp/src/app/messages/components/ChatList.tsx b/gravity-mvp/src/app/messages/components/ChatList.tsx
+index 271550b..479b988 100644
+--- a/gravity-mvp/src/app/messages/components/ChatList.tsx
++++ b/gravity-mvp/src/app/messages/components/ChatList.tsx
+@@ -1,7 +1,7 @@
+ "use client"
+ 
+ import { useState, useMemo, useEffect, useRef } from "react"
+-import { Search, LayoutGrid, AlertCircle, MessageSquare, Plus, Bot, Zap, Users, Clock, CheckCircle2, Inbox } from "lucide-react"
++import { Search, LayoutGrid, AlertCircle, MessageSquare, Plus, Bot, Zap, Users, Clock, CheckCircle2, Inbox, ChevronDown, SlidersHorizontal } from "lucide-react"
+ import Link from "next/link"
+ import { useRouter } from "next/navigation"
+ import { useDebounce } from "use-debounce"
+@@ -13,20 +13,32 @@ import { useStartConversation } from "../hooks/useStartConversation"
+ import NewChatPopover from "./NewChatPopover"
+ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+ 
+-export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string) => void }) {
++export default function ChatList({ selectedChatId, activeListTab, activeChannelTab, onSelectChat }: { selectedChatId: string | null, activeListTab: string, activeChannelTab?: string, onSelectChat?: (id: string, channelHint?: string) => void }) {
+     const { conversations, setConversations, isLoading } = useConversations()
+-    const { setChatId, setListTab, setChannel } = useChatNavigation()
++    const { setChatId, setListTab } = useChatNavigation()
+     // If onSelectChat is provided (from MessagesShell), use it for instant client-side switching.
+     // Otherwise fall back to setChatId (URL-based, used when ChatList is rendered standalone).
+-    const handleChatSelect = onSelectChat ?? setChatId
++    const baseChatSelect = onSelectChat ?? ((id: string) => setChatId(id))
+ 
+     const router = useRouter()
+ 
+     const [searchQuery, setSearchQuery] = useState("")
+     const [debouncedSearch] = useDebounce(searchQuery, 200)
+     const [showNewChat, setShowNewChat] = useState(false)
+-
+-    const currentChannelTab = activeChannelTab || 'all'
++    const [viewMode, setViewMode] = useState<'chats' | 'groups'>('chats')
++
++    // Multi-channel filter: empty set = all channels (no filter)
++    const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set())
++
++    // Wrap to pass channel hint when exactly 1 channel is selected in sidebar
++    const handleChatSelect = (id: string) => {
++        if (selectedChannels.size === 1) {
++            const ch = Array.from(selectedChannels)[0]
++            baseChatSelect(id, ch)
++        } else {
++            baseChatSelect(id)
++        }
++    }
+ 
+     // Current user for ownership filtering
+     const currentUserId = useMemo(() => {
+@@ -34,6 +46,56 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+         return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1]
+     }, [])
+ 
++    // Channel accounts: for account filter + dynamic tabs
++    const [channelAccounts, setChannelAccounts] = useState<Record<string, any[]>>({})
++    const [selectedAccountIds, setSelectedAccountIds] = useState<Set<string>>(new Set())
++    const [accountDropdownOpen, setAccountDropdownOpen] = useState(false)
++    const accountDropdownRef = useRef<HTMLDivElement>(null)
++
++    useEffect(() => {
++        fetch('/api/channels/accounts').then(r => r.json()).then(data => {
++            setChannelAccounts(data || {})
++        }).catch(() => {})
++    }, [])
++
++    // Close account dropdown on outside click
++    useEffect(() => {
++        const handleClick = (e: MouseEvent) => {
++            if (accountDropdownRef.current && !accountDropdownRef.current.contains(e.target as Node)) {
++                setAccountDropdownOpen(false)
++            }
++        }
++        document.addEventListener('mousedown', handleClick)
++        return () => document.removeEventListener('mousedown', handleClick)
++    }, [])
++
++    // Group visibility: load hidden group IDs
++    const [hiddenGroupIds, setHiddenGroupIds] = useState<Set<string>>(new Set())
++    useEffect(() => {
++        if (viewMode === 'groups') {
++            fetch('/api/groups/visibility').then(r => r.json()).then(data => {
++                setHiddenGroupIds(new Set(data.hiddenChatIds || []))
++            }).catch(() => {})
++        }
++    }, [viewMode])
++
++    const toggleGroupVisibility = async (chatId: string) => {
++        const isHidden = hiddenGroupIds.has(chatId)
++        const newVisibility = isHidden ? 'visible' : 'hidden'
++        // Optimistic update
++        setHiddenGroupIds(prev => {
++            const next = new Set(prev)
++            if (isHidden) next.delete(chatId)
++            else next.add(chatId)
++            return next
++        })
++        await fetch('/api/groups/visibility', {
++            method: 'POST',
++            headers: { 'Content-Type': 'application/json' },
++            body: JSON.stringify({ chatId, visibility: newVisibility })
++        }).catch(() => {})
++    }
++
+     // FC-10: Contact Search API for broader results
+     const { results: contactResults, loading: contactSearchLoading } = useContactSearch(searchQuery)
+ 
+@@ -41,6 +103,23 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+     const filteredConversations = useMemo(() => {
+         let list = conversations
+ 
++        // 0. View mode: Chats (private) vs Groups
++        if (viewMode === 'chats') {
++            list = list.filter(c => (c.chatType || 'private') === 'private')
++        } else {
++            list = list.filter(c => c.chatType && c.chatType !== 'private')
++            // Filter out hidden groups
++            list = list.filter(c => !hiddenGroupIds.has(c.id))
++        }
++
++        // 0b. Account filter: multi-select on metadata.connectionId
++        if (selectedAccountIds.size > 0) {
++            list = list.filter(c => {
++                const connId = (c.metadata as any)?.connectionId
++                return connId && selectedAccountIds.has(connId)
++            })
++        }
++
+         // 1. Text Search
+         if (debouncedSearch) {
+             const query = debouncedSearch.toLowerCase()
+@@ -51,12 +130,11 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+             )
+         }
+ 
+-        // 2. Channel Filter
+-        if (currentChannelTab !== 'all') {
+-            const normalizedChannel = currentChannelTab === 'wa' ? 'whatsapp' : currentChannelTab === 'tg' ? 'telegram' : currentChannelTab === 'ypro' ? 'yandex_pro' : currentChannelTab
+-            list = list.filter(c => 
+-                c.allChannels?.includes(normalizedChannel) || c.channel === normalizedChannel
+-            )
++        // 2. Channel Filter (multi-select)
++        if (selectedChannels.size > 0) {
++            const normalizeChannel = (ch: string) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch
++            const normalizedSet = new Set(Array.from(selectedChannels).map(normalizeChannel))
++            list = list.filter(c => normalizedSet.has(c.channel))
+         }
+ 
+         // 3. Tab Filter
+@@ -80,7 +158,16 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+         }
+ 
+         return list
+-    }, [conversations, debouncedSearch, activeListTab, currentChannelTab])
++    }, [conversations, debouncedSearch, activeListTab, selectedChannels, viewMode, hiddenGroupIds, selectedAccountIds])
++
++    // Conversations filtered only by account (for badge counts on channel tabs)
++    const accountFilteredConversations = useMemo(() => {
++        if (selectedAccountIds.size === 0) return conversations
++        return conversations.filter(c => {
++            const connId = (c.metadata as any)?.connectionId
++            return connId && selectedAccountIds.has(connId)
++        })
++    }, [conversations, selectedAccountIds])
+ 
+     // FC-10: Extra contacts from API that aren't already shown as conversations
+     const extraContacts = useMemo(() => {
+@@ -182,7 +269,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+         }
+         // No chat exists — open NewChatPopover pre-filled would be complex,
+         // so trigger start-conversation directly via API
+-        const channel = currentChannelTab !== 'all' ? currentChannelTab : 'tg'
++        const channel = selectedChannels.size === 1 ? Array.from(selectedChannels)[0] : 'tg'
+         startContactConversation(contact.id, channel)
+     }
+ 
+@@ -201,6 +288,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+             case 'telegram': return <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1 py-px rounded leading-none">TG</span>
+             case 'max': return <span className="text-[8px] font-bold text-purple-600 bg-purple-50 px-1 py-px rounded leading-none">MAX</span>
+             case 'yandex_pro': return <span className="text-[8px] font-bold text-yellow-600 bg-yellow-50 px-1 py-px rounded leading-none">YP</span>
++            case 'phone': return <span className="text-[8px] font-bold text-orange-600 bg-orange-50 px-1 py-px rounded leading-none">ТЕЛ</span>
+             default: return null
+         }
+     }
+@@ -222,18 +310,37 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+         { id: 'resolved', label: 'Решённые', icon: CheckCircle2 },
+     ]
+ 
+-    const channelTabs = [
+-        { id: 'all', label: 'All' },
+-        { id: 'wa', label: 'WA', dotColor: 'bg-emerald-500' },
+-        { id: 'tg', label: 'TG', dotColor: 'bg-blue-500' },
+-        { id: 'max', label: 'MAX', dotColor: 'bg-purple-500' },
+-        { id: 'ypro', label: 'YP', dotColor: 'bg-yellow-500' },
+-    ]
++    // Dynamic channel tabs: show channel if it has data OR connected accounts OR is a built-in CRM module
++    const channelTabs = useMemo(() => {
++        const channelsWithData = new Set(conversations.map(c => c.channel))
++        const channelsWithAccounts = new Set(
++            Object.entries(channelAccounts)
++                .filter(([, accs]) => (accs as any[]).length > 0)
++                .map(([ch]) => ch === 'wa' ? 'whatsapp' : ch === 'tg' ? 'telegram' : ch === 'ypro' ? 'yandex_pro' : ch)
++        )
++        const all: { id: string; label: string; channel: string; dotColor?: string; alwaysShow?: boolean }[] = [
++            { id: 'wa', label: 'WA', dotColor: 'bg-emerald-500', channel: 'whatsapp' },
++            { id: 'tg', label: 'TG', dotColor: 'bg-blue-500', channel: 'telegram' },
++            { id: 'max', label: 'MAX', dotColor: 'bg-purple-500', channel: 'max' },
++            { id: 'ypro', label: 'YP', dotColor: 'bg-yellow-500', channel: 'yandex_pro', alwaysShow: true },
++            { id: 'phone', label: 'Тел', dotColor: 'bg-orange-500', channel: 'phone', alwaysShow: true },
++        ]
++        return all.filter(ch => ch.alwaysShow || channelsWithData.has(ch.channel) || channelsWithAccounts.has(ch.channel))
++    }, [conversations, channelAccounts])
+ 
+     const renderChatItem = (index: number, chat: Conversation) => {
+         const isSelected = selectedChatId === chat.id || (chat.allChatIds && chat.allChatIds.includes(selectedChatId!))
+         const timeString = chat.lastMessageAt ? new Date(chat.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+-        const snippet = chat.messages?.[0]?.content || "Сообщений пока нет"
++        const lastMsg = chat.messages?.[0]
++        const isGroupChat = chat.chatType && chat.chatType !== 'private'
++        const snippet = (() => {
++            if (!lastMsg?.content) return "Сообщений пока нет"
++            if (lastMsg.type === 'call') return `📞 ${lastMsg.content}`
++            if (isGroupChat && lastMsg.metadata?.senderName) {
++                return `${lastMsg.metadata.senderName}: ${lastMsg.content}`
++            }
++            return lastMsg.content
++        })()
+ 
+         return (
+             <div id={`chat-row-${chat.id}`} className="px-2 py-0.5">
+@@ -244,19 +351,27 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+                              setConversations((prev: Conversation[]) => prev.map((c: Conversation) => c.id === chat.id ? { ...c, unreadCount: 0 } : c))
+                         }
+                     }}
++                    onContextMenu={(e) => {
++                        if (isGroupChat) {
++                            e.preventDefault()
++                            if (confirm('Скрыть эту группу?')) {
++                                toggleGroupVisibility(chat.id)
++                            }
++                        }
++                    }}
+                     className={`w-full text-left flex items-center gap-3 px-3 h-[72px] rounded-xl transition-all relative ${
+-                        isSelected 
+-                        ? 'bg-[#3390EC] shadow-md z-10' 
++                        isSelected
++                        ? 'bg-[#3390EC] shadow-md z-10'
+                         : 'hover:bg-[#F0F2F5]'
+                     }`}
+                 >
+                     <div className="relative shrink-0">
+                         <div className={`h-[48px] w-[48px] rounded-full flex items-center justify-center font-bold text-[15px] ${
+-                            isSelected 
+-                            ? 'bg-white/20 text-white' 
+-                            : 'bg-[#DEE3E8] text-[#546574]'
++                            isSelected
++                            ? 'bg-white/20 text-white'
++                            : isGroupChat ? 'bg-[#C8D6E5] text-[#546574]' : 'bg-[#DEE3E8] text-[#546574]'
+                         }`}>
+-                            {chat.name?.substring(0, 1).toUpperCase() || "D"}
++                            {isGroupChat ? <Users size={20} /> : (chat.name?.substring(0, 1).toUpperCase() || "D")}
+                         </div>
+                         <div className={`absolute -bottom-0.5 -right-0.5 rounded-full p-0.5 border ${isSelected ? 'bg-[#3390EC] border-[#3390EC]' : 'bg-white border-white'}`}>
+                             {getChannelBadge(chat.channel)}
+@@ -275,7 +390,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+                                     'bg-gray-300'
+                                 }`} />
+                                 <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
+-                                    {chat.name || "Водитель"}
++                                    {chat.name || (isGroupChat ? 'Группа' : 'Водитель')}
+                                 </span>
+                             </div>
+                             <div className="flex items-center gap-1.5 shrink-0">
+@@ -365,26 +480,245 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
+                 </div>
+             </div>
+ 
+-            {/* Channel filter */}
+-            <div className="px-4 pb-1.5 shrink-0 flex items-center gap-0.5">
+-                {channelTabs.map((ch, idx) => {
+-                    const isActive = currentChannelTab === ch.id
++            {/* View mode: Chats / Groups + Account selector icon */}
++            <div className="flex gap-1 px-3 py-1.5 border-b border-[#E4ECFC] shrink-0 items-center">
++                <button
++                    onClick={() => setViewMode('chats')}
++                    className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
++                        viewMode === 'chats' ? 'bg-[#3390EC] text-white' : 'text-[#8A9099] hover:bg-[#F0F2F5]'
++                    }`}
++                >Чаты</button>
++                <button
++                    onClick={() => setViewMode('groups')}
++                    className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors ${
++                        viewMode === 'groups' ? 'bg-[#3390EC] text-white' : 'text-[#8A9099] hover:bg-[#F0F2F5]'
++                    }`}
++                >Группы</button>
++
++                {/* Account selector — icon button + dropdown */}
++                {(() => {
++                    const channelDisplayName: Record<string, string> = { wa: 'WhatsApp', tg: 'Telegram', max: 'MAX', ypro: 'Yandex Pro' }
++                    const channelBadge: Record<string, string> = { wa: 'WA', tg: 'TG', max: 'MAX', ypro: 'YP' }
++                    const dropdownAccounts: { id: string; label: string; phone?: string; channel?: string; channelKey?: string }[] = []
++                    if (selectedChannels.size === 0) {
++                        Object.entries(channelAccounts).forEach(([ch, accs]) => {
++                            (accs as any[]).forEach(a => dropdownAccounts.push({ ...a, channel: channelBadge[ch] || ch, channelKey: ch }))
++                        })
++                    } else {
++                        for (const chId of selectedChannels) {
++                            const accs = channelAccounts[chId] || []
++                            accs.forEach((a: any) => dropdownAccounts.push({ ...a, channel: channelBadge[chId] || chId, channelKey: chId }))
++                        }
++                    }
++
++                    const normalizePhone = (p: string) => p?.replace(/[\s\-\+\(\)]/g, '') || ''
++                    const phoneGroups = new Map<string, typeof dropdownAccounts>()
++                    const phoneDisplay = new Map<string, string>()
++                    const ungrouped: typeof dropdownAccounts = []
++
++                    for (const acc of dropdownAccounts) {
++                        const norm = normalizePhone(acc.phone || '')
++                        if (norm.length >= 7) {
++                            if (!phoneGroups.has(norm)) {
++                                phoneGroups.set(norm, [])
++                                phoneDisplay.set(norm, acc.phone || norm)
++                            }
++                            phoneGroups.get(norm)!.push(acc)
++                        } else {
++                            ungrouped.push(acc)
++                        }
++                    }
++
++                    const allOff = selectedAccountIds.has('__none__')
++                    const isAccSelected = (accId: string) => selectedAccountIds.size === 0 || selectedAccountIds.has(accId)
++                    const hasFilter = selectedAccountIds.size > 0 && !allOff
++
++                    const toggleAll = () => {
++                        if (selectedAccountIds.size === 0) {
++                            setSelectedAccountIds(new Set(['__none__']))
++                        } else {
++                            setSelectedAccountIds(new Set())
++                        }
++                    }
++                    const toggleGroup = (groupAccs: typeof dropdownAccounts) => {
++                        const groupIds = groupAccs.map(a => a.id)
++                        const allGroupSelected = groupIds.every(id => isAccSelected(id))
++                        setSelectedAccountIds(prev => {
++                            if (prev.size === 0) {
++                                const all = new Set(dropdownAccounts.map(a => a.id))
++                                groupIds.forEach(id => all.delete(id))
++                                return all
++                            }
++                            const next = new Set(prev)
++                            next.delete('__none__')
++                            if (allGroupSelected) groupIds.forEach(id => next.delete(id))
++                            else groupIds.forEach(id => next.add(id))
++                            return next.size === 0 ? new Set(['__none__']) : next
++                        })
++                    }
++                    const toggleSingle = (accId: string) => {
++                        setSelectedAccountIds(prev => {
++                            if (prev.size === 0) {
++                                const all = new Set(dropdownAccounts.map(a => a.id))
++                                all.delete(accId)
++                                return all
++                            }
++                            const next = new Set(prev)
++                            next.delete('__none__')
++                            if (next.has(accId)) next.delete(accId)
++                            else next.add(accId)
++                            return next.size === 0 ? new Set(['__none__']) : next
++                        })
++                    }
++
+                     return (
+-                        <div key={ch.id} className="flex items-center">
+-                            {idx > 0 && <span className="text-gray-300 text-[10px] mx-1">·</span>}
++                        <div className="relative ml-auto" ref={accountDropdownRef}>
+                             <button
+-                                onClick={() => setChannel(ch.id as any)}
+-                                className={`text-[12px] transition-all px-0.5 ${
+-                                    isActive 
+-                                    ? 'text-[#111] font-bold' 
+-                                    : 'text-gray-400 hover:text-gray-600 font-medium'
++                                onClick={() => setAccountDropdownOpen(!accountDropdownOpen)}
++                                className={`w-[28px] h-[28px] rounded-lg flex items-center justify-center transition-colors ${
++                                    hasFilter || accountDropdownOpen
++                                    ? 'bg-[#3390EC]/10 text-[#3390EC]'
++                                    : 'text-gray-400 hover:bg-[#F0F2F5] hover:text-gray-600'
+                                 }`}
++                                title="Аккаунты"
+                             >
+-                                {ch.label}
++                                <SlidersHorizontal size={15} />
++                                {hasFilter && (
++                                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#3390EC]" />
++                                )}
+                             </button>
++                            {accountDropdownOpen && (
++                                <div className="absolute top-full right-0 mt-1 bg-white rounded-lg shadow-xl border border-[#E0E0E0] py-1 min-w-[240px] z-50">
++                                    <button
++                                        onClick={toggleAll}
++                                        className={`w-full px-3 py-1.5 text-left text-[12px] hover:bg-gray-50 transition-colors flex items-center gap-2 ${selectedAccountIds.size === 0 ? 'font-bold text-[#3390EC]' : 'text-[#111]'}`}
++                                    >
++                                        <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] ${selectedAccountIds.size === 0 ? 'bg-[#3390EC] border-[#3390EC] text-white' : 'border-gray-300'}`}>
++                                            {selectedAccountIds.size === 0 && '✓'}
++                                        </span>
++                                        Все аккаунты
++                                    </button>
++                                    {Array.from(phoneGroups.entries()).map(([normPhone, groupAccs]) => {
++                                        const allSelected = groupAccs.every(a => isAccSelected(a.id))
++                                        const someSelected = groupAccs.some(a => isAccSelected(a.id))
++                                        return (
++                                            <div key={normPhone}>
++                                                <div className="border-t border-gray-100 mt-1 pt-1" />
++                                                <button
++                                                    onClick={() => toggleGroup(groupAccs)}
++                                                    className="w-full px-3 py-1.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
++                                                >
++                                                    <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] ${allSelected ? 'bg-[#3390EC] border-[#3390EC] text-white' : someSelected ? 'bg-[#3390EC]/30 border-[#3390EC]' : 'border-gray-300'}`}>
++                                                        {allSelected && '✓'}
++                                                    </span>
++                                                    <span className="text-[12px] font-semibold text-[#111]">{phoneDisplay.get(normPhone)}</span>
++                                                    <div className="flex gap-0.5 ml-auto">
++                                                        {groupAccs.map(a => (
++                                                            <span key={a.id} className="text-[9px] text-gray-500 bg-gray-100 px-1 rounded">{a.channel || channelBadge[a.channelKey || ''] || '?'}</span>
++                                                        ))}
++                                                    </div>
++                                                </button>
++                                                {groupAccs.map(acc => (
++                                                    <button
++                                                        key={acc.id}
++                                                        onClick={() => toggleSingle(acc.id)}
++                                                        className="w-full px-3 py-1 text-left hover:bg-gray-50 transition-colors flex items-center gap-2 pl-6"
++                                                    >
++                                                        <span className={`w-3 h-3 rounded border flex items-center justify-center text-[8px] ${isAccSelected(acc.id) ? 'bg-[#3390EC] border-[#3390EC] text-white' : 'border-gray-300'}`}>
++                                                            {isAccSelected(acc.id) && '✓'}
++                                                        </span>
++                                                        <span className="text-[12px] text-[#333]">{channelDisplayName[acc.channelKey || ''] || acc.label}</span>
++                                                    </button>
++                                                ))}
++                                            </div>
++                                        )
++                                    })}
++                                    {ungrouped.length > 0 && phoneGroups.size > 0 && <div className="border-t border-gray-100 mt-1 pt-1" />}
++                                    {ungrouped.map(acc => (
++                                        <button
++                                            key={acc.id}
++                                            onClick={() => toggleSingle(acc.id)}
++                                            className="w-full px-3 py-1.5 text-left hover:bg-gray-50 transition-colors flex items-center gap-2"
++                                        >
++                                            <span className={`w-3.5 h-3.5 rounded border flex items-center justify-center text-[9px] ${isAccSelected(acc.id) ? 'bg-[#3390EC] border-[#3390EC] text-white' : 'border-gray-300'}`}>
++                                                {isAccSelected(acc.id) && '✓'}
++                                            </span>
++                                            <span className="text-[12px] text-[#111]">{acc.label}</span>
++                                            {acc.channel && <span className="text-[9px] text-gray-400 bg-gray-100 px-1 rounded ml-auto">{acc.channel}</span>}
++                                        </button>
++                                    ))}
++                                </div>
++                            )}
+                         </div>
+                     )
++                })()}
++            </div>
++
++            {/* Channel filter — multi-select */}
++            <div className="px-3 pb-1.5 shrink-0 flex items-center gap-1">
++                {/* "Все" button — clears channel filter */}
++                {(() => {
++                    const totalUnread = accountFilteredConversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)
++                    return (
++                        <button
++                            onClick={() => setSelectedChannels(new Set())}
++                            className={`h-[28px] px-2.5 rounded-lg text-[13px] font-semibold transition-all flex items-center gap-1 ${
++                                selectedChannels.size === 0
++                                ? 'bg-[#3390EC] text-white'
++                                : 'text-[#8A9099] hover:bg-[#F0F2F5]'
++                            }`}
++                        >
++                            Все
++                            {totalUnread > 0 && (
++                                <span className={`h-[16px] min-w-[16px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center leading-none ${
++                                    selectedChannels.size === 0 ? 'bg-white/25 text-white' : 'bg-[#3390EC] text-white'
++                                }`}>
++                                    {totalUnread > 999 ? '999+' : totalUnread}
++                                </span>
++                            )}
++                        </button>
++                    )
++                })()}
++                {channelTabs.map((ch) => {
++                    const isActive = selectedChannels.has(ch.id)
++                    const normalizedChannel = ch.channel
++                    const channelUnread = accountFilteredConversations
++                        .filter(c => c.channel === normalizedChannel || (c.channelUnread && c.channelUnread[normalizedChannel]))
++                        .reduce((sum, c) => {
++                            if (c.channelUnread?.[normalizedChannel]) return sum + c.channelUnread[normalizedChannel]
++                            if (c.channel === normalizedChannel) return sum + (c.unreadCount || 0)
++                            return sum
++                        }, 0)
++                    return (
++                        <button
++                            key={ch.id}
++                            onClick={() => {
++                                setSelectedChannels(prev => {
++                                    const next = new Set(prev)
++                                    if (next.has(ch.id)) next.delete(ch.id)
++                                    else next.add(ch.id)
++                                    return next
++                                })
++                            }}
++                            className={`h-[28px] px-2.5 rounded-lg text-[13px] font-semibold transition-all flex items-center gap-1 ${
++                                isActive
++                                ? 'bg-[#3390EC] text-white'
++                                : 'text-[#8A9099] hover:bg-[#F0F2F5]'
++                            }`}
++                        >
++                            {ch.label}
++                            {channelUnread > 0 && (
++                                <span className={`h-[16px] min-w-[16px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center leading-none ${
++                                    isActive ? 'bg-white/25 text-white' : 'bg-[#3390EC] text-white'
++                                }`}>
++                                    {channelUnread > 999 ? '999+' : channelUnread}
++                                </span>
++                            )}
++                        </button>
++                    )
+                 })}
++
++                {/* Account selector moved to Chats/Groups row */}
+             </div>
+ 
+             {/* Status tabs */}
+diff --git a/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx b/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx
+index 1bb1da6..811cd53 100644
+--- a/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx
++++ b/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx
+@@ -9,6 +9,8 @@ import MessageInputArea, { ReplyContextType } from "./MessageInputArea"
+ import { useConversations, refreshConversations } from "../hooks/useConversations"
+ import { useMessages, Message } from "../hooks/useMessages"
+ import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
++import { useCallEvents } from "../hooks/useCallEvents"
++import CallNotificationBanner from "./CallNotificationBanner"
+ 
+ export default function ChatWorkspace({
+     chatId,
+@@ -96,6 +98,7 @@ function ChatWorkspaceInner({
+     conversations: any[]
+ }) {
+     const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
++    const { activeCall } = useCallEvents()
+ 
+     // A3: Compute channels that have failed outbound messages
+     const failedChannels = useMemo(() => {
+@@ -179,6 +182,20 @@ function ChatWorkspaceInner({
+         })
+     }
+ 
++    const handleReaction = useCallback(async (msgId: string, emoji: string) => {
++        try {
++            const res = await fetch('/api/messages/reaction', {
++                method: 'POST',
++                headers: { 'Content-Type': 'application/json' },
++                body: JSON.stringify({ messageId: msgId, emoji })
++            })
++            if (!res.ok) return
++            // Optimistic: will be refreshed on next poll
++        } catch (e) {
++            console.error('[Reaction] error:', e)
++        }
++    }, [])
++
+     const isEmptyChannel = effectiveChatId?.startsWith('empty:')
+ 
+     return (
+@@ -198,6 +215,7 @@ function ChatWorkspaceInner({
+             />
+ 
+             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />
++            <CallNotificationBanner activeCall={activeCall} />
+ 
+             {isEmptyChannel ? (
+                 <div className="flex-1 flex flex-col items-center justify-center messenger-bg">
+@@ -217,6 +235,7 @@ function ChatWorkspaceInner({
+                 <MessageFeed
+                     chatId={chatId}
+                     channelTab={activeChannelTab}
++                    chatType={chat?.chatType}
+                     uiItems={uiItems}
+                     isLoading={isLoading}
+                     hasMoreHistory={hasMoreHistory}
+@@ -224,6 +243,7 @@ function ChatWorkspaceInner({
+                     onReply={handleReply}
+                     onRetry={handleRetry}
+                     onCreateTask={setTaskModalContext}
++                    onReaction={handleReaction}
+                     activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
+                     onFocusComposer={() => document.getElementById('message-composer')?.focus()}
+                     lastSentAt={lastSentAt}
+diff --git a/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx b/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
+index 91066f2..4aa0ae0 100644
+--- a/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
++++ b/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
+@@ -1,7 +1,7 @@
+ "use client"
+ 
+ import { useState, useEffect } from "react"
+-import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search } from "lucide-react"
++import { X, Phone, PhoneOutgoing, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search } from "lucide-react"
+ import { useChatNavigation } from "../hooks/useChatNavigation"
+ import { useConversations, refreshConversations } from "../hooks/useConversations"
+ import { useContactSearch } from "../hooks/useContactSearch"
+@@ -77,6 +77,39 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+     const [aiStatus, setAiStatus] = useState<'active' | 'paused' | 'inactive'>('inactive')
+     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
+     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
++    const [callingPhone, setCallingPhone] = useState<string | null>(null)
++    const [callResult, setCallResult] = useState<{ phone: string; ok: boolean } | null>(null)
++
++    const handleCall = async (phoneNumber: string) => {
++        setCallingPhone(phoneNumber)
++        setCallResult(null)
++        try {
++            // Get first active online device
++            const devRes = await fetch('/api/telephony/devices')
++            if (!devRes.ok) throw new Error('Не удалось получить список устройств')
++            const devices = await devRes.json()
++            const device = devices.find((d: any) => d.isActive && d.status === 'online')
++            if (!device) {
++                setCallResult({ phone: phoneNumber, ok: false })
++                return
++            }
++            const res = await fetch('/api/telephony/commands/call', {
++                method: 'POST',
++                headers: { 'Content-Type': 'application/json' },
++                body: JSON.stringify({
++                    deviceId: device.id,
++                    phoneNumber,
++                    contactId: contact?.id,
++                }),
++            })
++            setCallResult({ phone: phoneNumber, ok: res.ok })
++        } catch {
++            setCallResult({ phone: phoneNumber, ok: false })
++        } finally {
++            setCallingPhone(null)
++            setTimeout(() => setCallResult(null), 3000)
++        }
++    }
+ 
+     // Reachability: merge persisted status from DB with optional live-check override
+     const [liveReachability, setLiveReachability] = useState<Record<string, boolean | null>>({})
+@@ -317,6 +350,23 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+                                         {phone.isPrimary && (
+                                             <Star size={10} className="text-yellow-500 fill-yellow-500" />
+                                         )}
++                                        <button
++                                            onClick={() => handleCall(phone.phone)}
++                                            disabled={callingPhone === phone.phone}
++                                            title="Позвонить"
++                                            className="ml-auto text-[10px] text-orange-600 font-semibold px-2 py-0.5 rounded bg-orange-50 hover:bg-orange-100 transition-colors disabled:opacity-50 flex items-center gap-1"
++                                        >
++                                            {callingPhone === phone.phone ? (
++                                                <Loader2 size={9} className="animate-spin" />
++                                            ) : callResult?.phone === phone.phone ? (
++                                                callResult.ok ? <Check size={9} className="text-green-600" /> : <X size={9} className="text-red-500" />
++                                            ) : (
++                                                <PhoneOutgoing size={9} />
++                                            )}
++                                            {callingPhone === phone.phone ? 'Звоним...' :
++                                             callResult?.phone === phone.phone ? (callResult.ok ? 'Отправлено' : 'Нет устройства') :
++                                             'Позвонить'}
++                                        </button>
+                                     </div>
+                                     <div className="ml-4 space-y-0.5">
+                                         {/* Existing identities */}
+diff --git a/gravity-mvp/src/app/messages/components/MessageFeed.tsx b/gravity-mvp/src/app/messages/components/MessageFeed.tsx
+index 007d9d2..ef747c8 100644
+--- a/gravity-mvp/src/app/messages/components/MessageFeed.tsx
++++ b/gravity-mvp/src/app/messages/components/MessageFeed.tsx
+@@ -3,7 +3,9 @@
+ import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
+ import { Message } from "../hooks/useMessages"
+ import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
+-import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw } from "lucide-react"
++import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react"
++import MessageContextMenu from "./MessageContextMenu"
++import ImageLightbox from "./ImageLightbox"
+ 
+ // ── Anchor-based scroll memory (module-level, survives remounts) ──
+ // Primary: anchor msgId + offset from viewport top
+@@ -19,6 +21,7 @@ const scrollAnchorMemory = new Map<string, ScrollAnchor>()
+ export default function MessageFeed({
+     chatId,
+     channelTab,
++    chatType,
+     uiItems,
+     isLoading,
+     hasMoreHistory,
+@@ -26,12 +29,14 @@ export default function MessageFeed({
+     onReply,
+     onRetry,
+     onCreateTask,
++    onReaction,
+     activeSearchMessageId,
+     onFocusComposer,
+     lastSentAt
+ }: {
+     chatId: string
+     channelTab: string
++    chatType?: string
+     uiItems: UIItem[]
+     isLoading: boolean
+     hasMoreHistory: boolean
+@@ -39,6 +44,7 @@ export default function MessageFeed({
+     onReply?: (msg: Message) => void
+     onRetry?: (msg: Message) => void
+     onCreateTask?: (msg: Message) => void
++    onReaction?: (msgId: string, emoji: string) => void
+     activeSearchMessageId?: string | null
+     onFocusComposer?: () => void
+     lastSentAt?: number
+@@ -46,6 +52,10 @@ export default function MessageFeed({
+     // Ссылка на scrollable div (заменяет VirtuosoHandle)
+     const scrollerRef = useRef<HTMLDivElement>(null)
+     const [atBottom, setAtBottom] = useState(true)
++    // Context menu state
++    const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null)
++    // Lightbox state
++    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
+     const [showNewMessagesBadge, setShowNewMessagesBadge] = useState(false)
+     const seenMessageIds = useRef<Set<string>>(new Set())
+     const prevItemCount = useRef(uiItems.length)
+@@ -310,6 +320,18 @@ export default function MessageFeed({
+         setShowNewMessagesBadge(false)
+     }
+ 
++    // ──────────────────────────────────────────────────────────
++    // Collect all image URLs for lightbox navigation
++    // ──────────────────────────────────────────────────────────
++    const allImageUrls: string[] = []
++    for (const item of uiItems) {
++        if (item.type === 'message' && item.message.type === 'image' && item.message.attachments) {
++            for (const att of item.message.attachments) {
++                if (att.url) allImageUrls.push(att.url)
++            }
++        }
++    }
++
+     // ──────────────────────────────────────────────────────────
+     // Рендер элементов
+     // ──────────────────────────────────────────────────────────
+@@ -322,7 +344,41 @@ export default function MessageFeed({
+         </div>
+     )
+ 
++    const renderCallMessage = (item: MessageUIItem) => {
++        const { message: msg, spacingTop } = item
++        const meta = msg.metadata as Record<string, any> | undefined
++        const disposition = meta?.disposition || 'no_answer'
++        const isInbound = msg.direction === 'inbound'
++        const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
++
++        const colorClass = disposition === 'answered'
++            ? 'text-green-600 bg-green-50 border-green-100'
++            : (disposition === 'missed' || disposition === 'rejected')
++                ? 'text-red-600 bg-red-50 border-red-100'
++                : 'text-gray-500 bg-gray-50 border-gray-100'
++
++        const CallIcon = disposition === 'missed' || disposition === 'rejected'
++            ? PhoneMissed
++            : isInbound ? PhoneIncoming : PhoneOutgoing
++
++        return (
++            <div
++                className="flex justify-center w-full px-4"
++                style={{ marginTop: spacingTop }}
++                data-msg-id={msg.id}
++            >
++                <div className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm border ${colorClass}`}>
++                    <CallIcon size={16} strokeWidth={2} />
++                    <span className="font-medium">{msg.content}</span>
++                    <span className="text-[11px] opacity-60">{timeString}</span>
++                </div>
++            </div>
++        )
++    }
++
+     const renderMessage = (item: MessageUIItem) => {
++        if (item.message.type === 'call') return renderCallMessage(item)
++
+         const { message: msg, position, showAvatar, showName, showTail, spacingTop, statusPlacement } = item
+         const isOutbound = msg.direction === 'outbound'
+         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+@@ -349,12 +405,14 @@ export default function MessageFeed({
+                                 msg.channel === 'telegram' || msg.channel === 'tg' ? 'bg-[#3390EC]/10 border-[#3390EC]/20 text-[#3390EC]' :
+                                 msg.channel === 'whatsapp' || msg.channel === 'wa' ? 'bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366]' :
+                                 msg.channel === 'max' ? 'bg-[#8E24AA]/10 border-[#8E24AA]/20 text-[#8E24AA]' :
++                                msg.channel === 'phone' ? 'bg-orange-100 border-orange-200 text-orange-500' :
+                                 'bg-[#3390EC]/10 border-[#3390EC]/20 text-[#3390EC]'
+                             }`}>
+                                 {msg.account?.substring(0, 1).toUpperCase() || (
+                                     msg.channel === 'telegram' || msg.channel === 'tg' ? 'T' :
+                                     msg.channel === 'whatsapp' || msg.channel === 'wa' ? 'W' :
+                                     msg.channel === 'max' ? 'M' :
++                                    msg.channel === 'phone' ? '☎' :
+                                     msg.channel === 'yandex' || msg.channel === 'yp' ? 'Y' : 'U'
+                                 )}
+                             </div>
+@@ -363,6 +421,12 @@ export default function MessageFeed({
+                 )}
+ 
+                 <div className={`flex flex-col max-w-[70%] ${isOutbound ? 'items-end' : 'items-start'}`}>
++                    {/* Group chat: sender name for inbound messages */}
++                    {chatType && chatType !== 'private' && !isOutbound && msg.metadata?.senderName && (
++                        <div className="text-[12px] font-semibold text-[#3390EC] mb-0.5 ml-1">
++                            {msg.metadata.senderName}
++                        </div>
++                    )}
+                     <div
+                         className={`relative group px-3 pt-1.5 pb-1.5 shadow-sm transition-shadow ${
+                             isOutbound ? 'bg-[#D1F7B6]' : 'bg-white'
+@@ -371,6 +435,10 @@ export default function MessageFeed({
+                             borderRadius: radius[position],
+                             minWidth: '60px'
+                         }}
++                        onContextMenu={(e) => {
++                            e.preventDefault()
++                            setContextMenu({ msg, x: e.clientX, y: e.clientY })
++                        }}
+                     >
+                         {showName && (
+                             <div className="flex items-center gap-1.5 mb-1 px-0.5">
+@@ -399,16 +467,19 @@ export default function MessageFeed({
+                         {/* Изображения */}
+                         {msg.type === 'image' && msg.attachments && msg.attachments.length > 0 && (
+                             <div className="mb-1">
+-                                {msg.attachments.filter(a => a.url).map(att => (
+-                                    <a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer">
++                                {msg.attachments.filter(a => a.url).map(att => {
++                                    const imgIndex = allImageUrls.indexOf(att.url)
++                                    return (
+                                         <img
++                                            key={att.id}
+                                             src={att.url}
+                                             alt="фото"
+                                             className="max-w-[280px] max-h-[320px] rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
++                                            onClick={() => setLightboxIndex(imgIndex >= 0 ? imgIndex : 0)}
+                                             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                                         />
+-                                    </a>
+-                                ))}
++                                    )
++                                })}
+                             </div>
+                         )}
+ 
+@@ -480,13 +551,26 @@ export default function MessageFeed({
+                             )}
+                         </div>
+ 
+-                        {/* Кнопки действий (hover) */}
+-                        <div className={`absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 z-20 ${isOutbound ? 'right-full mr-2' : 'left-full ml-2'}`}>
+-                           <button onClick={() => onReply && onReply(msg)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><Reply size={14} /></button>
+-                           <button onClick={() => navigator.clipboard.writeText(msg.content)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><Copy size={13} /></button>
+-                           <button onClick={() => onCreateTask?.(msg)} className="w-8 h-8 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-500 hover:text-[#3390EC] transition-colors"><ClipboardList size={14} /></button>
++                        {/* Quick reply button (hover) */}
++                        <div className={`absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 ${isOutbound ? 'right-full mr-1' : 'left-full ml-1'}`}>
++                           <button onClick={() => onReply && onReply(msg)} className="w-7 h-7 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-400 hover:text-[#3390EC] transition-colors" title="Ответить"><Reply size={13} /></button>
+                         </div>
+                     </div>
++
++                    {/* Reaction badges */}
++                    {msg.metadata?.reactions && Object.keys(msg.metadata.reactions as Record<string, number>).length > 0 && (
++                        <div className={`flex flex-wrap gap-1 mt-0.5 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
++                            {Object.entries(msg.metadata.reactions as Record<string, number>).map(([emoji]) => (
++                                <button
++                                    key={emoji}
++                                    onClick={() => onReaction?.(msg.id, emoji)}
++                                    className="h-6 px-1.5 rounded-full bg-white border border-gray-200 shadow-sm flex items-center gap-0.5 text-[13px] hover:border-[#3390EC]/40 transition-colors"
++                                >
++                                    {emoji}
++                                </button>
++                            ))}
++                        </div>
++                    )}
+                 </div>
+             </div>
+         )
+@@ -550,6 +634,28 @@ export default function MessageFeed({
+                     </div>
+                 )}
+             </div>
++
++            {/* Context menu */}
++            {contextMenu && (
++                <MessageContextMenu
++                    msg={contextMenu.msg}
++                    x={contextMenu.x}
++                    y={contextMenu.y}
++                    onClose={() => setContextMenu(null)}
++                    onReply={onReply}
++                    onCreateTask={onCreateTask}
++                    onReaction={onReaction}
++                />
++            )}
++
++            {/* Image lightbox */}
++            {lightboxIndex !== null && allImageUrls.length > 0 && (
++                <ImageLightbox
++                    images={allImageUrls}
++                    initialIndex={lightboxIndex}
++                    onClose={() => setLightboxIndex(null)}
++                />
++            )}
+         </div>
+     )
+ }
+diff --git a/gravity-mvp/src/app/messages/components/MessageInputArea.tsx b/gravity-mvp/src/app/messages/components/MessageInputArea.tsx
+index 241c235..f58a590 100644
+--- a/gravity-mvp/src/app/messages/components/MessageInputArea.tsx
++++ b/gravity-mvp/src/app/messages/components/MessageInputArea.tsx
+@@ -65,6 +65,8 @@ export default function MessageInputArea({
+     const fileInputRef = useRef<HTMLInputElement>(null)
+     const [isSendingImage, setIsSendingImage] = useState(false)
+     const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
++    const [imageCaption, setImageCaption] = useState("")
++    const captionInputRef = useRef<HTMLInputElement>(null)
+ 
+     // Restore draft on chat/channel change
+     useEffect(() => {
+@@ -153,6 +155,27 @@ export default function MessageInputArea({
+         }, 50)
+     }
+ 
++    // Paste image from clipboard
++    const handlePaste = (e: React.ClipboardEvent) => {
++        const items = e.clipboardData?.items
++        if (!items) return
++        for (const item of items) {
++            if (item.type.startsWith('image/')) {
++                e.preventDefault()
++                const file = item.getAsFile()
++                if (!file) return
++                const reader = new FileReader()
++                reader.onload = () => {
++                    setImagePreview({ dataUrl: reader.result as string, file })
++                    setImageCaption("")
++                    setTimeout(() => captionInputRef.current?.focus(), 100)
++                }
++                reader.readAsDataURL(file)
++                return
++            }
++        }
++    }
++
+     const handleKeyDown = (e: React.KeyboardEvent) => {
+         // Quick reply suggestion navigation
+         if (showSuggestions && suggestionsMatches.length > 0) {
+@@ -205,6 +228,8 @@ export default function MessageInputArea({
+         const reader = new FileReader()
+         reader.onload = () => {
+             setImagePreview({ dataUrl: reader.result as string, file })
++            setImageCaption("")
++            setTimeout(() => captionInputRef.current?.focus(), 100)
+         }
+         reader.readAsDataURL(file)
+     }
+@@ -212,7 +237,9 @@ export default function MessageInputArea({
+     const handleSendImage = async () => {
+         if (!imagePreview) return
+         const { dataUrl, file } = imagePreview
++        const caption = imageCaption.trim()
+         setImagePreview(null)
++        setImageCaption("")
+         setIsSendingImage(true)
+         try {
+             const base64 = dataUrl.split(',')[1]
+@@ -224,15 +251,12 @@ export default function MessageInputArea({
+                     base64,
+                     filename: file.name,
+                     mimeType: file.type,
+-                    caption: text.trim() || '',
++                    caption,
+                 }),
+             })
+             if (!res.ok) {
+                 const err = await res.json().catch(() => ({}))
+                 console.error('[send-image] failed:', err)
+-            } else {
+-                setText('')
+-                draftCache.delete(cacheKey)
+             }
+         } catch (err) {
+             console.error('[send-image] error:', err)
+@@ -266,8 +290,17 @@ export default function MessageInputArea({
+                         </button>
+                     </div>
+                     <img src={imagePreview.dataUrl} alt="preview" className="w-full max-h-[320px] object-contain rounded-lg bg-gray-50" />
++                    <input
++                        ref={captionInputRef}
++                        type="text"
++                        value={imageCaption}
++                        onChange={(e) => setImageCaption(e.target.value)}
++                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendImage() } }}
++                        placeholder="Добавить подпись..."
++                        className="w-full h-10 px-3 rounded-xl border border-gray-200 text-[14px] placeholder-gray-400 outline-none focus:border-[#3390EC] transition-colors"
++                    />
+                     <div className="flex gap-2">
+-                        <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
++                        <button onClick={() => { setImagePreview(null); setImageCaption("") }} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
+                             Отмена
+                         </button>
+                         <button onClick={handleSendImage} className="flex-1 h-10 rounded-xl bg-[#3390EC] text-white text-[14px] font-medium hover:bg-[#2B7FD4] transition-colors">
+@@ -410,7 +443,7 @@ export default function MessageInputArea({
+                 <div className={`flex-1 bg-[#F4F5F7] rounded-[18px] flex items-end min-h-[36px] border border-transparent transition-colors ${
+                     hasText ? 'focus-within:border-[#3390EC]/30 focus-within:bg-white' : 'focus-within:bg-[#EEEFF1]'
+                 } relative`}>
+-                    <textarea 
++                    <textarea
+                         id="message-composer"
+                         ref={textareaRef}
+                         value={text}
+@@ -419,6 +452,7 @@ export default function MessageInputArea({
+                             handleInput()
+                         }}
+                         onKeyDown={handleKeyDown}
++                        onPaste={handlePaste}
+                         placeholder="Написать сообщение..." 
+                         className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-4 resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
+                         rows={1}
+diff --git a/gravity-mvp/src/app/messages/components/MessagesShell.tsx b/gravity-mvp/src/app/messages/components/MessagesShell.tsx
+index d31e4e5..0f8b444 100644
+--- a/gravity-mvp/src/app/messages/components/MessagesShell.tsx
++++ b/gravity-mvp/src/app/messages/components/MessagesShell.tsx
+@@ -15,7 +15,7 @@
+  *   page.tsx passes the initial chatId from the URL; subsequent switches are local.
+  */
+ 
+-import { useState, useTransition } from "react"
++import { useState, useTransition, useEffect } from "react"
+ import { useRouter, usePathname, useSearchParams } from "next/navigation"
+ import ChatList from "./ChatList"
+ import ChatWorkspace from "./ChatWorkspace"
+@@ -35,16 +35,29 @@ export default function MessagesShell({
+     initialMessageId: string | null
+ }) {
+     const [chatId, setChatIdState] = useState(initialChatId)
++    const [channelTab, setChannelTab] = useState(activeChannelTab)
+     const router = useRouter()
+     const pathname = usePathname()
+     const searchParams = useSearchParams()
+     const [, startTransition] = useTransition()
+ 
+-    const handleSelectChat = (id: string) => {
++    // Sync channelTab with URL param (ChatChannelTabs updates URL directly)
++    const urlChannel = searchParams.get('channel') || 'all'
++    useEffect(() => {
++        setChannelTab(urlChannel)
++    }, [urlChannel])
++
++    const handleSelectChat = (id: string, channelHint?: string) => {
+         setChatIdState(id)
++        if (channelHint) {
++            setChannelTab(channelHint)
++        }
+         startTransition(() => {
+             const params = new URLSearchParams(searchParams.toString())
+             params.set('id', id)
++            if (channelHint) {
++                params.set('channel', channelHint)
++            }
+             router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+         })
+     }
+@@ -54,13 +67,13 @@ export default function MessagesShell({
+             <ChatList
+                 selectedChatId={chatId}
+                 activeListTab={activeListTab}
+-                activeChannelTab={activeChannelTab}
++                activeChannelTab={channelTab}
+                 onSelectChat={handleSelectChat}
+             />
+ 
+             <ChatWorkspace
+                 chatId={chatId}
+-                activeChannelTab={activeChannelTab}
++                activeChannelTab={channelTab}
+                 isProfileOpen={isProfileOpen}
+                 initialMessageId={initialMessageId}
+             />
+diff --git a/gravity-mvp/src/app/messages/hooks/useConversations.ts b/gravity-mvp/src/app/messages/hooks/useConversations.ts
+index e76d288..7fdf320 100644
+--- a/gravity-mvp/src/app/messages/hooks/useConversations.ts
++++ b/gravity-mvp/src/app/messages/hooks/useConversations.ts
+@@ -4,6 +4,7 @@ export interface Conversation {
+     id: string
+     name: string
+     channel: string
++    chatType?: 'private' | 'group' | 'supergroup' | 'channel'
+     externalChatId: string
+     lastMessageAt: string
+     unreadCount: number
+@@ -18,7 +19,7 @@ export interface Conversation {
+         phone: string | null
+         segment: string
+     }
+-    messages?: { content: string }[]
++    messages?: { content: string; type?: string; metadata?: Record<string, any> | null }[]
+     metadata?: Record<string, any> | null
+     // Contact Model (MVP)
+     contactId?: string | null
+@@ -26,6 +27,7 @@ export interface Conversation {
+     // Multi-channel aggregation fields (from merged driver chats)
+     allChatIds?: string[]
+     channelMap?: Record<string, string> // { whatsapp: chatId, telegram: chatId, max: chatId }
++    channelUnread?: Record<string, number> // { whatsapp: 3, telegram: 1, ... }
+     allChannels?: string[]
+     allProfiles?: { channel: string, profileId: string }[]
+ }
+diff --git a/gravity-mvp/src/app/messages/utils/message-utils.ts b/gravity-mvp/src/app/messages/utils/message-utils.ts
+index df4434a..11f7675 100644
+--- a/gravity-mvp/src/app/messages/utils/message-utils.ts
++++ b/gravity-mvp/src/app/messages/utils/message-utils.ts
+@@ -72,14 +72,19 @@ export function prepareMessagesForUI(messages: Message[]): UIItem[] {
+         // Same visual side = same direction AND (effectively) same sender context
+         // Strict rules: consecutive, same author/direction, <= 5 min difference
+         
+-        const isSameSideAsPrev = prevMsg && 
+-            prevMsg.direction === msg.direction && 
++        // Call messages are always standalone — never grouped with adjacent messages
++        const isCallMsg = msg.type === 'call'
++        const prevIsCall = prevMsg?.type === 'call'
++        const nextIsCall = nextMsg?.type === 'call'
++
++        const isSameSideAsPrev = !isCallMsg && !prevIsCall && prevMsg &&
++            prevMsg.direction === msg.direction &&
+             prevMsg.origin === msg.origin &&
+             (new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 5 * 60 * 1000 &&
+             getDateLabel(new Date(prevMsg.sentAt)) === dateLabel;
+ 
+-        const isSameSideAsNext = nextMsg && 
+-            nextMsg.direction === msg.direction && 
++        const isSameSideAsNext = !isCallMsg && !nextIsCall && nextMsg &&
++            nextMsg.direction === msg.direction &&
+             nextMsg.origin === msg.origin &&
+             (new Date(nextMsg.sentAt).getTime() - new Date(msg.sentAt).getTime()) <= 5 * 60 * 1000 &&
+             getDateLabel(new Date(nextMsg.sentAt)) === dateLabel;
+diff --git a/gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx b/gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx
+index c56a6c8..272318f 100644
+--- a/gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx
++++ b/gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx
+@@ -328,7 +328,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
+ 
+                     <TabsContent value="personal" className="space-y-4">
+                         <div className="flex items-center justify-between">
+-                            <h2 className="text-base font-semibold text-foreground">Личный аккаунт MAX</h2>
++                            <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты (1)</h2>
+                             {!isScraperOnline && (
+                                 <span className="flex items-center gap-1.5 text-xs font-medium text-destructive">
+                                     <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Скрейпер не запущен
+@@ -339,19 +339,22 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
+                         {isPersonalLoggedIn ? (
+                             <div className="rounded-2xl border bg-card p-5 shadow-sm transition-all">
+                                 <div className="flex items-start gap-3 mb-3">
+-                                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${isPersonalPaused ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
++                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                                         <Smartphone size={18} />
+                                     </div>
+                                     <div className="flex-1 min-w-0">
+-                                        <div className="font-semibold text-sm text-foreground mb-0.5">Личный аккаунт MAX</div>
+-                                        <div className="flex items-center gap-2">
++                                        <div className="font-semibold text-sm text-foreground">MAX</div>
++                                        <div className="flex items-center gap-2 mt-0.5">
++                                            {process.env.NEXT_PUBLIC_MAX_SCRAPER_PHONE && (
++                                                <span className="text-xs text-muted-foreground">{process.env.NEXT_PUBLIC_MAX_SCRAPER_PHONE}</span>
++                                            )}
+                                             {isPersonalPaused ? (
+                                                 <span className="flex items-center gap-1 text-[11px] text-amber-600">
+                                                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> На паузе
+                                                 </span>
+                                             ) : (
+                                                 <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Подключен через браузер
++                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Подключено
+                                                 </span>
+                                             )}
+                                         </div>
+diff --git a/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx b/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx
+index 9ee42d3..adb1eb5 100644
+--- a/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx
++++ b/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx
+@@ -45,6 +45,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
+     const pollingRef = useRef<NodeJS.Timeout | null>(null)
+     const [pauseDialog, setPauseDialog] = useState(false)
+     const [resumeDialog, setResumeDialog] = useState(false)
++    const [syncKey, setSyncKey] = useState(0)
+     const [disconnectDialog, setDisconnectDialog] = useState(false)
+ 
+     useEffect(() => {
+@@ -86,6 +87,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
+             await pauseWhatsAppConnection(conn.id, deleteMessages)
+             setLivePaused(true)
+             setPauseDialog(false)
++            if (deleteMessages) setSyncKey(k => k + 1)
+             onRefresh()
+         } catch (err) {
+             console.error('[WA] Pause failed:', err)
+@@ -113,6 +115,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
+         try {
+             if (deleteMessages) {
+                 await deleteWhatsAppMessages(conn.id)
++                setSyncKey(k => k + 1)
+             }
+             await disconnectWhatsApp(conn.id)
+             setLiveStatus('idle')
+@@ -212,7 +215,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
+ 
+             {/* История сообщений */}
+             {liveStatus === 'ready' && (
+-                <ChannelSyncBlock channel="whatsapp" connectionId={conn.id} />
++                <ChannelSyncBlock key={syncKey} channel="whatsapp" connectionId={conn.id} />
+             )}
+ 
+             {/* Actions */}
+diff --git a/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts b/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts
+index 0b56d0a..1de555c 100644
+--- a/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts
++++ b/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts
+@@ -120,8 +120,8 @@ export async function resumeWhatsAppConnection(connectionId: string, catchUp: bo
+ 
+ export async function deleteWhatsAppMessages(connectionId: string) {
+     console.log(`[WA-ACTIONS] deleteWhatsAppMessages id=${connectionId}`)
+-    // Reset auto-sync guard so future sync can re-populate
+-    resetSyncGuard(connectionId)
++    // Do NOT reset sync guard here — auto-sync must stay blocked after deletion.
++    // Guard is only reset when user explicitly clicks "Загрузить историю".
+     // Delete from WA-specific tables
+     try {
+         await prisma.whatsAppMessage.deleteMany({ where: { chat: { connectionId } } })
+@@ -131,32 +131,44 @@ export async function deleteWhatsAppMessages(connectionId: string) {
+         await prisma.whatsAppChat.deleteMany({ where: { connectionId } })
+     } catch (e: any) { console.error(`[WA-DELETE] WhatsAppChat delete error: ${e.message}`) }
+ 
+-    // Delete ALL messages with channel='whatsapp' (including cross-channel ones in TG/MAX chats)
+-    const crossChannelDel = await (prisma.message as any).deleteMany({ where: { channel: 'whatsapp' } })
+-    console.log(`[WA-DELETE] Deleted ${crossChannelDel.count} WA messages (all channels)`)
+-
+-    // Delete unified WA chats
++    // Find unified chats that belong to THIS connection (by metadata.connectionId)
+     const unifiedChats = await (prisma.chat as any).findMany({
+         where: { channel: 'whatsapp' },
+-        select: { id: true, contactId: true },
++        select: { id: true, contactId: true, metadata: true },
++    })
++    // Filter to only chats belonging to this connection
++    const connectionChats = unifiedChats.filter((c: any) => {
++        const connId = c.metadata?.connectionId
++        // Match by connectionId, or include legacy chats without connectionId
++        // only if there's a single WA connection (backward compat)
++        return connId === connectionId
+     })
+-    if (unifiedChats.length > 0) {
+-        const chatIds = unifiedChats.map((c: any) => c.id)
+-        const contactIds = [...new Set(unifiedChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
++    const connectionChatIds = connectionChats.map((c: any) => c.id)
++
++    if (connectionChatIds.length > 0) {
++        // Delete messages only from this connection's chats
++        const msgDel = await (prisma.message as any).deleteMany({
++            where: { chatId: { in: connectionChatIds } }
++        })
++        console.log(`[WA-DELETE] Deleted ${msgDel.count} messages for connection ${connectionId}`)
++
++        const contactIds = [...new Set(connectionChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
+ 
+-        const chatDel = await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+-        console.log(`[WA-DELETE] Deleted ${chatDel.count} chats`)
++        const chatDel = await (prisma.chat as any).deleteMany({ where: { id: { in: connectionChatIds } } })
++        console.log(`[WA-DELETE] Deleted ${chatDel.count} chats for connection ${connectionId}`)
+ 
+         // Cleanup dangling identities
+         if (contactIds.length > 0) {
+             const { ContactService } = await import('@/lib/ContactService')
+             await ContactService.cleanupDanglingIdentities(contactIds)
+         }
++    } else {
++        console.log(`[WA-DELETE] No unified chats found for connection ${connectionId}`)
+     }
+-    // Clean up HistoryImportJob records so ChannelSyncBlock resets
++    // Clean up HistoryImportJob records only for THIS connection so ChannelSyncBlock resets
+     try {
+-        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels)`
+-        console.log(`[WA-DELETE] Cleaned up import jobs`)
++        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels) AND "connectionId" = ${connectionId}`
++        console.log(`[WA-DELETE] Cleaned up import jobs for connection ${connectionId}`)
+     } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
+ 
+     revalidatePath('/messages')
+diff --git a/gravity-mvp/src/app/tg-actions.ts b/gravity-mvp/src/app/tg-actions.ts
+index b67dd75..7a02ee4 100644
+--- a/gravity-mvp/src/app/tg-actions.ts
++++ b/gravity-mvp/src/app/tg-actions.ts
+@@ -252,10 +252,81 @@ export async function getTelegramRuntimeStatus() {
+ 
+ import { DriverMatchService } from '@/lib/DriverMatchService'
+ import { ContactService } from '@/lib/ContactService'
++import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+ import { emitMessageReceived } from '@/lib/messageEvents'
+ 
+ async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
+     if (message && !message.out) {
++        // ── GROUP BRANCH: route group/supergroup/channel messages separately ──
++        const peerId = message.peerId
++        const isGroup = peerId?.className === 'PeerChat' || peerId?.className === 'PeerChannel'
++
++        if (isGroup) {
++            const groupId = peerId?.chatId?.toString() || peerId?.channelId?.toString()
++            const text = message.message
++            if (!groupId || !text) return
++
++            const externalChatId = `telegram:group:${groupId}`
++            const senderId = message.fromId?.userId?.toString()
++            const externalMsgId = message.id?.toString()
++            const now = message.date ? new Date(message.date * 1000) : new Date()
++
++            // senderName priority: firstName > username > fallback ID
++            const senderName = message.sender?.firstName
++                || message.sender?.username
++                || (senderId ? `User ${senderId}` : null)
++            const senderUsername = message.sender?.username || null
++
++            let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
++            if (!unifiedChat) {
++                let chatTitle = `TG Group ${groupId}`
++                try {
++                    const entity = await message.getChat?.()
++                    chatTitle = entity?.title || chatTitle
++                } catch {}
++
++                unifiedChat = await (prisma.chat as any).create({
++                    data: {
++                        externalChatId,
++                        channel: 'telegram',
++                        chatType: peerId.className === 'PeerChat' ? 'group' : 'supergroup',
++                        name: chatTitle,
++                        lastMessageAt: now,
++                        status: 'new',
++                        metadata: { connectionId }
++                    }
++                })
++            } else {
++                await (prisma.chat as any).update({
++                    where: { id: unifiedChat.id },
++                    data: { lastMessageAt: now }
++                })
++            }
++
++            // NO ContactService, NO DriverMatchService for groups
++
++            await (prisma.message as any).create({
++                data: {
++                    chatId: unifiedChat.id,
++                    direction: 'inbound',
++                    content: text,
++                    channel: 'telegram',
++                    type: 'text',
++                    sentAt: now,
++                    status: 'delivered',
++                    externalId: externalMsgId,
++                    metadata: { senderId, senderName, senderUsername }
++                }
++            })
++
++            // Lightweight workflow: only unreadCount + lastInboundAt
++            await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, now)
++
++            console.log(`[${loggerPrefix}] GROUP connId=${connectionId} groupId=${groupId} sender=${senderName} text="${text.substring(0, 30)}"`)
++            return
++        }
++        // ── END GROUP BRANCH ──
++
+         const senderId = message.peerId?.userId?.toString() || message.fromId?.userId?.toString();
+         const text = message.message
+         if (!senderId || !text) return
+@@ -548,6 +619,18 @@ async function getTelegramClient(connection: any) {
+     return client
+ }
+ 
++/**
++ * Get a connected GramJS client for sending reactions.
++ * Exported for use by the reaction API.
++ */
++export async function getClientForReaction(connectionId: string): Promise<any> {
++    const conn = await (prisma as any).telegramConnection.findUnique({
++        where: { id: connectionId }
++    })
++    if (!conn) return null
++    return getTelegramClient(conn)
++}
++
+ export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string }) {
+     console.log(`[TG-SEND] START: phone=${phoneNumber}, connectionId=${connectionId}, metadata=${JSON.stringify(metadata)}`)
+     let connection
+@@ -863,16 +946,16 @@ export async function importTelegramHistory(
+                     })
+                 }
+ 
+-                // Contact resolution
+-                if (!unifiedChat.contactId) {
++                // Contact resolution (skip for group chats)
++                if (!unifiedChat.contactId && (!unifiedChat.chatType || unifiedChat.chatType === 'private')) {
+                     try {
+                         await ContactService.resolveContact('telegram', peerId, null, chatName)
+                         totalContacts++
+                     } catch {}
+                 }
+ 
+-                // Driver linking
+-                if (!unifiedChat.driverId) {
++                // Driver linking (skip for group chats)
++                if (!unifiedChat.driverId && (!unifiedChat.chatType || unifiedChat.chatType === 'private')) {
+                     await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: peerId })
+                 }
+ 
+diff --git a/gravity-mvp/src/instrumentation.ts b/gravity-mvp/src/instrumentation.ts
+index 0540f7f..b36fd74 100644
+--- a/gravity-mvp/src/instrumentation.ts
++++ b/gravity-mvp/src/instrumentation.ts
+@@ -150,7 +150,16 @@ export async function register() {
+         }, 24 * 60 * 60 * 1000)
+         OperationalJobs.registerInterval(cleanupInterval)
+ 
+-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h'] })
++        // Device offline check: every 90 seconds
++        const deviceOfflineInterval = setInterval(async () => {
++            await OperationalJobs.run('device_offline_check', async () => {
++                const { TelephonyService } = await import('@/lib/TelephonyService')
++                await TelephonyService.markOfflineStaleDevices()
++            })
++        }, 90 * 1000)
++        OperationalJobs.registerInterval(deviceOfflineInterval)
++
++        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'device_offline:90s'] })
+ 
+     }, 5000) // 5 second delay after server start
+ 
+diff --git a/gravity-mvp/src/lib/ConversationWorkflowService.ts b/gravity-mvp/src/lib/ConversationWorkflowService.ts
+index 4ed2f9b..f974b46 100644
+--- a/gravity-mvp/src/lib/ConversationWorkflowService.ts
++++ b/gravity-mvp/src/lib/ConversationWorkflowService.ts
+@@ -37,6 +37,21 @@ export class ConversationWorkflowService {
+     `
+   }
+ 
++  /**
++   * Lightweight handler for group chat inbound messages.
++   * Only increments unreadCount and updates lastInboundAt.
++   * Does NOT set requiresResponse, does NOT transition status.
++   */
++  static async onGroupInboundMessage(chatId: string, sentAt: Date): Promise<void> {
++    await prisma.$executeRaw`
++      UPDATE "Chat"
++      SET "unreadCount" = "unreadCount" + 1,
++          "lastInboundAt" = ${sentAt},
++          "updatedAt" = NOW()
++      WHERE id = ${chatId}
++    `
++  }
++
+   /**
+    * Called by MessageService.send() after successful delivery.
+    */
+diff --git a/gravity-mvp/src/lib/MessageService.ts b/gravity-mvp/src/lib/MessageService.ts
+index 800c2e6..190eb15 100644
+--- a/gravity-mvp/src/lib/MessageService.ts
++++ b/gravity-mvp/src/lib/MessageService.ts
+@@ -49,40 +49,86 @@ export class MessageService {
+                 orderBy: { lastMessageAt: 'desc' }
+             })
+ 
+-            // 1b. Enrich with workflow fields not in Prisma client types
+-            const workflowRows = await (prisma as any).$queryRaw`
+-                SELECT id, "assignedToUserId", "lastInboundAt", "lastOutboundAt"
++            // 1b. Enrich with fields not in Prisma client types (chatType, workflow fields)
++            const extraRows = await (prisma as any).$queryRaw`
++                SELECT id, "chatType", "assignedToUserId", "lastInboundAt", "lastOutboundAt"
+                 FROM "Chat"
+             `
+-            const workflowMap = new Map<string, any>()
+-            for (const row of workflowRows) {
+-                workflowMap.set(row.id, row)
++            const extraMap = new Map<string, any>()
++            for (const row of extraRows) {
++                extraMap.set(row.id, row)
+             }
+             for (const chat of chats) {
+-                const wf = workflowMap.get(chat.id)
+-                if (wf) {
+-                    chat.assignedToUserId = wf.assignedToUserId
+-                    chat.lastInboundAt = wf.lastInboundAt
+-                    chat.lastOutboundAt = wf.lastOutboundAt
++                const extra = extraMap.get(chat.id)
++                if (extra) {
++                    chat.chatType = extra.chatType || 'private'
++                    chat.assignedToUserId = extra.assignedToUserId
++                    chat.lastInboundAt = extra.lastInboundAt
++                    chat.lastOutboundAt = extra.lastOutboundAt
+                 }
+             }
+ 
+             // 2. Group chats by contactId (priority) or driverId (fallback)
+             // This ensures chats created via Contact API (with contactId but no driverId)
+             // are grouped together with chats linked via Driver.
+-            const groups = new Map<string, any[]>()
+             const ungroupedChats: any[] = []
+ 
++            // Union-Find merge: chats sharing contactId OR driverId end up in the same group
++            const chatToGroup = new Map<string, string>() // chatId → groupKey
++            const keyToGroup = new Map<string, string>()   // contactId/driverId → groupKey
++            const groupChats = new Map<string, any[]>()    // groupKey → chats
++
+             for (const chat of chats) {
+-                const key = chat.contactId || chat.driverId
+-                if (key) {
+-                    if (!groups.has(key)) groups.set(key, [])
+-                    groups.get(key)!.push(chat)
+-                } else {
++                if (chat.chatType && chat.chatType !== 'private') {
++                    ungroupedChats.push(chat)
++                    continue
++                }
++                const keys = [
++                    chat.contactId ? `c:${chat.contactId}` : null,
++                    chat.driverId ? `d:${chat.driverId}` : null,
++                ].filter(Boolean) as string[]
++
++                if (keys.length === 0) {
+                     ungroupedChats.push(chat)
++                    continue
++                }
++
++                // Find existing group for any of the keys
++                let groupKey: string | null = null
++                for (const k of keys) {
++                    if (keyToGroup.has(k)) {
++                        groupKey = keyToGroup.get(k)!
++                        break
++                    }
+                 }
++
++                if (!groupKey) {
++                    groupKey = keys[0]
++                    groupChats.set(groupKey, [])
++                }
++
++                // If chat has multiple keys, merge groups
++                for (const k of keys) {
++                    const existingGroup = keyToGroup.get(k)
++                    if (existingGroup && existingGroup !== groupKey) {
++                        // Merge existingGroup into groupKey
++                        const chatsToMove = groupChats.get(existingGroup) || []
++                        const targetChats = groupChats.get(groupKey) || []
++                        targetChats.push(...chatsToMove)
++                        groupChats.delete(existingGroup)
++                        // Re-point all keys from old group
++                        for (const [mk, mv] of keyToGroup) {
++                            if (mv === existingGroup) keyToGroup.set(mk, groupKey)
++                        }
++                    }
++                    keyToGroup.set(k, groupKey)
++                }
++
++                groupChats.get(groupKey)!.push(chat)
+             }
+ 
++            const groups = groupChats
++
+             // 3. For each driver group, create a merged entry
+             const mergedEntries: any[] = []
+ 
+@@ -101,6 +147,7 @@ export class MessageService {
+                 const assignedToUserId = primary.assignedToUserId || driverChats.find((c: any) => c.assignedToUserId)?.assignedToUserId || null
+                 const allChatIds = driverChats.map((c: any) => c.id)
+                 const channelMap = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.id]))
++                const channelUnread = Object.fromEntries(driverChats.map((c: any) => [c.channel, c.unreadCount || 0]))
+                 
+                 // Aggregate profiles from all chats for this driver
+                 const allProfiles = driverChats.map((c: any) => ({
+@@ -115,6 +162,7 @@ export class MessageService {
+                     assignedToUserId,
+                     allChatIds,
+                     channelMap, // { whatsapp: chatId, telegram: chatId, max: chatId }
++                    channelUnread, // { whatsapp: 3, telegram: 1, ... }
+                     allProfiles, // List of { channel, profileId }
+                     // For display in channel-filter tabs, keep all channels the driver has
+                     allChannels: driverChats.map((c: any) => c.channel)
+@@ -128,6 +176,7 @@ export class MessageService {
+                     ...chat,
+                     allChatIds: [chat.id],
+                     channelMap: { [chat.channel]: chat.id },
++                    channelUnread: { [chat.channel]: chat.unreadCount || 0 },
+                     allProfiles: profileId ? [{ channel: chat.channel, profileId }] : [],
+                     allChannels: [chat.channel]
+                 })
+diff --git a/gravity-mvp/src/lib/phoneUtils.ts b/gravity-mvp/src/lib/phoneUtils.ts
+index dc86bf0..f9738f2 100644
+--- a/gravity-mvp/src/lib/phoneUtils.ts
++++ b/gravity-mvp/src/lib/phoneUtils.ts
+@@ -48,7 +48,7 @@ export function parseExternalChatId(externalChatId: string): { channel: string;
+   const channel = externalChatId.slice(0, colonIndex)
+   const externalId = externalChatId.slice(colonIndex + 1)
+ 
+-  const knownChannels = ['whatsapp', 'telegram', 'max', 'yandex_pro']
++  const knownChannels = ['whatsapp', 'telegram', 'max', 'yandex_pro', 'phone']
+   if (knownChannels.includes(channel)) {
+     return { channel, externalId }
+   }
+diff --git a/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts b/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts
+index 028b624..1a9a0db 100644
+--- a/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts
++++ b/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts
+@@ -82,6 +82,57 @@ async function syncHistory(connectionId: string, client: Client) {
+     try {
+         const chatsRaw = await client.getChats()
+         for (const chatRaw of chatsRaw) {
++            // ── GROUP BRANCH: sync group chats separately (no Contact, no Driver, no merge) ──
++            if (chatRaw.isGroup) {
++                try {
++                    const groupExternalId = chatRaw.id._serialized
++                    const chatLastTs = chatRaw.timestamp ? new Date(chatRaw.timestamp * 1000) : new Date()
++
++                    const groupChat = await (prisma.chat as any).upsert({
++                        where: { externalChatId: groupExternalId },
++                        update: { lastMessageAt: chatLastTs },
++                        create: {
++                            externalChatId: groupExternalId,
++                            channel: 'whatsapp',
++                            chatType: 'group',
++                            name: chatRaw.name || 'WA Group',
++                            lastMessageAt: chatLastTs,
++                            metadata: { connectionId }
++                        }
++                    })
++
++                    // Sync group messages (reuse existing fetchMessages pattern)
++                    const groupMsgs = await chatRaw.fetchMessages({ limit: 100 })
++                    for (const gMsg of groupMsgs) {
++                        if (gMsg.timestamp < cutoff.getTime() / 1000) continue
++                        const authorPhone = gMsg.author?.split('@')[0] || null
++                        const senderName = (gMsg as any).notifyName || authorPhone || 'Unknown'
++
++                        await (prisma.message as any).upsert({
++                            where: { externalId: gMsg.id._serialized },
++                            update: {},
++                            create: {
++                                chatId: groupChat.id,
++                                externalId: gMsg.id._serialized,
++                                direction: gMsg.fromMe ? 'outbound' : 'inbound',
++                                content: gMsg.body || '',
++                                channel: 'whatsapp',
++                                type: 'text',
++                                sentAt: new Date(gMsg.timestamp * 1000),
++                                status: 'delivered',
++                                metadata: { senderId: authorPhone, senderName, senderPhone: authorPhone }
++                            }
++                        })
++                    }
++
++                    console.log(`[WA-SYNC] GROUP: ${groupExternalId} name="${chatRaw.name}" msgs=${groupMsgs.length}`)
++                } catch (groupErr: any) {
++                    console.error(`[WA-SYNC] GROUP ERROR: ${chatRaw.id._serialized} ${groupErr.message}`)
++                }
++                continue
++            }
++            // ── END GROUP BRANCH ──
++
+             try {
+                 // Ensure chat exists in DB (legacy)
+                 await prisma.whatsAppChat.upsert({
+@@ -203,7 +254,8 @@ async function syncHistory(connectionId: string, client: Client) {
+                                         content: msg.body || '',
+                                         externalId: msg.id,
+                                         channel: 'whatsapp',
+-                                        sentAt: ts
++                                        sentAt: ts,
++                                        metadata: { connectionId }
+                                     }
+                                 })
+                             }
+@@ -351,6 +403,65 @@ export async function initializeClient(connectionId: string): Promise<void> {
+             return
+         }
+ 
++        // ── GROUP BRANCH: route group messages separately (no Contact, no Driver, no merge) ──
++        const chatObj = await msg.getChat()
++        if (chatObj.isGroup) {
++            try {
++                const authorPhone = msg.author?.split('@')[0] || null
++                const senderName = (msg as any).notifyName || authorPhone || 'Unknown'
++                const groupExternalId = chatObj.id._serialized
++                const ts = new Date(msg.timestamp * 1000)
++
++                let unifiedChat = await (prisma.chat as any).findUnique({
++                    where: { externalChatId: groupExternalId }
++                })
++
++                if (!unifiedChat) {
++                    unifiedChat = await (prisma.chat as any).create({
++                        data: {
++                            externalChatId: groupExternalId,
++                            channel: 'whatsapp',
++                            chatType: 'group',
++                            name: chatObj.name || 'WA Group',
++                            lastMessageAt: ts,
++                            metadata: { connectionId }
++                        }
++                    })
++                } else {
++                    await (prisma.chat as any).update({
++                        where: { id: unifiedChat.id },
++                        data: { lastMessageAt: ts }
++                    })
++                }
++
++                await (prisma.message as any).create({
++                    data: {
++                        chatId: unifiedChat.id,
++                        direction: 'inbound',
++                        content: msg.body || '',
++                        channel: 'whatsapp',
++                        type: 'text',
++                        sentAt: ts,
++                        status: 'delivered',
++                        metadata: {
++                            senderId: authorPhone,
++                            senderName,
++                            senderPhone: authorPhone
++                        }
++                    }
++                })
++
++                // Lightweight workflow: only unreadCount + lastInboundAt
++                await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, ts)
++
++                console.log(`[WA-MSG] GROUP ${groupExternalId} sender=${senderName} body="${(msg.body || '').substring(0, 30)}"`)
++            } catch (groupErr: any) {
++                console.error(`[WA-MSG] GROUP ERROR: ${chatObj.id._serialized} ${groupErr.message}`)
++            }
++            return
++        }
++        // ── END GROUP BRANCH ──
++
+         console.log(`[WA-SERVICE] INBOUND msgId=${msg.id._serialized} fromMe=${msg.fromMe} from=${msg.from} body="${(msg.body || '').substring(0, 30)}"`)
+         const logLine = `[${new Date().toISOString()}] INBOUND MSG: id=${msg.id._serialized} fromMe=${msg.fromMe} from=${msg.from} body="${msg.body}"\n`;
+         try { fs.appendFileSync(path.join(process.cwd(), 'wa-incoming.log'), logLine); } catch(e) {}
+@@ -501,7 +612,8 @@ export async function initializeClient(connectionId: string): Promise<void> {
+                         type: mapToUnifiedMessageType(msg.type),
+                         content: msg.body || '',
+                         externalId: msg.id._serialized,
+-                        sentAt: ts
++                        sentAt: ts,
++                        metadata: { connectionId }
+                     }
+                 })
+ 
+@@ -820,7 +932,8 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
+                     content: text,
+                     externalId: msg.id._serialized,
+                     sentAt: ts,
+-                    status: 'delivered'
++                    status: 'delivered',
++                    metadata: { connectionId }
+                 }
+             })
+         }
+@@ -906,6 +1019,9 @@ export async function importWhatsAppHistory(
+         const chatsRaw = await client.getChats()
+ 
+         for (const chatRaw of chatsRaw) {
++            // Skip group chats in history import (no Contact, no Driver, no merge)
++            if (chatRaw.isGroup) continue
++
+             try {
+                 totalChats++
+ 
+@@ -1024,7 +1140,8 @@ export async function importWhatsAppHistory(
+                                     content: msg.body || '',
+                                     externalId: msgId,
+                                     channel: 'whatsapp',
+-                                    sentAt: ts
++                                    sentAt: ts,
++                                    metadata: { connectionId }
+                                 }
+                             })
+                             newMessages++
+diff --git a/max-web-scraper/last_seen_dedupe.json b/max-web-scraper/last_seen_dedupe.json
+index d1b8fb0..3061854 100644
+--- a/max-web-scraper/last_seen_dedupe.json
++++ b/max-web-scraper/last_seen_dedupe.json
+@@ -1 +1 @@
+-{"sidebar:Ёжик Втумане:Здравствуйте, это что зачем и надолго ли?:undefined:rev_occ_0":1774560799508,"sidebar:Казбек:Ааа все спасибо:undefined:rev_occ_0":1774560801589,"sidebar:Владимир:да, все верно:undefined:rev_occ_0":1774560803066,"sidebar:Саня Шилов:Комиссия парка у нас на выбор: ✅ - 3.99% ✅ - 8р с заказа ✅ - 100р/сутки в дни работы (не работаете, комиссия не списывается) Бесплатный моментальный вывод денег 24/7 на тарифе 3.99% 🏆 ВЫБИРАЙ НАДЕЖНЫЙ ПАРК YOKO:undefined:rev_occ_0":1774560803146,"sidebar:Заново Я:*Отлично*!  _Регистрация прошла успешно_! Теперь в приложении Яндекс ПРО выбери парк *Yoko* — и можно выходить на линию!  *Тариф*:  Комиссия парка — всего 3,99%  *Выплаты*: _Бесплатный моментальный вывод_ на карту любого банка — через *ЯндексПРО*  *Договор*: Подпиши через приложение Мозен или по ссылке: 👉 Подписать договор https://edgvr.org/register/77de36ec-daa1-4bfb-a6ed-53c0f77867f0 При подписании загрузите 2 страницы паспорта: ✅ C фотографией ✅ C пропиской *_Зачем нужен договор_*? Он закрепляет обязанность парка осуществлять выплаты на вашу карту.:undefined:rev_occ_0":1774560803336,"sidebar:Александр:5:undefined:rev_occ_0":1774560803373,"sidebar:Александр:День добрый, а деньги вывести без интернета не получится?:undefined:rev_occ_0":1774560803489,"sidebar:8909335679123:89093356791:undefined:rev_occ_0":1774560803544,"sidebar:Дмитрий:Голосовое сообщение:undefined:rev_occ_0":1774560803573,"sidebar:MAX:Новый вход в MAX Обнаружили вход в профиль с вашим номером телефона 20 марта 2026 23:43 МСК Если это были не вы, перейдите в Профиль → Устройства → Завершить все сессии, кроме текущей, чтобы предотвратить нежелательный доступ к вашим данным, перепискам и звонкам:undefined:rev_occ_0":1774560803599,"sidebar:Денис:Красавчики ашпэ)) хорошего вечера!:undefined:rev_occ_0":1774560803728,"sidebar:Бек:Стикер:undefined:rev_occ_0":1774560803755,"sidebar:Лёша Патрушев:Голосовое сообщение:undefined:rev_occ_0":1774560803815,"sidebar:Н:Стикер:undefined:rev_occ_0":1774560803832,"sidebar:Маха:Выводить можно на любую карту, и также на картк 3-го лица В этом случае выводить также можно, скачав приложение Mozen:undefined:rev_occ_0":1774560803841,"sidebar:Константин:Стикер:undefined:rev_occ_0":1774560803958,"sidebar:Сяйфи:Стикер:undefined:rev_occ_0":1774560803979,"sidebar:Амелия:Я Амелия из Таиланда:undefined:rev_occ_0":1774560804000,"sidebar:Избранное:Сохраните что-нибудь:undefined:rev_occ_0":1774560804086}
+\ No newline at end of file
++{"id:116394328290051171":1776036505660,"id:116394332457486121":1776036568366}
+\ No newline at end of file
+diff --git a/tg-bot/src/services/crmIntegration.js b/tg-bot/src/services/crmIntegration.js
+index ff8d178..ceb26c7 100644
+--- a/tg-bot/src/services/crmIntegration.js
++++ b/tg-bot/src/services/crmIntegration.js
+@@ -24,6 +24,13 @@ class CrmIntegrationService {
+                 let text = ctx.message?.text || ctx.callbackQuery?.data;
+                 const username = ctx.from?.username;
+ 
++                // Group chat metadata (for CRM group/private routing)
++                const chatId    = ctx.message?.chat?.id;
++                const chatType  = ctx.message?.chat?.type;
++                const chatTitle = ctx.message?.chat?.title || null;
++                const firstName = ctx.from?.first_name || null;
++                const lastName  = ctx.from?.last_name || null;
++
+                 // Handle media messages that have no text/callback data
+                 if (!text && ctx.message) {
+                     if (ctx.message.photo) text = '[Фото]';
+@@ -41,7 +48,12 @@ class CrmIntegrationService {
+                     text: text,
+                     direction: direction,
+                     username: username,
+-                    timestamp: new Date().toISOString()
++                    timestamp: new Date().toISOString(),
++                    chatId: chatId?.toString() || null,
++                    chatType: chatType || null,
++                    chatTitle: chatTitle,
++                    firstName: firstName,
++                    lastName: lastName,
+                 };
+ 
+                 const parsed = new URL(this.crmWebhookUrl);

@@ -1,0 +1,1980 @@
+diff --git a/gravity-mvp/src/app/api/messages/route.ts b/gravity-mvp/src/app/api/messages/route.ts
+index 7ff3b93..d7a8ffc 100644
+--- a/gravity-mvp/src/app/api/messages/route.ts
++++ b/gravity-mvp/src/app/api/messages/route.ts
+@@ -24,13 +24,13 @@ export async function GET(req: NextRequest) {
+ export async function POST(req: NextRequest) {
+     try {
+         const body = await req.json()
+-        const { chatId, content, profileId, channel, clientMessageId } = body
++        const { chatId, content, profileId, channel, clientMessageId, replyToMessageId } = body
+ 
+         if (!chatId || !content) {
+             return NextResponse.json({ error: 'chatId and content are required' }, { status: 400 })
+         }
+ 
+-        const result = await MessageService.send(chatId, content, channel, profileId, clientMessageId)
++        const result = await MessageService.send(chatId, content, channel, profileId, clientMessageId, replyToMessageId)
+         return NextResponse.json(result)
+     } catch (error: any) {
+         console.error('[API-MESSAGES] POST Error:', error)
+diff --git a/gravity-mvp/src/app/api/messages/start-chat/route.ts b/gravity-mvp/src/app/api/messages/start-chat/route.ts
+index 41fa6b0..73ddbd6 100644
+--- a/gravity-mvp/src/app/api/messages/start-chat/route.ts
++++ b/gravity-mvp/src/app/api/messages/start-chat/route.ts
+@@ -67,8 +67,14 @@ export async function POST(request: Request) {
+ 
+         // ── Contact Model dual write ──────────────────────────────
+         try {
++            // Only WA and MAX use a phone-as-external-id format. Telegram's
++            // external id is a numeric user-id (e.g. "7169614093") that
++            // happens to be 10 digits — exactly the length normalizePhoneE164
++            // accepts. Treating it as a phone produced fakes like
++            // "+77169614093" (~21 such rows in Contact history pre-fix).
++            const isPhoneLikeChannel = channel === 'whatsapp' || channel === 'max'
+             const phone = isUnsaved
+-                ? normalizePhoneE164(finalExternalId)
++                ? (isPhoneLikeChannel ? normalizePhoneE164(finalExternalId) : null)
+                 : normalizePhoneE164(driver?.phone)
+             const displayName = chatName || null
+ 
+diff --git a/gravity-mvp/src/app/api/webhook/telegram/route.ts b/gravity-mvp/src/app/api/webhook/telegram/route.ts
+index ce773a2..b3d521d 100644
+--- a/gravity-mvp/src/app/api/webhook/telegram/route.ts
++++ b/gravity-mvp/src/app/api/webhook/telegram/route.ts
+@@ -12,10 +12,15 @@ export async function POST(req: NextRequest) {
+         const body = await req.json()
+         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
+ 
+-        // Structure expected from Bot's webhook payload
++        // Structure expected from Bot's webhook payload.
++        // contactPhone is optional — set by tg-bot when a user shares a
++        // contact card whose user_id matches the sender (i.e. it's their
++        // own phone). Bot API never reveals phone via plain text messages,
++        // only via /sendContact, so this is the one legitimate way to
++        // capture a TG bot user's number.
+         const { telegramId, text, direction, username, timestamp,
+                 chatType, chatId: tgChatId, chatTitle,
+-                firstName, lastName } = body
++                firstName, lastName, contactPhone } = body
+ 
+         if (!telegramId || !text) {
+             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
+@@ -127,11 +132,15 @@ export async function POST(req: NextRequest) {
+             }
+ 
+             // ── Contact Model dual write ──────────────────────────────
++            // contactPhone arrives only when tg-bot forwards a shared-
++            // contact event (KeyboardButton "Share number"). Plain text
++            // messages have it = undefined; that's fine — Scenario 2
++            // merging will fire later if any other channel brings the phone.
+             try {
+                 const contactResult = await ContactService.resolveContact(
+                     'telegram',
+                     telegramId.toString(),
+-                    null,  // Bot webhook не передаёт номер телефона
++                    contactPhone ? String(contactPhone) : null,
+                     username ? `@${username}` : null,
+                 )
+                 await ContactService.ensureChatLinked(
+diff --git a/gravity-mvp/src/app/api/webhooks/max/route.ts b/gravity-mvp/src/app/api/webhooks/max/route.ts
+index d0cc6a9..afd5c18 100644
+--- a/gravity-mvp/src/app/api/webhooks/max/route.ts
++++ b/gravity-mvp/src/app/api/webhooks/max/route.ts
+@@ -12,7 +12,7 @@ import { opsLog } from '@/lib/opsLog'
+ export async function POST(request: Request) {
+   try {
+     const body = await request.json()
+-    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing } = body
++    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, replyToMessageId } = body
+ 
+     if (!chatId) {
+       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
+@@ -125,6 +125,17 @@ export async function POST(request: Request) {
+     const content = text || contentFallbacks[messageType] || ''
+ 
+     // Create Message (skip if already seen)
++    // Capture native MAX reply (m.link.message.id from the scraper). Stored
++    // alongside senderId/maxChatId in metadata; MessageFeed renders the
++    // quote-block from metadata.replyTo just like TG/WA.
++    const messageMetadata: any = {
++      senderId,
++      maxChatId: chatId,
++      attachments: attachments || [],
++    }
++    if (replyToMessageId) {
++      messageMetadata.replyTo = { externalId: String(replyToMessageId), channel: 'max' }
++    }
+     const message = await prisma.message.upsert({
+       where:  { externalId: externalId || `max-${chatId}-${Date.now()}` },
+       update: {},
+@@ -137,7 +148,7 @@ export async function POST(request: Request) {
+         externalId: externalId || null,
+         status:    'delivered',
+         sentAt,   // validated above
+-        metadata:  { senderId, maxChatId: chatId, attachments: attachments || [] },
++        metadata:  messageMetadata,
+       },
+     })
+ 
+@@ -178,7 +189,22 @@ export async function POST(request: Request) {
+       try {
+         // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
+         const maxExternalId = senderId ? String(senderId) : externalChatId
+-        const maxPhone = senderPhone ? normalizePhoneE164(senderPhone) : null
++
++        // senderPhone defensive check: only pass through when it looks
++        // phone-shaped. Without this, a future MAX scraper change that
++        // dumps a user-id or LID-style identifier into senderPhone would
++        // produce phantom +7XXX phones the same way WA LIDs did.
++        // Accept either E.164 ("+7..."), bare RU ("7..."/"8..."), or any
++        // 10-12 digit string. Reject ≥13 digits (LID-shaped) and <10.
++        let maxPhone: string | null = null
++        if (senderPhone) {
++          const digits = String(senderPhone).replace(/\D/g, '')
++          if (digits.length >= 10 && digits.length <= 12) {
++            maxPhone = normalizePhoneE164(senderPhone)
++          } else {
++            console.warn(`[MAX Webhook] suspicious senderPhone "${senderPhone}" (${digits.length} digits) — skipped phone creation`)
++          }
++        }
+ 
+         const contactResult = await ContactService.resolveContact(
+           'max',
+diff --git a/gravity-mvp/src/app/max-actions.ts b/gravity-mvp/src/app/max-actions.ts
+index 0b1c400..80b63c5 100644
+--- a/gravity-mvp/src/app/max-actions.ts
++++ b/gravity-mvp/src/app/max-actions.ts
+@@ -194,7 +194,9 @@ export async function updateMaxConnectionSettings(id: string, name: string, isDe
+ 
+ // Send a message via MAX Personal Account (Web Scraper)
+ // target can be a MAX internal chatId (e.g. "201482140") or a phone number (e.g. "79222155750")
+-export async function sendMaxPersonalMessage(target: string, message: string, name?: string) {
++// replyToMessageId — MAX message id (m.id) of the source we're replying to; the
++// scraper wraps it as `link.message.id` in the SEND_MESSAGE WS frame.
++export async function sendMaxPersonalMessage(target: string, message: string, name?: string, replyToMessageId?: string) {
+     if (!target || !message) {
+         throw new Error("Target (chatId or phone) and message are required")
+     }
+@@ -203,12 +205,16 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
+     if (!cleanTarget) throw new Error("Invalid target")
+ 
+     try {
+-        console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}`)
++        console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}, replyTo=${replyToMessageId || 'none'}`)
+         const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+         const response = await fetch(`${maxScraperUrl}/send-message`, {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+-            body: JSON.stringify({ chatId: cleanTarget, message })
++            body: JSON.stringify({
++                chatId: cleanTarget,
++                message,
++                ...(replyToMessageId ? { replyToMessageId } : {}),
++            })
+         })
+ 
+         if (!response.ok) {
+@@ -224,13 +230,13 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
+ }
+ 
+ // Send a message via MAX (Bot or Personal)
+-export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean }) {
++export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, replyToMessageId?: string }) {
+     if (!phone || !message) {
+         throw new Error("Phone and message are required")
+     }
+ 
+     if (options?.isPersonal) {
+-        return await sendMaxPersonalMessage(phone, message, options.name)
++        return await sendMaxPersonalMessage(phone, message, options.name, options.replyToMessageId)
+     }
+ 
+     try {
+diff --git a/gravity-mvp/src/app/messages/components/ChatHeader.tsx b/gravity-mvp/src/app/messages/components/ChatHeader.tsx
+index f66e55c..3fb10b4 100644
+--- a/gravity-mvp/src/app/messages/components/ChatHeader.tsx
++++ b/gravity-mvp/src/app/messages/components/ChatHeader.tsx
+@@ -175,8 +175,34 @@ export default function ChatHeader({
+                                         chat.name is just the messenger handle ("Check"). */}
+                                     {chat.driver?.fullName || chat.contact?.displayName || chat.name || "Водитель"}
+                                 </h3>
+-                                <span className="text-[11px] text-gray-400">·</span>
+-                                <span className="text-[11px] text-gray-500 font-mono truncate">{chat.driver?.phone || chat.externalChatId?.split(':')[1] || chat.externalChatId}</span>
++                                {(() => {
++                                    /* Header identifier (right of the name) priority:
++                                       1. Driver.phone — authoritative from Yandex
++                                       2. Primary ContactPhone — operator-visible E.164
++                                       3. externalChatId after the channel prefix (e.g.
++                                          "whatsapp:79993332211" → "79993332211")
++                                       4. Hide entirely if the only thing we have is a
++                                          raw WA JID suffix (@lid / @c.us / @g.us) —
++                                          showing "63068021227590@lid" leaks internal
++                                          identifiers to operators and is what bug #2
++                                          was about. */
++                                    const primaryPhone = contact?.phones?.find(p => p.isPrimary)?.phone
++                                        || contact?.phones?.[0]?.phone
++                                    const ext = chat.externalChatId || ''
++                                    const afterColon = ext.includes(':') ? ext.split(':')[1] : null
++                                    const isRawJid = /@(lid|c\.us|g\.us|s\.whatsapp\.net)$/i.test(ext)
++                                    const identifier = chat.driver?.phone
++                                        || primaryPhone
++                                        || afterColon
++                                        || (isRawJid ? null : ext || null)
++                                    if (!identifier) return null
++                                    return (
++                                        <>
++                                            <span className="text-[11px] text-gray-400">·</span>
++                                            <span className="text-[11px] text-gray-500 font-mono truncate">{identifier}</span>
++                                        </>
++                                    )
++                                })()}
+                                 <span className="text-[11px] text-gray-400">·</span>
+                                 <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>{getStatusLabel(chat.status)}</span>
+                             </div>
+diff --git a/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx b/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx
+index c01f24e..2c5f93e 100644
+--- a/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx
++++ b/gravity-mvp/src/app/messages/components/ChatWorkspace.tsx
+@@ -149,9 +149,9 @@ function ChatWorkspaceInner({
+         }
+     }
+ 
+-    const handleSendMessage = (content: string, effectiveChannel: string) => {
++    const handleSendMessage = (content: string, effectiveChannel: string, replyToMessageId?: string) => {
+         setLastSentAt(Date.now())
+-        sendMessage(content, effectiveChannel)
++        sendMessage(content, effectiveChannel, replyToMessageId)
+ 
+         // Auto-assign on first reply: if chat is unassigned, assign to current user
+         if (!chat.assignedToUserId) {
+diff --git a/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx b/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
+index 6abd928..ef755de 100644
+--- a/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
++++ b/gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx
+@@ -110,13 +110,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+         }
+     }
+ 
+-    // Reachability: merge persisted status from DB with optional live-check override
++    // Reachability: merge persisted status from DB with optional live-check override.
++    // Fires for any displayed phone, not only Contact.phones — so a Chat with
++    // no contactId but a linked Driver still gets WA/TG dot indicators.
+     const [liveReachability, setLiveReachability] = useState<Record<string, boolean | null>>({})
+ 
++    const effectivePrimaryPhone =
++        (contact?.phones?.find(p => p.isPrimary)?.phone)
++        || contact?.phones?.[0]?.phone
++        || chat?.driver?.phone
++        || null
++
+     useEffect(() => {
+-        if (!contact) return
+-        const primaryPhone = contact.phones.find(p => p.isPrimary)?.phone || contact.phones[0]?.phone
+-        if (!primaryPhone) return
++        if (!effectivePrimaryPhone) return
+ 
+         let cancelled = false
+         const checkChannels = ['telegram', 'whatsapp'] as const
+@@ -125,7 +131,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+             fetch('/api/channels/check-reachability', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+-                body: JSON.stringify({ phone: primaryPhone, channel }),
++                body: JSON.stringify({ phone: effectivePrimaryPhone, channel }),
+             })
+                 .then(r => r.json())
+                 .then(data => {
+@@ -139,7 +145,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+         }
+ 
+         return () => { cancelled = true }
+-    }, [contact?.id])
++    }, [effectivePrimaryPhone])
+ 
+     /** Get effective reachability for a channel: live > persisted > null */
+     const getReachability = (identity: ContactIdentity): boolean | null => {
+@@ -183,50 +189,138 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+ 
+     const CHANNEL_SHORT: Record<string, string> = { whatsapp: 'wa', telegram: 'tg', max: 'max' }
+ 
+-    // ── Handle "Написать" — works with identity OR phone+channel ──
++    // ── Handle "Написать" — works for Contact OR Driver-only chats ──
++    // Three entry points:
++    //   1. existing identity (id provided) → jump to its chat or create one
++    //   2. Contact exists, channel via phone → POST /api/contacts/:id/chats
++    //   3. no Contact, Driver exists       → POST /api/messages/start-chat
+     const handleWrite = async (channel: string, identityId?: string) => {
+-        if (!contact) return
+-
+-        // If identityId provided, check for existing chat
+-        if (identityId) {
+-            const existingChat = contact.chats.find(c => c.contactIdentityId === identityId)
+-            if (existingChat) {
+-                updateQuery({ id: existingChat.id, channel: CHANNEL_SHORT[channel] || null })
+-                return
++        if (contact) {
++            // Path 1 & 2 — Contact-backed
++            if (identityId) {
++                const existingChat = contact.chats.find(c => c.contactIdentityId === identityId)
++                if (existingChat) {
++                    updateQuery({ id: existingChat.id, channel: CHANNEL_SHORT[channel] || null })
++                    return
++                }
+             }
++            setWritingIdentityId(identityId || `phone_${channel}`)
++            try {
++                const res = await fetch(`/api/contacts/${contact.id}/chats`, {
++                    method: 'POST',
++                    headers: { 'Content-Type': 'application/json' },
++                    body: JSON.stringify({
++                        channel,
++                        ...(identityId ? { identityId } : {}),
++                    }),
++                })
++                const data = await res.json()
++                if (res.ok && data.chat) {
++                    updateQuery({ id: data.chat.id, channel: CHANNEL_SHORT[channel] || null })
++                    refetchContact()
++                } else {
++                    console.error('[ContactProfile] Create chat error:', data.error)
++                }
++            } catch (e: any) {
++                console.error('[ContactProfile] Create chat failed:', e.message)
++            } finally {
++                setWritingIdentityId(null)
++            }
++            return
+         }
+ 
+-        // Create chat via API (will also create identity if needed)
+-        setWritingIdentityId(identityId || `phone_${channel}`)
+-        try {
+-            const res = await fetch(`/api/contacts/${contact.id}/chats`, {
+-                method: 'POST',
+-                headers: { 'Content-Type': 'application/json' },
+-                body: JSON.stringify({
+-                    channel,
+-                    ...(identityId ? { identityId } : {}),
+-                }),
+-            })
+-            const data = await res.json()
+-            if (res.ok && data.chat) {
+-                updateQuery({ id: data.chat.id, channel: CHANNEL_SHORT[channel] || null })
+-                refetchContact()
+-            } else {
+-                console.error('[ContactProfile] Create chat error:', data.error)
++        // Path 3 — no Contact, driver-only chat (e.g. orphan TG chat created
++        // before its identity existed). Fall back to start-chat which will
++        // resolve the right Contact + Chat by driver phone / TG id.
++        if (chat.driver?.id) {
++            setWritingIdentityId(`phone_${channel}`)
++            try {
++                const res = await fetch('/api/messages/start-chat', {
++                    method: 'POST',
++                    headers: { 'Content-Type': 'application/json' },
++                    body: JSON.stringify({ driverId: chat.driver.id, channel }),
++                })
++                const data = await res.json()
++                if (res.ok && data.id) {
++                    updateQuery({ id: data.id, channel: CHANNEL_SHORT[channel] || null })
++                }
++            } catch (e: any) {
++                console.error('[ContactProfile] start-chat failed:', e.message)
++            } finally {
++                setWritingIdentityId(null)
+             }
+-        } catch (e: any) {
+-            console.error('[ContactProfile] Create chat failed:', e.message)
+-        } finally {
+-            setWritingIdentityId(null)
+         }
+     }
+ 
+     // ── Group identities by phone ─────────────────────────────
+-    const phonesWithIdentities = contact ? contact.phones.map(phone => ({
+-        phone,
+-        identities: contact.identities.filter(i => i.phoneId === phone.id),
+-    })) : []
+-    const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
++    // phoneGroups is the canonical render unit. Each entry yields:
++    //   * a phone header row (or "Номер неизвестен" when phone is null)
++    //   * a fixed-order list of WA / TG / MAX rows beneath it
++    // We always render that list — present-identity vs missing-channel is a
++    // per-row decision, not a section-level toggle. That guarantees the
++    // operator sees the three messengers and their state regardless of
++    // whether the chat is Contact-backed or Driver-only.
++    const ALL_MESSENGER_CHANNELS: Array<'whatsapp' | 'telegram' | 'max'> = ['whatsapp', 'telegram', 'max']
++
++    type PhoneGroup = {
++        phone: string | null         // E.164, or null when nothing is known
++        isPrimary: boolean
++        contactPhoneId: string | null
++        identityByChannel: Partial<Record<string, ContactIdentity>>
++    }
++
++    const phoneGroups: PhoneGroup[] = (() => {
++        if (contact && contact.phones.length > 0) {
++            // Find the "primary" group (or fall back to the first phone) —
++            // that's where phoneId-less identities pile on, so a TG/MAX
++            // identity merged in without a phone link still surfaces next
++            // to the actual number rather than getting exiled to a separate
++            // orphan section. Per-phone identities (phoneId === p.id) take
++            // priority and override any phoneId-less one for the same channel.
++            const primaryPhoneId = contact.phones.find(p => p.isPrimary)?.id
++                || contact.phones[0]?.id
++            return contact.phones.map(p => {
++                const byChannel: Partial<Record<string, ContactIdentity>> = {}
++                if (p.id === primaryPhoneId) {
++                    for (const id of contact.identities) {
++                        if (!id.phoneId) byChannel[id.channel] = id
++                    }
++                }
++                for (const id of contact.identities) {
++                    if (id.phoneId === p.id) byChannel[id.channel] = id
++                }
++                return {
++                    phone: p.phone,
++                    isPrimary: p.isPrimary,
++                    contactPhoneId: p.id,
++                    identityByChannel: byChannel,
++                }
++            })
++        }
++        // No Contact phones — fall back to driver.phone (orphan-Chat case),
++        // or to a phoneless group. Either way, surface any phoneId-less
++        // identities on this Contact alongside the (virtual) phone so the
++        // operator sees a Telegram dot even when Contact has no real phone.
++        const virtualByChannel: Partial<Record<string, ContactIdentity>> = {}
++        if (contact) {
++            for (const id of contact.identities) {
++                if (!id.phoneId) virtualByChannel[id.channel] = id
++            }
++        }
++        return [{
++            phone: chat.driver?.phone || null,
++            isPrimary: true,
++            contactPhoneId: null,
++            identityByChannel: virtualByChannel,
++        }]
++    })()
++
++    // Identities without phoneId are now absorbed into the primary phone
++    // group (or the virtual driver-phone group when no Contact phones
++    // exist). The legacy "orphan section below the phones" is therefore
++    // unused — kept as an empty array so the JSX below doesn't crash if
++    // anyone ever reintroduces dedicated orphan rendering.
++    const orphanIdentities: ContactIdentity[] = []
+ 
+     return (
+         <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
+@@ -314,7 +408,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+ 
+                 <div className="h-px bg-[#E8E8E8] mx-3" />
+ 
+-                {/* ── Phones & Channels (Contact Model) ──────────────── */}
++                {/* ── Phones & Channels ────────────────────────────────
++                  *
++                  * Unified rendering — always shows WhatsApp / Telegram / MAX
++                  * for each phone group, with a per-channel state dot:
++                  *   ● green  — reachable (live check or persisted "confirmed")
++                  *   ● red    — unreachable (live "false" or persisted "unreachable")
++                  *   ● gray   — unknown (no phone, or check not supported, or check is still in flight)
++                  *
++                  * Three render paths converge here:
++                  *   - Contact has phones → one group per phone
++                  *   - No Contact phones, Driver has phone → virtual group from driver
++                  *   - Neither → one group with phone=null (channels show as "unknown")
++                  */}
+                 {contactLoading ? (
+                     <div className="px-4 py-3">
+                         <div className="animate-pulse space-y-2">
+@@ -323,136 +429,132 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+                             <div className="h-8 bg-gray-100 rounded" />
+                         </div>
+                     </div>
+-                ) : contact ? (
++                ) : (
+                     <div className="px-4 py-2.5">
+                         <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Телефоны и каналы</h4>
+ 
+-                        {phonesWithIdentities.length === 0 && orphanIdentities.length === 0 && (
+-                            <div className="text-[12px] text-gray-400 italic">Нет активных каналов связи</div>
+-                        )}
+-
+-                        {/* Phones with their identities + available channels */}
+-                        {phonesWithIdentities.map(({ phone, identities }) => {
+-                            // Channels that have identity for this phone
+-                            const existingChannels = new Set(identities.map(i => i.channel))
+-                            // Channels available via phone but without identity yet
+-                            const phoneChannels: string[] = ['whatsapp', 'telegram', 'max']
+-                            const missingChannels = phoneChannels.filter(ch => !existingChannels.has(ch))
+-
+-                            return (
+-                                <div key={phone.id} className="mb-2.5">
+-                                    <div className="flex items-center gap-1.5 mb-1">
+-                                        <Phone size={11} className="text-gray-400" />
++                        {phoneGroups.map((group, gIdx) => (
++                            <div key={group.contactPhoneId || `vphone-${gIdx}`} className="mb-2.5">
++                                {/* Phone header */}
++                                <div className="flex items-center gap-1.5 mb-1">
++                                    <Phone size={11} className="text-gray-400" />
++                                    {group.phone ? (
+                                         <span className="text-[12px] font-medium text-[#111] font-mono">
+-                                            {formatPhone(phone.phone)}
++                                            {formatPhone(group.phone)}
+                                         </span>
+-                                        {phone.isPrimary && (
+-                                            <Star size={10} className="text-yellow-500 fill-yellow-500" />
+-                                        )}
++                                    ) : (
++                                        <span className="text-[12px] text-gray-400 italic">Номер неизвестен</span>
++                                    )}
++                                    {group.phone && group.isPrimary && (
++                                        <Star size={10} className="text-yellow-500 fill-yellow-500" />
++                                    )}
++                                    {group.phone && (
+                                         <button
+-                                            onClick={() => handleCall(phone.phone)}
+-                                            disabled={callingPhone === phone.phone}
++                                            onClick={() => handleCall(group.phone!)}
++                                            disabled={callingPhone === group.phone}
+                                             title="Позвонить"
+                                             className="ml-auto text-[10px] text-orange-600 font-semibold px-2 py-0.5 rounded bg-orange-50 hover:bg-orange-100 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                         >
+-                                            {callingPhone === phone.phone ? (
++                                            {callingPhone === group.phone ? (
+                                                 <Loader2 size={9} className="animate-spin" />
+-                                            ) : callResult?.phone === phone.phone ? (
++                                            ) : callResult?.phone === group.phone ? (
+                                                 callResult.ok ? <Check size={9} className="text-green-600" /> : <X size={9} className="text-red-500" />
+                                             ) : (
+                                                 <PhoneOutgoing size={9} />
+                                             )}
+-                                            {callingPhone === phone.phone ? 'Звоним...' :
+-                                             callResult?.phone === phone.phone ? (callResult.ok ? 'Отправлено' : 'Нет устройства') :
++                                            {callingPhone === group.phone ? 'Звоним...' :
++                                             callResult?.phone === group.phone ? (callResult.ok ? 'Отправлено' : 'Нет устройства') :
+                                              'Позвонить'}
+                                         </button>
+-                                    </div>
+-                                    <div className="ml-4 space-y-0.5">
+-                                        {/* Existing identities */}
+-                                        {identities.map(identity => {
+-                                            const cfg = CHANNEL_CONFIG[identity.channel]
+-                                            const isWriting = writingIdentityId === identity.id
+-                                            const chStatus = channelStatus[identity.channel]
+-                                            const hasFailed = chStatus?.status === 'failed'
+-                                            const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp'
+-                                            const reachable = getReachability(identity)
+-                                            return (
+-                                                <div key={identity.id}>
+-                                                    <div className="flex items-center justify-between h-[26px]">
+-                                                        <div className="flex items-center gap-1.5">
+-                                                            {isCheckable && reachable !== undefined ? (
+-                                                                <span className={`inline-block w-[7px] h-[7px] rounded-full ${reachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={reachable ? 'Номер найден' : 'Номер не найден'} />
+-                                                            ) : (
+-                                                                <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверка недоступна" />
+-                                                            )}
+-                                                            <span className="text-[11px]">{cfg?.icon || '?'}</span>
+-                                                            <span className="text-[11px] text-gray-600">{cfg?.label || identity.channel}</span>
+-                                                            {identity.source === 'auto' && contact && contact.identities.length > 1 && (
+-                                                                <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">авто</span>
+-                                                            )}
+-                                                            {identity.source === 'manual' && (
+-                                                                <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">ручной</span>
+-                                                            )}
+-                                                            {hasFailed && <AlertCircle size={10} className="text-red-500" />}
+-                                                        </div>
+-                                                        <button
+-                                                            onClick={() => handleWrite(identity.channel, identity.id)}
+-                                                            disabled={isWriting}
+-                                                            className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
+-                                                        >
+-                                                            {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
+-                                                            Написать
+-                                                        </button>
+-                                                    </div>
+-                                                    {hasFailed && (
+-                                                        <div className="ml-5 mb-0.5 group/err relative inline-block">
+-                                                            <span className="text-[10px] text-red-500 leading-tight cursor-default">Ошибка доставки</span>
+-                                                            {chStatus.error && (
+-                                                                <div className="absolute left-0 bottom-full mb-1 hidden group-hover/err:block z-50 pointer-events-none">
+-                                                                    <div className="bg-[#333] text-white text-[10px] leading-tight rounded-lg px-2.5 py-1.5 max-w-[220px] whitespace-pre-wrap shadow-lg">
+-                                                                        {chStatus.error.length > 120 ? chStatus.error.substring(0, 120) + '…' : chStatus.error}
+-                                                                    </div>
+-                                                                </div>
+-                                                            )}
+-                                                        </div>
+-                                                    )}
+-                                                </div>
+-                                            )
+-                                        })}
+-                                        {/* Available channels without identity (can write via phone) */}
+-                                        {missingChannels.map(ch => {
+-                                            const cfg = CHANNEL_CONFIG[ch]
+-                                            const isWriting = writingIdentityId === `phone_${ch}`
+-                                            const isMissingCheckable = ch === 'telegram' || ch === 'whatsapp'
+-                                            const missingReachable = liveReachability[ch] !== undefined ? liveReachability[ch] : null
+-                                            return (
+-                                                <div key={`missing-${ch}`} className="flex items-center justify-between h-[26px]">
++                                    )}
++                                </div>
++
++                                {/* Channel rows — fixed order WA / TG / MAX */}
++                                <div className="ml-4 space-y-0.5">
++                                    {ALL_MESSENGER_CHANNELS.map(ch => {
++                                        const cfg = CHANNEL_CONFIG[ch]
++                                        const identity = group.identityByChannel[ch]
++                                        const isCheckable = ch === 'telegram' || ch === 'whatsapp'
++
++                                        // Reachability resolution priority:
++                                        //   identity → live > persisted > null
++                                        //   missing  → live (only if we have a phone) > null
++                                        let reachable: boolean | null | undefined = null
++                                        if (identity) {
++                                            reachable = getReachability(identity)
++                                        } else if (group.phone && isCheckable) {
++                                            reachable = liveReachability[ch] !== undefined ? liveReachability[ch] : null
++                                        }
++
++                                        const isWriting = writingIdentityId === (identity?.id || `phone_${ch}`)
++                                        const chStatus = channelStatus[ch]
++                                        const hasFailed = identity && chStatus?.status === 'failed'
++
++                                        const dotClass = !isCheckable
++                                            ? 'bg-gray-300'  // MAX has no live check; show neutral
++                                            : reachable === true
++                                                ? 'bg-emerald-500'
++                                                : reachable === false
++                                                    ? 'bg-red-500'
++                                                    : 'bg-gray-300'
++
++                                        const dotTitle = !isCheckable
++                                            ? 'Проверка недоступна'
++                                            : reachable === true
++                                                ? 'Номер найден'
++                                                : reachable === false
++                                                    ? 'Номер не найден'
++                                                    : 'Проверка недоступна'
++
++                                        // "Написать" button is disabled when we have neither a phone
++                                        // nor a Driver to start a chat with — there's no target to write to.
++                                        const canWrite = !!(identity || group.phone || chat.driver?.id)
++
++                                        return (
++                                            <div key={ch}>
++                                                <div className="flex items-center justify-between h-[26px]">
+                                                     <div className="flex items-center gap-1.5">
+-                                                        {isMissingCheckable && missingReachable !== undefined ? (
+-                                                            <span className={`inline-block w-[7px] h-[7px] rounded-full ${missingReachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={missingReachable ? 'Номер найден' : 'Номер не найден'} />
+-                                                        ) : (
+-                                                            <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверка недоступна" />
++                                                        <span className={`inline-block w-[7px] h-[7px] rounded-full ${dotClass}`} title={dotTitle} />
++                                                        <span className={`text-[11px] ${identity ? '' : 'opacity-50'}`}>{cfg?.icon || '?'}</span>
++                                                        <span className={`text-[11px] ${identity ? 'text-gray-600' : 'text-gray-400'}`}>{cfg?.label || ch}</span>
++                                                        {identity?.source === 'auto' && contact && contact.identities.length > 1 && (
++                                                            <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">авто</span>
++                                                        )}
++                                                        {identity?.source === 'manual' && (
++                                                            <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">ручной</span>
+                                                         )}
+-                                                        <span className="text-[11px] opacity-50">{cfg?.icon || '?'}</span>
+-                                                        <span className="text-[11px] text-gray-400">{cfg?.label || ch}</span>
++                                                        {hasFailed && <AlertCircle size={10} className="text-red-500" />}
+                                                     </div>
+                                                     <button
+-                                                        onClick={() => handleWrite(ch)}
+-                                                        disabled={isWriting}
+-                                                        className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
++                                                        onClick={() => handleWrite(ch, identity?.id)}
++                                                        disabled={isWriting || !canWrite}
++                                                        title={!canWrite ? 'Нет данных для отправки' : ''}
++                                                        className="text-[10px] text-[#3390EC] font-semibold px-2 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-30 flex items-center gap-1"
+                                                     >
+                                                         {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
+                                                         Написать
+                                                     </button>
+                                                 </div>
+-                                            )
+-                                        })}
+-                                    </div>
++                                                {hasFailed && chStatus && (
++                                                    <div className="ml-5 mb-0.5 group/err relative inline-block">
++                                                        <span className="text-[10px] text-red-500 leading-tight cursor-default">Ошибка доставки</span>
++                                                        {chStatus.error && (
++                                                            <div className="absolute left-0 bottom-full mb-1 hidden group-hover/err:block z-50 pointer-events-none">
++                                                                <div className="bg-[#333] text-white text-[10px] leading-tight rounded-lg px-2.5 py-1.5 max-w-[220px] whitespace-pre-wrap shadow-lg">
++                                                                    {chStatus.error.length > 120 ? chStatus.error.substring(0, 120) + '…' : chStatus.error}
++                                                                </div>
++                                                            </div>
++                                                        )}
++                                                    </div>
++                                                )}
++                                            </div>
++                                        )
++                                    })}
+                                 </div>
+-                            )
+-                        })}
++                            </div>
++                        ))}
+ 
+-                        {/* Identities without phone (e.g. MAX) */}
++                        {/* Identities without phone (e.g. MAX with externalId only) */}
+                         {orphanIdentities.map(identity => {
+                             const cfg = CHANNEL_CONFIG[identity.channel]
+                             const isWriting = writingIdentityId === identity.id
+@@ -487,20 +589,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
+                             )
+                         })}
+                     </div>
+-                ) : !chat.contactId ? (
+-                    /* Fallback: no Contact linked */
+-                    <div className="px-4 py-2.5">
+-                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Телефоны и каналы</h4>
+-                        {chat.driver?.phone ? (
+-                            <div className="flex items-center gap-1.5">
+-                                <Phone size={11} className="text-gray-400" />
+-                                <span className="text-[12px] text-[#111]">{chat.driver.phone}</span>
+-                            </div>
+-                        ) : (
+-                            <div className="text-[12px] text-gray-400 italic">Контакт не привязан</div>
+-                        )}
+-                    </div>
+-                ) : null}
++                )}
+ 
+                 <div className="h-px bg-[#E8E8E8] mx-3" />
+ 
+diff --git a/gravity-mvp/src/app/messages/components/MessageFeed.tsx b/gravity-mvp/src/app/messages/components/MessageFeed.tsx
+index c44b652..0fbf2b2 100644
+--- a/gravity-mvp/src/app/messages/components/MessageFeed.tsx
++++ b/gravity-mvp/src/app/messages/components/MessageFeed.tsx
+@@ -1,6 +1,6 @@
+ "use client"
+ 
+-import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
++import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from "react"
+ import { Message } from "../hooks/useMessages"
+ import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
+ import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed } from "lucide-react"
+@@ -65,6 +65,36 @@ export default function MessageFeed({
+     const uiItemsRef = useRef(uiItems)
+     uiItemsRef.current = uiItems
+ 
++    // Reply quote lookup: messages in the current chat indexed two ways —
++    // outbound replies arrive with metadata.replyTo.messageId (our internal id),
++    // inbound replies arrive with metadata.replyTo.externalId (provider id).
++    // Both indexes are derived from the same uiItems pass.
++    const replyLookup = useMemo(() => {
++        const byId = new Map<string, Message>()
++        const byExternal = new Map<string, Message>()  // key: `${channel}:${externalId}`
++        for (const item of uiItems) {
++            if (item.type !== 'message') continue
++            const m = item.message
++            byId.set(m.id, m)
++            if (m.externalId) byExternal.set(`${m.channel}:${m.externalId}`, m)
++        }
++        return { byId, byExternal }
++    }, [uiItems])
++
++    const resolveReplySource = useCallback((replyTo: any, ownChannel: string): Message | null => {
++        if (!replyTo) return null
++        if (replyTo.messageId) {
++            const found = replyLookup.byId.get(replyTo.messageId)
++            if (found) return found
++        }
++        if (replyTo.externalId) {
++            const ch = replyTo.channel || ownChannel
++            const found = replyLookup.byExternal.get(`${ch}:${String(replyTo.externalId)}`)
++            if (found) return found
++        }
++        return null
++    }, [replyLookup])
++
+     // Единый источник истины для текущей позиции скролла
+     const currentScrollTopRef = useRef(0)
+ 
+@@ -563,6 +593,57 @@ export default function MessageFeed({
+                             </div>
+                         )}
+ 
++                        {/* Reply quote — shown above the content when this message
++                          * is a reply (operator-initiated via context menu, or
++                          * inbound captured from the provider's replyTo field).
++                          * Click scrolls to the source message. If we can't find
++                          * the source in the current view, fall back to a slim
++                          * "ответ на сообщение" stub without losing the visual
++                          * cue that this is a reply. */}
++                        {msg.metadata?.replyTo && (() => {
++                            const replyTo = msg.metadata.replyTo as { messageId?: string; externalId?: string | number; channel?: string }
++                            const source = resolveReplySource(replyTo, msg.channel)
++                            const srcText = (source?.content || '').trim()
++                            const TYPE_LABELS: Record<string, string> = {
++                                image: '📷 Фото', video: '🎬 Видео', voice: '🎤 Голосовое',
++                                audio: '🎵 Аудио', document: '📎 Документ', sticker: '🖼 Стикер',
++                            }
++                            const fallbackLabel = source?.type ? TYPE_LABELS[source.type] : null
++                            const preview = srcText || fallbackLabel || 'Сообщение'
++                            const authorLabel = source
++                                ? (source.direction === 'outbound' ? 'Вы' : (source.account || 'Собеседник'))
++                                : 'Сообщение'
++                            return (
++                                <button
++                                    type="button"
++                                    onClick={() => {
++                                        if (!source) return
++                                        const el = scrollerRef.current?.querySelector<HTMLElement>(`[data-msg-id="${source.id}"]`)
++                                        if (el) {
++                                            el.scrollIntoView({ behavior: 'smooth', block: 'center' })
++                                            // brief highlight pulse
++                                            el.style.transition = 'background-color 0.4s'
++                                            el.style.backgroundColor = 'rgba(51, 144, 236, 0.18)'
++                                            setTimeout(() => { el.style.backgroundColor = '' }, 1200)
++                                        }
++                                    }}
++                                    className={`mb-1 flex items-stretch gap-2 w-full text-left rounded-md overflow-hidden transition-colors ${
++                                        source ? 'cursor-pointer hover:bg-black/5' : 'cursor-default'
++                                    } ${isOutbound ? 'bg-emerald-700/10' : 'bg-[#3390EC]/10'}`}
++                                >
++                                    <span className={`w-[3px] shrink-0 rounded-l-md ${isOutbound ? 'bg-emerald-700' : 'bg-[#3390EC]'}`} />
++                                    <div className="py-1 pr-2 min-w-0 flex-1">
++                                        <div className={`text-[11.5px] font-semibold leading-tight truncate ${isOutbound ? 'text-emerald-800' : 'text-[#3390EC]'}`}>
++                                            {authorLabel}
++                                        </div>
++                                        <div className="text-[12.5px] text-gray-700 truncate leading-tight">
++                                            {preview}
++                                        </div>
++                                    </div>
++                                </button>
++                            )
++                        })()}
++
+                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
+                             {(() => {
+                                 // Hide auto-generated media placeholders ("[Фото]", "[Видео]"
+diff --git a/gravity-mvp/src/app/messages/components/MessageInputArea.tsx b/gravity-mvp/src/app/messages/components/MessageInputArea.tsx
+index 4537ccc..4cf542b 100644
+--- a/gravity-mvp/src/app/messages/components/MessageInputArea.tsx
++++ b/gravity-mvp/src/app/messages/components/MessageInputArea.tsx
+@@ -34,7 +34,7 @@ interface MessageInputAreaProps {
+     onClearReply: () => void
+     manualSendChannelMode: string | null
+     setManualSendChannelMode: (channel: string) => void
+-    onSendMessage: (content: string, effectiveChannel: string) => void
++    onSendMessage: (content: string, effectiveChannel: string, replyToMessageId?: string) => void
+ }
+ 
+ const CHANNELS = [
+@@ -128,7 +128,10 @@ export default function MessageInputArea({
+ 
+     const handleSend = () => {
+         if (!text.trim()) return
+-        onSendMessage(text.trim(), effectiveNormalized)
++        // replyContext.messageId is our internal Message.id; the backend
++        // resolves it to the provider-specific externalId before calling
++        // gramJS replyTo / wa-web quotedMessageId.
++        onSendMessage(text.trim(), effectiveNormalized, replyContext?.messageId)
+         setText("")
+         draftCache.delete(cacheKey)
+         onClearReply()
+diff --git a/gravity-mvp/src/app/messages/hooks/useMessages.ts b/gravity-mvp/src/app/messages/hooks/useMessages.ts
+index bc5daae..4059008 100644
+--- a/gravity-mvp/src/app/messages/hooks/useMessages.ts
++++ b/gravity-mvp/src/app/messages/hooks/useMessages.ts
+@@ -27,6 +27,11 @@ export interface Message {
+     channel: string
+     origin?: 'operator' | 'ai' | 'auto' | 'system'
+     account?: string
++    // Provider-side message id (TG MsgId, WA key, MAX seq). Needed for the
++    // reply lookup path: when an inbound carries metadata.replyTo.externalId
++    // we look the source message up by externalId since we don't own its
++    // internal id.
++    externalId?: string | null
+     metadata?: Record<string, any>
+     attachments?: MessageAttachment[]
+ }
+@@ -257,7 +262,7 @@ export function useMessages(chatId: string | null) {
+         setHasMoreHistory(false) 
+     }
+ 
+-    const sendMessage = async (content: string, channel: string) => {
++    const sendMessage = async (content: string, channel: string, replyToMessageId?: string) => {
+         if (!chatId) return
+ 
+         // Normalize channel for API (wa→whatsapp, tg→telegram)
+@@ -298,7 +303,13 @@ export function useMessages(chatId: string | null) {
+             const res = await fetch('/api/messages', {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+-                body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel, clientMessageId })
++                body: JSON.stringify({
++                    chatId: primaryChatId,
++                    content,
++                    channel: apiChannel,
++                    clientMessageId,
++                    ...(replyToMessageId ? { replyToMessageId } : {}),
++                })
+             })
+             
+             if (res.ok) {
+diff --git a/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx b/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx
+index 026ca3b..88c13c7 100644
+--- a/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx
++++ b/gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx
+@@ -342,9 +342,13 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
+                 </div>
+             )}
+             {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
+-                <div className="flex items-center justify-end pt-3 mt-auto border-t border-dashed">
+-                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }} disabled={loading} className="h-8 px-3 text-xs">
+-                        {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
++                <div className="flex items-center justify-end pt-4 mt-auto border-t border-dashed">
++                    <Button
++                        onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }}
++                        disabled={loading}
++                        className="h-11 px-5 text-base font-semibold"
++                    >
++                        {loading ? <Loader2 size={18} className="mr-2 animate-spin" /> : <Wifi size={18} className="mr-2" />} Переподключить
+                     </Button>
+                 </div>
+             )}
+diff --git a/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts b/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts
+index b9c0139..c589846 100644
+--- a/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts
++++ b/gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts
+@@ -292,9 +292,9 @@ export async function getWhatsAppMessages(chatId: string) {
+     })
+ }
+ 
+-export async function sendWhatsAppMessage(connectionId: string, chatId: string, text: string) {
+-    console.log(`[WA-ACTIONS] sendWhatsAppMessage called for: ${connectionId}, chat: ${chatId}`)
+-    const result = await waSendMessage(connectionId, chatId, text)
++export async function sendWhatsAppMessage(connectionId: string, chatId: string, text: string, quotedMessageId?: string) {
++    console.log(`[WA-ACTIONS] sendWhatsAppMessage called for: ${connectionId}, chat: ${chatId}, quotedMessageId=${quotedMessageId || 'none'}`)
++    const result = await waSendMessage(connectionId, chatId, text, quotedMessageId)
+     revalidatePath(`/whatsapp/chat/${chatId}`)
+     return result
+ }
+diff --git a/gravity-mvp/src/app/tg-actions.ts b/gravity-mvp/src/app/tg-actions.ts
+index b6e0202..7e0711e 100644
+--- a/gravity-mvp/src/app/tg-actions.ts
++++ b/gravity-mvp/src/app/tg-actions.ts
+@@ -293,7 +293,18 @@ function detectTgMediaType(message: any): { type: string; fallback: string } | n
+ }
+ 
+ async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
+-    if (message && !message.out) {
++    if (message) {
++        // Direction: MTProto ставит message.out=true когда сообщение
++        // отправлено С НАШЕГО аккаунта (через Telegram Web/Desktop или
++        // через нашу CRM). Раньше тут был фильтр !message.out и
++        // исходящие из веб-Telegram оператора игнорировались. Теперь
++        // обрабатываем оба направления.
++        // (См. importTelegramHistory ниже — там тот же подход.)
++        const direction: 'inbound' | 'outbound' = message.out ? 'outbound' : 'inbound'
++
++        // peerId = собеседник в диалоге, в обоих направлениях:
++        //   inbound:  peerId.userId = sender (собеседник)
++        //   outbound: peerId.userId = recipient (тоже собеседник)
+         const senderId = message.peerId?.userId?.toString() || message.fromId?.userId?.toString();
+         const mediaInfo = detectTgMediaType(message)
+         const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
+@@ -311,7 +322,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
+         }
+         const now = validated
+ 
+-        console.log(`[${loggerPrefix}] INBOUND connId=${connectionId} senderId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
++        console.log(`[${loggerPrefix}] ${direction.toUpperCase()} connId=${connectionId} partnerId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
+ 
+         // 1. Resolve or CREATE unified chat
+         let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
+@@ -348,11 +359,19 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
+         }
+ 
+         // ── Contact Model dual write ──────────────────────────────
++        // gramJS attaches a User on `message.sender` for private dialogs.
++        // `.phone` is present iff the peer's privacy lets us see it (or
++        // they're in our contacts). When available, passing it through
++        // means Scenario 2 phone-match will fire — TG identity attaches
++        // to whatever Contact already owns that phone (Yandex driver,
++        // WA-side contact, etc.) and yandex-link/cron can chain further.
+         try {
++            const rawSenderPhone = (message.sender as any)?.phone
++            const senderPhone = rawSenderPhone ? String(rawSenderPhone) : null
+             const contactResult = await ContactService.resolveContact(
+                 'telegram',
+                 senderId,
+-                null,  // TG GramJS не передаёт номер телефона
++                senderPhone,
+                 message.sender?.firstName || message.sender?.username || null,
+             )
+             await ContactService.ensureChatLinked(
+@@ -365,7 +384,12 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
+         }
+         // ──────────────────────────────────────────────────────────
+ 
+-        // 3. DE-DUPLICATION: by externalId or content+time
++        // 3. DE-DUPLICATION: by externalId or content+time.
++        // Для outbound из CRM: MessageService.send сначала optimistic-
++        // записывает Message без externalId, потом обновляет externalId
++        // после ответа Telegram. Если live-listener успевает раньше —
++        // второй OR-блок найдёт нашу запись по content+chatId+direction
++        // и не создаст дубль.
+         const existing = await (prisma.message as any).findFirst({
+             where: {
+                 OR: [
+@@ -373,7 +397,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
+                     {
+                         chatId: unifiedChat.id,
+                         content: text,
+-                        direction: 'inbound',
++                        direction,
+                         sentAt: {
+                             gte: new Date(now.getTime() - 5000),
+                             lte: new Date(now.getTime() + 5000)
+@@ -384,19 +408,32 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
+         })
+ 
+         if (existing) {
+-            console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
++            console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id} ${direction})`)
+         } else {
+             const msgType = mediaInfo?.type || 'text'
++            // Capture native TG reply for UI quote-block. gramJS attaches a
++            // MessageReplyHeader at `message.replyTo`, with `replyToMsgId` as
++            // the peer-scoped TG msgId of the source — same value the UI
++            // looks up via Message.externalId. We store only externalId
++            // (no internal id yet because the source might predate this row
++            // and we don't want to do a join on every inbound).
++            const replyToHeader: any = (message as any).replyTo
++            const replyToMsgIdRaw: any = replyToHeader?.replyToMsgId
++            const replyMeta = replyToMsgIdRaw
++                ? { replyTo: { externalId: String(replyToMsgIdRaw), channel: 'telegram' as const } }
++                : null
++
+             const savedMsg = await (prisma.message as any).create({
+                 data: {
+                     chatId: unifiedChat.id,
+-                    direction: 'inbound',
++                    direction,
+                     content: text,
+                     channel: 'telegram',
+                     type: msgType,
+                     sentAt: now,
+                     status: 'delivered',
+-                    externalId: externalMsgId
++                    externalId: externalMsgId,
++                    ...(replyMeta ? { metadata: replyMeta } : {}),
+                 }
+             })
+ 
+@@ -429,7 +466,10 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
+                 }
+             }
+ 
+-            console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
++            console.log(`[${loggerPrefix}] SAVED ${direction} msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
++            // emitMessageReceived нужен и для outbound — UI live-update
++            // должен сразу подхватить «оператор написал с другого
++            // клиента → строка чата всплывает наверх с новым preview».
+             emitMessageReceived(savedMsg).catch(e =>
+                 console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
+             )
+@@ -695,7 +735,7 @@ async function getTelegramClient(connection: any) {
+     return client
+ }
+ 
+-export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string }) {
++export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, replyToExternalId?: string }) {
+     console.log(`[TG-SEND] START: phone=${phoneNumber}, connectionId=${connectionId}, metadata=${JSON.stringify(metadata)}`)
+     let connection
+     
+@@ -786,10 +826,25 @@ export async function sendTelegramMessage(phoneNumber: string, message: string,
+         }
+ 
+         console.log(`[TG-SEND] Sending message to entity...`)
+-        
++
++        // gramJS replyTo expects a number (peer-scoped TG message id).
++        // metadata.replyToExternalId comes from MessageService as a string
++        // (DB-side externalId column). Parse defensively — bad input means
++        // "no reply" rather than send-failure.
++        const sendOptions: { message: string; replyTo?: number } = { message }
++        if (metadata?.replyToExternalId) {
++            const parsed = parseInt(String(metadata.replyToExternalId), 10)
++            if (Number.isFinite(parsed) && parsed > 0) {
++                sendOptions.replyTo = parsed
++                console.log(`[TG-SEND] replyTo=${parsed}`)
++            } else {
++                console.warn(`[TG-SEND] replyToExternalId="${metadata.replyToExternalId}" did not parse to a number — sending without reply`)
++            }
++        }
++
+         // Add a safety timeout for the actual sending
+         const result = await Promise.race([
+-            client.sendMessage(entity || target, { message }),
++            client.sendMessage(entity || target, sendOptions),
+             new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Telegram sendMessage timeout (25s)')), 25000))
+         ])
+         
+@@ -1120,10 +1175,16 @@ export async function importTelegramHistory(
+                     })
+                 }
+ 
+-                // Contact resolution
++                // Contact resolution. gramJS exposes `entity.phone` on private-
++                // dialog User objects when the peer's privacy permits it (we're
++                // in their contacts, or "Anybody can see my phone"). Pass it
++                // through so Scenario 2 phone-match merges fire and the
++                // identity attaches to an existing Yandex Contact.
+                 if (!unifiedChat.contactId) {
+                     try {
+-                        await ContactService.resolveContact('telegram', peerId, null, chatName)
++                        const rawPhone = (dialog.entity as any)?.phone
++                        const peerPhone = rawPhone ? String(rawPhone) : null
++                        await ContactService.resolveContact('telegram', peerId, peerPhone, chatName)
+                         totalContacts++
+                     } catch {}
+                 }
+@@ -1538,3 +1599,220 @@ async function resolveEntity(
+ 
+     return { reachable: false, error: 'Номер не найден в Telegram' }
+ }
++
++/**
++ * One-shot backfill for TG ContactIdentity rows whose phoneId is NULL.
++ *
++ * Walks every orphan TG identity, asks the active gramJS client for the
++ * underlying User entity, and — when the peer's privacy lets us see it —
++ * attaches the discovered phone. The phone-attach logic mirrors the WA
++ * LID backfill:
++ *
++ *   - If a ContactPhone with that phone already exists on a DIFFERENT
++ *     Contact → merge our TG-only contact INTO that owner via
++ *     ContactMergeService.mergeContactToContact (driver-link survives).
++ *   - If a ContactPhone is already on OUR Contact → just attach identity.phoneId.
++ *   - If neither → create a fresh ContactPhone on our Contact, link
++ *     identity.phoneId, and (if Contact had no primary yet) set primaryPhoneId.
++ *
++ * Tg privacy permitting, this turns "TG identity floating without a number"
++ * into a real, merge-able contact node. Throttled to avoid gramJS flood-wait.
++ */
++export async function backfillTelegramPhonesForOrphanIdentities(
++    options: { dryRun?: boolean; limit?: number; throttleMs?: number } = {}
++): Promise<{
++    dryRun: boolean
++    scanned: number
++    translated: number
++    merged: number
++    phoneCreated: number
++    phoneLinked: number
++    skipped_no_phone: number
++    skipped_no_entity: number
++    errors: number
++    sample: any[]
++}> {
++    const dryRun = options.dryRun !== false  // default true
++    const limit = Number.isFinite(options.limit) && (options.limit as number) > 0 ? Number(options.limit) : 0
++    const throttleMs = Number.isFinite(options.throttleMs) ? Number(options.throttleMs) : 250
++
++    const { normalizePhoneE164 } = await import('@/lib/phoneUtils')
++    const { ContactMergeService } = await import('@/lib/ContactMergeService')
++
++    console.log(`[tg-backfill] start dryRun=${dryRun} limit=${limit || 'all'} throttleMs=${throttleMs}`)
++
++    // Pick the FIRST active connection — that's whose contacts list we'll
++    // probe. Probing through every connection ×186 identities would multiply
++    // gramJS load and risk flood-wait without much extra coverage.
++    const connection = await (prisma as any).telegramConnection.findFirst({
++        where: { isActive: true },
++        orderBy: { isDefault: 'desc' },
++    })
++    if (!connection || !connection.sessionString) {
++        console.warn('[tg-backfill] no active Telegram connection — abort')
++        return { dryRun, scanned: 0, translated: 0, merged: 0, phoneCreated: 0, phoneLinked: 0, skipped_no_phone: 0, skipped_no_entity: 0, errors: 0, sample: [] }
++    }
++
++    let client: TelegramClient
++    try {
++        client = await getTelegramClient(connection)
++    } catch (e: any) {
++        console.error(`[tg-backfill] failed to get TG client: ${e.message}`)
++        return { dryRun, scanned: 0, translated: 0, merged: 0, phoneCreated: 0, phoneLinked: 0, skipped_no_phone: 0, skipped_no_entity: 0, errors: 0, sample: [] }
++    }
++
++    type OrphanRow = { id: string; externalId: string; contactId: string }
++    const rows: OrphanRow[] = limit > 0
++        ? await prisma.$queryRaw<OrphanRow[]>`
++            SELECT id, "externalId", "contactId"
++            FROM "ContactIdentity"
++            WHERE channel = 'telegram'
++              AND "phoneId" IS NULL
++              AND "externalId" ~ '^[0-9]+$'
++            ORDER BY "createdAt" DESC
++            LIMIT ${limit}
++        `
++        : await prisma.$queryRaw<OrphanRow[]>`
++            SELECT id, "externalId", "contactId"
++            FROM "ContactIdentity"
++            WHERE channel = 'telegram'
++              AND "phoneId" IS NULL
++              AND "externalId" ~ '^[0-9]+$'
++            ORDER BY "createdAt" DESC
++        `
++
++    console.log(`[tg-backfill] candidates: ${rows.length}`)
++
++    // gramJS `getEntity(BigInt(userId))` fails when we never had a peer
++    // reference (no access_hash in cache). The reliable way to pull phones
++    // is to enumerate dialogs + contacts once — that's the path Telegram
++    // itself exposes phones through. We build a userId→phone map up front
++    // and look every orphan identity up in it.
++    const userPhoneById = new Map<string, string>()
++
++    try {
++        const dialogs = await client.getDialogs({ limit: 500 })
++        let dialogPhones = 0
++        for (const d of dialogs) {
++            const entity: any = d.entity
++            if (entity?.className === 'User' && entity.phone && entity.id) {
++                userPhoneById.set(entity.id.toString(), String(entity.phone))
++                dialogPhones++
++            }
++        }
++        console.log(`[tg-backfill] dialogs scanned: ${dialogs.length}, phones harvested: ${dialogPhones}`)
++    } catch (e: any) {
++        console.warn(`[tg-backfill] getDialogs failed: ${e.message}`)
++    }
++
++    try {
++        const contacts: any = await client.invoke(new Api.contacts.GetContacts({ hash: BigInt(0) as any }))
++        let contactPhones = 0
++        if (contacts && 'users' in contacts && Array.isArray(contacts.users)) {
++            for (const u of contacts.users) {
++                if (u?.phone && u?.id) {
++                    userPhoneById.set(u.id.toString(), String(u.phone))
++                    contactPhones++
++                }
++            }
++        }
++        console.log(`[tg-backfill] contacts API phones harvested: ${contactPhones}`)
++    } catch (e: any) {
++        console.warn(`[tg-backfill] GetContacts failed: ${e.message}`)
++    }
++
++    console.log(`[tg-backfill] total userId→phone map size: ${userPhoneById.size}`)
++
++    const counters = { scanned: 0, translated: 0, merged: 0, phoneCreated: 0, phoneLinked: 0, skipped_no_phone: 0, skipped_no_entity: 0, errors: 0 }
++    const sample: any[] = []
++
++    for (const row of rows) {
++        counters.scanned++
++
++        const rawPhone = userPhoneById.get(row.externalId)
++        if (!rawPhone) {
++            counters.skipped_no_phone++
++            continue
++        }
++
++        const normalized = normalizePhoneE164(String(rawPhone))
++        if (!normalized) {
++            counters.errors++
++            console.warn(`[tg-backfill] phone "${rawPhone}" failed normalization (identity ${row.id})`)
++            continue
++        }
++
++        counters.translated++
++
++        const existingPhone = await prisma.contactPhone.findFirst({
++            where: { phone: normalized, isActive: true },
++            select: { id: true, contactId: true },
++        })
++
++        const action = existingPhone
++            ? (existingPhone.contactId === row.contactId ? 'link_existing_phone' : 'merge')
++            : 'create_phone'
++
++        if (sample.length < 10) {
++            sample.push({
++                identity_id: row.id,
++                external_id: row.externalId,
++                translated: normalized,
++                contact_id: row.contactId,
++                action,
++                target_contact_id: existingPhone?.contactId || null,
++            })
++        }
++
++        if (!dryRun) {
++            try {
++                if (action === 'merge') {
++                    await ContactMergeService.mergeContactToContact(row.contactId, existingPhone!.contactId, 'system:tg-backfill')
++                    counters.merged++
++                    console.log(`[tg-backfill] merged contact=${row.contactId} → target=${existingPhone!.contactId} (TG ${row.externalId} → ${normalized})`)
++                } else if (action === 'link_existing_phone') {
++                    await prisma.contactIdentity.update({
++                        where: { id: row.id },
++                        data: { phoneId: existingPhone!.id },
++                    })
++                    counters.phoneLinked++
++                } else {
++                    const created = await prisma.contactPhone.create({
++                        data: {
++                            contactId: row.contactId,
++                            phone: normalized,
++                            source: 'telegram',
++                            isPrimary: true,
++                        },
++                    })
++                    await prisma.contactIdentity.update({
++                        where: { id: row.id },
++                        data: { phoneId: created.id },
++                    })
++                    // Only promote to primary if Contact has none yet.
++                    // updateMany lets us use non-unique fields in `where`.
++                    await prisma.contact.updateMany({
++                        where: { id: row.contactId, primaryPhoneId: null },
++                        data: { primaryPhoneId: created.id },
++                    })
++                    counters.phoneCreated++
++                    console.log(`[tg-backfill] phone created contact=${row.contactId} phone=${normalized} (TG ${row.externalId})`)
++                }
++            } catch (e: any) {
++                counters.errors++
++                console.warn(`[tg-backfill] action ${action} failed for identity=${row.id}: ${e.message}`)
++            }
++        }
++
++        if (counters.scanned % 20 === 0) {
++            console.log(`[tg-backfill] progress ${counters.scanned}/${rows.length} translated=${counters.translated} merged=${counters.merged} phoneCreated=${counters.phoneCreated} phoneLinked=${counters.phoneLinked}`)
++        }
++        // throttle no longer needed inside the loop: all phones are in the
++        // pre-fetched userPhoneById map, so each iteration only does local
++        // DB I/O. Kept the option (default 0 effect) for paranoia.
++        if (throttleMs > 0) await new Promise(r => setTimeout(r, throttleMs))
++    }
++
++    console.log('[tg-backfill] done', counters)
++    return { dryRun, ...counters, sample }
++}
+diff --git a/gravity-mvp/src/lib/ContactService.ts b/gravity-mvp/src/lib/ContactService.ts
+index 7578055..27399c1 100644
+--- a/gravity-mvp/src/lib/ContactService.ts
++++ b/gravity-mvp/src/lib/ContactService.ts
+@@ -96,6 +96,13 @@ export class ContactService {
+           },
+         })
+ 
++        // Re-link orphan Chats that arrived before this identity existed.
++        // Without this, a TG chat created when the user first messaged us
++        // (contactId=null at creation time) stays orphan forever, even after
++        // a Yandex sync or another channel later attaches the same phone
++        // to a Contact. Fixed in 89 historical TG chats by backfill script.
++        await this._relinkOrphanChatsForIdentity(channel, externalId, phoneRecord.contactId, identity.id)
++
+         console.log(`[ContactService] Created identity via phone match: contact=${phoneRecord.contactId} identity=${identity.id} phone=${normalized}`)
+         return {
+           contact: phoneRecord.contact,
+@@ -157,6 +164,58 @@ export class ContactService {
+     }
+   }
+ 
++  /**
++   * Best-effort: when a new ContactIdentity is created via phone-match
++   * (Scenario 2), attach any pre-existing orphan Chat for that channel
++   * + externalId to this Contact. Handles the race where a Chat was
++   * created with contactId=null (e.g. a TG inbound arrived before any
++   * identity existed) and only later did the Contact get an identity
++   * via a different path (Yandex sync, manual, etc.).
++   *
++   * Match rules mirror the relink migration:
++   *   whatsapp: externalChatId starts with `${externalId}@`
++   *   telegram: externalChatId equals `telegram:${externalId}`
++   *   else:     externalChatId equals `${externalId}` (exact)
++   *
++   * Failures here MUST NOT abort the identity creation — log and move on.
++   */
++  private static async _relinkOrphanChatsForIdentity(
++    channel: ChatChannel,
++    externalId: string,
++    contactId: string,
++    identityId: string,
++  ): Promise<void> {
++    try {
++      const whereOr: any[] = []
++      if (channel === 'whatsapp') {
++        whereOr.push({ externalChatId: { startsWith: `${externalId}@` } })
++      } else if (channel === 'telegram') {
++        whereOr.push({ externalChatId: `telegram:${externalId}` })
++      } else {
++        whereOr.push({ externalChatId: externalId })
++      }
++
++      const result = await prisma.chat.updateMany({
++        where: {
++          channel,
++          contactId: null,
++          OR: whereOr,
++        },
++        data: {
++          contactId,
++          contactIdentityId: identityId,
++        },
++      })
++
++      if (result.count > 0) {
++        console.log(`[ContactService] Relinked ${result.count} orphan ${channel} chat(s) to contact=${contactId} via identity=${identityId}`)
++      }
++    } catch (err: any) {
++      // Identity creation already succeeded — don't fail the caller.
++      console.warn(`[ContactService] _relinkOrphanChatsForIdentity failed for ${channel}:${externalId}: ${err.message}`)
++    }
++  }
++
+   /**
+    * Ensure Chat has contactId, contactIdentityId, and driverId (if Contact is linked to a Driver).
+    */
+diff --git a/gravity-mvp/src/lib/MessageService.ts b/gravity-mvp/src/lib/MessageService.ts
+index ccdf2b2..3b48391 100644
+--- a/gravity-mvp/src/lib/MessageService.ts
++++ b/gravity-mvp/src/lib/MessageService.ts
+@@ -288,9 +288,16 @@ export class MessageService {
+ 
+     /**
+      * Sends a message through the appropriate channel.
++     *
++     * @param replyToMessageId — internal Message.id we're replying to.
++     *   The service resolves it to that message's externalId (Telegram msgId
++     *   or WhatsApp message key) and threads it to the provider so the
++     *   delivered message becomes a native reply/quote in the messenger.
++     *   Cross-channel replies are silently demoted to plain sends — gramJS
++     *   can't replyTo a WA message, and vice versa.
+      */
+-    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string) {
+-        console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}`)
++    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, replyToMessageId?: string) {
++        console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}, replyToMessageId=${replyToMessageId || 'none'}`)
+ 
+         const chat = await (prisma.chat as any).findUnique({
+             where: { id: chatId },
+@@ -412,6 +419,31 @@ export class MessageService {
+             }
+         }
+ 
++        // Resolve reply target: look up the source message's externalId for
++        // the native provider replyTo / quotedMessageId fields. Only useful
++        // when the source message's channel matches our outbound channel
++        // — gramJS can't natively reply to a WA message.
++        let replyToExternalId: string | null = null
++        let replyToMetadata: { messageId: string; externalId: string | null; channel: string } | null = null
++        if (replyToMessageId) {
++            const src = await (prisma.message as any).findUnique({
++                where: { id: replyToMessageId },
++                select: { id: true, externalId: true, channel: true },
++            })
++            if (src) {
++                replyToMetadata = { messageId: src.id, externalId: src.externalId, channel: src.channel }
++                if (src.channel === channel && src.externalId) {
++                    replyToExternalId = src.externalId
++                } else if (src.channel !== channel) {
++                    console.warn(`[MessageService] reply demoted to plain send — source channel=${src.channel} differs from outbound=${channel}`)
++                } else {
++                    console.warn(`[MessageService] reply target ${replyToMessageId} has no externalId yet (still optimistic?) — demoted to plain send`)
++                }
++            } else {
++                console.warn(`[MessageService] replyToMessageId=${replyToMessageId} not found — demoted to plain send`)
++            }
++        }
++
+         // 2. Save message to DB first (Optimistic)
+         const messageId = `msg_${Date.now()}`
+         const now = new Date()
+@@ -426,7 +458,13 @@ export class MessageService {
+                 status: 'sent',
+                 channel: channel,
+                 sentAt: now,
+-                type: 'text'
++                type: 'text',
++                // Persist reply linkage in metadata so the UI can render the
++                // quoted-message preview when the chat is reopened. We keep
++                // both internal id and externalId — the former survives a
++                // channel-prefix rename, the latter is needed for cross-
++                // device sync where only the provider id is stable.
++                ...(replyToMetadata ? { metadata: { replyTo: replyToMetadata } } : {}),
+             }
+         })
+ 
+@@ -447,14 +485,14 @@ export class MessageService {
+                 case 'whatsapp':
+                     const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
+                     const connId = profileId || (targetChat.metadata as any)?.connectionId
+-                    console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
++                    console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}, replyTo=${replyToExternalId || 'none'}`)
+                     if (connId) {
+-                        await deliverWA(connId, rawExternalChatId, content)
++                        await deliverWA(connId, rawExternalChatId, content, replyToExternalId || undefined)
+                     } else {
+                         const conn = await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' } })
+                         console.log(`[MessageService] WA Fallback: found ready conn=${conn?.id}`)
+                         if (!conn) throw new Error('No ready WhatsApp connection available.')
+-                        await deliverWA(conn.id, rawExternalChatId, content)
++                        await deliverWA(conn.id, rawExternalChatId, content, replyToExternalId || undefined)
+                     }
+                     deliveryStatus = 'delivered'
+                     break
+@@ -462,11 +500,12 @@ export class MessageService {
+                 case 'max':
+                     const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
+                     const isPersonal = profileId === 'scraper' || !profileId
+-                    console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}`)
+-                    await deliverMax(rawExternalChatId, content, { 
++                    console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}, replyTo=${replyToExternalId || 'none'}`)
++                    await deliverMax(rawExternalChatId, content, {
+                         isPersonal,
+                         connectionId: isPersonal ? undefined : profileId,
+-                        name: chat.driver?.fullName
++                        name: chat.driver?.fullName,
++                        replyToMessageId: replyToExternalId || undefined,
+                     })
+                     deliveryStatus = 'delivered'
+                     break
+@@ -489,13 +528,14 @@ export class MessageService {
+                             const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
+                             const target = rawExternalChatId || chat.driver?.phone?.replace(/\D/g, '')
+                             if (!target) throw new Error('No target for TG')
+-                            
++
+                             try {
+-                                const res = await deliverTG(target, content, activeProfileId, { 
++                                const res = await deliverTG(target, content, activeProfileId, {
+                                     // @ts-ignore - dynamic type mismatch
+                                     messageId: messageId,
+                                     chatId: targetChat.id,
+-                                    driverId: chat.driver?.id
++                                    driverId: chat.driver?.id,
++                                    replyToExternalId: replyToExternalId || undefined,
+                                 })
+                                 if (res.externalId) deliveryExternalId = res.externalId
+                                 deliveryStatus = 'delivered'
+@@ -638,18 +678,31 @@ export class MessageService {
+             const rawExternalId = chat.externalChatId?.split(':').slice(1).join(':') || chat.externalChatId
+             const connId = (chat.metadata as any)?.connectionId
+ 
++            // Preserve the reply quote across retries — without this a
++            // first-attempt failure followed by an automatic retry would
++            // re-send as a plain message, dropping the operator's intent.
++            const replyMeta = meta?.replyTo
++            const retryReplyExternalId: string | null =
++                replyMeta?.externalId && replyMeta?.channel === message.channel
++                    ? String(replyMeta.externalId)
++                    : null
++
+             switch (message.channel) {
+                 case 'whatsapp': {
+                     const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
+                     const waConn = connId || (await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' }, select: { id: true } }))?.id
+                     if (!waConn) throw new Error('No ready WhatsApp connection available.')
+-                    await deliverWA(waConn, rawExternalId, message.content)
++                    await deliverWA(waConn, rawExternalId, message.content, retryReplyExternalId || undefined)
+                     deliveryStatus = 'delivered'
+                     break
+                 }
+                 case 'max': {
+                     const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
+-                    await deliverMax(rawExternalId, message.content, { isPersonal: true, name: chat.driver?.fullName })
++                    await deliverMax(rawExternalId, message.content, {
++                        isPersonal: true,
++                        name: chat.driver?.fullName,
++                        replyToMessageId: retryReplyExternalId || undefined,
++                    })
+                     deliveryStatus = 'delivered'
+                     break
+                 }
+@@ -660,7 +713,9 @@ export class MessageService {
+                     const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`
+                     const profileId = defaultConns[0]?.id
+                     if (!profileId) throw new Error('No active TG connection')
+-                    const res = await deliverTG(target, message.content, profileId, {})
++                    const res = await deliverTG(target, message.content, profileId, {
++                        replyToExternalId: retryReplyExternalId || undefined,
++                    })
+                     if (res.externalId) deliveryExternalId = res.externalId
+                     deliveryStatus = 'delivered'
+                     break
+diff --git a/gravity-mvp/src/lib/phoneUtils.ts b/gravity-mvp/src/lib/phoneUtils.ts
+index 5b835b8..2ba5510 100644
+--- a/gravity-mvp/src/lib/phoneUtils.ts
++++ b/gravity-mvp/src/lib/phoneUtils.ts
+@@ -6,6 +6,12 @@
+ /**
+  * Normalize any phone input to E.164 format (+7XXXXXXXXXX).
+  * Returns null for invalid/unparseable input.
++ *
++ * NB. We refuse anything longer than 12 digits. WhatsApp Business hands
++ * us 14-15-digit LIDs (e.g. `63068021227590@lid`); blindly trimming
++ * the tail produced fake numbers like `+78021227590` that polluted
++ * ContactPhone for ~625 rows historically. If you ever need to accept
++ * longer inputs, do it at the call site after validating the shape.
+  */
+ export function normalizePhoneE164(raw: string | null | undefined): string | null {
+   if (!raw || typeof raw !== 'string') return null
+@@ -23,8 +29,12 @@ export function normalizePhoneE164(raw: string | null | undefined): string | nul
+     }
+   } else if (digits.length === 10) {
+     normalized = '7' + digits
+-  } else if (digits.length > 11) {
+-    normalized = '7' + digits.slice(-10)
++  } else if (digits.length === 12 && digits.startsWith('7')) {
++    // Edge case: some sources emit a leading '+' that survived re.replace
++    // as a duplicate 7 (e.g. accidental "+7 +7..."). Accept iff first 12th
++    // char is 7 and the next 11 form a valid number.
++    normalized = digits.slice(-11)
++    if (!normalized.startsWith('7')) return null
+   } else {
+     return null
+   }
+diff --git a/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts b/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts
+index a800e6a..106df06 100644
+--- a/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts
++++ b/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts
+@@ -254,6 +254,15 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
+     if (existing) return
+ 
+     const unifiedType = mapToUnifiedMessageType(msg.type)
++    // Quote capture mirrors the private-chat path. Plus groupAuthor stays
++    // around — both pieces live in the same metadata jsonb column.
++    const quotedKey: string | undefined = (msg as any).quotedMsgId
++        || (msg as any)._data?.quotedStanzaID
++        || ((msg as any).hasQuotedMsg && (msg as any)._data?.quotedMsg?.id?._serialized)
++    const groupMeta: any = {}
++    if ((msg as any).author) groupMeta.groupAuthor = (msg as any).author
++    if (quotedKey) groupMeta.replyTo = { externalId: String(quotedKey), channel: 'whatsapp' as const }
++
+     const savedMsg = await prisma.message.create({
+         data: {
+             chatId: unifiedChat.id,
+@@ -264,7 +273,7 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
+             channel: 'whatsapp',
+             sentAt: ts,
+             status: isOutbound ? 'delivered' : undefined,
+-            metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
++            metadata: Object.keys(groupMeta).length > 0 ? groupMeta : undefined,
+         },
+     })
+ 
+@@ -528,11 +537,45 @@ async function syncHistory(connectionId: string, client: Client) {
+ 
+                 // Contact resolution: only for private chats. For groups
+                 // the JID is the group id, not a phone — no contact to link.
++                //
++                // JID shapes from whatsapp-web.js:
++                //   <digits>@c.us  — real phone (E.164 without '+')
++                //   <digits>@lid   — Linked ID for WA Business / privacy-hidden
++                //                     contacts. NOT a phone — opaque opaque opaque.
++                //   <digits>@g.us  — group room id, already filtered above.
++                //
++                // For @lid we first try to translate to a real phone via
++                // `chatRaw.getContact().number` — same trick the live handler
++                // uses. If WA hands us a real number, we pass it to
++                // ContactService as `phone` so Scenario 2 (phone-match
++                // auto-merge) fires and the LID-identity attaches to an
++                // existing Contact (or links to Driver via yandex-link on
++                // the next tick). If translation returns null, we still
++                // create the identity but with phone=null — no fabrication.
+                 if (!isGroupChat && !unifiedSyncChat.contactId) {
+                     try {
+-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
+-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+-                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
++                        const jid: string = chatRaw.id._serialized || ''
++                        const rawDigits = jid.split('@')[0]
++                        const isPhoneJid = jid.endsWith('@c.us')
++                        const isLidJid = jid.endsWith('@lid')
++
++                        if (rawDigits && /^\d{10,15}$/.test(rawDigits) && (isPhoneJid || isLidJid)) {
++                            let phoneArg: string | null = isPhoneJid ? rawDigits : null
++
++                            if (isLidJid) {
++                                try {
++                                    const waContact = await (chatRaw as any).getContact?.()
++                                    const translated = waContact?.number
++                                    if (translated && /^\d{10,15}$/.test(String(translated))) {
++                                        phoneArg = String(translated)
++                                        console.log(`[WA-SERVICE] syncHistory translated LID ${rawDigits} → ${phoneArg}`)
++                                    }
++                                } catch (translateErr: any) {
++                                    console.warn(`[WA-SERVICE] syncHistory LID translation failed for ${rawDigits}: ${translateErr.message}`)
++                                }
++                            }
++
++                            const contactResult = await ContactService.resolveContact('whatsapp', rawDigits, phoneArg, chatRaw.name)
+                             await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                         }
+                     } catch (contactErr: any) {
+@@ -991,11 +1034,18 @@ async function doInitializeClient(connectionId: string): Promise<void> {
+             }
+ 
+             // ── Contact Model dual write ──────────────────────────────
++            // If the LID-translation above failed, rawChatId is still
++            // `<digits>@lid` and phoneDigits is just the LID. Passing it
++            // as a phone to ContactService would create a phantom +7<last10>
++            // ContactPhone — bug #1 we just fixed. So we suppress phone
++            // for un-translated LIDs and let the identity stand alone.
+             try {
++                const isStillLid = rawChatId.endsWith('@lid')
++                const contactPhoneArg = isStillLid ? null : phoneDigits
+                 const contactResult = await ContactService.resolveContact(
+                     'whatsapp',
+                     normalizedPhone,
+-                    phoneDigits,
++                    contactPhoneArg,
+                     (msg as any).notifyName || unifiedChat.name || null,
+                 )
+                 await ContactService.ensureChatLinked(
+@@ -1052,6 +1102,17 @@ async function doInitializeClient(connectionId: string): Promise<void> {
+                 }
+             } else {
+                 const msgType = mapToUnifiedMessageType(msg.type)
++                // Capture native WA quote for UI quote-block. whatsapp-web.js
++                // sets hasQuotedMsg + exposes the source key on msg.quotedMsgId
++                // (or msg._data.quotedStanzaID on older builds). Matches the
++                // shape we store in `externalId` for outbound messages.
++                const quotedKey: string | undefined = (msg as any).quotedMsgId
++                    || (msg as any)._data?.quotedStanzaID
++                    || ((msg as any).hasQuotedMsg && (msg as any)._data?.quotedMsg?.id?._serialized)
++                const replyMeta = quotedKey
++                    ? { replyTo: { externalId: String(quotedKey), channel: 'whatsapp' as const } }
++                    : null
++
+                 const savedMsg = await prisma.message.create({
+                     data: {
+                         chatId: unifiedChat.id,
+@@ -1061,6 +1122,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
+                         externalId: msg.id._serialized,
+                         sentAt: ts,
+                         status: isOutbound ? 'delivered' : undefined,
++                        ...(replyMeta ? { metadata: replyMeta } : {}),
+                     }
+                 })
+ 
+@@ -1345,7 +1407,7 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
+     return { checkedCount: entries.length, unhealthyCount, details }
+ }
+ 
+-export async function sendMessage(connectionId: string, chatId: string, text: string): Promise<{ externalId: string }> {
++export async function sendMessage(connectionId: string, chatId: string, text: string, quotedMessageId?: string): Promise<{ externalId: string }> {
+     let client = clients.get(connectionId)
+ 
+     // Lightweight runtime validation: detect stale client (puppeteer dead but object in map)
+@@ -1407,7 +1469,11 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
+ 
+     let msg
+     try {
+-        msg = await client.sendMessage(targetChatId, text)
++        // whatsapp-web.js: MessageSendOptions.quotedMessageId is a string
++        // (the source message's id._serialized, e.g. "true_79221234567@c.us_XXXX").
++        // When absent, falls through to a plain send.
++        const sendOptions: any = quotedMessageId ? { quotedMessageId } : undefined
++        msg = await client.sendMessage(targetChatId, text, sendOptions)
+     } catch (sendErr: any) {
+         // Detect puppeteer crash: "detached Frame", "Protocol error", "Target closed"
+         const errMsg = sendErr.message || ''
+@@ -1817,12 +1883,34 @@ export async function importWhatsAppHistory(
+                 })
+ 
+                 // Contact resolution: only for private (1:1) chats.
+-                // Group JIDs are room ids, not phones.
++                // Group JIDs are room ids, not phones. @lid JIDs are
++                // opaque Linked IDs — try to translate via WA API; if
++                // WA returns a real number, pass it through so Scenario 2
++                // phone-match merges fire. If it doesn't, identity stays
++                // standalone without a fabricated phone.
+                 if (!isGroupChat && !unifiedChat.contactId) {
+                     try {
+-                        const rawPhone = chatRaw.id._serialized?.split('@')[0]
+-                        if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
+-                            await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
++                        const jid: string = chatRaw.id._serialized || ''
++                        const rawDigits = jid.split('@')[0]
++                        const isPhoneJid = jid.endsWith('@c.us')
++                        const isLidJid = jid.endsWith('@lid')
++                        if (rawDigits && /^\d{10,15}$/.test(rawDigits) && (isPhoneJid || isLidJid)) {
++                            let phoneArg: string | null = isPhoneJid ? rawDigits : null
++
++                            if (isLidJid) {
++                                try {
++                                    const waContact = await (chatRaw as any).getContact?.()
++                                    const translated = waContact?.number
++                                    if (translated && /^\d{10,15}$/.test(String(translated))) {
++                                        phoneArg = String(translated)
++                                        console.log(`[WA-SERVICE] importChats translated LID ${rawDigits} → ${phoneArg}`)
++                                    }
++                                } catch (translateErr: any) {
++                                    console.warn(`[WA-SERVICE] importChats LID translation failed for ${rawDigits}: ${translateErr.message}`)
++                                }
++                            }
++
++                            await ContactService.resolveContact('whatsapp', rawDigits, phoneArg, chatRaw.name)
+                             totalContacts++
+                         }
+                     } catch {}
+diff --git a/max-web-scraper/index.js b/max-web-scraper/index.js
+index 0873c59..478971c 100644
+--- a/max-web-scraper/index.js
++++ b/max-web-scraper/index.js
+@@ -210,12 +210,37 @@ async function handleIncoming(msg, mediaPipeline, messageSync) {
+ 
+ // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
+ 
+-async function sendText(transport, chatId, text) {
++/**
++ * Send a text message.
++ * @param {object}  transport
++ * @param {number}  chatId
++ * @param {string}  text
++ * @param {object} [options]
++ * @param {string|number} [options.replyToMessageId] — MAX message id (m.id from
++ *   an incoming payload) to attach as a native quote. Wrapped into the
++ *   `link` field of the SEND_MESSAGE payload — the same field MAX itself
++ *   uses on the wire to mark "this is a reply to <id>". If the field name
++ *   turns out to be wrong on a given MAX build, this still falls through
++ *   to a plain send because MAX servers tolerate unknown payload keys.
++ */
++async function sendText(transport, chatId, text, options = {}) {
+   const cid = -Date.now()
++  const message = { text, cid, elements: [], attaches: [] }
++
++  if (options.replyToMessageId) {
++    // MAX wire format for reply (observed in OK/MAX family WS frames):
++    // link: { type: 'REPLY', message: { id, ... } }
++    // We only know the id from the CRM side, MAX backend resolves the rest.
++    message.link = {
++      type:    'REPLY',
++      message: { id: String(options.replyToMessageId) },
++    }
++  }
++
+   await transport.sendFrame(OP.SEND_MESSAGE, {
+     chatId,
+-    message: { text, cid, elements: [], attaches: [] },
+-    notify:  true,
++    message,
++    notify: true,
+   })
+ }
+ 
+@@ -560,10 +585,11 @@ app.get('/resolve-phone', (req, res) => {
+ })
+ 
+ // Отправить текст
+-// Body: { chatId: number|string, message: string, phone?: string }
++// Body: { chatId: number|string, message: string, phone?: string, replyToMessageId?: string }
+ // chatId может быть MAX internal ID или телефон — если телефон, автоматически резолвим
++// replyToMessageId — MAX message id оригинала, на который отвечаем (для нативной цитаты)
+ app.post('/send-message', async (req, res) => {
+-  let { chatId, message, phone } = req.body
++  let { chatId, message, phone, replyToMessageId } = req.body
+   if (!message) {
+     return res.status(400).json({ error: 'message is required' })
+   }
+@@ -599,7 +625,7 @@ app.post('/send-message', async (req, res) => {
+   }
+ 
+   try {
+-    await enqueueSend(() => sendText(transport, Number(chatId), message))
++    await enqueueSend(() => sendText(transport, Number(chatId), message, { replyToMessageId }))
+     res.json({ success: true, chatId: String(chatId) })
+   } catch (e) {
+     res.status(500).json({ error: e.message })
+diff --git a/max-web-scraper/parser/MessageParser.js b/max-web-scraper/parser/MessageParser.js
+index 1c52526..7f5e1bf 100644
+--- a/max-web-scraper/parser/MessageParser.js
++++ b/max-web-scraper/parser/MessageParser.js
+@@ -19,6 +19,10 @@ class MessageParser {
+       messageType: msg.type || 'text',
+       attachments: msg.attachments || [],
+       isOutgoing:  msg.isOutgoing || false,
++      // Native reply support — null when the message isn't a reply.
++      // The CRM stores it in Message.metadata.replyTo so the UI can render
++      // a quote-block linking to the source message in the same chat.
++      replyToMessageId: msg.replyToMessageId || null,
+     }
+   }
+ 
+diff --git a/max-web-scraper/transport/TransportInterceptor.js b/max-web-scraper/transport/TransportInterceptor.js
+index 24f9e94..bff23ed 100644
+--- a/max-web-scraper/transport/TransportInterceptor.js
++++ b/max-web-scraper/transport/TransportInterceptor.js
+@@ -158,6 +158,23 @@ class TransportInterceptor {
+ 
+     const hasAttaches = Array.isArray(m.attaches) && m.attaches.length > 0
+ 
++    // Native MAX reply lives at m.link with type='REPLY'. Field names vary
++    // slightly across builds (some emit message.id, some replyToMessageId),
++    // so we try every shape we've seen. Returned value is just the source
++    // message id — the CRM stores it as metadata.replyTo.externalId and
++    // resolves the snippet via its own Message table.
++    let replyToMessageId = null
++    if (m.link && (m.link.type === 'REPLY' || m.link.type === 'reply')) {
++      replyToMessageId = m.link.message?.id
++        || m.link.messageId
++        || m.link.replyToMessageId
++        || null
++    }
++    // Some MAX builds emit a flat `replyTo` field at the message root.
++    if (!replyToMessageId && m.replyTo) {
++      replyToMessageId = m.replyTo.id || m.replyTo.messageId || null
++    }
++
+     return {
+       id:          m.id    || null,
+       chatId:      payload.chatId || null,
+@@ -167,6 +184,7 @@ class TransportInterceptor {
+       type:        hasAttaches ? this._detectMaxType(m.attaches) : 'text',
+       attachments: this._extractMaxAttachments(m.attaches || []),
+       isOutgoing:  this._myUserId ? String(m.sender) === this._myUserId : false,
++      replyToMessageId: replyToMessageId ? String(replyToMessageId) : null,
+       raw:         payload,
+     }
+   }
+diff --git a/start-all.bat b/start-all.bat
+index 302095c..8ed16c5 100644
+--- a/start-all.bat
++++ b/start-all.bat
+@@ -1,24 +1,27 @@
+ @echo off
+ echo ===================================================
+-echo Starting CRM and Yandex Scraper Services
++echo Starting CRM and all background services
+ echo ===================================================
+ 
+-echo [1/6] Starting CRM (gravity-mvp)...
++echo [1/7] Starting CRM (gravity-mvp)...
+ start cmd /k "title CRM - npm run dev && cd /d %~dp0gravity-mvp && npm run dev"
+ 
+-echo [2/6] Starting Scraper API...
++echo [2/7] Starting Scraper API...
+ start cmd /k "title Scraper API - npm run start:api && cd /d %~dp0yandex-fleet-scraper && npm run start:api"
+ 
+-echo [3/6] Starting Scraper Worker...
++echo [3/7] Starting Scraper Worker...
+ start cmd /k "title Scraper Worker - npm run start:worker && cd /d %~dp0yandex-fleet-scraper && npm run start:worker"
+ 
+-echo [4/6] Starting Max-web-scraper...
++echo [4/7] Starting Max-web-scraper...
+ start cmd /k "title Max-web-scraper - node index.js && cd /d %~dp0max-web-scraper && node index.js"
+ 
+-echo [5/6] Starting TG Bot Backend...
++echo [5/7] Starting TG Bot Backend...
+ start cmd /k "title TG Bot Backend - npm start && cd /d %~dp0tg-bot && npm start"
+ 
+-echo [6/6] Starting TG Bot Frontend...
++echo [6/7] Starting TG Bot Frontend...
+ start cmd /k "title TG Bot Frontend - npm run dev && cd /d %~dp0tg-bot\tg-bot-frontend && npm run dev"
+ 
++echo [7/7] Starting Avito Worker (collects responses from Avito messenger)...
++start cmd /k "title Avito Worker - npm run dev && cd /d %~dp0avito-worker && npm run dev"
++
+ echo All services started in separate windows!

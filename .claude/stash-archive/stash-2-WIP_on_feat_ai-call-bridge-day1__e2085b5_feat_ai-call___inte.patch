@@ -1,0 +1,66 @@
+diff --git a/.claude/launch.json b/.claude/launch.json
+index 313ed25..fd8b512 100644
+--- a/.claude/launch.json
++++ b/.claude/launch.json
+@@ -1,6 +1,14 @@
+ {
+   "version": "0.0.1",
+   "configurations": [
++    {
++      "name": "ai-call-preview",
++      "runtimeExecutable": "npm",
++      "runtimeArgs": ["run", "dev", "--", "-p", "3003"],
++      "port": 3003,
++      "cwd": "../ai-call-preview/gravity-mvp",
++      "autoPort": false
++    },
+     {
+       "name": "crm",
+       "runtimeExecutable": "npm",
+diff --git a/telephony/setup-mod-audio-fork.sh b/telephony/setup-mod-audio-fork.sh
+index f82c3a1..f153f78 100644
+--- a/telephony/setup-mod-audio-fork.sh
++++ b/telephony/setup-mod-audio-fork.sh
+@@ -75,23 +75,28 @@ fi
+ # Sanity check
+ [ -d "${SRC_DIR}/modules/mod_audio_fork" ] || fail "modules/mod_audio_fork not found in fetched sources"
+ 
+-step "Building mod_audio_fork"
++step "Building mod_audio_fork (standalone g++, no autotools)"
++# The drachtio fork's Makefile.am expects to live inside the FreeSWITCH
++# source tree ($(top_srcdir)/build/modmake.rulesam). For an already-installed
++# FS we compile directly against installed headers + libraries — no
++# configure step needed.
+ cd "${SRC_DIR}/modules/mod_audio_fork"
+ 
+-# bootstrap.sh generates configure from autogen sources
+-if [ -f bootstrap.sh ]; then
+-    ./bootstrap.sh
+-elif [ -f autogen.sh ]; then
+-    ./autogen.sh
+-else
+-    autoreconf -fiv
+-fi
+-
+-# Tell configure where FS lives (this build is not in /usr/lib pkgconfig)
+ export PKG_CONFIG_PATH="${FS_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+-./configure --prefix="${FS_PREFIX}" CFLAGS="-I${FS_PREFIX}/include/freeswitch" CXXFLAGS="-I${FS_PREFIX}/include/freeswitch"
+-make -j$(nproc)
+-make install
++CFLAGS_FS="$(pkg-config --cflags freeswitch libwebsockets)"
++LIBS_FS="$(pkg-config --libs freeswitch libwebsockets)"
++echo "CFLAGS=${CFLAGS_FS}"
++echo "LIBS=${LIBS_FS}"
++
++gcc -c -fPIC ${CFLAGS_FS} mod_audio_fork.c -o mod_audio_fork.c.o
++g++ -std=c++11 -c -fPIC ${CFLAGS_FS} lws_glue.cpp -o lws_glue.o
++g++ -std=c++11 -c -fPIC ${CFLAGS_FS} parser.cpp -o parser.o
++g++ -std=c++11 -c -fPIC ${CFLAGS_FS} audio_pipe.cpp -o audio_pipe.o
++g++ -shared -o mod_audio_fork.so \
++    mod_audio_fork.c.o lws_glue.o parser.o audio_pipe.o \
++    ${LIBS_FS}
++
++cp mod_audio_fork.so "${FS_PREFIX}/mod/mod_audio_fork.so"
+ 
+ step "Verifying .so deployed"
+ if [ ! -f "${FS_PREFIX}/mod/mod_audio_fork.so" ]; then
