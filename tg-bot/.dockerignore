@@ -1,0 +1,23 @@
+node_modules
+.git
+.gitignore
+.env
+.env.local
+*.log
+database.sqlite
+*.sqlite
+*.sqlite-journal
+.DS_Store
+README.md
+Dockerfile
+.dockerignore
+# Дебаг-скрипты, не нужны в runtime
+check-*.js
+debug-*.js
+diagnose-*.js
+fix-*.js
+test-*.js
+apply-*.js
+enhance-*.js
+# Tg-bot-frontend — отдельный сервис, у него свой Dockerfile
+tg-bot-frontend

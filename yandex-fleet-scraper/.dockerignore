@@ -1,0 +1,20 @@
+node_modules
+.git
+.env
+.env.local
+*.log
+chrome_profile
+chrome_user_data
+storage-state.json
+*.har
+.playwright-browsers
+.DS_Store
+README.md
+Dockerfile
+.dockerignore
+# Локальные дебаг-данные
+debug-*
+screenshots
+# Probe-скрипты — не нужны в проде (если нужны для отладки на VPS, копируем вручную)
+src/scripts/probe-*.ts
+src/scripts/login.ts

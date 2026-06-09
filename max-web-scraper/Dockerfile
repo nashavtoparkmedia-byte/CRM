@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1.7
+# ─────────────────────────────────────────────────────────────────────────────
+# max-web-scraper — скрапер мессенджера MAX (web.max.ru)
+#
+# Playwright-based, single process (node index.js).
+# Профиль браузера монтируется как volume для сохранения сессии между рестартами.
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS deps
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS runner
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends tini \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV TZ=Europe/Moscow
+
+COPY --from=deps --chown=pwuser:pwuser /app/node_modules ./node_modules
+COPY --chown=pwuser:pwuser . .
+
+# Профиль и runtime-стейт — монтируются volume на VPS
+RUN mkdir -p /app/userData \
+    && chown -R pwuser:pwuser /app
+
+USER pwuser
+
+# Скрапер не слушает HTTP-порт — общается через CRM_WEBHOOK_URL.
+# Healthcheck — наличие процесса.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
+    CMD pgrep -f "node.*index" >/dev/null || exit 1
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "index.js"]

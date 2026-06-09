@@ -1,0 +1,32 @@
+node_modules
+.next
+out
+dist
+build
+.env
+.env.local
+.env.*.local
+.git
+.gitignore
+*.log
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+coverage
+.nyc_output
+__tests__
+test
+*.test.ts
+*.test.tsx
+*.spec.ts
+README.md
+Dockerfile
+.dockerignore
+# Профили сессий (хранятся в volume на VPS)
+.wwebjs_auth
+.wwebjs_cache
+whatsapp_auth
+# Сгенерированные миграции (нужны — оставляем, но скрипты разовые - чистим)
+scripts/temp_*.js
+scripts/debug_*.js
