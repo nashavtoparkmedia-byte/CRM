@@ -1,0 +1,19 @@
+# Linux-исполняемые файлы — всегда LF, иначе на VPS упадут с
+# "bad interpreter: /usr/bin/env\r: no such file or directory"
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.dockerfile text eol=lf
+
+# YAML/конфиги — LF (Docker и Linux-демоны любят их так)
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.conf      text eol=lf
+nginx.conf  text eol=lf
+
+# Бинарные — не трогать
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.pdf       binary
+*.age       binary

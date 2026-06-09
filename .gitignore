@@ -19,8 +19,13 @@
 **/.env.local
 **/.env.development.local
 **/.env.test.local
+**/.env.production
 **/.env.production.local
 *.pem
+*.key
+*.age
+# Exception: age PUBLIC key is safe in git
+!deploy/secrets/age-public.key
 
 # IDE / Logs
 **/.vscode/
