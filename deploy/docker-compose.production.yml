@@ -262,9 +262,13 @@ services:
       - "80:80"     # HTTP — Let's Encrypt validation + 301 на HTTPS
       - "443:443"   # HTTPS — основной
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # conf.d — записываемая, потому что nginx entrypoint envsubst пишет сюда
+      # processed templates (NGINX_ENVSUBST_OUTPUT_DIR). default.conf оставляем
+      # rebindable из репо — но без :ro чтобы entrypoint не падал.
+      - ./nginx/conf.d:/etc/nginx/conf.d
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      # Templates — envsubst делает подстановку ${CRM_DOMAIN}, ${BOT_ADMIN_DOMAIN}
+      # Templates — read-only, envsubst читает их и кладёт обработанный
+      # результат в /etc/nginx/conf.d/
       - ./nginx/templates:/etc/nginx/templates:ro
       - nginx_certs:/etc/letsencrypt
       - nginx_www:/var/www/letsencrypt
