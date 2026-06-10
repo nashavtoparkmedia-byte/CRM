@@ -40,7 +40,9 @@ COPY --chown=app:app prisma ./prisma
 
 # prisma generate — иначе @prisma/client не инициализирован при require.
 # Делаем до USER чтобы у root были права записать .prisma/client.
-RUN npx prisma generate && chown -R app:app /app/node_modules /app/prisma
+# chown -R /app (не только подпапок!) — иначе app не может писать
+# в /app/bot-errors.log который создаёт log-interceptor.js.
+RUN npx prisma generate && chown -R app:app /app
 
 USER app
 

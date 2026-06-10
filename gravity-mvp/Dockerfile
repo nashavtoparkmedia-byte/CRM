@@ -89,6 +89,12 @@ COPY --from=builder --chown=app:app /app/scripts ./scripts
 # Удаляем dev-зависимости (npm prune вместо отдельной stage — экономит слой)
 RUN npm prune --omit=dev && npm cache clean --force
 
+# Pre-create writable cache + ensure /app сам по себе writable для app user.
+# Без chown /app — npx prisma migrate deploy не может писать в /tmp/.npm,
+# а приложение не может писать в свой WORKDIR (recordings/, .next/cache/).
+RUN mkdir -p /tmp/.npm /app/recordings /app/whatsapp_auth \
+    && chown -R app:app /app /tmp/.npm
+
 USER app
 EXPOSE 3002
 
