@@ -186,7 +186,7 @@ else
     ufw default deny incoming
     ufw default allow outgoing
     ufw allow 22/tcp        comment 'SSH'
-    ufw allow 80/tcp        comment 'HTTP (Let'\''s Encrypt + redirect)'
+    ufw allow 80/tcp        comment 'HTTP Lets Encrypt and redirect'
     ufw allow 443/tcp       comment 'HTTPS'
     ufw allow 5060/udp      comment 'SIP signaling'
     ufw allow 5060/tcp      comment 'SIP signaling TCP'
