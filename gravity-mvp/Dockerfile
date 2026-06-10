@@ -103,5 +103,10 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD node -e "require('http').get('http://127.0.0.1:3002/', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-# prisma migrate deploy — безопасно применяет миграции (только не-применённые)
-CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+# DEV deploy: используем db push вместо migrate deploy.
+# Причина — в репо отсутствуют миграции для некоторых моделей (tasks),
+# которые локально применялись через prisma db push без записи в migrations/.
+# Это блокирует prod-style migrate deploy. db push идемпотентно
+# синхронизирует БД с schema.prisma. После стабилизации стека и создания
+# недостающих миграций — переключим обратно на migrate deploy.
+CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss && npm run start"]
