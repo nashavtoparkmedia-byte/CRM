@@ -33,7 +33,7 @@ RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 COPY --from=builder --chown=app:app /app/package.json /app/package-lock.json* ./
 COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/.next ./.next
-COPY --from=builder --chown=app:app /app/public ./public 2>/dev/null || true
+COPY --from=builder --chown=app:app /app/public ./public
 
 RUN npm prune --omit=dev && npm cache clean --force
 
