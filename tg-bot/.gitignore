@@ -3,4 +3,6 @@ node_modules/
 *.json
 !package.json
 !package-lock.json
+!tg-bot-frontend/jsconfig.json
+!tg-bot-frontend/next.config.json
 database.sqlite
