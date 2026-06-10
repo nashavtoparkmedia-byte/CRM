@@ -1,6 +1,15 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+
+// DEV deploy: отключаем Static Generation для всего приложения.
+// Страницы используют Prisma/Redis/MinIO — при build их в Docker контейнере
+// нет, и Next.js при попытке SSG падает с Prisma connection error.
+// На runtime всё работает: контейнер стартует, БД доступна, страницы
+// рендерятся per-request.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { Sidebar } from "@/components/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import { QueryProvider } from "@/providers/QueryProvider";
