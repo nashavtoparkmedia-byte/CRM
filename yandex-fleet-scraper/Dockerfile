@@ -35,11 +35,15 @@ ENV TZ=Europe/Moscow
 COPY --from=deps --chown=pwuser:pwuser /app/node_modules ./node_modules
 COPY --chown=pwuser:pwuser . .
 
-# Каталоги для профилей браузера — будут смонтированы как volume на VPS
-RUN mkdir -p /app/chrome_profile /app/chrome_user_data \
+# Каталоги для профилей браузера + SQLite — будут смонтированы как volume на VPS.
+# Заранее создаём + chown — иначе при mount volume будет owned by root и
+# pwuser не сможет писать (Prisma "unable to open database file").
+RUN mkdir -p /app/chrome_profile /app/chrome_user_data /app/data \
     && chown -R pwuser:pwuser /app
 
+# prisma generate под pwuser — чтобы .prisma/client писалось в правильное место.
 USER pwuser
+RUN npx prisma generate
 
 # API использует PORT из .env (по умолчанию 3003)
 EXPOSE 3003

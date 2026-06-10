@@ -38,6 +38,10 @@ COPY --chown=app:app start.js package.json ./
 COPY --chown=app:app src ./src
 COPY --chown=app:app prisma ./prisma
 
+# prisma generate — иначе @prisma/client не инициализирован при require.
+# Делаем до USER чтобы у root были права записать .prisma/client.
+RUN npx prisma generate && chown -R app:app /app/node_modules /app/prisma
+
 USER app
 
 # Healthcheck — проверяем что Node-процесс жив через файл-маркер,

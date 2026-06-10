@@ -70,6 +70,9 @@ ENV HOSTNAME=0.0.0.0
 # whatsapp-web.js → puppeteer → читает эти переменные.
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+# npm cache в /tmp — наш CMD делает `npx prisma migrate deploy` под
+# непривилегированным USER app, который не может писать в /app/.npm.
+ENV NPM_CONFIG_CACHE=/tmp/.npm
 
 # Непривилегированный пользователь — стандартная практика безопасности
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app

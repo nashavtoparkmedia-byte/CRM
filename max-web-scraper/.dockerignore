@@ -19,6 +19,8 @@ debug*.log
 debug.js
 check-*.js
 current_tasks.log
-contacts
+# было `contacts` — но это паттерн который исключает папку contacts/ с
+# ContactStore.js. Real debug-файл назывался contacts.csv или подобное.
+# Если он появится — добавь точное имя, не glob по папке.
 d.txt
 d_utf8*.txt
