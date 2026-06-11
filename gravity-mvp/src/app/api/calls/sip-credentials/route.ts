@@ -20,10 +20,15 @@ export async function GET() {
     const ext = getSipExtensionForUser(user.id)
     if (!ext) return NextResponse.json({ error: 'no_extension_for_user' }, { status: 403 })
 
-    const wsUrl = process.env.SIP_WS_URL ?? 'ws://localhost:7080'
+    // Без явного SIP_WS_URL софтфон отключён: дефолт ws://localhost:7080
+    // в проде приводил к бесконечному reconnect-спаму на каждой странице.
+    const wsUrl = process.env.SIP_WS_URL
+    if (!wsUrl) return NextResponse.json({ enabled: false })
+
     const sipDomain = process.env.SIP_DOMAIN ?? 'crm.local'
 
     return NextResponse.json({
+        enabled: true,
         wsUrl,
         sipUri: `sip:${ext.extension}@${sipDomain}`,
         authUser: ext.extension,

@@ -83,7 +83,7 @@ function transformSdpForMegafon(sdp: string): string {
     return out.join('\r\n')
 }
 
-export type SipStatus = 'idle' | 'connecting' | 'registered' | 'unregistered' | 'failed'
+export type SipStatus = 'idle' | 'connecting' | 'registered' | 'unregistered' | 'failed' | 'disabled'
 export type CallState = 'ringing' | 'connecting' | 'active' | 'ended'
 
 export interface IncomingCallInfo {
@@ -260,6 +260,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 creds = await res.json()
             } catch { setStatus('failed'); return }
             if (cancelled) return
+
+            if (creds.enabled === false) {
+                // Телефония не настроена (нет SIP_WS_URL) — не поднимать UA вовсе
+                setStatus('disabled')
+                return
+            }
 
             setExtension(creds.extension)
 
