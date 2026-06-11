@@ -42,6 +42,23 @@ const db = prisma as any
 // Fixed ID for the default project (matches migration seed)
 export const DEFAULT_PROJECT_ID = 'proj_lead_qual'
 
+/**
+ * Идемпотентный сид трёх базовых проектов. Дублирует data-часть миграции
+ * 20260517000000_add_ai_call_projects: на базах, созданных через
+ * `prisma db push` (VPS), миграции не выполнялись, AiCallProject пуст,
+ * и автосид сценария падал с P2003 (FK projectId) → 500 на странице.
+ */
+async function ensureDefaultProjects(): Promise<void> {
+    await db.aiCallProject.createMany({
+        data: [
+            { id: 'proj_lead_qual', name: 'Квалификация лида', slug: 'lead-qualification', description: 'Холодные/тёплые звонки лидам для квалификации перед передачей менеджеру.', isActive: true, sortOrder: 10 },
+            { id: 'proj_churn_winback', name: 'Работа с оттоком', slug: 'churn-winback', description: 'Возврат уходящих или давно неактивных водителей.', isActive: true, sortOrder: 20 },
+            { id: 'proj_nps_survey', name: 'Опрос качества', slug: 'nps-survey', description: 'Сбор обратной связи и оценок качества обслуживания у активных водителей.', isActive: true, sortOrder: 30 },
+        ],
+        skipDuplicates: true,
+    })
+}
+
 export interface AiCallProjectConfig {
     id: string
     name: string
@@ -81,10 +98,14 @@ function rowToConfig(row: any): AiCallScenarioWithProject {
 }
 
 export async function listProjects(opts?: { includeInactive?: boolean }): Promise<AiCallProjectConfig[]> {
-    const rows = await db.aiCallProject.findMany({
+    let rows = await db.aiCallProject.findMany({
         where: opts?.includeInactive ? undefined : { isActive: true },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     })
+    if (rows.length === 0) {
+        await ensureDefaultProjects()
+        rows = await listProjectRows(opts)
+    }
     return rows.map((r: any) => ({
         id: r.id,
         name: r.name,
@@ -92,6 +113,13 @@ export async function listProjects(opts?: { includeInactive?: boolean }): Promis
         description: r.description ?? undefined,
         sortOrder: r.sortOrder,
     }))
+}
+
+function listProjectRows(opts?: { includeInactive?: boolean }) {
+    return db.aiCallProject.findMany({
+        where: opts?.includeInactive ? undefined : { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    })
 }
 
 export async function getProject(id: string): Promise<AiCallProjectConfig | null> {
@@ -127,7 +155,10 @@ export async function listScenarios(opts?: { includeInactive?: boolean; projectI
     }
 
     if (rows.length === 0 && !opts?.projectId) {
-        // Auto-seed default scenario into the default project.
+        // Auto-seed default scenario into the default project. На пустой базе
+        // (db push без data-миграций) сначала гарантируем сам проект — иначе
+        // create() падает с P2003 по FK projectId.
+        await ensureDefaultProjects()
         const seeded = await createScenario({
             name: DEFAULT_SCENARIO_NAME,
             description: DEFAULT_SCENARIO_DESCRIPTION,
