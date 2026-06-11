@@ -85,6 +85,9 @@ COPY --from=builder --chown=app:app /app/public ./public
 COPY --from=builder --chown=app:app /app/prisma ./prisma
 # Скрипты миграций — могут понадобиться в runtime (prisma migrate deploy)
 COPY --from=builder --chown=app:app /app/scripts ./scripts
+# Runtime-data: user-service.ts читает src/data/users.json через fs.readFile
+# (server action). Без этого dropdown «Войти...» пустой и залогиниться нельзя.
+COPY --from=builder --chown=app:app /app/src/data ./src/data
 
 # Удаляем dev-зависимости (npm prune вместо отдельной stage — экономит слой)
 RUN npm prune --omit=dev && npm cache clean --force
