@@ -1,10 +1,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # crm.conf — основной CRM (gravity-mvp)
 #
-# ${CRM_DOMAIN} подставляется при старте nginx из env (см. compose).
-# SSL сертификат: nginx стартует с self-signed (создаётся init-container
-# certs-init). После запуска scripts/get-ssl.sh подменяется на Let's Encrypt.
-# Reload nginx подхватывает новый — без downtime.
+# Этап 1 миграции на yokoone.ru: обслуживаем 3 имени одновременно.
+#   - ${CRM_DOMAIN}      → основной адрес продукта, проксирует на gravity-mvp
+#   - ${CRM_WWW_DOMAIN}  → 301 на ${CRM_DOMAIN}
+#   - ${CRM_APP_DOMAIN}  → legacy, временно проксирует на gravity-mvp (Этап 2
+#                          переключит на 301 → ${CRM_DOMAIN})
+#
+# SSL: certs-init создаёт self-signed для всех имён при первом старте.
+# get-ssl.sh выпускает реальный Let's Encrypt:
+#   - один SAN cert на ${CRM_DOMAIN} + ${CRM_WWW_DOMAIN}
+#   - отдельный cert на ${CRM_APP_DOMAIN}
+#   - отдельный cert на ${BOT_ADMIN_DOMAIN}
 # ─────────────────────────────────────────────────────────────────────────────
 
 upstream gravity_mvp_upstream {
@@ -12,31 +19,31 @@ upstream gravity_mvp_upstream {
     keepalive 32;
 }
 
-# HTTP — ACME challenge + 301 на HTTPS
+# HTTP — ACME challenge + 301 на HTTPS (для всех трёх имён)
 server {
     listen 80;
     listen [::]:80;
-    server_name ${CRM_DOMAIN};
+    server_name ${CRM_DOMAIN} ${CRM_WWW_DOMAIN} ${CRM_APP_DOMAIN};
 
-    # ACME http-01 challenge: certbot пишет файлы в /var/www/letsencrypt,
-    # nginx раздаёт их по этому пути. Без этого Let's Encrypt не подтвердит домен.
     location /.well-known/acme-challenge/ {
         root /var/www/letsencrypt;
     }
 
-    # Всё остальное — редирект на HTTPS
     location / {
         return 301 https://$host$request_uri;
     }
 }
 
-# HTTPS — основной трафик
+# ───────────────────────────────────────────────────────────────────────────
+# HTTPS apex — ОСНОВНОЙ адрес продукта (${CRM_DOMAIN})
+# ───────────────────────────────────────────────────────────────────────────
 server {
     listen 443 ssl;
     http2 on;
     listen [::]:443 ssl;
     server_name ${CRM_DOMAIN};
 
+    # SAN cert покрывает apex + www
     ssl_certificate     /etc/letsencrypt/live/${CRM_DOMAIN}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/${CRM_DOMAIN}/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
@@ -45,16 +52,13 @@ server {
     ssl_session_timeout 1d;
     ssl_prefer_server_ciphers off;
 
-    # HSTS включаем только после того, как боевой Let's Encrypt сертификат
-    # стабильно работает >= 1 неделю. До этого — комментировано:
+    # HSTS включаем после стабильной недели на боевом cert.
     # add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
-    # Боковые заголовки безопасности
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
-    # Большие медиа в чатах (голосовые, видео)
     client_max_body_size 64m;
 
     location / {
@@ -64,7 +68,60 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        # WebSocket upgrade для realtime (SSE/WS из gravity-mvp)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+
+# ───────────────────────────────────────────────────────────────────────────
+# HTTPS www — 301 на apex (тот же SAN cert)
+# ───────────────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    http2 on;
+    listen [::]:443 ssl;
+    server_name ${CRM_WWW_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${CRM_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CRM_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    return 301 https://${CRM_DOMAIN}$request_uri;
+}
+
+# ───────────────────────────────────────────────────────────────────────────
+# HTTPS app — LEGACY, временно полный CRM (Этап 1).
+# В Этапе 2 будет заменено на `return 301 https://${CRM_DOMAIN}$request_uri;`
+# ───────────────────────────────────────────────────────────────────────────
+server {
+    listen 443 ssl;
+    http2 on;
+    listen [::]:443 ssl;
+    server_name ${CRM_APP_DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${CRM_APP_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${CRM_APP_DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    client_max_body_size 64m;
+
+    location / {
+        proxy_pass http://gravity_mvp_upstream;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_read_timeout 300s;

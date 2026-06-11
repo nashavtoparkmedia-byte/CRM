@@ -230,12 +230,19 @@ services:
     environment:
       CRM_DOMAIN: ${CRM_DOMAIN:?CRM_DOMAIN required}
       BOT_ADMIN_DOMAIN: ${BOT_ADMIN_DOMAIN:?BOT_ADMIN_DOMAIN required}
+      # Опциональные — для миграции на yokoone.ru.
+      # Если не заданы — пропускаются (нет нужды генерить self-signed).
+      # Default "_disabled_*" — nginx-блоки существуют, но server_name никогда
+      # не сматчится, поэтому они инертны на старых установках без этих env.
+      CRM_WWW_DOMAIN: ${CRM_WWW_DOMAIN:-_disabled_www_}
+      CRM_APP_DOMAIN: ${CRM_APP_DOMAIN:-_disabled_app_}
     command:
       - sh
       - -c
       - |
         apk add --no-cache openssl >/dev/null
-        for d in "$$CRM_DOMAIN" "$$BOT_ADMIN_DOMAIN"; do
+        for d in "$$CRM_DOMAIN" "$$BOT_ADMIN_DOMAIN" "$$CRM_APP_DOMAIN"; do
+          [ -z "$$d" ] && continue
           cert_dir="/etc/letsencrypt/live/$$d"
           if [ -f "$$cert_dir/fullchain.pem" ]; then
             echo "[$$d] cert exists, skip"
@@ -248,6 +255,8 @@ services:
             -out "$$cert_dir/fullchain.pem" \
             -subj "/CN=$$d" 2>/dev/null
         done
+        # Для www nginx использует тот же cert что и apex (SAN), отдельный
+        # bootstrap не нужен.
         echo "Done."
 
   # ─── Nginx: входная точка из интернета ───────────────────────────────────
@@ -275,6 +284,14 @@ services:
     environment:
       CRM_DOMAIN: ${CRM_DOMAIN:?CRM_DOMAIN required}
       BOT_ADMIN_DOMAIN: ${BOT_ADMIN_DOMAIN:?BOT_ADMIN_DOMAIN required}
+      # Для миграции на yokoone.ru — crm.conf.template использует эти имена.
+      # Если пусто — envsubst подставит пустую строку, что превратит
+      # `server_name ${CRM_DOMAIN} ${CRM_WWW_DOMAIN} ${CRM_APP_DOMAIN};` в
+      # валидный директив с одним именем.
+      # Default "_disabled_*" — nginx-блоки существуют, но server_name никогда
+      # не сматчится, поэтому они инертны на старых установках без этих env.
+      CRM_WWW_DOMAIN: ${CRM_WWW_DOMAIN:-_disabled_www_}
+      CRM_APP_DOMAIN: ${CRM_APP_DOMAIN:-_disabled_app_}
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx/conf.d
     networks:
       - crm_internal

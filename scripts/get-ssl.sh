@@ -50,9 +50,16 @@ for var in CRM_DOMAIN BOT_ADMIN_DOMAIN LETSENCRYPT_EMAIL; do
     exit 1
   fi
 done
+# CRM_WWW_DOMAIN и CRM_APP_DOMAIN — опциональные (для миграции на yokoone.ru).
+# Если заданы — будут добавлены к выпуску cert.
+CRM_WWW_DOMAIN="${CRM_WWW_DOMAIN:-}"
+CRM_APP_DOMAIN="${CRM_APP_DOMAIN:-}"
 
-echo "==> SSL $MODE for: $CRM_DOMAIN, $BOT_ADMIN_DOMAIN"
-echo "    email: $LETSENCRYPT_EMAIL"
+echo "==> SSL $MODE for:"
+echo "    CRM:       $CRM_DOMAIN${CRM_WWW_DOMAIN:+ + $CRM_WWW_DOMAIN (SAN)}"
+echo "    Bot admin: $BOT_ADMIN_DOMAIN"
+[ -n "$CRM_APP_DOMAIN" ] && echo "    Legacy:    $CRM_APP_DOMAIN"
+echo "    email:     $LETSENCRYPT_EMAIL"
 [ -n "$STAGING_FLAG" ] && echo "    STAGING mode (test certificates)"
 
 # ── Ensure nginx is running (needed for webroot challenge) ───────────────────
@@ -62,25 +69,47 @@ if ! docker compose -f "$COMPOSE_FILE" ps nginx | grep -q "Up\|running"; then
   sleep 5
 fi
 
+# Один cert per "live path". Имя папки = первый -d (Subject CN).
+# Дополнительные -d попадают в SAN.
+issue_cert() {
+  local primary="$1"; shift
+  local sans=("$@")
+  local args=(-d "$primary")
+  local desc="$primary"
+  for s in "${sans[@]}"; do
+    args+=(-d "$s")
+    desc+=" + $s"
+  done
+  echo "==> Issuing certificate for $desc..."
+  docker run --rm \
+    -v crm_nginx_certs:/etc/letsencrypt \
+    -v crm_nginx_www:/var/www/letsencrypt \
+    certbot/certbot:latest certonly \
+    --webroot -w /var/www/letsencrypt \
+    --non-interactive --agree-tos \
+    --force-renewal \
+    --cert-name "$primary" \
+    $STAGING_FLAG \
+    --email "$LETSENCRYPT_EMAIL" \
+    "${args[@]}"
+}
+
 # ── Run certbot ──────────────────────────────────────────────────────────────
 if [ "$MODE" = "issue" ]; then
-  # Выпускаем ДВА отдельных сертификата — по одному на каждый домен.
-  # Это потому что nginx templates ссылаются на /etc/letsencrypt/live/${DOMAIN}/
-  # и certbot создаёт папку по имени первого -d. Один сертификат с SAN на оба
-  # домена работал бы, но требовал бы symlinks — нежелательная сложность.
-  for domain in "$CRM_DOMAIN" "$BOT_ADMIN_DOMAIN"; do
-    echo "==> Issuing certificate for $domain..."
-    docker run --rm \
-      -v crm_nginx_certs:/etc/letsencrypt \
-      -v crm_nginx_www:/var/www/letsencrypt \
-      certbot/certbot:latest certonly \
-      --webroot -w /var/www/letsencrypt \
-      --non-interactive --agree-tos \
-      --force-renewal \
-      $STAGING_FLAG \
-      --email "$LETSENCRYPT_EMAIL" \
-      -d "$domain"
-  done
+  # 1. CRM SAN cert: apex (+ www если задан). Папка live/$CRM_DOMAIN/.
+  if [ -n "$CRM_WWW_DOMAIN" ]; then
+    issue_cert "$CRM_DOMAIN" "$CRM_WWW_DOMAIN"
+  else
+    issue_cert "$CRM_DOMAIN"
+  fi
+
+  # 2. Bot admin cert
+  issue_cert "$BOT_ADMIN_DOMAIN"
+
+  # 3. Legacy app cert (если задан и нет уже валидного)
+  if [ -n "$CRM_APP_DOMAIN" ]; then
+    issue_cert "$CRM_APP_DOMAIN"
+  fi
 else
   echo "==> Renewing existing certificates..."
   docker run --rm \
