@@ -19,7 +19,7 @@ export default function BotAdminPage() {
 
                 <div className="flex-1 bg-black/5 rounded-xl border shadow-inner overflow-hidden relative">
                     <iframe
-                        src="http://localhost:3004"
+                        src={process.env.BOT_ADMIN_URL ?? 'http://localhost:3004'}
                         className="w-full h-full border-0 absolute top-0 left-0"
                         title="Telegram Bot Admin Panel"
                         allow="clipboard-write"
