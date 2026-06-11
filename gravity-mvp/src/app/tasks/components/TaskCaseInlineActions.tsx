@@ -190,7 +190,7 @@ function RescheduleMenu({ busy, onPick }: { busy: boolean; onPick: (iso: string)
                         +3 дня
                     </MenuItem>
                     <div className="border-t border-[#EEF2FF] my-1" />
-                    <label className="flex items-center gap-2 px-3 py-1.5 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer">
+                    <label className="flex items-center gap-[2px] px-3 py-1.5 text-[#64748B] hover:bg-[#F8FAFC] cursor-pointer">
                         <span>Выбрать дату</span>
                         <input
                             type="date"

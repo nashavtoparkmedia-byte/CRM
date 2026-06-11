@@ -38,19 +38,19 @@ export function ScoringSettingsClient({ initialThresholds }: ScoringSettingsClie
     const statusFields = FIELDS.filter(f => f.group === "status")
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-[8px]">
             {/* Segments */}
             <div className="rounded-xl border bg-card p-6 shadow-sm">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground mb-4">
+                <h2 className="flex items-center gap-[2px] text-lg font-semibold text-foreground mb-[4px]">
                     <Settings size={20} className="text-primary" />
                     Пороги сегментов
                 </h2>
                 <p className="text-sm text-muted-foreground mb-6">
                     Определяют, к какому сегменту относится водитель на основе количества поездок за неделю.
                 </p>
-                <div className="space-y-4">
+                <div className="space-y-[4px]">
                     {segmentFields.map((field) => (
-                        <div key={field.key} className="flex items-center gap-4">
+                        <div key={field.key} className="flex items-center gap-[4px]">
                             <label className="flex-1 text-sm font-medium text-foreground">
                                 {field.label}
                             </label>
@@ -60,7 +60,7 @@ export function ScoringSettingsClient({ initialThresholds }: ScoringSettingsClie
                                 onChange={(e) =>
                                     setValues({ ...values, [field.key]: Number(e.target.value) })
                                 }
-                                className="w-24 h-10 text-center bg-secondary/50"
+                                className="w-[24px] h-10 text-center bg-secondary/50"
                                 min={0}
                             />
                         </div>
@@ -70,16 +70,16 @@ export function ScoringSettingsClient({ initialThresholds }: ScoringSettingsClie
 
             {/* Statuses */}
             <div className="rounded-xl border bg-card p-6 shadow-sm">
-                <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground mb-4">
+                <h2 className="flex items-center gap-[2px] text-lg font-semibold text-foreground mb-[4px]">
                     <Settings size={20} className="text-primary" />
                     Пороги статусов
                 </h2>
                 <p className="text-sm text-muted-foreground mb-6">
                     Определяют статус водителя на основе количества дней без поездок подряд.
                 </p>
-                <div className="space-y-4">
+                <div className="space-y-[4px]">
                     {statusFields.map((field) => (
-                        <div key={field.key} className="flex items-center gap-4">
+                        <div key={field.key} className="flex items-center gap-[4px]">
                             <label className="flex-1 text-sm font-medium text-foreground">
                                 {field.label}
                             </label>
@@ -89,7 +89,7 @@ export function ScoringSettingsClient({ initialThresholds }: ScoringSettingsClie
                                 onChange={(e) =>
                                     setValues({ ...values, [field.key]: Number(e.target.value) })
                                 }
-                                className="w-24 h-10 text-center bg-secondary/50"
+                                className="w-[24px] h-10 text-center bg-secondary/50"
                                 min={0}
                             />
                         </div>
@@ -98,8 +98,8 @@ export function ScoringSettingsClient({ initialThresholds }: ScoringSettingsClie
             </div>
 
             {/* Save */}
-            <div className="flex items-center gap-4">
-                <Button onClick={handleSave} disabled={status === "saving"} className="gap-2 px-8">
+            <div className="flex items-center gap-[4px]">
+                <Button onClick={handleSave} disabled={status === "saving"} className="gap-[2px] px-[8px]">
                     <Save size={16} />
                     {status === "saving" ? "Сохранение..." : "Сохранить"}
                 </Button>

@@ -85,7 +85,7 @@ export default function TaskTimelineView() {
     return (
         <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200 overflow-hidden relative">
             <div className="flex-1 overflow-auto custom-scrollbar bg-white">
-                <div className="min-w-[1000px] flex flex-col min-h-full pb-4">
+                <div className="min-w-[1000px] flex flex-col min-h-full pb-[4px]">
                     {/* Table Header */}
                     <div className="flex sticky top-0 z-10 border-b border-gray-200 bg-gray-50 shadow-sm">
                         <div className="w-[320px] shrink-0 p-3 flex items-center border-r border-gray-200 bg-gray-50">
@@ -97,7 +97,7 @@ export default function TaskTimelineView() {
                         </div>
 
                         {days.map((d, i) => (
-                            <div key={i} className={`flex-1 min-w-[80px] p-2 flex flex-col items-center justify-center border-r border-gray-200 last:border-r-0 ${i === 0 ? 'bg-indigo-50/90' : 'bg-gray-50'}`}>
+                            <div key={i} className={`flex-1 min-w-[80px] p-[2px] flex flex-col items-center justify-center border-r border-gray-200 last:border-r-0 ${i === 0 ? 'bg-indigo-50/90' : 'bg-gray-50'}`}>
                                 <span className={`text-[13px] font-semibold ${i === 0 ? 'text-indigo-600' : 'text-gray-700'}`}>
                                     {formatDayHeader(d, i)}
                                 </span>
@@ -113,11 +113,11 @@ export default function TaskTimelineView() {
                         {groupedDrivers.map(group => (
                             <div key={group.driverId} className="flex border-b border-gray-100 hover:bg-gray-50/50 transition-colors group/row">
                                 {/* Driver Info */}
-                                <div className="w-[320px] shrink-0 h-[56px] px-3 flex items-center gap-2 border-r border-gray-200 bg-white group-hover/row:bg-transparent">
-                                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[12px] flex items-center justify-center shrink-0">
+                                <div className="w-[320px] shrink-0 h-[56px] px-3 flex items-center gap-[2px] border-r border-gray-200 bg-white group-hover/row:bg-transparent">
+                                    <div className="w-[8px] h-[8px] rounded-full bg-indigo-100 text-indigo-600 font-bold text-[12px] flex items-center justify-center shrink-0">
                                         {group.driverName.charAt(0)}
                                     </div>
-                                    <div className="flex-1 min-w-0 pr-2 cursor-pointer" onClick={() => router.push(`/drivers/${group.driverId}`)}>
+                                    <div className="flex-1 min-w-0 pr-[2px] cursor-pointer" onClick={() => router.push(`/drivers/${group.driverId}`)}>
                                         <div className="text-[13px] font-semibold text-gray-900 whitespace-nowrap hover:text-[#2AABEE] transition-colors">
                                             {group.driverName}
                                         </div>
@@ -162,7 +162,7 @@ export default function TaskTimelineView() {
 
     {groupedDrivers.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <Inbox size={32} className="mb-2 opacity-50" />
+            <Inbox size={32} className="mb-[2px] opacity-50" />
             <span className="text-[13px]">Нет активных задач в этом периоде</span>
         </div>
     )}
@@ -194,7 +194,7 @@ else if (primaryTask.status === 'done') baseColor = 'text-emerald-800 bg-emerald
 
 return (
 <div 
-className={`flex items-center justify-center h-[28px] px-2 rounded-md font-bold text-[12px] transition-colors cursor-pointer ${baseColor}`}
+className={`flex items-center justify-center h-[28px] px-[2px] rounded-md font-bold text-[12px] transition-colors cursor-pointer ${baseColor}`}
 title={tasks.map(t => t.title).join('\n')}
 >
 <div className="flex items-center gap-1">

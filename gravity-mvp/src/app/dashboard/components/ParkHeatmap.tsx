@@ -14,15 +14,15 @@ function getHeatColor(percent: number): string {
 export function ParkHeatmap({ data }: { data: HeatmapDay[] }) {
     return (
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
-            <div className="mb-4">
+            <div className="mb-[4px]">
                 <h3 className="text-lg font-bold text-foreground">Активность парка</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Последние 7 дней</p>
             </div>
 
-            <div className="flex gap-2 justify-between">
+            <div className="flex gap-[2px] justify-between">
                 {data.map((day) => (
                     <div key={day.date} className="flex-1 text-center group">
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-2">
+                        <div className="text-[10px] font-bold text-muted-foreground uppercase mb-[2px]">
                             {day.dayName}
                         </div>
                         <div
@@ -41,7 +41,7 @@ export function ParkHeatmap({ data }: { data: HeatmapDay[] }) {
             </div>
 
             {/* Legend */}
-            <div className="flex items-center justify-center gap-3 mt-4 text-[10px] text-muted-foreground">
+            <div className="flex items-center justify-center gap-3 mt-[4px] text-[10px] text-muted-foreground">
                 <div className="flex items-center gap-1">
                     <div className="w-3 h-3 rounded bg-red-500" />
                     <span>0-20%</span>

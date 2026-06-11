@@ -12,7 +12,7 @@ export default async function MaxSettingsPage() {
 
     return (
         <PageContainer>
-            <div className="flex flex-col gap-8 animate-in fade-in duration-500 pb-12">
+            <div className="flex flex-col gap-[8px] animate-in fade-in duration-500 pb-[12px]">
                 <div className="flex items-start gap-3 border-b pb-6">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600 mt-0.5">
                         <MessageSquare size={18} />

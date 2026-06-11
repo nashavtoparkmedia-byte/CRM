@@ -155,9 +155,9 @@ export default function TaskListExcelButtons() {
                         <div className="absolute right-0 top-full mt-1 z-40 min-w-[240px] bg-white rounded-lg shadow-md border border-[#E4ECFC] py-1 text-[13px]">
                             <button
                                 onClick={() => runExport('data')}
-                                className="w-full flex items-start gap-2 px-3 py-2 hover:bg-[#F8FAFC] transition-colors text-left"
+                                className="w-full flex items-start gap-[2px] px-3 py-[2px] hover:bg-[#F8FAFC] transition-colors text-left"
                             >
-                                <FileSpreadsheet className="w-4 h-4 text-[#1E40AF] mt-0.5 shrink-0" />
+                                <FileSpreadsheet className="w-[4px] h-[4px] text-[#1E40AF] mt-0.5 shrink-0" />
                                 <div>
                                     <div className="font-medium text-[#0F172A]">Рабочий Excel</div>
                                     <div className="text-[11px] text-[#64748B]">Все текущие кейсы с данными</div>
@@ -165,9 +165,9 @@ export default function TaskListExcelButtons() {
                             </button>
                             <button
                                 onClick={() => runExport('template')}
-                                className="w-full flex items-start gap-2 px-3 py-2 hover:bg-[#F8FAFC] transition-colors text-left"
+                                className="w-full flex items-start gap-[2px] px-3 py-[2px] hover:bg-[#F8FAFC] transition-colors text-left"
                             >
-                                <FileText className="w-4 h-4 text-[#64748B] mt-0.5 shrink-0" />
+                                <FileText className="w-[4px] h-[4px] text-[#64748B] mt-0.5 shrink-0" />
                                 <div>
                                     <div className="font-medium text-[#0F172A]">Шаблон для импорта</div>
                                     <div className="text-[11px] text-[#64748B]">Пустой файл со структурой и валидациями</div>
@@ -235,7 +235,7 @@ function ImportPreviewDialog({
                     <DialogTitle>Импорт Отток — предпросмотр</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid grid-cols-4 gap-2 mb-3 text-[12px]">
+                <div className="grid grid-cols-4 gap-[2px] mb-3 text-[12px]">
                     <Stat label="Всего строк" value={preview.totalRows} />
                     <Stat label="Создастся"    value={preview.createRows} tone={preview.createRows > 0 ? 'info' : 'ok'} />
                     <Stat label="Обновится"    value={preview.updateRows} tone={preview.updateRows > 0 ? 'info' : 'ok'} />
@@ -244,7 +244,7 @@ function ImportPreviewDialog({
 
                 {preview.unmappedHeaders.length > 0 && (
                     <div className="mb-3 border border-[#FCD34D] bg-[#FEF3C7] rounded-lg p-3">
-                        <div className="text-[13px] font-semibold text-[#92400E] mb-2">
+                        <div className="text-[13px] font-semibold text-[#92400E] mb-[2px]">
                             Сопоставление колонок ({preview.unmappedHeaders.length})
                         </div>
                         <div className="text-[12px] text-[#78350F] mb-3">
@@ -252,7 +252,7 @@ function ImportPreviewDialog({
                         </div>
                         <div className="space-y-1.5">
                             {preview.unmappedHeaders.map(h => (
-                                <div key={h.letter} className="flex items-center gap-2 text-[12px]">
+                                <div key={h.letter} className="flex items-center gap-[2px] text-[12px]">
                                     <span className="font-mono text-[11px] text-[#78350F] w-10 shrink-0">
                                         {h.letter}
                                     </span>
@@ -263,7 +263,7 @@ function ImportPreviewDialog({
                                     <select
                                         value={mapDraft[h.letter] ?? ''}
                                         onChange={(e) => setMapDraft(m => ({ ...m, [h.letter]: e.target.value }))}
-                                        className="bg-white border border-[#E4ECFC] rounded-lg px-2 py-1 text-[12px] text-[#0F172A] outline-none focus:border-[#1E40AF] min-w-[220px]"
+                                        className="bg-white border border-[#E4ECFC] rounded-lg px-[2px] py-1 text-[12px] text-[#0F172A] outline-none focus:border-[#1E40AF] min-w-[220px]"
                                     >
                                         <option value="">— не импортировать</option>
                                         {CHURN_COLUMNS.map(col => (
@@ -301,20 +301,20 @@ function ImportPreviewDialog({
                         <table className="w-full text-[12px]">
                             <thead className="bg-[#F8FAFC] sticky top-0 z-10">
                                 <tr className="text-left">
-                                    <th className="px-2 py-1.5 border-b">Строка</th>
-                                    <th className="px-2 py-1.5 border-b">ID кейса</th>
-                                    <th className="px-2 py-1.5 border-b">Изменения</th>
-                                    <th className="px-2 py-1.5 border-b">Ошибки</th>
+                                    <th className="px-[2px] py-1.5 border-b">Строка</th>
+                                    <th className="px-[2px] py-1.5 border-b">ID кейса</th>
+                                    <th className="px-[2px] py-1.5 border-b">Изменения</th>
+                                    <th className="px-[2px] py-1.5 border-b">Ошибки</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {preview.sampleDiffs.map((d, i) => (
                                     <tr key={i} className="border-b border-[#EEF2FF] align-top">
-                                        <td className="px-2 py-1.5 text-[#64748B]">{d.rowNumber}</td>
-                                        <td className="px-2 py-1.5 font-mono text-[11px] text-[#475569]" title={d.taskId}>
+                                        <td className="px-[2px] py-1.5 text-[#64748B]">{d.rowNumber}</td>
+                                        <td className="px-[2px] py-1.5 font-mono text-[11px] text-[#475569]" title={d.taskId}>
                                             {d.taskId.slice(-6)}
                                         </td>
-                                        <td className="px-2 py-1.5">
+                                        <td className="px-[2px] py-1.5">
                                             {d.changes.length === 0 ? (
                                                 <span className="text-[#94A3B8]">—</span>
                                             ) : (
@@ -333,7 +333,7 @@ function ImportPreviewDialog({
                                                 </ul>
                                             )}
                                         </td>
-                                        <td className="px-2 py-1.5 text-[#B91C1C]">
+                                        <td className="px-[2px] py-1.5 text-[#B91C1C]">
                                             {d.errors.join('; ') || '—'}
                                         </td>
                                     </tr>
@@ -344,18 +344,18 @@ function ImportPreviewDialog({
                 </div>
 
 
-                <div className="flex justify-end gap-2 mt-3">
+                <div className="flex justify-end gap-[2px] mt-3">
                     <button
                         onClick={onClose}
                         disabled={applying}
-                        className="px-4 py-1.5 rounded-lg border border-[#E4ECFC] text-[#334155] text-[13px] font-medium hover:bg-[#F8FAFC] disabled:opacity-50"
+                        className="px-[4px] py-1.5 rounded-lg border border-[#E4ECFC] text-[#334155] text-[13px] font-medium hover:bg-[#F8FAFC] disabled:opacity-50"
                     >
                         Отмена
                     </button>
                     <button
                         onClick={onApply}
                         disabled={!canApply}
-                        className="px-4 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] disabled:opacity-40 flex items-center gap-1.5"
+                        className="px-[4px] py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] disabled:opacity-40 flex items-center gap-1.5"
                     >
                         {applying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                         Применить{preview.rowsWithChanges > 0 ? ` (${preview.rowsWithChanges})` : ''}
@@ -373,7 +373,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 'ok
         tone === 'info' ? 'text-[#1E40AF]' :
                           'text-[#0F172A]'
     return (
-        <div className="bg-[#F8FAFC] border border-[#E4ECFC] rounded-lg px-3 py-2">
+        <div className="bg-[#F8FAFC] border border-[#E4ECFC] rounded-lg px-3 py-[2px]">
             <div className="text-[#64748B] text-[11px]">{label}</div>
             <div className={`text-[18px] font-semibold ${color}`}>{value}</div>
         </div>

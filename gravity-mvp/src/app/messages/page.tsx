@@ -103,8 +103,8 @@ export default async function MessagesPage({
 
     return (
         <div className="h-[calc(100vh-theme(spacing.16))] flex flex-col">
-            <div className="px-4 pt-4">
-                <SectionDescription sectionKey="messages" className="mb-4" />
+            <div className="px-[4px] pt-[4px]">
+                <SectionDescription sectionKey="messages" className="mb-[4px]" />
             </div>
             <div className="flex-1 overflow-hidden relative border-t">
                 <ChatsLayout>

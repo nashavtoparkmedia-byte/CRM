@@ -35,16 +35,16 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
         >
             {children}
             {show && (
-                <div className="absolute z-[100] left-0 top-full mt-1 w-72 rounded-lg bg-white shadow-xl border border-gray-200 p-4 dark:bg-zinc-900 dark:border-zinc-800">
+                <div className="absolute z-[100] left-0 top-full mt-1 w-72 rounded-lg bg-white shadow-xl border border-gray-200 p-[4px] dark:bg-zinc-900 dark:border-zinc-800">
                     <div className="font-semibold text-sm mb-1">{driverName}</div>
-                    {phone && <div className="text-sm text-muted-foreground mb-2">📞 {phone}</div>}
-                    <div className="border-t pt-2">
+                    {phone && <div className="text-sm text-muted-foreground mb-[2px]">📞 {phone}</div>}
+                    <div className="border-t pt-[2px]">
                         {loading && <div className="text-xs text-muted-foreground">Загрузка...</div>}
                         {events && events.length === 0 && (
                             <div className="text-xs text-muted-foreground">Нет событий</div>
                         )}
                         {events && events.length > 0 && (
-                            <div className="space-y-4">
+                            <div className="space-y-[4px]">
                                 {events.map((e) => {
                                     // Special rendering for completed fleet check with detailed results
                                     if (e.eventType === 'fleet_check_completed' && e.payload?.result) {
@@ -53,8 +53,8 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
                                         const act = r.activity || {};
                                         const qual = r.quality || {};
                                         return (
-                                            <div key={e.id} className="text-xs space-y-2 border-b pb-2 last:border-0">
-                                                <div className="flex items-center gap-2">
+                                            <div key={e.id} className="text-xs space-y-[2px] border-b pb-[2px] last:border-0">
+                                                <div className="flex items-center gap-[2px]">
                                                     <span>{EVENT_ICONS[e.eventType] || '✅'}</span>
                                                     <span className="text-muted-foreground">
                                                         {new Date(e.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
@@ -63,7 +63,7 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
                                                 </div>
 
                                                 {/* Profile & Quality */}
-                                                <div className="bg-gray-50 p-2 rounded-md">
+                                                <div className="bg-gray-50 p-[2px] rounded-md">
                                                     <div className="mb-1">
                                                         <span className="font-semibold">{profile.name || driverName}</span>
                                                     </div>
@@ -74,7 +74,7 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
                                                 </div>
 
                                                 {/* Activity Stats */}
-                                                <div className="grid grid-cols-2 gap-2 text-gray-600">
+                                                <div className="grid grid-cols-2 gap-[2px] text-gray-600">
                                                     {act.totalOrders && (
                                                         <div className="col-span-2">Всего: {act.totalOrders}</div>
                                                     )}
@@ -84,7 +84,7 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
 
                                                 {/* Monthly breakdown */}
                                                 {act.monthlyStats && Array.isArray(act.monthlyStats) && act.monthlyStats.length > 0 ? (
-                                                    <div className="mt-2 text-gray-600">
+                                                    <div className="mt-[2px] text-gray-600">
                                                         <div className="font-medium mb-1">Активность (мес):</div>
                                                         <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                                                             {act.monthlyStats.filter((st: any) => typeof st === 'object' && st !== null && st.month).map((st: any, i: number) => {
@@ -113,7 +113,7 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
                                                                         <span className="text-gray-800 capitalize">{monthLabel}</span>
                                                                         <span className="text-gray-900">Всего: {total}</span>
                                                                     </div>
-                                                                    <div className="flex flex-wrap gap-x-2 gap-y-0.5 opacity-90 leading-tight">
+                                                                    <div className="flex flex-wrap gap-x-[2px] gap-y-0.5 opacity-90 leading-tight">
                                                                         {comf > 0 && <span className="text-yellow-600 font-medium">К: {comf}</span>}
                                                                         {econ > 0 && <span className="text-blue-500 font-medium">Э: {econ}</span>}
                                                                         {kid > 0 && <span className="text-rose-500 font-medium">Д: {kid}</span>}
@@ -128,9 +128,9 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
 
                                                 {/* Reviews */}
                                                 {r.topReviews && typeof r.topReviews === 'object' && Object.keys(r.topReviews).length > 0 && (
-                                                    <div className="mt-2 text-gray-600 border-t pt-1">
+                                                    <div className="mt-[2px] text-gray-600 border-t pt-1">
                                                         <div className="font-medium mb-1">Отзывы (топ):</div>
-                                                        <ul className="list-disc pl-4 text-[10px] space-y-0.5">
+                                                        <ul className="list-disc pl-[4px] text-[10px] space-y-0.5">
                                                             {Object.entries(r.topReviews).slice(0, 3).map(([k, v]) => (
                                                                 <li key={k}>{k}: {String(v)}</li>
                                                             ))}
@@ -140,11 +140,11 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
 
                                                 {/* Other Parks Notice */}
                                                 {r.otherParks && Array.isArray(r.otherParks) && r.otherParks.length > 0 && r.otherParks[0]?.rawText && (
-                                                    <details className="mt-2 text-[10px] bg-amber-50 rounded px-1.5 py-1 cursor-pointer">
+                                                    <details className="mt-[2px] text-[10px] bg-amber-50 rounded px-1.5 py-1 cursor-pointer">
                                                         <summary className="text-amber-800 font-medium select-none outline-none">
                                                             ⚠️ Найдены другие парки ({r.otherParks.length})
                                                         </summary>
-                                                        <div className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-[9px] text-amber-900/80 leading-tight border-t border-amber-200/50 pt-1">
+                                                        <div className="mt-1 max-h-[32px] overflow-y-auto whitespace-pre-wrap text-[9px] text-amber-900/80 leading-tight border-t border-amber-200/50 pt-1">
                                                             {r.otherParks[0].rawText.split(' | ').filter((row: string) => !row.includes('Машина\tКомпания')).map((row: string, idx: number) => (
                                                                 <div key={idx} className="border-b border-amber-200/50 last:border-0 py-0.5">{row.replace(/\t/g, ' - ')}</div>
                                                             ))}
@@ -157,7 +157,7 @@ export function DriverHoverCard({ driverId, driverName, phone, children }: Drive
 
                                     // Default rendering for other events
                                     return (
-                                        <div key={e.id} className="flex items-center gap-2 text-xs">
+                                        <div key={e.id} className="flex items-center gap-[2px] text-xs">
                                             <span>{EVENT_ICONS[e.eventType] || '•'}</span>
                                             <span className="text-muted-foreground">
                                                 {new Date(e.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}

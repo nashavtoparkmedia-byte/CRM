@@ -171,10 +171,10 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
     return (
         <>
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-[8px]">
             {initialConnections.length > 0 && (
                 <div className="animate-in fade-in duration-500">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-[4px]">
                         <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты ({initialConnections.length})</h2>
                         {!isAddingNew && (
                             <Button variant="outline" size="sm" onClick={() => setIsAddingNew(true)}>
@@ -183,7 +183,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[4px]">
                         {initialConnections.map(conn => (
                             <div key={conn.id} className="flex flex-col rounded-2xl border bg-card p-5 shadow-sm transition-all">
 
@@ -194,14 +194,14 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         </div>
                                         <div className="min-w-0">
                                             {editingId === conn.id ? (
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-[2px]">
                                                     <Input
                                                         value={editName}
                                                         onChange={e => setEditName(e.target.value)}
-                                                        className="h-7 text-sm py-0 w-32"
+                                                        className="h-7 text-sm py-0 w-[32px]"
                                                         autoFocus
                                                     />
-                                                    <Button size="sm" className="h-7 text-xs px-2" onClick={() => handleSaveName(conn.id, conn.isDefault)}>Сохр.</Button>
+                                                    <Button size="sm" className="h-7 text-xs px-[2px]" onClick={() => handleSaveName(conn.id, conn.isDefault)}>Сохр.</Button>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -210,11 +210,11 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                                         <Edit2 size={11} />
                                                     </button>
                                                     {conn.isDefault && (
-                                                        <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-foreground/70">основной</span>
+                                                        <span className="rounded-full bg-primary/15 px-[2px] py-0.5 text-[10px] font-medium text-foreground/70">основной</span>
                                                     )}
                                                 </div>
                                             )}
-                                            <div className="flex items-center gap-2 mt-0.5">
+                                            <div className="flex items-center gap-[2px] mt-0.5">
                                                 <span className="text-xs text-muted-foreground">{conn.phoneNumber || `ID: ${conn.id}`}</span>
                                                 {conn.isPaused ? (
                                                     <span className="flex items-center gap-1 text-[11px] text-amber-600">
@@ -234,7 +234,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
                                 <div className="flex items-center justify-end gap-1 pt-3 mt-3 border-t border-dashed">
                                     {!conn.isDefault && !conn.isPaused && (
-                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
+                                        <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
                                             <Star size={12} className="mr-1.5" /> Основным
                                         </Button>
                                     )}
@@ -242,7 +242,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                                            className="h-[8px] px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                                             onClick={() => setResumeDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}
                                         >
                                             <PlayCircle size={13} className="mr-1.5" /> Включить
@@ -251,13 +251,13 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                                            className="h-[8px] px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
                                             onClick={() => setPauseDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}
                                         >
                                             <PauseCircle size={13} className="mr-1.5" /> Пауза
                                         </Button>
                                     )}
-                                    <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}>
+                                    <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}>
                                         <LogOut size={13} className="mr-1.5" /> Отключить
                                     </Button>
                                 </div>
@@ -271,7 +271,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                 <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 animate-in fade-in duration-500 bg-muted/30 p-5 rounded-2xl border">
                     <div className="rounded-2xl border bg-card p-5 shadow-sm">
                         <div className="flex justify-between items-center mb-5">
-                            <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                            <h2 className="flex items-center gap-[2px] text-base font-semibold text-foreground">
                                 <div className="rounded-lg bg-sky-100 p-1.5 text-sky-500">
                                     <Send size={16} />
                                 </div>
@@ -286,7 +286,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                             {!hasExisting && (
                                 <>
                                     <div>
-                                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">App API ID</label>
+                                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">App API ID</label>
                                         <Input
                                             placeholder="напр. 1234567"
                                             value={apiId}
@@ -296,7 +296,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         />
                                     </div>
                                     <div>
-                                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">App API Hash</label>
+                                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">App API Hash</label>
                                         <Input
                                             placeholder="напр. ab12cd34..."
                                             value={apiHash}
@@ -307,13 +307,13 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                     </div>
                                 </>
                             )}
-                            <div className={hasExisting ? "" : "mt-4"}>
+                            <div className={hasExisting ? "" : "mt-[4px]"}>
                                 <Button
                                     type="submit"
                                     disabled={loading || status === 'awaiting_scan'}
                                     className="w-full py-6 text-base shadow-md"
                                 >
-                                    {loading ? <Loader2 className="mr-2 animate-spin" /> : <QrCode size={18} className="mr-2" />}
+                                    {loading ? <Loader2 className="mr-[2px] animate-spin" /> : <QrCode size={18} className="mr-[2px]" />}
                                     Сгенерировать QR для входа
                                 </Button>
                             </div>
@@ -323,7 +323,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                     <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border bg-card p-6 shadow-sm">
                         {status === 'idle' && (
                             <div className="text-center">
-                                <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+                                <div className="mx-auto mb-[4px] flex h-20 w-20 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
                                     <QrCode size={40} />
                                 </div>
                                 <p className="text-sm text-muted-foreground">
@@ -336,17 +336,17 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
                         {status === 'generating_qr' && (
                             <div className="text-center">
-                                <Loader2 className="mx-auto mb-4 animate-spin text-primary" size={48} />
+                                <Loader2 className="mx-auto mb-[4px] animate-spin text-primary" size={48} />
                                 <p className="text-sm font-medium text-muted-foreground">Связь с Telegram API...</p>
                             </div>
                         )}
 
                         {status === 'awaiting_scan' && qrUrl && (
                             <div className="text-center animate-in fade-in zoom-in-95 duration-500">
-                                <div className="mb-6 rounded-3xl border-4 border-muted bg-white p-4 shadow-xl">
+                                <div className="mb-6 rounded-3xl border-4 border-muted bg-white p-[4px] shadow-xl">
                                     <img src={qrUrl} alt="Telegram QR Login" className="h-[200px] w-[200px]" />
                                 </div>
-                                <h3 className="mb-2 text-xl font-bold text-foreground">Наведите сканер</h3>
+                                <h3 className="mb-[2px] text-xl font-bold text-foreground">Наведите сканер</h3>
                                 <p className="mx-auto max-w-[240px] text-sm text-muted-foreground">
                                     Откройте Telegram → Настройки → Устройства → <b>Подключить устройство</b>
                                 </p>
@@ -355,15 +355,15 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
                         {status === '2fa_required' && (
                             <div className="w-full max-w-sm text-center animate-in zoom-in-95 duration-300">
-                                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 shadow-sm">
+                                <div className="mx-auto mb-[4px] flex h-[16px] w-[16px] items-center justify-center rounded-2xl bg-blue-100 text-blue-600 shadow-sm">
                                     <CheckCircle2 size={32} />
                                 </div>
-                                <h3 className="mb-2 text-lg font-bold text-foreground">Облачный пароль</h3>
+                                <h3 className="mb-[2px] text-lg font-bold text-foreground">Облачный пароль</h3>
                                 <p className="mb-6 text-sm text-muted-foreground">
                                     Ваш аккаунт защищен двухэтапной аутентификацией.
                                 </p>
 
-                                <form onSubmit={handle2FASubmit} className="flex flex-col gap-4">
+                                <form onSubmit={handle2FASubmit} className="flex flex-col gap-[4px]">
                                     <div>
                                         <Input
                                             type="password"
@@ -386,7 +386,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         type="button"
                                         variant="ghost"
                                         onClick={() => setStatus('idle')}
-                                        className="mt-2 text-xs text-muted-foreground hover:text-foreground uppercase tracking-widest"
+                                        className="mt-[2px] text-xs text-muted-foreground hover:text-foreground uppercase tracking-widest"
                                     >
                                         Отмена
                                     </Button>
@@ -396,11 +396,11 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
                         {status === 'error' && (
                             <div className="flex flex-col items-center text-center">
-                                <div className="mb-4 rounded-full bg-red-100 p-3 text-red-600">
+                                <div className="mb-[4px] rounded-full bg-red-100 p-3 text-red-600">
                                     <LogOut size={32} />
                                 </div>
-                                <p className="mb-2 text-lg font-bold text-destructive">Ошибка подключения</p>
-                                <p className="mb-4 text-sm text-muted-foreground">
+                                <p className="mb-[2px] text-lg font-bold text-destructive">Ошибка подключения</p>
+                                <p className="mb-[4px] text-sm text-muted-foreground">
                                     {authError || 'Проверьте API ID и Hash и попробуйте снова.'}
                                 </p>
                                 <Button
@@ -425,10 +425,10 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                         Аккаунт временно остановит обработку сообщений. Подключение останется активным.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex flex-col gap-3 py-2">
+                <div className="flex flex-col gap-3 py-[2px]">
                     <Button
                         variant="outline"
-                        className="w-full justify-start text-sm h-auto py-3 px-4"
+                        className="w-full justify-start text-sm h-auto py-3 px-[4px]"
                         disabled={actionLoading}
                         onClick={() => handlePauseConfirm(false)}
                     >
@@ -439,11 +439,11 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                     </Button>
                     <Button
                         variant="outline"
-                        className="w-full justify-start text-sm h-auto py-3 px-4 border-destructive/30 hover:bg-destructive/5"
+                        className="w-full justify-start text-sm h-auto py-3 px-[4px] border-destructive/30 hover:bg-destructive/5"
                         disabled={actionLoading}
                         onClick={() => handlePauseConfirm(true)}
                     >
-                        {actionLoading ? <Loader2 size={14} className="mr-2 animate-spin flex-shrink-0" /> : null}
+                        {actionLoading ? <Loader2 size={14} className="mr-[2px] animate-spin flex-shrink-0" /> : null}
                         <div className="flex flex-col items-start text-left">
                             <span className="font-medium text-destructive">Пауза и удалить сообщения</span>
                             <span className="text-xs text-muted-foreground mt-0.5">Все сообщения этого аккаунта будут удалены из CRM.</span>
@@ -460,7 +460,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
         <Dialog open={!!resumeDialog} onOpenChange={() => setResumeDialog(null)}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+                    <DialogTitle className="flex items-center gap-[2px]">
                         <PlayCircle size={20} className="text-green-500" />
                         Включить: {resumeDialog?.connName}
                     </DialogTitle>
@@ -468,15 +468,15 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                         Аккаунт был на паузе. Пока он был выключен, входящие сообщения накапливались в буфере.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex flex-col gap-3 py-2">
+                <div className="flex flex-col gap-3 py-[2px]">
                     <p className="text-sm text-muted-foreground">Что делать с буфером сообщений за период паузы?</p>
                     <Button
                         variant="outline"
-                        className="w-full justify-start text-sm h-auto py-3 px-4 border-green-300 hover:bg-green-50"
+                        className="w-full justify-start text-sm h-auto py-3 px-[4px] border-green-300 hover:bg-green-50"
                         disabled={actionLoading}
                         onClick={() => handleResumeConfirm(true)}
                     >
-                        {actionLoading ? <Loader2 size={14} className="mr-2 animate-spin" /> : null}
+                        {actionLoading ? <Loader2 size={14} className="mr-[2px] animate-spin" /> : null}
                         <div className="flex flex-col items-start text-left">
                             <span className="font-medium text-green-700">Пробросить в CRM</span>
                             <span className="text-xs text-muted-foreground mt-0.5">Все накопленные сообщения появятся в /messages</span>
@@ -484,7 +484,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                     </Button>
                     <Button
                         variant="outline"
-                        className="w-full justify-start text-sm h-auto py-3 px-4"
+                        className="w-full justify-start text-sm h-auto py-3 px-[4px]"
                         disabled={actionLoading}
                         onClick={() => handleResumeConfirm(false)}
                     >
@@ -504,7 +504,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
         <Dialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
+                    <DialogTitle className="flex items-center gap-[2px]">
                         <Trash2 size={20} className="text-destructive" />
                         Удалить сообщения: {deleteDialog?.connName}
                     </DialogTitle>
@@ -513,7 +513,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                         В Telegram они останутся без изменений.
                     </DialogDescription>
                 </DialogHeader>
-                <DialogFooter className="gap-2">
+                <DialogFooter className="gap-[2px]">
                     <Button variant="ghost" size="sm" onClick={() => setDeleteDialog(null)}>Отмена</Button>
                     <Button
                         variant="destructive"
@@ -521,7 +521,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                         disabled={actionLoading}
                         onClick={handleDeleteConfirm}
                     >
-                        {actionLoading ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Trash2 size={14} className="mr-2" />}
+                        {actionLoading ? <Loader2 size={14} className="mr-[2px] animate-spin" /> : <Trash2 size={14} className="mr-[2px]" />}
                         Удалить
                     </Button>
                 </DialogFooter>
@@ -537,10 +537,10 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                         Аккаунт будет полностью отключён. Для повторного подключения потребуется снова отсканировать QR-код.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="flex flex-col gap-3 py-2">
+                <div className="flex flex-col gap-3 py-[2px]">
                     <Button
                         variant="outline"
-                        className="w-full justify-start text-sm h-auto py-3 px-4"
+                        className="w-full justify-start text-sm h-auto py-3 px-[4px]"
                         disabled={actionLoading}
                         onClick={() => handleDisconnectConfirm(false)}
                     >
@@ -551,11 +551,11 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                     </Button>
                     <Button
                         variant="outline"
-                        className="w-full justify-start text-sm h-auto py-3 px-4 border-destructive/30 hover:bg-destructive/5"
+                        className="w-full justify-start text-sm h-auto py-3 px-[4px] border-destructive/30 hover:bg-destructive/5"
                         disabled={actionLoading}
                         onClick={() => handleDisconnectConfirm(true)}
                     >
-                        {actionLoading ? <Loader2 size={14} className="mr-2 animate-spin flex-shrink-0" /> : null}
+                        {actionLoading ? <Loader2 size={14} className="mr-[2px] animate-spin flex-shrink-0" /> : null}
                         <div className="flex flex-col items-start text-left">
                             <span className="font-medium text-destructive">Отключить и удалить сообщения</span>
                             <span className="text-xs text-muted-foreground mt-0.5">Аккаунт отключится, все сообщения будут удалены из CRM.</span>

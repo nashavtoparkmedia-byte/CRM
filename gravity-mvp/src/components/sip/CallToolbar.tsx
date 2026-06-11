@@ -26,10 +26,10 @@ export default function CallToolbar() {
 
     if (activeCall) {
         return (
-            <div className="flex items-center gap-2 bg-primary/10 px-3 py-1 rounded-full text-[13px]">
-                <span className="relative flex h-2 w-2">
+            <div className="flex items-center gap-[2px] bg-primary/10 px-3 py-1 rounded-full text-[13px]">
+                <span className="relative flex h-[2px] w-[2px]">
                     <span className="absolute inset-0 animate-ping rounded-full bg-primary/60"/>
-                    <span className="relative h-2 w-2 rounded-full bg-primary"/>
+                    <span className="relative h-[2px] w-[2px] rounded-full bg-primary"/>
                 </span>
                 <span className="font-medium text-foreground">
                     {activeCall.displayName ?? activeCall.peerNumber}
@@ -60,7 +60,7 @@ export default function CallToolbar() {
             className="flex items-center gap-1.5 bg-secondary px-2.5 py-1 rounded-full text-[12px]"
             title={statusTitle(status, extension)}
         >
-            <span className={`h-2 w-2 rounded-full ${statusColor(status)}`}/>
+            <span className={`h-[2px] w-[2px] rounded-full ${statusColor(status)}`}/>
             <Phone className="h-3.5 w-3.5 text-muted-foreground"/>
             <span className="text-muted-foreground">{extension ?? '—'}</span>
         </div>

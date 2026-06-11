@@ -225,9 +225,9 @@ function MonitoringClientInner({
                             setAttentionModal({ driverId: drivers[0].id, driverName: drivers[0].fullName });
                         }
                     }}
-                    className="gap-2"
+                    className="gap-[2px]"
                 >
-                    <Plus className="h-4 w-4" />
+                    <Plus className="h-[4px] w-[4px]" />
                     Добавить в наблюдение
                 </Button>
             </div>

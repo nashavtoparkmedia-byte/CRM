@@ -14,8 +14,8 @@ export default async function TelegramSettingsPage() {
 
     return (
         <PageContainer>
-            <div className="flex flex-col gap-8 animate-in fade-in duration-500 pb-12">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-6">
+            <div className="flex flex-col gap-[8px] animate-in fade-in duration-500 pb-[12px]">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-[4px] border-b pb-6">
                     <div className="flex items-start gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sky-500 mt-0.5">
                             <Send size={18} />
@@ -32,7 +32,7 @@ export default async function TelegramSettingsPage() {
                         <Link
                             href="https://my.telegram.org"
                             target="_blank"
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-[2px]"
                         >
                             Получить API Ключи <ExternalLink size={13} />
                         </Link>
@@ -42,7 +42,7 @@ export default async function TelegramSettingsPage() {
                 <TelegramLoginClient initialConnections={connections} />
 
                 <div className="border-t pt-6">
-                    <h2 className="text-base font-semibold text-foreground mb-4">Инструменты Телеграм Бота</h2>
+                    <h2 className="text-base font-semibold text-foreground mb-[4px]">Инструменты Телеграм Бота</h2>
                     <TelegramManualLinkClient />
                 </div>
             </div>

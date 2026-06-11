@@ -184,14 +184,14 @@ export default function TaskCreateModal({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#e5e7eb] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0f0f0]">
+                <div className="flex items-center justify-between px-5 py-[4px] border-b border-[#f0f0f0]">
                     <div>
                         <h2 className="text-[17px] font-bold text-[#1f2937]">Новая задача</h2>
                         <p className="text-[13px] text-[#6b7280]">Для: <span className="font-semibold text-[#374151]">{driverName}</span></p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-[#f3f4f6] transition-colors text-[#9ca3af]"
+                        className="p-[2px] rounded-lg hover:bg-[#f3f4f6] transition-colors text-[#9ca3af]"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -199,7 +199,7 @@ export default function TaskCreateModal({
 
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-5">
-                    <form id="task-form" onSubmit={handleSubmit} className="space-y-4">
+                    <form id="task-form" onSubmit={handleSubmit} className="space-y-[4px]">
 
                         {/* Scenario selector */}
                         <div>
@@ -237,7 +237,7 @@ export default function TaskCreateModal({
                                         <p className="text-[12px] text-amber-800 mt-0.5 truncate">
                                             Задача: {scenarioConflict.title}
                                         </p>
-                                        <div className="flex flex-wrap gap-2 mt-2">
+                                        <div className="flex flex-wrap gap-[2px] mt-[2px]">
                                             <Link
                                                 href={`/tasks/${scenarioConflict.id}`}
                                                 onClick={onClose}
@@ -327,7 +327,7 @@ export default function TaskCreateModal({
                             <label className="block text-[12px] font-semibold text-[#374151] mb-1.5 uppercase tracking-wider">
                                 Приоритет
                             </label>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-[2px]">
                                 {(
                                     [
                                         { val: 'high', label: 'Высокий', color: 'text-orange-700 bg-orange-50 border-orange-200 hover:bg-orange-100', active: 'border-orange-500 ring-2 ring-orange-200' },
@@ -338,7 +338,7 @@ export default function TaskCreateModal({
                                         key={p.val}
                                         type="button"
                                         onClick={() => setPriority(p.val as TaskPriority)}
-                                        className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${p.color} ${priority === p.val ? p.active : 'opacity-70'}`}
+                                        className={`flex flex-col items-center justify-center p-[2px] rounded-lg border transition-all ${p.color} ${priority === p.val ? p.active : 'opacity-70'}`}
                                     >
                                         <span className="text-[12px] font-semibold">{p.label}</span>
                                     </button>
@@ -364,7 +364,7 @@ export default function TaskCreateModal({
                                 value={description}
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Дополнительная информация..."
-                                className="w-full h-[80px] py-2 bg-[#f9fafb] border border-[#d1d5db] rounded-lg px-3 text-[14px] outline-none focus:border-[#4f46e5] resize-none"
+                                className="w-full h-[80px] py-[2px] bg-[#f9fafb] border border-[#d1d5db] rounded-lg px-3 text-[14px] outline-none focus:border-[#4f46e5] resize-none"
                             />
                         </div>
 
@@ -384,12 +384,12 @@ export default function TaskCreateModal({
                 </div>
 
                 {/* Footer */}
-                <div className="px-5 py-4 border-t border-[#f0f0f0] bg-[#f9fafb] flex justify-end gap-3">
+                <div className="px-5 py-[4px] border-t border-[#f0f0f0] bg-[#f9fafb] flex justify-end gap-3">
                     <button
                         type="button"
                         onClick={onClose}
                         disabled={createTask.isPending}
-                        className="px-4 py-2 rounded-lg text-[14px] font-medium text-[#4b5563] hover:bg-[#e5e7eb] transition-colors"
+                        className="px-[4px] py-[2px] rounded-lg text-[14px] font-medium text-[#4b5563] hover:bg-[#e5e7eb] transition-colors"
                     >
                         Отмена
                     </button>
@@ -398,9 +398,9 @@ export default function TaskCreateModal({
                         form="task-form"
                         disabled={createTask.isPending || !!scenarioConflict}
                         title={scenarioConflict ? 'Сначала откройте существующую задачу или выберите «Без сценария»' : undefined}
-                        className="flex items-center justify-center gap-2 px-6 py-2 rounded-lg bg-[#4f46e5] hover:bg-[#4338ca] text-white text-[14px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center gap-[2px] px-6 py-[2px] rounded-lg bg-[#4f46e5] hover:bg-[#4338ca] text-white text-[14px] font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {createTask.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {createTask.isPending && <Loader2 className="w-[4px] h-[4px] animate-spin" />}
                         Создать задачу
                     </button>
                 </div>

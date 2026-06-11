@@ -61,14 +61,14 @@ export function AllDriversSection({
 
     return (
         <div className="rounded-xl bg-card shadow-sm border">
-            <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center justify-between p-[4px] border-b">
                 <h2 className="text-lg font-semibold">
                     Все водители
-                    <span className="ml-2 text-sm font-normal text-muted-foreground">({total})</span>
+                    <span className="ml-[2px] text-sm font-normal text-muted-foreground">({total})</span>
                 </h2>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Search className="absolute left-3 top-1/2 h-[4px] w-[4px] -translate-y-1/2 text-muted-foreground" />
                         <Input
                             placeholder="Поиск по имени..."
                             value={searchQuery}
@@ -96,7 +96,7 @@ export function AllDriversSection({
                 <TableBody>
                     {drivers.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={6} className="text-center py-[8px] text-muted-foreground">
                                 Водители не найдены
                             </TableCell>
                         </TableRow>
@@ -140,18 +140,18 @@ export function AllDriversSection({
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between p-4 border-t">
+                <div className="flex items-center justify-between p-[4px] border-t">
                     <span className="text-sm text-muted-foreground">
                         Страница {page} из {totalPages}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-[2px]">
                         <Button
                             variant="outline"
                             size="sm"
                             onClick={() => onPageChange(page - 1)}
                             disabled={page <= 1}
                         >
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="h-[4px] w-[4px]" />
                         </Button>
                         <Button
                             variant="outline"
@@ -159,7 +159,7 @@ export function AllDriversSection({
                             onClick={() => onPageChange(page + 1)}
                             disabled={page >= totalPages}
                         >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-[4px] w-[4px]" />
                         </Button>
                     </div>
                 </div>

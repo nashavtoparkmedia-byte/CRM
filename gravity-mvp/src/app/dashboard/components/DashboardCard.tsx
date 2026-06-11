@@ -31,7 +31,7 @@ export function DashboardCard({
     >
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
+          <h3 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-[2px]">
             <Icon className="h-5 w-5 text-primary" />
             {title}
           </h3>
@@ -41,7 +41,7 @@ export function DashboardCard({
         </div>
       </div>
 
-      <div className="mt-4 flex items-end gap-3">
+      <div className="mt-[4px] flex items-end gap-3">
         <span className="text-3xl font-bold text-foreground leading-none">
           {metric}
         </span>
@@ -63,7 +63,7 @@ export function DashboardCard({
         )}
       </div>
 
-      <div className="mt-6 flex flex-col gap-2">
+      <div className="mt-6 flex flex-col gap-[2px]">
         {breakdown.map((item, index) => (
           <div
             key={index}

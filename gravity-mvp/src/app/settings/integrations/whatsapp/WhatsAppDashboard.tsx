@@ -273,7 +273,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                                         if (e.key === 'Escape') handleRenameCancel()
                                     }}
                                     disabled={renaming}
-                                    className="flex-1 min-w-0 h-7 px-2 text-sm font-semibold border border-input rounded-md outline-none focus:border-primary bg-background"
+                                    className="flex-1 min-w-0 h-7 px-[2px] text-sm font-semibold border border-input rounded-md outline-none focus:border-primary bg-background"
                                 />
                                 <button
                                     type="button"
@@ -314,13 +314,13 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                             </div>
                         )}
                         {/* PR7.14: secondary line — phone + status + paused */}
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <div className="flex items-center gap-[2px] mt-0.5 flex-wrap">
                             {showPhoneSecondary && (
                                 <span className="text-xs text-muted-foreground">{maskedPhone}</span>
                             )}
                             <StatusDot status={liveStatus} />
                             {livePaused && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-[2px] py-0.5 text-[11px] font-medium text-amber-700">
                                     <PauseCircle size={11} /> На паузе
                                 </span>
                             )}
@@ -344,10 +344,10 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
             {/* QR Display */}
             {(liveStatus === 'qr' || liveStatus === 'qr_required' || liveStatus === 'qr_expired') && (
-                <div className="flex flex-col items-center gap-3 py-4">
+                <div className="flex flex-col items-center gap-3 py-[4px]">
                     {liveStatus === 'qr_expired' ? (
                         <div className="text-center text-orange-600">
-                            <AlertTriangle size={40} className="mx-auto mb-2" />
+                            <AlertTriangle size={40} className="mx-auto mb-[2px]" />
                             <p className="text-sm font-medium">QR код истек. Пожалуйста, переподключитесь.</p>
                         </div>
                     ) : liveQr ? (
@@ -358,7 +358,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                             <p className="max-w-[200px] text-center text-xs text-muted-foreground">
                                 Откройте WhatsApp → Настройки → Связанные устройства → Привязка устройства
                             </p>
-                            <div className="flex items-center gap-2 text-xs font-bold text-yellow-600">
+                            <div className="flex items-center gap-[2px] text-xs font-bold text-yellow-600">
                                 <Loader2 size={14} className="animate-spin" />
                                 Ожидание сканирования...
                             </div>
@@ -372,9 +372,9 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                                     setLoading(false)
                                 }}
                                 disabled={loading}
-                                className="mt-2"
+                                className="mt-[2px]"
                             >
-                                <RefreshCw size={14} className="mr-2" /> Обновить QR
+                                <RefreshCw size={14} className="mr-[2px]" /> Обновить QR
                             </Button>
                         </>
                     ) : (
@@ -385,7 +385,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
             {/* Connecting */}
             {(liveStatus === 'authenticated' || liveStatus === 'initializing') && (
-                <div className="flex items-center gap-3 py-4 text-blue-600">
+                <div className="flex items-center gap-3 py-[4px] text-blue-600">
                     <Loader2 size={18} className="animate-spin" />
                     <span className="text-sm font-medium">
                         {liveStatus === 'initializing' ? 'Подключение...' : 'Завершение аутентификации...'}
@@ -395,7 +395,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
             {/* Reconnecting */}
             {liveStatus === 'reconnecting' && (
-                <div className="flex items-center gap-3 py-4 text-yellow-600">
+                <div className="flex items-center gap-3 py-[4px] text-yellow-600">
                     <Loader2 size={18} className="animate-spin" />
                     <span className="text-sm font-medium">Переподключаемся...</span>
                 </div>
@@ -403,20 +403,20 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
 
             {/* Degraded — connection unstable */}
             {liveStatus === 'degraded' && (
-                <div className="flex flex-col gap-2 py-4">
+                <div className="flex flex-col gap-[2px] py-[4px]">
                     <div className="flex items-center gap-3 text-yellow-600">
                         <AlertTriangle size={18} />
                         <span className="text-sm font-medium">Связь нестабильна — нет сигнала от WhatsApp {'>'} 5 минут</span>
                     </div>
                     <Button onClick={handleForceReset} variant="outline" size="sm" disabled={loading} className="self-start">
-                        <RefreshCw size={14} className="mr-2" /> Пересоздать сессию
+                        <RefreshCw size={14} className="mr-[2px]" /> Пересоздать сессию
                     </Button>
                 </div>
             )}
 
             {/* Broken — init crashed or runtime dead */}
             {liveStatus === 'broken' && (
-                <div className="flex flex-col gap-2 py-4">
+                <div className="flex flex-col gap-[2px] py-[4px]">
                     <div className="flex items-center gap-3 text-red-600">
                         <AlertTriangle size={18} />
                         <span className="text-sm font-medium">Ошибка запуска WhatsApp-клиента</span>
@@ -425,33 +425,33 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                         <div className="text-xs text-muted-foreground break-all">{liveLastError}</div>
                     )}
                     <Button onClick={handleForceReset} variant="outline" size="sm" disabled={loading} className="self-start">
-                        <RefreshCw size={14} className="mr-2" /> Пересоздать сессию
+                        <RefreshCw size={14} className="mr-[2px]" /> Пересоздать сессию
                     </Button>
                 </div>
             )}
 
             {/* Auth failed — need fresh QR */}
             {liveStatus === 'auth_failed' && (
-                <div className="flex flex-col gap-2 py-4">
+                <div className="flex flex-col gap-[2px] py-[4px]">
                     <div className="flex items-center gap-3 text-red-600">
                         <AlertTriangle size={18} />
                         <span className="text-sm font-medium">Требуется повторная авторизация</span>
                     </div>
                     <Button onClick={handleForceReset} variant="outline" size="sm" disabled={loading} className="self-start">
-                        <RefreshCw size={14} className="mr-2" /> Сбросить и отсканировать QR
+                        <RefreshCw size={14} className="mr-[2px]" /> Сбросить и отсканировать QR
                     </Button>
                 </div>
             )}
 
             {/* Connected (or Paused) */}
             {liveStatus === 'ready' && !livePaused && (
-                <div className="flex items-center gap-3 py-4 text-green-600">
+                <div className="flex items-center gap-3 py-[4px] text-green-600">
                     <CheckCircle2 size={20} />
                     <span className="text-sm font-medium">Аккаунт подключен и готов к работе</span>
                 </div>
             )}
             {liveStatus === 'ready' && livePaused && (
-                <div className="flex items-center gap-3 py-4 text-amber-600">
+                <div className="flex items-center gap-3 py-[4px] text-amber-600">
                     <PauseCircle size={20} />
                     <span className="text-sm font-medium">Аккаунт на паузе — входящие буферизуются</span>
                 </div>
@@ -501,15 +501,15 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                         <DialogTitle>Поставить аккаунт на паузу</DialogTitle>
                         <DialogDescription>Аккаунт временно остановит обработку сообщений. Подключение останется активным.</DialogDescription>
                     </DialogHeader>
-                    <div className="flex flex-col gap-3 py-2">
-                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handlePauseConfirm(false)}>
+                    <div className="flex flex-col gap-3 py-[2px]">
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-[4px]" disabled={loading} onClick={() => handlePauseConfirm(false)}>
                             <div className="flex flex-col items-start text-left">
                                 <span className="font-medium">Поставить на паузу</span>
                                 <span className="text-xs text-muted-foreground mt-0.5">Сообщения сохраняются, обработка остановлена.</span>
                             </div>
                         </Button>
-                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4 border-destructive/30 hover:bg-destructive/5" disabled={loading} onClick={() => handlePauseConfirm(true)}>
-                            {loading ? <Loader2 size={14} className="mr-2 animate-spin flex-shrink-0" /> : null}
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-[4px] border-destructive/30 hover:bg-destructive/5" disabled={loading} onClick={() => handlePauseConfirm(true)}>
+                            {loading ? <Loader2 size={14} className="mr-[2px] animate-spin flex-shrink-0" /> : null}
                             <div className="flex flex-col items-start text-left">
                                 <span className="font-medium text-destructive">Пауза и удалить сообщения</span>
                                 <span className="text-xs text-muted-foreground mt-0.5">Все сообщения этого аккаунта будут удалены из CRM.</span>
@@ -527,14 +527,14 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                         <DialogTitle>Включить аккаунт</DialogTitle>
                         <DialogDescription>Аккаунт был на паузе. Что делать с накопленными сообщениями?</DialogDescription>
                     </DialogHeader>
-                    <div className="flex flex-col gap-3 py-2">
-                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4 border-green-300 hover:bg-green-50" disabled={loading} onClick={() => handleResumeConfirm(true)}>
+                    <div className="flex flex-col gap-3 py-[2px]">
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-[4px] border-green-300 hover:bg-green-50" disabled={loading} onClick={() => handleResumeConfirm(true)}>
                             <div className="flex flex-col items-start text-left">
                                 <span className="font-medium text-green-700">Пробросить в CRM</span>
                                 <span className="text-xs text-muted-foreground mt-0.5">Все накопленные сообщения появятся в /messages.</span>
                             </div>
                         </Button>
-                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handleResumeConfirm(false)}>
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-[4px]" disabled={loading} onClick={() => handleResumeConfirm(false)}>
                             <div className="flex flex-col items-start text-left">
                                 <span className="font-medium">Начать с этого места</span>
                                 <span className="text-xs text-muted-foreground mt-0.5">Буфер удаляется, новые сообщения идут в CRM как обычно.</span>
@@ -552,15 +552,15 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                         <DialogTitle>Отключить аккаунт</DialogTitle>
                         <DialogDescription>Выберите сценарий отключения. При удалении сообщений потребуется заново отсканировать QR-код для подключения.</DialogDescription>
                     </DialogHeader>
-                    <div className="flex flex-col gap-3 py-2">
-                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4" disabled={loading} onClick={() => handleDisconnectConfirm(false)}>
+                    <div className="flex flex-col gap-3 py-[2px]">
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-[4px]" disabled={loading} onClick={() => handleDisconnectConfirm(false)}>
                             <div className="flex flex-col items-start text-left">
                                 <span className="font-medium">Просто отключить</span>
                                 <span className="text-xs text-muted-foreground mt-0.5">Аккаунт отключится, сообщения останутся.</span>
                             </div>
                         </Button>
-                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-4 border-destructive/30 hover:bg-destructive/5" disabled={loading} onClick={() => handleDisconnectConfirm(true)}>
-                            {loading ? <Loader2 size={14} className="mr-2 animate-spin flex-shrink-0" /> : null}
+                        <Button variant="outline" className="w-full justify-start text-sm h-auto py-3 px-[4px] border-destructive/30 hover:bg-destructive/5" disabled={loading} onClick={() => handleDisconnectConfirm(true)}>
+                            {loading ? <Loader2 size={14} className="mr-[2px] animate-spin flex-shrink-0" /> : null}
                             <div className="flex flex-col items-start text-left">
                                 <span className="font-medium text-destructive">Отключить и удалить сообщения</span>
                                 <span className="text-xs text-muted-foreground mt-0.5">Аккаунт отключится, все сообщения будут удалены из CRM.</span>
@@ -604,7 +604,7 @@ export function WhatsAppDashboard({ initialConnections }: { initialConnections: 
     const hasPendingConnection = connections.some(c => ['idle', 'qr', 'qr_expired', 'authenticated'].includes(c.status))
 
     if (!isClient) return (
-        <div className="space-y-8 animate-pulse p-2">
+        <div className="space-y-[8px] animate-pulse p-[2px]">
             <div className="h-10 w-48 rounded-lg bg-muted" />
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                 <div className="h-[250px] rounded-xl bg-muted" />
@@ -637,7 +637,7 @@ export function WhatsAppDashboard({ initialConnections }: { initialConnections: 
                     </Button>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-[4px] md:grid-cols-2">
                     {connections.map(conn => (
                         <ConnectionCard key={conn.id} conn={conn} onRefresh={refresh} />
                     ))}

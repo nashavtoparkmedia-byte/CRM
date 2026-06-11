@@ -57,7 +57,7 @@ export default function MyDayContent({ summary }: MyDayContentProps) {
             {overdue.length > 0 && (
                 <TaskBlock
                     title="Просроченные"
-                    icon={<AlertTriangle className="w-4 h-4 text-red-500" />}
+                    icon={<AlertTriangle className="w-[4px] h-[4px] text-red-500" />}
                     tasks={overdue}
                     accentColor="red"
                     defaultExpanded
@@ -68,7 +68,7 @@ export default function MyDayContent({ summary }: MyDayContentProps) {
             {/* Today block */}
             <TaskBlock
                 title="Сегодня"
-                icon={<Clock className="w-4 h-4 text-blue-500" />}
+                icon={<Clock className="w-[4px] h-[4px] text-blue-500" />}
                 tasks={today}
                 accentColor="blue"
                 defaultExpanded
@@ -79,7 +79,7 @@ export default function MyDayContent({ summary }: MyDayContentProps) {
             {/* Active block */}
             <TaskBlock
                 title="В работе"
-                icon={<CheckCircle className="w-4 h-4 text-indigo-500" />}
+                icon={<CheckCircle className="w-[4px] h-[4px] text-indigo-500" />}
                 tasks={active}
                 accentColor="indigo"
                 defaultExpanded={active.length <= 10}
@@ -116,9 +116,9 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
 
     return (
         <div className={`rounded-xl border-2 overflow-hidden ${task.isOverdue ? 'border-red-300 bg-red-50/50' : 'border-indigo-200 bg-indigo-50/30'}`}>
-            <div className="px-5 py-4">
+            <div className="px-5 py-[4px]">
                 {/* Header */}
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-[2px] mb-3">
                     <Target className={`w-5 h-5 ${task.isOverdue ? 'text-red-500' : 'text-indigo-500'}`} />
                     <span className="text-[13px] font-semibold text-[#64748B] uppercase tracking-wide">Следующая задача</span>
                     {task.isOverdue && (
@@ -130,18 +130,18 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
                 </div>
 
                 {/* Task info */}
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start justify-between gap-[4px]">
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-[2px] mb-1">
                             <span className="text-[17px] font-semibold text-[#111827]">{task.driverName}</span>
                             {task.priority === 'high' && (
-                                <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0" />
+                                <AlertTriangle className="w-[4px] h-[4px] text-orange-500 shrink-0" />
                             )}
                         </div>
-                        <div className="text-[14px] text-[#374151] mb-2">{task.title}</div>
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="text-[14px] text-[#374151] mb-[2px]">{task.title}</div>
+                        <div className="flex items-center gap-[2px] flex-wrap">
                             {scenarioLabel && (
-                                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-100 text-indigo-700">
+                                <span className="px-[2px] py-0.5 rounded text-[11px] font-semibold bg-indigo-100 text-indigo-700">
                                     {scenarioLabel}
                                     {stageLabel && <> · {stageLabel}</>}
                                 </span>
@@ -158,23 +158,23 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-col gap-2 shrink-0">
+                    <div className="flex flex-col gap-[2px] shrink-0">
                         <button
                             onClick={onStart}
-                            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[14px] font-semibold text-white transition-colors ${
+                            className={`flex items-center gap-1.5 px-[4px] py-2.5 rounded-lg text-[14px] font-semibold text-white transition-colors ${
                                 task.isOverdue
                                     ? 'bg-red-500 hover:bg-red-600'
                                     : 'bg-[#4f46e5] hover:bg-[#4338ca]'
                             }`}
                         >
                             Начать работу
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-[4px] h-[4px]" />
                         </button>
                         <div className="flex items-center gap-1.5 justify-end">
                             {task.driverPhone && (
                                 <button
                                     onClick={onCall}
-                                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
+                                    className="w-[8px] h-[8px] rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
                                     title="Позвонить"
                                 >
                                     <Phone className="w-3.5 h-3.5 text-[#6b7280]" />
@@ -182,7 +182,7 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
                             )}
                             <button
                                 onClick={onWrite}
-                                className="w-8 h-8 rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
+                                className="w-[8px] h-[8px] rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
                                 title="Написать"
                             >
                                 <MessageSquare className="w-3.5 h-3.5 text-[#6b7280]" />
@@ -199,7 +199,7 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
 
 function MetricCard({ label, value, color }: { label: string; value: number; color: string }) {
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
             <div className="text-[28px] font-bold leading-none" style={{ color }}>
                 {value}
             </div>
@@ -234,16 +234,16 @@ function TaskBlock({ title, icon, tasks, accentColor, defaultExpanded = true, em
             {/* Header */}
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center gap-2 px-4 py-3 hover:bg-[#f9fafb] transition-colors"
+                className="w-full flex items-center gap-[2px] px-[4px] py-3 hover:bg-[#f9fafb] transition-colors"
             >
                 {icon}
                 <span className="text-[15px] font-semibold text-[#111827]">{title}</span>
                 <span className="text-[13px] text-[#94A3B8] font-medium ml-1">({tasks.length})</span>
                 <div className="ml-auto">
                     {expanded ? (
-                        <ChevronUp className="w-4 h-4 text-[#94A3B8]" />
+                        <ChevronUp className="w-[4px] h-[4px] text-[#94A3B8]" />
                     ) : (
-                        <ChevronDown className="w-4 h-4 text-[#94A3B8]" />
+                        <ChevronDown className="w-[4px] h-[4px] text-[#94A3B8]" />
                     )}
                 </div>
             </button>
@@ -252,7 +252,7 @@ function TaskBlock({ title, icon, tasks, accentColor, defaultExpanded = true, em
             {expanded && (
                 <div className="border-t border-[#f3f4f6]">
                     {tasks.length === 0 ? (
-                        <div className="px-4 py-6 text-center text-[13px] text-[#94A3B8]">
+                        <div className="px-[4px] py-6 text-center text-[13px] text-[#94A3B8]">
                             {emptyMessage || 'Нет задач'}
                         </div>
                     ) : (
@@ -305,7 +305,7 @@ function TaskRow({ task, borderColor, onClick }: { task: DailyTask; borderColor:
     return (
         <div
             onClick={onClick}
-            className={`group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-[#f9fafb] transition-colors border-l-[3px] ${borderColor}`}
+            className={`group flex items-center gap-3 px-[4px] py-2.5 cursor-pointer hover:bg-[#f9fafb] transition-colors border-l-[3px] ${borderColor}`}
         >
             {/* Priority indicator */}
             {task.priority === 'high' && (
@@ -314,7 +314,7 @@ function TaskRow({ task, borderColor, onClick }: { task: DailyTask; borderColor:
 
             {/* Main content */}
             <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                     <span className="text-[13px] font-semibold text-[#111827] truncate">{task.driverName}</span>
                     {scenarioLabel && (
                         <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-600">

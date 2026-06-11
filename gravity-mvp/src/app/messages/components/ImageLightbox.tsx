@@ -117,7 +117,7 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
             <div className="absolute inset-0 bg-black/85" />
 
             {/* Top bar */}
-            <div className="relative z-10 flex items-center justify-between px-4 h-[48px] shrink-0">
+            <div className="relative z-10 flex items-center justify-between px-[4px] h-[48px] shrink-0">
                 <div className="text-white/60 text-[13px] font-medium">
                     {images.length > 1 ? `Фото ${currentIndex + 1} из ${images.length}` : 'Фото'}
                 </div>

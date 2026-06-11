@@ -223,16 +223,16 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
     return (
         <>
-        <div className="flex w-full flex-col gap-8 lg:flex-row animate-in fade-in duration-500">
+        <div className="flex w-full flex-col gap-[8px] lg:flex-row animate-in fade-in duration-500">
             <div className="flex flex-1 flex-col gap-6">
                 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="mb-6 inline-flex h-10 rounded-xl border bg-muted/40 p-1 w-full max-w-sm">
-                        <TabsTrigger value="bots" className="gap-2 flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"><MessageSquare size={15}/> Боты (API)</TabsTrigger>
-                        <TabsTrigger value="personal" className="gap-2 flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"><Smartphone size={15}/> Личный аккаунт</TabsTrigger>
+                        <TabsTrigger value="bots" className="gap-[2px] flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"><MessageSquare size={15}/> Боты (API)</TabsTrigger>
+                        <TabsTrigger value="personal" className="gap-[2px] flex-1 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"><Smartphone size={15}/> Личный аккаунт</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="bots" className="space-y-4">
+                    <TabsContent value="bots" className="space-y-[4px]">
                         <div className="flex items-center justify-between">
                             <h2 className="text-base font-semibold text-foreground">Подключенные боты ({initialConnections.length})</h2>
                             {initialConnections.length > 0 && !isAddingNew && (
@@ -243,13 +243,13 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         </div>
 
                         {initialConnections.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-12 text-center text-muted-foreground">
-                                <MessageSquare className="mb-4 h-12 w-12 opacity-20" />
+                            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-[12px] text-center text-muted-foreground">
+                                <MessageSquare className="mb-[4px] h-[12px] w-[12px] opacity-20" />
                                 <p>Нет подключенных ботов</p>
                                 <p className="text-xs">Добавьте бота справа, чтобы начать писать в MAX</p>
                             </div>
                         ) : (
-                            <div className="grid gap-4">
+                            <div className="grid gap-[4px]">
                                 {initialConnections.map((conn) => (
                                     <div key={conn.id} className="rounded-2xl border bg-card p-5 shadow-sm transition-all">
                                         <div className="flex items-start gap-3 mb-3">
@@ -258,7 +258,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 {editingId === conn.id ? (
-                                                    <div className="flex items-center gap-2 mb-0.5">
+                                                    <div className="flex items-center gap-[2px] mb-0.5">
                                                         <Input
                                                             value={editName}
                                                             onChange={(e) => setEditName(e.target.value)}
@@ -282,11 +282,11 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                                             изм.
                                                         </button>
                                                         {conn.isDefault && (
-                                                            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-foreground/70">основной</span>
+                                                            <span className="rounded-full bg-primary/15 px-[2px] py-0.5 text-[10px] font-medium text-foreground/70">основной</span>
                                                         )}
                                                     </div>
                                                 )}
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-[2px]">
                                                     {conn.isPaused ? (
                                                         <span className="flex items-center gap-1 text-[11px] text-amber-600">
                                                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> На паузе
@@ -303,20 +303,20 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
                                         <div className="flex items-center justify-end gap-1 pt-3 border-t border-dashed">
                                             {!conn.isDefault && (
-                                                <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
+                                                <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
                                                     Основным
                                                 </Button>
                                             )}
                                             {conn.isPaused ? (
-                                                <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog(conn.id)}>
+                                                <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog(conn.id)}>
                                                     <PlayCircle size={13} className="mr-1.5" /> Включить
                                                 </Button>
                                             ) : (
-                                                <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog(conn.id)}>
+                                                <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog(conn.id)}>
                                                     <PauseCircle size={13} className="mr-1.5" /> Пауза
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ id: conn.id })}>
+                                            <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ id: conn.id })}>
                                                 <LogOut size={13} className="mr-1.5" /> Отключить
                                             </Button>
                                         </div>
@@ -326,7 +326,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         )}
                     </TabsContent>
 
-                    <TabsContent value="personal" className="space-y-4">
+                    <TabsContent value="personal" className="space-y-[4px]">
                         <div className="flex items-center justify-between">
                             <h2 className="text-base font-semibold text-foreground">Подключенные аккаунты (1)</h2>
                             {!isScraperOnline && (
@@ -344,7 +344,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="font-semibold text-sm text-foreground">MAX</div>
-                                        <div className="flex items-center gap-2 mt-0.5">
+                                        <div className="flex items-center gap-[2px] mt-0.5">
                                             {process.env.NEXT_PUBLIC_MAX_SCRAPER_PHONE && (
                                                 <span className="text-xs text-muted-foreground">{process.env.NEXT_PUBLIC_MAX_SCRAPER_PHONE}</span>
                                             )}
@@ -366,23 +366,23 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
                                 <div className="flex items-center justify-end gap-1 pt-3 mt-3 border-t border-dashed">
                                     {isPersonalPaused ? (
-                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog('personal')}>
+                                        <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog('personal')}>
                                             <PlayCircle size={13} className="mr-1.5" /> Включить
                                         </Button>
                                     ) : (
-                                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog('personal')}>
+                                        <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog('personal')}>
                                             <PauseCircle size={13} className="mr-1.5" /> Пауза
                                         </Button>
                                     )}
-                                    <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ id: 'personal', isPersonal: true })}>
+                                    <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ id: 'personal', isPersonal: true })}>
                                         <LogOut size={13} className="mr-1.5" /> Выйти
                                     </Button>
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center rounded-2xl border p-8 text-center bg-card shadow-sm">
+                            <div className="flex flex-col items-center justify-center rounded-2xl border p-[8px] text-center bg-card shadow-sm">
                                 {error && (activeTab === "personal") && (
-                                     <div className="mb-6 w-full max-w-sm flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                                     <div className="mb-6 w-full max-w-sm flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/10 p-[4px] text-sm text-destructive">
                                         <ShieldAlert size={18} className="shrink-0" />
                                         <p>{error}</p>
                                     </div>
@@ -390,14 +390,14 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                 <div className="mb-6 select-none bg-white p-3 rounded-xl shadow-sm border inline-flex items-center justify-center" style={{ width: 320, height: 320 }}>
                                     {qrLoading ? (
                                         <div className="flex flex-col items-center text-muted-foreground">
-                                            <RefreshCw className="h-8 w-8 animate-spin mb-4" />
+                                            <RefreshCw className="h-[8px] w-[8px] animate-spin mb-[4px]" />
                                             <span className="text-sm">Запуск браузера и загрузка QR...</span>
                                         </div>
                                     ) : !isScraperOnline ? (
                                         <div className="flex flex-col items-center text-muted-foreground">
-                                            <ShieldAlert className="h-12 w-12 text-destructive mb-4 opacity-50" />
+                                            <ShieldAlert className="h-[12px] w-[12px] text-destructive mb-[4px] opacity-50" />
                                             <span className="text-sm">Скрейпер офлайн</span>
-                                            <Button variant="link" onClick={checkPersonalStatus} className="text-xs mt-2">Проверить связь</Button>
+                                            <Button variant="link" onClick={checkPersonalStatus} className="text-xs mt-[2px]">Проверить связь</Button>
                                         </div>
                                     ) : qrUrl ? (
                                         <img 
@@ -409,20 +409,20 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                         />
                                     ) : (
                                         <div className="flex flex-col items-center text-muted-foreground">
-                                            <MessageSquare className="h-12 w-12 opacity-20 mb-4" />
+                                            <MessageSquare className="h-[12px] w-[12px] opacity-20 mb-[4px]" />
                                             <span className="text-sm">Ожидание QR кода...</span>
                                         </div>
                                     )}
                                 </div>
 
                                 <h3 className="text-lg font-bold">Отсканируйте код</h3>
-                                <p className="text-sm text-muted-foreground mt-2 max-w-sm mb-6">
+                                <p className="text-sm text-muted-foreground mt-[2px] max-w-sm mb-6">
                                     Откройте приложение MAX на телефоне и отсканируйте этот QR-код для привязки аккаунта в CRM. Код обновляется автоматически.
                                 </p>
                                 
                                 <Button 
                                     variant="outline" 
-                                    className="gap-2" 
+                                    className="gap-[2px]" 
                                     onClick={handleRestartScraper}
                                     disabled={qrLoading}
                                 >
@@ -439,7 +439,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
             {isAddingNew && activeTab === "bots" && (
                 <div className="flex w-full flex-col max-w-sm">
                     <div className="rounded-2xl border bg-card shadow-sm p-5">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center justify-between mb-[4px]">
                             <h2 className="text-base font-semibold text-foreground">Подключение бота</h2>
                             {initialConnections.length > 0 && (
                                 <Button type="button" variant="ghost" size="sm" onClick={() => setIsAddingNew(false)}>Отмена</Button>
@@ -447,13 +447,13 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         </div>
 
                         {error && (
-                            <div className="mb-4 flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+                            <div className="mb-[4px] flex items-center gap-[2px] rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
                                 <ShieldAlert size={16} className="shrink-0" />
                                 <p>{error}</p>
                             </div>
                         )}
 
-                        <form onSubmit={handleAddBot} className="flex flex-col gap-4">
+                        <form onSubmit={handleAddBot} className="flex flex-col gap-[4px]">
                             <div>
                                 <label className="mb-1.5 block text-xs font-medium text-muted-foreground uppercase">
                                     Название в CRM
@@ -500,12 +500,12 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         Подключение останется активным. Новые сообщения будут накапливаться и не отображаться в CRM.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-2">
+                <div className="py-[2px]">
                     <p className="text-sm text-muted-foreground">Что сделать с текущими сообщениями?</p>
                 </div>
-                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                <DialogFooter className="flex-col gap-[2px] sm:flex-col">
                     <Button variant="outline" onClick={() => handlePauseConfirm(false)} disabled={actionLoading} className="w-full">
-                        {actionLoading && <Loader2 size={14} className="mr-2 animate-spin" />}
+                        {actionLoading && <Loader2 size={14} className="mr-[2px] animate-spin" />}
                         Сохранить сообщения
                     </Button>
                     <Button variant="destructive" onClick={() => handlePauseConfirm(true)} disabled={actionLoading} className="w-full">
@@ -525,12 +525,12 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                         Канал снова будет активен и сообщения начнут поступать в CRM.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-2">
+                <div className="py-[2px]">
                     <p className="text-sm text-muted-foreground">Что сделать с накопленными сообщениями?</p>
                 </div>
-                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                <DialogFooter className="flex-col gap-[2px] sm:flex-col">
                     <Button onClick={() => handleResumeConfirm(true)} disabled={actionLoading} className="w-full">
-                        {actionLoading && <Loader2 size={14} className="mr-2 animate-spin" />}
+                        {actionLoading && <Loader2 size={14} className="mr-[2px] animate-spin" />}
                         Загрузить накопленные сообщения
                     </Button>
                     <Button variant="outline" onClick={() => handleResumeConfirm(false)} disabled={actionLoading} className="w-full">
@@ -552,9 +552,9 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                             : 'Бот будет отключён от CRM. Вы сможете подключить его снова позже.'}
                     </DialogDescription>
                 </DialogHeader>
-                <DialogFooter className="flex-col gap-2 sm:flex-col">
+                <DialogFooter className="flex-col gap-[2px] sm:flex-col">
                     <Button variant="destructive" onClick={() => handleDisconnectConfirm(true)} disabled={actionLoading} className="w-full">
-                        {actionLoading && <Loader2 size={14} className="mr-2 animate-spin" />}
+                        {actionLoading && <Loader2 size={14} className="mr-[2px] animate-spin" />}
                         Отключить и удалить сообщения
                     </Button>
                     {!disconnectDialog?.isPersonal && (

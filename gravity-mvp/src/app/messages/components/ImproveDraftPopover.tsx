@@ -87,7 +87,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
             {state.phase === 'menu' && (
                 <div
                     ref={popoverRef}
-                    className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-xl border border-[#E0E0E0] py-1.5 min-w-[260px] z-50 animate-in fade-in slide-in-from-bottom-1 duration-150"
+                    className="absolute bottom-full left-0 mb-[2px] bg-white rounded-xl shadow-xl border border-[#E0E0E0] py-1.5 min-w-[260px] z-50 animate-in fade-in slide-in-from-bottom-1 duration-150"
                 >
                     <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                         Улучшить с ИИ
@@ -96,7 +96,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
                         <button
                             key={p.id}
                             onClick={() => runImprove(p.id)}
-                            className="w-full px-3 py-2 text-left hover:bg-purple-50 transition-colors"
+                            className="w-full px-3 py-[2px] text-left hover:bg-purple-50 transition-colors"
                         >
                             <div className="text-[13px] font-medium text-[#111]">{p.label}</div>
                             <div className="text-[11px] text-gray-500 mt-0.5">{p.desc}</div>
@@ -107,7 +107,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
 
             {/* Loading overlay (chip над input) */}
             {state.phase === 'loading' && (
-                <div className="absolute bottom-full left-0 mb-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-1.5 z-50 flex items-center gap-2">
+                <div className="absolute bottom-full left-0 mb-[2px] bg-purple-50 border border-purple-200 rounded-lg px-3 py-1.5 z-50 flex items-center gap-[2px]">
                     <Loader2 size={14} className="text-purple-500 animate-spin" />
                     <span className="text-[12px] text-purple-700 font-medium">
                         AI улучшает черновик...
@@ -117,7 +117,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
 
             {/* Error toast */}
             {state.phase === 'error' && (
-                <div className="absolute bottom-full left-0 mb-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 z-50 flex items-center gap-2">
+                <div className="absolute bottom-full left-0 mb-[2px] bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 z-50 flex items-center gap-[2px]">
                     <X size={14} className="text-red-500" />
                     <span className="text-[12px] text-red-700">{state.message}</span>
                     <button
@@ -140,7 +140,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="px-5 py-3.5 border-b border-gray-200 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-[2px]">
                                 <Sparkles size={16} className="text-purple-500" />
                                 <h3 className="font-semibold text-[15px] text-[#111]">
                                     AI улучшил черновик
@@ -154,13 +154,13 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+                        <div className="flex-1 overflow-y-auto px-5 py-[4px] space-y-3">
                             {/* Было */}
                             <div>
                                 <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">
                                     Было
                                 </div>
-                                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-600 whitespace-pre-wrap">
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-[2px] text-[13px] text-gray-600 whitespace-pre-wrap">
                                     {draft}
                                 </div>
                             </div>
@@ -170,13 +170,13 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
                                 <div className="text-[11px] font-bold text-purple-600 uppercase tracking-wider mb-1.5">
                                     Стало
                                 </div>
-                                <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-[13px] text-[#111] whitespace-pre-wrap">
+                                <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-[2px] text-[13px] text-[#111] whitespace-pre-wrap">
                                     {state.improved}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between gap-2 bg-gray-50">
+                        <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between gap-[2px] bg-gray-50">
                             <button
                                 onClick={() => runImprove(state.preset)}
                                 className="text-[12px] text-gray-600 hover:text-gray-900 font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-md hover:bg-gray-200 transition-colors"
@@ -184,7 +184,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
                                 <RefreshCw size={12} />
                                 Ещё вариант
                             </button>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-[2px]">
                                 <button
                                     onClick={() => setState({ phase: 'idle' })}
                                     className="text-[12px] text-gray-600 hover:text-[#111] font-medium px-3 py-1.5 rounded-md hover:bg-gray-200 transition-colors"
@@ -196,7 +196,7 @@ export default function ImproveDraftPopover({ chatId, draft, onApply, disabled }
                                         onApply(state.improved)
                                         setState({ phase: 'idle' })
                                     }}
-                                    className="bg-purple-500 hover:bg-purple-600 text-white text-[12px] font-semibold px-4 py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
+                                    className="bg-purple-500 hover:bg-purple-600 text-white text-[12px] font-semibold px-[4px] py-1.5 rounded-md flex items-center gap-1.5 transition-colors"
                                 >
                                     <Check size={13} />
                                     Применить

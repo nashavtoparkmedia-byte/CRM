@@ -30,7 +30,7 @@ export function DriverScoreBar({ score }: DriverScoreBarProps) {
 
     return (
         <div className="flex items-center gap-2.5">
-            <div className={`relative h-2 flex-1 rounded-full ${trackColor} overflow-hidden`}>
+            <div className={`relative h-[2px] flex-1 rounded-full ${trackColor} overflow-hidden`}>
                 <div
                     className={`absolute inset-y-0 left-0 rounded-full ${color} transition-all duration-500`}
                     style={{ width: `${value}%` }}

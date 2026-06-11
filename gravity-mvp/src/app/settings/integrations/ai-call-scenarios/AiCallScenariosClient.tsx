@@ -130,7 +130,7 @@ export default function AiCallScenariosClient({
             </header>
 
             {!canEdit && (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-muted-foreground">
+                <div className="flex items-center gap-[2px] rounded-md border border-border bg-surface px-3 py-[2px] text-[13px] text-muted-foreground">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Только Администратор / Руководитель может редактировать.
                 </div>
@@ -141,13 +141,13 @@ export default function AiCallScenariosClient({
                 <OuterTabBtn
                     active={outerTab === 'projects'}
                     onClick={() => setOuterTab('projects')}
-                    icon={<FolderTree className="h-4 w-4" />}
+                    icon={<FolderTree className="h-[4px] w-[4px]" />}
                     label="Проекты и сценарии"
                 />
                 <OuterTabBtn
                     active={outerTab === 'keys'}
                     onClick={() => setOuterTab('keys')}
-                    icon={<KeyRound className="h-4 w-4" />}
+                    icon={<KeyRound className="h-[4px] w-[4px]" />}
                     label="API ключи"
                 />
             </div>
@@ -235,13 +235,13 @@ function ProjectsPane(props: {
     const activeProject = projects.find(p => p.id === activeProjectId) ?? null
 
     return (
-        <div className="flex flex-col gap-4 animate-in fade-in duration-200">
+        <div className="flex flex-col gap-[4px] animate-in fade-in duration-200">
             {/* Только когда активного нет — короткое предупреждение. Когда
                 активный есть, его статус полностью передаёт зелёный chip
                 ниже + кнопка-действие в заголовке открытого проекта.
                 Дублирующий metadata-row убран — был лишний шум. */}
             {!activeProject && (
-                <div className="flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[13px]">
+                <div className="flex items-center gap-[2px] rounded-md border border-amber-300 bg-amber-50 px-3 py-[2px] text-[13px]">
                     <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 text-amber-600" />
                     <span className="text-amber-900">
                         Активный проект не выбран — без этого система не запустит AI-звонок.
@@ -256,11 +256,11 @@ function ProjectsPane(props: {
                   - subtle green tint when active but not viewing
                   - plain when neither
                 A small ✓ icon next to the name doubles down on it. */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-[2px]">
                 {projects.map(p => {
                     const viewing = p.id === viewingProjectId
                     const isActive = p.id === activeProjectId
-                    const base = 'inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all'
+                    const base = 'inline-flex items-center gap-[2px] rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all'
                     const style = (() => {
                         if (viewing && isActive) {
                             return 'bg-green-600 text-white shadow-sm'
@@ -311,7 +311,7 @@ function ProjectsPane(props: {
             <section className="flex flex-col gap-3">
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-[2px] flex-wrap">
                             <h2 className="text-[15px] font-semibold text-foreground">
                                 Сценарии проекта «{viewingProject.name}»
                             </h2>
@@ -323,7 +323,7 @@ function ProjectsPane(props: {
                                 не «сценариям» — поэтому слева, рядом с
                                 названием проекта. */}
                             {isViewingActive ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-[2px] py-0.5 text-[11px] font-medium text-green-700">
                                     <CheckCircle2 className="h-3 w-3" />
                                     активный
                                 </span>
@@ -333,7 +333,7 @@ function ProjectsPane(props: {
                                     onClick={() => setAsActive(viewingProject.id)}
                                     disabled={activating === viewingProject.id}
                                     title="Назначить этот проект активным — AI-звонки будут идти по нему"
-                                    className="inline-flex items-center gap-1 rounded-full border border-green-500/50 px-2 py-0.5 text-[11px] font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex items-center gap-1 rounded-full border border-green-500/50 px-[2px] py-0.5 text-[11px] font-medium text-green-700 transition-colors hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     {activating === viewingProject.id
                                         ? <Loader2 className="h-3 w-3 animate-spin" />
@@ -379,7 +379,7 @@ function ProjectsPane(props: {
                         В этом проекте пока нет сценариев
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-[2px]">
                         {scenariosOfActive.map((s) =>
                             editor.kind === 'edit' && editor.id === s.id ? (
                                 <ScenarioEditor
@@ -426,7 +426,7 @@ function ScenarioCard({
             type="button"
             onClick={canEdit ? onEdit : undefined}
             disabled={!canEdit}
-            className="flex flex-col gap-2 rounded-md border border-border bg-card p-5 text-left transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-80"
+            className="flex flex-col gap-[2px] rounded-md border border-border bg-card p-5 text-left transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-80"
         >
             <div className="flex items-center justify-between">
                 <div className="text-[17px] font-semibold text-foreground">{scenario.name}</div>
@@ -535,7 +535,7 @@ function ScenarioEditor({
     }
 
     return (
-        <div className="flex flex-col gap-4 rounded-md border border-border bg-card p-5">
+        <div className="flex flex-col gap-[4px] rounded-md border border-border bg-card p-5">
             <div className="flex items-center justify-between">
                 <h2 className="text-[17px] font-semibold text-foreground">
                     {isNew ? 'Новый сценарий' : 'Редактирование сценария'}
@@ -546,11 +546,11 @@ function ScenarioEditor({
                     className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface hover:text-foreground"
                     aria-label="Отмена"
                 >
-                    <X className="h-4 w-4" />
+                    <X className="h-[4px] w-[4px]" />
                 </button>
             </div>
 
-            <section className="flex flex-col gap-2">
+            <section className="flex flex-col gap-[2px]">
                 <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-project">
                     Проект
                 </label>
@@ -566,7 +566,7 @@ function ScenarioEditor({
                 </select>
             </section>
 
-            <section className="flex flex-col gap-2">
+            <section className="flex flex-col gap-[2px]">
                 <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-name">
                     Название
                 </label>
@@ -580,7 +580,7 @@ function ScenarioEditor({
                 />
             </section>
 
-            <section className="flex flex-col gap-2">
+            <section className="flex flex-col gap-[2px]">
                 <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-desc">
                     Описание (опционально)
                 </label>
@@ -594,7 +594,7 @@ function ScenarioEditor({
                 />
             </section>
 
-            <section className="flex flex-col gap-2">
+            <section className="flex flex-col gap-[2px]">
                 <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-duration">
                     Целевая длительность звонка (секунд)
                 </label>
@@ -607,14 +607,14 @@ function ScenarioEditor({
                     value={targetDurationSec ?? ''}
                     onChange={(e) => setTargetDurationSec(e.target.value ? Number(e.target.value) : undefined)}
                     placeholder="120"
-                    className="h-11 w-32 rounded-md border border-border bg-background px-3 text-[15px] text-foreground outline-none transition-colors focus:border-primary"
+                    className="h-11 w-[32px] rounded-md border border-border bg-background px-3 text-[15px] text-foreground outline-none transition-colors focus:border-primary"
                 />
                 <p className="text-[12px] text-muted-foreground">
                     Подсказка для модели по темпу — реальная длительность зависит от диалога.
                 </p>
             </section>
 
-            <section className="flex flex-col gap-2">
+            <section className="flex flex-col gap-[2px]">
                 <label className="text-[13px] font-medium text-muted-foreground" htmlFor="scen-prompt">
                     Системный промт
                 </label>
@@ -630,7 +630,7 @@ function ScenarioEditor({
                 </p>
             </section>
 
-            <section className="flex flex-col gap-2">
+            <section className="flex flex-col gap-[2px]">
                 <div className="flex items-center justify-between">
                     <label className="text-[13px] font-medium text-muted-foreground">
                         Вопросы по порядку
@@ -638,21 +638,21 @@ function ScenarioEditor({
                     <button
                         type="button"
                         onClick={addQuestion}
-                        className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-primary hover:bg-surface"
+                        className="inline-flex items-center gap-1 rounded-md px-[2px] py-1 text-[12px] text-primary hover:bg-surface"
                     >
                         <Plus className="h-3 w-3" />
                         Добавить
                     </button>
                 </div>
                 {questions.length === 0 && (
-                    <div className="rounded-md border border-dashed border-border bg-surface px-3 py-4 text-center text-[13px] text-muted-foreground">
+                    <div className="rounded-md border border-dashed border-border bg-surface px-3 py-[4px] text-center text-[13px] text-muted-foreground">
                         Пока вопросов нет. Сценарий может работать только по системному промту, но обычно проще задать 3–5 чётких вопросов.
                     </div>
                 )}
                 {questions.map((q, idx) => (
-                    <div key={idx} className="flex items-start gap-2 rounded-md border border-border bg-background p-2">
+                    <div key={idx} className="flex items-start gap-[2px] rounded-md border border-border bg-background p-[2px]">
                         <div className="flex h-11 w-7 items-center justify-center text-muted-foreground">
-                            <GripVertical className="h-4 w-4" />
+                            <GripVertical className="h-[4px] w-[4px]" />
                         </div>
                         <div className="flex flex-1 flex-col gap-1">
                             <input
@@ -660,7 +660,7 @@ function ScenarioEditor({
                                 value={q.text}
                                 onChange={(e) => updateQuestion(idx, { text: e.target.value })}
                                 placeholder={`Вопрос ${idx + 1}`}
-                                className="h-9 rounded-md border border-transparent bg-transparent px-2 text-[15px] text-foreground outline-none focus:border-border"
+                                className="h-9 rounded-md border border-transparent bg-transparent px-[2px] text-[15px] text-foreground outline-none focus:border-border"
                             />
                             <input
                                 type="text"
@@ -674,7 +674,7 @@ function ScenarioEditor({
                                     })
                                 }
                                 placeholder="ключевые слова ответа через запятую (опционально)"
-                                className="h-8 rounded-md border border-transparent bg-transparent px-2 text-[12px] text-muted-foreground outline-none focus:border-border"
+                                className="h-[8px] rounded-md border border-transparent bg-transparent px-[2px] text-[12px] text-muted-foreground outline-none focus:border-border"
                             />
                         </div>
                         <button
@@ -683,13 +683,13 @@ function ScenarioEditor({
                             className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-surface hover:text-destructive"
                             aria-label="Удалить вопрос"
                         >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-[4px] w-[4px]" />
                         </button>
                     </div>
                 ))}
             </section>
 
-            <footer className="sticky bottom-4 z-10 flex items-center justify-between rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+            <footer className="sticky bottom-[4px] z-10 flex items-center justify-between rounded-md border border-border bg-card px-[4px] py-3 shadow-sm">
                 <div className="text-[12px] text-muted-foreground">
                     {status?.kind === 'ok' && (
                         <span className="inline-flex items-center gap-1 text-green-600">
@@ -704,22 +704,22 @@ function ScenarioEditor({
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                     {!isNew && onDeleted && (
                         <button
                             type="button"
                             onClick={handleDelete}
                             disabled={deleting}
-                            className="inline-flex h-11 items-center gap-2 rounded-md border border-border bg-background px-4 text-[15px] font-medium text-destructive transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex h-11 items-center gap-[2px] rounded-md border border-border bg-background px-[4px] text-[15px] font-medium text-destructive transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            {deleting ? <Loader2 className="h-[4px] w-[4px] animate-spin" /> : <Trash2 className="h-[4px] w-[4px]" />}
                             Удалить
                         </button>
                     )}
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="inline-flex h-11 items-center rounded-md border border-border bg-background px-4 text-[15px] font-medium text-foreground transition-colors hover:bg-surface"
+                        className="inline-flex h-11 items-center rounded-md border border-border bg-background px-[4px] text-[15px] font-medium text-foreground transition-colors hover:bg-surface"
                     >
                         Отмена
                     </button>
@@ -727,9 +727,9 @@ function ScenarioEditor({
                         type="button"
                         onClick={handleSave}
                         disabled={saving}
-                        className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+                        className="inline-flex h-11 items-center gap-[2px] rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                        {saving ? <Loader2 className="h-[4px] w-[4px] animate-spin" /> : <Save className="h-[4px] w-[4px]" />}
                         Сохранить
                     </button>
                 </div>

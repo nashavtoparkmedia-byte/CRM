@@ -132,7 +132,7 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
                 <div className="flex items-center shrink-0 pr-3 bg-[#F3F4F6]"
                      style={{ borderRight: '1px solid #E2E8F0' }}>
                     <div className="w-[3px] self-stretch shrink-0 bg-transparent" />
-                    <div className="pl-2" style={{ width: '220px' }} />
+                    <div className="pl-[2px]" style={{ width: '220px' }} />
                 </div>
 
                 {/* One draggable cell per block, width = sum of block.visibleColumns.widthPx */}
@@ -157,7 +157,7 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
                                 }}
                                 onDrop={(e) => { e.preventDefault(); handleBlockDrop(block.id) }}
                                 onDragEnd={() => { setDragBlockId(null); setHoverBlockId(null) }}
-                                className={`group flex items-center justify-center gap-1 px-2 text-[11px] uppercase tracking-wide text-[#334155] font-semibold border-l border-[#E2E8F0] cursor-grab select-none transition-all ${
+                                className={`group flex items-center justify-center gap-1 px-[2px] text-[11px] uppercase tracking-wide text-[#334155] font-semibold border-l border-[#E2E8F0] cursor-grab select-none transition-all ${
                                     isDragging ? 'opacity-40' : ''
                                 } ${isDropTarget ? 'ring-2 ring-inset ring-[#4338CA]' : ''}`}
                                 style={{
@@ -179,7 +179,7 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
             <div className="flex items-stretch w-full min-h-[32px] text-[11px] uppercase tracking-wide text-[#475569] font-semibold bg-[#F8FAFC]">
                 <div className="flex items-center shrink-0 pr-3 bg-[#F8FAFC]">
                     <div className="w-[3px] self-stretch shrink-0 bg-transparent" />
-                    <div className="flex items-center pl-2" style={{ width: '220px' }}>
+                    <div className="flex items-center pl-[2px]" style={{ width: '220px' }}>
                         <HeaderButton
                             label="ФИО"
                             sortable
@@ -215,7 +215,7 @@ export default function TaskCaseListHeader({ layout, viewId, sortField, sortDire
                                     }}
                                     onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleColumnDrop(col.id) }}
                                     onDragEnd={() => { setDragColId(null); setHoverColId(null) }}
-                                    className={`group flex items-center px-2 cursor-grab select-none transition-all ${
+                                    className={`group flex items-center px-[2px] cursor-grab select-none transition-all ${
                                         i > 0 ? 'border-l border-[#E2E8F0]' : 'border-l border-[#CBD5E1]'
                                     } ${isDragging ? 'opacity-40' : ''} ${
                                         isDropTarget ? 'ring-2 ring-inset ring-[#4338CA]' : ''

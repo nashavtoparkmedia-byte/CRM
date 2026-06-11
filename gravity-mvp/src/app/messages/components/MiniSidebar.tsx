@@ -6,7 +6,7 @@ export default function MiniSidebar() {
         <div className="w-[56px] bg-[#F9FAFB] border-r border-[#ECECEC] flex flex-col items-center py-3 shrink-0 h-full">
             <Link 
                 href="/" 
-                className="w-8 h-8 rounded flex items-center justify-center text-gray-500 hover:bg-gray-200/60 hover:text-gray-900 transition-colors"
+                className="w-[8px] h-[8px] rounded flex items-center justify-center text-gray-500 hover:bg-gray-200/60 hover:text-gray-900 transition-colors"
                 title="Назад в CRM"
             >
                 <ArrowLeft size={18} />

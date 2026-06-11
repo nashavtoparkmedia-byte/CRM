@@ -46,7 +46,7 @@ export default function TaskCaseBlock({ task, block, ctx, showBlockLabel, showCe
     if (isDetailed) {
         return (
             <div
-                className="flex flex-col py-1 px-2 min-w-0 border-l border-[#EEF2FF]"
+                className="flex flex-col py-1 px-[2px] min-w-0 border-l border-[#EEF2FF]"
                 style={{ gridColumn: `span ${columns.length}` }}
             >
                 {showBlockLabel && (
@@ -87,7 +87,7 @@ export default function TaskCaseBlock({ task, block, ctx, showBlockLabel, showCe
                 return (
                     <div
                         key={col.id}
-                        className={`flex flex-col justify-center px-2 min-w-0 ${
+                        className={`flex flex-col justify-center px-[2px] min-w-0 ${
                             isBlockStart ? 'border-l border-[#EEF2FF]' : 'border-l border-[#F1F5F9]'
                         }`}
                         style={cellStyle}

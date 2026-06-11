@@ -15,7 +15,7 @@ export function SegmentChart({ data }: { data: SegmentData[] }) {
 
     return (
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
-            <div className="mb-4">
+            <div className="mb-[4px]">
                 <h3 className="text-lg font-bold text-foreground">Сегменты водителей</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Распределение по активности</p>
             </div>
@@ -64,7 +64,7 @@ export function SegmentChart({ data }: { data: SegmentData[] }) {
                 </ResponsiveContainer>
             </div>
             {/* Summary below chart */}
-            <div className="grid grid-cols-4 gap-2 mt-2">
+            <div className="grid grid-cols-4 gap-[2px] mt-[2px]">
                 {data.map((d) => (
                     <div key={d.name} className="text-center">
                         <div className="text-lg font-bold" style={{ color: d.color }}>{d.value}</div>

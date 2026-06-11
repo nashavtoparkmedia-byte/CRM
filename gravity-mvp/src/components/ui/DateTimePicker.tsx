@@ -125,7 +125,7 @@ export default function DateTimePicker({ value, onChange, className = '' }: Prop
     }
 
     return (
-        <div className={`space-y-2 ${className}`}>
+        <div className={`space-y-[2px] ${className}`}>
             {/* Preset tiles — 2×2 grid for big tap targets. Each tile shows
                 a primary label («Через час») and a smaller secondary line
                 with the resolved absolute time («18:35» or «17 мая»). */}
@@ -137,7 +137,7 @@ export default function DateTimePicker({ value, onChange, className = '' }: Prop
                             key={p.label}
                             type="button"
                             onClick={() => onChange(p.iso)}
-                            className={`flex flex-col items-start justify-center px-3 py-2 rounded-lg border text-left transition-colors ${
+                            className={`flex flex-col items-start justify-center px-3 py-[2px] rounded-lg border text-left transition-colors ${
                                 active
                                     ? 'bg-[#4f46e5] border-[#4f46e5] text-white'
                                     : 'bg-white border-[#e5e7eb] text-[#374151] hover:bg-[#f9fafb] hover:border-[#d1d5db]'
@@ -154,7 +154,7 @@ export default function DateTimePicker({ value, onChange, className = '' }: Prop
 
             {/* Selected display + edit affordance. Shows what's set in plain
                 Russian; click pencil to reveal manual date/time editor. */}
-            <div className="flex items-center gap-2 text-[12px] text-[#6b7280] px-1">
+            <div className="flex items-center gap-[2px] text-[12px] text-[#6b7280] px-1">
                 {parsed ? (
                     <>
                         <span>Выбрано:</span>
@@ -166,7 +166,7 @@ export default function DateTimePicker({ value, onChange, className = '' }: Prop
                 <button
                     type="button"
                     onClick={() => setShowManual(s => !s)}
-                    className="ml-auto inline-flex items-center gap-1 px-2 h-[24px] rounded-md text-[11px] font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
+                    className="ml-auto inline-flex items-center gap-1 px-[2px] h-[24px] rounded-md text-[11px] font-medium text-[#4f46e5] hover:bg-[#eef2ff]"
                 >
                     <Pencil className="w-3 h-3" />
                     {showManual ? 'Скрыть' : 'Своё время'}
@@ -187,7 +187,7 @@ export default function DateTimePicker({ value, onChange, className = '' }: Prop
                 the browser's date popup outside the modal's DOM so we don't
                 fight z-index or overflow. Time uses our stepper. */}
             {showManual && (
-                <div className="flex items-stretch gap-2 pt-1">
+                <div className="flex items-stretch gap-[2px] pt-1">
                     <input
                         type="date"
                         value={dateOnly}

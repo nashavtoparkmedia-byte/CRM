@@ -171,7 +171,7 @@ function CallDetailContent({ callId, autoPlay, onClose }: { callId: string; auto
     return (
         <>
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
+            <div className="flex items-center gap-3 border-b border-gray-200 px-[4px] py-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
                     <Icon className="h-5 w-5 text-primary" />
                 </div>
@@ -199,7 +199,7 @@ function CallDetailContent({ callId, autoPlay, onClose }: { callId: string; auto
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 border-b border-gray-200 px-2 pt-2">
+            <div className="flex items-center gap-1 border-b border-gray-200 px-[2px] pt-[2px]">
                 <TabButton active={activeTab === 'audio'} onClick={() => setActiveTab('audio')} icon={Headphones} label="Аудио" ready={!!call?.recordingPath} />
                 <TabButton active={activeTab === 'transcript'} onClick={() => setActiveTab('transcript')} icon={FileText} label="Транскрипт" ready={!!call?.transcript} />
                 <TabButton active={activeTab === 'ai'} onClick={() => setActiveTab('ai')} icon={Sparkles} label="AI-анализ" ready={!!call?.aiAnalysis} />
@@ -208,8 +208,8 @@ function CallDetailContent({ callId, autoPlay, onClose }: { callId: string; auto
             {/* Body — scrollable */}
             <div className="flex-1 overflow-y-auto p-5">
                 {loading && (
-                    <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" /> Загрузка…
+                    <div className="flex items-center gap-[2px] text-[13px] text-muted-foreground">
+                        <Loader2 className="h-[4px] w-[4px] animate-spin" /> Загрузка…
                     </div>
                 )}
                 {error && !loading && (
@@ -240,7 +240,7 @@ function TabButton({
         <button
             onClick={onClick}
             className={[
-                'inline-flex items-center gap-1.5 rounded-t-md px-3 py-2 text-[13px] font-medium transition-colors',
+                'inline-flex items-center gap-1.5 rounded-t-md px-3 py-[2px] text-[13px] font-medium transition-colors',
                 active
                     ? 'bg-surface text-foreground border-b-2 border-primary'
                     : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -289,7 +289,7 @@ function AudioPane({ call, autoPlay }: { call: CallDetail; autoPlay?: boolean })
     if (!call.recordingPath) {
         return <EmptyState icon={Headphones} title="Записи нет" hint="Запись появляется через несколько секунд после завершения разговора." />
     }
-    if (loading) return <div className="flex items-center gap-2 text-[13px] text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Получаем ссылку…</div>
+    if (loading) return <div className="flex items-center gap-[2px] text-[13px] text-muted-foreground"><Loader2 className="h-[4px] w-[4px] animate-spin" /> Получаем ссылку…</div>
     if (err || !url) return <div className="text-[13px] text-destructive">{err}</div>
 
     return (
@@ -333,15 +333,15 @@ function AiPane({ analysis, summary, score }: { analysis: any; summary: string |
             )}
 
             {(outcome || sentiment || nextAction) && (
-                <div className="flex flex-wrap gap-2 text-[11px]">
-                    {outcome && <span className="rounded-full bg-primary/10 px-2 py-1 text-primary">Итог: {outcome}</span>}
-                    {sentiment && <span className="rounded-full bg-surface px-2 py-1 text-foreground">Настроение: {sentiment}</span>}
-                    {nextAction && <span className="rounded-full bg-surface px-2 py-1 text-foreground">Действие: {nextAction}</span>}
+                <div className="flex flex-wrap gap-[2px] text-[11px]">
+                    {outcome && <span className="rounded-full bg-primary/10 px-[2px] py-1 text-primary">Итог: {outcome}</span>}
+                    {sentiment && <span className="rounded-full bg-surface px-[2px] py-1 text-foreground">Настроение: {sentiment}</span>}
+                    {nextAction && <span className="rounded-full bg-surface px-[2px] py-1 text-foreground">Действие: {nextAction}</span>}
                 </div>
             )}
 
             <div>
-                <div className="text-[12px] font-medium text-muted-foreground mb-2">Критерии</div>
+                <div className="text-[12px] font-medium text-muted-foreground mb-[2px]">Критерии</div>
                 <div className="flex flex-col gap-2.5">
                     {Object.entries(scores).map(([key, val]) => (
                         <div key={key} className="flex flex-col gap-1">
@@ -366,7 +366,7 @@ function AiPane({ analysis, summary, score }: { analysis: any; summary: string |
                         <AlertTriangle className="h-3.5 w-3.5" />
                         Проблемные моменты
                     </div>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[13px]">
+                    <ul className="mt-[2px] list-disc space-y-1 pl-5 text-[13px]">
                         {flags.map((f, i) => <li key={i}>{f}</li>)}
                     </ul>
                 </div>
@@ -377,8 +377,8 @@ function AiPane({ analysis, summary, score }: { analysis: any; summary: string |
 
 function EmptyState({ icon: Icon, title, hint }: { icon: typeof Sparkles; title: string; hint: string }) {
     return (
-        <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <Icon className="h-8 w-8 text-muted-foreground/60" />
+        <div className="flex flex-col items-center gap-[2px] py-10 text-center">
+            <Icon className="h-[8px] w-[8px] text-muted-foreground/60" />
             <div className="text-[14px] font-semibold">{title}</div>
             <div className="max-w-xs text-[12px] text-muted-foreground">{hint}</div>
         </div>

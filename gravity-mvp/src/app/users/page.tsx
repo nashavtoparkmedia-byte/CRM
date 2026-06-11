@@ -59,12 +59,12 @@ export default function UsersPage() {
         load()
     }
 
-    if (isLoading && users.length === 0) return <div className="p-8 text-center text-gray-500">Загрузка пользователей...</div>
+    if (isLoading && users.length === 0) return <div className="p-[8px] text-center text-gray-500">Загрузка пользователей...</div>
 
     if (currentUser && currentUser.role === 'Менеджер') {
         return (
             <PageContainer>
-                <div className="p-8 text-center text-red-500 font-bold bg-red-50 rounded-xl border border-red-200 mt-6 shadow-sm">
+                <div className="p-[8px] text-center text-red-500 font-bold bg-red-50 rounded-xl border border-red-200 mt-6 shadow-sm">
                     Доступ запрещен. Настройка пользователей разрешена только Администраторам и Руководителям.
                 </div>
             </PageContainer>
@@ -88,9 +88,9 @@ export default function UsersPage() {
             />
 
             {isAddOpen && (
-                <div className="mt-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3 max-w-md">
+                <div className="mt-[4px] bg-white p-[4px] rounded-xl border border-gray-200 shadow-sm space-y-3 max-w-md">
                     <h3 className="text-sm font-bold text-gray-900">Новый пользователь</h3>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-[2px]">
                         <input type="text" placeholder="Имя" value={firstName} onChange={e => setFirstName(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" />
                         <input type="text" placeholder="Фамилия" value={lastName} onChange={e => setLastName(e.target.value)} className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm outline-none" />
                     </div>
@@ -101,16 +101,16 @@ export default function UsersPage() {
                         <option value="Руководитель">Руководитель</option>
                         <option value="Администратор">Администратор</option>
                     </select>
-                    <button onClick={handleAdd} className="w-full py-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-semibold rounded-lg text-sm transition-colors cursor-pointer">Сохранить</button>
+                    <button onClick={handleAdd} className="w-full py-[2px] bg-[#4f46e5] hover:bg-[#4338ca] text-white font-semibold rounded-lg text-sm transition-colors cursor-pointer">Сохранить</button>
                 </div>
             )}
 
             <div className="mt-6 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                 <div className="divide-y divide-gray-100">
                     {users.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                        <div key={user.id} className="flex items-center justify-between px-[4px] py-3 hover:bg-gray-50 transition-colors">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                                <div className="w-[8px] h-[8px] rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
                                     {user.firstName[0]}{user.lastName[0]}
                                 </div>
                                 <div className="flex flex-col">
@@ -128,8 +128,8 @@ export default function UsersPage() {
                                     </select>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2 text-gray-400 text-[12px]">
+                            <div className="flex items-center gap-[4px]">
+                                <div className="flex items-center gap-[2px] text-gray-400 text-[12px]">
                                     {user.email && <div className="flex items-center gap-1"><Mail size={12} /> {user.email}</div>}
                                     {user.phone && <div className="flex items-center gap-1"><Phone size={12} /> {user.phone}</div>}
                                 </div>

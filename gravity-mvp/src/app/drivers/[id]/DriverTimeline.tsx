@@ -83,23 +83,23 @@ export function DriverTimeline({ driverId, events, telegramConnections = [], max
         <div className="space-y-6">
             {/* Quick Actions */}
             <div className="flex flex-col gap-3">
-                <div className="flex gap-2 p-1 bg-secondary rounded-xl w-fit">
+                <div className="flex gap-[2px] p-1 bg-secondary rounded-xl w-fit">
                     <button
                         onClick={() => setChannel("telegram")}
-                        className={`px-4 py-1 text-xs font-medium rounded-lg transition-colors ${channel === "telegram" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`px-[4px] py-1 text-xs font-medium rounded-lg transition-colors ${channel === "telegram" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                     >
                         Telegram
                     </button>
                     <button
                         onClick={() => setChannel("max")}
-                        className={`px-4 py-1 text-xs font-medium rounded-lg transition-colors ${channel === "max" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                        className={`px-[4px] py-1 text-xs font-medium rounded-lg transition-colors ${channel === "max" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                     >
                         MAX
                     </button>
                 </div>
 
                 {activeConnections.length > 0 ? (
-                    <div className="flex gap-2 items-center text-sm text-muted-foreground">
+                    <div className="flex gap-[2px] items-center text-sm text-muted-foreground">
                         <span className="whitespace-nowrap">Отправить с:</span>
                         <select 
                             value={selectedConnection}
@@ -115,12 +115,12 @@ export function DriverTimeline({ driverId, events, telegramConnections = [], max
                         </select>
                     </div>
                 ) : (
-                    <div className="text-xs text-amber-600 bg-amber-50 rounded-lg p-2">
+                    <div className="text-xs text-amber-600 bg-amber-50 rounded-lg p-[2px]">
                         Нет подключенных аккаунтов {channel === "telegram" ? "Telegram" : "MAX"}.
                     </div>
                 )}
                 <div className="flex gap-3">
-                    <div className="flex-1 flex gap-2">
+                    <div className="flex-1 flex gap-[2px]">
                         <input
                             type="text"
                             value={message}
@@ -155,7 +155,7 @@ export function DriverTimeline({ driverId, events, telegramConnections = [], max
 
             {/* Timeline Feed */}
             {events.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-[12px] text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground">
                     <Clock size={40} className="mb-3 opacity-30" />
                     <p className="font-medium">Нет событий</p>
                     <p className="text-xs mt-1">Отправьте сообщение или зафиксируйте звонок</p>
@@ -180,7 +180,7 @@ export function DriverTimeline({ driverId, events, telegramConnections = [], max
                             })
 
                             return (
-                                <div key={event.id} className="relative flex gap-4 py-3 group">
+                                <div key={event.id} className="relative flex gap-[4px] py-3 group">
                                     {/* Icon circle */}
                                     <div className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-background bg-white shadow-sm ${config.color}`}>
                                         <Icon size={16} />
@@ -188,7 +188,7 @@ export function DriverTimeline({ driverId, events, telegramConnections = [], max
 
                                     {/* Content */}
                                     <div className="flex-1 min-w-0 pt-1">
-                                        <div className="flex items-center gap-2 mb-0.5">
+                                        <div className="flex items-center gap-[2px] mb-0.5">
                                             <span className="text-sm font-semibold text-foreground">
                                                 {config.label}
                                             </span>
@@ -207,7 +207,7 @@ export function DriverTimeline({ driverId, events, telegramConnections = [], max
                                                 {event.content}
                                             </p>
                                         )}
-                                        <div className="flex items-center gap-2 mt-1">
+                                        <div className="flex items-center gap-[2px] mt-1">
                                             <span className="text-[11px] text-muted-foreground/60">
                                                 {timeStr}
                                             </span>

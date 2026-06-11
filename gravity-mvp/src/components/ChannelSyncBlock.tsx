@@ -199,10 +199,10 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
     const channelName = CHANNEL_NAMES[channel] ?? channel
 
     return (
-        <div className="mt-4 rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-4 space-y-3">
+        <div className="mt-[4px] rounded-xl border border-[#E8E8E8] bg-[#FAFAFA] p-[4px] space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                     <Download size={13} className="text-gray-400" />
                     <span className="text-[12px] font-semibold text-gray-700">История сообщений</span>
                 </div>
@@ -211,19 +211,19 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
 
             {/* Running */}
             {historyStatus === 'running' && (
-                <div className="space-y-2">
+                <div className="space-y-[2px]">
                     <div className="w-full h-1 bg-blue-100 rounded-full overflow-hidden">
                         <div className="h-full bg-blue-400 rounded-full" style={{ animation: 'sync-indeterminate 2s ease-in-out infinite', width: '40%' }} />
                     </div>
                     <style>{`@keyframes sync-indeterminate{0%{transform:translateX(-100%);width:40%}50%{transform:translateX(60%);width:60%}100%{transform:translateX(200%);width:40%}}`}</style>
-                    <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="grid grid-cols-3 gap-[2px] text-center">
                         <StatMini label="Сообщений" value={liveProgress?.messagesImported ?? lastJob?.messagesImported ?? 0} color="blue" />
                         <StatMini label="Чатов"     value={liveProgress?.chatsScanned   ?? lastJob?.chatsScanned   ?? 0} color="blue" />
                         <StatMini label="Контактов" value={lastJob?.contactsFound ?? 0}                                    color="blue" />
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-gray-400">
                         <span className="flex items-center gap-1"><RefreshCw size={10} className="animate-spin" /> Синхронизация выполняется…</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-[2px]">
                             <span className="font-mono">{Math.floor(elapsed/60)}:{String(elapsed%60).padStart(2,'0')}</span>
                             {lastJob?.id && (
                                 <button
@@ -234,7 +234,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                                         setLiveProgress(null)
                                         await loadLastJob()
                                     }}
-                                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[11px]"
+                                    className="flex items-center gap-1 px-[2px] py-0.5 rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-[11px]"
                                 >
                                     <Square size={9} fill="currentColor" /> Остановить
                                 </button>
@@ -246,7 +246,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
 
             {/* Done / Partial */}
             {(historyStatus === 'done' || historyStatus === 'partial') && lastJob && (
-                <div className="space-y-2">
+                <div className="space-y-[2px]">
                     {/* PR9.29: три большие плашки — реальные DB-totals (Message COUNT)
                         для этого аккаунта. Должны совпадать с числом, которое
                         пользователь видит в AI → «База сообщений». Раньше показывали
@@ -275,7 +275,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                                     Всего в базе
                                 </div>
                                 <div
-                                    className="grid grid-cols-3 gap-2 text-center"
+                                    className="grid grid-cols-3 gap-[2px] text-center"
                                     title="Сколько сообщений / чатов / контактов лежит в базе CRM для этого аккаунта прямо сейчас. То же число видно в настройках AI → «База сообщений»."
                                 >
                                     <StatMini label="Сообщений" value={msgs}     color="green" />
@@ -307,7 +307,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                             </div>
                         )
                     })()}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
+                    <div className="flex flex-wrap gap-x-[4px] gap-y-1 text-[11px] text-gray-400">
                         {lastJob.coveredPeriodFrom && lastJob.coveredPeriodTo && (
                             <span>Период: <b className="text-gray-600">{fmt(lastJob.coveredPeriodFrom)} — {fmt(lastJob.coveredPeriodTo)}</b></span>
                         )}
@@ -328,7 +328,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                 if (reason === 'session_locked_needs_rescan') {
                     return (
                         <div className="flex flex-col gap-1 text-[12px] text-red-600">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-[2px]">
                                 <AlertCircle size={14} />
                                 <span>Нужно заново отсканировать QR-код.</span>
                             </div>
@@ -339,7 +339,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                     )
                 }
                 return (
-                    <div className="flex items-center gap-2 text-[12px] text-red-600">
+                    <div className="flex items-center gap-[2px] text-[12px] text-red-600">
                         <AlertCircle size={14} />
                         <span>Ошибка синхронизации. Попробуйте ещё раз.</span>
                     </div>
@@ -353,12 +353,12 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
 
             {/* Mode selector — компактный */}
             {showModeSelector && !isImporting && (
-                <div className="border-t border-[#ECECEC] pt-3 space-y-2">
+                <div className="border-t border-[#ECECEC] pt-3 space-y-[2px]">
                     <div className="flex items-center justify-between">
                         <p className="text-[11px] font-medium text-gray-500">Режим синхронизации:</p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-[2px]">
                             <button onClick={handleStartSync}
-                                className="h-7 px-4 rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2980d4] transition-colors">
+                                className="h-7 px-[4px] rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2980d4] transition-colors">
                                 Запустить
                             </button>
                             <button onClick={() => setShowModeSelector(false)}
@@ -370,7 +370,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                     <div className="space-y-1">
                         {(Object.keys(MODE_LABELS) as SyncMode[]).map(m => (
                             <div key={m} className="py-1">
-                                <label className="flex items-start gap-2 cursor-pointer">
+                                <label className="flex items-start gap-[2px] cursor-pointer">
                                     <input type="radio" name="channelSyncMode" checked={mode === m} onChange={() => setMode(m)} className="mt-0.5 shrink-0" />
                                     <div>
                                         <span className="text-[12px] text-gray-700">{MODE_LABELS[m]}</span>
@@ -378,7 +378,7 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
                                     </div>
                                 </label>
                                 {m === 'last_n_days' && mode === 'last_n_days' && (
-                                    <div className="flex items-center gap-2 mt-1.5 ml-5" onClick={e => e.stopPropagation()}>
+                                    <div className="flex items-center gap-[2px] mt-1.5 ml-5" onClick={e => e.stopPropagation()}>
                                         <select
                                             value={daysBack}
                                             onChange={e => setDaysBack(Number(e.target.value))}
@@ -403,15 +403,15 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
 
             {/* Buttons */}
             {!isImporting && !showModeSelector && (
-                <div className="flex items-center gap-2 pt-2 border-t border-[#ECECEC]">
+                <div className="flex items-center gap-[2px] pt-[2px] border-t border-[#ECECEC]">
                     {historyStatus === 'none' ? (
                         <button onClick={openModeSelector}
-                            className="flex items-center gap-2 h-9 px-4 rounded-lg bg-[#3390EC] text-white text-[13px] font-semibold hover:bg-[#2980d4] transition-colors">
+                            className="flex items-center gap-[2px] h-9 px-[4px] rounded-lg bg-[#3390EC] text-white text-[13px] font-semibold hover:bg-[#2980d4] transition-colors">
                             <Download size={14} /> Загрузить историю
                         </button>
                     ) : (
                         <button onClick={openModeSelector}
-                            className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-[#E0E0E0] text-[12px] text-gray-600 hover:bg-gray-50 transition-colors">
+                            className="flex items-center gap-1.5 h-[8px] px-3 rounded-lg border border-[#E0E0E0] text-[12px] text-gray-600 hover:bg-gray-50 transition-colors">
                             <RefreshCw size={12} /> Синхронизировать снова
                         </button>
                     )}
@@ -426,18 +426,18 @@ export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '
 }
 
 function StatusChip({ status }: { status: 'none' | 'running' | 'done' | 'partial' | 'error' }) {
-    if (status === 'none')    return <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Не загружена</span>
-    if (status === 'running') return <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1"><RefreshCw size={9} className="animate-spin" /> Загружается</span>
-    if (status === 'done')    return <span className="text-[10px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 size={9} /> Актуально</span>
-    if (status === 'partial') return <span className="text-[10px] text-yellow-700 bg-yellow-50 px-2 py-0.5 rounded-full flex items-center gap-1"><Clock size={9} /> Частично</span>
-    if (status === 'error')   return <span className="text-[10px] text-red-700 bg-red-50 px-2 py-0.5 rounded-full flex items-center gap-1"><AlertCircle size={9} /> Ошибка</span>
+    if (status === 'none')    return <span className="text-[10px] text-gray-400 bg-gray-100 px-[2px] py-0.5 rounded-full">Не загружена</span>
+    if (status === 'running') return <span className="text-[10px] text-blue-700 bg-blue-50 px-[2px] py-0.5 rounded-full flex items-center gap-1"><RefreshCw size={9} className="animate-spin" /> Загружается</span>
+    if (status === 'done')    return <span className="text-[10px] text-green-700 bg-green-50 px-[2px] py-0.5 rounded-full flex items-center gap-1"><CheckCircle2 size={9} /> Актуально</span>
+    if (status === 'partial') return <span className="text-[10px] text-yellow-700 bg-yellow-50 px-[2px] py-0.5 rounded-full flex items-center gap-1"><Clock size={9} /> Частично</span>
+    if (status === 'error')   return <span className="text-[10px] text-red-700 bg-red-50 px-[2px] py-0.5 rounded-full flex items-center gap-1"><AlertCircle size={9} /> Ошибка</span>
     return null
 }
 
 function StatMini({ label, value, color }: { label: string; value: number; color: 'blue' | 'green' }) {
     const cls = color === 'blue' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'
     return (
-        <div className={`rounded-lg py-2 px-1 ${cls.split(' ')[0]}`}>
+        <div className={`rounded-lg py-[2px] px-1 ${cls.split(' ')[0]}`}>
             <div className={`text-[15px] font-bold tabular-nums ${cls.split(' ')[1]}`}>{value.toLocaleString()}</div>
             <div className="text-[10px] text-gray-500 mt-0.5">{label}</div>
         </div>

@@ -50,13 +50,13 @@ export function FleetCheckModal({ driverName, onSubmit, onClose }: FleetCheckMod
                 style={{ boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)' }}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-[4px]">
                     <h3 className="text-lg font-semibold text-gray-900">Проверка Fleet</h3>
-                    <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
-                        <X className="h-4 w-4" />
+                    <Button variant="ghost" size="sm" onClick={onClose} className="h-[8px] w-[8px] p-0">
+                        <X className="h-[4px] w-[4px]" />
                     </Button>
                 </div>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-[4px]">
                     Введите номер ВУ для водителя <strong className="text-gray-900">{driverName}</strong>
                 </p>
                 <Input
@@ -65,9 +65,9 @@ export function FleetCheckModal({ driverName, onSubmit, onClose }: FleetCheckMod
                     value={license}
                     onChange={(e) => setLicense(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                    className="mb-4"
+                    className="mb-[4px]"
                 />
-                <div className="flex justify-end gap-2">
+                <div className="flex justify-end gap-[2px]">
                     <Button variant="outline" onClick={onClose}>Отмена</Button>
                     <Button onClick={handleSubmit} disabled={!license.trim() || loading}>
                         {loading ? 'Запуск...' : 'Проверить'}

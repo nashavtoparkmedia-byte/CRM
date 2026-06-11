@@ -118,7 +118,7 @@ export default function TelephonyAiClient({
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-6 animate-in fade-in duration-300">
             <TelephonyTabs active="ai" />
 
-            <div className="flex items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/5 px-4 py-2.5">
+            <div className="flex items-center justify-between gap-3 rounded-md border border-primary/20 bg-primary/5 px-[4px] py-2.5">
                 <div className="flex min-w-0 flex-col">
                     <div className={`text-[14px] font-semibold ${enabled ? 'text-emerald-600' : 'text-muted-foreground'}`}>
                         {enabled ? '✓ AI-анализ включён' : '✗ AI-анализ выключен'}
@@ -131,7 +131,7 @@ export default function TelephonyAiClient({
             </div>
 
             {!canEdit && (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-muted-foreground">
+                <div className="flex items-center gap-[2px] rounded-md border border-border bg-surface px-3 py-[2px] text-[13px] text-muted-foreground">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Только Администратор или Руководитель может редактировать настройки.
                 </div>
@@ -149,7 +149,7 @@ export default function TelephonyAiClient({
                         key={t.key}
                         onClick={() => setTab(t.key)}
                         className={[
-                            'px-3 py-2 text-[14px] font-medium border-b-2 transition-colors',
+                            'px-3 py-[2px] text-[14px] font-medium border-b-2 transition-colors',
                             tab === t.key
                                 ? 'border-primary text-foreground'
                                 : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -202,7 +202,7 @@ export default function TelephonyAiClient({
                 />
             )}
 
-            <footer className="sticky bottom-4 z-10 flex items-center justify-between rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+            <footer className="sticky bottom-[4px] z-10 flex items-center justify-between rounded-md border border-border bg-card px-[4px] py-3 shadow-sm">
                 <div className="text-[12px] text-muted-foreground">
                     {status?.kind === 'ok' && (
                         <span className="inline-flex items-center gap-1 text-emerald-600">
@@ -224,9 +224,9 @@ export default function TelephonyAiClient({
                     type="button"
                     onClick={handleSave}
                     disabled={!canEdit || !dirty || saving}
-                    className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-11 items-center gap-[2px] rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {saving ? <Loader2 className="h-[4px] w-[4px] animate-spin" /> : <Save className="h-[4px] w-[4px]" />}
                     Сохранить
                 </button>
             </footer>
@@ -271,10 +271,10 @@ function CriteriaEditor({
     }
 
     return (
-        <section className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-card p-4">
-                <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+        <section className="flex flex-col gap-[4px]">
+            <div className="flex items-start justify-between gap-3 rounded-md border border-border bg-card p-[4px]">
+                <div className="flex items-start gap-[2px] text-[13px] text-muted-foreground">
+                    <Info className="h-[4px] w-[4px] shrink-0 mt-0.5 text-primary" />
                     <div>
                         AI поставит каждому критерию балл от 1 до выбранной шкалы (обычно 1–10).
                         Чем выше «важность критерия», тем сильнее он влияет на общую оценку звонка.
@@ -286,14 +286,14 @@ function CriteriaEditor({
                         onClick={add}
                         className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-white hover:bg-primary-dark transition-colors"
                     >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-[4px] w-[4px]" />
                         Добавить критерий
                     </button>
                 )}
             </div>
 
             {criteria.length === 0 && (
-                <div className="rounded-md border border-dashed border-border bg-surface p-8 text-center text-[13px] text-muted-foreground">
+                <div className="rounded-md border border-dashed border-border bg-surface p-[8px] text-center text-[13px] text-muted-foreground">
                     Критериев нет. Добавьте хотя бы один, иначе AI не сможет оценить звонок.
                 </div>
             )}
@@ -333,10 +333,10 @@ function CriterionCard({
     const [showAdvanced, setShowAdvanced] = useState(false)
 
     return (
-        <div className={`flex flex-col gap-3 rounded-md border bg-card p-4 transition-opacity ${criterion.isActive ? 'border-border' : 'border-dashed border-border opacity-60'}`}>
+        <div className={`flex flex-col gap-3 rounded-md border bg-card p-[4px] transition-opacity ${criterion.isActive ? 'border-border' : 'border-dashed border-border opacity-60'}`}>
             {/* Header: name + activation */}
             <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[13px] font-bold text-primary">
+                <span className="flex h-[8px] w-[8px] shrink-0 items-center justify-center rounded-full bg-primary/10 text-[13px] font-bold text-primary">
                     {index + 1}
                 </span>
                 <input
@@ -351,7 +351,7 @@ function CriterionCard({
                     placeholder="Название критерия"
                     className="h-10 flex-1 rounded-md border border-border bg-background px-3 text-[15px] font-medium outline-none focus:border-primary disabled:opacity-60"
                 />
-                <label className="flex items-center gap-2 text-[12px] text-muted-foreground whitespace-nowrap">
+                <label className="flex items-center gap-[2px] text-[12px] text-muted-foreground whitespace-nowrap">
                     <span>{criterion.isActive ? 'Активен' : 'Выключен'}</span>
                     <Toggle checked={criterion.isActive} onChange={(v) => onUpdate({ isActive: v })} disabled={!canEdit} />
                 </label>
@@ -368,7 +368,7 @@ function CriterionCard({
                     onChange={(e) => onUpdate({ description: e.target.value })}
                     placeholder="Опишите, на что AI должен обращать внимание в этом критерии"
                     rows={2}
-                    className="min-h-[60px] w-full rounded-md border border-border bg-background px-3 py-2 text-[13.5px] leading-[1.5] outline-none focus:border-primary disabled:opacity-60 resize-y"
+                    className="min-h-[60px] w-full rounded-md border border-border bg-background px-3 py-[2px] text-[13.5px] leading-[1.5] outline-none focus:border-primary disabled:opacity-60 resize-y"
                 />
             </div>
 
@@ -423,9 +423,9 @@ function CriterionCard({
                 Дополнительно
             </button>
             {showAdvanced && (
-                <div className="flex flex-col gap-2 rounded-md bg-surface px-3 py-3 text-[12px] text-muted-foreground">
+                <div className="flex flex-col gap-[2px] rounded-md bg-surface px-3 py-3 text-[12px] text-muted-foreground">
                     <div className="flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <label className="inline-flex items-center gap-[2px] whitespace-nowrap">
                             Шкала оценок — от 1 до
                             <input
                                 disabled={!canEdit}
@@ -437,10 +437,10 @@ function CriterionCard({
                                     const n = parseInt(e.target.value.replace(/\D/g, ''), 10)
                                     onUpdate({ scaleMax: Number.isFinite(n) && n >= 2 ? Math.min(n, 100) : 10 })
                                 }}
-                                className="h-8 w-16 rounded border border-border bg-background px-2 text-center text-[13px] font-semibold text-foreground outline-none focus:border-primary disabled:opacity-60"
+                                className="h-[8px] w-[16px] rounded border border-border bg-background px-[2px] text-center text-[13px] font-semibold text-foreground outline-none focus:border-primary disabled:opacity-60"
                             />
                         </label>
-                        <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                        <label className="inline-flex items-center gap-[2px] whitespace-nowrap">
                             Произвольный вес
                             <input
                                 disabled={!canEdit}
@@ -452,18 +452,18 @@ function CriterionCard({
                                     const n = parseFloat(raw)
                                     onUpdate({ weight: Number.isFinite(n) ? n : 0 })
                                 }}
-                                className="h-8 w-20 rounded border border-border bg-background px-2 text-center text-[13px] font-semibold text-foreground outline-none focus:border-primary disabled:opacity-60"
+                                className="h-[8px] w-20 rounded border border-border bg-background px-[2px] text-center text-[13px] font-semibold text-foreground outline-none focus:border-primary disabled:opacity-60"
                                 title="0.5 / 1.0 / 1.5 покрывают 99% случаев. Здесь — для тонкой настройки."
                             />
                         </label>
                     </div>
-                    <label className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <label className="inline-flex items-center gap-[2px] whitespace-nowrap">
                         Технический ключ
                         <input
                             disabled={!canEdit}
                             value={criterion.key}
                             onChange={(e) => onUpdate({ key: e.target.value.trim() })}
-                            className="h-7 flex-1 rounded border border-border bg-background px-2 font-mono text-[11px] text-foreground outline-none focus:border-primary disabled:opacity-60"
+                            className="h-7 flex-1 rounded border border-border bg-background px-[2px] font-mono text-[11px] text-foreground outline-none focus:border-primary disabled:opacity-60"
                         />
                     </label>
                 </div>
@@ -491,7 +491,7 @@ function WeightPills({
     const isCustom = activeIdx === -1
 
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-[2px]">
             <span className="text-[12px] text-muted-foreground whitespace-nowrap">Важность:</span>
             <div className="inline-flex rounded-md border border-border bg-background p-0.5">
                 {presets.map((p, i) => {
@@ -560,7 +560,7 @@ function OptionsEditor({
     }
 
     return (
-        <section className="flex flex-col gap-3 rounded-md border border-border bg-card p-4">
+        <section className="flex flex-col gap-3 rounded-md border border-border bg-card p-[4px]">
             <div className="flex items-start justify-between gap-3">
                 <div>
                     <div className="text-[15px] font-semibold text-foreground">{title}</div>
@@ -571,14 +571,14 @@ function OptionsEditor({
                         onClick={add}
                         className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-primary px-3 text-[13px] font-medium text-white hover:bg-primary-dark transition-colors"
                     >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-[4px] w-[4px]" />
                         {addLabel}
                     </button>
                 )}
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-[2px]">
                 {options.length === 0 && (
-                    <div className="rounded-md border border-dashed border-border bg-surface p-4 text-center text-[13px] text-muted-foreground">
+                    <div className="rounded-md border border-dashed border-border bg-surface p-[4px] text-center text-[13px] text-muted-foreground">
                         Список пуст.
                     </div>
                 )}
@@ -613,7 +613,7 @@ function OptionRow({
     onRemove: () => void
 }) {
     return (
-        <div className={`flex items-center gap-2 rounded-md border bg-background p-2.5 ${option.isActive ? 'border-border' : 'border-dashed border-border opacity-60'}`}>
+        <div className={`flex items-center gap-[2px] rounded-md border bg-background p-2.5 ${option.isActive ? 'border-border' : 'border-dashed border-border opacity-60'}`}>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-bold text-primary">
                 {index + 1}
             </span>
@@ -637,7 +637,7 @@ function OptionRow({
                 className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-surface hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Выше"
             >
-                <ArrowUp className="h-4 w-4" />
+                <ArrowUp className="h-[4px] w-[4px]" />
             </button>
             <button
                 disabled={!canEdit || index === total - 1}
@@ -645,7 +645,7 @@ function OptionRow({
                 className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-surface hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Ниже"
             >
-                <ArrowDown className="h-4 w-4" />
+                <ArrowDown className="h-[4px] w-[4px]" />
             </button>
             <button
                 disabled={!canEdit}
@@ -653,7 +653,7 @@ function OptionRow({
                 className="h-9 w-9 inline-flex items-center justify-center rounded-md border border-border text-destructive hover:bg-destructive/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Удалить"
             >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-[4px] w-[4px]" />
             </button>
         </div>
     )
@@ -673,7 +673,7 @@ function AdvancedTab({
 }) {
     const [showPrompt, setShowPrompt] = useState(false)
     return (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-[4px]">
             <section className="flex flex-col gap-3 rounded-md border border-border bg-card p-5">
                 <label className="text-[14px] font-semibold text-foreground" htmlFor="model">
                     Модель OpenAI
@@ -699,8 +699,8 @@ function AdvancedTab({
             </section>
 
             <section className="flex flex-col gap-3 rounded-md border border-border bg-card p-5">
-                <div className="flex items-start gap-2 text-[13px] text-muted-foreground">
-                    <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+                <div className="flex items-start gap-[2px] text-[13px] text-muted-foreground">
+                    <Info className="h-[4px] w-[4px] shrink-0 mt-0.5 text-primary" />
                     <div>
                         Системный промт для AI <strong>автоматически собирается</strong> из критериев и справочников.
                         Эта текстовая форма ниже используется только если на вкладке «Критерии оценки» <em>нет ни одного</em>
@@ -711,7 +711,7 @@ function AdvancedTab({
                 <button
                     type="button"
                     onClick={() => setShowPrompt(v => !v)}
-                    className="inline-flex items-center gap-1.5 self-start rounded-md border border-border bg-background px-3 py-2 text-[12px] text-muted-foreground hover:bg-surface hover:text-foreground transition-colors"
+                    className="inline-flex items-center gap-1.5 self-start rounded-md border border-border bg-background px-3 py-[2px] text-[12px] text-muted-foreground hover:bg-surface hover:text-foreground transition-colors"
                 >
                     <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showPrompt ? 'rotate-180' : ''}`} />
                     {showPrompt ? 'Скрыть запасной промт' : 'Показать запасной промт (для опытных)'}
@@ -724,7 +724,7 @@ function AdvancedTab({
                                 <button
                                     type="button"
                                     onClick={() => setSystemPrompt(defaultPrompt)}
-                                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground hover:bg-surface"
+                                    className="inline-flex items-center gap-1 rounded-md px-[2px] py-1 text-[12px] text-muted-foreground hover:text-foreground hover:bg-surface"
                                 >
                                     <RotateCcw className="h-3 w-3" />
                                     Сбросить к шаблону

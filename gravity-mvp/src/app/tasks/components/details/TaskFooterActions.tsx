@@ -18,13 +18,13 @@ export default function TaskFooterActions({ scenario, onResolve, onRequestCloseR
     }
 
     return (
-        <div className="px-4 py-3 flex items-center gap-3">
+        <div className="px-[4px] py-3 flex items-center gap-3">
             <button
                 onClick={handleDone}
                 style={{ height: '36px', padding: '8px 14px', fontSize: '14px', fontWeight: 500, borderRadius: '8px', width: 'auto' }}
                 className="flex items-center justify-center gap-1.5 bg-[#DCFCE7] text-[#166534] hover:bg-[#bbf7d0] transition-colors"
             >
-                <Check className="w-4 h-4" />
+                <Check className="w-[4px] h-[4px]" />
                 Выполнено
             </button>
             <button

@@ -16,7 +16,7 @@ import type { TripDataPoint } from "../actions"
 export function TripsChart({ data }: { data: TripDataPoint[] }) {
     return (
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
-            <div className="mb-4">
+            <div className="mb-[4px]">
                 <h3 className="text-lg font-bold text-foreground">Поездки за 30 дней</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Динамика активности парка</p>
             </div>

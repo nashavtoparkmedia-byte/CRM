@@ -91,13 +91,13 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                     onClick={e => e.stopPropagation()}
                 >
                     <div className="text-center">
-                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-[12px] h-[12px] rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
                             <Check className="w-6 h-6 text-green-600" />
                         </div>
-                        <h3 className="text-[17px] font-semibold text-[#111827] mb-2">
+                        <h3 className="text-[17px] font-semibold text-[#111827] mb-[2px]">
                             Задачи созданы
                         </h3>
-                        <div className="space-y-1 text-[14px] text-[#374151] mb-4">
+                        <div className="space-y-1 text-[14px] text-[#374151] mb-[4px]">
                             <p>Создано: <span className="font-semibold text-green-600">{result.created}</span></p>
                             {result.skipped > 0 && (
                                 <p>Пропущено (уже есть): <span className="font-semibold text-[#94A3B8]">{result.skipped}</span></p>
@@ -105,7 +105,7 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                         </div>
                         <button
                             onClick={onClose}
-                            className="px-4 py-2 rounded-lg bg-[#4f46e5] text-white text-[14px] font-medium hover:bg-[#4338ca] transition-colors"
+                            className="px-[4px] py-[2px] rounded-lg bg-[#4f46e5] text-white text-[14px] font-medium hover:bg-[#4338ca] transition-colors"
                         >
                             Закрыть
                         </button>
@@ -123,20 +123,20 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e7eb]">
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between px-5 py-[4px] border-b border-[#e5e7eb]">
+                    <div className="flex items-center gap-[2px]">
                         <Users className="w-5 h-5 text-[#4f46e5]" />
                         <h3 className="text-[17px] font-semibold text-[#111827]">Массовая забота</h3>
                     </div>
                     <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#f3f4f6] transition-colors">
-                        <X className="w-4 h-4 text-[#6b7280]" />
+                        <X className="w-[4px] h-[4px] text-[#6b7280]" />
                     </button>
                 </div>
 
                 {/* Search */}
                 <div className="px-5 py-3 border-b border-[#f3f4f6]">
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94A3B8]" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-[4px] h-[4px] text-[#94A3B8]" />
                         <input
                             type="text"
                             value={query}
@@ -148,13 +148,13 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                     </div>
                     {/* Search results */}
                     {query.length >= 2 && (
-                        <div className="mt-2 max-h-[180px] overflow-y-auto space-y-0.5">
+                        <div className="mt-[2px] max-h-[180px] overflow-y-auto space-y-0.5">
                             {isSearching ? (
                                 <div className="flex items-center justify-center py-3">
-                                    <Loader2 className="w-4 h-4 animate-spin text-[#94A3B8]" />
+                                    <Loader2 className="w-[4px] h-[4px] animate-spin text-[#94A3B8]" />
                                 </div>
                             ) : searchResults.length === 0 ? (
-                                <p className="text-[13px] text-[#94A3B8] py-2 text-center">Не найдено</p>
+                                <p className="text-[13px] text-[#94A3B8] py-[2px] text-center">Не найдено</p>
                             ) : (
                                 searchResults.map(driver => {
                                     const isSelected = selected.has(driver.id)
@@ -162,7 +162,7 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                                         <button
                                             key={driver.id}
                                             onClick={() => toggleDriver(driver)}
-                                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors ${
+                                            className={`w-full flex items-center gap-[2px] px-3 py-[2px] rounded-lg text-left transition-colors ${
                                                 isSelected
                                                     ? 'bg-indigo-50 border border-indigo-200'
                                                     : 'hover:bg-[#f3f4f6] border border-transparent'
@@ -190,19 +190,19 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                 {/* Selected drivers */}
                 <div className="flex-1 overflow-y-auto px-5 py-3 min-h-[60px]">
                     {selected.size === 0 ? (
-                        <p className="text-[13px] text-[#94A3B8] text-center py-4">
+                        <p className="text-[13px] text-[#94A3B8] text-center py-[4px]">
                             Найдите и выберите водителей для создания задач заботы
                         </p>
                     ) : (
                         <>
-                            <div className="text-[12px] font-medium text-[#64748B] mb-2">
+                            <div className="text-[12px] font-medium text-[#64748B] mb-[2px]">
                                 Выбрано: {selected.size}
                             </div>
                             <div className="flex flex-wrap gap-1.5">
                                 {Array.from(selected.values()).map(driver => (
                                     <span
                                         key={driver.id}
-                                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[#f1f5f9] text-[12px] text-[#374151] font-medium"
+                                        className="inline-flex items-center gap-1 px-[2px] py-1 rounded-full bg-[#f1f5f9] text-[12px] text-[#374151] font-medium"
                                     >
                                         {driver.fullName.split(' ').slice(0, 2).join(' ')}
                                         <button
@@ -221,24 +221,24 @@ export default function BulkCareModal({ onClose }: BulkCareModalProps) {
                 {/* Footer */}
                 <div className="px-5 py-3 border-t border-[#e5e7eb] flex items-center justify-between">
                     {error && (
-                        <p className="text-[12px] text-red-600 flex-1 mr-2">{error}</p>
+                        <p className="text-[12px] text-red-600 flex-1 mr-[2px]">{error}</p>
                     )}
-                    <div className="flex items-center gap-2 ml-auto">
+                    <div className="flex items-center gap-[2px] ml-auto">
                         <button
                             onClick={onClose}
-                            className="px-3 py-2 rounded-lg text-[13px] font-medium text-[#374151] hover:bg-[#f3f4f6] transition-colors"
+                            className="px-3 py-[2px] rounded-lg text-[13px] font-medium text-[#374151] hover:bg-[#f3f4f6] transition-colors"
                         >
                             Отмена
                         </button>
                         <button
                             onClick={handleSubmit}
                             disabled={selected.size === 0 || isSubmitting}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 px-[4px] py-[2px] rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-[4px] h-[4px] animate-spin" />
                             ) : (
-                                <Users className="w-4 h-4" />
+                                <Users className="w-[4px] h-[4px]" />
                             )}
                             Создать {selected.size > 0 ? `(${selected.size})` : ''}
                         </button>

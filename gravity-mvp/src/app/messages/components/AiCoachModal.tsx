@@ -119,7 +119,7 @@ export default function AiCoachModal({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+            className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-[4px] pt-[16px]"
             onClick={() => step !== 'loading' && step !== 'applying' && onClose()}
         >
             <div
@@ -127,8 +127,8 @@ export default function AiCoachModal({
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-[#F0F0F0]">
-                    <h2 className="text-[16px] font-semibold text-[#111] flex items-center gap-2">
+                <div className="px-6 py-[4px] border-b border-[#F0F0F0]">
+                    <h2 className="text-[16px] font-semibold text-[#111] flex items-center gap-[2px]">
                         <Bot size={16} className="text-[#3390EC]" />
                         Обучить AI
                     </h2>
@@ -144,7 +144,7 @@ export default function AiCoachModal({
                 </div>
 
                 {/* Body */}
-                <div className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+                <div className="px-6 py-5 overflow-y-auto flex-1 space-y-[4px]">
                     {/* STEP: EDIT — textarea с draft */}
                     {step === 'edit' && (
                         <>
@@ -198,7 +198,7 @@ export default function AiCoachModal({
                                 </div>
                             )}
                             {coachResult.suggestions.length > 0 && (
-                                <div className="space-y-2">
+                                <div className="space-y-[2px]">
                                     {coachResult.suggestions.map(s => {
                                         const checked = selected.has(s.itemId)
                                         return (
@@ -259,7 +259,7 @@ export default function AiCoachModal({
                                     </ul>
                                 )}
                                 {applyResult.skipped.length > 0 && (
-                                    <div className="mt-2 text-[12px] text-amber-700">
+                                    <div className="mt-[2px] text-[12px] text-amber-700">
                                         Пропущено: {applyResult.skipped.length}
                                     </div>
                                 )}
@@ -272,12 +272,12 @@ export default function AiCoachModal({
                 </div>
 
                 {/* Footer */}
-                <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-[2px]">
                     {step === 'edit' && (
                         <>
                             <button
                                 onClick={onClose}
-                                className="h-[34px] px-4 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
+                                className="h-[34px] px-[4px] rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
                             >
                                 Отмена
                             </button>
@@ -287,7 +287,7 @@ export default function AiCoachModal({
                                 title={correctedText.trim() === originalDraft.trim()
                                     ? 'Сначала исправь черновик'
                                     : 'Запустить AI для анализа исправлений'}
-                                className="h-[34px] px-4 rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5"
+                                className="h-[34px] px-[4px] rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1.5"
                             >
                                 <Bot size={12} />
                                 Обучить AI
@@ -298,7 +298,7 @@ export default function AiCoachModal({
                         <>
                             <button
                                 onClick={() => onApply(correctedText, null)}
-                                className="h-[34px] px-4 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
+                                className="h-[34px] px-[4px] rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
                             >
                                 Не обновлять
                             </button>
@@ -306,7 +306,7 @@ export default function AiCoachModal({
                                 <button
                                     onClick={handleApply}
                                     disabled={selected.size === 0}
-                                    className="h-[34px] px-4 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
+                                    className="h-[34px] px-[4px] rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors inline-flex items-center gap-1.5"
                                 >
                                     <Check size={12} />
                                     Применить {selected.size > 0 && `(${selected.size})`}
@@ -317,7 +317,7 @@ export default function AiCoachModal({
                     {step === 'done' && (
                         <button
                             onClick={handleFinish}
-                            className="h-[34px] px-4 rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] transition-colors"
+                            className="h-[34px] px-[4px] rounded-lg bg-[#3390EC] text-white text-[12px] font-semibold hover:bg-[#2B7FD4] transition-colors"
                         >
                             Закрыть и отправить
                         </button>

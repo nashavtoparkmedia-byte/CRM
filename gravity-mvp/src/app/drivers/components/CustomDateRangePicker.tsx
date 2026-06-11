@@ -145,9 +145,9 @@ export function CustomDateRangePicker({
                 }
             ` }} />
 
-            <div className="mb-4 flex items-center justify-between px-1">
+            <div className="mb-[4px] flex items-center justify-between px-1">
                 <button onClick={prevMonth} className="p-1 hover:bg-gray-50 rounded-full transition-colors">
-                    <ChevronLeft className="h-4 w-4 text-gray-400" />
+                    <ChevronLeft className="h-[4px] w-[4px] text-gray-400" />
                 </button>
                 <div className="flex items-center gap-1 text-[11px] font-bold text-gray-900">
                     <span>{monthNames[currentMonth.getMonth()]}</span>
@@ -155,11 +155,11 @@ export function CustomDateRangePicker({
                     <ChevronRight className="h-3 w-3 text-gray-400" />
                 </div>
                 <button onClick={nextMonth} className="p-1 hover:bg-gray-50 rounded-full transition-colors">
-                    <ChevronRight className="h-4 w-4 text-gray-400" />
+                    <ChevronRight className="h-[4px] w-[4px] text-gray-400" />
                 </button>
             </div>
 
-            <div className="mb-2 grid grid-cols-7 text-center">
+            <div className="mb-[2px] grid grid-cols-7 text-center">
                 {["П", "В", "С", "Ч", "П", "С", "В"].map((d, i) => (
                     <span key={i} className="text-[9px] font-bold text-gray-300 uppercase tracking-widest">
                         {d}
@@ -169,7 +169,7 @@ export function CustomDateRangePicker({
 
             <div className="grid grid-cols-7 gap-y-0.5">
                 {daysInMonth.map((date, i) => {
-                    if (!date) return <div key={`empty-${i}`} className="h-8" />
+                    if (!date) return <div key={`empty-${i}`} className="h-[8px]" />
                     
                     const inRange = displayInRange(date)
                     const isToday = isSameDay(date, today)
@@ -179,7 +179,7 @@ export function CustomDateRangePicker({
                     return (
                         <div
                             key={date.toISOString()}
-                            className="relative flex items-center justify-center h-8 cursor-pointer"
+                            className="relative flex items-center justify-center h-[8px] cursor-pointer"
                             onMouseEnter={() => !endDate && setHoverDate(date)}
                             onMouseLeave={() => setHoverDate(null)}
                             onClick={() => handleDateClick(date)}

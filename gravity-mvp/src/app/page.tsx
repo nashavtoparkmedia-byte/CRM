@@ -23,7 +23,7 @@ export default async function DashboardPage() {
                         description="Общий обзор состояния парка"
                     />
                     <DashboardTabs />
-                    <div className="mt-2 mb-4">
+                    <div className="mt-[2px] mb-[4px]">
                         <SectionDescription sectionKey="dashboard" />
                     </div>
                 </div>

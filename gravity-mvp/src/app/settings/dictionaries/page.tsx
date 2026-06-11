@@ -63,12 +63,12 @@ export default function DictionariesPage() {
         load()
     }
 
-    if (isLoading && !dicts) return <div className="p-8 text-center text-gray-500">Загрузка справочников...</div>
+    if (isLoading && !dicts) return <div className="p-[8px] text-center text-gray-500">Загрузка справочников...</div>
 
     if (currentUser && currentUser.role === 'Менеджер') {
         return (
             <PageContainer>
-                <div className="p-8 text-center text-red-500 font-bold bg-red-50 rounded-xl border border-red-200 mt-6 shadow-sm">
+                <div className="p-[8px] text-center text-red-500 font-bold bg-red-50 rounded-xl border border-red-200 mt-6 shadow-sm">
                     Доступ запрещен. У вас недостаточно прав для редактирования справочников (разрешено только Руководителям и Администраторам).
                 </div>
             </PageContainer>
@@ -83,14 +83,14 @@ export default function DictionariesPage() {
             />
 
             {/* Tabs grouped into containers */}
-            <div className="flex flex-wrap items-center gap-4 mt-8">
+            <div className="flex flex-wrap items-center gap-[4px] mt-[8px]">
                 {/* Group 1: Operational */}
                 <div className="p-1 px-2.5 bg-gray-50/80 rounded-2xl border border-gray-200 flex items-center gap-1 shadow-sm">
                     {['contact_results', 'next_actions'].map(type => (
                         <button
                             key={type}
                             onClick={() => setActiveTab(type as DictionaryType)}
-                            className={`px-4 py-1.5 text-[13px] font-bold rounded-xl transition-all whitespace-nowrap ${
+                            className={`px-[4px] py-1.5 text-[13px] font-bold rounded-xl transition-all whitespace-nowrap ${
                                 activeTab === type 
                                     ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
                                     : 'text-gray-500 hover:text-gray-800'
@@ -107,7 +107,7 @@ export default function DictionariesPage() {
                         <button
                             key={type}
                             onClick={() => setActiveTab(type as DictionaryType)}
-                            className={`px-4 py-1.5 text-[13px] font-bold rounded-xl transition-all whitespace-nowrap ${
+                            className={`px-[4px] py-1.5 text-[13px] font-bold rounded-xl transition-all whitespace-nowrap ${
                                 activeTab === type 
                                     ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
                                     : 'text-gray-500 hover:text-gray-800'
@@ -119,17 +119,17 @@ export default function DictionariesPage() {
                 </div>
             </div>
 
-            <div className="mt-4 bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="mt-[4px] bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                 {/* List Items */}
                 <div className="divide-y divide-gray-100">
                     {dicts?.[activeTab]?.map((item: DictionaryItem) => (
-                        <div key={item.id} className="flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors">
+                        <div key={item.id} className="flex items-center justify-between px-[4px] py-3 hover:bg-gray-50 transition-colors">
                             <div>
                                 <span className={`text-[14px] font-medium ${item.isActive ? 'text-gray-900' : 'text-gray-400 line-through'}`}>
                                     {item.label}
                                 </span>
                                 {item.metadata && Object.keys(item.metadata).length > 0 && (
-                                    <span className="ml-2 text-[11px] text-gray-400">
+                                    <span className="ml-[2px] text-[11px] text-gray-400">
                                         ({JSON.stringify(item.metadata)})
                                     </span>
                                 )}
@@ -153,12 +153,12 @@ export default function DictionariesPage() {
                         </div>
                     ))}
                     {(!dicts?.[activeTab] || dicts[activeTab].length === 0) && (
-                        <div className="p-8 text-center text-gray-400 text-sm">Список пуст</div>
+                        <div className="p-[8px] text-center text-gray-400 text-sm">Список пуст</div>
                     )}
                 </div>
 
                 {/* Add Box */}
-                <div className="p-4 border-t border-gray-100 bg-gray-50/50 flex gap-2">
+                <div className="p-[4px] border-t border-gray-100 bg-gray-50/50 flex gap-[2px]">
                     <input
                         type="text"
                         placeholder="Добавить новую запись..."

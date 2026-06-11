@@ -40,14 +40,14 @@ export default function TaskHistorySection({
     return (
         <div>
             <div className="flex items-center justify-between mb-3">
-                <h4 className="text-section-label flex items-center gap-2">
+                <h4 className="text-section-label flex items-center gap-[2px]">
                     <FileText className="w-3.5 h-3.5" />
                     История
                 </h4>
                 <div className="flex bg-[#F1F5F9] rounded-md p-0.5" style={{ fontSize: '11px' }}>
                     <button
                         onClick={() => setHistoryMode('actions')}
-                        className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                        className={`px-[2px] py-0.5 rounded transition-colors cursor-pointer ${
                             historyMode === 'actions'
                                 ? 'bg-white text-[#111827] shadow-sm font-medium'
                                 : 'text-[#94A3B8] hover:text-[#64748B]'
@@ -57,7 +57,7 @@ export default function TaskHistorySection({
                     </button>
                     <button
                         onClick={() => setHistoryMode('all')}
-                        className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                        className={`px-[2px] py-0.5 rounded transition-colors cursor-pointer ${
                             historyMode === 'all'
                                 ? 'bg-white text-[#111827] shadow-sm font-medium'
                                 : 'text-[#94A3B8] hover:text-[#64748B]'
@@ -68,13 +68,13 @@ export default function TaskHistorySection({
                 </div>
             </div>
             {isLoading ? (
-                <div className="space-y-2">
+                <div className="space-y-[2px]">
                     {[1, 2, 3].map((i) => (
-                        <div key={i} className="h-8 bg-[#f3f4f6] rounded-lg animate-pulse" />
+                        <div key={i} className="h-[8px] bg-[#f3f4f6] rounded-lg animate-pulse" />
                     ))}
                 </div>
             ) : events && events.length > 0 ? (
-                <div className={`space-y-0 ${isHistoryExpanded && (events?.length || 0) > 10 ? 'max-h-[300px] overflow-y-auto pr-2 custom-scrollbar' : ''}`}>
+                <div className={`space-y-0 ${isHistoryExpanded && (events?.length || 0) > 10 ? 'max-h-[300px] overflow-y-auto pr-[2px] custom-scrollbar' : ''}`}>
                     {(() => {
                         // Calculate first response time
                         const createdEvent = events.find((e: any) => e.eventType === 'created');
@@ -187,12 +187,12 @@ export default function TaskHistorySection({
                             return (
                                 <div key={`g-${gi}`}>
                                     {showDaySeparator && (
-                                        <div className={`flex items-center gap-2 ${gi > 0 ? 'mt-3 mb-2' : 'mb-2'}`}>
+                                        <div className={`flex items-center gap-[2px] ${gi > 0 ? 'mt-3 mb-[2px]' : 'mb-[2px]'}`}>
                                             <span style={{ fontSize: '11px', fontWeight: 500, color: '#94A3B8' }} className="uppercase tracking-wide shrink-0">{groupDay}</span>
                                             <div className="flex-1 h-px bg-[#F0F0F0]" />
                                         </div>
                                     )}
-                                    <div className={`${!showDaySeparator && gi > 0 ? 'mt-2' : ''}`}>
+                                    <div className={`${!showDaySeparator && gi > 0 ? 'mt-[2px]' : ''}`}>
                                         {/* Actor header — initials + type badge */}
                                         <div className="flex items-center gap-1.5 mb-1">
                                             <TooltipProvider>
@@ -366,7 +366,7 @@ export default function TaskHistorySection({
 
                                                 return (
                                                     <div key={event.id}>
-                                                        <div className="flex items-start gap-2">
+                                                        <div className="flex items-start gap-[2px]">
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-start gap-1.5">
                                                                     <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isSlaEscalated ? 'bg-red-500' : 'bg-[#d1d5db]'}`} />

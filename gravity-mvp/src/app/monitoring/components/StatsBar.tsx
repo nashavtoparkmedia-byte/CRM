@@ -16,14 +16,14 @@ export function StatsBar({ stats }: StatsBarProps) {
         : null;
 
     return (
-        <div className="flex items-center gap-6 rounded-xl bg-card p-4 shadow-sm border">
-            <div className="flex items-center gap-2">
+        <div className="flex items-center gap-6 rounded-xl bg-card p-[4px] shadow-sm border">
+            <div className="flex items-center gap-[2px]">
                 <Users className="h-5 w-5 text-muted-foreground" />
                 <span className="text-sm font-medium">Активные:</span>
                 <span className="text-lg font-bold">{stats.activeDrivers}</span>
             </div>
             <div className="h-6 w-px bg-border" />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-[2px]">
                 <SearchIcon className="h-5 w-5 text-muted-foreground" />
                 <span className="text-sm font-medium">Fleet:</span>
                 <span className="text-lg font-bold">{checksDisplay}</span>
@@ -33,7 +33,7 @@ export function StatsBar({ stats }: StatsBarProps) {
                     </span>
                 )}
                 {stats.checksLimitReached && (
-                    <span className="text-xs text-destructive font-medium px-2 py-0.5 bg-destructive/10 rounded">
+                    <span className="text-xs text-destructive font-medium px-[2px] py-0.5 bg-destructive/10 rounded">
                         Лимит
                     </span>
                 )}

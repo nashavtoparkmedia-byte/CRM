@@ -158,7 +158,7 @@ export function YandexSyncControl() {
 
     return (
         <>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-[2px]">
                 {statusText && (
                     <div className="flex items-center gap-1.5">
                         {statusIcon}
@@ -168,7 +168,7 @@ export function YandexSyncControl() {
                 <button
                     onClick={handleClick}
                     disabled={buttonDisabled}
-                    className="h-[36px] px-3 rounded-lg bg-[#F4F5F7] hover:bg-[#EBEDF0] disabled:opacity-50 disabled:cursor-not-allowed text-[13px] font-semibold text-[#111] flex items-center gap-2 transition-colors"
+                    className="h-[36px] px-3 rounded-lg bg-[#F4F5F7] hover:bg-[#EBEDF0] disabled:opacity-50 disabled:cursor-not-allowed text-[13px] font-semibold text-[#111] flex items-center gap-[2px] transition-colors"
                     title={isRunning ? 'Идёт обновление...' : 'Обновить данные из Яндекс.Флит'}
                 >
                     <RefreshCw
@@ -181,7 +181,7 @@ export function YandexSyncControl() {
 
             {toast && (
                 <div
-                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-lg shadow-lg text-[13px] font-medium animate-in slide-in-from-bottom-4 duration-200 z-[120] max-w-[480px] ${
+                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-[4px] py-2.5 rounded-lg shadow-lg text-[13px] font-medium animate-in slide-in-from-bottom-4 duration-200 z-[120] max-w-[480px] ${
                         toast.type === 'success' ? 'bg-emerald-500 text-white' :
                         toast.type === 'error' ? 'bg-red-500 text-white' :
                         'bg-[#3390EC] text-white'

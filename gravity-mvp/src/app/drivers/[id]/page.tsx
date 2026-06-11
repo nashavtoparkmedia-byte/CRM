@@ -22,7 +22,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
     const id = resolvedParams?.id;
 
     if (!id) {
-        return <div className="p-8 text-center text-red-500">Некорректный ID водителя</div>;
+        return <div className="p-[8px] text-center text-red-500">Некорректный ID водителя</div>;
     }
 
     // Fetch real driver data from Yandex and stored TG link from DB in parallel
@@ -57,7 +57,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
 
     return (
         <div className="flex flex-col gap-6 animate-in fade-in duration-500 max-w-5xl mx-auto w-full">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-[4px]">
                 <Button variant="outline" size="icon" asChild className="rounded-xl h-10 w-10 border-muted-foreground/20 text-muted-foreground hover:bg-secondary">
                     <Link href="/drivers">
                         <ArrowLeft size={18} />
@@ -74,26 +74,26 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
             <div className="rounded-2xl border bg-card p-6 shadow-sm">
                 <Tabs defaultValue="profile" className="w-full">
                     <TabsList className="mb-6 grid w-full grid-cols-6 bg-secondary/50 p-1.5 rounded-xl h-auto">
-                        <TabsTrigger value="profile" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><User size={16} className="mr-2" /> Профиль</TabsTrigger>
-                        <TabsTrigger value="timeline" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><Clock size={16} className="mr-2" /> Хронология</TabsTrigger>
-                        <TabsTrigger value="calls" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><PhoneIcon size={16} className="mr-2" /> Звонки</TabsTrigger>
-                        <TabsTrigger value="transactions" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><CreditCard size={16} className="mr-2" /> Транзакции</TabsTrigger>
-                        <TabsTrigger value="fines" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><AlertTriangle size={16} className="mr-2" /> Штрафы</TabsTrigger>
-                        <TabsTrigger value="cars" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><Car size={16} className="mr-2" /> Авто</TabsTrigger>
+                        <TabsTrigger value="profile" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><User size={16} className="mr-[2px]" /> Профиль</TabsTrigger>
+                        <TabsTrigger value="timeline" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><Clock size={16} className="mr-[2px]" /> Хронология</TabsTrigger>
+                        <TabsTrigger value="calls" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><PhoneIcon size={16} className="mr-[2px]" /> Звонки</TabsTrigger>
+                        <TabsTrigger value="transactions" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><CreditCard size={16} className="mr-[2px]" /> Транзакции</TabsTrigger>
+                        <TabsTrigger value="fines" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><AlertTriangle size={16} className="mr-[2px]" /> Штрафы</TabsTrigger>
+                        <TabsTrigger value="cars" className="rounded-lg py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground"><Car size={16} className="mr-[2px]" /> Авто</TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="profile" className="space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                    <TabsContent value="profile" className="space-y-[4px] animate-in fade-in zoom-in-95 duration-300">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
+                            <div className="space-y-[4px]">
                                 <div>
                                     <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Основная информация</h3>
-                                    <div className="rounded-xl border p-5 space-y-4 bg-secondary/20 shadow-inner">
+                                    <div className="rounded-xl border p-5 space-y-[4px] bg-secondary/20 shadow-inner">
                                         <div className="grid grid-cols-[120px_1fr] gap-3 text-sm">
                                             <span className="text-muted-foreground font-medium">ФИО:</span>
                                             <span className="font-semibold text-foreground">{driverName}</span>
 
                                             <span className="text-muted-foreground font-medium">Телефон:</span>
-                                            <span className="font-semibold text-foreground flex items-center gap-2 flex-wrap">
+                                            <span className="font-semibold text-foreground flex items-center gap-[2px] flex-wrap">
                                                 {driverPhone}
                                                 {driverPhone && driverPhone !== '—' && (
                                                     <CallButton phoneNumber={driverPhone} label="Позвонить" />
@@ -120,7 +120,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                     </div>
                                 </div>
                             </div>
-                            <div className="space-y-4">
+                            <div className="space-y-[4px]">
                                 <div>
                                     <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Реквизиты и Данные</h3>
                                     <div className="rounded-xl border p-5 space-y-3 bg-secondary/20 shadow-inner min-h-[140px] flex items-center justify-center">
@@ -153,25 +153,25 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
 
                     <TabsContent value="calls" className="animate-in fade-in zoom-in-95 duration-300">
                         <div className="rounded-xl border p-5 bg-secondary/20 shadow-inner">
-                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">История звонков</h3>
+                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-[4px]">История звонков</h3>
                             {prismaDriver ? (
                                 <CallsList driverId={prismaDriver.id} limit={50} />
                             ) : (
-                                <div className="text-[13px] text-muted-foreground py-2">Водитель ещё не зарегистрирован в CRM — звонков пока нет</div>
+                                <div className="text-[13px] text-muted-foreground py-[2px]">Водитель ещё не зарегистрирован в CRM — звонков пока нет</div>
                             )}
                         </div>
                     </TabsContent>
 
                     <TabsContent value="transactions" className="animate-in fade-in zoom-in-95 duration-300">
-                        <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-secondary/20">
-                            <CreditCard size={48} className="mb-4 opacity-40 text-primary" strokeWidth={1} />
+                        <div className="flex flex-col items-center justify-center py-[16px] text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-secondary/20">
+                            <CreditCard size={48} className="mb-[4px] opacity-40 text-primary" strokeWidth={1} />
                             <p className="font-medium">История транзакций будет доступна здесь</p>
                         </div>
                     </TabsContent>
 
                     <TabsContent value="fines" className="animate-in fade-in zoom-in-95 duration-300">
-                        <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-secondary/20">
-                            <AlertTriangle size={48} className="mb-4 opacity-40 text-red-500" strokeWidth={1} />
+                        <div className="flex flex-col items-center justify-center py-[16px] text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-secondary/20">
+                            <AlertTriangle size={48} className="mb-[4px] opacity-40 text-red-500" strokeWidth={1} />
                             <p className="font-medium">Информация о штрафах будет доступна здесь</p>
                         </div>
                     </TabsContent>
@@ -179,7 +179,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                     <TabsContent value="cars" className="animate-in fade-in zoom-in-95 duration-300">
                         {car ? (
                             <div className="rounded-xl border p-5 bg-secondary/20 shadow-inner">
-                                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">Привязанный автомобиль</h3>
+                                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-[4px]">Привязанный автомобиль</h3>
                                 <div className="grid grid-cols-[140px_1fr] gap-3 text-sm">
                                     <span className="text-muted-foreground font-medium">Марка / Модель:</span>
                                     <span className="font-semibold">{[car.brand, car.model].filter(Boolean).join(' ') || '—'}</span>
@@ -198,8 +198,8 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                 </div>
                             </div>
                         ) : (
-                            <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-secondary/20">
-                                <Car size={48} className="mb-4 opacity-40 text-primary" strokeWidth={1} />
+                            <div className="flex flex-col items-center justify-center py-[16px] text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-secondary/20">
+                                <Car size={48} className="mb-[4px] opacity-40 text-primary" strokeWidth={1} />
                                 <p className="font-medium">Автомобиль не привязан</p>
                             </div>
                         )}

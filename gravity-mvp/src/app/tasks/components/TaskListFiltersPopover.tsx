@@ -117,7 +117,7 @@ export default function TaskListFiltersPopover({ crmUsers }: Props) {
                     <DialogTitle>Фильтры</DialogTitle>
                 </DialogHeader>
 
-                <div className="flex items-center justify-between text-[12px] text-[#64748B] mb-2">
+                <div className="flex items-center justify-between text-[12px] text-[#64748B] mb-[2px]">
                     <span>Активных фильтров: {activeCount}</span>
                     {activeCount > 0 && (
                         <button
@@ -261,11 +261,11 @@ export default function TaskListFiltersPopover({ crmUsers }: Props) {
 
 function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="mb-4">
-            <div className="text-[11px] uppercase tracking-wide text-[#94A3B8] font-semibold mb-2">
+        <div className="mb-[4px]">
+            <div className="text-[11px] uppercase tracking-wide text-[#94A3B8] font-semibold mb-[2px]">
                 {title}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-[2px]">
                 {children}
             </div>
         </div>
@@ -288,7 +288,7 @@ function SelectField({
                 value={value}
                 disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}
-                className="bg-white border border-[#E4ECFC] rounded-lg px-2 py-1.5 text-[13px] text-[#0F172A] outline-none focus:border-[#1E40AF] cursor-pointer disabled:opacity-50"
+                className="bg-white border border-[#E4ECFC] rounded-lg px-[2px] py-1.5 text-[13px] text-[#0F172A] outline-none focus:border-[#1E40AF] cursor-pointer disabled:opacity-50"
             >
                 {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
@@ -304,12 +304,12 @@ function ToggleField({
     onChange: (v: boolean) => void
 }) {
     return (
-        <label className="flex items-center gap-2 text-[13px] text-[#0F172A] cursor-pointer px-2 py-1.5 rounded-lg hover:bg-[#F8FAFC]">
+        <label className="flex items-center gap-[2px] text-[13px] text-[#0F172A] cursor-pointer px-[2px] py-1.5 rounded-lg hover:bg-[#F8FAFC]">
             <input
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => onChange(e.target.checked)}
-                className="w-4 h-4 rounded border-[#CBD5E1]"
+                className="w-[4px] h-[4px] rounded border-[#CBD5E1]"
             />
             <span>{label}</span>
         </label>
@@ -370,7 +370,7 @@ function ScenarioFieldControl({
                     value={(existing?.value as number) ?? ''}
                     onChange={(e) => apply('gt', e.target.value ? Number(e.target.value) : undefined)}
                     placeholder="0"
-                    className="bg-white border border-[#E4ECFC] rounded-lg px-2 py-1.5 text-[13px] text-[#0F172A] outline-none focus:border-[#1E40AF]"
+                    className="bg-white border border-[#E4ECFC] rounded-lg px-[2px] py-1.5 text-[13px] text-[#0F172A] outline-none focus:border-[#1E40AF]"
                 />
             </label>
         )

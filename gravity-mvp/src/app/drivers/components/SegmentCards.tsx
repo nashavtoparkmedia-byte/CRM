@@ -51,7 +51,7 @@ export function SegmentCards({
                         key={s.id}
                         onClick={() => onSegmentClick(isActive ? 'all' : s.id)}
                         className={cn(
-                            "h-[32px] px-3 rounded-lg flex items-center gap-2 text-[13px] font-semibold transition-colors",
+                            "h-[32px] px-3 rounded-lg flex items-center gap-[2px] text-[13px] font-semibold transition-colors",
                             isActive
                                 ? "bg-[#3390EC] text-white"
                                 : "text-[#8A9099] hover:bg-[#F0F2F5]"

@@ -98,19 +98,19 @@ export default function ReassignModal({ sourceManager, allManagers, onClose, onD
                 <div className="absolute inset-0 bg-black/40" />
                 <div className="relative bg-white rounded-xl w-[400px] p-6" onClick={e => e.stopPropagation()}>
                     <div className="text-center">
-                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-[12px] h-[12px] rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
                             <Check className="w-6 h-6 text-green-600" />
                         </div>
-                        <h3 className="text-[17px] font-semibold text-[#111827] mb-2">Задачи переданы</h3>
+                        <h3 className="text-[17px] font-semibold text-[#111827] mb-[2px]">Задачи переданы</h3>
                         <p className="text-[14px] text-[#374151] mb-1">
                             Передано: <span className="font-semibold text-green-600">{result.reassigned}</span>
                         </p>
-                        <p className="text-[13px] text-[#94A3B8] mb-4">
+                        <p className="text-[13px] text-[#94A3B8] mb-[4px]">
                             {sourceManager.managerName} → {targetName}
                         </p>
                         <button
                             onClick={() => { onDone(); onClose() }}
-                            className="px-4 py-2 rounded-lg bg-[#4f46e5] text-white text-[14px] font-medium hover:bg-[#4338ca] transition-colors"
+                            className="px-[4px] py-[2px] rounded-lg bg-[#4f46e5] text-white text-[14px] font-medium hover:bg-[#4338ca] transition-colors"
                         >
                             Закрыть
                         </button>
@@ -128,13 +128,13 @@ export default function ReassignModal({ sourceManager, allManagers, onClose, onD
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-[#e5e7eb]">
+                <div className="flex items-center justify-between px-5 py-[4px] border-b border-[#e5e7eb]">
                     <div>
                         <h3 className="text-[17px] font-semibold text-[#111827]">Передать задачи</h3>
                         <p className="text-[13px] text-[#94A3B8] mt-0.5">От: {sourceManager.managerName}</p>
                     </div>
                     <button onClick={onClose} className="p-1 rounded-lg hover:bg-[#f3f4f6] transition-colors">
-                        <X className="w-4 h-4 text-[#6b7280]" />
+                        <X className="w-[4px] h-[4px] text-[#6b7280]" />
                     </button>
                 </div>
 
@@ -156,17 +156,17 @@ export default function ReassignModal({ sourceManager, allManagers, onClose, onD
                 {/* Task list */}
                 <div className="flex-1 overflow-y-auto px-5 py-3 min-h-[120px]">
                     {isLoading ? (
-                        <div className="flex items-center justify-center py-8">
+                        <div className="flex items-center justify-center py-[8px]">
                             <Loader2 className="w-5 h-5 animate-spin text-[#94A3B8]" />
                         </div>
                     ) : tasks.length === 0 ? (
-                        <p className="text-[13px] text-[#94A3B8] text-center py-8">Нет активных задач</p>
+                        <p className="text-[13px] text-[#94A3B8] text-center py-[8px]">Нет активных задач</p>
                     ) : (
                         <>
                             {/* Select all */}
                             <button
                                 onClick={toggleAll}
-                                className="text-[12px] font-medium text-[#4f46e5] hover:underline mb-2"
+                                className="text-[12px] font-medium text-[#4f46e5] hover:underline mb-[2px]"
                             >
                                 {selected.size === tasks.length ? 'Снять все' : `Выбрать все (${tasks.length})`}
                             </button>
@@ -181,7 +181,7 @@ export default function ReassignModal({ sourceManager, allManagers, onClose, onD
                                         <button
                                             key={task.id}
                                             onClick={() => toggleTask(task.id)}
-                                            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors ${
+                                            className={`w-full flex items-center gap-[2px] px-3 py-[2px] rounded-lg text-left transition-colors ${
                                                 isChecked ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-[#f9fafb] border border-transparent'
                                             }`}
                                         >
@@ -227,23 +227,23 @@ export default function ReassignModal({ sourceManager, allManagers, onClose, onD
 
                 {/* Footer */}
                 <div className="px-5 py-3 border-t border-[#e5e7eb] flex items-center justify-between">
-                    {error && <p className="text-[12px] text-red-600 flex-1 mr-2">{error}</p>}
-                    <div className="flex items-center gap-2 ml-auto">
+                    {error && <p className="text-[12px] text-red-600 flex-1 mr-[2px]">{error}</p>}
+                    <div className="flex items-center gap-[2px] ml-auto">
                         <button
                             onClick={onClose}
-                            className="px-3 py-2 rounded-lg text-[13px] font-medium text-[#374151] hover:bg-[#f3f4f6] transition-colors"
+                            className="px-3 py-[2px] rounded-lg text-[13px] font-medium text-[#374151] hover:bg-[#f3f4f6] transition-colors"
                         >
                             Отмена
                         </button>
                         <button
                             onClick={handleSubmit}
                             disabled={selected.size === 0 || !targetId || isSubmitting}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-1.5 px-[4px] py-[2px] rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isSubmitting ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <Loader2 className="w-[4px] h-[4px] animate-spin" />
                             ) : (
-                                <ArrowRight className="w-4 h-4" />
+                                <ArrowRight className="w-[4px] h-[4px]" />
                             )}
                             Передать {selected.size > 0 ? `(${selected.size})` : ''}
                         </button>

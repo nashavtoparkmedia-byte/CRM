@@ -22,7 +22,7 @@ export default function ChurnExtraFilters() {
     const parks = useTopParks(20)
 
     return (
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-[2px] flex-wrap">
             {/* Просрочено chip */}
             <button
                 onClick={() => {
@@ -50,7 +50,7 @@ export default function ChurnExtraFilters() {
                         setFilters({ offerAllowed: v })
                         void recordUsage('filter_change', { key: 'offerAllowed', value: v ?? null })
                     }}
-                    className="bg-white border border-[#E4ECFC] rounded-lg px-2 py-1 text-[12px] text-[#0F172A] outline-none focus:border-[#1E40AF] cursor-pointer"
+                    className="bg-white border border-[#E4ECFC] rounded-lg px-[2px] py-1 text-[12px] text-[#0F172A] outline-none focus:border-[#1E40AF] cursor-pointer"
                 >
                     <option value="">все</option>
                     <option value="yes">Да</option>
@@ -70,7 +70,7 @@ export default function ChurnExtraFilters() {
                         void recordUsage('filter_change', { key: 'park', value: v ?? null })
                     }}
                     disabled={parks.length === 0}
-                    className="bg-white border border-[#E4ECFC] rounded-lg px-2 py-1 text-[12px] text-[#0F172A] outline-none focus:border-[#1E40AF] cursor-pointer disabled:opacity-50"
+                    className="bg-white border border-[#E4ECFC] rounded-lg px-[2px] py-1 text-[12px] text-[#0F172A] outline-none focus:border-[#1E40AF] cursor-pointer disabled:opacity-50"
                 >
                     <option value="">все</option>
                     {parks.map(p => (

@@ -109,7 +109,7 @@ export default function TaskListColumnsSettings({ view, trigger }: Props) {
                     <DialogTitle>Настройка списка — {view.label}</DialogTitle>
                 </DialogHeader>
 
-                <div className="flex items-center justify-between text-[12px] text-[#64748B] mb-2">
+                <div className="flex items-center justify-between text-[12px] text-[#64748B] mb-[2px]">
                     <span>
                         Показано {layout.blocks.reduce((s, b) => s + b.visibleColumns.length, 0)} из{' '}
                         {layout.blocks.reduce((s, b) => s + b.columns.length, 0)} колонок ·{' '}
@@ -203,12 +203,12 @@ function BlockPanel({
                     else if (drag?.kind === 'col') onColumnDrop(null)
                 }}
                 onDragEnd={onDragEnd}
-                className={`flex items-center gap-2 px-3 py-2 select-none transition-colors ${
+                className={`flex items-center gap-[2px] px-3 py-[2px] select-none transition-colors ${
                     editingLabel ? '' : 'cursor-grab'
                 } ${isBlockDropTarget ? 'ring-2 ring-[#4338CA]' : ''} ${isDraggingThis ? 'opacity-40' : ''}`}
                 style={{ backgroundColor: block.color ?? '#F3F4F6' }}
             >
-                <GripVertical className="w-4 h-4 text-[#64748B] shrink-0" />
+                <GripVertical className="w-[4px] h-[4px] text-[#64748B] shrink-0" />
                 {editingLabel ? (
                     <div className="flex items-center gap-1 flex-1">
                         <input
@@ -220,7 +220,7 @@ function BlockPanel({
                                 if (e.key === 'Escape') { setLabelDraft(block.label); setEditingLabel(false) }
                             }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white border border-[#CBD5E1] rounded px-2 py-0.5 text-[13px] font-semibold flex-1 outline-none focus:border-[#1E40AF]"
+                            className="bg-white border border-[#CBD5E1] rounded px-[2px] py-0.5 text-[13px] font-semibold flex-1 outline-none focus:border-[#1E40AF]"
                         />
                         <button onClick={() => { onRenameBlock(labelDraft.trim() || null); setEditingLabel(false) }}
                                 className="p-1 hover:bg-white/50 rounded"><Check className="w-3.5 h-3.5" /></button>
@@ -308,7 +308,7 @@ function ColumnRow({
             }}
             onDrop={(e) => { e.preventDefault(); onDrop() }}
             onDragEnd={onDragEnd}
-            className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors select-none ${
+            className={`flex items-center gap-[2px] px-[2px] py-1.5 rounded-md transition-colors select-none ${
                 isDragging ? 'opacity-40' : ''
             } ${isDropTarget ? 'bg-[#EEF2FF] ring-2 ring-[#4338CA]' : 'hover:bg-[#F8FAFC]'}`}
         >
@@ -319,7 +319,7 @@ function ColumnRow({
                 checked={col.visible}
                 onChange={(e) => onToggle(e.target.checked)}
                 onClick={(e) => e.stopPropagation()}
-                className="w-4 h-4 rounded border-[#CBD5E1] shrink-0"
+                className="w-[4px] h-[4px] rounded border-[#CBD5E1] shrink-0"
                 title={col.visible ? 'Скрыть' : 'Показать'}
             />
 

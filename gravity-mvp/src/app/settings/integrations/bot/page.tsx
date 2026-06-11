@@ -6,11 +6,11 @@ export const dynamic = 'force-dynamic'
 export default function BotAdminPage() {
     return (
         <PageContainer>
-            <div className="flex flex-col gap-6 animate-in fade-in duration-500 h-[calc(100vh-theme(spacing.16))] pb-6 mt-4">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col gap-6 animate-in fade-in duration-500 h-[calc(100vh-theme(spacing.16))] pb-6 mt-[4px]">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-[4px]">
                     <div>
                         <h1 className="text-3xl font-bold text-foreground">Панель Телеграм Бота</h1>
-                        <p className="text-muted-foreground mt-2 max-w-lg text-sm mb-4">
+                        <p className="text-muted-foreground mt-[2px] max-w-lg text-sm mb-[4px]">
                             Управление опросами, рассылками и аналитикой активности бота.
                         </p>
                         <SectionDescription sectionKey="settings_bot" />

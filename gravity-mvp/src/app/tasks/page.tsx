@@ -40,7 +40,7 @@ export default function TasksPage() {
             {/* Main Content Area */}
             <div className="flex flex-1 mt-5 overflow-visible rounded-2xl border border-[#e5e7eb] bg-white">
                 {/* View Area */}
-                <div className="flex-1 overflow-visible p-4 custom-scrollbar">
+                <div className="flex-1 overflow-visible p-[4px] custom-scrollbar">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-full">
                             <div className="flex flex-col items-center gap-3">

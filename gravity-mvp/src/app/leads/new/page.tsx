@@ -207,13 +207,13 @@ export default function LeadsInboxPage() {
             .
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-[2px]">
           {/* Быстрый переход в управление источниками. Пока единственный
               подключённый канал — Avito; при добавлении сайта/whatsapp
               сюда логично положить dropdown «Источники → …». */}
           <Button asChild variant="outline" size="sm" title="Управление профилями Avito-скрапера">
             <Link href="/settings/integrations/avito">
-              <Megaphone className="mr-2 h-4 w-4" />
+              <Megaphone className="mr-[2px] h-[4px] w-[4px]" />
               Профили Avito
             </Link>
           </Button>
@@ -225,7 +225,7 @@ export default function LeadsInboxPage() {
             title="Проверить, что все отклики Avito появились в Чатах. Если что-то потерялось из-за выключенного робота-сборщика или сетевого сбоя — поднять сейчас. Безопасно нажимать сколько угодно раз — дублей не будет."
           >
             <RefreshCw
-              className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
+              className={`mr-[2px] h-[4px] w-[4px] ${syncing ? 'animate-spin' : ''}`}
             />
             {syncing ? 'Сверяем…' : 'Сверка с Avito'}
           </Button>
@@ -233,7 +233,7 @@ export default function LeadsInboxPage() {
       </div>
 
       {syncMsg && (
-        <div className="rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+        <div className="rounded-md border border-border bg-card px-3 py-[2px] text-sm text-muted-foreground">
           {syncMsg}
         </div>
       )}
@@ -270,7 +270,7 @@ export default function LeadsInboxPage() {
       )}
 
       {/* ── Чипсы источников ────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-[2px]">
         <SourceChip
           label="Все"
           active={sourceFilter === 'all'}
@@ -288,7 +288,7 @@ export default function LeadsInboxPage() {
           />
         ))}
 
-        <span className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="ml-auto flex items-center gap-[2px] text-sm text-muted-foreground">
           Статус:
           <select
             value={statusFilter}
@@ -309,13 +309,13 @@ export default function LeadsInboxPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-4 py-2 text-left font-medium">Источник</th>
-                <th className="px-4 py-2 text-left font-medium">Имя</th>
-                <th className="px-4 py-2 text-left font-medium">Телефон</th>
-                <th className="px-4 py-2 text-left font-medium">Превью</th>
-                <th className="px-4 py-2 text-left font-medium">Статус</th>
-                <th className="px-4 py-2 text-left font-medium">Получен</th>
-                <th className="px-4 py-2 text-left font-medium">Перешёл в</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Источник</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Имя</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Телефон</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Превью</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Статус</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Получен</th>
+                <th className="px-[4px] py-[2px] text-left font-medium">Перешёл в</th>
               </tr>
             </thead>
             <tbody>
@@ -323,7 +323,7 @@ export default function LeadsInboxPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-muted-foreground"
+                    className="px-[4px] py-[8px] text-center text-muted-foreground"
                   >
                     Загрузка…
                   </td>
@@ -331,7 +331,7 @@ export default function LeadsInboxPage() {
               )}
               {error && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-destructive">
+                  <td colSpan={7} className="px-[4px] py-[4px] text-destructive">
                     Ошибка: {error}
                   </td>
                 </tr>
@@ -340,7 +340,7 @@ export default function LeadsInboxPage() {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-8 text-center text-muted-foreground"
+                    className="px-[4px] py-[8px] text-center text-muted-foreground"
                   >
                     {leads.length === 0
                       ? 'Лидов пока нет. Когда появится новый отклик, он окажется тут и автоматически уйдёт в Чаты.'
@@ -380,7 +380,7 @@ function KpiCard({
   warning?: boolean
 }) {
   return (
-    <Card className="p-4">
+    <Card className="p-[4px]">
       <div className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
@@ -414,7 +414,7 @@ function SourceChip({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+      className={`inline-flex items-center gap-[2px] rounded-full border px-3 py-1.5 text-sm transition-colors ${
         active
           ? 'border-primary bg-primary text-primary-foreground'
           : 'border-border bg-background text-foreground hover:bg-muted'
@@ -448,7 +448,7 @@ function LeadRow({
   return (
     <tr className="border-t border-border hover:bg-muted/30">
       {/* Источник */}
-      <td className="px-4 py-3">
+      <td className="px-[4px] py-3">
         <Badge
           variant="outline"
           className={`border ${SOURCE_BADGE_CLASS[lead.source] ?? ''}`}
@@ -462,7 +462,7 @@ function LeadRow({
         ) : null}
       </td>
       {/* Имя */}
-      <td className="px-4 py-3">
+      <td className="px-[4px] py-3">
         <div className="font-medium text-foreground">{lead.name ?? '—'}</div>
         {lead.sourceMeta.vacancyTitle ? (
           <div className="mt-0.5 text-xs text-muted-foreground">
@@ -471,7 +471,7 @@ function LeadRow({
         ) : null}
       </td>
       {/* Телефон */}
-      <td className="px-4 py-3">
+      <td className="px-[4px] py-3">
         {lead.phone ? (
           <a
             href={`tel:${lead.phone}`}
@@ -486,7 +486,7 @@ function LeadRow({
       </td>
       {/* Превью */}
       <td
-        className="max-w-[280px] truncate px-4 py-3 text-muted-foreground"
+        className="max-w-[280px] truncate px-[4px] py-3 text-muted-foreground"
         title={lead.preview ?? ''}
       >
         {truncate(lead.preview, 60)}
@@ -494,7 +494,7 @@ function LeadRow({
       {/* Статус: кликабельный бейдж до обработки (клик = пометить
           обработанным). Под бейджем для processed — timestamp нажатия
           «Обработан», для остальных — источниковый статус мелким серым. */}
-      <td className="px-4 py-3">
+      <td className="px-[4px] py-3">
         {canMark ? (
           <button
             type="button"
@@ -527,16 +527,16 @@ function LeadRow({
         ) : null}
       </td>
       {/* Получен */}
-      <td className="px-4 py-3 text-sm text-muted-foreground">
+      <td className="px-[4px] py-3 text-sm text-muted-foreground">
         {fmt(lead.receivedAt)}
       </td>
       {/* Куда перешёл */}
-      <td className="px-4 py-3">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+      <td className="px-[4px] py-3">
+        <div className="flex flex-wrap items-center gap-[2px] text-xs">
           {lead.crm.chatId ? (
             <Link
               href={`/messages?chatId=${lead.crm.chatId}`}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-primary hover:bg-muted"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-[2px] py-1 text-primary hover:bg-muted"
               title="Открыть чат"
             >
               <MessageSquare className="h-3 w-3" />
@@ -548,7 +548,7 @@ function LeadRow({
           {lead.crm.taskId && (
             <Link
               href={`/tasks?taskId=${lead.crm.taskId}`}
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-primary hover:bg-muted"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-[2px] py-1 text-primary hover:bg-muted"
               title="Открыть задачу"
             >
               ✓ Задача
@@ -559,7 +559,7 @@ function LeadRow({
               href={lead.sourceRefUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-muted-foreground hover:bg-muted"
+              className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-[2px] py-1 text-muted-foreground hover:bg-muted"
               title="Открыть в источнике"
             >
               <ExternalLink className="h-3 w-3" />

@@ -124,8 +124,8 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Root causes */}
             {topRootCauses.length > 0 && (
-                <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
-                    <div className="text-[12px] text-[#64748B] font-medium mb-2">Причины проблем (сегодня)</div>
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
+                    <div className="text-[12px] text-[#64748B] font-medium mb-[2px]">Причины проблем (сегодня)</div>
                     <div className="flex items-center gap-3">
                         {topRootCauses.map((rc) => (
                             <div key={rc.cause} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50">
@@ -139,20 +139,20 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Pattern alerts & early warnings */}
             {patternAlerts.length > 0 && (
-                <div className={`rounded-xl border px-4 py-3 ${
+                <div className={`rounded-xl border px-[4px] py-3 ${
                     patternAlerts.some(p => p.level === 'pattern')
                         ? 'bg-orange-50 border-orange-200'
                         : 'bg-yellow-50 border-yellow-200'
                 }`}>
-                    <div className="flex items-center gap-2 mb-2">
-                        <AlertTriangle className={`w-4 h-4 ${
+                    <div className="flex items-center gap-[2px] mb-[2px]">
+                        <AlertTriangle className={`w-[4px] h-[4px] ${
                             patternAlerts.some(p => p.level === 'pattern') ? 'text-orange-500' : 'text-yellow-500'
                         }`} />
                         <span className={`text-[13px] font-semibold ${
                             patternAlerts.some(p => p.level === 'pattern') ? 'text-orange-700' : 'text-yellow-700'
                         }`}>Повторяющиеся проблемы</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-[2px]">
                         {patternAlerts.map((pa) => (
                             <div key={pa.rootCause} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border ${
                                 pa.level === 'pattern' ? 'border-orange-200' : 'border-yellow-200'
@@ -182,11 +182,11 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Persistent root causes */}
             {persistentRootCauses.length > 0 && (
-                <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
-                    <div className="text-[12px] text-[#64748B] font-medium mb-2">Хронические проблемы</div>
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
+                    <div className="text-[12px] text-[#64748B] font-medium mb-[2px]">Хронические проблемы</div>
                     <div className="space-y-1.5">
                         {persistentRootCauses.map(rc => (
-                            <div key={rc.cause} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[#f8fafc]">
+                            <div key={rc.cause} className="flex items-center gap-[2px] px-2.5 py-1.5 rounded-lg bg-[#f8fafc]">
                                 <span className="text-[13px] font-medium text-[#374151]">{rc.label}</span>
                                 <span className="text-[12px] text-[#64748B]">·</span>
                                 <span className="text-[12px] text-[#64748B]">{rc.distinctDays} из {rc.periodDays} дней</span>
@@ -201,8 +201,8 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
             {/* Intervention Queue */}
             {interventionQueue.length > 0 && (
                 <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-red-50 border-b border-red-200">
-                        <AlertTriangle className="w-4 h-4 text-red-500" />
+                    <div className="flex items-center gap-[2px] px-[4px] py-2.5 bg-red-50 border-b border-red-200">
+                        <AlertTriangle className="w-[4px] h-[4px] text-red-500" />
                         <span className="text-[13px] font-semibold text-red-700">
                             Требуют внимания ({interventionQueue.length})
                         </span>
@@ -239,7 +239,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
             {/* Effectiveness analytics */}
             {effectivenessStats.length > 0 && (
                 <div className="bg-white rounded-xl border border-[#e5e7eb] overflow-hidden">
-                    <div className="px-4 py-2.5 border-b border-[#f3f4f6]">
+                    <div className="px-[4px] py-2.5 border-b border-[#f3f4f6]">
                         <span className="text-[13px] font-semibold text-[#374151]">Эффективность вмешательств</span>
                     </div>
                     <div className="divide-y divide-[#f3f4f6]">
@@ -252,7 +252,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Outcome completion activity */}
             {outcomeTiming.status === 'available' && (
-                <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
                     <span className="text-[13px] text-[#64748B]">
                         {outcomeTiming.completedCount} завершённых · {outcomeTiming.recentCount} за {OUTCOME_TIMING_CONFIG.recentPeriodDays}д · {outcomeTiming.avgPerDay}/день
                         {outcomeTiming.newestDaysAgo > 3 && (
@@ -279,7 +279,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
             {/* Manager cards */}
             {managers.length === 0 ? (
-                <div className="bg-white rounded-xl border border-[#e5e7eb] px-6 py-12 text-center">
+                <div className="bg-white rounded-xl border border-[#e5e7eb] px-6 py-[12px] text-center">
                     <Users className="w-10 h-10 text-[#d1d5db] mx-auto mb-3" />
                     <p className="text-[15px] font-semibold text-[#374151]">Нет менеджеров</p>
                     <p className="text-[13px] text-[#94A3B8] mt-1">Добавьте CRM-пользователей для отображения статистики</p>
@@ -327,7 +327,7 @@ export default function TeamOverviewContent({ overview }: TeamOverviewContentPro
 
 function TotalCard({ label, value, color }: { label: string; value: number; color: string }) {
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
             <div className="text-[28px] font-bold leading-none" style={{ color }}>
                 {value}
             </div>
@@ -356,7 +356,7 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
             {/* Manager header */}
             <button
                 onClick={onOpenTasks}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#f9fafb] transition-colors"
+                className="w-full flex items-center gap-3 px-[4px] py-3 hover:bg-[#f9fafb] transition-colors"
             >
                 {/* Avatar */}
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-[14px] font-bold shrink-0 ${
@@ -367,7 +367,7 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
 
                 {/* Name + role */}
                 <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-[2px]">
                         <span className="text-[15px] font-semibold text-[#111827]">{manager.managerName}</span>
                         {isOverloaded && (
                             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-600">
@@ -396,7 +396,7 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
                 </div>
 
                 {/* Stats pills */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-[2px] shrink-0">
                     <StatPill value={manager.active} label="актив" color="#4f46e5" />
                     {manager.overdue > 0 && (
                         <StatPill value={manager.overdue} label="просроч" color="#dc2626" />
@@ -422,14 +422,14 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
                     <StatPill value={manager.closedToday} label="закрыто" color="#059669" />
                 </div>
 
-                <ChevronRight className="w-4 h-4 text-[#d1d5db] shrink-0" />
+                <ChevronRight className="w-[4px] h-[4px] text-[#d1d5db] shrink-0" />
             </button>
 
             {/* Reassign button */}
             {manager.active > 0 && (
                 <button
                     onClick={(e) => { e.stopPropagation(); onReassign() }}
-                    className="absolute top-3 right-12 px-2 py-1 rounded-lg text-[11px] font-medium text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#4f46e5] transition-colors opacity-0 group-hover:opacity-100 flex items-center gap-1"
+                    className="absolute top-3 right-[12px] px-[2px] py-1 rounded-lg text-[11px] font-medium text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#4f46e5] transition-colors opacity-0 group-hover:opacity-100 flex items-center gap-1"
                     title="Передать задачи"
                 >
                     <Repeat2 className="w-3.5 h-3.5" />
@@ -441,7 +441,7 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
             {manager.nextTask && (
                 <div
                     onClick={() => onOpenTask(manager.nextTask!.id)}
-                    className="flex items-center gap-2 px-4 py-2 border-t border-[#f3f4f6] cursor-pointer hover:bg-[#f9fafb] transition-colors"
+                    className="flex items-center gap-[2px] px-[4px] py-[2px] border-t border-[#f3f4f6] cursor-pointer hover:bg-[#f9fafb] transition-colors"
                 >
                     <ArrowRight className="w-3.5 h-3.5 text-[#94A3B8] shrink-0" />
                     <NextTaskPreview task={manager.nextTask} />
@@ -455,7 +455,7 @@ function ManagerCard({ manager, historyPoints, onOpenTasks, onOpenTask, onReassi
 
 function StatPill({ value, label, color }: { value: number; label: string; color: string }) {
     return (
-        <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: `${color}10` }}>
+        <div className="flex items-center gap-1 px-[2px] py-1 rounded-lg" style={{ backgroundColor: `${color}10` }}>
             <span className="text-[14px] font-bold" style={{ color }}>{value}</span>
             <span className="text-[10px] font-medium" style={{ color: `${color}99` }}>{label}</span>
         </div>
@@ -474,9 +474,9 @@ function EffectivenessRow({ stat }: { stat: EffectivenessStat }) {
     const barWidth = Math.min(stat.improvementRate, 100)
 
     return (
-        <div className="flex items-center gap-3 px-4 py-2.5">
+        <div className="flex items-center gap-3 px-[4px] py-2.5">
             <span className="text-[13px] font-medium text-[#374151] min-w-[180px]">{stat.label}</span>
-            <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-[2px] flex-1">
                 <div className="flex-1 h-1.5 rounded-full bg-[#f3f4f6] overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all ${
@@ -522,15 +522,15 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
         <div className="group/irow">
             <div
                 onClick={onClick}
-                className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[#f9fafb] transition-colors cursor-pointer"
+                className="w-full flex items-center gap-3 px-[4px] py-2.5 hover:bg-[#f9fafb] transition-colors cursor-pointer"
             >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
+                <div className={`w-[8px] h-[8px] rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
                     m.interventionPriority === 'urgent' ? 'bg-red-600' : 'bg-orange-500'
                 }`}>
                     {initials}
                 </div>
                 <div className="flex-1 min-w-0 text-left">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-[2px]">
                         <span className="text-[14px] font-medium text-[#111827] truncate">{m.managerName}</span>
                         {badge && (
                             <span className={`shrink-0 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${badge.bg} ${badge.text}`}>
@@ -565,7 +565,7 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                                         +{hiddenCount}
                                     </span>
                                     <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/reasons:block">
-                                        <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                                        <div className="bg-[#1e293b] text-white rounded-lg px-3 py-[2px] text-[11px] whitespace-nowrap shadow-lg">
                                             {m.interventionReasons.map(r => (
                                                 <div key={r} className="py-0.5">{INTERVENTION_REASON_LABELS[r]}</div>
                                             ))}
@@ -586,7 +586,7 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                                             ✓ {INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}
                                         </span>
                                         <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/lastact:block">
-                                            <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                                            <div className="bg-[#1e293b] text-white rounded-lg px-3 py-[2px] text-[11px] whitespace-nowrap shadow-lg">
                                                 <div className="font-semibold mb-0.5">Последнее действие</div>
                                                 <div>{INTERVENTION_ACTION_LABELS[lastAction.action as InterventionAction] ?? lastAction.action}</div>
                                                 {lastAction.comment && (
@@ -630,7 +630,7 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                         </div>
                     )}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-[2px] shrink-0">
                     {m.overdue > 0 && <StatPill value={m.overdue} label="просроч" color="#dc2626" />}
                     {m.escalated > 0 && <StatPill value={m.escalated} label="эскал." color="#dc2626" />}
                     {m.highRiskTasks > 0 && <StatPill value={m.highRiskTasks} label="риск" color="#dc2626" />}
@@ -642,7 +642,7 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                 >
                     Отметить
                 </button>
-                <ChevronRight className="w-4 h-4 text-[#d1d5db] shrink-0" />
+                <ChevronRight className="w-[4px] h-[4px] text-[#d1d5db] shrink-0" />
             </div>
         </div>
     )
@@ -695,23 +695,23 @@ function HealthBadge({ score, level, breakdown, trend, previousScore, declineStr
             </div>
             {/* Tooltip */}
             <div className="absolute left-0 top-full mt-1 z-50 hidden group-hover/health:block">
-                <div className="bg-[#1e293b] text-white rounded-lg px-3 py-2 text-[11px] whitespace-nowrap shadow-lg">
+                <div className="bg-[#1e293b] text-white rounded-lg px-3 py-[2px] text-[11px] whitespace-nowrap shadow-lg">
                     <div className="font-semibold mb-1">Health Score: {score}/100</div>
                     {previousScore !== null && (
-                        <div className="flex justify-between gap-4">
+                        <div className="flex justify-between gap-[4px]">
                             <span className="text-gray-300">Предыдущий</span>
                             <span className="text-gray-200 font-medium">{previousScore}</span>
                         </div>
                     )}
                     {declineStreak > 0 && (
-                        <div className="flex justify-between gap-4">
+                        <div className="flex justify-between gap-[4px]">
                             <span className="text-gray-300">Серия снижений</span>
                             <span className="text-red-300 font-medium">{declineStreak}x</span>
                         </div>
                     )}
                     {penalties.length > 0 && <div className="border-t border-gray-600 my-1" />}
                     {penalties.map(p => (
-                        <div key={p.label} className="flex justify-between gap-4">
+                        <div key={p.label} className="flex justify-between gap-[4px]">
                             <span className="text-gray-300">{p.label}</span>
                             <span className="text-red-300 font-medium">−{p.value}</span>
                         </div>
@@ -733,7 +733,7 @@ const STABILITY_DISPLAY: Record<Exclude<TeamStabilityResult['status'], 'insuffic
 function TeamStabilityIndicator({ stability }: { stability: TeamStabilityResult }) {
     if (stability.status === 'insufficient_data') {
         return (
-            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
                 <span className="text-[13px] text-[#94A3B8]">Недостаточно данных для оценки стабильности</span>
             </div>
         )
@@ -744,7 +744,7 @@ function TeamStabilityIndicator({ stability }: { stability: TeamStabilityResult 
     const tooltip = `Сравнение средней динамики health score за период (${stability.firstHalfAvg}→${stability.secondHalfAvg}, ${stability.dataPoints} менеджеров)`
 
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3" title={tooltip}>
             <div className="flex items-center gap-2.5">
                 <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
                 <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
@@ -767,10 +767,10 @@ function TeamCapacityBar({ capacity }: { capacity: TeamCapacityResult }) {
     const { totalManagers, avgActive, maxActive, maxManagerName, distributionSkew } = capacity
 
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
-            <div className="text-[12px] text-[#64748B] font-medium mb-2">Распределение нагрузки</div>
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
+            <div className="text-[12px] text-[#64748B] font-medium mb-[2px]">Распределение нагрузки</div>
             {/* Segmented bar */}
-            <div className="flex h-2 rounded-full overflow-hidden">
+            <div className="flex h-[2px] rounded-full overflow-hidden">
                 {CAPACITY_SEGMENTS.map(seg => {
                     const count = capacity[seg.key]
                     if (count === 0) return null
@@ -784,7 +784,7 @@ function TeamCapacityBar({ capacity }: { capacity: TeamCapacityResult }) {
                 })}
             </div>
             {/* Summary text */}
-            <div className="text-[12px] text-[#64748B] mt-2">
+            <div className="text-[12px] text-[#64748B] mt-[2px]">
                 {avgActive} задач/менеджер · макс {maxActive}{maxManagerName ? ` (${maxManagerName})` : ''} · перекос ×{distributionSkew}
             </div>
         </div>
@@ -888,11 +888,11 @@ function GovernanceSummary(props: {
     const signals = deriveGovernanceSignals(props)
 
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
-            <div className="flex items-center gap-4 flex-wrap">
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
+            <div className="flex items-center gap-[4px] flex-wrap">
                 {signals.map((s) => (
                     <div key={s.label} className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${GOV_DOT_COLOR[s.status]}`} />
+                        <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${GOV_DOT_COLOR[s.status]}`} />
                         <span className="text-[13px] text-[#374151]">{s.label}</span>
                     </div>
                 ))}
@@ -916,7 +916,7 @@ const VOLATILITY_DISPLAY: Record<string, { label: string; dot: string; text: str
 function OperationalVolatilityIndicator({ volatility }: { volatility: OperationalVolatilityResult }) {
     if (volatility.status === 'insufficient_data') {
         return (
-            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
                 <span className="text-[13px] text-[#94A3B8]">Недостаточно данных для оценки волатильности</span>
             </div>
         )
@@ -926,7 +926,7 @@ function OperationalVolatilityIndicator({ volatility }: { volatility: Operationa
     const tooltip = `CV ${volatility.teamCv}% по ${volatility.managersIncluded} менеджерам`
 
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3" title={tooltip}>
             <div className="flex items-center gap-2.5">
                 <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
                 <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
@@ -939,7 +939,7 @@ function OperationalVolatilityIndicator({ volatility }: { volatility: Operationa
 function TeamRiskProfileSummary({ profile }: { profile: TeamRiskProfileResult }) {
     const tooltip = `Из ${profile.totalManagers} менеджеров: ${profile.clear} стабильных, ${profile.active} временных, ${profile.sustained} устойчивых рисков (${profile.persistenceRatio}% устойчивых)`
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3" title={tooltip}>
             <div className="flex items-center gap-2.5 text-[13px]">
                 <span className="text-green-600 font-medium">{profile.clear} стабильных</span>
                 <span className="text-[#94A3B8]">·</span>
@@ -955,7 +955,7 @@ function TeamRiskProfileSummary({ profile }: { profile: TeamRiskProfileResult })
 function ProcessReliabilityIndicator({ reliability }: { reliability: ProcessReliabilityResult }) {
     if (reliability.status === 'no_data') {
         return (
-            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
                 <span className="text-[13px] text-[#94A3B8]">Нет активных задач для оценки надёжности</span>
             </div>
         )
@@ -965,7 +965,7 @@ function ProcessReliabilityIndicator({ reliability }: { reliability: ProcessReli
     const tooltip = `${reliability.totalActive} активных задач, ${reliability.totalIncidents} инцидентных сигналов (просрочки + эскалации + повторные)`
 
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3" title={tooltip}>
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3" title={tooltip}>
             <div className="flex items-center gap-2.5">
                 <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${display.dot}`} />
                 <span className={`text-[14px] font-medium ${display.text}`}>{display.label}</span>
@@ -1057,7 +1057,7 @@ function NextTaskPreview({ task }: { task: ManagerNextTask }) {
     const stageLabel = task.scenario && task.stage ? getStage(task.scenario, task.stage)?.label : null
 
     return (
-        <div className="flex items-center gap-2 flex-1 min-w-0">
+        <div className="flex items-center gap-[2px] flex-1 min-w-0">
             <span className="text-[12px] font-medium text-[#374151] truncate">
                 {task.driverName}
             </span>

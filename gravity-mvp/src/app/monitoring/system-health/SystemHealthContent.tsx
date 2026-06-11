@@ -30,7 +30,7 @@ export default function SystemHealthContent({ data }: Props) {
     const overallStatus = failureDetection.overallStatus
 
     return (
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
+        <div className="max-w-4xl mx-auto px-[4px] py-6 space-y-5">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <h1 className="text-[20px] font-semibold text-[#0F172A]">Здоровье системы</h1>
@@ -43,7 +43,7 @@ export default function SystemHealthContent({ data }: Props) {
             </div>
 
             {/* Overall status */}
-            <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
+            <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
                 <div className="flex items-center gap-2.5">
                     <div className={`w-3 h-3 rounded-full shrink-0 ${STATUS_DOT[overallStatus]}`} />
                     <span className="text-[15px] font-medium text-[#0F172A]">
@@ -57,33 +57,33 @@ export default function SystemHealthContent({ data }: Props) {
 
             {/* Guardrails */}
             <Section title="Защитные ограничения">
-                <div className="space-y-2">
+                <div className="space-y-[2px]">
                     <div className="flex items-center gap-2.5">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${configValidation.valid ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${configValidation.valid ? 'bg-green-500' : 'bg-red-500'}`} />
                         <span className="text-[13px] text-[#0F172A]">Конфигурация</span>
                         <span className="text-[12px] text-[#94A3B8]">
                             {configValidation.checkedRules} правил · {configValidation.valid ? 'валидна' : `${configValidation.errors.length} ошибок`}
                         </span>
                     </div>
                     {!configValidation.valid && configValidation.errors.map((err, i) => (
-                        <div key={i} className="text-[12px] text-red-500 ml-4">{err}</div>
+                        <div key={i} className="text-[12px] text-red-500 ml-[4px]">{err}</div>
                     ))}
                     <div className="flex items-center gap-2.5">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${cronValidation.valid ? 'bg-green-500' : 'bg-red-500'}`} />
+                        <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${cronValidation.valid ? 'bg-green-500' : 'bg-red-500'}`} />
                         <span className="text-[13px] text-[#0F172A]">Cron-расписания</span>
                         <span className="text-[12px] text-[#94A3B8]">
                             {cronValidation.schedules} задач · {cronValidation.valid ? 'валидны' : `${cronValidation.errors.length} ошибок`}
                         </span>
                     </div>
                     <div className="flex items-center gap-2.5">
-                        <div className={`w-2 h-2 rounded-full shrink-0 ${runtimeGuardrails.status === 'ok' ? 'bg-green-500' : runtimeGuardrails.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                        <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${runtimeGuardrails.status === 'ok' ? 'bg-green-500' : runtimeGuardrails.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'}`} />
                         <span className="text-[13px] text-[#0F172A]">Runtime-гарантии</span>
                         <span className="text-[12px] text-[#94A3B8]">
                             {runtimeGuardrails.violations.length === 0 ? 'без нарушений' : `${runtimeGuardrails.violations.length} нарушений`}
                         </span>
                     </div>
                     {runtimeGuardrails.violations.map((v, i) => (
-                        <div key={i} className={`text-[12px] ml-4 ${v.severity === 'critical' ? 'text-red-500' : 'text-yellow-600'}`}>
+                        <div key={i} className={`text-[12px] ml-[4px] ${v.severity === 'critical' ? 'text-red-500' : 'text-yellow-600'}`}>
                             {v.description}
                         </div>
                     ))}
@@ -112,7 +112,7 @@ export default function SystemHealthContent({ data }: Props) {
                     <div className="space-y-1">
                         {stabilityReports.map(r => (
                             <div key={r.id} className="flex items-center gap-2.5 py-1.5">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[r.status] || 'bg-gray-300'}`} />
+                                <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${STATUS_DOT[r.status] || 'bg-gray-300'}`} />
                                 <span className="text-[13px] text-[#0F172A]">
                                     {new Date(r.checkedAt).toLocaleString('ru-RU')}
                                 </span>
@@ -134,7 +134,7 @@ export default function SystemHealthContent({ data }: Props) {
                     <div className="space-y-1">
                         {failureDetection.operations.map(op => (
                             <div key={op.operationName} className="flex items-center gap-2.5 py-1.5">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${STATUS_DOT[op.status]}`} />
+                                <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${STATUS_DOT[op.status]}`} />
                                 <span className="text-[14px] text-[#0F172A] font-medium min-w-[180px]">{op.operationName}</span>
                                 <span className="text-[12px] text-[#94A3B8]">
                                     {op.totalRuns} запусков · {op.errorRuns} ошибок
@@ -189,7 +189,7 @@ export default function SystemHealthContent({ data }: Props) {
                     <div className="space-y-1">
                         {Object.entries(backgroundJobs).map(([name, state]) => (
                             <div key={name} className="flex items-center gap-2.5 py-1.5">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${state.isRunning ? 'bg-blue-500 animate-pulse' : state.lastError ? 'bg-red-500' : 'bg-green-500'}`} />
+                                <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${state.isRunning ? 'bg-blue-500 animate-pulse' : state.lastError ? 'bg-red-500' : 'bg-green-500'}`} />
                                 <span className="text-[14px] text-[#0F172A] font-medium min-w-[160px]">{name}</span>
                                 <span className="text-[12px] text-[#94A3B8]">
                                     {state.isRunning && 'Выполняется'}
@@ -215,7 +215,7 @@ export default function SystemHealthContent({ data }: Props) {
                     <div className="space-y-1">
                         {integrityReports.map(r => (
                             <div key={r.id} className="flex items-center gap-2.5 py-1.5">
-                                <div className={`w-2 h-2 rounded-full shrink-0 ${r.criticalIssues > 0 ? 'bg-red-500' : r.warningIssues > 0 ? 'bg-yellow-500' : 'bg-green-500'}`} />
+                                <div className={`w-[2px] h-[2px] rounded-full shrink-0 ${r.criticalIssues > 0 ? 'bg-red-500' : r.warningIssues > 0 ? 'bg-yellow-500' : 'bg-green-500'}`} />
                                 <span className="text-[13px] text-[#0F172A]">
                                     {new Date(r.checkedAt).toLocaleString('ru-RU')}
                                 </span>
@@ -268,7 +268,7 @@ export default function SystemHealthContent({ data }: Props) {
                     <div className="space-y-1">
                         {slowOperations.map((op, i) => (
                             <div key={i} className="flex items-center gap-2.5 py-1.5">
-                                <div className="w-2 h-2 rounded-full shrink-0 bg-orange-400" />
+                                <div className="w-[2px] h-[2px] rounded-full shrink-0 bg-orange-400" />
                                 <span className="text-[13px] text-[#0F172A] font-medium">{op.operationName}</span>
                                 <span className="text-[12px] text-[#94A3B8]">
                                     {op.durationMs}мс · {op.operationType}
@@ -288,7 +288,7 @@ export default function SystemHealthContent({ data }: Props) {
                     <div className="space-y-1">
                         {activeLocks.map((lock, i) => (
                             <div key={i} className="flex items-center gap-2.5 py-1.5">
-                                <div className="w-2 h-2 rounded-full shrink-0 bg-blue-500 animate-pulse" />
+                                <div className="w-[2px] h-[2px] rounded-full shrink-0 bg-blue-500 animate-pulse" />
                                 <span className="text-[13px] text-[#0F172A] font-medium">{lock.operationName}</span>
                                 <span className="text-[12px] text-[#94A3B8]">
                                     до {new Date(lock.expiresAt).toLocaleTimeString('ru-RU')}
@@ -304,8 +304,8 @@ export default function SystemHealthContent({ data }: Props) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <div className="bg-white rounded-xl border border-[#e5e7eb] px-4 py-3">
-            <h2 className="text-[15px] font-semibold text-[#0F172A] mb-2">{title}</h2>
+        <div className="bg-white rounded-xl border border-[#e5e7eb] px-[4px] py-3">
+            <h2 className="text-[15px] font-semibold text-[#0F172A] mb-[2px]">{title}</h2>
             {children}
         </div>
     )

@@ -55,7 +55,7 @@ export default function LastContactSection({
 
     return (
         <div className={`p-3 border rounded-xl animate-in fade-in slide-in-from-top-1 duration-300 ${bgClass}`}>
-            <div className={`flex items-center gap-1.5 text-section-label mb-2 ${labelColor}`}>
+            <div className={`flex items-center gap-1.5 text-section-label mb-[2px] ${labelColor}`}>
                 <Clock className="w-3 h-3" />
                 Последний контакт
             </div>
@@ -103,7 +103,7 @@ export default function LastContactSection({
             </div>
 
             {/* Touch Counter */}
-            <div className="mt-3 pt-2 border-t border-black/5 flex items-center justify-between">
+            <div className="mt-3 pt-[2px] border-t border-black/5 flex items-center justify-between">
                 <TooltipProvider>
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -115,7 +115,7 @@ export default function LastContactSection({
                             <p className="font-bold text-[13px] mb-1">Всего касаний</p>
                             <p className="text-[12px] opacity-80 leading-snug">
                                 Количество попыток связаться с водителем.<br/>
-                                <span className="mt-2 block pt-1 border-t border-white/10">
+                                <span className="mt-[2px] block pt-1 border-t border-white/10">
                                     Считаются: <b>Позвонил, Написал</b>.<br/>
                                     Не считаются: Перенос срока, Смена статуса.
                                 </span>

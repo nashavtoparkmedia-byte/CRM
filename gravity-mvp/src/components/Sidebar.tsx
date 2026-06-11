@@ -118,12 +118,12 @@ export function Sidebar() {
                 }}
             >
                 {/* 1. ICON RAIL (Fixed 72px) */}
-                <aside className="w-[72px] h-full bg-[#ffffff] border-r border-[#e5e7eb] flex flex-col items-center py-4 flex-shrink-0 z-50">
+                <aside className="w-[72px] h-full bg-[#ffffff] border-r border-[#e5e7eb] flex flex-col items-center py-[4px] flex-shrink-0 z-50">
                     <div className="mb-6 flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground cursor-pointer shadow-sm">
                         <span className="font-bold text-lg">Y</span>
                     </div>
 
-                    <nav className="flex flex-col gap-2 flex-1 w-full items-center">
+                    <nav className="flex flex-col gap-[2px] flex-1 w-full items-center">
                         {DOMAINS.map(domain => {
                             const isActive = activeDomainKey === domain.key;
                             const firstItemHref = domain.items?.[0]?.href || domain.groups?.[0]?.items?.[0]?.href;
@@ -173,7 +173,7 @@ export function Sidebar() {
                         showContextPanel ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0 pointer-events-none"
                     )}
                 >
-                    <div className="px-5 pt-6 pb-4 flex-shrink-0">
+                    <div className="px-5 pt-6 pb-[4px] flex-shrink-0">
                         <h2 className="text-[18px] font-semibold text-gray-900">{displayDomain.label}</h2>
                     </div>
                     
@@ -205,8 +205,8 @@ export function Sidebar() {
 
                         {/* Группы (Интеграции и др.) */}
                         {displayDomain.groups?.map((group, gIdx) => (
-                            <div key={gIdx} className={cn("mt-4", gIdx === 0 && (!displayDomain.items || displayDomain.items.length === 0) ? "mt-0" : "")}>
-                                <div className="px-3 pb-2 pt-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                            <div key={gIdx} className={cn("mt-[4px]", gIdx === 0 && (!displayDomain.items || displayDomain.items.length === 0) ? "mt-0" : "")}>
+                                <div className="px-3 pb-[2px] pt-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
                                     {group.title}
                                 </div>
                                 {group.items.map((item, i) => {

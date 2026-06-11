@@ -7,7 +7,7 @@ export default async function ScoringSettingsPage() {
     const thresholds = await getThresholdSettings()
 
     return (
-        <div className="flex flex-col gap-8 max-w-2xl">
+        <div className="flex flex-col gap-[8px] max-w-2xl">
             <div>
                 <h1 className="text-2xl font-bold text-foreground">Настройки скоринга</h1>
                 <p className="text-sm text-muted-foreground mt-1">

@@ -78,8 +78,8 @@ function SendMessageModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="relative w-full max-w-lg rounded-2xl bg-white p-8 shadow-xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-[4px] backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="relative w-full max-w-lg rounded-2xl bg-white p-[8px] shadow-xl animate-in zoom-in-95 duration-200">
                 <button
                     onClick={onClose}
                     className="absolute right-6 top-6 text-muted-foreground transition-colors hover:text-foreground"
@@ -87,7 +87,7 @@ function SendMessageModal({
                     <X size={24} />
                 </button>
 
-                <h2 className="mb-2 flex items-center gap-3 text-2xl font-bold text-foreground">
+                <h2 className="mb-[2px] flex items-center gap-3 text-2xl font-bold text-foreground">
                     <MessageSquare size={24} className="text-primary" />
                     Сообщение {driver.fullName.split(' ')[0]}
                 </h2>
@@ -96,13 +96,13 @@ function SendMessageModal({
                 </div>
 
                 {status === "success" ? (
-                    <div className="py-12 text-center text-green-600 animate-in zoom-in">
-                        <p className="text-4xl mb-4">✓</p>
+                    <div className="py-[12px] text-center text-green-600 animate-in zoom-in">
+                        <p className="text-4xl mb-[4px]">✓</p>
                         <p className="font-bold">Сообщение отправлено!</p>
                     </div>
                 ) : (
                     <div className="space-y-6">
-                        <div className="flex gap-2 p-1 bg-secondary rounded-xl">
+                        <div className="flex gap-[2px] p-1 bg-secondary rounded-xl">
                             <button
                                 onClick={() => setChannel("telegram")}
                                 className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-colors ${channel === "telegram" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
@@ -119,7 +119,7 @@ function SendMessageModal({
 
                         {activeConnections.length > 0 ? (
                             <div className="relative">
-                                <label className="mb-2 block text-sm font-medium text-muted-foreground">
+                                <label className="mb-[2px] block text-sm font-medium text-muted-foreground">
                                     Отправить с аккаунта
                                 </label>
                                 <select 
@@ -143,24 +143,24 @@ function SendMessageModal({
                         <textarea
                             value={message}
                             onChange={(e) => setMessage(e.target.value)}
-                            className="h-32 w-full resize-none rounded-xl border bg-gray-50 p-4 text-sm text-foreground outline-none transition-all focus:ring-2 focus:ring-primary/50"
+                            className="h-[32px] w-full resize-none rounded-xl border bg-gray-50 p-[4px] text-sm text-foreground outline-none transition-all focus:ring-2 focus:ring-primary/50"
                             placeholder="Напишите ваше сообщение здесь..."
                             disabled={status === "sending"}
                         />
                         {status === "error" && (
-                            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-[4px] text-sm text-destructive">
                                 {error}
                             </div>
                         )}
-                        <div className="flex gap-4">
+                        <div className="flex gap-[4px]">
                             <Button
                                 onClick={handleSend}
                                 disabled={status === "sending" || !message.trim()}
-                                className="flex-1 gap-2 py-6 text-base"
+                                className="flex-1 gap-[2px] py-6 text-base"
                             >
                                 <Send size={18} /> Отправить
                             </Button>
-                            <Button variant="outline" onClick={onClose} className="py-6 px-8 text-base">
+                            <Button variant="outline" onClick={onClose} className="py-6 px-[8px] text-base">
                                 Отмена
                             </Button>
                         </div>
@@ -257,13 +257,13 @@ export default function CardsClient({
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm md:flex-row md:items-end">
+            <div className="flex flex-col gap-[4px] rounded-xl border bg-card p-[4px] shadow-sm md:flex-row md:items-end">
                 <form
                     onSubmit={(e) => { e.preventDefault(); updateFilters() }}
-                    className="flex w-full flex-col gap-4 md:flex-row"
+                    className="flex w-full flex-col gap-[4px] md:flex-row"
                 >
                     <div className="flex-1">
-                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
+                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">
                             Поиск по ФИО
                         </label>
                         <Input
@@ -275,13 +275,13 @@ export default function CardsClient({
                     </div>
 
                     <div className="w-full md:w-36">
-                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
+                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">
                             Сегмент
                         </label>
                         <select
                             value={segment}
                             onChange={(e) => { setSegment(e.target.value); updateFilters({ segment: e.target.value }) }}
-                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-2 text-sm"
+                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-[2px] text-sm"
                         >
                             <option value="all">Все</option>
                             <option value="profitable">Прибыльный</option>
@@ -292,13 +292,13 @@ export default function CardsClient({
                     </div>
 
                     <div className="w-full md:w-36">
-                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
+                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">
                             Статус
                         </label>
                         <select
                             value={status}
                             onChange={(e) => { setStatus(e.target.value); updateFilters({ status: e.target.value }) }}
-                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-2 text-sm"
+                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-[2px] text-sm"
                         >
                             <option value="all">Все</option>
                             <option value="active">Активный</option>
@@ -308,13 +308,13 @@ export default function CardsClient({
                     </div>
 
                     <div className="w-full md:w-28">
-                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
+                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">
                             Период
                         </label>
                         <select
                             value={dateRange}
                             onChange={(e) => { setDateRange(Number(e.target.value)); updateFilters({ dateRange: Number(e.target.value) }) }}
-                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-2 text-sm"
+                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-[2px] text-sm"
                         >
                             <option value={7}>7 дн</option>
                             <option value={14}>14 дн</option>
@@ -323,13 +323,13 @@ export default function CardsClient({
                     </div>
 
                     <div className="w-full md:w-36">
-                        <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
+                        <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">
                             Сортировка
                         </label>
                         <select
                             value={sortBy}
                             onChange={(e) => { setSortBy(e.target.value); updateFilters({ sortBy: e.target.value }) }}
-                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-2 text-sm"
+                            className="flex h-10 w-full rounded-md border border-input bg-secondary/50 px-3 py-[2px] text-sm"
                         >
                             <option value="score">По скорингу ↓</option>
                             <option value="name">По имени</option>
@@ -337,7 +337,7 @@ export default function CardsClient({
                     </div>
 
                     <Button type="submit" className="h-10 px-6 self-end" disabled={isLoading}>
-                        <Search className="mr-2 h-4 w-4" /> Найти
+                        <Search className="mr-[2px] h-[4px] w-[4px]" /> Найти
                     </Button>
                 </form>
             </div>

@@ -104,7 +104,7 @@ export default function CallsStatsClient({
     if (!data && error) {
         return (
             <div className="mx-auto max-w-3xl p-6">
-                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-[14px] text-destructive">
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-[4px] text-[14px] text-destructive">
                     Не удалось загрузить статистику: {error}
                 </div>
             </div>
@@ -237,7 +237,7 @@ function FilterField({ label, children }: { label: string; children: React.React
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <section className="flex flex-col gap-4 rounded-md border border-border bg-card p-6">
+        <section className="flex flex-col gap-[4px] rounded-md border border-border bg-card p-6">
             <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
             {children}
         </section>
@@ -290,10 +290,10 @@ function Kpi({ label, value, hint, icon: Icon, color }: {
     color: string
 }) {
     return (
-        <div className="flex flex-col gap-1 rounded-md border border-border bg-card p-4">
+        <div className="flex flex-col gap-1 rounded-md border border-border bg-card p-[4px]">
             <div className="flex items-center justify-between">
                 <span className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">{label}</span>
-                <Icon className="h-4 w-4" style={{ color }} />
+                <Icon className="h-[4px] w-[4px]" style={{ color }} />
             </div>
             <div className="text-[24px] font-semibold tabular-nums text-foreground" style={{ lineHeight: 1.2 }}>{value}</div>
             <div className="text-[12px] text-muted-foreground">{hint || ' '}</div>
@@ -421,7 +421,7 @@ function RedFlagsList({ items }: { items: StatsPayload['topRedFlags'] }) {
                     className="flex items-center gap-3 py-3"
                     style={{ minHeight: 56 }}
                 >
-                    <AlertTriangle className="h-4 w-4 flex-shrink-0 text-destructive" />
+                    <AlertTriangle className="h-[4px] w-[4px] flex-shrink-0 text-destructive" />
                     <div className="min-w-0 flex-1 text-[14px] text-foreground">{f.flag}</div>
                     <div className="text-[13px] tabular-nums text-muted-foreground">{f.count}</div>
                 </li>
@@ -432,7 +432,7 @@ function RedFlagsList({ items }: { items: StatsPayload['topRedFlags'] }) {
 
 function Empty({ hint }: { hint: string }) {
     return (
-        <div className="py-8 text-center text-[13px] text-muted-foreground">{hint}</div>
+        <div className="py-[8px] text-center text-[13px] text-muted-foreground">{hint}</div>
     )
 }
 

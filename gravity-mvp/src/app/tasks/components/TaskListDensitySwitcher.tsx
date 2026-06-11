@@ -70,7 +70,7 @@ export default function TaskListDensitySwitcher({ scenario }: Props) {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e7eb] text-[#374151] text-[13px] font-medium hover:bg-[#f3f4f6] transition-colors"
                 title="Плотность строк"
             >
-                <CurrentIcon className="w-4 h-4 text-[#6b7280]" />
+                <CurrentIcon className="w-[4px] h-[4px] text-[#6b7280]" />
                 {currentOpt.label}
                 <ChevronDown className="w-3 h-3 text-[#9ca3af]" />
             </button>
@@ -83,11 +83,11 @@ export default function TaskListDensitySwitcher({ scenario }: Props) {
                             <button
                                 key={opt.value}
                                 onClick={() => pick(opt.value)}
-                                className={`w-full flex items-center gap-2 px-3 py-1.5 hover:bg-[#F8FAFC] transition-colors ${
+                                className={`w-full flex items-center gap-[2px] px-3 py-1.5 hover:bg-[#F8FAFC] transition-colors ${
                                     active ? 'text-[#1E40AF] font-medium' : 'text-[#0F172A]'
                                 }`}
                             >
-                                <Icon className="w-4 h-4 text-[#6b7280] shrink-0" />
+                                <Icon className="w-[4px] h-[4px] text-[#6b7280] shrink-0" />
                                 <span className="flex-1 text-left">{opt.label}</span>
                                 {active && <Check className="w-3.5 h-3.5 text-[#1E40AF]" />}
                             </button>

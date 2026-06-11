@@ -45,10 +45,10 @@ export default async function AiControlCenterPage() {
 
     return (
         <PageContainer>
-            <div className="flex h-full flex-col p-8 mt-4">
+            <div className="flex h-full flex-col p-[8px] mt-[4px]">
                 <div className="mb-6">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100/60 text-violet-600 border shadow-sm">
+                        <div className="flex h-[12px] w-[12px] items-center justify-center rounded-2xl bg-violet-100/60 text-violet-600 border shadow-sm">
                             <Bot size={24} />
                         </div>
                         <div className="flex-1 min-w-0">

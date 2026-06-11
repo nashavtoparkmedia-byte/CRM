@@ -148,16 +148,16 @@ export default function TasksToolbar() {
                 </div>
 
                 {/* RIGHT — actions: search, excel, density, bulk, create */}
-                <div className="flex items-center gap-2 flex-wrap self-center">
+                <div className="flex items-center gap-[2px] flex-wrap self-center">
                     {searchOpen ? (
                         <div className="flex items-center bg-[#f3f4f6] rounded-lg overflow-hidden">
-                            <Search className="w-4 h-4 text-[#9ca3af] ml-3" />
+                            <Search className="w-[4px] h-[4px] text-[#9ca3af] ml-3" />
                             <input
                                 autoFocus
                                 value={searchValue}
                                 onChange={(e) => handleSearch(e.target.value)}
                                 placeholder="Поиск по задачам..."
-                                className="bg-transparent border-none outline-none text-sm px-2 py-1.5 w-[220px]"
+                                className="bg-transparent border-none outline-none text-sm px-[2px] py-1.5 w-[220px]"
                             />
                             <button
                                 onClick={() => {
@@ -172,9 +172,9 @@ export default function TasksToolbar() {
                     ) : (
                         <button
                             onClick={() => setSearchOpen(true)}
-                            className="p-2 rounded-lg hover:bg-[#f3f4f6] transition-colors text-[#6b7280]"
+                            className="p-[2px] rounded-lg hover:bg-[#f3f4f6] transition-colors text-[#6b7280]"
                         >
-                            <Search className="w-4 h-4" />
+                            <Search className="w-[4px] h-[4px]" />
                         </button>
                     )}
 
@@ -188,14 +188,14 @@ export default function TasksToolbar() {
                         onClick={() => setIsBulkCareOpen(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#e5e7eb] text-[#374151] text-[13px] font-medium hover:bg-[#f3f4f6] transition-colors"
                     >
-                        <Users className="w-4 h-4 text-[#6b7280]" />
+                        <Users className="w-[4px] h-[4px] text-[#6b7280]" />
                         Массовая забота
                     </button>
                     <button
                         onClick={() => setIsCreateModalOpen(true)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4f46e5] text-white text-[13px] font-semibold hover:bg-[#4338ca] transition-colors shadow-sm"
                     >
-                        <Plus className="w-4 h-4" />
+                        <Plus className="w-[4px] h-[4px]" />
                         Создать задачу
                     </button>
                 </div>
@@ -249,7 +249,7 @@ export default function TasksToolbar() {
                         <select
                             value={filters.stage ?? ''}
                             onChange={(e) => setFilters({ stage: e.target.value || undefined })}
-                            className="ml-2 text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
+                            className="ml-[2px] text-[13px] bg-[#f9fafb] border border-[#e5e7eb] rounded-lg px-3 py-1.5 text-[#374151] outline-none focus:border-[#4f46e5] transition-colors cursor-pointer"
                         >
                             <option value="">Все этапы</option>
                             {activeScenarioConfig.stages.map((st) => (

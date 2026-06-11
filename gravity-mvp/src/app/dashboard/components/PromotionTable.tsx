@@ -18,8 +18,8 @@ const DEMO_PROMOTIONS: PromotionPerfRow[] = [
 export function PromotionTable() {
     return (
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
-            <div className="mb-4">
-                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+            <div className="mb-[4px]">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-[2px]">
                     🎯 Эффективность акций
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Конверсия текущих акций</p>
@@ -29,7 +29,7 @@ export function PromotionTable() {
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="bg-secondary/50">
-                            <th className="text-left py-2.5 px-4 font-semibold text-muted-foreground text-xs uppercase">Акция</th>
+                            <th className="text-left py-2.5 px-[4px] font-semibold text-muted-foreground text-xs uppercase">Акция</th>
                             <th className="text-center py-2.5 px-3 font-semibold text-muted-foreground text-xs uppercase">Назначено</th>
                             <th className="text-center py-2.5 px-3 font-semibold text-muted-foreground text-xs uppercase">Поехали</th>
                             <th className="text-center py-2.5 px-3 font-semibold text-muted-foreground text-xs uppercase">Конверсия</th>
@@ -38,7 +38,7 @@ export function PromotionTable() {
                     <tbody>
                         {DEMO_PROMOTIONS.map((promo) => (
                             <tr key={promo.name} className="border-t hover:bg-secondary/30 transition-colors">
-                                <td className="py-2.5 px-4 font-medium text-foreground">{promo.name}</td>
+                                <td className="py-2.5 px-[4px] font-medium text-foreground">{promo.name}</td>
                                 <td className="text-center py-2.5 px-3 text-muted-foreground font-medium">{promo.assigned}</td>
                                 <td className="text-center py-2.5 px-3 text-muted-foreground font-medium">{promo.completed}</td>
                                 <td className="text-center py-2.5 px-3">

@@ -11,15 +11,15 @@ import Link from "next/link"
 export function RiskDriversTable({ drivers }: { drivers: RiskDriver[] }) {
     return (
         <div className="rounded-2xl border bg-card p-6 shadow-sm">
-            <div className="mb-4">
-                <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+            <div className="mb-[4px]">
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-[2px]">
                     ⚠️ Водители в риске
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Топ-10 по дням неактивности</p>
             </div>
 
             {drivers.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground text-sm">
+                <div className="py-[8px] text-center text-muted-foreground text-sm">
                     Нет водителей в зоне риска 🎉
                 </div>
             ) : (
@@ -27,7 +27,7 @@ export function RiskDriversTable({ drivers }: { drivers: RiskDriver[] }) {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="bg-secondary/50">
-                                <th className="text-left py-2.5 px-4 font-semibold text-muted-foreground text-xs uppercase">Водитель</th>
+                                <th className="text-left py-2.5 px-[4px] font-semibold text-muted-foreground text-xs uppercase">Водитель</th>
                                 <th className="text-center py-2.5 px-3 font-semibold text-muted-foreground text-xs uppercase">Score</th>
                                 <th className="text-center py-2.5 px-3 font-semibold text-muted-foreground text-xs uppercase">Неактивен</th>
                                 <th className="text-center py-2.5 px-3 font-semibold text-muted-foreground text-xs uppercase">Действие</th>
@@ -60,7 +60,7 @@ function RiskDriverRow({ driver }: { driver: RiskDriver }) {
 
     return (
         <tr className="border-t hover:bg-secondary/30 transition-colors">
-            <td className="py-2.5 px-4">
+            <td className="py-2.5 px-[4px]">
                 <Link href={`/drivers/${driver.id}`} className="font-semibold text-foreground hover:text-primary transition-colors">
                     {driver.fullName}
                 </Link>
@@ -95,7 +95,7 @@ function RiskDriverRow({ driver }: { driver: RiskDriver }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-blue-600 hover:bg-blue-50"
+                            className="h-[8px] w-[8px] text-blue-600 hover:bg-blue-50"
                             onClick={handleMessage}
                             title="Написать"
                         >
@@ -104,7 +104,7 @@ function RiskDriverRow({ driver }: { driver: RiskDriver }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-green-600 hover:bg-green-50"
+                            className="h-[8px] w-[8px] text-green-600 hover:bg-green-50"
                             onClick={handleCall}
                             title="Позвонить"
                         >

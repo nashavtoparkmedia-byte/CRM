@@ -185,11 +185,11 @@ export function ActivityLogView({ compact = false }: { compact?: boolean }) {
       )}
 
       {/* Краткая справка — свёрнута по умолчанию */}
-      <details className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm">
+      <details className="rounded-md border border-border bg-muted/40 px-3 py-[2px] text-sm">
         <summary className="cursor-pointer font-medium text-primary">
           📖 Как использовать журнал
         </summary>
-        <div className="mt-2 text-muted-foreground leading-relaxed">
+        <div className="mt-[2px] text-muted-foreground leading-relaxed">
           Журнал — это <strong>аудит-лог системы</strong>: что и когда
           произошло на каждом аккаунте Avito. Используется когда:
           <ul className="mt-1.5 list-disc pl-6 space-y-0.5">
@@ -205,7 +205,7 @@ export function ActivityLogView({ compact = false }: { compact?: boolean }) {
       </details>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-[2px] text-sm text-red-800">
           Ошибка: {error}
         </div>
       )}
@@ -218,13 +218,13 @@ export function ActivityLogView({ compact = false }: { compact?: boolean }) {
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-xs uppercase text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 text-left font-medium whitespace-nowrap">
+                <th className="px-3 py-[2px] text-left font-medium whitespace-nowrap">
                   Время
                 </th>
-                <th className="px-3 py-2 text-left font-medium">Сущность</th>
-                <th className="px-3 py-2 text-left font-medium">ID</th>
-                <th className="px-3 py-2 text-left font-medium">Действие</th>
-                <th className="px-3 py-2 text-left font-medium">Детали</th>
+                <th className="px-3 py-[2px] text-left font-medium">Сущность</th>
+                <th className="px-3 py-[2px] text-left font-medium">ID</th>
+                <th className="px-3 py-[2px] text-left font-medium">Действие</th>
+                <th className="px-3 py-[2px] text-left font-medium">Детали</th>
               </tr>
             </thead>
             <tbody>
@@ -239,15 +239,15 @@ export function ActivityLogView({ compact = false }: { compact?: boolean }) {
                     key={e.id}
                     className="border-t border-border hover:bg-muted/30"
                   >
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                    <td className="px-3 py-[2px] whitespace-nowrap text-muted-foreground">
                       {fmt(e.createdAt)}
                     </td>
-                    <td className="px-3 py-2">{entityRu}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    <td className="px-3 py-[2px]">{entityRu}</td>
+                    <td className="px-3 py-[2px] font-mono text-xs text-muted-foreground">
                       {e.entityId ?? '—'}
                     </td>
-                    <td className="px-3 py-2">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <td className="px-3 py-[2px]">
+                      <div className="flex flex-wrap items-center gap-[2px]">
                         <span>{actionRu}</span>
                         {nextActionLabel !== null && (
                           <Badge variant="secondary">{nextActionLabel}</Badge>
@@ -259,7 +259,7 @@ export function ActivityLogView({ compact = false }: { compact?: boolean }) {
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2 max-w-[320px]">
+                    <td className="px-3 py-[2px] max-w-[320px]">
                       {detailPairs ? (
                         <div className="flex flex-col gap-0.5 text-xs">
                           {detailPairs.map(([k, v]) => (
@@ -288,7 +288,7 @@ export function ActivityLogView({ compact = false }: { compact?: boolean }) {
                 <tr>
                   <td
                     colSpan={5}
-                    className="px-3 py-8 text-center text-muted-foreground"
+                    className="px-3 py-[8px] text-center text-muted-foreground"
                   >
                     Пока пусто.
                   </td>

@@ -189,28 +189,28 @@ export default function AvitoAccessPage() {
                 </div>
                 <button
                     onClick={() => { setShowAdd(true); setRevealed(null) }}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-[#4f46e5] hover:bg-[#4338ca] text-white text-sm font-medium"
+                    className="inline-flex items-center gap-[2px] px-[4px] py-[2px] rounded-md bg-[#4f46e5] hover:bg-[#4338ca] text-white text-sm font-medium"
                 >
-                    <UserPlus className="w-4 h-4" />
+                    <UserPlus className="w-[4px] h-[4px]" />
                     Добавить пользователя
                 </button>
             </div>
 
             {error && (
-                <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-4 mb-4 text-sm">
+                <div className="bg-red-50 border border-red-200 text-red-800 rounded-md p-[4px] mb-[4px] text-sm">
                     <strong>Ошибка:</strong> {error}
                 </div>
             )}
 
             {revealed && (
-                <div className="bg-green-50 border border-green-300 rounded-md p-5 mb-4">
+                <div className="bg-green-50 border border-green-300 rounded-md p-5 mb-[4px]">
                     <div className="text-sm text-green-900 font-medium mb-3">
                         ✓ Пользователь {revealed.action === 'created' ? 'создан' : 'сменил пароль'}.
                         Покажется только один раз — сохрани!
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm mb-3">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-[2px] text-sm mb-3">
                         <div className="text-green-800">Логин</div>
-                        <div className="font-mono font-bold text-green-950 flex items-center gap-2">
+                        <div className="font-mono font-bold text-green-950 flex items-center gap-[2px]">
                             {revealed.username}
                             <button
                                 onClick={() => void copy(revealed.username)}
@@ -221,7 +221,7 @@ export default function AvitoAccessPage() {
                             </button>
                         </div>
                         <div className="text-green-800">Пароль</div>
-                        <div className="font-mono font-bold text-green-950 flex items-center gap-2 break-all">
+                        <div className="font-mono font-bold text-green-950 flex items-center gap-[2px] break-all">
                             {revealed.password}
                             <button
                                 onClick={() => void copy(revealed.password)}
@@ -239,8 +239,8 @@ export default function AvitoAccessPage() {
             )}
 
             {mode === 'upstream' && (
-                <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-md p-3 mb-4 text-xs flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-md p-3 mb-[4px] text-xs flex items-start gap-[2px]">
+                    <AlertTriangle className="w-[4px] h-[4px] flex-shrink-0 mt-0.5" />
                     <div>
                         Avito сейчас в режиме <code>upstream</code> — внутри CRM
                         вход бесшовный (по сессии CRM), эти логины используются
@@ -253,7 +253,7 @@ export default function AvitoAccessPage() {
             {loading ? (
                 <div className="text-gray-500 text-sm">Загрузка…</div>
             ) : users.length === 0 ? (
-                <div className="bg-white border border-gray-200 rounded-md p-12 text-center text-sm text-gray-500">
+                <div className="bg-white border border-gray-200 rounded-md p-[12px] text-center text-sm text-gray-500">
                     Пользователей пока нет. Жми «Добавить пользователя».
                 </div>
             ) : (
@@ -261,36 +261,36 @@ export default function AvitoAccessPage() {
                     <table className="w-full text-sm">
                         <thead className="bg-gray-50 border-b border-gray-200">
                             <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
-                                <th className="px-4 py-3 font-medium">Логин</th>
-                                <th className="px-4 py-3 font-medium">Изменён</th>
-                                <th className="px-4 py-3 font-medium">Кем (CRM)</th>
-                                <th className="px-4 py-3 font-medium">Статус</th>
-                                <th className="px-4 py-3 font-medium text-right">Действия</th>
+                                <th className="px-[4px] py-3 font-medium">Логин</th>
+                                <th className="px-[4px] py-3 font-medium">Изменён</th>
+                                <th className="px-[4px] py-3 font-medium">Кем (CRM)</th>
+                                <th className="px-[4px] py-3 font-medium">Статус</th>
+                                <th className="px-[4px] py-3 font-medium text-right">Действия</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {users.map((u) => (
                                 <tr key={u.id} className={u.disabled ? 'opacity-60' : ''}>
-                                    <td className="px-4 py-3 font-mono font-medium text-gray-900">{u.username}</td>
-                                    <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmt(u.updatedAt)}</td>
-                                    <td className="px-4 py-3 text-gray-600">{u.updatedBy ?? '—'}</td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-[4px] py-3 font-mono font-medium text-gray-900">{u.username}</td>
+                                    <td className="px-[4px] py-3 text-gray-600 whitespace-nowrap">{fmt(u.updatedAt)}</td>
+                                    <td className="px-[4px] py-3 text-gray-600">{u.updatedBy ?? '—'}</td>
+                                    <td className="px-[4px] py-3">
                                         {u.disabled ? (
-                                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                                            <span className="inline-flex px-[2px] py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                                                 выключен
                                             </span>
                                         ) : (
-                                            <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
+                                            <span className="inline-flex px-[2px] py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">
                                                 активен
                                             </span>
                                         )}
                                     </td>
-                                    <td className="px-4 py-3">
+                                    <td className="px-[4px] py-3">
                                         <div className="flex items-center justify-end gap-1">
                                             <button
                                                 onClick={() => void doReset(u)}
                                                 disabled={busy === u.id}
-                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+                                                className="inline-flex items-center gap-1 px-[2px] py-1 text-xs rounded border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-50"
                                                 title="Сменить пароль"
                                             >
                                                 <KeyRound className="w-3.5 h-3.5" />
@@ -299,7 +299,7 @@ export default function AvitoAccessPage() {
                                             <button
                                                 onClick={() => void doToggle(u)}
                                                 disabled={busy === u.id}
-                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-50"
+                                                className="inline-flex items-center gap-1 px-[2px] py-1 text-xs rounded border border-gray-200 hover:bg-gray-50 text-gray-700 disabled:opacity-50"
                                                 title={u.disabled ? 'Включить' : 'Выключить'}
                                             >
                                                 <Power className="w-3.5 h-3.5" />
@@ -308,7 +308,7 @@ export default function AvitoAccessPage() {
                                             <button
                                                 onClick={() => void doDelete(u)}
                                                 disabled={busy === u.id}
-                                                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-red-200 hover:bg-red-50 text-red-700 disabled:opacity-50"
+                                                className="inline-flex items-center gap-1 px-[2px] py-1 text-xs rounded border border-red-200 hover:bg-red-50 text-red-700 disabled:opacity-50"
                                                 title="Удалить безвозвратно"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
@@ -376,16 +376,16 @@ function AddUserModal({
 
     return (
         <div
-            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-[4px]"
             onClick={onClose}
         >
             <div
                 className="bg-white rounded-md p-6 w-full max-w-md shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <h3 className="text-lg font-semibold mb-4">Добавить пользователя Avito</h3>
+                <h3 className="text-lg font-semibold mb-[4px]">Добавить пользователя Avito</h3>
 
-                <div className="space-y-4">
+                <div className="space-y-[4px]">
                     <div>
                         <label className="block text-sm text-gray-700 mb-1">Логин</label>
                         <input
@@ -395,7 +395,7 @@ function AddUserModal({
                             onChange={(e) => setUsername(e.target.value)}
                             disabled={submitting}
                             autoFocus
-                            className="w-full px-3 py-2 text-sm font-mono rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                            className="w-full px-3 py-[2px] text-sm font-mono rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                         />
                         <div className="text-xs text-gray-500 mt-1">
                             Латиница, цифры, точка/тире/подчёркивание. Минимум 2 символа.
@@ -406,14 +406,14 @@ function AddUserModal({
                         <label className="block text-sm text-gray-700 mb-1">
                             Пароль
                         </label>
-                        <div className="flex gap-2">
+                        <div className="flex gap-[2px]">
                             <input
                                 type="text"
                                 placeholder="введи свой или жми «Сгенерировать»"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 disabled={submitting}
-                                className="flex-1 px-3 py-2 text-sm font-mono rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
+                                className="flex-1 px-3 py-[2px] text-sm font-mono rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]"
                             />
                             <button
                                 type="button"
@@ -429,7 +429,7 @@ function AddUserModal({
                                     setPassword(hex)
                                 }}
                                 disabled={submitting}
-                                className="inline-flex items-center gap-1 px-3 py-2 rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm whitespace-nowrap"
+                                className="inline-flex items-center gap-1 px-3 py-[2px] rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm whitespace-nowrap"
                                 title="Сгенерировать случайный пароль и подставить в поле"
                             >
                                 <RefreshCw className="w-3.5 h-3.5" />
@@ -446,11 +446,11 @@ function AddUserModal({
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 mt-6">
+                <div className="flex items-center justify-between gap-[2px] mt-6">
                     <button
                         onClick={onClose}
                         disabled={submitting}
-                        className="px-4 py-2 text-sm rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700"
+                        className="px-[4px] py-[2px] text-sm rounded-md border border-gray-300 hover:bg-gray-50 text-gray-700"
                     >
                         Отмена
                     </button>
@@ -461,7 +461,7 @@ function AddUserModal({
                             !usernameValid ||
                             password.length < 8
                         }
-                        className="px-5 py-2 rounded-md bg-[#4f46e5] hover:bg-[#4338ca] text-white text-sm font-medium disabled:opacity-50"
+                        className="px-5 py-[2px] rounded-md bg-[#4f46e5] hover:bg-[#4338ca] text-white text-sm font-medium disabled:opacity-50"
                     >
                         Создать
                     </button>

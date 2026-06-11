@@ -297,7 +297,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 When the operator picks "Тел" we swap the lead icon (Search →
                 Phone) and switch to font-mono so plus / digits read crisply
                 and don't collide with the icon. */}
-            <div className="px-3.5 pt-3 pb-2">
+            <div className="px-3.5 pt-3 pb-[2px]">
                 <div className="relative">
                     {isPhoneChannelOuter ? (
                         <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-orange-500" />
@@ -338,7 +338,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                     onClick={() => handleSelectContact(contact)}
                                     onMouseEnter={() => setHoveredContactId(contact.id)}
                                     onMouseLeave={() => setHoveredContactId(prev => prev === contact.id ? null : prev)}
-                                    className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-gray-50 transition-colors text-left group"
+                                    className="w-full px-3 py-[2px] flex items-center gap-2.5 hover:bg-gray-50 transition-colors text-left group"
                                 >
                                     <div className="w-[32px] h-[32px] rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[11px] font-bold shrink-0">
                                         {(contact.displayName || "?").substring(0, 2).toUpperCase()}
@@ -401,7 +401,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                             <span>Канал</span>
                             {focusedContact && (
-                                <span className="flex items-center gap-2 text-[9px] font-medium normal-case">
+                                <span className="flex items-center gap-[2px] text-[9px] font-medium normal-case">
                                     <span className="flex items-center gap-1 text-emerald-600">
                                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />активен
                                     </span>
@@ -473,7 +473,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 <div className="px-3.5 pb-1">
                     <div className="text-[11px] text-red-500 bg-red-50 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
                         <span>{startError}</span>
-                        <button onClick={clearError} className="text-red-400 hover:text-red-600 ml-2">
+                        <button onClick={clearError} className="text-red-400 hover:text-red-600 ml-[2px]">
                             <X size={10} />
                         </button>
                     </div>

@@ -59,9 +59,9 @@ export default function AiProposedReplyBubble({
     // Loading state — пока AI думает
     if (loading) {
         return (
-            <div className="flex justify-start px-4 py-2">
-                <div className="max-w-[80%] rounded-2xl bg-[#F0F4FA] border border-[#E4ECFC] px-4 py-3">
-                    <div className="flex items-center gap-2 text-[12px] text-[#3390EC] font-medium mb-1">
+            <div className="flex justify-start px-[4px] py-[2px]">
+                <div className="max-w-[80%] rounded-2xl bg-[#F0F4FA] border border-[#E4ECFC] px-[4px] py-3">
+                    <div className="flex items-center gap-[2px] text-[12px] text-[#3390EC] font-medium mb-1">
                         <Bot size={14} className="text-[#3390EC]" />
                         AI думает…
                         <Loader2 size={12} className="animate-spin opacity-60" />
@@ -69,7 +69,7 @@ export default function AiProposedReplyBubble({
                     <div className="space-y-1.5">
                         <div className="h-3 bg-[#E4ECFC] rounded animate-pulse w-48" />
                         <div className="h-3 bg-[#E4ECFC] rounded animate-pulse w-64" />
-                        <div className="h-3 bg-[#E4ECFC] rounded animate-pulse w-32" />
+                        <div className="h-3 bg-[#E4ECFC] rounded animate-pulse w-[32px]" />
                     </div>
                 </div>
             </div>
@@ -81,7 +81,7 @@ export default function AiProposedReplyBubble({
     // не написал». Если message не пришёл — generic fallback.
     if (silent && !proposal) {
         return (
-            <div className="flex justify-start px-4 py-2">
+            <div className="flex justify-start px-[4px] py-[2px]">
                 <div className="inline-flex items-start gap-1.5 rounded-lg bg-gray-100 border border-gray-200 px-3 py-1.5 text-[11px] text-gray-600 max-w-[80%]">
                     <Bot size={11} className="opacity-60 mt-[2px] shrink-0" />
                     <span className="flex-1">
@@ -108,9 +108,9 @@ export default function AiProposedReplyBubble({
     // Escalate state — AI считает что нужен менеджер
     if (proposal.decisionMode === 'escalate') {
         return (
-            <div className="flex justify-start px-4 py-2">
-                <div className="max-w-[80%] rounded-2xl bg-[#FFFBED] border border-[#FFE8B0] px-4 py-3">
-                    <div className="flex items-center gap-2 text-[12px] text-[#8B6914] font-semibold mb-1.5">
+            <div className="flex justify-start px-[4px] py-[2px]">
+                <div className="max-w-[80%] rounded-2xl bg-[#FFFBED] border border-[#FFE8B0] px-[4px] py-3">
+                    <div className="flex items-center gap-[2px] text-[12px] text-[#8B6914] font-semibold mb-1.5">
                         <Bot size={14} />
                         AI предлагает передать менеджеру
                     </div>
@@ -118,7 +118,7 @@ export default function AiProposedReplyBubble({
                         {/* PR-Р: технические причины (confidence=X < threshold=Y) → человеческий язык. */}
                         {humanizeAiReason(proposal.reasoning) || 'Не хватает данных в Ядре знаний, чтобы ответить уверенно.'}
                     </div>
-                    <div className="mt-2.5 flex items-center gap-2">
+                    <div className="mt-2.5 flex items-center gap-[2px]">
                         <button
                             type="button"
                             onClick={onDismiss}
@@ -139,16 +139,16 @@ export default function AiProposedReplyBubble({
         : null
 
     return (
-        <div className="flex justify-start px-4 py-2">
-            <div className="max-w-[80%] rounded-2xl bg-[#F0F4FA] border border-[#3390EC]/30 px-4 py-3">
-                <div className="flex items-center gap-2 text-[12px] text-[#3390EC] font-semibold mb-1.5">
+        <div className="flex justify-start px-[4px] py-[2px]">
+            <div className="max-w-[80%] rounded-2xl bg-[#F0F4FA] border border-[#3390EC]/30 px-[4px] py-3">
+                <div className="flex items-center gap-[2px] text-[12px] text-[#3390EC] font-semibold mb-1.5">
                     <Bot size={14} />
                     AI бы написал
                 </div>
                 <div className="text-[14px] text-[#111] leading-snug whitespace-pre-wrap">
                     {proposal.text}
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-500">
+                <div className="mt-[2px] flex flex-wrap items-center gap-x-[2px] gap-y-0.5 text-[11px] text-gray-500">
                     <span>{confPercent}% уверенности</span>
                     {topSource && (
                         <>
@@ -163,7 +163,7 @@ export default function AiProposedReplyBubble({
                     👍 «Правильно» — auto-verify используемых items + копирует в input
                     ✏ «Поправить» — copy в input (Coach flow в PR9.55)
                     ✗ «Пропустить» — dismiss */}
-                <div className="mt-3 flex items-center gap-2">
+                <div className="mt-3 flex items-center gap-[2px]">
                     <button
                         type="button"
                         onClick={onConfirmCorrect}

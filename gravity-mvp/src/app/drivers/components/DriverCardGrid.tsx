@@ -29,11 +29,11 @@ export function DriverCardGrid({
         <div className="flex flex-col gap-6">
             {/* Cards Grid */}
             {drivers.length === 0 ? (
-                <div className="flex items-center justify-center rounded-xl border bg-card p-12 text-muted-foreground">
+                <div className="flex items-center justify-center rounded-xl border bg-card p-[12px] text-muted-foreground">
                     Водители не найдены
                 </div>
             ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-1 gap-[4px] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {drivers.map((driver) => (
                         <DriverCard
                             key={driver.id}
@@ -46,7 +46,7 @@ export function DriverCardGrid({
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 shadow-sm">
+                <div className="flex items-center justify-between rounded-xl border bg-card px-[4px] py-3 shadow-sm">
                     <div className="text-sm text-muted-foreground">
                         Показаны с{" "}
                         <span className="font-medium text-foreground">
@@ -59,16 +59,16 @@ export function DriverCardGrid({
                         из{" "}
                         <span className="font-medium text-foreground">{total}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-[2px]">
                         <Button
                             variant="outline"
                             size="icon"
                             onClick={() => onPageChange(page - 1)}
                             disabled={page <= 1}
                         >
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="h-[4px] w-[4px]" />
                         </Button>
-                        <div className="flex items-center justify-center px-4 font-medium text-sm">
+                        <div className="flex items-center justify-center px-[4px] font-medium text-sm">
                             {page} / {totalPages}
                         </div>
                         <Button
@@ -77,7 +77,7 @@ export function DriverCardGrid({
                             onClick={() => onPageChange(page + 1)}
                             disabled={page >= totalPages}
                         >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-[4px] w-[4px]" />
                         </Button>
                     </div>
                 </div>

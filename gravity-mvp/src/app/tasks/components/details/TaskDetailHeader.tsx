@@ -44,8 +44,8 @@ export default function TaskDetailHeader({
     onClose,
 }: TaskDetailHeaderProps) {
     return (
-        <div className={`flex items-center px-4 py-3 border-b ${isOverdue ? 'border-red-100 bg-red-50/30' : 'border-gray-100 bg-indigo-50/10'}`}>
-            <div className="flex items-center flex-1 min-w-0 pr-4 gap-2">
+        <div className={`flex items-center px-[4px] py-3 border-b ${isOverdue ? 'border-red-100 bg-red-50/30' : 'border-gray-100 bg-indigo-50/10'}`}>
+            <div className="flex items-center flex-1 min-w-0 pr-[4px] gap-[2px]">
                 <h3 className="text-card-title truncate shrink">
                     {task.title}
                 </h3>
@@ -61,7 +61,7 @@ export default function TaskDetailHeader({
                 </TooltipProvider>
             </div>
 
-            <div className="flex items-center gap-2 px-2 py-1 bg-gray-50/50 border border-gray-100/50 rounded-xl group/metadata">
+            <div className="flex items-center gap-[2px] px-[2px] py-1 bg-gray-50/50 border border-gray-100/50 rounded-xl group/metadata">
                 {/* Assignee Toggle Icon */}
                 <div className="relative shrink-0 flex items-center group/assignee">
                     <TooltipProvider>
@@ -94,19 +94,19 @@ export default function TaskDetailHeader({
                     </TooltipProvider>
 
                     {/* Custom Assignee Dropdown */}
-                    <div className="absolute top-full right-0 pt-2 w-[200px] opacity-0 invisible group-hover/assignee:opacity-100 group-hover/assignee:visible transition-all z-50">
+                    <div className="absolute top-full right-0 pt-[2px] w-[200px] opacity-0 invisible group-hover/assignee:opacity-100 group-hover/assignee:visible transition-all z-50">
                         <div className="bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5 max-h-[250px] overflow-y-auto">
                             <button
                                 onClick={(e) => { e.stopPropagation(); onUpdateAssignee(null) }}
-                                className={`w-full text-left px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${!task.assigneeId ? 'font-bold bg-indigo-50/50 text-indigo-700' : 'text-gray-700'}`}
+                                className={`w-full text-left px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${!task.assigneeId ? 'font-bold bg-indigo-50/50 text-indigo-700' : 'text-gray-700'}`}
                             >
-                                <User className="w-4 h-4" /> Не назначен
+                                <User className="w-[4px] h-[4px]" /> Не назначен
                             </button>
                             {users.map((u: any) => (
                                 <button
                                     key={u.id}
                                     onClick={(e) => { e.stopPropagation(); onUpdateAssignee(u.id) }}
-                                    className={`w-full text-left px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.assigneeId === u.id ? 'font-bold bg-indigo-50/50 text-indigo-700' : 'text-gray-700'}`}
+                                    className={`w-full text-left px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.assigneeId === u.id ? 'font-bold bg-indigo-50/50 text-indigo-700' : 'text-gray-700'}`}
                                 >
                                     <div
                                         className="w-6 h-6 rounded-md flex items-center justify-center text-white font-bold text-[9px] shrink-0"
@@ -139,16 +139,16 @@ export default function TaskDetailHeader({
                     </TooltipProvider>
 
                     {/* Custom Source Dropdown */}
-                    <div className="absolute top-full right-0 pt-2 w-[160px] opacity-0 invisible group-hover/src:opacity-100 group-hover/src:visible transition-all z-50">
+                    <div className="absolute top-full right-0 pt-[2px] w-[160px] opacity-0 invisible group-hover/src:opacity-100 group-hover/src:visible transition-all z-50">
                         <div className="bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5">
-                            <button onClick={(e) => { e.stopPropagation(); onUpdateSource('auto') }} className={`w-full px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.source === 'auto' ? 'bg-blue-50/50 font-bold text-blue-700' : 'text-gray-700'}`}>
-                                <Bot className="w-4 h-4 text-blue-500" /> {SOURCE_LABELS['auto']}
+                            <button onClick={(e) => { e.stopPropagation(); onUpdateSource('auto') }} className={`w-full px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.source === 'auto' ? 'bg-blue-50/50 font-bold text-blue-700' : 'text-gray-700'}`}>
+                                <Bot className="w-[4px] h-[4px] text-blue-500" /> {SOURCE_LABELS['auto']}
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); onUpdateSource('manual') }} className={`w-full px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.source === 'manual' ? 'bg-slate-50 font-bold text-slate-700' : 'text-gray-700'}`}>
-                                <MousePointerClick className="w-4 h-4 text-slate-400" /> {SOURCE_LABELS['manual']}
+                            <button onClick={(e) => { e.stopPropagation(); onUpdateSource('manual') }} className={`w-full px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.source === 'manual' ? 'bg-slate-50 font-bold text-slate-700' : 'text-gray-700'}`}>
+                                <MousePointerClick className="w-[4px] h-[4px] text-slate-400" /> {SOURCE_LABELS['manual']}
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); onUpdateSource('chat') }} className={`w-full px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.source === 'chat' ? 'bg-emerald-50/50 font-bold text-emerald-700' : 'text-gray-700'}`}>
-                                <MessageSquare className="w-4 h-4 text-emerald-500" /> {SOURCE_LABELS['chat']}
+                            <button onClick={(e) => { e.stopPropagation(); onUpdateSource('chat') }} className={`w-full px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.source === 'chat' ? 'bg-emerald-50/50 font-bold text-emerald-700' : 'text-gray-700'}`}>
+                                <MessageSquare className="w-[4px] h-[4px] text-emerald-500" /> {SOURCE_LABELS['chat']}
                             </button>
                         </div>
                     </div>
@@ -178,20 +178,20 @@ export default function TaskDetailHeader({
                     </TooltipProvider>
 
                     {/* Custom Priority Dropdown */}
-                    <div className="absolute top-full right-0 pt-2 w-[140px] opacity-0 invisible group-hover/prio:opacity-100 group-hover/prio:visible transition-all z-50">
+                    <div className="absolute top-full right-0 pt-[2px] w-[140px] opacity-0 invisible group-hover/prio:opacity-100 group-hover/prio:visible transition-all z-50">
                         <div className="bg-white rounded-xl shadow-2xl border border-gray-100 py-1.5">
-                            <button onClick={(e) => { e.stopPropagation(); onUpdatePriority('medium') }} className={`w-full px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.priority === 'medium' ? 'bg-gray-50 font-bold text-gray-700' : 'text-gray-700'}`}>
-                                <Plus className="w-4 h-4 text-gray-400" /> Обычный
+                            <button onClick={(e) => { e.stopPropagation(); onUpdatePriority('medium') }} className={`w-full px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.priority === 'medium' ? 'bg-gray-50 font-bold text-gray-700' : 'text-gray-700'}`}>
+                                <Plus className="w-[4px] h-[4px] text-gray-400" /> Обычный
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); onUpdatePriority('high') }} className={`w-full px-3 py-2 text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.priority === 'high' ? 'bg-orange-50 font-bold text-orange-700' : 'text-gray-700'}`}>
-                                <AlertTriangle className="w-4 h-4 text-orange-500" /> Высокий
+                            <button onClick={(e) => { e.stopPropagation(); onUpdatePriority('high') }} className={`w-full px-3 py-[2px] text-[12px] hover:bg-gray-50 flex items-center gap-3 ${task.priority === 'high' ? 'bg-orange-50 font-bold text-orange-700' : 'text-gray-700'}`}>
+                                <AlertTriangle className="w-[4px] h-[4px] text-orange-500" /> Высокий
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="w-[1px] h-4 bg-gray-200 ml-3 mr-0.5 shrink-0" />
+            <div className="w-[1px] h-[4px] bg-gray-200 ml-3 mr-0.5 shrink-0" />
 
             <button
                 onClick={onClose}

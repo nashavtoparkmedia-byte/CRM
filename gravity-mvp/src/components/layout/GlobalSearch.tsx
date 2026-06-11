@@ -154,7 +154,7 @@ export default function GlobalSearch() {
 
   return (
     <div className="relative w-48 md:w-72" ref={wrapRef}>
-      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      <Search className="absolute left-2.5 top-2.5 h-[4px] w-[4px] text-muted-foreground" />
       <Input
         ref={inputRef}
         type="search"
@@ -186,7 +186,7 @@ export default function GlobalSearch() {
           style={{ minWidth: 280 }}
         >
           {loading && (
-            <div className="px-3 py-2 text-[12px] text-gray-400">Ищу…</div>
+            <div className="px-3 py-[2px] text-[12px] text-gray-400">Ищу…</div>
           )}
           {!loading && !hasResults && (
             <div className="px-3 py-3 text-[12px] text-gray-500">
@@ -219,7 +219,7 @@ export default function GlobalSearch() {
                             go(row);
                           }}
                           className={
-                            "w-full flex items-start gap-2 px-3 py-2 text-left border-none cursor-pointer text-[12px] " +
+                            "w-full flex items-start gap-[2px] px-3 py-[2px] text-left border-none cursor-pointer text-[12px] " +
                             (isActive
                               ? "bg-blue-50 text-blue-700"
                               : "hover:bg-gray-50 text-gray-900")

@@ -125,16 +125,16 @@ function SendMessageModal({
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-[4px] animate-in fade-in duration-200">
             <div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200">
                 <button
                     onClick={onClose}
-                    className="absolute right-4 top-4 w-8 h-8 rounded-lg text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#111] flex items-center justify-center transition-colors"
+                    className="absolute right-[4px] top-[4px] w-[8px] h-[8px] rounded-lg text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#111] flex items-center justify-center transition-colors"
                 >
                     <X size={18} />
                 </button>
 
-                <h2 className="mb-1 flex items-center gap-2 text-[17px] font-semibold text-[#111]">
+                <h2 className="mb-1 flex items-center gap-[2px] text-[17px] font-semibold text-[#111]">
                     <MessageSquare size={18} className="text-[#3390EC]" />
                     Сообщение {driver.fullName.split(' ')[0]}
                 </h2>
@@ -144,7 +144,7 @@ function SendMessageModal({
 
                 {status === "success" ? (
                     <div className="py-10 text-center animate-in zoom-in">
-                        <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-[12px] h-[12px] rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto mb-3">
                             <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                             </svg>
@@ -152,17 +152,17 @@ function SendMessageModal({
                         <p className="text-[15px] font-semibold text-[#111]">Сообщение отправлено</p>
                     </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-[4px]">
                         <div className="flex gap-1 p-1 bg-[#F4F5F7] rounded-lg">
                             <button
                                 onClick={() => setChannel("telegram")}
-                                className={`flex-1 h-8 text-[13px] font-semibold rounded-md transition-colors ${channel === "telegram" ? "bg-white text-[#3390EC] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#8A9099] hover:text-[#111]"}`}
+                                className={`flex-1 h-[8px] text-[13px] font-semibold rounded-md transition-colors ${channel === "telegram" ? "bg-white text-[#3390EC] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#8A9099] hover:text-[#111]"}`}
                             >
                                 Telegram
                             </button>
                             <button
                                 onClick={() => setChannel("max")}
-                                className={`flex-1 h-8 text-[13px] font-semibold rounded-md transition-colors ${channel === "max" ? "bg-white text-[#3390EC] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#8A9099] hover:text-[#111]"}`}
+                                className={`flex-1 h-[8px] text-[13px] font-semibold rounded-md transition-colors ${channel === "max" ? "bg-white text-[#3390EC] shadow-[0_1px_2px_rgba(0,0,0,0.06)]" : "text-[#8A9099] hover:text-[#111]"}`}
                             >
                                 MAX
                             </button>
@@ -211,7 +211,7 @@ function SendMessageModal({
                             </div>
                         )}
 
-                        <div className="flex gap-2 pt-1">
+                        <div className="flex gap-[2px] pt-1">
                             <button
                                 onClick={onClose}
                                 className="flex-1 h-[40px] rounded-lg bg-[#F4F5F7] hover:bg-[#EBEDF0] text-[13px] font-semibold text-[#111] transition-colors"
@@ -221,7 +221,7 @@ function SendMessageModal({
                             <button
                                 onClick={handleSend}
                                 disabled={status === "sending" || !message.trim()}
-                                className="flex-1 h-[40px] rounded-lg bg-[#3390EC] hover:bg-[#2B7FD0] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-semibold flex items-center justify-center gap-2 transition-colors"
+                                className="flex-1 h-[40px] rounded-lg bg-[#3390EC] hover:bg-[#2B7FD0] disabled:opacity-50 disabled:cursor-not-allowed text-white text-[13px] font-semibold flex items-center justify-center gap-[2px] transition-colors"
                             >
                                 {status === "sending" ? (
                                     <Spinner />
@@ -430,7 +430,7 @@ export default function DriversClient({
     }
 
     return (
-        <div className="flex w-full flex-col gap-4 animate-in fade-in duration-300">
+        <div className="flex w-full flex-col gap-[4px] animate-in fade-in duration-300">
             {messageTarget && (
                 <SendMessageModal
                     driver={messageTarget.driver}
@@ -445,20 +445,20 @@ export default function DriversClient({
             <div className="flex items-center justify-between flex-wrap gap-3">
                 <h1 className="text-[22px] font-semibold text-[#111] tracking-tight flex items-center gap-2.5">
                     Водители
-                    <span className="text-[12px] font-semibold bg-[#F0F2F5] text-[#8A9099] px-2 py-0.5 rounded-full">{total}</span>
+                    <span className="text-[12px] font-semibold bg-[#F0F2F5] text-[#8A9099] px-[2px] py-0.5 rounded-full">{total}</span>
                 </h1>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-[2px] flex-wrap">
                     <YandexSyncControl />
                     <button
                         onClick={() => setIsSegmentationOpen(true)}
-                        className="h-[36px] px-3 rounded-lg bg-[#F4F5F7] hover:bg-[#EBEDF0] text-[13px] font-semibold text-[#111] flex items-center gap-2 transition-colors"
+                        className="h-[36px] px-3 rounded-lg bg-[#F4F5F7] hover:bg-[#EBEDF0] text-[13px] font-semibold text-[#111] flex items-center gap-[2px] transition-colors"
                     >
                         <Settings2 size={14} className="text-[#8A9099]" />
                         Настройка
                     </button>
                     <button
                         onClick={() => router.push('/drivers/stats')}
-                        className="h-[36px] px-4 rounded-lg bg-[#3390EC] hover:bg-[#2B7FD0] text-white text-[13px] font-semibold flex items-center gap-2 transition-colors"
+                        className="h-[36px] px-[4px] rounded-lg bg-[#3390EC] hover:bg-[#2B7FD0] text-white text-[13px] font-semibold flex items-center gap-[2px] transition-colors"
                     >
                         <TrendingUp size={14} />
                         Статистика
@@ -534,12 +534,12 @@ export default function DriversClient({
                 <Table wrapperClassName="!overflow-visible">
                     <TableHeader>
                         <TableRow className="bg-[#FAFAFA] hover:bg-[#FAFAFA] border-b border-[#E8E8E8]">
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[220px]">Водитель</TableHead>
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[130px]">Телефон</TableHead>
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[120px]">Сегмент</TableHead>
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[140px]">Посл. поездка</TableHead>
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[90px] text-center">Поездки</TableHead>
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 min-w-[120px]">
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[220px]">Водитель</TableHead>
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[130px]">Телефон</TableHead>
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[120px]">Сегмент</TableHead>
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[140px]">Посл. поездка</TableHead>
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[90px] text-center">Поездки</TableHead>
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 min-w-[120px]">
                                 <div className="flex flex-col gap-1 text-left">
                                     <span className="leading-none">Активность</span>
                                     <div className="flex gap-[1px]">
@@ -563,20 +563,20 @@ export default function DriversClient({
                                     </div>
                                 </div>
                             </TableHead>
-                            <TableHead className="py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[70px] text-right">Действия</TableHead>
+                            <TableHead className="py-[2px] px-3 text-[11px] font-semibold uppercase tracking-wider text-[#8A9099] bg-[#FAFAFA] sticky top-[64px] z-30 w-[70px] text-right">Действия</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {isLoading ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-24 text-center text-[#8A9099]">
+                                <TableCell colSpan={7} className="h-[24px] text-center text-[#8A9099]">
                                     <Spinner />
                                 </TableCell>
                             </TableRow>
                         ) : initialDrivers.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-32 text-center">
-                                    <div className="flex flex-col items-center gap-2 text-[#8A9099]">
+                                <TableCell colSpan={7} className="h-[32px] text-center">
+                                    <div className="flex flex-col items-center gap-[2px] text-[#8A9099]">
                                         <Users size={24} className="opacity-30" />
                                         <span className="text-[13px] font-medium">Водители не найдены</span>
                                     </div>
@@ -590,7 +590,7 @@ export default function DriversClient({
                                     onClick={() => router.push(`/drivers/${driver.id}`)}
                                 >
                                     {/* Driver name */}
-                                    <TableCell className="py-2 px-3 align-middle w-[220px]">
+                                    <TableCell className="py-[2px] px-3 align-middle w-[220px]">
                                         <div className="flex items-center gap-2.5 min-w-0">
                                             <ScoringDot status={driver.computedStatus} />
                                             <span className="text-[13px] font-semibold text-[#111] truncate select-all">
@@ -600,15 +600,15 @@ export default function DriversClient({
                                     </TableCell>
 
                                     {/* Phone column */}
-                                    <TableCell className="py-2 px-3 align-middle w-[130px]">
+                                    <TableCell className="py-[2px] px-3 align-middle w-[130px]">
                                         <span className="text-[12px] font-medium text-[#8A9099] whitespace-nowrap">
                                             {driver.phone || "—"}
                                         </span>
                                     </TableCell>
 
                                     {/* Segment badge */}
-                                    <TableCell className="py-2 px-3 align-middle w-[120px]">
-                                        <div className="flex items-center gap-1.5 bg-[#F0F2F5] rounded-md px-2 py-1 w-fit whitespace-nowrap">
+                                    <TableCell className="py-[2px] px-3 align-middle w-[120px]">
+                                        <div className="flex items-center gap-1.5 bg-[#F0F2F5] rounded-md px-[2px] py-1 w-fit whitespace-nowrap">
                                             <span className="text-[9px]">{getSegmentLabel(driver.segment).icon}</span>
                                             <span className="text-[10px] font-semibold text-[#8A9099] tracking-tight">
                                                 {getSegmentLabel(driver.segment).label}
@@ -617,7 +617,7 @@ export default function DriversClient({
                                     </TableCell>
 
                                     {/* Last Trip */}
-                                    <TableCell className="py-2 px-3 align-middle w-[140px]">
+                                    <TableCell className="py-[2px] px-3 align-middle w-[140px]">
                                         <div className="flex items-center gap-1.5 text-[12px] font-medium text-[#8A9099] whitespace-nowrap">
                                             <Clock size={11} className="text-[#B0B5BA]" />
                                             {formatRelativeTime(driver.lastOrderAt)}
@@ -625,7 +625,7 @@ export default function DriversClient({
                                     </TableCell>
 
                                     {/* Trips */}
-                                    <TableCell className="py-2 px-3 align-middle text-center w-[90px]">
+                                    <TableCell className="py-[2px] px-3 align-middle text-center w-[90px]">
                                         <div className="flex items-center justify-center gap-1.5">
                                             <span className="text-[13px] font-semibold text-[#111]">
                                                 {driver.periodTrips}
@@ -638,24 +638,24 @@ export default function DriversClient({
                                     </TableCell>
 
                                     {/* Activity cells */}
-                                    <TableCell className="py-2 px-3 align-middle">
+                                    <TableCell className="py-[2px] px-3 align-middle">
                                         <ActivityGrid cells={driver.cells} />
                                     </TableCell>
 
                                     {/* Actions */}
-                                    <TableCell className="py-2 px-3 align-middle text-right">
+                                    <TableCell className="py-[2px] px-3 align-middle text-right">
                                         <div className="relative group/actions inline-block">
                                             <button
-                                                className="h-8 w-8 rounded-lg hover:bg-[#F0F2F5] flex items-center justify-center transition-colors"
+                                                className="h-[8px] w-[8px] rounded-lg hover:bg-[#F0F2F5] flex items-center justify-center transition-colors"
                                                 onClick={(e) => e.stopPropagation()}
                                             >
                                                 <MessageSquare size={15} className="text-[#8A9099]" />
                                             </button>
 
-                                            <div className="absolute right-full top-0 h-full w-2 z-50 hidden group-hover/actions:block" />
+                                            <div className="absolute right-full top-0 h-full w-[2px] z-50 hidden group-hover/actions:block" />
                                             <div className="absolute right-full top-0 mr-1 hidden group-hover/actions:flex flex-col bg-white border border-[#E8E8E8] rounded-xl shadow-lg z-[60] py-1.5 min-w-[170px] animate-in fade-in slide-in-from-right-2 duration-150">
                                                 <button
-                                                    className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
+                                                    className="flex items-center gap-[2px] px-3 py-[2px] text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
                                                         setMessageTarget({ driver, channel: "telegram" })
@@ -665,7 +665,7 @@ export default function DriversClient({
                                                 </button>
 
                                                 <button
-                                                    className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
+                                                    className="flex items-center gap-[2px] px-3 py-[2px] text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
                                                         setMessageTarget({ driver, channel: "max" })
@@ -679,7 +679,7 @@ export default function DriversClient({
                                                         href={`https://wa.me/${driver.phone.replace(/\D/g, '')}`}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
+                                                        className="flex items-center gap-[2px] px-3 py-[2px] text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         <MessageSquare size={13} className="text-emerald-500" /> WhatsApp
@@ -687,7 +687,7 @@ export default function DriversClient({
                                                 )}
 
                                                 <button
-                                                    className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
+                                                    className="flex items-center gap-[2px] px-3 py-[2px] text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
                                                         window.open(`https://fleet.yandex.ru/drivers/${driver.id}`, '_blank')
@@ -698,7 +698,7 @@ export default function DriversClient({
 
                                                 <div className="h-[1px] bg-[#F0F2F5] my-1" />
                                                 <button
-                                                    className="flex items-center gap-2 px-3 py-2 text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
+                                                    className="flex items-center gap-[2px] px-3 py-[2px] text-[12px] font-medium text-[#111] hover:bg-[#F4F5F7] transition-colors"
                                                     onClick={(e) => handleCallClick(driver, e)}
                                                 >
                                                     <Phone size={13} className="text-[#8A9099]" /> Отметить звонок
@@ -713,7 +713,7 @@ export default function DriversClient({
                 </Table>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between border-t border-[#E8E8E8] bg-[#FAFAFA] px-4 py-2.5">
+                <div className="flex items-center justify-between border-t border-[#E8E8E8] bg-[#FAFAFA] px-[4px] py-2.5">
                     <div className="text-[12px] font-medium text-[#8A9099]">
                         Показаны {pageSize === -1 ? "все" : "с "}{" "}
                         {pageSize !== -1 && (
@@ -754,7 +754,7 @@ export default function DriversClient({
                                             key={pageNum}
                                             onClick={() => updateFilters({ page: pageNum })}
                                             className={cn(
-                                                "h-[28px] min-w-[28px] px-2 rounded-lg text-[12px] font-semibold transition-colors",
+                                                "h-[28px] min-w-[28px] px-[2px] rounded-lg text-[12px] font-semibold transition-colors",
                                                 isActive
                                                     ? "bg-[#3390EC] text-white"
                                                     : "text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#111]"

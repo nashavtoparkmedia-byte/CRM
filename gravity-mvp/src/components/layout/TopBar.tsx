@@ -19,10 +19,10 @@ export default function TopBar() {
     
     return (
         <header className="fixed top-0 left-0 lg:left-[72px] right-0 h-[64px] z-40 bg-background border-b flex items-center justify-between px-6 transition-all duration-300">
-            <div className="flex items-center gap-4">
-                <div className="flex items-center justify-center lg:hidden mr-2">
+            <div className="flex items-center gap-[4px]">
+                <div className="flex items-center justify-center lg:hidden mr-[2px]">
                     {/* Mobile Logo Placeholder */}
-                    <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground font-bold">
+                    <div className="flex h-[8px] w-[8px] items-center justify-center rounded bg-primary text-primary-foreground font-bold">
                         Y
                     </div>
                 </div>
@@ -55,7 +55,7 @@ export default function TopBar() {
                                                  setIsOpen(false);
                                                  window.location.reload();
                                              }}
-                                             className="w-full flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-gray-50 text-left cursor-pointer border-none"
+                                             className="w-full flex items-center gap-[2px] px-3 py-[2px] text-[12px] hover:bg-gray-50 text-left cursor-pointer border-none"
                                          >
                                              {u.role === 'Администратор' && <Shield className="w-3.5 h-3.5 text-red-500" />}
                                              {u.role === 'Руководитель' && <Briefcase className="w-3.5 h-3.5 text-blue-500" />}

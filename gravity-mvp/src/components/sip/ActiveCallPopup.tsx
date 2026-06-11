@@ -49,12 +49,12 @@ export default function ActiveCallPopup() {
 
     return (
         <div className="fixed bottom-6 right-6 z-50 w-[360px] rounded-md border border-border bg-white shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-200">
-            <div className="flex items-center gap-3 px-4 pt-4">
+            <div className="flex items-center gap-3 px-[4px] pt-[4px]">
                 <div className="relative">
                     {activeCall.state !== 'active' && (
                         <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"/>
                     )}
-                    <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <div className="relative flex h-[12px] w-[12px] items-center justify-center rounded-full bg-primary/10 text-primary">
                         <Icon className="h-6 w-6"/>
                     </div>
                 </div>
@@ -64,24 +64,24 @@ export default function ActiveCallPopup() {
                 </div>
             </div>
 
-            <div className="px-4 pt-2 pb-1">
+            <div className="px-[4px] pt-[2px] pb-1">
                 <div className="text-[13px] text-primary font-medium">{statusText}</div>
             </div>
 
-            <div className="flex gap-2 px-4 py-3">
+            <div className="flex gap-[2px] px-[4px] py-3">
                 <button
                     onClick={toggleMute}
                     disabled={activeCall.state !== 'active'}
                     title={activeCall.isMuted ? 'Включить микрофон' : 'Отключить микрофон'}
-                    className="flex items-center justify-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-foreground hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-[13px] font-medium"
+                    className="flex items-center justify-center gap-[2px] rounded-md border border-border bg-white px-3 py-[2px] text-foreground hover:bg-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-[13px] font-medium"
                 >
-                    {activeCall.isMuted ? <MicOff className="h-4 w-4"/> : <Mic className="h-4 w-4"/>}
+                    {activeCall.isMuted ? <MicOff className="h-[4px] w-[4px]"/> : <Mic className="h-[4px] w-[4px]"/>}
                 </button>
                 <button
                     onClick={hangup}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-md bg-destructive py-2 text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium"
+                    className="flex flex-1 items-center justify-center gap-[2px] rounded-md bg-destructive py-[2px] text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium"
                 >
-                    <PhoneOff className="h-4 w-4"/>
+                    <PhoneOff className="h-[4px] w-[4px]"/>
                     Отбой
                 </button>
             </div>

@@ -43,7 +43,7 @@ export default function TaskBoardView() {
     }
 
     return (
-        <div className="flex gap-2 h-full overflow-x-auto pb-4 custom-scrollbar">
+        <div className="flex gap-[2px] h-full overflow-x-auto pb-[4px] custom-scrollbar">
             {BOARD_COLUMNS.map((col) => {
                 const tasks = grouped[col.key] ?? []
                 const isDragOver = dragOverColumn === col.key
@@ -57,7 +57,7 @@ export default function TaskBoardView() {
                         onDrop={(e) => handleDrop(e, col.key)}
                     >
                         {/* Column header */}
-                        <div className="flex items-center gap-2 px-3 py-2 mb-1">
+                        <div className="flex items-center gap-[2px] px-3 py-[2px] mb-1">
                             <div
                                 className="w-2.5 h-2.5 rounded-full"
                                 style={{ backgroundColor: col.color }}
@@ -73,7 +73,7 @@ export default function TaskBoardView() {
                         {/* Column body */}
                         <div
                             className={`
-                                flex-1 space-y-2 rounded-lg p-1.5 transition-colors min-h-[120px]
+                                flex-1 space-y-[2px] rounded-lg p-1.5 transition-colors min-h-[120px]
                                 ${isDragOver
                                     ? 'bg-indigo-50 border-2 border-dashed border-indigo-200'
                                     : 'bg-gray-50/50 border border-transparent'
@@ -92,7 +92,7 @@ export default function TaskBoardView() {
                             ))}
 
                             {tasks.length === 0 && !isDragOver && (
-                                <div className="flex items-center justify-center h-full text-[12px] text-[#d1d5db] py-8">
+                                <div className="flex items-center justify-center h-full text-[12px] text-[#d1d5db] py-[8px]">
                                     Пусто
                                 </div>
                             )}

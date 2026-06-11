@@ -63,8 +63,8 @@ export default function TelegramLinkClient({ driverId, initialTelegramId, initia
     }
 
     return (
-        <div className="rounded-xl border p-5 space-y-4 bg-secondary/20 shadow-inner">
-            <div className="flex items-center justify-between mb-2">
+        <div className="rounded-xl border p-5 space-y-[4px] bg-secondary/20 shadow-inner">
+            <div className="flex items-center justify-between mb-[2px]">
                 <span className="text-muted-foreground font-medium text-sm">Привязка Telegram (бот):</span>
                 {initialTelegramId ? (
                     <Badge variant="success" className="text-[10px] uppercase">Привязан</Badge>
@@ -73,7 +73,7 @@ export default function TelegramLinkClient({ driverId, initialTelegramId, initia
                 )}
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-[2px]">
                 <Input
                     placeholder="Введите Telegram ID (число)..."
                     value={telegramId}
@@ -82,11 +82,11 @@ export default function TelegramLinkClient({ driverId, initialTelegramId, initia
                 />
                 {!initialTelegramId ? (
                     <Button onClick={handleSave} disabled={loading || !telegramId} size="sm" className="h-9">
-                        <Link2 className="w-4 h-4 mr-2" /> Сохранить
+                        <Link2 className="w-[4px] h-[4px] mr-[2px]" /> Сохранить
                     </Button>
                 ) : (
                     <Button onClick={handleRemove} disabled={loading} size="sm" variant="destructive" className="h-9">
-                        <Trash2 className="w-4 h-4 mr-2" /> Отвязать
+                        <Trash2 className="w-[4px] h-[4px] mr-[2px]" /> Отвязать
                     </Button>
                 )}
             </div>
@@ -95,11 +95,11 @@ export default function TelegramLinkClient({ driverId, initialTelegramId, initia
             {success && <div className="text-green-600 text-xs">{success}</div>}
 
             {initialUsername && (
-                <div className="text-xs text-muted-foreground mt-2">
+                <div className="text-xs text-muted-foreground mt-[2px]">
                     Username: @{initialUsername}
                 </div>
             )}
-            <div className="text-xs text-muted-foreground mt-2">
+            <div className="text-xs text-muted-foreground mt-[2px]">
                 Водитель сможет управлять лимитами через Telegram бота.
             </div>
         </div>

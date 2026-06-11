@@ -2,8 +2,8 @@ import React from "react";
 
 export default function MapStubPage() {
   return (
-    <div className="flex h-[calc(100vh-theme(spacing.16))] w-full flex-col items-center justify-center p-8 text-center text-muted-foreground">
-      <div className="mb-4 rounded-full bg-muted p-4">
+    <div className="flex h-[calc(100vh-theme(spacing.16))] w-full flex-col items-center justify-center p-[8px] text-center text-muted-foreground">
+      <div className="mb-[4px] rounded-full bg-muted p-[4px]">
         {/* Simple placeholder icon if needed, but since we don't know what icons are available in this specific isolated file, we can just use an emoji or text for now, but lucide-react is used in the project */}
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -22,7 +22,7 @@ export default function MapStubPage() {
           <path d="M9 3.236v15" />
         </svg>
       </div>
-      <h2 className="mb-2 text-xl font-semibold text-foreground">
+      <h2 className="mb-[2px] text-xl font-semibold text-foreground">
         Раздел временно недоступен
       </h2>
       <p className="max-w-md text-sm">

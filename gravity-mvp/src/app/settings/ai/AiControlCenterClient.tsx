@@ -305,7 +305,7 @@ function StatusDot({ status, detail }: { status: string, detail?: React.ReactNod
                 className={`w-2.5 h-2.5 rounded-full ${color} cursor-pointer`}
             />
             {show && detail && (
-                <div className="absolute left-4 top-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[220px] text-[11px] text-[#111]">
+                <div className="absolute left-[4px] top-0 z-50 bg-white border border-gray-200 rounded-lg shadow-lg p-3 min-w-[220px] text-[11px] text-[#111]">
                     {detail}
                 </div>
             )}
@@ -1126,8 +1126,8 @@ export default function AiControlCenterClient({
 
         return (
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-6 text-[13px]">
-                <span className="inline-flex items-baseline gap-2">
-                    <span className={`w-2 h-2 rounded-full ${config.enabled ? 'bg-green-500' : 'bg-gray-300'}`} style={{ transform: 'translateY(-1px)' }} />
+                <span className="inline-flex items-baseline gap-[2px]">
+                    <span className={`w-[2px] h-[2px] rounded-full ${config.enabled ? 'bg-green-500' : 'bg-gray-300'}`} style={{ transform: 'translateY(-1px)' }} />
                     <span className="font-medium text-[#111]">
                         {config.enabled ? (RUNNING_LABEL[config.mode] ?? 'AI работает') : 'AI не работает'}
                     </span>
@@ -1403,9 +1403,9 @@ export default function AiControlCenterClient({
                                 ручное обновление лишним. Telegram-style:
                                 данные просто свежие, без UI-шума о том,
                                 «когда последний раз». */}
-                            <h3 className="text-[15px] font-semibold text-[#111] mb-2">База сообщений</h3>
+                            <h3 className="text-[15px] font-semibold text-[#111] mb-[2px]">База сообщений</h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className="rounded-xl border-2 border-[#3390EC]/30 bg-gradient-to-br from-[#F0F4FA] to-[#E1ECFA] px-4 py-4">
+                                <div className="rounded-xl border-2 border-[#3390EC]/30 bg-gradient-to-br from-[#F0F4FA] to-[#E1ECFA] px-[4px] py-[4px]">
                                     <div className="text-[10px] uppercase tracking-wide text-[#3390EC] font-bold mb-1">Сообщений</div>
                                     <div className="text-[28px] font-bold text-[#111] leading-none">
                                         {totalMessages.toLocaleString('ru')}
@@ -1414,7 +1414,7 @@ export default function AiControlCenterClient({
                                         входящие и исходящие, все каналы
                                     </div>
                                 </div>
-                                <div className="rounded-xl border-2 border-[#E0E8F4] bg-white px-4 py-4">
+                                <div className="rounded-xl border-2 border-[#E0E8F4] bg-white px-[4px] py-[4px]">
                                     <div className="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Чатов</div>
                                     <div className="text-[28px] font-bold text-[#111] leading-none">
                                         {totalChats.toLocaleString('ru')}
@@ -1423,7 +1423,7 @@ export default function AiControlCenterClient({
                                         диалогов с водителями
                                     </div>
                                 </div>
-                                <div className="rounded-xl border-2 border-[#E0E8F4] bg-white px-4 py-4">
+                                <div className="rounded-xl border-2 border-[#E0E8F4] bg-white px-[4px] py-[4px]">
                                     <div className="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1">Контактов</div>
                                     <div className="text-[28px] font-bold text-[#111] leading-none">
                                         {totalContacts.toLocaleString('ru')}
@@ -1435,7 +1435,7 @@ export default function AiControlCenterClient({
                             </div>
                             {hasOrphan && (
                                 <div
-                                    className="mt-2 text-[11px] text-gray-500 leading-snug"
+                                    className="mt-[2px] text-[11px] text-gray-500 leading-snug"
                                     title="Это сообщения / чаты / контакты, которые лежат в базе CRM, но не привязаны ни к одному из подключённых сейчас аккаунтов. Обычно — наследие от старых импортов или удалённых подключений. AI их не анализирует в обычной выборке по аккаунтам."
                                 >
                                     Без привязки к аккаунту:{' '}
@@ -1460,7 +1460,7 @@ export default function AiControlCenterClient({
                     // порядке WA → TG → MAX → Звонки. Voice появляется только
                     // если listChannelConnections вернул voice_all entry (есть
                     // транскрипты в БД).
-                    <div className="space-y-4">
+                    <div className="space-y-[4px]">
                         {(['whatsapp', 'telegram', 'max', 'phone'] as const).map(channel => {
                             const channelConns = channelConnections.filter(c => c.channel === channel)
                             if (channelConns.length === 0) return null
@@ -1517,17 +1517,17 @@ export default function AiControlCenterClient({
                             return (
                                 <div
                                     key={conn.id}
-                                    className={`text-left rounded-xl border-2 px-4 py-3.5 ${cardBg}`}
+                                    className={`text-left rounded-xl border-2 px-[4px] py-3.5 ${cardBg}`}
                                     title={conn.channel === 'phone'
                                         ? 'Список звонков с записями и расшифровкой — по ссылке внизу карточки.'
                                         : 'Чтобы изменить период истории в БД — нажми «Открыть настройки» внизу карточки.'}
                                 >
                                     {/* Header: label + status pill */}
-                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                    <div className="flex items-start justify-between gap-[2px] mb-[2px]">
                                         <span className="text-[15px] font-semibold text-[#111] truncate">
                                             {conn.label}
                                         </span>
-                                        <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${statusPillBg}`}>
+                                        <span className={`text-[10px] font-bold uppercase tracking-wide px-[2px] py-0.5 rounded-full shrink-0 ${statusPillBg}`}>
                                             {statusText}
                                         </span>
                                     </div>
@@ -1557,7 +1557,7 @@ export default function AiControlCenterClient({
                                         PR9.23: карточка-обёртка теперь <div>, а не
                                         <button>, поэтому stopPropagation у ссылки
                                         больше не нужен. */}
-                                    <div className="text-[11px] mt-2">
+                                    <div className="text-[11px] mt-[2px]">
                                         <a
                                             href={channelHref}
                                             className="text-[#3390EC] hover:underline font-semibold"
@@ -1578,7 +1578,7 @@ export default function AiControlCenterClient({
                 <button
                     type="button"
                     onClick={() => setTab('knowledge')}
-                    className="w-full text-left rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA] hover:bg-[#E1ECFA] transition-colors px-3 py-2.5 mt-2"
+                    className="w-full text-left rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA] hover:bg-[#E1ECFA] transition-colors px-3 py-2.5 mt-[2px]"
                 >
                     <div className="text-[12px] font-semibold text-[#3390EC]">Собрать ядро знаний →</div>
                     <div className="text-[11px] text-gray-500 mt-0.5">AI прочитает сообщения из БД и соберёт структурированную память</div>
@@ -1592,7 +1592,7 @@ export default function AiControlCenterClient({
             {false && importJobs.length > 0 && (
                 <div className="pt-1">
                     <h4 className="text-[13px] font-semibold text-[#111] mb-1">Прошлые загрузки</h4>
-                    <p className="text-[11px] text-gray-500 mb-2 leading-relaxed">
+                    <p className="text-[11px] text-gray-500 mb-[2px] leading-relaxed">
                         ARCHIVED — see git history.
                     </p>
                     <div className="divide-y divide-[#F0F0F0] border-t border-b border-[#F0F0F0]">
@@ -1606,7 +1606,7 @@ export default function AiControlCenterClient({
                             const prevSameJob = isRepeat ? olderSameChannel.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] : null
                             const newMsgs = isRepeat && prevSameJob ? Math.max(0, job.messagesImported - prevSameJob.messagesImported) : null
                             return (
-                            <div key={job.id} className="px-4 py-3">
+                            <div key={job.id} className="px-[4px] py-3">
                                 {/* Верхняя строка: аккаунт (если известен) или
                                     каналы, режим, статус, дата.
                                     PR7.13: связываем аккаунт раньше каналов
@@ -1639,7 +1639,7 @@ export default function AiControlCenterClient({
                                         Импорт: {job.mode === 'available_history' ? 'вся доступная история' : job.mode === 'from_connection_time' ? 'с момента подключения' : job.mode === 'last_n_days' ? `${(job as any).daysBack ?? 'N'} дней` : job.mode}
                                     </span>
                                     {isRepeat && <span className="text-[10px] text-gray-400 italic">повторная синхронизация</span>}
-                                    <span className={`ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    <span className={`ml-auto text-[10px] font-bold px-[2px] py-0.5 rounded-full ${
                                         job.status === 'completed' ? 'bg-green-50 text-green-700' :
                                         job.status === 'running'   ? 'bg-yellow-50 text-yellow-700' :
                                         job.status === 'failed'    ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
@@ -1720,7 +1720,7 @@ export default function AiControlCenterClient({
                                 })()}
                                 {/* Статистика результата */}
                                 {hasStats && (
-                                    <div className="mt-2 ml-5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
+                                    <div className="mt-[2px] ml-5 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px]">
                                         <span className="text-gray-500"><span className="font-semibold text-gray-700">{job.messagesImported}</span> сообщ.</span>
                                         <span className="text-gray-500"><span className="font-semibold text-gray-700">{job.chatsScanned}</span> чатов</span>
                                         <span className="text-gray-500"><span className="font-semibold text-gray-700">{job.contactsFound}</span> контактов</span>
@@ -1728,7 +1728,7 @@ export default function AiControlCenterClient({
                                             <span className="text-gray-400">Новых: <span className={`font-semibold ${newMsgs === 0 ? 'text-gray-400' : 'text-green-600'}`}>{newMsgs}</span></span>
                                         )}
                                         {job.resultType && !isRepeat && (
-                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                            <span className={`text-[10px] font-bold px-[2px] py-0.5 rounded-full ${
                                                 job.resultType === 'full' ? 'bg-blue-50 text-blue-700' :
                                                 job.resultType === 'partial' ? 'bg-yellow-50 text-yellow-700' :
                                                 job.resultType === 'failed'  ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-600'
@@ -2012,14 +2012,14 @@ export default function AiControlCenterClient({
                             key={p}
                             onClick={handleCardClick}
                             title={!isActive ? `Кликни чтобы переключиться на ${meta.name}` : undefined}
-                            className={`rounded-xl border-2 px-4 py-3.5 transition-colors ${cardBg}`}
+                            className={`rounded-xl border-2 px-[4px] py-3.5 transition-colors ${cardBg}`}
                         >
-                            <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex items-start justify-between gap-[2px] mb-[2px]">
                                 <div className="min-w-0">
                                     <div className="text-[15px] font-semibold text-[#111]">{meta.name}</div>
                                     <div className="text-[11px] text-gray-600 leading-snug mt-0.5">{meta.sub}</div>
                                 </div>
-                                <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0 ${pillBg}`}>
+                                <span className={`text-[10px] font-bold uppercase tracking-wide px-[2px] py-0.5 rounded-full shrink-0 ${pillBg}`}>
                                     {pillText}
                                 </span>
                             </div>
@@ -2034,7 +2034,7 @@ export default function AiControlCenterClient({
                                 </div>
                             )}
                             {!isActive && (
-                                <div className="text-[12px] font-semibold text-[#3390EC] mt-2">
+                                <div className="text-[12px] font-semibold text-[#3390EC] mt-[2px]">
                                     Кликни чтобы переключиться →
                                 </div>
                             )}
@@ -2043,13 +2043,13 @@ export default function AiControlCenterClient({
                 })}
             </div>
 
-            <div className="space-y-4 pt-1">
+            <div className="space-y-[4px] pt-1">
                 <div>
                     <label className="text-[12px] text-gray-500 mb-1.5 flex items-center gap-1.5">
                         API ключ для <b className="text-[#111]">{PROVIDER_META[config.provider]?.name ?? config.provider}</b>
                         <a href={PROVIDER_META[config.provider]?.keysUrl ?? '#'} target="_blank" rel="noreferrer" className="text-[#3390EC] hover:underline">— где взять</a>
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-[2px]">
                         <input
                             type="password"
                             value={apiKey}
@@ -2066,7 +2066,7 @@ export default function AiControlCenterClient({
                         <button
                             onClick={handleTestConnection}
                             disabled={testStatus === 'testing'}
-                            className={`h-[36px] px-4 text-[12px] font-semibold rounded-lg disabled:opacity-50 transition-colors ${
+                            className={`h-[36px] px-[4px] text-[12px] font-semibold rounded-lg disabled:opacity-50 transition-colors ${
                                 effectiveStatus === 'ok'
                                     ? 'bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50'
                                     : effectiveStatus === 'error'
@@ -2085,8 +2085,8 @@ export default function AiControlCenterClient({
                     {/* PR9.19: явное пояснение про сохранённый ключ +
                         last-4 chars для уверенности «он реально есть». */}
                     {config.apiKeyEncrypted && !apiKey.trim() ? (
-                        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-gray-600">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded font-mono text-emerald-700">
+                        <div className="mt-1.5 flex items-center gap-[2px] text-[11px] text-gray-600">
+                            <span className="inline-flex items-center gap-1 px-[2px] py-0.5 bg-emerald-50 border border-emerald-200 rounded font-mono text-emerald-700">
                                 <CheckCircle2 size={11} /> сохранён ключ •••{(config.apiKeyEncrypted as string).slice(-4)}
                             </span>
                             <span className="text-gray-500">— работает автоматически. Введи новый чтобы заменить.</span>
@@ -2106,7 +2106,7 @@ export default function AiControlCenterClient({
                     флоу «выбрал провайдера → вставил ключ → проверил → сохранил»
                     не загромождался моделями и роутингом. */}
                 <details className="group rounded-lg border border-[#F0F0F0] bg-[#FAFAFA]">
-                    <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-2 text-[12px] font-medium text-gray-600 hover:text-[#111]">
+                    <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-[2px] text-[12px] font-medium text-gray-600 hover:text-[#111]">
                         <ChevronDown size={13} className="transition-transform group-open:rotate-180" />
                         Дополнительно: модели и маршрутизация
                     </summary>
@@ -2149,22 +2149,22 @@ export default function AiControlCenterClient({
                         <div className="pt-1">
                             <h5 className="text-[12px] font-medium text-gray-600 mb-1.5">Что какая модель делает</h5>
                             <div className="space-y-1.5 text-[11px] text-gray-600">
-                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
+                                <div className="flex items-center gap-[2px] bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
                                     <span className="w-[140px] text-gray-500">Понять, о чём вопрос</span>
                                     <span className="text-gray-300">→</span>
                                     <span className="font-mono">{config.classificationModel}</span>
                                 </div>
-                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
+                                <div className="flex items-center gap-[2px] bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
                                     <span className="w-[140px] text-gray-500">FAQ / простой ответ</span>
                                     <span className="text-gray-300">→</span>
                                     <span className="font-mono">{config.classificationModel}</span>
                                 </div>
-                                <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
+                                <div className="flex items-center gap-[2px] bg-white rounded-lg px-3 py-1.5 border border-[#F0F0F0]">
                                     <span className="w-[140px] text-gray-500">Сложный / длинный</span>
                                     <span className="text-gray-300">→</span>
                                     <span className="font-mono">{config.responseModel}</span>
                                 </div>
-                                <div className="flex items-center gap-2 bg-red-50 rounded-lg px-3 py-1.5 text-red-600">
+                                <div className="flex items-center gap-[2px] bg-red-50 rounded-lg px-3 py-1.5 text-red-600">
                                     <span className="w-[140px]">Жалоба / конфликт</span>
                                     <span>→</span>
                                     <span className="font-semibold">Всегда оператор</span>
@@ -2265,14 +2265,14 @@ export default function AiControlCenterClient({
         if (!rulesModalOpen) return null
         return (
             <div
-                className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-[4px] pt-[16px]"
                 onClick={() => !rulesSaving && setRulesModalOpen(false)}
             >
                 <div
                     className="bg-white rounded-xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden"
                     onClick={e => e.stopPropagation()}
                 >
-                    <div className="px-6 py-4 border-b border-[#F0F0F0]">
+                    <div className="px-6 py-[4px] border-b border-[#F0F0F0]">
                         <h2 className="text-[16px] font-semibold text-[#111]">Дополнительные настройки</h2>
                         <p className="text-[12px] text-gray-500 mt-0.5">
                             Режим работы AI, активные каналы, пороги уверенности.
@@ -2288,7 +2288,7 @@ export default function AiControlCenterClient({
                     Раньше выглядело «размазано» — широкие плашки с одиноким
                     текстом по центру. Сделали как Telegram-фильтры в чат-листе:
                     инлайн-ряд, иконка + лейбл, активный — заполненный primary. */}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-[2px]">
                     {([
                         { val: 'off',             label: 'Выключен', hint: 'AI не работает совсем.',                                          Icon: Ban },
                         { val: 'suggest_only',    label: 'Советует', hint: 'AI пишет ответ в подсказку. Отправляет менеджер вручную.',         Icon: MessageSquare },
@@ -2319,9 +2319,9 @@ export default function AiControlCenterClient({
                     h-[34px], px-3.5, text-[12px] font-semibold, border-[#E4ECFC]).
                     Раньше использовался form-label-style (gray 12px) + укороченные
                     pill'ы — выглядело как «отдельный блок из другого UI». */}
-                <div className="space-y-2 pt-1">
+                <div className="space-y-[2px] pt-1">
                     <h4 className="text-[14px] font-semibold text-[#111]">Активные каналы</h4>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-[2px]">
                         {(['max', 'telegram', 'whatsapp'] as const).map(ch => {
                             const active = config.activeChannels.includes(ch)
                             return (
@@ -2350,8 +2350,8 @@ export default function AiControlCenterClient({
                     выше. Раньше использовался form-label-style (gray 12px),
                     из-за чего пороги визуально отрывались от блоков
                     «Что AI делает» / «Активные каналы». */}
-                <div className="grid grid-cols-2 gap-4 pt-1">
-                    <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-[4px] pt-1">
+                    <div className="space-y-[2px]">
                         <h4 className="text-[14px] font-semibold text-[#111] flex items-center gap-1.5">
                             Уверенность для автоответа
                             <Hint text="Чем выше порог, тем реже AI отвечает сам и чаще передаёт менеджеру. 0.75 — рекомендуемое стартовое значение." />
@@ -2368,7 +2368,7 @@ export default function AiControlCenterClient({
                             <span>отвечает реже</span>
                         </div>
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-[2px]">
                         <h4 className="text-[14px] font-semibold text-[#111] flex items-center gap-1.5">
                             Макс. автоответов подряд
                             <Hint text="После N автоответов в одном чате AI замолкает и передаёт диалог менеджеру — даже если уверен. Защита от бесконечного диалога с ботом." />
@@ -2386,12 +2386,12 @@ export default function AiControlCenterClient({
 
                     </div>
                     {/* Footer модалки — действия */}
-                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-[2px]">
                         <button
                             type="button"
                             onClick={() => !rulesSaving && setRulesModalOpen(false)}
                             disabled={rulesSaving}
-                            className="h-[34px] px-4 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
+                            className="h-[34px] px-[4px] rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors disabled:opacity-50"
                         >
                             Закрыть
                         </button>
@@ -2401,7 +2401,7 @@ export default function AiControlCenterClient({
                                 setRulesModalOpen(false)
                             }}
                             disabled={rulesSaving}
-                            className="h-[34px] px-4 bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                            className="h-[34px] px-[4px] bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors flex items-center gap-1.5"
                         >
                             {rulesSaving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
                             {rulesSaving ? 'Сохраняем...' : 'Сохранить'}
@@ -2512,7 +2512,7 @@ export default function AiControlCenterClient({
     }
 
     const KbTab = () => (
-        <div className="space-y-4">
+        <div className="space-y-[4px]">
             {/* PR9.33: убрана deprecation-плашка «устаревший раздел».
                 User feedback: «У нас же база знаний главная отсюда,
                 а Ядро в помощь? Если это так, информация с этого раздела
@@ -2541,9 +2541,9 @@ export default function AiControlCenterClient({
                     Подробнее →
                 </a>
             </InlineInfo>
-            <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center justify-between gap-[2px] flex-wrap">
                 <span className="text-[12px] text-gray-500">{kb.length} {kb.length === 1 ? 'запись' : kb.length >= 2 && kb.length <= 4 ? 'записи' : 'записей'}</span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                     {kb.length > 0 && (
                         <button
                             onClick={openMigrationModal}
@@ -2566,7 +2566,7 @@ export default function AiControlCenterClient({
             </div>
 
             {showKbForm && (
-                <div className="bg-[#F8F9FA] border border-[#E8E8E8] rounded-xl p-4 space-y-2.5 animate-in fade-in duration-150">
+                <div className="bg-[#F8F9FA] border border-[#E8E8E8] rounded-xl p-[4px] space-y-2.5 animate-in fade-in duration-150">
                     {/* Список существующих категорий — datalist подсказывает админу
                         уже использованные значения, чтобы не плодить «general» /
                         «General» / «общее» вариантов. Свободный ввод остаётся. */}
@@ -2579,18 +2579,18 @@ export default function AiControlCenterClient({
                         <option value="payments" />
                         <option value="docs" />
                     </datalist>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-[2px]">
                         <div>
                             <label className="text-[11px] text-gray-500 block mb-1">Заголовок *</label>
                             <input value={kbForm.title} onChange={e => setKbForm(f => ({ ...f, title: e.target.value }))}
-                                placeholder="Как получить справку?" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                                placeholder="Как получить справку?" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-[2px] text-[12px] outline-none focus:border-[#3390EC]" />
                         </div>
                         <div>
                             <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
                                 Категория <Hint text="Произвольная метка для группировки. Выпадающий список подсказывает уже использованные значения." />
                             </label>
                             <input list="kb-categories" value={kbForm.category} onChange={e => setKbForm(f => ({ ...f, category: e.target.value }))}
-                                placeholder="general" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                                placeholder="general" className="w-full h-[30px] border border-[#E0E0E0] bg-white rounded-lg px-[2px] text-[12px] outline-none focus:border-[#3390EC]" />
                         </div>
                     </div>
                     <div>
@@ -2599,12 +2599,12 @@ export default function AiControlCenterClient({
                             <Hint text="Как водитель может спросить о том же самом. Помогает AI узнать запрос в живой переписке." />
                         </label>
                         <textarea rows={2} value={kbForm.sampleQuestions} onChange={e => setKbForm(f => ({ ...f, sampleQuestions: e.target.value }))}
-                            placeholder={"Как мне получить справку?\nГде взять документы?"} className="w-full border border-[#E0E0E0] bg-white rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#3390EC] resize-none" />
+                            placeholder={"Как мне получить справку?\nГде взять документы?"} className="w-full border border-[#E0E0E0] bg-white rounded-lg px-[2px] py-1.5 text-[12px] outline-none focus:border-[#3390EC] resize-none" />
                     </div>
                     <div>
                         <label className="text-[11px] text-gray-500 block mb-1">Ответ *</label>
                         <textarea rows={3} value={kbForm.answer} onChange={e => setKbForm(f => ({ ...f, answer: e.target.value }))}
-                            placeholder="Справки выдаются в офисе по адресу..." className="w-full border border-[#E0E0E0] bg-white rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#3390EC] resize-none" />
+                            placeholder="Справки выдаются в офисе по адресу..." className="w-full border border-[#E0E0E0] bg-white rounded-lg px-[2px] py-1.5 text-[12px] outline-none focus:border-[#3390EC] resize-none" />
                     </div>
                     {/* Расширенные поля: теги / приоритет — большинству админов
                         не нужны на старте, поэтому скрыты в свёрнутом блоке. */}
@@ -2613,24 +2613,24 @@ export default function AiControlCenterClient({
                             <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
                             Дополнительно
                         </summary>
-                        <div className="px-3 pb-3 grid grid-cols-2 gap-2 pt-1">
+                        <div className="px-3 pb-3 grid grid-cols-2 gap-[2px] pt-1">
                             <div>
                                 <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
                                     Теги <Hint text="Через запятую. Для поиска и фильтрации внутри базы знаний." />
                                 </label>
                                 <input value={kbForm.tags} onChange={e => setKbForm(f => ({ ...f, tags: e.target.value }))}
-                                    placeholder="справка, документы" className="w-full h-[30px] border border-[#E0E0E0] bg-[#F8F9FA] rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                                    placeholder="справка, документы" className="w-full h-[30px] border border-[#E0E0E0] bg-[#F8F9FA] rounded-lg px-[2px] text-[12px] outline-none focus:border-[#3390EC]" />
                             </div>
                             <div>
                                 <label className="text-[11px] text-gray-500 mb-1 flex items-center gap-1.5">
                                     Приоритет <Hint text="Если несколько записей подходят к одному вопросу — AI берёт ту, у которой число больше. 0 — обычная запись." />
                                 </label>
                                 <input type="number" min={0} max={100} value={kbForm.priority} onChange={e => setKbForm(f => ({ ...f, priority: +e.target.value }))}
-                                    className="w-full h-[30px] border border-[#E0E0E0] bg-[#F8F9FA] rounded-lg px-2 text-[12px] outline-none focus:border-[#3390EC]" />
+                                    className="w-full h-[30px] border border-[#E0E0E0] bg-[#F8F9FA] rounded-lg px-[2px] text-[12px] outline-none focus:border-[#3390EC]" />
                             </div>
                         </div>
                     </details>
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-[2px] pt-1">
                         <button onClick={handleCreateKb} disabled={kbSaving}
                             className="h-[28px] px-3 bg-[#3390EC] text-white text-[11px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors">
                             {kbSaving ? 'Сохраняем...' : 'Сохранить'}
@@ -2656,11 +2656,11 @@ export default function AiControlCenterClient({
                     <button
                         type="button"
                         onClick={() => setLegacyExpanded(v => !v)}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2 text-[12px] text-gray-500 hover:bg-[#FAFBFC] transition-colors"
+                        className="w-full flex items-center justify-between gap-[2px] px-3 py-[2px] text-[12px] text-gray-500 hover:bg-[#FAFBFC] transition-colors"
                     >
                         <span>
                             <span className="font-medium text-[#111]">FAQ-карточки</span>
-                            <span className="ml-2 text-gray-400">{kb.length}</span>
+                            <span className="ml-[2px] text-gray-400">{kb.length}</span>
                         </span>
                         <span className="text-[11px] text-gray-400">
                             {legacyExpanded ? 'свернуть' : 'развернуть'}
@@ -2669,9 +2669,9 @@ export default function AiControlCenterClient({
                     {legacyExpanded && (
                 <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
                     {kb.map(entry => (
-                        <div key={entry.id} className={`py-3.5 flex items-start gap-2 px-3 transition-opacity ${entry.active ? '' : 'opacity-50'}`}>
+                        <div key={entry.id} className={`py-3.5 flex items-start gap-[2px] px-3 transition-opacity ${entry.active ? '' : 'opacity-50'}`}>
                             <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-0.5">
+                                <div className="flex items-center gap-[2px] mb-0.5">
                                     <span className="text-[13px] font-semibold text-[#111] truncate">{entry.title}</span>
                                     <span className="text-[10px] text-gray-400">{entry.category}</span>
                                     {entry.priority > 0 && (
@@ -2681,14 +2681,14 @@ export default function AiControlCenterClient({
                                 </div>
                                 <p className="text-[12px] text-gray-600 line-clamp-2 leading-[1.5]">{entry.answer}</p>
                                 {entry.tags.length > 0 && (
-                                    <div className="flex flex-wrap gap-x-2 mt-1 text-[11px] text-gray-400">
+                                    <div className="flex flex-wrap gap-x-[2px] mt-1 text-[11px] text-gray-400">
                                         {entry.tags.map(t => (
                                             <span key={t}>#{t}</span>
                                         ))}
                                     </div>
                                 )}
                             </div>
-                            <div className="flex items-center gap-2 shrink-0 text-[11px]">
+                            <div className="flex items-center gap-[2px] shrink-0 text-[11px]">
                                 <button onClick={() => handleToggleKb(entry)}
                                     className={`transition-colors ${entry.active ? 'text-green-600 hover:underline' : 'text-gray-400 hover:text-[#111]'}`}>
                                     {entry.active ? 'вкл' : 'выкл'}
@@ -2726,7 +2726,7 @@ export default function AiControlCenterClient({
         return (
             <div className={`py-3.5 flex items-start gap-3 group ${!item.isActive ? 'opacity-60' : ''}`}>
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <div className="flex items-center gap-[2px] mb-0.5 flex-wrap">
                         <span className="text-[13px] font-semibold text-[#111] truncate">{item.title}</span>
                         {item.isVerified && (
                             <span title={item.verifiedAt
@@ -2822,7 +2822,7 @@ export default function AiControlCenterClient({
                     <p className="text-[12px] text-gray-600 line-clamp-2 leading-[1.5]">
                         {item.canonicalStatement}
                     </p>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[10px] text-gray-400">
+                    <div className="flex flex-wrap items-center gap-x-[2px] gap-y-1 mt-1 text-[10px] text-gray-400">
                         <span>
                             {item.sourceCount === 0
                                 ? 'создано вручную'
@@ -2971,7 +2971,7 @@ export default function AiControlCenterClient({
 
         return (
             <div className="space-y-1.5">
-                <div className="flex items-center gap-3 flex-wrap rounded-md border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-2 text-[12px] text-gray-600">
+                <div className="flex items-center gap-3 flex-wrap rounded-md border border-[#E8E8E8] bg-[#FAFBFC] px-3 py-[2px] text-[12px] text-gray-600">
                     <span
                         title="Общая готовность ядра — самая слабая из 5 проверок ниже. Кликните «Проверить готовность» чтобы увидеть подробности."
                         className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${overallCfg.bg} ${overallCfg.txt}`}
@@ -3087,12 +3087,12 @@ export default function AiControlCenterClient({
             }
 
         return (
-            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16" onClick={() => setRolloutOpen(false)}>
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-[4px] pt-[16px]" onClick={() => setRolloutOpen(false)}>
                 <div
                     className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
                     onClick={e => e.stopPropagation()}
                 >
-                    <div className="px-6 py-4 border-b border-[#F0F0F0] flex items-center justify-between">
+                    <div className="px-6 py-[4px] border-b border-[#F0F0F0] flex items-center justify-between">
                         <div>
                             <h2 className="text-[16px] font-semibold text-[#111]">Готовность ядра знаний</h2>
                             <p className="text-[12px] text-gray-500 mt-0.5">
@@ -3106,11 +3106,11 @@ export default function AiControlCenterClient({
                         >×</button>
                     </div>
 
-                    <div className="px-6 py-4 overflow-y-auto space-y-5">
+                    <div className="px-6 py-[4px] overflow-y-auto space-y-5">
                         {/* Текущий режим — без env-флагов в основном UI */}
                         <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
                             <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Сейчас</div>
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-[2px] mb-1">
                                 <RuntimeModePill state={runtimeState} />
                                 <span className="text-[13px] font-semibold text-[#111]">{modeDescription.title}</span>
                             </div>
@@ -3119,10 +3119,10 @@ export default function AiControlCenterClient({
 
                         {/* Checklist готовности — humanized labels, каждый с tooltip */}
                         <div>
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Готовность ядра</div>
-                            <ul className="space-y-2">
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-[2px]">Готовность ядра</div>
+                            <ul className="space-y-[2px]">
                                 {r.checks.map(ch => (
-                                    <li key={ch.id} className="flex items-start gap-2 text-[13px]">
+                                    <li key={ch.id} className="flex items-start gap-[2px] text-[13px]">
                                         <span className="mt-[2px] text-[14px] leading-none">{checkIcon(ch.status)}</span>
                                         <div className="flex-1">
                                             <div className="flex items-center gap-1.5">
@@ -3142,8 +3142,8 @@ export default function AiControlCenterClient({
 
                         {/* Активность за 7 дней — humanized labels */}
                         <div>
-                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Что было за 7 дней</div>
-                            <div className="grid grid-cols-2 gap-2 text-[12px]">
+                            <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-[2px]">Что было за 7 дней</div>
+                            <div className="grid grid-cols-2 gap-[2px] text-[12px]">
                                 <Stat label="Всего ответов AI" value={r.activity7d.decisionsTotal} />
                                 <Stat label="Тестовых наблюдений" value={r.activity7d.shadowDecisions} />
                                 <Stat label="Передано менеджеру" value={r.activity7d.escalated} />
@@ -3161,22 +3161,22 @@ export default function AiControlCenterClient({
                                 <li>подтвердить ключевые факты — тарифы, требования, документы</li>
                                 <li>разрешить спорные знания, если они появятся</li>
                             </ul>
-                            <p className="mt-2">
+                            <p className="mt-[2px]">
                                 Когда все четыре пункта выше зелёные — разработчик отдельно включит новый режим на сервере. Это страховка от случайного переключения кнопкой.
                             </p>
                         </div>
 
                         {/* Технические детали — скрыто по-умолчанию, для админа/разработчика */}
                         <details className="group rounded-md border border-[#E8E8E8] bg-[#FAFAFA]">
-                            <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-gray-500 hover:text-[#111]">
+                            <summary className="flex items-center gap-1.5 cursor-pointer select-none px-3 py-[2px] text-[11px] font-medium text-gray-500 hover:text-[#111]">
                                 <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
                                 Технические детали (для разработчика)
                             </summary>
-                            <div className="px-3 pb-3 text-[11px] text-gray-600 space-y-2">
+                            <div className="px-3 pb-3 text-[11px] text-gray-600 space-y-[2px]">
                                 <div>
                                     Режим управляется переменными окружения сервера. UI только показывает их фактическое значение, не флипает.
                                 </div>
-                                <div className="bg-white border border-[#E8E8E8] rounded px-2 py-1.5 font-mono text-[10px] leading-relaxed">
+                                <div className="bg-white border border-[#E8E8E8] rounded px-[2px] py-1.5 font-mono text-[10px] leading-relaxed">
                                     AI_KNOWLEDGE_SHADOW_MODE = <strong>{runtimeState.shadowOn ? '1' : '0'}</strong><br/>
                                     AI_KNOWLEDGE_RUNTIME_ENABLED = <strong>{runtimeState.runtimeOn ? '1' : '0'}</strong>
                                 </div>
@@ -3189,7 +3189,7 @@ export default function AiControlCenterClient({
                         </details>
                     </div>
 
-                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-between gap-2">
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-between gap-[2px]">
                         <a
                             href="/settings/integrations/ai-knowledge-help"
                             target="_blank"
@@ -3200,7 +3200,7 @@ export default function AiControlCenterClient({
                         </a>
                         <button
                             onClick={() => setRolloutOpen(false)}
-                            className="h-9 px-4 rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90"
+                            className="h-9 px-[4px] rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90"
                         >
                             Понятно
                         </button>
@@ -3212,7 +3212,7 @@ export default function AiControlCenterClient({
 
     function Stat({ label, value }: { label: string; value: number }) {
         return (
-            <div className="rounded-md border border-[#E8E8E8] bg-white px-3 py-2">
+            <div className="rounded-md border border-[#E8E8E8] bg-white px-3 py-[2px]">
                 <div className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</div>
                 <div className="text-[15px] font-semibold text-[#111]">{value}</div>
             </div>
@@ -3259,7 +3259,7 @@ export default function AiControlCenterClient({
         const summary = trace.shadowRetrievalSummary
         return (
             <div className="py-2.5">
-                <div className="flex items-baseline gap-2 flex-wrap">
+                <div className="flex items-baseline gap-[2px] flex-wrap">
                     <span className={`text-[12px] font-medium ${decColor}`}>
                         {DECISION_TXT[dec] ?? dec}
                     </span>
@@ -3332,7 +3332,7 @@ export default function AiControlCenterClient({
         }
 
         return (
-            <div className="border-t border-[#F0F0F0] pt-4 space-y-6">
+            <div className="border-t border-[#F0F0F0] pt-[4px] space-y-6">
                 {/* PR7.12: Заглавный блок «Источники памяти AI» —
                     точка опоры для пользователя на этой sub-tab. */}
                 <div className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] px-3 py-2.5">
@@ -3351,7 +3351,7 @@ export default function AiControlCenterClient({
                     переименовали, чтобы выделить, что это и есть
                     «откуда AI берёт память». */}
                 <div>
-                    <div className="text-[12px] font-semibold text-[#111] mb-1 flex items-center gap-2">
+                    <div className="text-[12px] font-semibold text-[#111] mb-1 flex items-center gap-[2px]">
                         Аккаунты и каналы
                         <Hint text="Это все мессенджеры, которые когда-либо были подключены к CRM. AI собирает память из их переписок. Можно отключить знания одного WhatsApp-аккаунта — записи из него уйдут в архив (подтверждённые и ручные останутся с пометкой)." />
                     </div>
@@ -3360,7 +3360,7 @@ export default function AiControlCenterClient({
                             Нет подключённых аккаунтов. Подключите WhatsApp / Telegram / MAX в разделе «Интеграции».
                         </div>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-[2px]">
                             {[...connsByChannel.entries()].map(([channel, conns]) => {
                                 const CHANNEL_LABEL_LOCAL: Record<string, string> = {
                                     whatsapp: 'WhatsApp', telegram: 'Telegram', max: 'MAX', phone: 'Звонки',
@@ -3393,7 +3393,7 @@ export default function AiControlCenterClient({
                                             return (
                                                 <div key={conn.id} className="border-t border-[#F0F0F0] first:border-t-0 px-3 py-2.5 flex items-start gap-3">
                                                     <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                        <div className="flex items-center gap-[2px] flex-wrap">
                                                             <span className="text-[13px] font-medium text-[#111]">
                                                                 {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '')}
                                                             </span>
@@ -3446,7 +3446,7 @@ export default function AiControlCenterClient({
                         Последние сборы ядра
                     </div>
                 {extractionJobs.length === 0 ? (
-                    <div className="text-center py-12 text-[12px] text-gray-400">
+                    <div className="text-center py-[12px] text-[12px] text-gray-400">
                         <div className="font-medium text-[#111] text-[13px] mb-1">Извлечения ещё не запускались</div>
                         Когда вы запустите «Собрать ядро», здесь появятся отчёты:<br />
                         сколько диалогов проанализировано, сколько новых знаний добавлено.
@@ -3461,7 +3461,7 @@ export default function AiControlCenterClient({
                             const p = j.progress ?? {}
                             return (
                                 <div key={j.id ?? idx} className="py-3">
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                    <div className="flex items-center gap-[2px] mb-1 flex-wrap">
                                         <StatusDot status={j.status} />
                                         <span className="text-[13px] font-medium text-[#111]">
                                             {STATUS_LABEL[j.status] ?? j.status}
@@ -3507,7 +3507,7 @@ export default function AiControlCenterClient({
                                         if (llmErrors === 0 || llmCalls === 0) return null
                                         const allFailed = llmErrors === llmCalls && itemsCreated === 0
                                         return (
-                                            <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-2 mb-1 text-[11px] text-red-700 leading-relaxed">
+                                            <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-[2px] mb-1 text-[11px] text-red-700 leading-relaxed">
                                                 <div className="font-semibold">
                                                     {allFailed
                                                         ? `Сбор не удался: все ${llmCalls} запросов к AI завершились ошибкой`
@@ -3629,7 +3629,7 @@ export default function AiControlCenterClient({
 
                 {/* PR7.13 Block 4: Активность ответов (PR3 shadow/runtime) */}
                 <div>
-                    <div className="flex items-baseline gap-2 mb-2">
+                    <div className="flex items-baseline gap-[2px] mb-[2px]">
                         <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">
                             Активность ответов
                         </span>
@@ -3716,11 +3716,11 @@ export default function AiControlCenterClient({
         ]
 
         return (
-            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+            <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-[4px] pt-[16px]"
                  onClick={closeResetModal}>
                 <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
                      onClick={e => e.stopPropagation()}>
-                    <div className="px-6 py-4 border-b border-[#F0F0F0] flex items-center justify-between">
+                    <div className="px-6 py-[4px] border-b border-[#F0F0F0] flex items-center justify-between">
                         <div>
                             <h2 className="text-[16px] font-semibold text-[#111]">Очистить ядро знаний</h2>
                             <p className="text-[12px] text-gray-500 mt-0.5">
@@ -3732,7 +3732,7 @@ export default function AiControlCenterClient({
                                 aria-label="Закрыть">×</button>
                     </div>
 
-                    <div className="px-6 py-4 overflow-y-auto space-y-4">
+                    <div className="px-6 py-[4px] overflow-y-auto space-y-[4px]">
                         {resetResult ? (
                             <>
                                 <div className="rounded-md border border-green-200 bg-green-50 p-3 text-[13px] text-green-900 space-y-1">
@@ -3748,7 +3748,7 @@ export default function AiControlCenterClient({
                                     из последнего запуска (или default).
                                     Восстановить отдельные знания всё ещё
                                     можно через «Архив». */}
-                                <div className="rounded-md border border-[#3390EC]/30 bg-[#F0F4FA] p-3 space-y-2">
+                                <div className="rounded-md border border-[#3390EC]/30 bg-[#F0F4FA] p-3 space-y-[2px]">
                                     <div className="text-[13px] font-semibold text-[#111]">
                                         Собрать ядро заново
                                     </div>
@@ -3836,7 +3836,7 @@ export default function AiControlCenterClient({
                                                 closeResetModal()
                                                 openExtractionModal()
                                             }}
-                                            className="h-9 px-4 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] text-white text-[13px] font-semibold hover:bg-[#2B7FD4]"
+                                            className="h-9 px-[4px] inline-flex items-center gap-1.5 rounded-md bg-[#3390EC] text-white text-[13px] font-semibold hover:bg-[#2B7FD4]"
                                         >
                                             <Sparkles size={13} />
                                             Собрать заново
@@ -3879,7 +3879,7 @@ export default function AiControlCenterClient({
                                 )}
 
                                 <div className="text-[11px] uppercase tracking-wide text-gray-500">Что архивировать</div>
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-[2px]">
                                     {MODES.map(m => {
                                         const selected = resetMode === m.value
                                         const borderActive =
@@ -3888,7 +3888,7 @@ export default function AiControlCenterClient({
                                             'border-[#3390EC] bg-[#F0F4FA]'
                                         return (
                                             <label key={m.value}
-                                                className={`flex items-start gap-2 px-3 py-2.5 rounded-lg cursor-pointer border transition-colors ${
+                                                className={`flex items-start gap-[2px] px-3 py-2.5 rounded-lg cursor-pointer border transition-colors ${
                                                     selected ? borderActive : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
                                                 }`}>
                                                 <input type="radio" name="reset-mode" className="mt-0.5"
@@ -3904,7 +3904,7 @@ export default function AiControlCenterClient({
                                 </div>
 
                                 {resetMode === 'full' && (
-                                    <div className="rounded-md border border-red-300 bg-red-50 p-3 space-y-2">
+                                    <div className="rounded-md border border-red-300 bg-red-50 p-3 space-y-[2px]">
                                         <div className="text-[12px] text-red-800">
                                             Чтобы подтвердить полную очистку, введите слово <b>ОЧИСТИТЬ</b> заглавными буквами:
                                         </div>
@@ -3922,11 +3922,11 @@ export default function AiControlCenterClient({
                         )}
                     </div>
 
-                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                    <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-[2px]">
                         <button
                             onClick={closeResetModal}
                             disabled={resetRunning}
-                            className="h-9 px-4 rounded-md border border-[#E0E0E0] text-[13px] text-gray-600 hover:bg-[#F8F9FA] disabled:opacity-50"
+                            className="h-9 px-[4px] rounded-md border border-[#E0E0E0] text-[13px] text-gray-600 hover:bg-[#F8F9FA] disabled:opacity-50"
                         >
                             {resetResult ? 'Закрыть' : 'Отмена'}
                         </button>
@@ -3934,7 +3934,7 @@ export default function AiControlCenterClient({
                             <button
                                 onClick={handleResetCore}
                                 disabled={submitDisabled}
-                                className={`h-9 px-4 rounded-md text-white text-[13px] font-medium disabled:opacity-50 inline-flex items-center gap-1.5 ${
+                                className={`h-9 px-[4px] rounded-md text-white text-[13px] font-medium disabled:opacity-50 inline-flex items-center gap-1.5 ${
                                     resetMode === 'full' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#3390EC] hover:opacity-90'
                                 }`}
                             >
@@ -4048,7 +4048,7 @@ export default function AiControlCenterClient({
 
         return (
             <>
-            <div className="space-y-4">
+            <div className="space-y-[4px]">
                 <InlineInfo>
                     Ядро знаний — структурированная память AI: тарифы, требования,
                     условия, документы, частые вопросы. AI отвечает фактами из ядра,
@@ -4083,7 +4083,7 @@ export default function AiControlCenterClient({
                             </span>
                         </span>
                     </span>
-                    <span className="flex items-center gap-2 shrink-0">
+                    <span className="flex items-center gap-[2px] shrink-0">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium ${statusCfg.bg} ${statusCfg.txt}`}>
                             <span>{statusCfg.dot}</span>
                             <span>{statusCfg.label}</span>
@@ -4095,7 +4095,7 @@ export default function AiControlCenterClient({
                 {/* PR9.37: primary actions ВЫНЕСЕНЫ за пределы passport —
                     они должны быть видны сразу, без открытия модалки.
                     Раньше жили внутри section, прятались вместе с passport. */}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-[2px]">
                     {extractionRunning ? (
                         <div className="h-[32px] px-3 inline-flex items-center gap-1.5 rounded-md bg-[#3390EC]/10 text-[#3390EC] text-[12px] font-semibold">
                             <Loader2 size={12} className="animate-spin" />
@@ -4160,14 +4160,14 @@ export default function AiControlCenterClient({
                     lastExtrAllFailed alert, coreEmpty/grid и counters. */}
                 {coreInfoOpen && (
                 <div
-                    className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                    className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-[4px] pt-[16px]"
                     onClick={() => setCoreInfoOpen(false)}
                 >
                 <div
                     className="bg-white rounded-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
                     onClick={e => e.stopPropagation()}
                 >
-                <div className="px-6 pt-4 pb-0 border-b border-[#F0F0F0]">
+                <div className="px-6 pt-[4px] pb-0 border-b border-[#F0F0F0]">
                     <header className="flex items-start justify-between gap-3 flex-wrap mb-3">
                         <div className="min-w-0">
                             <h2 className="text-[16px] font-semibold text-[#111]">Текущее ядро AI</h2>
@@ -4198,7 +4198,7 @@ export default function AiControlCenterClient({
                                 key={key}
                                 type="button"
                                 onClick={() => setCoreInfoTab(key)}
-                                className={`px-3 py-2 text-[12px] font-semibold border-b-2 transition-colors ${
+                                className={`px-3 py-[2px] text-[12px] font-semibold border-b-2 transition-colors ${
                                     coreInfoTab === key
                                         ? 'border-[#3390EC] text-[#3390EC]'
                                         : 'border-transparent text-gray-500 hover:text-[#111]'
@@ -4209,7 +4209,7 @@ export default function AiControlCenterClient({
                         ))}
                     </div>
                 </div>
-                <div className="px-6 py-5 overflow-y-auto space-y-4">
+                <div className="px-6 py-5 overflow-y-auto space-y-[4px]">
 
                     {coreInfoTab === 'state' && (
                     <>
@@ -4232,7 +4232,7 @@ export default function AiControlCenterClient({
                     )}
                     {coreEmpty ? (
                         /* PR7.13: empty state — «Ядро ещё не собрано» */
-                        <div className="rounded-md border border-[#E0E8F4] bg-white px-4 py-4 space-y-3">
+                        <div className="rounded-md border border-[#E0E8F4] bg-white px-[4px] py-[4px] space-y-3">
                             <div>
                                 <h3 className="text-[14px] font-semibold text-[#111]">Ядро ещё не собрано</h3>
                                 <p className="text-[12px] text-gray-600 leading-relaxed mt-1">
@@ -4302,7 +4302,7 @@ export default function AiControlCenterClient({
                                                     {conns.slice(0, 4).map(({ conn, participated }) => {
                                                         const status = STATUS_LABEL_LOCAL[conn.status] ?? conn.status
                                                         return (
-                                                            <div key={conn.id} className="text-[11px] text-gray-600 leading-snug pl-2">
+                                                            <div key={conn.id} className="text-[11px] text-gray-600 leading-snug pl-[2px]">
                                                                 — {conn.label.replace(/^(WhatsApp|Telegram|MAX) /, '')}
                                                                 <span className="text-gray-400"> · {status}</span>
                                                                 <span className={participated ? 'text-green-700' : 'text-gray-400'}>
@@ -4312,7 +4312,7 @@ export default function AiControlCenterClient({
                                                         )
                                                     })}
                                                     {conns.length > 4 && (
-                                                        <div className="text-[11px] text-gray-400 pl-2">
+                                                        <div className="text-[11px] text-gray-400 pl-[2px]">
                                                             и ещё {conns.length - 4}
                                                         </div>
                                                     )}
@@ -4321,7 +4321,7 @@ export default function AiControlCenterClient({
                                                         это legacy данные, не относятся к
                                                         выбору пользователя в Шаге 2. */}
                                                     {showChannelLevel && (
-                                                        <div className="text-[11px] text-gray-500 leading-snug pl-2">
+                                                        <div className="text-[11px] text-gray-500 leading-snug pl-[2px]">
                                                             — <span className="text-gray-500">из старых сборов:</span>
                                                             <span className="text-gray-400">
                                                                 {' '}{channelLevel!.stat.sourcesActive} источников · аккаунт не сохранён
@@ -4473,7 +4473,7 @@ export default function AiControlCenterClient({
                                 {/* Текущий режим */}
                                 <div className="rounded-md border border-[#E8E8E8] bg-[#FAFBFC] p-3">
                                     <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">Сейчас</div>
-                                    <div className="flex items-center gap-2 mb-1">
+                                    <div className="flex items-center gap-[2px] mb-1">
                                         <RuntimeModePill state={runtimeState} />
                                         <span className="text-[13px] font-semibold text-[#111]">{modeDescription.title}</span>
                                     </div>
@@ -4482,10 +4482,10 @@ export default function AiControlCenterClient({
 
                                 {/* Checklist готовности */}
                                 <div>
-                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Готовность ядра</div>
-                                    <ul className="space-y-2">
+                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-[2px]">Готовность ядра</div>
+                                    <ul className="space-y-[2px]">
                                         {r.checks.map(ch => (
-                                            <li key={ch.id} className="flex items-start gap-2 text-[13px]">
+                                            <li key={ch.id} className="flex items-start gap-[2px] text-[13px]">
                                                 <span className="mt-[2px] text-[14px] leading-none">{checkIcon(ch.status)}</span>
                                                 <div className="flex-1">
                                                     <div className="flex items-center gap-1.5">
@@ -4505,8 +4505,8 @@ export default function AiControlCenterClient({
 
                                 {/* Активность за 7 дней */}
                                 <div>
-                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-2">Что было за 7 дней</div>
-                                    <div className="grid grid-cols-2 gap-2 text-[12px]">
+                                    <div className="text-[11px] uppercase tracking-wide text-gray-500 mb-[2px]">Что было за 7 дней</div>
+                                    <div className="grid grid-cols-2 gap-[2px] text-[12px]">
                                         <Stat label="Всего ответов AI" value={r.activity7d.decisionsTotal} />
                                         <Stat label="Тестовых наблюдений" value={r.activity7d.shadowDecisions} />
                                         <Stat label="Передано менеджеру" value={r.activity7d.escalated} />
@@ -4530,7 +4530,7 @@ export default function AiControlCenterClient({
                     <button
                         type="button"
                         onClick={() => setCoreInfoOpen(false)}
-                        className="h-[34px] px-4 rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
+                        className="h-[34px] px-[4px] rounded-lg border border-[#E0E0E0] bg-white text-[12px] font-semibold text-gray-700 hover:bg-[#F8F9FA] transition-colors"
                     >
                         Закрыть
                     </button>
@@ -4567,11 +4567,11 @@ export default function AiControlCenterClient({
                     <KnowledgeSourcesPanel />
                 ) : (
                     /* Book-style: оглавление + контент выбранной секции */
-                    <div className="grid grid-cols-[260px_1fr] gap-6 border-t border-[#F0F0F0] pt-4">
+                    <div className="grid grid-cols-[260px_1fr] gap-6 border-t border-[#F0F0F0] pt-[4px]">
                         {/* Оглавление */}
                         <div className="space-y-0.5">
                             {sections.length === 0 ? (
-                                <p className="text-[11px] text-gray-400 px-2 py-3 leading-relaxed">
+                                <p className="text-[11px] text-gray-400 px-[2px] py-3 leading-relaxed">
                                     Разделы не настроены. Запустите{' '}
                                     <code className="text-[10px]">node scripts/seed_knowledge_sections.js</code>.
                                 </p>
@@ -4582,7 +4582,7 @@ export default function AiControlCenterClient({
                                     <button
                                         key={s.id}
                                         onClick={() => setSelectedSectionId(s.id)}
-                                        className={`w-full flex items-center gap-2 px-2 py-2 rounded-lg text-left transition-colors ${
+                                        className={`w-full flex items-center gap-[2px] px-[2px] py-[2px] rounded-lg text-left transition-colors ${
                                             isSelected
                                                 ? 'bg-[#F0F4FA] text-[#3390EC]'
                                                 : 'text-[#111] hover:bg-[#F8F9FA]'
@@ -4632,7 +4632,7 @@ export default function AiControlCenterClient({
                                         const unverifiedCount = knowledgeItems.filter(i => !i.isVerified && i.status === 'active').length
                                         const unverifiedIds   = knowledgeItems.filter(i => !i.isVerified && i.status === 'active').map(i => i.id)
                                         return (
-                                        <div className="flex items-center gap-x-3 gap-y-1 text-[11px] mb-2 flex-wrap">
+                                        <div className="flex items-center gap-x-3 gap-y-1 text-[11px] mb-[2px] flex-wrap">
                                             <button
                                                 onClick={() => setCoreFilter('all')}
                                                 className={`transition-colors ${coreFilter === 'all' ? 'text-[#3390EC] font-medium' : 'text-gray-500 hover:text-[#111]'}`}
@@ -4691,11 +4691,11 @@ export default function AiControlCenterClient({
                                         )
                                     })()}
                                     {knowledgeItemsLoading ? (
-                                        <div className="flex items-center gap-2 text-[12px] text-gray-400 py-6">
+                                        <div className="flex items-center gap-[2px] text-[12px] text-gray-400 py-6">
                                             <Loader2 size={12} className="animate-spin" /> Загружаем…
                                         </div>
                                     ) : knowledgeItems.length === 0 ? (
-                                        <div className="text-center py-12 text-[12px] text-gray-400">
+                                        <div className="text-center py-[12px] text-[12px] text-gray-400">
                                             {knowledgeSubtab === 'archive' ? (
                                                 <>В этом разделе нет архивных знаний.</>
                                             ) : (
@@ -4715,7 +4715,7 @@ export default function AiControlCenterClient({
                                                                           knowledgeItems
                                         if (filtered.length === 0) {
                                             return (
-                                                <div className="text-center py-8 text-[12px] text-gray-400">
+                                                <div className="text-center py-[8px] text-[12px] text-gray-400">
                                                     По выбранному фильтру ничего не найдено.
                                                 </div>
                                             )
@@ -4765,7 +4765,7 @@ export default function AiControlCenterClient({
                                 </button>
                             ))}
                         </div>
-                        <div className="flex-1 overflow-y-auto px-6 py-4">
+                        <div className="flex-1 overflow-y-auto px-6 py-[4px]">
                             {editTab === 'fields' ? (
                                 <div className="space-y-3">
                                     <div>
@@ -4778,7 +4778,7 @@ export default function AiControlCenterClient({
                                         <label className="text-[11px] text-gray-500 block mb-1">Формулировка</label>
                                         <textarea rows={4} value={editForm.canonicalStatement}
                                             onChange={e => setEditForm(f => ({ ...f, canonicalStatement: e.target.value }))}
-                                            className="w-full border border-[#E0E0E0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#3390EC] resize-none leading-relaxed" />
+                                            className="w-full border border-[#E0E0E0] rounded-lg px-3 py-[2px] text-[13px] outline-none focus:border-[#3390EC] resize-none leading-relaxed" />
                                     </div>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
@@ -4810,9 +4810,9 @@ export default function AiControlCenterClient({
                                 </div>
                             ) : (
                                 auditEntries.length === 0 ? (
-                                    <div className="text-center text-[12px] text-gray-400 py-8">История пока пуста.</div>
+                                    <div className="text-center text-[12px] text-gray-400 py-[8px]">История пока пуста.</div>
                                 ) : (
-                                    <div className="space-y-2">
+                                    <div className="space-y-[2px]">
                                         {auditEntries.map(a => (
                                             <div key={a.id} className="border-l-2 border-[#E8E8E8] pl-3 py-1">
                                                 <div className="text-[12px] text-[#111]">
@@ -4826,14 +4826,14 @@ export default function AiControlCenterClient({
                                 )
                             )}
                         </div>
-                        <div className="flex justify-end gap-2 px-6 py-4 border-t border-[#F0F0F0]">
+                        <div className="flex justify-end gap-[2px] px-6 py-[4px] border-t border-[#F0F0F0]">
                             <button onClick={() => setEditingItem(null)} disabled={editSaving}
-                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md transition-colors disabled:opacity-50">
+                                className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md transition-colors disabled:opacity-50">
                                 Закрыть
                             </button>
                             {editTab === 'fields' && (
                                 <button onClick={handleSaveEdit} disabled={editSaving}
-                                    className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50">
+                                    className="h-[36px] px-[4px] inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50">
                                     {editSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                                     Сохранить
                                 </button>
@@ -4868,7 +4868,7 @@ export default function AiControlCenterClient({
                             <textarea rows={3} value={manualForm.canonicalStatement}
                                 onChange={e => setManualForm(f => ({ ...f, canonicalStatement: e.target.value }))}
                                 placeholder="Минимальный возраст водителя — 21 год."
-                                className="w-full border border-[#E0E0E0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#3390EC] resize-none leading-relaxed" />
+                                className="w-full border border-[#E0E0E0] rounded-lg px-3 py-[2px] text-[13px] outline-none focus:border-[#3390EC] resize-none leading-relaxed" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div>
@@ -4889,14 +4889,14 @@ export default function AiControlCenterClient({
                                 </select>
                             </div>
                         </div>
-                        <div className="flex justify-end gap-2 pt-2">
+                        <div className="flex justify-end gap-[2px] pt-[2px]">
                             <button onClick={() => setManualCreateOpen(false)} disabled={manualSaving}
-                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md disabled:opacity-50">
+                                className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md disabled:opacity-50">
                                 Отмена
                             </button>
                             <button onClick={handleCreateManual}
                                 disabled={manualSaving || !manualForm.title.trim() || !manualForm.canonicalStatement.trim()}
-                                className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50">
+                                className="h-[36px] px-[4px] inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50">
                                 {manualSaving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
                                 Создать
                             </button>
@@ -4920,12 +4920,12 @@ export default function AiControlCenterClient({
                         </div>
                         <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
                             {conflictMembers.map(m => (
-                                <div key={m.id} className="py-3 flex items-start gap-2">
+                                <div key={m.id} className="py-3 flex items-start gap-[2px]">
                                     <div className="flex-1 min-w-0">
                                         <div className="text-[13px] font-semibold text-[#111]">
                                             {m.title}
-                                            {!m.isActive && <span className="ml-2 text-[10px] text-gray-400">в архиве</span>}
-                                            {m.id === conflictFor.id && <span className="ml-2 text-[10px] text-[#3390EC]">(этот)</span>}
+                                            {!m.isActive && <span className="ml-[2px] text-[10px] text-gray-400">в архиве</span>}
+                                            {m.id === conflictFor.id && <span className="ml-[2px] text-[10px] text-[#3390EC]">(этот)</span>}
                                         </div>
                                         <p className="text-[12px] text-gray-600 mt-0.5">{m.canonicalStatement}</p>
                                         <div className="text-[10px] text-gray-400 mt-0.5">
@@ -4942,13 +4942,13 @@ export default function AiControlCenterClient({
                                 </div>
                             ))}
                         </div>
-                        <div className="flex justify-end gap-2 pt-2">
+                        <div className="flex justify-end gap-[2px] pt-[2px]">
                             <button onClick={() => handleResolveConflict(conflictFor.id, 'unmark_all')}
-                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md">
+                                className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md">
                                 Снять конфликт без действий
                             </button>
                             <button onClick={() => setConflictFor(null)}
-                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md">
+                                className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md">
                                 Закрыть
                             </button>
                         </div>
@@ -4972,7 +4972,7 @@ export default function AiControlCenterClient({
                     onClick={() => !extractionStarting && setExtractionModalOpen(false)}
                 >
                     <div onClick={e => e.stopPropagation()}
-                         className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-w-[94vw] space-y-4 max-h-[90vh] overflow-y-auto">
+                         className="bg-white rounded-xl shadow-xl p-6 w-[480px] max-w-[94vw] space-y-[4px] max-h-[90vh] overflow-y-auto">
                         <div>
                             <h2 className="text-[17px] font-semibold text-[#111]">Сбор ядра знаний</h2>
                             <p className="text-[12px] text-gray-500 mt-1 leading-relaxed">
@@ -4994,7 +4994,7 @@ export default function AiControlCenterClient({
                                 из мессенджера; на самом деле AI работает
                                 только с тем что физически в БД. */}
                             {extractionRange && extractionRange.totalMessages > 0 && (
-                                <div className="mb-2 rounded-md bg-[#F0F4FA] border border-[#E0E8F4] px-3 py-2 text-[11px] text-gray-700 leading-relaxed">
+                                <div className="mb-[2px] rounded-md bg-[#F0F4FA] border border-[#E0E8F4] px-3 py-[2px] text-[11px] text-gray-700 leading-relaxed">
                                     <div>
                                         <strong className="text-[#111]">В БД сейчас есть:</strong>{' '}
                                         {extractionRange.totalMessages.toLocaleString('ru')} сообщений
@@ -5011,7 +5011,7 @@ export default function AiControlCenterClient({
                                 </div>
                             )}
                             {extractionRange && extractionRange.totalMessages === 0 && !extractionRangeLoading && (
-                                <div className="mb-2 rounded-md bg-[#FFFBED] border border-[#FFE8B0] px-3 py-2 text-[11px] text-[#8B6914] leading-relaxed">
+                                <div className="mb-[2px] rounded-md bg-[#FFFBED] border border-[#FFE8B0] px-3 py-[2px] text-[11px] text-[#8B6914] leading-relaxed">
                                     Для выбранных аккаунтов в БД ещё нет сообщений. Сначала загрузите историю через «Синхронизацию».
                                 </div>
                             )}
@@ -5027,7 +5027,7 @@ export default function AiControlCenterClient({
                                     ]
                                     return opts.map(opt => (
                                         <label key={opt.v}
-                                            className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
+                                            className={`flex items-start gap-[2px] px-3 py-[2px] rounded-lg cursor-pointer border transition-colors ${
                                                 extractionScopeMode === opt.v
                                                     ? 'border-[#3390EC] bg-[#F0F4FA]'
                                                     : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
@@ -5061,7 +5061,7 @@ export default function AiControlCenterClient({
                                 <Hint text="Выбрать конкретные аккаунты WhatsApp работает напрямую — будут проанализированы только их чаты. Для Telegram и MAX сбор пока берёт всю историю канала независимо от отметок." />
                             </label>
                             {channelConnectionsLoading ? (
-                                <div className="flex items-center gap-2 text-[12px] text-gray-400 py-3 px-3">
+                                <div className="flex items-center gap-[2px] text-[12px] text-gray-400 py-3 px-3">
                                     <Loader2 size={12} className="animate-spin" /> Загружаем список подключений…
                                 </div>
                             ) : channelConnections.length === 0 ? (
@@ -5094,7 +5094,7 @@ export default function AiControlCenterClient({
                                             byChannel.set(c.channel, arr)
                                         }
                                         return (
-                                            <div className="flex flex-col gap-2">
+                                            <div className="flex flex-col gap-[2px]">
                                                 {[...byChannel.entries()].map(([channel, conns]) => {
                                                     // PR7.15: вычисляем, есть ли у канала хоть один effective-selected
                                                     // (с учётом onlyConnectedNow), чтобы показывать честный header.
@@ -5185,7 +5185,7 @@ export default function AiControlCenterClient({
                                                             return (
                                                                 <label key={conn.id}
                                                                     title={disabledTitle || undefined}
-                                                                    className={`flex items-center gap-2 px-3 py-2 border-t border-[#F0F0F0] first:border-t-0 ${
+                                                                    className={`flex items-center gap-[2px] px-3 py-[2px] border-t border-[#F0F0F0] first:border-t-0 ${
                                                                         disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-[#FAFBFC]'
                                                                     }`}>
                                                                     <input type="checkbox"
@@ -5200,7 +5200,7 @@ export default function AiControlCenterClient({
                                                                             </span>
                                                                         )}
                                                                     </span>
-                                                                    <span className="inline-flex items-center gap-2 text-[10px] text-gray-500">
+                                                                    <span className="inline-flex items-center gap-[2px] text-[10px] text-gray-500">
                                                                         {hasHistory ? (
                                                                             <span className="text-green-700" title="Этот аккаунт уже участвовал в сборе — есть сохранённая история">
                                                                                 есть история
@@ -5231,7 +5231,7 @@ export default function AiControlCenterClient({
                                             ? channelConnections.filter(c => !c.isReady).length
                                             : 0
                                         return (
-                                            <label className="flex items-center gap-2 mt-2.5 cursor-pointer text-[12px] text-gray-600">
+                                            <label className="flex items-center gap-[2px] mt-2.5 cursor-pointer text-[12px] text-gray-600">
                                                 <input type="checkbox"
                                                     checked={onlyConnectedNow}
                                                     onChange={e => setOnlyConnectedNow(e.target.checked)} />
@@ -5255,7 +5255,7 @@ export default function AiControlCenterClient({
                             Summary висел сверху и был отрезан от
                             submit; теперь это последний блок перед
                             кнопкой «Запустить сбор». */}
-                        <div className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] px-3 py-2.5 space-y-2">
+                        <div className="rounded-lg border border-[#E4ECFC] bg-[#F8FBFF] px-3 py-2.5 space-y-[2px]">
                             <div className="text-[11px] uppercase tracking-wide text-[#3390EC] font-semibold">
                                 Шаг 3 · Что будет сделано
                             </div>
@@ -5315,7 +5315,7 @@ export default function AiControlCenterClient({
                                                     const n = includedByChannel.get(ch) ?? 0
                                                     if (n === 0) return null
                                                     return (
-                                                        <div key={ch} className="pl-2">
+                                                        <div key={ch} className="pl-[2px]">
                                                             — {CHANNEL_LABEL_LOCAL[ch]}: {n} {n === 1 ? 'аккаунт' : n < 5 ? 'аккаунта' : 'аккаунтов'}
                                                         </div>
                                                     )
@@ -5326,7 +5326,7 @@ export default function AiControlCenterClient({
                                                     const hasConnections = channelConnections.some(c => c.channel === ch)
                                                     if (n > 0 || !hasConnections) return null
                                                     return (
-                                                        <div key={`exc-${ch}`} className="pl-2 text-gray-400 text-[11px]">
+                                                        <div key={`exc-${ch}`} className="pl-[2px] text-gray-400 text-[11px]">
                                                             — {CHANNEL_LABEL_LOCAL[ch]}: не участвует — нет выбранных аккаунтов
                                                         </div>
                                                     )
@@ -5339,29 +5339,29 @@ export default function AiControlCenterClient({
                                                 {willNotInclude.slice(0, 4).map(c => {
                                                     const r = reasonFor(c)
                                                     return (
-                                                        <div key={c.id} className="pl-2 text-gray-500">
+                                                        <div key={c.id} className="pl-[2px] text-gray-500">
                                                             — {c.label}
                                                             {r && <span className="text-gray-400"> · {r}</span>}
                                                         </div>
                                                     )
                                                 })}
                                                 {willNotInclude.length > 4 && (
-                                                    <div className="text-gray-400 pl-2">и ещё {willNotInclude.length - 4}</div>
+                                                    <div className="text-gray-400 pl-[2px]">и ещё {willNotInclude.length - 4}</div>
                                                 )}
                                             </div>
                                         )}
                                         <div className="text-[11px] text-gray-600 leading-relaxed pt-1.5 border-t border-[#E4ECFC] space-y-0.5">
                                             <div className="text-gray-500">После запуска AI:</div>
-                                            <div className="pl-2">— соберёт знания из выбранных аккаунтов</div>
-                                            <div className="pl-2">— заблокирует противоречия с проверенными правилами</div>
-                                            <div className="pl-2">
+                                            <div className="pl-[2px]">— соберёт знания из выбранных аккаунтов</div>
+                                            <div className="pl-[2px]">— заблокирует противоречия с проверенными правилами</div>
+                                            <div className="pl-[2px]">
                                                 — {runtimeState.runtimeOn
                                                     ? 'постепенно начнёт отвечать клиентам из обновлённого ядра'
                                                     : 'не изменит ответы клиентам — runtime пока выключен'}
                                             </div>
                                         </div>
                                         {warnings.length > 0 && (
-                                            <div className="rounded border border-[#FFE8B0] bg-[#FFFBED] px-2.5 py-2 text-[11px] text-[#8B6914] leading-relaxed space-y-1">
+                                            <div className="rounded border border-[#FFE8B0] bg-[#FFFBED] px-2.5 py-[2px] text-[11px] text-[#8B6914] leading-relaxed space-y-1">
                                                 {warnings.map((w, i) => (
                                                     <div key={i}>⚠ {w}</div>
                                                 ))}
@@ -5384,7 +5384,7 @@ export default function AiControlCenterClient({
                                     { v: 'quality',  label: 'Повышенное качество',              hint: 'медленнее и дороже, лучше для редких формулировок' },
                                 ] as const).map(opt => (
                                     <label key={opt.v}
-                                        className={`flex items-start gap-2 px-3 py-2 rounded-lg cursor-pointer border transition-colors ${
+                                        className={`flex items-start gap-[2px] px-3 py-[2px] rounded-lg cursor-pointer border transition-colors ${
                                             extractionTier === opt.v
                                                 ? 'border-[#3390EC] bg-[#F0F4FA]'
                                                 : 'border-[#E8E8E8] hover:border-[#C8C8C8]'
@@ -5400,13 +5400,13 @@ export default function AiControlCenterClient({
                                 ))}
                             </div>
                         </div>
-                        <div className="flex justify-end gap-2 pt-1">
+                        <div className="flex justify-end gap-[2px] pt-1">
                             <button onClick={() => setExtractionModalOpen(false)} disabled={extractionStarting}
-                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md transition-colors disabled:opacity-50">
+                                className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md transition-colors disabled:opacity-50">
                                 Отмена
                             </button>
                             <button onClick={handleStartExtraction} disabled={extractionStarting}
-                                className="h-[36px] px-4 inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors">
+                                className="h-[36px] px-[4px] inline-flex items-center gap-1.5 bg-[#3390EC] text-white text-[13px] font-semibold rounded-md hover:bg-[#2B7FD4] disabled:opacity-50 transition-colors">
                                 {extractionStarting ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                                 Запустить сбор
                             </button>
@@ -5453,7 +5453,7 @@ export default function AiControlCenterClient({
     })
 
     const LogTab = () => (
-        <div className="space-y-4">
+        <div className="space-y-[4px]">
             <InlineInfo>
                 Что AI ответил и какие решения принял. 👍 или 👎 рядом с ответом
                 помогает понять, где AI работает хорошо, а где нужно поправить.
@@ -5525,11 +5525,11 @@ export default function AiControlCenterClient({
             {filteredLogs.length > 0 && (
                 <div className="divide-y divide-[#F0F0F0] border-t border-[#F0F0F0]">
                     {filteredLogs.map(log => (
-                        <div key={log.id} className="py-4 space-y-2">
+                        <div key={log.id} className="py-[4px] space-y-[2px]">
                             {/* Заголовок строки: dot-маркер решения, текст
                                 решения, канал, время. Технический %
                                 спрятан в title-tooltip — он редко нужен. */}
-                            <div className="flex items-baseline gap-2 text-[12px]">
+                            <div className="flex items-baseline gap-[2px] text-[12px]">
                                 {log.decision && (
                                     <span className="inline-flex items-baseline gap-1.5">
                                         <span className={`w-1.5 h-1.5 rounded-full ${DECISION_DOT_COLOR[log.decision] ?? 'bg-gray-300'}`} style={{ transform: 'translateY(-1px)' }} />
@@ -5613,7 +5613,7 @@ export default function AiControlCenterClient({
         <div className="flex flex-col h-full">
             {/* Toast */}
             {toast && (
-                <div className="fixed top-4 right-4 z-50 bg-[#111] text-white text-[12px] font-medium px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="fixed top-[4px] right-[4px] z-50 bg-[#111] text-white text-[12px] font-medium px-[4px] py-2.5 rounded-xl shadow-lg animate-in fade-in slide-in-from-top-2 duration-200">
                     {toast}
                 </div>
             )}
@@ -5631,22 +5631,22 @@ export default function AiControlCenterClient({
 
             {/* PR5: Legacy KB → Knowledge Core migration modal */}
             {migrationOpen && (
-                <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 pt-16"
+                <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-[4px] pt-[16px]"
                      onClick={() => !migrationRunning && setMigrationOpen(false)}>
                     <div
                         className="bg-white rounded-lg shadow-xl w-full max-w-xl flex flex-col max-h-[85vh] overflow-hidden"
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="px-6 py-4 border-b border-[#F0F0F0]">
+                        <div className="px-6 py-[4px] border-b border-[#F0F0F0]">
                             <h2 className="text-[16px] font-semibold text-[#111]">Скопировать FAQ в Ядро</h2>
                             <p className="text-[12px] text-gray-500 mt-0.5">
                                 FAQ-записи копируются в Ядро как verified-факты. Сама база знаний
                                 остаётся как есть — это копирование, не перенос.
                             </p>
                         </div>
-                        <div className="px-6 py-4 overflow-y-auto space-y-4">
+                        <div className="px-6 py-[4px] overflow-y-auto space-y-[4px]">
                             {migrationLoading && (
-                                <div className="flex items-center gap-2 text-[12px] text-gray-400 py-6">
+                                <div className="flex items-center gap-[2px] text-[12px] text-gray-400 py-6">
                                     <Loader2 size={13} className="animate-spin" /> Считаем что копировать…
                                 </div>
                             )}
@@ -5671,7 +5671,7 @@ export default function AiControlCenterClient({
                                                     </li>
                                                 ))}
                                             </ul>
-                                            <p className="text-[11px] text-gray-400 mt-2">
+                                            <p className="text-[11px] text-gray-400 mt-[2px]">
                                                 Категории сопоставлены автоматически. После копирования вы можете переместить факты в другой раздел через карточку знания.
                                             </p>
                                         </div>
@@ -5710,11 +5710,11 @@ export default function AiControlCenterClient({
                                 </div>
                             )}
                         </div>
-                        <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-2">
+                        <div className="px-6 py-3 border-t border-[#F0F0F0] flex items-center justify-end gap-[2px]">
                             <button
                                 onClick={() => !migrationRunning && setMigrationOpen(false)}
                                 disabled={migrationRunning}
-                                className="h-9 px-4 rounded-md border border-[#E0E0E0] text-[13px] text-gray-600 hover:bg-[#F8F9FA] disabled:opacity-50"
+                                className="h-9 px-[4px] rounded-md border border-[#E0E0E0] text-[13px] text-gray-600 hover:bg-[#F8F9FA] disabled:opacity-50"
                             >
                                 {migrationResult ? 'Закрыть' : 'Отмена'}
                             </button>
@@ -5722,7 +5722,7 @@ export default function AiControlCenterClient({
                                 <button
                                     onClick={runMigration}
                                     disabled={migrationRunning}
-                                    className="h-9 px-4 rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
+                                    className="h-9 px-[4px] rounded-md bg-[#3390EC] text-white text-[13px] font-medium hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5"
                                 >
                                     {migrationRunning && <Loader2 size={13} className="animate-spin" />}
                                     Скопировать {migrationPreview.toMigrate}
@@ -5744,9 +5744,9 @@ export default function AiControlCenterClient({
                         <div className="px-6 pt-5 pb-3 border-b border-[#F0F0F0]">
                             <h2 className="text-[17px] font-semibold text-[#111]">Почему AI так ответил?</h2>
                         </div>
-                        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+                        <div className="flex-1 overflow-y-auto px-6 py-[4px] space-y-5">
                             {explainLoading || !explainBundle ? (
-                                <div className="flex items-center gap-2 text-[12px] text-gray-400 py-8">
+                                <div className="flex items-center gap-[2px] text-[12px] text-gray-400 py-[8px]">
                                     <Loader2 size={13} className="animate-spin" /> Загружаем подробности…
                                 </div>
                             ) : !explainBundle.decision ? (
@@ -5761,12 +5761,12 @@ export default function AiControlCenterClient({
                                 )
                                 return <>
                                     {/* Вопрос / ответ */}
-                                    <div className="space-y-2">
+                                    <div className="space-y-[2px]">
                                         <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Что спросил клиент</div>
-                                        <div className="bg-[#F8F9FA] rounded-lg px-3 py-2 text-[13px] text-[#111] whitespace-pre-wrap leading-relaxed">
+                                        <div className="bg-[#F8F9FA] rounded-lg px-3 py-[2px] text-[13px] text-[#111] whitespace-pre-wrap leading-relaxed">
                                             {bundle.userMessage?.content ?? '(сообщение не найдено)'}
                                         </div>
-                                        <div className="flex items-baseline gap-2 pt-2">
+                                        <div className="flex items-baseline gap-[2px] pt-[2px]">
                                             <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Что ответил AI</div>
                                             {decision.generatedReply && (
                                                 <button
@@ -5778,7 +5778,7 @@ export default function AiControlCenterClient({
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="bg-[#F0F4FA] rounded-lg px-3 py-2 text-[13px] text-[#111] whitespace-pre-wrap leading-relaxed">
+                                        <div className="bg-[#F0F4FA] rounded-lg px-3 py-[2px] text-[13px] text-[#111] whitespace-pre-wrap leading-relaxed">
                                             {decision.generatedReply ?? (decision.escalated
                                                 ? '(передано менеджеру, ответа клиенту не было)'
                                                 : '(ответа нет)')}
@@ -5787,7 +5787,7 @@ export default function AiControlCenterClient({
 
                                     {/* Mode + policy */}
                                     <div>
-                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Как AI принял решение</div>
+                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">Как AI принял решение</div>
                                         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] text-gray-600">
                                             <span><strong className="text-[#111]">Решение:</strong> {DECISION_HUMAN[decision.decision ?? ''] ?? decision.decision}</span>
                                             {decision.retrievalMode && (
@@ -5795,12 +5795,12 @@ export default function AiControlCenterClient({
                                             )}
                                         </div>
                                         {decision.escalationReason && (
-                                            <div className="mt-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900 leading-relaxed">
+                                            <div className="mt-[2px] px-3 py-[2px] bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900 leading-relaxed">
                                                 <strong>Почему не ответил сам:</strong> {ESCALATION_HUMAN[decision.escalationReason] ?? decision.escalationReason}
                                             </div>
                                         )}
                                         {decision.error && (
-                                            <div className="mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
+                                            <div className="mt-[2px] px-3 py-[2px] bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
                                                 Ошибка: {decision.error}
                                             </div>
                                         )}
@@ -5808,7 +5808,7 @@ export default function AiControlCenterClient({
 
                                     {/* Использованные знания */}
                                     <div>
-                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">
                                             Использованные знания ({usedUsages.length})
                                         </div>
                                         {usedUsages.length === 0 ? (
@@ -5817,14 +5817,14 @@ export default function AiControlCenterClient({
                                                 {decision.retrievalMode === 'legacy' && ' (режим «Только FAQ»)'}.
                                             </div>
                                         ) : (
-                                            <div className="space-y-2">
+                                            <div className="space-y-[2px]">
                                                 {usedUsages.map(u => {
                                                     const it = u.item
                                                     if (!it) return <div key={u.id} className="text-[12px] text-gray-400 italic">Знание было удалено</div>
                                                     const changedAfter = new Date(it.updatedAt) > new Date(decision.createdAt)
                                                     return (
-                                                        <div key={u.id} className="px-3 py-2 rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA]">
-                                                            <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
+                                                        <div key={u.id} className="px-3 py-[2px] rounded-lg border border-[#3390EC]/40 bg-[#F0F4FA]">
+                                                            <div className="flex items-baseline gap-[2px] flex-wrap mb-0.5">
                                                                 <span className="text-[13px] font-semibold text-[#111]">{it.title}</span>
                                                                 {it.isVerified && <span className="text-[10px] text-green-700">подтверждено</span>}
                                                                 {it.safetyLevel === 'requires_human' && <span className="text-[10px] text-red-600">только менеджер</span>}
@@ -5835,12 +5835,12 @@ export default function AiControlCenterClient({
                                                                 {it.sectionTitle && <span className="text-[10px] text-gray-400 ml-auto">{it.sectionTitle}</span>}
                                                             </div>
                                                             <p className="text-[12px] text-gray-700 leading-relaxed">{it.canonicalStatement}</p>
-                                                            <div className="flex items-baseline gap-2 mt-1 text-[10px] text-gray-500">
+                                                            <div className="flex items-baseline gap-[2px] mt-1 text-[10px] text-gray-500">
                                                                 <span>{USAGE_REASON_HUMAN[u.policyDecision ?? ''] ?? 'обработано'}</span>
                                                                 {it.sourceCount > 0 && <span>· {it.sourceCount} {plural(it.sourceCount,'источник','источника','источников')}</span>}
                                                                 {it.uniqueManagerCount > 0 && <span>· {it.uniqueManagerCount} {plural(it.uniqueManagerCount,'менеджер','менеджера','менеджеров')}</span>}
                                                             </div>
-                                                            <div className="flex gap-3 mt-2 text-[11px] flex-wrap">
+                                                            <div className="flex gap-3 mt-[2px] text-[11px] flex-wrap">
                                                                 <button onClick={() => copyToClipboardSafe(it.canonicalStatement, 'Формулировка скопирована')}
                                                                     className="text-gray-400 hover:text-[#3390EC] inline-flex items-center gap-0.5"
                                                                     title="Скопировать каноническую формулировку">
@@ -5886,7 +5886,7 @@ export default function AiControlCenterClient({
                                     {/* Что AI сознательно НЕ использовал (улучшение #2) */}
                                     {filteredUsages.length > 0 && (
                                         <div>
-                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">
                                                 Что AI не использовал ({filteredUsages.length})
                                             </div>
                                             <div className="space-y-1.5">
@@ -5894,8 +5894,8 @@ export default function AiControlCenterClient({
                                                     const it = u.item
                                                     if (!it) return null
                                                     return (
-                                                        <div key={u.id} className="px-3 py-2 rounded-lg border border-[#E8E8E8] bg-white opacity-70">
-                                                            <div className="flex items-baseline gap-2 flex-wrap mb-0.5">
+                                                        <div key={u.id} className="px-3 py-[2px] rounded-lg border border-[#E8E8E8] bg-white opacity-70">
+                                                            <div className="flex items-baseline gap-[2px] flex-wrap mb-0.5">
                                                                 <span className="text-[12px] font-medium text-gray-700">{it.title}</span>
                                                                 {it.sectionTitle && <span className="text-[10px] text-gray-400 ml-auto">{it.sectionTitle}</span>}
                                                             </div>
@@ -5912,14 +5912,14 @@ export default function AiControlCenterClient({
                                     {/* Sources (Admin only) */}
                                     {canEdit && bundle.sources.length > 0 && (
                                         <div>
-                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">
                                                 Источники ({bundle.sources.length})
                                             </div>
                                             <div className="space-y-1.5">
                                                 {bundle.sources.slice(0, 10).map(s => (
-                                                    <div key={s.id} className="px-3 py-2 border-l-2 border-[#E8E8E8] bg-[#F8F9FA] text-[12px]">
+                                                    <div key={s.id} className="px-3 py-[2px] border-l-2 border-[#E8E8E8] bg-[#F8F9FA] text-[12px]">
                                                         <p className="text-[#111] leading-relaxed">{s.excerpt}</p>
-                                                        <div className="text-[10px] text-gray-400 mt-0.5 flex flex-wrap gap-x-2">
+                                                        <div className="text-[10px] text-gray-400 mt-0.5 flex flex-wrap gap-x-[2px]">
                                                             {s.originType === 'manual_entry'
                                                                 ? <span>создано вручную</span>
                                                                 : <>
@@ -5936,12 +5936,12 @@ export default function AiControlCenterClient({
                                     {/* Knowledge changes after answer */}
                                     {bundle.auditAfter.length > 0 && (
                                         <div>
-                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">
                                                 Что изменилось после этого ответа
                                             </div>
                                             <div className="space-y-1">
                                                 {bundle.auditAfter.map(a => (
-                                                    <div key={a.id} className="text-[12px] text-gray-600 flex items-baseline gap-2">
+                                                    <div key={a.id} className="text-[12px] text-gray-600 flex items-baseline gap-[2px]">
                                                         <span className="w-1.5 h-1.5 rounded-full bg-[#3390EC] shrink-0 mt-1.5" />
                                                         <span>{AUDIT_AFTER_HUMAN[a.action] ?? a.action}</span>
                                                         <span className="text-[10px] text-gray-400">{new Date(a.createdAt).toLocaleString('ru')}</span>
@@ -5954,7 +5954,7 @@ export default function AiControlCenterClient({
                                     {/* Retry preview (Admin only) */}
                                     {canEdit && (
                                         <div>
-                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">
                                                 Прогнать заново
                                             </div>
                                             {!retryPreview && !retryRunning && (
@@ -5964,25 +5964,25 @@ export default function AiControlCenterClient({
                                                 </button>
                                             )}
                                             {retryRunning && (
-                                                <div className="flex items-center gap-2 text-[12px] text-gray-500">
+                                                <div className="flex items-center gap-[2px] text-[12px] text-gray-500">
                                                     <Loader2 size={12} className="animate-spin" /> Прогоняем...
                                                 </div>
                                             )}
                                             {retryPreview && (
-                                                <div className="space-y-2">
+                                                <div className="space-y-[2px]">
                                                     {retryPreview.errorMessage && (
-                                                        <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
+                                                        <div className="px-3 py-[2px] bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700">
                                                             {retryPreview.errorMessage}
                                                         </div>
                                                     )}
                                                     {retryPreview.generatedReply && (
-                                                        <div className="px-3 py-2 bg-[#F0FAF4] border border-green-200 rounded-lg text-[12px] text-[#111] whitespace-pre-wrap leading-relaxed">
+                                                        <div className="px-3 py-[2px] bg-[#F0FAF4] border border-green-200 rounded-lg text-[12px] text-[#111] whitespace-pre-wrap leading-relaxed">
                                                             <div className="text-[10px] text-green-700 mb-1 uppercase tracking-wide">Новый ответ (превью, не отправлено)</div>
                                                             {retryPreview.generatedReply}
                                                         </div>
                                                     )}
                                                     {retryPreview.policyType !== 'answer' && (
-                                                        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900">
+                                                        <div className="px-3 py-[2px] bg-amber-50 border border-amber-200 rounded-lg text-[12px] text-amber-900">
                                                             Сейчас AI {retryPreview.policyType === 'escalate' ? 'передал бы менеджеру' : 'не нашёл бы знаний'}
                                                             {retryPreview.escalationReason && `: ${ESCALATION_HUMAN[retryPreview.escalationReason] ?? retryPreview.escalationReason}`}
                                                         </div>
@@ -5999,7 +5999,7 @@ export default function AiControlCenterClient({
                                     {/* Shadow vs runtime compare */}
                                     {decision.shadowRetrievalSummary && decision.retrievalMode === 'shadow' && (
                                         <div>
-                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                                            <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-[2px]">
                                                 Что бы сделало новое ядро
                                             </div>
                                             <div className="text-[12px] text-gray-600 leading-relaxed">
@@ -6044,7 +6044,7 @@ export default function AiControlCenterClient({
                                                     <div>confidence: {(decision.confidence * 100).toFixed(0)}%</div>
                                                 )}
                                                 {retryPreview && (
-                                                    <div className="pt-2 text-gray-400">retry preview durations:</div>
+                                                    <div className="pt-[2px] text-gray-400">retry preview durations:</div>
                                                 )}
                                                 {retryPreview && (
                                                     <div className="ml-3">
@@ -6054,7 +6054,7 @@ export default function AiControlCenterClient({
                                                         total={retryPreview.trace.totalDurationMs}ms
                                                     </div>
                                                 )}
-                                                <div className="pt-2 text-gray-400">scores per item:</div>
+                                                <div className="pt-[2px] text-gray-400">scores per item:</div>
                                                 {bundle.knowledgeUsages.map(u => (
                                                     <div key={u.id} className="ml-3">
                                                         {u.itemId.slice(0, 12)} · retrieval={u.retrievalScore?.toFixed(3) ?? 'null'} · rerank={u.rerankScore?.toFixed(3) ?? 'null'} · {u.policyDecision ?? '—'}
@@ -6068,7 +6068,7 @@ export default function AiControlCenterClient({
                         </div>
                         <div className="flex justify-end px-6 py-3 border-t border-[#F0F0F0]">
                             <button onClick={() => setExplainOpen(false)} disabled={retryRunning}
-                                className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md disabled:opacity-50">
+                                className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md disabled:opacity-50">
                                 Закрыть
                             </button>
                         </div>
@@ -6169,7 +6169,7 @@ function SupersedePickerModal({
                         не конфликт — это обновление правила во времени.
                     </p>
                 </div>
-                <div className="my-3 px-3 py-2 border-l-2 border-[#E8E8E8]">
+                <div className="my-3 px-3 py-[2px] border-l-2 border-[#E8E8E8]">
                     <div className="text-[12px] font-semibold text-[#111]">{oldItem.title}</div>
                     <p className="text-[11px] text-gray-500 line-clamp-2">{oldItem.canonicalStatement}</p>
                 </div>
@@ -6179,7 +6179,7 @@ function SupersedePickerModal({
                     onChange={e => setSearch(e.target.value)}
                     className="w-full h-[34px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC]"
                 />
-                <div className="flex-1 overflow-y-auto mt-3 -mx-2">
+                <div className="flex-1 overflow-y-auto mt-3 -mx-[2px]">
                     {loading ? (
                         <div className="text-center text-[12px] text-gray-400 py-6">Загружаем…</div>
                     ) : filteredItems.length === 0 ? (
@@ -6191,7 +6191,7 @@ function SupersedePickerModal({
                             {filteredItems.map(i => (
                                 <button key={i.id}
                                     onClick={() => onPick(i.id)}
-                                    className="w-full text-left px-3 py-2 hover:bg-[#F8F9FA] transition-colors">
+                                    className="w-full text-left px-3 py-[2px] hover:bg-[#F8F9FA] transition-colors">
                                     <div className="text-[13px] font-semibold text-[#111]">{i.title}</div>
                                     <p className="text-[11px] text-gray-500 line-clamp-2">{i.canonicalStatement}</p>
                                 </button>
@@ -6201,7 +6201,7 @@ function SupersedePickerModal({
                 </div>
                 <div className="flex justify-end pt-3">
                     <button onClick={onClose}
-                        className="h-[36px] px-4 text-[13px] text-gray-600 hover:text-[#111] rounded-md">
+                        className="h-[36px] px-[4px] text-[13px] text-gray-600 hover:text-[#111] rounded-md">
                         Отмена
                     </button>
                 </div>
@@ -6284,7 +6284,7 @@ function ProfilesEditor({
 
             {/* Chip-табы — по аналогии с проектами в /ai-call-scenarios.
                 Активный помечен зелёным, выбранный (открытый) — синим. */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-[2px]">
                 {profiles.map(p => {
                     const isViewing = p.id === viewingId
                     const isActive = p.id === activeProfileId
@@ -6414,20 +6414,20 @@ function ProfileForm({
     }
 
     return (
-        <div className="rounded-md border border-[#E8E8E8] bg-white p-4">
+        <div className="rounded-md border border-[#E8E8E8] bg-white p-[4px]">
             {/* Шапка: имя на всю ширину, справа bagde активности.
-                Раньше использовалось `flex items-start` + `space-y-2`
+                Раньше использовалось `flex items-start` + `space-y-[2px]`
                 для двух input'ов — на проде верстка ехала (вероятно
                 глобальный CSS навязывает min-height для input'ов и
                 space-y перестаёт перекрывать его). Сейчас — явный
                 grid из трёх блоков с собственным `mb-3`. */}
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-[2px]">
                 <input
                     value={name}
                     onChange={e => setName(e.target.value)}
                     disabled={!canEdit}
                     placeholder="Название стиля"
-                    className="flex-1 min-w-0 border border-[#E0E0E0] rounded-md px-3 py-2 text-[14px] font-medium text-[#111] outline-none focus:border-[#3390EC] disabled:bg-[#FAFAFA]"
+                    className="flex-1 min-w-0 border border-[#E0E0E0] rounded-md px-3 py-[2px] text-[14px] font-medium text-[#111] outline-none focus:border-[#3390EC] disabled:bg-[#FAFAFA]"
                 />
                 <div className="shrink-0">
                     {isActive ? (
@@ -6456,7 +6456,7 @@ function ProfileForm({
                 onChange={e => setDescription(e.target.value)}
                 disabled={!canEdit}
                 placeholder="Короткое описание — где этот стиль уместен"
-                className="block w-full border border-[#E0E0E0] rounded-md px-3 py-1.5 text-[12px] text-gray-600 outline-none focus:border-[#3390EC] disabled:bg-[#FAFAFA] mb-4"
+                className="block w-full border border-[#E0E0E0] rounded-md px-3 py-1.5 text-[12px] text-gray-600 outline-none focus:border-[#3390EC] disabled:bg-[#FAFAFA] mb-[4px]"
             />
 
             {/* 4 текстовых блока — Роль/Тон/Разрешено/Запрещено.
@@ -6479,7 +6479,7 @@ function ProfileForm({
                         onChange={e => set(e.target.value)}
                         disabled={!canEdit}
                         placeholder={placeholder}
-                        className="block w-full border border-[#E0E0E0] rounded-md px-3 py-2 text-[12px] outline-none focus:border-[#3390EC] resize-none placeholder:text-gray-300 disabled:bg-[#FAFAFA]"
+                        className="block w-full border border-[#E0E0E0] rounded-md px-3 py-[2px] text-[12px] outline-none focus:border-[#3390EC] resize-none placeholder:text-gray-300 disabled:bg-[#FAFAFA]"
                     />
                 </div>
             ))}
@@ -6488,7 +6488,7 @@ function ProfileForm({
                 для системного. flex-wrap чтобы текст «Системный стиль…»
                 переходил на новую строку, а не накладывался на кнопку. */}
             {canEdit && (
-                <div className="flex flex-wrap items-center gap-3 pt-2 mt-2 border-t border-[#F0F0F0]">
+                <div className="flex flex-wrap items-center gap-3 pt-[2px] mt-[2px] border-t border-[#F0F0F0]">
                     <button
                         type="button"
                         onClick={handleSave}

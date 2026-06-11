@@ -92,8 +92,8 @@ export function DriverFilters({
     const hasCustomRange = dateRange === -1 || (fromDate && toDate)
 
     return (
-        <div className="flex flex-col border-b border-[#E8E8E8] bg-white px-3 py-2">
-            <div className="flex w-full items-center gap-2 flex-wrap">
+        <div className="flex flex-col border-b border-[#E8E8E8] bg-white px-3 py-[2px]">
+            <div className="flex w-full items-center gap-[2px] flex-wrap">
                 {/* Search */}
                 <div className="relative flex-1 min-w-[180px] max-w-[240px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8A9099]" size={14} />
@@ -177,7 +177,7 @@ export function DriverFilters({
                 </div>
 
                 {/* Page Size */}
-                <div className="flex items-center gap-2 ml-auto">
+                <div className="flex items-center gap-[2px] ml-auto">
                     <span className="text-[11px] font-semibold text-[#8A9099] whitespace-nowrap">Показывать:</span>
                     <select
                         value={pageSize}
@@ -208,7 +208,7 @@ export function DriverFilters({
                 </button>
 
                 {/* Exclude Inactive Toggle */}
-                <label className="flex items-center gap-2 cursor-pointer select-none h-[32px] px-2 rounded-lg hover:bg-[#F4F5F7] transition-colors">
+                <label className="flex items-center gap-[2px] cursor-pointer select-none h-[32px] px-[2px] rounded-lg hover:bg-[#F4F5F7] transition-colors">
                     <input
                         type="checkbox"
                         checked={excludeInactive}
@@ -226,7 +226,7 @@ export function DriverFilters({
 
 function cn_btn(active: boolean) {
     return [
-        "flex h-[32px] items-center gap-2 px-3 rounded-lg text-[13px] font-medium transition-colors",
+        "flex h-[32px] items-center gap-[2px] px-3 rounded-lg text-[13px] font-medium transition-colors",
         active
             ? "bg-[#3390EC]/10 text-[#3390EC] hover:bg-[#3390EC]/15"
             : "bg-[#F4F5F7] hover:bg-[#EBEDF0] text-[#8A9099]",

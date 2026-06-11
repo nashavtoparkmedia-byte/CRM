@@ -86,7 +86,7 @@ export default function LinkContactModal({ chatId, isOpen, onClose, onLinked }: 
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div className="px-5 py-[4px] border-b border-gray-200 flex items-center justify-between">
                     <h3 className="font-semibold text-[17px] text-[#111]">Привязать к водителю</h3>
                     <button
                         onClick={onClose}
@@ -106,28 +106,28 @@ export default function LinkContactModal({ chatId, isOpen, onClose, onLinked }: 
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="Поиск по ФИО или телефону..."
-                            className="bg-transparent border-none outline-none text-[14px] flex-1 px-2"
+                            className="bg-transparent border-none outline-none text-[14px] flex-1 px-[2px]"
                         />
                     </div>
                     {error && (
-                        <div className="text-[12px] text-red-600 mt-2 font-medium">{error}</div>
+                        <div className="text-[12px] text-red-600 mt-[2px] font-medium">{error}</div>
                     )}
                 </div>
 
                 {/* Results */}
                 <div className="flex-1 overflow-y-auto">
                     {query.trim().length < 2 && (
-                        <div className="px-5 py-8 text-center text-[13px] text-gray-400">
+                        <div className="px-5 py-[8px] text-center text-[13px] text-gray-400">
                             Начните вводить имя или телефон
                         </div>
                     )}
                     {loading && (
-                        <div className="px-5 py-8 text-center text-[13px] text-gray-400">
+                        <div className="px-5 py-[8px] text-center text-[13px] text-gray-400">
                             Поиск...
                         </div>
                     )}
                     {!loading && query.trim().length >= 2 && results.length === 0 && (
-                        <div className="px-5 py-8 text-center text-[13px] text-gray-400">
+                        <div className="px-5 py-[8px] text-center text-[13px] text-gray-400">
                             Ничего не найдено
                         </div>
                     )}

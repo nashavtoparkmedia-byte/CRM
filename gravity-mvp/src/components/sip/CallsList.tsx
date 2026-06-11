@@ -70,9 +70,9 @@ export default function CallsList({ driverId, contactId, limit = 10 }: { driverI
         }
     }
 
-    if (loading) return <div className="text-[13px] text-muted-foreground py-2">Загрузка…</div>
+    if (loading) return <div className="text-[13px] text-muted-foreground py-[2px]">Загрузка…</div>
     if (calls.length === 0) {
-        return <div className="text-[13px] text-muted-foreground py-2">Звонков пока нет</div>
+        return <div className="text-[13px] text-muted-foreground py-[2px]">Звонков пока нет</div>
     }
 
     return (
@@ -111,12 +111,12 @@ function CallRowItem({
     // The row links to /calls/[id]; the play button stops propagation so a
     // click on the play icon doesn't navigate away while audio is loading.
     return (
-        <li className="flex items-center gap-3 py-2 rounded-md transition-colors hover:bg-surface">
+        <li className="flex items-center gap-3 py-[2px] rounded-md transition-colors hover:bg-surface">
             <Link
                 href={`/calls/${call.id}`}
                 className="flex flex-1 items-center gap-3 min-w-0 outline-none"
             >
-                <Icon className={`h-4 w-4 flex-shrink-0 ${colorFor(call)}`}/>
+                <Icon className={`h-[4px] w-[4px] flex-shrink-0 ${colorFor(call)}`}/>
                 <div className="min-w-0 flex-1">
                     <div className="text-[13px] text-foreground">{formatPhone(peerNumber)}</div>
                     <div className="text-[11px] text-muted-foreground">
@@ -127,7 +127,7 @@ function CallRowItem({
                     <span
                         title={`AI-оценка ${call.aiScore}/10`}
                         className={[
-                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                            'inline-flex items-center gap-1 rounded-full px-[2px] py-0.5 text-[11px] font-medium',
                             call.aiScore >= 8 ? 'bg-accent/10 text-accent'
                             : call.aiScore >= 5 ? 'bg-primary/10 text-primary'
                             : 'bg-destructive/10 text-destructive',

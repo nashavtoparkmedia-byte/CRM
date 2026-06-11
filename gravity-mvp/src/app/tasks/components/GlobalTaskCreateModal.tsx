@@ -59,14 +59,14 @@ export default function GlobalTaskCreateModal({ onClose }: { onClose: () => void
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-[#e5e7eb] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-[#f0f0f0]">
+                <div className="flex items-center justify-between px-5 py-[4px] border-b border-[#f0f0f0]">
                     <div>
                         <h2 className="text-[17px] font-bold text-[#1f2937]">Новая задача</h2>
                         <p className="text-[13px] text-[#6b7280]">Выберите водителя для постановки задачи</p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-2 rounded-lg hover:bg-[#f3f4f6] transition-colors text-[#9ca3af]"
+                        className="p-[2px] rounded-lg hover:bg-[#f3f4f6] transition-colors text-[#9ca3af]"
                     >
                         <X className="w-5 h-5" />
                     </button>
@@ -74,8 +74,8 @@ export default function GlobalTaskCreateModal({ onClose }: { onClose: () => void
 
                 {/* Body */}
                 <div className="p-5 h-[300px] flex flex-col">
-                    <div className="relative mb-4">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <div className="relative mb-[4px]">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-[4px] h-[4px] text-gray-400" />
                         <input
                             autoFocus
                             value={searchQuery}
@@ -87,7 +87,7 @@ export default function GlobalTaskCreateModal({ onClose }: { onClose: () => void
 
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
                         {isSearching ? (
-                            <div className="flex justify-center py-8 text-sm text-gray-400">Поиск...</div>
+                            <div className="flex justify-center py-[8px] text-sm text-gray-400">Поиск...</div>
                         ) : drivers.length > 0 ? (
                             <div className="space-y-1">
                                 {drivers.map(d => (
@@ -96,7 +96,7 @@ export default function GlobalTaskCreateModal({ onClose }: { onClose: () => void
                                         onClick={() => setSelectedDriver({ id: d.id, fullName: d.fullName })}
                                         className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-indigo-50 transition-colors text-left group"
                                     >
-                                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
+                                        <div className="w-[8px] h-[8px] rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
                                             <User size={14} />
                                         </div>
                                         <div>
@@ -107,9 +107,9 @@ export default function GlobalTaskCreateModal({ onClose }: { onClose: () => void
                                 ))}
                             </div>
                         ) : searchQuery.length >= 2 ? (
-                            <div className="text-center py-8 text-[13px] text-gray-400">Ничего не найдено</div>
+                            <div className="text-center py-[8px] text-[13px] text-gray-400">Ничего не найдено</div>
                         ) : (
-                            <div className="text-center py-8 text-[13px] text-gray-400">Введите имя или телефон водителя</div>
+                            <div className="text-center py-[8px] text-[13px] text-gray-400">Введите имя или телефон водителя</div>
                         )}
                     </div>
                 </div>

@@ -203,7 +203,7 @@ function KeyRow(props: {
             // Inline-hint снизу — единственный канал подсказки. Native
             // `title=` убрали, чтобы desktop-popup поверх окна не дублировал
             // его и не закрывал кнопки.
-            className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
+            className="group rounded-md border border-border bg-card px-[4px] py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
         >
             <div className="flex items-center gap-3">
                 {/* Status dot — 10px, с тонким контрастным ring для лучшей
@@ -213,7 +213,7 @@ function KeyRow(props: {
                     className={`inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ring-2 ring-white ${dot.color}`}
                 />
                 <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-baseline gap-2">
+                    <div className="flex flex-wrap items-baseline gap-[2px]">
                         <span className="text-[14px] font-medium text-foreground">{title}</span>
                         <span className="text-[12px] text-muted-foreground">{dot.label}</span>
                         {status.configured && status.mask && (
@@ -223,7 +223,7 @@ function KeyRow(props: {
                         )}
                     </div>
                     {/* Inline expand при hover. max-h-40 чтобы трехстрочный
-                        текст «Mock-режим» влезал целиком (max-h-24 был
+                        текст «Mock-режим» влезал целиком (max-h-[24px] был
                         слишком мал, текст обрезался). */}
                     {hint && (
                         <div className="mt-0.5 max-h-0 overflow-hidden text-[12px] leading-relaxed text-muted-foreground opacity-0 transition-all duration-200 group-hover:mt-1 group-hover:max-h-40 group-hover:opacity-100">
@@ -245,7 +245,7 @@ function KeyRow(props: {
                     //   в flex parent в Tailwind v4 даёт baseline-align quirks);
                     // - whitespace-nowrap чтобы текст «Проверить» / «Изменить»
                     //   не переносился на 2 строки при тесном viewport.
-                    <div className="flex flex-shrink-0 items-center gap-2">
+                    <div className="flex flex-shrink-0 items-center gap-[2px]">
                         {onTest && (
                             <button
                                 type="button"
@@ -283,7 +283,7 @@ function KeyRow(props: {
 
             {canEdit && editing && (
                 <div className="mt-3 flex flex-col gap-1.5">
-                    <div className="flex gap-2">
+                    <div className="flex gap-[2px]">
                         <div className="flex-1 relative">
                             <input
                                 type={show || !masked ? 'text' : 'password'}
@@ -303,7 +303,7 @@ function KeyRow(props: {
                                 <button
                                     type="button"
                                     onClick={() => setShow(!show)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-surface hover:text-foreground"
+                                    className="absolute right-[2px] top-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-surface hover:text-foreground"
                                     title={show ? 'Скрыть' : 'Показать'}
                                 >
                                     {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -368,12 +368,12 @@ function MockModeRow({
 
     return (
         <section
-            className="group rounded-md border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
+            className="group rounded-md border border-border bg-card px-[4px] py-3 transition-colors hover:border-primary/40 hover:bg-surface/40"
         >
             <div className="flex items-center gap-3">
                 <span aria-hidden className={`inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full ring-2 ring-white ${dot.color}`} />
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline gap-[2px]">
                         <span className="text-[14px] font-medium text-foreground">Mock-режим</span>
                         <span className="text-[12px] text-muted-foreground">{dot.label}</span>
                     </div>

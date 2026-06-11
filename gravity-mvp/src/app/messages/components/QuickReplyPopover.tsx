@@ -155,7 +155,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
 
                     <div className="max-h-[240px] overflow-y-auto custom-scrollbar py-0.5">
                         {Object.entries(groups).length === 0 ? (
-                            <div className="px-3.5 py-4 text-center text-[12px] text-gray-400">
+                            <div className="px-3.5 py-[4px] text-center text-[12px] text-gray-400">
                                 {searchQuery ? "Ничего не найдено" : "Нет шаблонов"}
                             </div>
                         ) : (
@@ -168,7 +168,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
                                         <button
                                             key={template.id}
                                             onClick={() => handleSelect(template.text)}
-                                            className="w-full px-3.5 py-2 text-left hover:bg-gray-50 transition-colors"
+                                            className="w-full px-3.5 py-[2px] text-left hover:bg-gray-50 transition-colors"
                                         >
                                             <div className="text-[12px] font-medium text-[#111]">{template.name}</div>
                                             <div className="text-[11px] text-gray-500 truncate mt-0.5 leading-tight">{template.text}</div>
@@ -179,7 +179,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
                         )}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-[#E8E8E8]">
+                    <div className="px-3 py-[2px] border-t border-[#E8E8E8]">
                         <button
                             onClick={() => setView('manage')}
                             className="w-full h-[30px] text-[11px] text-[#3390EC] font-semibold rounded-lg bg-[#3390EC]/5 hover:bg-[#3390EC]/10 transition-colors flex items-center justify-center gap-1"
@@ -194,7 +194,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
             {view === 'manage' && (
                 <>
                     <div className="flex items-center justify-between px-3.5 h-[38px] border-b border-[#E8E8E8]">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-[2px]">
                             <button onClick={() => setView('list')} className="text-gray-400 hover:text-gray-700">
                                 <ChevronLeft size={16} />
                             </button>
@@ -236,7 +236,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
                         ))}
                     </div>
 
-                    <div className="px-3 py-2 border-t border-[#E8E8E8]">
+                    <div className="px-3 py-[2px] border-t border-[#E8E8E8]">
                         <button
                             onClick={handleStartCreate}
                             className="w-full h-[30px] text-[11px] text-white font-semibold rounded-lg bg-[#3390EC] hover:bg-[#2B7FD4] transition-colors flex items-center justify-center gap-1"
@@ -251,7 +251,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
             {view === 'edit' && (
                 <>
                     <div className="flex items-center justify-between px-3.5 h-[38px] border-b border-[#E8E8E8]">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-[2px]">
                             <button onClick={() => setView('manage')} className="text-gray-400 hover:text-gray-700">
                                 <ChevronLeft size={16} />
                             </button>
@@ -282,7 +282,7 @@ export default function QuickReplyPopover({ templates, onSelect, onUpdateTemplat
                                 onChange={(e) => setFormText(e.target.value)}
                                 placeholder="Текст, который будет вставлен..."
                                 rows={3}
-                                className="w-full bg-[#F4F5F7] rounded-lg px-3 py-2 text-[13px] outline-none placeholder:text-gray-400 text-[#111] resize-none focus:bg-[#EEF0F3] transition-colors"
+                                className="w-full bg-[#F4F5F7] rounded-lg px-3 py-[2px] text-[13px] outline-none placeholder:text-gray-400 text-[#111] resize-none focus:bg-[#EEF0F3] transition-colors"
                             />
                         </div>
                         <div>

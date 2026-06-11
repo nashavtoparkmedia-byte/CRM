@@ -13,11 +13,11 @@ export function PageShell({ sectionKey }: PageShellProps) {
 
   if (!section) {
     return (
-      <div className="flex h-[calc(100vh-theme(spacing.32))] flex-col items-center justify-center p-8 text-center animate-in fade-in">
-        <div className="mb-4 rounded-full bg-red-50 p-4 border border-red-100">
-          <Activity className="h-8 w-8 text-red-500" />
+      <div className="flex h-[calc(100vh-theme(spacing.32))] flex-col items-center justify-center p-[8px] text-center animate-in fade-in">
+        <div className="mb-[4px] rounded-full bg-red-50 p-[4px] border border-red-100">
+          <Activity className="h-[8px] w-[8px] text-red-500" />
         </div>
-        <h2 className="mb-2 text-xl font-bold text-foreground">Unknown section</h2>
+        <h2 className="mb-[2px] text-xl font-bold text-foreground">Unknown section</h2>
         <p className="max-w-md text-sm text-muted-foreground">
           Please contact administrator. Section <code>{sectionKey}</code> is not registered.
         </p>
@@ -31,7 +31,7 @@ export function PageShell({ sectionKey }: PageShellProps) {
   return (
     <>
       {/* Optionally, Breadcrumbs could be placed here structurally */}
-      <div className="mb-4 text-sm text-muted opacity-50 font-medium">
+      <div className="mb-[4px] text-sm text-muted opacity-50 font-medium">
          {/* Placeholder for Breadcrumb Slot */}
          {section.breadcrumbs ? section.breadcrumbs.join(" / ") : `Главная / ${section.title}`}
       </div>
@@ -49,7 +49,7 @@ export function PageShell({ sectionKey }: PageShellProps) {
           icon={Beaker} 
           title="В разработке" 
           description={`Раздел "${section.title}" находится на стадии проектирования. Доступный функционал появится в ближайших обновлениях.`} 
-          className="mt-8 py-16 bg-surface shadow-sm border border-transparent"
+          className="mt-[8px] py-[16px] bg-surface shadow-sm border border-transparent"
         />
       )}
     </>

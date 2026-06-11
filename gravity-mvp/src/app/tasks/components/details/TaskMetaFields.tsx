@@ -76,7 +76,7 @@ export default function TaskMetaFields({
 
             <MetaField label="Статус" icon={<ChevronRight className="w-3.5 h-3.5" />}>
                 <div className="flex items-center gap-1 -ml-1">
-                    {isOverdue && <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />}
+                    {isOverdue && <AlertTriangle className="w-[4px] h-[4px] text-red-500 shrink-0" />}
                     <select
                         value={task.status}
                         onChange={(e) => onUpdateStatus(e.target.value as TaskStatus)}

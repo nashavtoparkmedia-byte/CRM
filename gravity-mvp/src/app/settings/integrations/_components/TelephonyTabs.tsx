@@ -23,7 +23,7 @@ const TABS: { key: TelephonyTabKey; label: string; href: string }[] = [
 
 export default function TelephonyTabs({ active }: { active: TelephonyTabKey }) {
     return (
-        <header className="flex flex-col gap-4">
+        <header className="flex flex-col gap-[4px]">
             <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
                     <Smartphone className="h-5 w-5 text-primary" />
@@ -42,7 +42,7 @@ export default function TelephonyTabs({ active }: { active: TelephonyTabKey }) {
                         key={t.key}
                         href={t.href}
                         className={[
-                            'px-3 py-2 text-[14px] font-medium border-b-2 transition-colors',
+                            'px-3 py-[2px] text-[14px] font-medium border-b-2 transition-colors',
                             active === t.key
                                 ? 'border-primary text-foreground'
                                 : 'border-transparent text-muted-foreground hover:text-foreground',

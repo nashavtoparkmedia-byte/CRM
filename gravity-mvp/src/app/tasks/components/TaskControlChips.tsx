@@ -68,7 +68,7 @@ export default function TaskControlChips() {
             {active.length > 0 && (
                 <button
                     onClick={clear}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[12px] text-[#64748B] hover:text-[#DC2626] transition-colors"
+                    className="flex items-center gap-1 px-[2px] py-1 rounded-lg text-[12px] text-[#64748B] hover:text-[#DC2626] transition-colors"
                 >
                     <X className="w-3 h-3" /> сбросить
                 </button>

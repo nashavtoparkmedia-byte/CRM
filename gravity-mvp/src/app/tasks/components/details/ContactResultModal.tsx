@@ -27,13 +27,13 @@ export default function ContactResultModal({
 }: ContactResultModalProps) {
     return (
         <div className="absolute inset-0 z-50 bg-white/95 backdrop-blur-sm flex items-center justify-center p-6 animate-in fade-in duration-200">
-            <div className="w-full max-w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 space-y-4">
+            <div className="w-full max-w-[320px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 space-y-[4px]">
                 <div className="flex items-center justify-between">
                     <h4 className="text-[15px] font-bold text-gray-900">
                         {isEditing ? 'Исправление результата' : 'Результат контакта'}
                     </h4>
                     <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-                        <X className="w-4 h-4 text-gray-400" />
+                        <X className="w-[4px] h-[4px] text-gray-400" />
                     </button>
                 </div>
 
@@ -43,7 +43,7 @@ export default function ContactResultModal({
                         <select
                             value={resultId}
                             onChange={(e) => onResultChange(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-[13px] outline-none focus:border-blue-500 transition-colors cursor-pointer"
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-[2px] text-[13px] outline-none focus:border-blue-500 transition-colors cursor-pointer"
                         >
                             <option value="">Выберите...</option>
                             {contactResults.map((r) => (
@@ -58,13 +58,13 @@ export default function ContactResultModal({
                             value={comment}
                             onChange={(e) => onCommentChange(e.target.value.slice(0, 200))}
                             placeholder="Кратко о главном..."
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-[13px] outline-none focus:border-blue-500 transition-colors h-20 resize-none"
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-[2px] text-[13px] outline-none focus:border-blue-500 transition-colors h-20 resize-none"
                         />
                         <div className="text-[10px] text-right text-gray-400">{comment.length}/200</div>
                     </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex gap-[2px] pt-[2px]">
                     <button
                         onClick={onClose}
                         className="flex-1 py-2.5 rounded-xl bg-gray-50 text-gray-600 text-[13px] font-bold hover:bg-gray-100 transition-colors"

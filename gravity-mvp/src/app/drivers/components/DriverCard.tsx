@@ -70,7 +70,7 @@ export function DriverCard({ driver, onMessage }: DriverCardProps) {
             </div>
 
             {/* Mini Activity Grid - last 7 days */}
-            <div className="mb-4">
+            <div className="mb-[4px]">
                 <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1 block">
                     Активность (7 дн)
                 </span>
@@ -91,11 +91,11 @@ export function DriverCard({ driver, onMessage }: DriverCardProps) {
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-2 mt-auto pt-2 border-t">
+            <div className="flex gap-[2px] mt-auto pt-[2px] border-t">
                 <Button
                     variant="secondary"
                     size="sm"
-                    className="flex-1 gap-1.5 h-8 text-xs"
+                    className="flex-1 gap-1.5 h-[8px] text-xs"
                     onClick={(e) => {
                         e.stopPropagation()
                         onMessage(driver)
@@ -107,7 +107,7 @@ export function DriverCard({ driver, onMessage }: DriverCardProps) {
                 <Button
                     variant="secondary"
                     size="sm"
-                    className={`flex-1 gap-1.5 h-8 text-xs transition-colors ${callLogged ? 'bg-emerald-100 text-emerald-700' : ''}`}
+                    className={`flex-1 gap-1.5 h-[8px] text-xs transition-colors ${callLogged ? 'bg-emerald-100 text-emerald-700' : ''}`}
                     onClick={handleCall}
                 >
                     <Phone size={12} className={callLogged ? "text-emerald-600" : "text-green-500"} />

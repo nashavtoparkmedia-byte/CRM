@@ -165,7 +165,7 @@ export default function ChatHeader({
 
     return (
         <div className="border-b border-[#E8E8E8] shrink-0 flex justify-center bg-white z-20 relative">
-            <div className="w-full max-w-[720px] px-4">
+            <div className="w-full max-w-[720px] px-[4px]">
                 {/* Standard Header View */}
                 {!isSearchActive ? (
                     <>
@@ -224,7 +224,7 @@ export default function ChatHeader({
                             <div className="relative" ref={tasksPopoverRef}>
                                 <button 
                                     onClick={() => setShowTasksPopover(!showTasksPopover)}
-                                    className={`h-[28px] px-2 rounded-md flex items-center gap-1 text-[11px] font-medium transition-colors ${
+                                    className={`h-[28px] px-[2px] rounded-md flex items-center gap-1 text-[11px] font-medium transition-colors ${
                                         showTasksPopover 
                                         ? 'bg-[#3390EC]/10 text-[#3390EC]' 
                                         : taskCount > 0 
@@ -260,7 +260,7 @@ export default function ChatHeader({
                                                         <Link
                                                             key={task.id}
                                                             href={`/tasks?driverId=${chat.driver?.id}`}
-                                                            className="w-full px-3.5 py-2 flex items-start gap-2.5 hover:bg-gray-50 transition-colors text-left block"
+                                                            className="w-full px-3.5 py-[2px] flex items-start gap-2.5 hover:bg-gray-50 transition-colors text-left block"
                                                         >
                                                             <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${isOverdue ? 'bg-red-500' : 'bg-[#3390EC]'}`} />
                                                             <div className="flex-1 min-w-0">
@@ -303,7 +303,7 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-2 rounded-md hover:bg-blue-50 flex items-center gap-1 text-[11px] font-medium text-[#3390EC] transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-blue-50 flex items-center gap-1 text-[11px] font-medium text-[#3390EC] transition-colors"
                                     title="Взять себе"
                                 >
                                     <UserPlus size={13} />
@@ -315,7 +315,7 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/unassign`, { method: 'POST' })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-2 rounded-md hover:bg-gray-100 flex items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-gray-100 flex items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors"
                                     title="Снять назначение"
                                 >
                                     <UserMinus size={13} />
@@ -328,7 +328,7 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/resolve`, { method: 'POST' })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-2 rounded-md hover:bg-green-50 flex items-center gap-1 text-[11px] font-medium text-emerald-500 transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-green-50 flex items-center gap-1 text-[11px] font-medium text-emerald-500 transition-colors"
                                     title="Завершить"
                                 >
                                     <CheckCircle2 size={13} />
@@ -340,7 +340,7 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/reopen`, { method: 'POST' })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-2 rounded-md hover:bg-amber-50 flex items-center gap-1 text-[11px] font-medium text-amber-500 transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-amber-50 flex items-center gap-1 text-[11px] font-medium text-amber-500 transition-colors"
                                     title="Переоткрыть"
                                 >
                                     <RotateCcw size={13} />
@@ -384,7 +384,7 @@ export default function ChatHeader({
 
                         {/* Line 2: contact metadata */}
                         {hasMetadata && (
-                            <div className="h-[24px] flex items-center gap-2 pb-1">
+                            <div className="h-[24px] flex items-center gap-[2px] pb-1">
                                 {/* Бейдж этапа жизни: Лид · Канал /
                                     Водитель · Канал / Отток · Канал.
                                     contact.driver приходит из useContact —
@@ -433,7 +433,7 @@ export default function ChatHeader({
                         />
                         
                         {searchQuery && (
-                            <div className="flex items-center gap-2 shrink-0 border-l border-gray-200 pl-3 ml-1">
+                            <div className="flex items-center gap-[2px] shrink-0 border-l border-gray-200 pl-3 ml-1">
                                 <span className="text-[12px] font-medium text-gray-400 min-w-[36px] text-center">
                                     {searchResultsCount > 0 ? `${activeSearchIndex + 1} / ${searchResultsCount}` : "0 / 0"}
                                 </span>

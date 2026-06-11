@@ -468,7 +468,7 @@ function GlobalSettingsModal({
           модалки. max-h-[90vh] оставляем как safety на маленьких экранах. */}
       <DialogContent className="max-w-2xl h-[80vh] max-h-[90vh] flex flex-col gap-0 p-0">
         <DialogHeader className="px-6 pt-6 pb-3">
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-[2px]">
             <SettingsIcon className="h-5 w-5" /> Глобальные настройки
           </DialogTitle>
         </DialogHeader>
@@ -477,7 +477,7 @@ function GlobalSettingsModal({
           {/* TabsList: явные классы для фона/текста, потому что в темах
               CRM --muted и --muted-foreground слишком близкие → дефолтный
               shadcn-стиль делает неактивные табы нечитаемыми. */}
-          <TabsList className="mx-6 mb-2 grid w-auto grid-cols-3 bg-slate-100">
+          <TabsList className="mx-6 mb-[2px] grid w-auto grid-cols-3 bg-slate-100">
             <TabsTrigger
               value="general"
               className="text-slate-700 data-[state=active]:bg-white data-[state=active]:text-foreground"
@@ -498,14 +498,14 @@ function GlobalSettingsModal({
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-[4px]">
             {/* ── Общие ──────────────────────────────────────────── */}
-            <TabsContent value="general" className="space-y-6 mt-2">
+            <TabsContent value="general" className="space-y-6 mt-[2px]">
               <div>
                 <Label className="mb-1.5 block">
                   Глобальный интервал сбора откликов
                 </Label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                   <Input
                     className="!w-40 !min-w-[10rem] shrink-0 text-base h-11"
                     value={minutes}
@@ -541,7 +541,7 @@ function GlobalSettingsModal({
                     <strong>~{avgJobSec}с</strong>. Полный цикл по всем ≈{' '}
                     <strong>{actualPerAccountMin} мин</strong>.
                   </div>
-                  <div className="mt-2 rounded bg-white/60 p-2 text-xs space-y-1">
+                  <div className="mt-[2px] rounded bg-white/60 p-[2px] text-xs space-y-1">
                     {level !== 'bad' ? (
                       <>
                         <div>
@@ -573,7 +573,7 @@ function GlobalSettingsModal({
                     )}
                   </div>
                   {level !== 'ok' && (
-                    <div className="mt-2">
+                    <div className="mt-[2px]">
                       {level === 'tight' && (
                         <>
                           Запас небольшой: цикл (
@@ -594,7 +594,7 @@ function GlobalSettingsModal({
                       )}
                     </div>
                   )}
-                  <div className="mt-2 text-[11px] opacity-75">
+                  <div className="mt-[2px] text-[11px] opacity-75">
                     Расчёт игнорирует per-account override'ы. Среднее время
                     скана — оценка; реально 20–120с в зависимости от
                     количества новых диалогов.
@@ -612,10 +612,10 @@ function GlobalSettingsModal({
                   rows={4}
                   placeholder="Пусто — нет глобального авто-ответа. Только те аккаунты, где задан свой текст в кнопке «Авто-ответ», будут отвечать."
                   onChange={(e) => setReply(e.target.value)}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="w-full rounded-md border border-input bg-background px-3 py-[2px] text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 />
                 {replyDirty && (
-                  <div className="mt-2">
+                  <div className="mt-[2px]">
                     <Button
                       size="sm"
                       onClick={() => void saveReply()}
@@ -625,7 +625,7 @@ function GlobalSettingsModal({
                     </Button>
                   </div>
                 )}
-                <div className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                <div className="mt-[2px] text-xs text-muted-foreground leading-relaxed">
                   <div className="font-semibold text-foreground">Как работает:</div>
                   <ol className="list-decimal pl-5 space-y-0.5">
                     <li>Система находит новый непрочитанный отклик в мессенджере одного из аккаунтов.</li>
@@ -633,7 +633,7 @@ function GlobalSettingsModal({
                     <li>Печатает этот текст в поле сообщения и отправляет.</li>
                     <li>Отправляется <strong>ровно один раз</strong> на диалог — повторно никогда.</li>
                   </ol>
-                  <div className="font-semibold text-foreground mt-2">
+                  <div className="font-semibold text-foreground mt-[2px]">
                     Приоритет источника текста:
                   </div>
                   <ul className="list-disc pl-5 space-y-0.5">
@@ -646,11 +646,11 @@ function GlobalSettingsModal({
             </TabsContent>
 
             {/* ── Telegram ───────────────────────────────────────── */}
-            <TabsContent value="telegram" className="mt-2">
+            <TabsContent value="telegram" className="mt-[2px]">
               <Label className="mb-1.5 block">📢 Telegram уведомления</Label>
               <div className="flex flex-col gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-[2px]">
                     <Input
                       type="password"
                       placeholder={
@@ -687,22 +687,22 @@ function GlobalSettingsModal({
                   onChange={(e) => setTgChatIdInput(e.target.value)}
                   disabled={savingTg}
                 />
-                <div className="flex flex-col gap-2 text-sm">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                <div className="flex flex-col gap-[2px] text-sm">
+                  <label className="flex items-center gap-[2px] cursor-pointer">
                     <Checkbox
                       checked={tgNotifyNew}
                       onCheckedChange={(c) => setTgNotifyNew(!!c)}
                     />
                     <span>🆕 Новый отклик (лид)</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex items-center gap-[2px] cursor-pointer">
                     <Checkbox
                       checked={tgNotifyPause}
                       onCheckedChange={(c) => setTgNotifyPause(!!c)}
                     />
                     <span>⏸ Аккаунт авто-приостановлен</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className="flex items-center gap-[2px] cursor-pointer">
                     <Checkbox
                       checked={tgNotifyDegraded}
                       onCheckedChange={(c) => setTgNotifyDegraded(!!c)}
@@ -710,7 +710,7 @@ function GlobalSettingsModal({
                     <span>⚠️ Аккаунт не работает (login/ip)</span>
                   </label>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-[2px]">
                   <Button
                     size="sm"
                     onClick={() => void saveTg()}
@@ -735,7 +735,7 @@ function GlobalSettingsModal({
                 {tgTestResult && (
                   <div
                     className={cn(
-                      'rounded-md border px-3 py-2 text-sm',
+                      'rounded-md border px-3 py-[2px] text-sm',
                       tgTestResult.ok
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                         : 'bg-red-50 text-red-800 border-red-200',
@@ -764,13 +764,13 @@ function GlobalSettingsModal({
             </TabsContent>
 
             {/* ── Журнал ─────────────────────────────────────────── */}
-            <TabsContent value="activity" className="mt-2">
+            <TabsContent value="activity" className="mt-[2px]">
               <ActivityLogView compact />
             </TabsContent>
           </div>
         </Tabs>
 
-        <DialogFooter className="px-6 py-4 border-t">
+        <DialogFooter className="px-6 py-[4px] border-t">
           <Button onClick={onClose}>Закрыть</Button>
         </DialogFooter>
       </DialogContent>
@@ -800,7 +800,7 @@ function AccountHealthPopover({
         <DialogHeader>
           <DialogTitle>Состояние аккаунта</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-[4px]">
           <Badge
             variant="outline"
             className={cn('border', HEALTH_BADGE_CLASS[health])}
@@ -823,55 +823,55 @@ function AccountHealthPopover({
           <table className="w-full text-sm">
             <tbody className="divide-y divide-border">
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground w-1/2">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground w-1/2">
                   Account ID
                 </th>
                 <td className="py-1.5">{account.id}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Название
                 </th>
                 <td className="py-1.5">{account.name}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Последний сбор откликов
                 </th>
                 <td className="py-1.5">{fmt(account.lastCollectResponsesAt)}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Последний результат
                 </th>
                 <td className="py-1.5">{account.lastCollectPageKind ?? '—'}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Требует повтора
                 </th>
                 <td className="py-1.5">{account.retryRequired ? 'да' : 'нет'}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Ошибок за 24 часа
                 </th>
                 <td className="py-1.5">{account.collectFailCount24h ?? 0}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   IP-блоков за 24 часа
                 </th>
                 <td className="py-1.5">{account.ipBlockedCount24h ?? 0}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Нужен вход за 24 часа
                 </th>
                 <td className="py-1.5">{account.loginRequiredCount24h ?? 0}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Последний сбор занял
                 </th>
                 <td className="py-1.5">
@@ -881,13 +881,13 @@ function AccountHealthPopover({
                 </td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Телефонов получено
                 </th>
                 <td className="py-1.5">{account.lastCollectPhoneSuccessCount ?? 0}</td>
               </tr>
               <tr>
-                <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                   Телефонов не удалось
                 </th>
                 <td className="py-1.5">{account.lastCollectPhoneFailedCount ?? 0}</td>
@@ -895,13 +895,13 @@ function AccountHealthPopover({
               {account.autoPausedAt && (
                 <>
                   <tr>
-                    <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                    <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                       Авто-пауза с
                     </th>
                     <td className="py-1.5">{fmt(account.autoPausedAt)}</td>
                   </tr>
                   <tr>
-                    <th className="py-1.5 pr-2 text-left font-normal text-muted-foreground">
+                    <th className="py-1.5 pr-[2px] text-left font-normal text-muted-foreground">
                       Причина авто-паузы
                     </th>
                     <td className="py-1.5">{account.autoPauseReason ?? '—'}</td>
@@ -975,10 +975,10 @@ function EditIntervalModal({
         <DialogHeader>
           <DialogTitle>Интервал сбора: {account.name}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-[4px]">
           <div>
             <Label className="mb-1.5 block">Интервал проверки мессенджера</Label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-[2px]">
               <Input
                 value={minutes}
                 placeholder={`${globalMin} (глобальный)`}
@@ -990,11 +990,11 @@ function EditIntervalModal({
             </div>
           </div>
           {err && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-[2px] text-sm text-red-800">
               {err}
             </div>
           )}
-          <div className="text-xs text-muted-foreground leading-relaxed space-y-2">
+          <div className="text-xs text-muted-foreground leading-relaxed space-y-[2px]">
             <div>
               <strong className="text-foreground">Как это работает.</strong> Раз в
               указанное число минут система заходит в мессенджер этого аккаунта
@@ -1078,7 +1078,7 @@ function AddAccountModal({
         <DialogHeader>
           <DialogTitle>Новый аккаунт</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-[4px]">
           <div>
             <Label className="mb-1.5 block">Название</Label>
             <Input
@@ -1111,11 +1111,11 @@ function AddAccountModal({
               rows={4}
               placeholder="Пример: Здравствуйте! Получили ваш отклик, перезвоним в ближайшее время."
               onChange={(e) => setAutoReplyText(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-md border border-input bg-background px-3 py-[2px] text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           {err && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-[2px] text-sm text-red-800">
               {err}
             </div>
           )}
@@ -1183,7 +1183,7 @@ function EditAutoReplyModal({
         <DialogHeader>
           <DialogTitle>Авто-ответ: {account.name}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={submit} className="space-y-4">
+        <form onSubmit={submit} className="space-y-[4px]">
           <div>
             <Label className="mb-1.5 block">
               Текст авто-ответа{' '}
@@ -1197,11 +1197,11 @@ function EditAutoReplyModal({
               rows={6}
               placeholder="Пример: Здравствуйте! Получили ваш отклик, перезвоним в ближайшее время."
               onChange={(e) => setText(e.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-md border border-input bg-background px-3 py-[2px] text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </div>
           {err && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-[2px] text-sm text-red-800">
               {err}
             </div>
           )}
@@ -1313,7 +1313,7 @@ function ContextExportModal({
           <div className="text-sm text-muted-foreground">Собираем контекст…</div>
         )}
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-[2px] text-sm text-red-800">
             Не удалось собрать контекст: {error}
           </div>
         )}
@@ -1563,7 +1563,7 @@ export default function AccountsPage() {
           на широких мониторах ей нужен весь viewport. Это сознательно
           отличается от стандартного <PageContainer> (max-w-[1400px]) —
           табличные интеграции выигрывают от полной ширины. */}
-      <main className="w-full px-6 py-6 pb-12">
+      <main className="w-full px-6 py-6 pb-[12px]">
       {/* ── WA-style шапка ──────────────────────────────────────── */}
       <div className="flex items-start gap-3 border-b pb-6 mb-6">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 mt-0.5">
@@ -1587,10 +1587,10 @@ export default function AccountsPage() {
       </div>
 
       {/* ── Toolbar: density + global settings + add ────────────── */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-[2px] mb-[4px]">
         {/* Сегмент-контрол «Компактно / Подробно» — две shadcn Button
             с одинаковой высотой (h-9 size="sm"), склеенные по границе.
-            Раньше был кастомный inline-flex с h-8, но он расходился
+            Раньше был кастомный inline-flex с h-[8px], но он расходился
             с соседними кнопками по высоте и обрезался во flex-wrap. */}
         <div role="group" aria-label="Плотность таблицы" className="flex">
           <Button
@@ -1618,15 +1618,15 @@ export default function AccountsPage() {
           onClick={() => setShowGlobalModal(true)}
           title="Глобальный интервал + глобальный авто-ответ"
         >
-          <SettingsIcon className="mr-1.5 h-4 w-4" /> Глобальные настройки
+          <SettingsIcon className="mr-1.5 h-[4px] w-[4px]" /> Глобальные настройки
         </Button>
         <Button size="sm" onClick={() => setShowAddModal(true)}>
-          <Plus className="mr-1.5 h-4 w-4" /> Добавить аккаунт
+          <Plus className="mr-1.5 h-[4px] w-[4px]" /> Добавить аккаунт
         </Button>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="mb-[4px] rounded-md border border-red-200 bg-red-50 px-3 py-[2px] text-sm text-red-800">
           Ошибка: {error}
         </div>
       )}
@@ -1636,12 +1636,12 @@ export default function AccountsPage() {
 
       {/* ── Attention summary ───────────────────────────────────── */}
       {!loading && accounts.length > 0 && (
-        <Card className="p-4 mb-4">
-          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">
+        <Card className="p-[4px] mb-[4px]">
+          <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-[2px]">
             Требуют внимания
           </div>
           <div className="flex flex-wrap gap-3 items-center">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-[2px]">
               <Chip
                 className="bg-emerald-100 text-emerald-800 border-emerald-200"
                 title="Аккаунты, которые работают нормально и собирают отклики по расписанию. Никаких действий не требуется."
@@ -1661,7 +1661,7 @@ export default function AccountsPage() {
                 Авто-пауза: <strong>{counts['auto-paused']}</strong>
               </Chip>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-[2px]">
               <Chip
                 className="bg-muted text-foreground border-border"
                 title="На последнем сборе что-то пошло не так и система запланировала повторную попытку. Снимется автоматически после успешного сбора — обычно через несколько минут."
@@ -1875,7 +1875,7 @@ export default function AccountsPage() {
                 <tr>
                   <td
                     colSpan={11}
-                    className="px-4 py-8 text-center text-muted-foreground"
+                    className="px-[4px] py-[8px] text-center text-muted-foreground"
                   >
                     {accounts.length === 0
                       ? 'Аккаунтов пока нет. Нажмите «Добавить аккаунт».'
@@ -1954,7 +1954,7 @@ export default function AccountsPage() {
 
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="px-3 py-2 text-left font-medium whitespace-nowrap">
+    <th className="px-3 py-[2px] text-left font-medium whitespace-nowrap">
       {children}
     </th>
   );
@@ -1970,7 +1970,7 @@ function Td({
   title?: string;
 }) {
   return (
-    <td className={cn('px-3 py-2 align-middle', className)} title={title}>
+    <td className={cn('px-3 py-[2px] align-middle', className)} title={title}>
       {children}
     </td>
   );

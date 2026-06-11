@@ -102,7 +102,7 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
     const channelAlwaysAvailable = (key: string) => key === '' || key === 'phone'
 
     return (
-        <div className="h-[40px] flex items-center px-4 shrink-0 bg-white border-b border-[#E8E8E8] gap-1 relative" ref={dropdownRef}>
+        <div className="h-[40px] flex items-center px-[4px] shrink-0 bg-white border-b border-[#E8E8E8] gap-1 relative" ref={dropdownRef}>
             {channels.map((ch) => {
                 const isActive = activeChannelTab === ch.id
                 const unread = getChannelUnread(ch.channelKey)

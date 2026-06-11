@@ -38,36 +38,36 @@ export function SectionDescription({ sectionKey, className }: { sectionKey: stri
     <div className={cn("mb-6 overflow-hidden rounded-xl border bg-surface shadow-surface transition-all", className)}>
       <button
         onClick={toggle}
-        className="flex w-full items-center justify-between px-5 py-4 hover:bg-black/5 focus:outline-none"
+        className="flex w-full items-center justify-between px-5 py-[4px] hover:bg-black/5 focus:outline-none"
       >
         <div className="flex items-center gap-3">
-          <div className="flex bg-primary/10 rounded-lg p-2 text-primary">
+          <div className="flex bg-primary/10 rounded-lg p-[2px] text-primary">
             <Info className="h-5 w-5" />
           </div>
           <div className="text-left flex flex-col items-start gap-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-[2px]">
                 <span className="font-semibold text-sm text-text">О разделе: {section.title}</span>
                 {section.badgeLabel && (
-                    <span className="px-2 py-0.5 rounded-full bg-black/5 text-[10px] font-medium text-muted uppercase tracking-wider">
+                    <span className="px-[2px] py-0.5 rounded-full bg-black/5 text-[10px] font-medium text-muted uppercase tracking-wider">
                         {section.badgeLabel}
                     </span>
                  )}
             </div>
             {!isExpanded && (
-                <span className="text-xs text-muted font-medium pr-4 truncate max-w-xl">
+                <span className="text-xs text-muted font-medium pr-[4px] truncate max-w-xl">
                   {section.description.what}
                 </span>
             )}
           </div>
         </div>
         <div className="text-muted p-1 bg-black/5 rounded-md hover:bg-black/10 transition-colors">
-          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          {isExpanded ? <ChevronUp className="h-[4px] w-[4px]" /> : <ChevronDown className="h-[4px] w-[4px]" />}
         </div>
       </button>
 
       {isExpanded && (
-        <div className="px-5 pb-5 pt-2 animate-in slide-in-from-top-2 fade-in duration-200">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 text-sm mt-2 border-t pt-4">
+        <div className="px-5 pb-5 pt-[2px] animate-in slide-in-from-top-2 fade-in duration-200">
+          <div className="grid gap-[4px] sm:grid-cols-2 lg:grid-cols-4 text-sm mt-[2px] border-t pt-[4px]">
             <div>
               <h4 className="font-semibold text-text mb-1.5 flex items-center gap-1.5 opacity-90">
                  Суть раздела

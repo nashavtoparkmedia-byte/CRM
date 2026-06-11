@@ -105,9 +105,9 @@ export default function ScenarioContextSection({ task, onChangeStage }: Scenario
             {recommended && task.isActive && (
                 <button
                     onClick={() => onChangeStage(recommended.id)}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-indigo-600 text-white text-[13px] font-semibold hover:bg-indigo-700 transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 py-[2px] rounded-lg bg-indigo-600 text-white text-[13px] font-semibold hover:bg-indigo-700 transition-colors"
                 >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-[4px] h-[4px]" />
                     {recommended.label}
                 </button>
             )}

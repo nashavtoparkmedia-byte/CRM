@@ -48,13 +48,13 @@ export default function DriverTasksWidget({ driverId }: { driverId: string }) {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col gap-3 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                    <CheckSquare className="w-4 h-4 text-[#9ca3af]" />
+            <div className="flex flex-col gap-3 p-[4px]">
+                <div className="flex items-center gap-[2px] mb-[2px]">
+                    <CheckSquare className="w-[4px] h-[4px] text-[#9ca3af]" />
                     <span className="text-[14px] font-semibold text-[#374151]">Задачи</span>
                 </div>
                 {[1, 2].map((i) => (
-                    <div key={i} className="h-16 bg-[#f3f4f6] rounded-xl animate-pulse" />
+                    <div key={i} className="h-[16px] bg-[#f3f4f6] rounded-xl animate-pulse" />
                 ))}
             </div>
         )
@@ -62,9 +62,9 @@ export default function DriverTasksWidget({ driverId }: { driverId: string }) {
 
     return (
         <div className="flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-2">
-                    <CheckSquare className="w-4 h-4 text-[#4f46e5]" />
+            <div className="flex items-center justify-between px-[4px] py-3">
+                <div className="flex items-center gap-[2px]">
+                    <CheckSquare className="w-[4px] h-[4px] text-[#4f46e5]" />
                     <span className="text-[14px] font-semibold text-[#1f2937]">Задачи</span>
                     {counts.active > 0 && (
                         <span className="text-[11px] bg-[#eef2ff] text-[#4f46e5] px-1.5 py-0.5 rounded-md font-bold">
@@ -88,7 +88,7 @@ export default function DriverTasksWidget({ driverId }: { driverId: string }) {
                             <div key={task.id}>
                                 <TaskCard task={task} compact />
                                 {task.scenario && (
-                                    <div className="flex items-center gap-1 px-2 -mt-0.5 mb-1">
+                                    <div className="flex items-center gap-1 px-[2px] -mt-0.5 mb-1">
                                         <span className="text-[10px] font-medium text-indigo-500">
                                             {getScenario(task.scenario)?.label}
                                             {task.stage && <> · {getStage(task.scenario, task.stage)?.label}</>}
@@ -101,7 +101,7 @@ export default function DriverTasksWidget({ driverId }: { driverId: string }) {
                         {counts.active > tasks.length && (
                             <Link
                                 href={`/tasks?driverId=${driverId}`}
-                                className="flex items-center justify-center gap-1 mt-2 text-[12px] font-medium text-[#4f46e5] hover:bg-[#eef2ff] py-1.5 rounded-lg transition-colors"
+                                className="flex items-center justify-center gap-1 mt-[2px] text-[12px] font-medium text-[#4f46e5] hover:bg-[#eef2ff] py-1.5 rounded-lg transition-colors"
                             >
                                 Посмотреть все ({counts.active})
                                 <ChevronRight className="w-3.5 h-3.5" />
@@ -109,7 +109,7 @@ export default function DriverTasksWidget({ driverId }: { driverId: string }) {
                         )}
                     </>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-4 bg-[#f9fafb] rounded-xl border border-dashed border-[#e5e7eb]">
+                    <div className="flex flex-col items-center justify-center py-[4px] bg-[#f9fafb] rounded-xl border border-dashed border-[#e5e7eb]">
                         <CheckSquare className="w-5 h-5 text-[#d1d5db] mb-1" />
                         <span className="text-[12px] text-[#9ca3af]">Нет активных задач</span>
                     </div>

@@ -158,7 +158,7 @@ export default function TaskCaseBlockHeader({ layout, viewId }: Props) {
                             }}
                             onDrop={(e) => { e.preventDefault(); handleBlockDrop(block.id) }}
                             onDragEnd={() => { setDragBlockId(null); setHoverBlockId(null) }}
-                            className={`group flex items-center justify-center gap-1 px-2 min-w-0 min-h-[28px] text-[11px] uppercase tracking-wide text-[#334155] font-semibold border-b border-[#E2E8F0] cursor-grab select-none transition-all ${
+                            className={`group flex items-center justify-center gap-1 px-[2px] min-w-0 min-h-[28px] text-[11px] uppercase tracking-wide text-[#334155] font-semibold border-b border-[#E2E8F0] cursor-grab select-none transition-all ${
                                 isIdentification ? '' : 'border-l'
                             } ${isDragging ? 'opacity-40' : ''} ${
                                 isDropTarget ? 'ring-2 ring-inset ring-[#4338CA]' : ''
@@ -205,7 +205,7 @@ export default function TaskCaseBlockHeader({ layout, viewId }: Props) {
                             }}
                             onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleColumnDrop(col.id) }}
                             onDragEnd={() => { setDragColId(null); setHoverColId(null) }}
-                            className={`group flex items-center gap-1 px-2 min-w-0 min-h-[26px] text-[10px] uppercase tracking-wide text-[#64748B] font-semibold bg-[#F8FAFC] border-l border-[#E2E8F0] cursor-grab select-none transition-all ${
+                            className={`group flex items-center gap-1 px-[2px] min-w-0 min-h-[26px] text-[10px] uppercase tracking-wide text-[#64748B] font-semibold bg-[#F8FAFC] border-l border-[#E2E8F0] cursor-grab select-none transition-all ${
                                 isDragging ? 'opacity-40' : ''
                             } ${isDropTarget ? 'ring-2 ring-inset ring-[#4338CA]' : ''}`}
                             style={{ gridRow: 2, gridColumn: `${gridCol} / span 1` }}

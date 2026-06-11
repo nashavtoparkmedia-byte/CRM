@@ -19,8 +19,8 @@ interface Props {
 
 export default function LearnFromReplyBanner({ similarityPct, onTrain, onDismiss }: Props) {
     return (
-        <div className="flex justify-start px-4 py-2">
-            <div className="inline-flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-[12px] max-w-[80%]">
+        <div className="flex justify-start px-[4px] py-[2px]">
+            <div className="inline-flex items-start gap-[2px] rounded-lg bg-blue-50 border border-blue-200 px-3 py-[2px] text-[12px] max-w-[80%]">
                 <GraduationCap size={14} className="text-blue-500 mt-[2px] shrink-0" />
                 <div className="flex-1">
                     <div className="text-[12px] text-blue-900 font-medium leading-snug">
@@ -29,7 +29,7 @@ export default function LearnFromReplyBanner({ similarityPct, onTrain, onDismiss
                     <div className="text-[11px] text-blue-700 mt-0.5 leading-snug">
                         Обучить AI стажёра на вашем варианте?
                     </div>
-                    <div className="mt-1.5 flex items-center gap-2">
+                    <div className="mt-1.5 flex items-center gap-[2px]">
                         <button
                             type="button"
                             onClick={onTrain}

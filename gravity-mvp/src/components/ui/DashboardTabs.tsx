@@ -23,7 +23,7 @@ export function DashboardTabs() {
                         key={tab.href}
                         href={tab.href}
                         className={`
-                            px-4 py-2.5 text-[15px] font-medium transition-colors duration-150
+                            px-[4px] py-2.5 text-[15px] font-medium transition-colors duration-150
                             border-b-2 -mb-[1px]
                             ${isActive
                                 ? 'border-[#2AABEE] text-[#2AABEE]'

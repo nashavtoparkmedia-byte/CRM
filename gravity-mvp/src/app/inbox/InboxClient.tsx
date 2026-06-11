@@ -36,7 +36,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     }
 
     return (
-        <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase ${styles[priority] || styles.medium}`}>
+        <span className={`inline-flex items-center rounded-md border px-[2px] py-0.5 text-[10px] font-bold uppercase ${styles[priority] || styles.medium}`}>
             {labels[priority] || priority}
         </span>
     )
@@ -62,16 +62,16 @@ function TaskCard({
     const timeAgo = getTimeAgo(new Date(task.createdAt))
 
     return (
-        <div className="group relative flex items-start gap-4 rounded-xl border bg-card p-4 shadow-sm transition-all hover:shadow-md hover:border-primary/20">
+        <div className="group relative flex items-start gap-[4px] rounded-xl border bg-card p-[4px] shadow-sm transition-all hover:shadow-md hover:border-primary/20">
             {/* Priority indicator */}
-            <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${
+            <div className={`mt-1 h-[2px] w-[2px] rounded-full shrink-0 ${
                 task.priority === "high" ? "bg-red-500" :
                 task.priority === "medium" ? "bg-amber-500" : "bg-blue-500"
             }`} />
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-[2px] mb-1">
                     <Link
                         href={`/drivers/${task.driverId}`}
                         className="text-sm font-bold text-foreground hover:text-primary transition-colors truncate"
@@ -81,10 +81,10 @@ function TaskCard({
                     <SegmentBadge segment={task.driverSegment} />
                     <PriorityBadge priority={task.priority} />
                 </div>
-                <p className="text-sm text-muted-foreground mb-2 line-clamp-1">
+                <p className="text-sm text-muted-foreground mb-[2px] line-clamp-1">
                     {task.title}
                 </p>
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
+                <div className="flex items-center gap-[2px] text-[11px] text-muted-foreground/60">
                     <span>{timeAgo}</span>
                     {task.driverPhone && (
                         <>
@@ -100,7 +100,7 @@ function TaskCard({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
+                    className="h-[8px] w-[8px] text-green-600 hover:bg-green-50 hover:text-green-700"
                     onClick={() => onResolve(task.id, "done")}
                     title="Выполнено"
                 >
@@ -109,7 +109,7 @@ function TaskCard({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:bg-secondary"
+                    className="h-[8px] w-[8px] text-muted-foreground hover:bg-secondary"
                     onClick={() => onResolve(task.id, "skipped")}
                     title="Пропустить"
                 >
@@ -118,7 +118,7 @@ function TaskCard({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className={`h-8 w-8 ${callLogged ? "text-emerald-600 bg-emerald-50" : "text-blue-600 hover:bg-blue-50"}`}
+                    className={`h-[8px] w-[8px] ${callLogged ? "text-emerald-600 bg-emerald-50" : "text-blue-600 hover:bg-blue-50"}`}
                     onClick={handleCall}
                     title="Позвонил"
                 >
@@ -199,19 +199,19 @@ export default function InboxClient({
 
             {/* Summary Cards */}
             <div className="grid grid-cols-4 gap-3">
-                <div className="rounded-xl border bg-card p-4 shadow-sm">
+                <div className="rounded-xl border bg-card p-[4px] shadow-sm">
                     <div className="text-2xl font-bold text-foreground">{counts.total}</div>
                     <div className="text-xs text-muted-foreground">Всего открытых</div>
                 </div>
-                <div className="rounded-xl border bg-card p-4 shadow-sm border-l-4 border-l-red-500">
+                <div className="rounded-xl border bg-card p-[4px] shadow-sm border-l-4 border-l-red-500">
                     <div className="text-2xl font-bold text-red-600">{counts.high}</div>
                     <div className="text-xs text-muted-foreground">Высокий приоритет</div>
                 </div>
-                <div className="rounded-xl border bg-card p-4 shadow-sm border-l-4 border-l-amber-500">
+                <div className="rounded-xl border bg-card p-[4px] shadow-sm border-l-4 border-l-amber-500">
                     <div className="text-2xl font-bold text-amber-600">{counts.medium}</div>
                     <div className="text-xs text-muted-foreground">Средний</div>
                 </div>
-                <div className="rounded-xl border bg-card p-4 shadow-sm border-l-4 border-l-blue-500">
+                <div className="rounded-xl border bg-card p-[4px] shadow-sm border-l-4 border-l-blue-500">
                     <div className="text-2xl font-bold text-blue-600">{counts.low}</div>
                     <div className="text-xs text-muted-foreground">Низкий</div>
                 </div>
@@ -220,11 +220,11 @@ export default function InboxClient({
             {/* Filters */}
             <div className="flex gap-3 items-end">
                 <div className="w-40">
-                    <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">Статус</label>
+                    <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">Статус</label>
                     <select
                         value={initialStatus}
                         onChange={(e) => updateFilters({ status: e.target.value })}
-                        className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm"
+                        className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-[2px] text-sm"
                     >
                         <option value="open">Открытые</option>
                         <option value="done">Выполненные</option>
@@ -233,11 +233,11 @@ export default function InboxClient({
                     </select>
                 </div>
                 <div className="w-40">
-                    <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">Приоритет</label>
+                    <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">Приоритет</label>
                     <select
                         value={initialPriority}
                         onChange={(e) => updateFilters({ priority: e.target.value })}
-                        className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm"
+                        className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-[2px] text-sm"
                     >
                         <option value="all">Все</option>
                         <option value="high">Высокий</option>
@@ -245,7 +245,7 @@ export default function InboxClient({
                         <option value="low">Низкий</option>
                     </select>
                 </div>
-                <form onSubmit={(e) => { e.preventDefault(); updateFilters({ search }) }} className="flex-1 flex gap-2">
+                <form onSubmit={(e) => { e.preventDefault(); updateFilters({ search }) }} className="flex-1 flex gap-[2px]">
                     <Input
                         placeholder="Поиск по ФИО..."
                         value={search}
@@ -258,13 +258,13 @@ export default function InboxClient({
 
             {/* Task List */}
             {tasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-card">
-                    <InboxIcon size={48} className="mb-4 opacity-30" />
+                <div className="flex flex-col items-center justify-center py-[16px] text-center rounded-xl border border-dashed border-muted-foreground/30 text-muted-foreground bg-card">
+                    <InboxIcon size={48} className="mb-[4px] opacity-30" />
                     <p className="font-medium">Нет задач</p>
                     <p className="text-xs mt-1">Все задачи выполнены!</p>
                 </div>
             ) : (
-                <div className="space-y-2">
+                <div className="space-y-[2px]">
                     {tasks.map((task) => (
                         <TaskCard key={task.id} task={task} onResolve={handleResolve} />
                     ))}
@@ -273,19 +273,19 @@ export default function InboxClient({
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3 shadow-sm">
+                <div className="flex items-center justify-between rounded-xl border bg-card px-[4px] py-3 shadow-sm">
                     <div className="text-sm text-muted-foreground">
                         {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, total)} из {total}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-[2px]">
                         <Button variant="outline" size="icon" disabled={currentPage <= 1}
                             onClick={() => updateFilters({ page: currentPage - 1 })}>
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="h-[4px] w-[4px]" />
                         </Button>
-                        <div className="flex items-center px-4 font-medium text-sm">{currentPage} / {totalPages}</div>
+                        <div className="flex items-center px-[4px] font-medium text-sm">{currentPage} / {totalPages}</div>
                         <Button variant="outline" size="icon" disabled={currentPage >= totalPages}
                             onClick={() => updateFilters({ page: currentPage + 1 })}>
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-[4px] w-[4px]" />
                         </Button>
                     </div>
                 </div>

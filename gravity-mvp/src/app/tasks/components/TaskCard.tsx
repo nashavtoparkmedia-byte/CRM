@@ -143,7 +143,7 @@ export default function TaskCard({ task }: TaskCardProps) {
         <div
             onClick={() => setSelectedTask(task.id)}
             className={`
-                group relative flex flex-col justify-between pl-4 pr-3 py-2 w-full h-[76px] rounded-lg cursor-pointer
+                group relative flex flex-col justify-between pl-[4px] pr-3 py-[2px] w-full h-[76px] rounded-lg cursor-pointer
                 transition-all duration-150 border overflow-hidden
                 ${isSelected
                     ? 'bg-indigo-50/50 border-indigo-200 shadow-sm'
@@ -156,7 +156,7 @@ export default function TaskCard({ task }: TaskCardProps) {
 
             {/* Top row: Name */}
             <div className="flex items-center justify-between w-full h-[18px]">
-                <div className="text-[13px] font-bold text-gray-900 truncate pr-2">
+                <div className="text-[13px] font-bold text-gray-900 truncate pr-[2px]">
                     {task.driverName}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
@@ -216,7 +216,7 @@ export default function TaskCard({ task }: TaskCardProps) {
                                 <AlertTriangle size={16} className="text-orange-500 animate-in zoom-in-50 duration-200" />
                             </span>
                         ) : (
-                            <div className="w-4 h-4 rounded flex items-center justify-center opacity-0 group-hover/prio:opacity-100 group-hover:bg-gray-100 transition-all">
+                            <div className="w-[4px] h-[4px] rounded flex items-center justify-center opacity-0 group-hover/prio:opacity-100 group-hover:bg-gray-100 transition-all">
                                 <Plus size={12} className="text-gray-400" />
                             </div>
                         )}

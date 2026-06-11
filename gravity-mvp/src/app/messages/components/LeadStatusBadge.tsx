@@ -126,7 +126,7 @@ export function LeadStatusBadge({
   const sizeClass =
     size === 'xs'
       ? 'text-[10px] px-1.5 py-px'
-      : 'text-[11px] px-2 py-0.5'
+      : 'text-[11px] px-[2px] py-0.5'
   return (
     <span
       className={`inline-flex items-center rounded-full border font-medium leading-none whitespace-nowrap ${sizeClass} ${status.className}`}

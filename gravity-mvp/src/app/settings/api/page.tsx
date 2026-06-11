@@ -130,13 +130,13 @@ export default async function ApiSettingsPage() {
                 description="Управление подключениями к API Яндекс Про для вашего парка"
             />
             
-            <div className="flex flex-col gap-10 pb-12 animate-in fade-in duration-500 mt-6">
+            <div className="flex flex-col gap-10 pb-[12px] animate-in fade-in duration-500 mt-6">
                 {/* Primary Settings */}
                 <ApiListClient initialConnections={connections} />
 
                 {/* Reference Table */}
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-2 p-2 border-b pb-4">
+                <div className="flex flex-col gap-[4px]">
+                    <div className="flex flex-col gap-[2px] p-[2px] border-b pb-[4px]">
                         <h2 className="text-2xl font-bold text-foreground">Справочник Yandex Fleet API</h2>
                         <p className="text-sm text-muted-foreground">
                             Полный перечень доступных Endpoints для интеграции с Яндекс Про, включая еще не реализованные в CRM.
@@ -168,7 +168,7 @@ export default async function ApiSettingsPage() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
-                                            <code className="rounded bg-secondary/50 px-2 py-1 font-mono text-xs break-all text-secondary-foreground">
+                                            <code className="rounded bg-secondary/50 px-[2px] py-1 font-mono text-xs break-all text-secondary-foreground">
                                                 {api.endpoint}
                                             </code>
                                         </TableCell>

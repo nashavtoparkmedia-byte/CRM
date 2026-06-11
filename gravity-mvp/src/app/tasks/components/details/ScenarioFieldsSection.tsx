@@ -46,9 +46,9 @@ export default function ScenarioFieldsSection({ task, onFieldUpdated }: Props) {
         <div className="border border-[#E4ECFC] rounded-xl overflow-hidden">
             <button
                 onClick={() => setExpanded(!expanded)}
-                className="w-full flex items-center justify-between px-3 py-2 bg-[#F8FAFF] hover:bg-[#F1F5FD] transition-colors"
+                className="w-full flex items-center justify-between px-3 py-[2px] bg-[#F8FAFF] hover:bg-[#F1F5FD] transition-colors"
             >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-[2px]">
                     {expanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-500" />}
                     <span className="text-[13px] font-semibold text-[#0F172A]">Контекст кейса</span>
                     <span className="text-[11px] text-[#64748B]">{filled} из {serviceFields.length} заполнено</span>
@@ -56,7 +56,7 @@ export default function ScenarioFieldsSection({ task, onFieldUpdated }: Props) {
             </button>
 
             {expanded && (
-                <div className="bg-white px-3 py-2 space-y-1.5 border-t border-[#E4ECFC]">
+                <div className="bg-white px-3 py-[2px] space-y-1.5 border-t border-[#E4ECFC]">
                     {serviceFields.map(field => {
                         const entry = scenarioData[field.id]
                         return (
@@ -126,8 +126,8 @@ function ScenarioFieldRow({
     }
 
     return (
-        <div className="flex items-center justify-between py-1 min-h-[28px] gap-2">
-            <div className="flex items-center gap-2 min-w-0 shrink-0">
+        <div className="flex items-center justify-between py-1 min-h-[28px] gap-[2px]">
+            <div className="flex items-center gap-[2px] min-w-0 shrink-0">
                 <span className="text-[12px] text-[#64748B]">{field.label}</span>
                 <span className={`text-[10px] px-1 rounded shrink-0 ${sourceBadge.className}`}>
                     {sourceBadge.label}
@@ -192,14 +192,14 @@ function InlineEditor({
                 <button
                     onClick={() => onSave(true)}
                     disabled={saving}
-                    className="text-[12px] px-2 py-0.5 rounded bg-green-50 text-green-700 hover:bg-green-100"
+                    className="text-[12px] px-[2px] py-0.5 rounded bg-green-50 text-green-700 hover:bg-green-100"
                 >
                     Да
                 </button>
                 <button
                     onClick={() => onSave(false)}
                     disabled={saving}
-                    className="text-[12px] px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    className="text-[12px] px-[2px] py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200"
                 >
                     Нет
                 </button>

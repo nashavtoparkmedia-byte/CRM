@@ -54,7 +54,7 @@ export default function ChatWorkspace({
         return (
             <div className="flex-1 flex flex-col items-center justify-center messenger-bg animate-in fade-in duration-500">
                 <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-full bg-white/60 flex items-center justify-center mb-4 text-[#B0B5BA]">
+                    <div className="w-[16px] h-[16px] rounded-full bg-white/60 flex items-center justify-center mb-[4px] text-[#B0B5BA]">
                         <MessageSquare size={28} />
                     </div>
                     <h3 className="text-[18px] font-semibold text-[#474B50] tracking-tight">Выберите диалог</h3>
@@ -287,7 +287,7 @@ function ChatWorkspaceInner({
             {isEmptyChannel ? (
                 <div className="flex-1 flex flex-col items-center justify-center messenger-bg">
                     <div className="flex flex-col items-center">
-                        <div className="w-12 h-12 rounded-full bg-white/60 flex items-center justify-center mb-3 text-[#B0B5BA]">
+                        <div className="w-[12px] h-[12px] rounded-full bg-white/60 flex items-center justify-center mb-3 text-[#B0B5BA]">
                             <MessageSquare size={22} />
                         </div>
                         <p className="text-[13px] text-[#8A9099] text-center">

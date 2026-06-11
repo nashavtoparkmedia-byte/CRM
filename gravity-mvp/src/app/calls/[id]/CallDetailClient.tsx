@@ -117,8 +117,8 @@ function initialTabFor(c: CallDetail): TabKey {
 function CallHeader({ call, peerName, peerNumber }: { call: CallDetail; peerName: string | null; peerNumber: string }) {
     const Icon = iconFor(call)
     return (
-        <div className="flex items-center gap-4 rounded-md border border-border bg-card p-5">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-full ${bgFor(call)}`}>
+        <div className="flex items-center gap-[4px] rounded-md border border-border bg-card p-5">
+            <div className={`flex h-[12px] w-[12px] items-center justify-center rounded-full ${bgFor(call)}`}>
                 <Icon className={`h-5 w-5 ${colorFor(call)}`} />
             </div>
             <div className="min-w-0 flex-1">
@@ -163,7 +163,7 @@ function Tabs({ active, onChange, call }: { active: TabKey; onChange: (t: TabKey
         { key: 'ai',         label: 'AI-анализ',   icon: Sparkles,   ready: !!call.aiAnalysis },
     ]
     return (
-        <div className="flex items-center gap-1 border-b border-border px-3 pt-2">
+        <div className="flex items-center gap-1 border-b border-border px-3 pt-[2px]">
             {items.map(it => {
                 const Icon = it.icon
                 const isActive = active === it.key
@@ -172,7 +172,7 @@ function Tabs({ active, onChange, call }: { active: TabKey; onChange: (t: TabKey
                         key={it.key}
                         onClick={() => onChange(it.key)}
                         className={[
-                            'inline-flex items-center gap-1.5 rounded-t-md px-3 py-2 text-[13px] font-medium transition-colors',
+                            'inline-flex items-center gap-1.5 rounded-t-md px-3 py-[2px] text-[13px] font-medium transition-colors',
                             isActive
                                 ? 'bg-surface text-foreground border-b-2 border-primary'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-surface',
@@ -210,7 +210,7 @@ function AudioPane({ call }: { call: CallDetail }) {
         return <EmptyState icon={Headphones} title="Записи нет" hint="Запись появляется через несколько секунд после завершения разговора." />
     }
     if (loading) {
-        return <div className="flex items-center gap-2 text-[13px] text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Загрузка ссылки на запись…</div>
+        return <div className="flex items-center gap-[2px] text-[13px] text-muted-foreground"><Loader2 className="h-[4px] w-[4px] animate-spin" /> Загрузка ссылки на запись…</div>
     }
     if (error || !url) {
         return <div className="text-[13px] text-destructive">Не удалось получить запись: {error}</div>
@@ -264,7 +264,7 @@ function AiPane({ analysis, summary, score }: { analysis: CallAnalysisShape | nu
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-[4px]">
                 <ScoreCircle score={score ?? null} />
                 <div className="text-[14px] text-foreground">
                     <div className="text-[13px] uppercase tracking-wide text-muted-foreground">Общая оценка</div>
@@ -288,7 +288,7 @@ function AiPane({ analysis, summary, score }: { analysis: CallAnalysisShape | nu
                 Теперь — graceful skip с empty-state. */}
             {analysis.scores && (
                 <div>
-                    <div className="text-[13px] font-medium text-muted-foreground mb-2">Критерии</div>
+                    <div className="text-[13px] font-medium text-muted-foreground mb-[2px]">Критерии</div>
                     <div className="flex flex-col gap-3">
                         {criteria.map(c => (
                             <ScoreBar
@@ -308,7 +308,7 @@ function AiPane({ analysis, summary, score }: { analysis: CallAnalysisShape | nu
                         <AlertTriangle className="h-3.5 w-3.5" />
                         Проблемные моменты
                     </div>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[14px] text-foreground">
+                    <ul className="mt-[2px] list-disc space-y-1 pl-5 text-[14px] text-foreground">
                         {analysis.red_flags.map((f, i) => (
                             <li key={i}>{f}</li>
                         ))}
@@ -380,8 +380,8 @@ function StatusBadge({ status, direction }: { status: string; direction: 'inboun
 
 function EmptyState({ icon: Icon, title, hint }: { icon: typeof Sparkles; title: string; hint: string }) {
     return (
-        <div className="flex flex-col items-center gap-2 py-10 text-center">
-            <Icon className="h-8 w-8 text-muted-foreground/60" />
+        <div className="flex flex-col items-center gap-[2px] py-10 text-center">
+            <Icon className="h-[8px] w-[8px] text-muted-foreground/60" />
             <div className="text-[15px] font-semibold text-foreground">{title}</div>
             <div className="max-w-md text-[13px] text-muted-foreground">{hint}</div>
         </div>

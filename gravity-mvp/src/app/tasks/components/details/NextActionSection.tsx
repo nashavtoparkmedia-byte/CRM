@@ -22,7 +22,7 @@ export default function NextActionSection({
     onShiftDue,
 }: NextActionSectionProps) {
     return (
-        <div className={`p-3 border rounded-xl space-y-2 transition-colors duration-300 ${isOverdue ? 'bg-red-50/80 border-red-200/60' : 'bg-gray-50/50 border-gray-100'}`}>
+        <div className={`p-3 border rounded-xl space-y-[2px] transition-colors duration-300 ${isOverdue ? 'bg-red-50/80 border-red-200/60' : 'bg-gray-50/50 border-gray-100'}`}>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-section-label">
                     <Zap className="w-3 h-3" />
@@ -47,7 +47,7 @@ export default function NextActionSection({
 
                 <div className="flex flex-col items-end gap-1 shrink-0">
                     {dueAt && (
-                        <span className="text-meta bg-white/80 px-2 py-0.5 rounded border border-gray-100 shadow-sm">
+                        <span className="text-meta bg-white/80 px-[2px] py-0.5 rounded border border-gray-100 shadow-sm">
                             {new Date(dueAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}, {new Date(dueAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                     )}

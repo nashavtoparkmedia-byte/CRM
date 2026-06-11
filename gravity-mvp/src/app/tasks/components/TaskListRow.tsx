@@ -18,12 +18,12 @@ export default function TaskListRow({ task, isSelected, onSelect, hideScenarioTa
     return (
         <div
             onClick={onSelect}
-            className={`flex items-center w-full min-h-[48px] px-3 py-1.5 border-b border-[#E4ECFC] cursor-pointer transition-colors gap-2 ${
+            className={`flex items-center w-full min-h-[48px] px-3 py-1.5 border-b border-[#E4ECFC] cursor-pointer transition-colors gap-[2px] ${
                 isSelected ? 'bg-[#EEF2FF]' : 'bg-white hover:bg-[#F1F5FD]'
             }`}
         >
             {/* Priority stripe */}
-            <div className={`w-1 h-8 rounded-full shrink-0 ${accent.stripeColor}`} />
+            <div className={`w-1 h-[8px] rounded-full shrink-0 ${accent.stripeColor}`} />
 
             {/* Avatar */}
             <div className="w-7 h-7 shrink-0 bg-[#EEF2FF] text-[#2AABEE] rounded-full flex items-center justify-center font-bold text-[11px]">
@@ -59,7 +59,7 @@ export default function TaskListRow({ task, isSelected, onSelect, hideScenarioTa
             </div>
 
             {/* Right: Next action / due */}
-            <div className="shrink-0 text-right ml-2">
+            <div className="shrink-0 text-right ml-[2px]">
                 {(task.nextActionAt || task.dueAt) && (
                     <span className={`text-[12px] font-medium whitespace-nowrap ${getDateColor(task.nextActionAt ?? task.dueAt!)}`}>
                         {formatRelativeDate(task.nextActionAt ?? task.dueAt!)}
@@ -77,7 +77,7 @@ function CompactBadge({ children, color }: { children: React.ReactNode; color: '
         ? 'bg-indigo-100 text-indigo-700 font-semibold'
         : 'bg-indigo-50 text-indigo-700 font-medium'
     return (
-        <span className={`inline-flex items-center h-[22px] px-2 rounded text-[12px] whitespace-nowrap shrink-0 ${tone}`}>
+        <span className={`inline-flex items-center h-[22px] px-[2px] rounded text-[12px] whitespace-nowrap shrink-0 ${tone}`}>
             {children}
         </span>
     )
@@ -94,7 +94,7 @@ function PriorityBadge({ priority }: { priority: string }) {
     const cfg = PRIORITY_COMPACT[priority]
     if (!cfg) return null
     return (
-        <span className={`inline-flex items-center h-[22px] px-2 rounded text-[12px] font-semibold whitespace-nowrap shrink-0 ${cfg.className}`}>
+        <span className={`inline-flex items-center h-[22px] px-[2px] rounded text-[12px] font-semibold whitespace-nowrap shrink-0 ${cfg.className}`}>
             Приоритет: {cfg.label}
         </span>
     )

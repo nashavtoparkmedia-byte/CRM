@@ -220,14 +220,14 @@ export default function TaskDetailsPane() {
             />
 
             {/* Content */}
-            <div className="flex-1 overflow-visible px-4 py-4 space-y-3">
+            <div className="flex-1 overflow-visible px-[4px] py-[4px] space-y-3">
                 {/* New reply banner */}
                 {task.hasNewReply && (
                     <button
                         onClick={handleMarkNewReplyRead}
-                        className="w-full flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg text-[13px] text-blue-700 font-bold hover:bg-blue-100 transition-colors shadow-sm"
+                        className="w-full flex items-center gap-[2px] px-3 py-[2px] bg-blue-50 border border-blue-100 rounded-lg text-[13px] text-blue-700 font-bold hover:bg-blue-100 transition-colors shadow-sm"
                     >
-                        <Bell className="w-4 h-4" />
+                        <Bell className="w-[4px] h-[4px]" />
                         Новый ответ водителя
                         <span className="ml-auto text-[11px] text-blue-400">Отметить прочитанным</span>
                     </button>

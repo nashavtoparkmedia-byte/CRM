@@ -75,7 +75,7 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
             >
                 <div className="flex items-center shrink-0 pr-3">
                     <div className={`w-[3px] self-stretch shrink-0 ${stripeColor}`} />
-                    <div className="flex items-center gap-2 pl-2" style={{ width: '220px' }}>
+                    <div className="flex items-center gap-[2px] pl-[2px]" style={{ width: '220px' }}>
                         {showAvatar && (
                             <div className="w-7 h-7 shrink-0 bg-[#EEF2FF] text-[#2AABEE] rounded-full flex items-center justify-center font-bold text-[11px]">
                                 {task.driverName.charAt(0).toUpperCase()}
@@ -103,7 +103,7 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
                     ))}
                 </div>
                 <div
-                    className="absolute right-0 top-0 bottom-0 flex items-center pl-2 pr-2 bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
+                    className="absolute right-0 top-0 bottom-0 flex items-center pl-[2px] pr-[2px] bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
                     style={{ background: isSelected ? 'linear-gradient(to left, #EEF2FF, #EEF2FF, transparent)' : undefined }}
                 >
                     <TaskCaseInlineActions task={task} />
@@ -128,7 +128,7 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
                 style={{ gridColumn: '1 / span 1' }}
             >
                 <div className={`w-[3px] self-stretch shrink-0 ${stripeColor}`} />
-                <div className="flex items-center gap-2 pl-2 pr-3 min-w-0 flex-1">
+                <div className="flex items-center gap-[2px] pl-[2px] pr-3 min-w-0 flex-1">
                     {showAvatar && (
                         <div className="w-7 h-7 shrink-0 bg-[#EEF2FF] text-[#2AABEE] rounded-full flex items-center justify-center font-bold text-[11px]">
                             {task.driverName.charAt(0).toUpperCase()}
@@ -164,7 +164,7 @@ export default function TaskCaseRow({ task, layout, isSelected, onSelect }: Task
                 actions pinned to the right edge of the row without shifting
                 the column flex distribution below. */}
             <div
-                className="absolute right-0 top-0 bottom-0 flex items-center pl-2 pr-2 bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
+                className="absolute right-0 top-0 bottom-0 flex items-center pl-[2px] pr-[2px] bg-gradient-to-l from-white via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto"
                 style={{ background: isSelected ? 'linear-gradient(to left, #EEF2FF, #EEF2FF, transparent)' : undefined }}
             >
                 <TaskCaseInlineActions task={task} />

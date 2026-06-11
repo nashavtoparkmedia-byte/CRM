@@ -41,10 +41,10 @@ export function AttentionSection({
 
     return (
         <div className="rounded-xl bg-card shadow-sm border">
-            <div className="flex items-center justify-between p-4 border-b">
+            <div className="flex items-center justify-between p-[4px] border-b">
                 <h2 className="text-lg font-semibold">
                     ⚡ Требуют внимания
-                    <span className="ml-2 text-sm font-normal text-muted-foreground">({total})</span>
+                    <span className="ml-[2px] text-sm font-normal text-muted-foreground">({total})</span>
                 </h2>
                 {total > items.length && (
                     <Button variant="ghost" size="sm" onClick={onShowAll}>

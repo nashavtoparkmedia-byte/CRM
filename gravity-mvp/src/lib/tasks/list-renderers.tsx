@@ -65,7 +65,7 @@ function MutedCell({ children }: { children: React.ReactNode }) {
 
 function Badge({ children, className = '' }: { children: React.ReactNode; className?: string }) {
     return (
-        <span className={`inline-flex items-center h-[22px] px-2 rounded text-[12px] font-medium whitespace-nowrap ${className}`}>
+        <span className={`inline-flex items-center h-[22px] px-[2px] rounded text-[12px] font-medium whitespace-nowrap ${className}`}>
             {children}
         </span>
     )
@@ -411,7 +411,7 @@ const RENDERERS: Record<string, FieldRenderer> = {
             return (
                 <span
                     title={t.offerAllowed.reason}
-                    className={`inline-flex items-center gap-1.5 h-[22px] px-2 rounded text-[12px] font-semibold ${c.bg} ${c.text}`}
+                    className={`inline-flex items-center gap-1.5 h-[22px] px-[2px] rounded text-[12px] font-semibold ${c.bg} ${c.text}`}
                 >
                     <span className={`w-[8px] h-[8px] rounded-full ${c.dot}`} />
                     {verdictLabel(verdict)}

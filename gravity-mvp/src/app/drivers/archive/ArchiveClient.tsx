@@ -169,16 +169,16 @@ function ArchiveClientInner({
             <div className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
                 
                 {/* Search Bar */}
-                <div className="flex flex-col gap-4 border-b p-4 md:flex-row md:items-end bg-secondary/10">
+                <div className="flex flex-col gap-[4px] border-b p-[4px] md:flex-row md:items-end bg-secondary/10">
                     <form
                         onSubmit={(e) => {
                             e.preventDefault()
                             updateFilters()
                         }}
-                        className="flex w-full flex-col gap-4 md:flex-row"
+                        className="flex w-full flex-col gap-[4px] md:flex-row"
                     >
                         <div className="flex-1">
-                            <label className="mb-2 block text-xs font-medium text-muted-foreground uppercase">
+                            <label className="mb-[2px] block text-xs font-medium text-muted-foreground uppercase">
                                 Поиск по ФИО в архиве
                             </label>
                             <Input
@@ -188,13 +188,13 @@ function ArchiveClientInner({
                                 className="h-10 bg-white"
                             />
                         </div>
-                        <Button type="submit" className="h-10 px-8 self-end" disabled={isLoading || isSyncing}>
-                            <Search className="mr-2 h-4 w-4" /> Найти
+                        <Button type="submit" className="h-10 px-[8px] self-end" disabled={isLoading || isSyncing}>
+                            <Search className="mr-[2px] h-[4px] w-[4px]" /> Найти
                         </Button>
                         <Button 
                             type="button" 
                             variant="outline" 
-                            className="h-10 px-6 self-end gap-2"
+                            className="h-10 px-6 self-end gap-[2px]"
                             disabled={isSyncing}
                             onClick={async () => {
                                 setIsSyncing(true)
@@ -209,7 +209,7 @@ function ArchiveClientInner({
                                 }
                             }}
                         >
-                            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`h-[4px] w-[4px] ${isSyncing ? 'animate-spin' : ''}`} />
                             {isSyncing ? 'Загрузка...' : `Синхронизировать с Яндекс (${total})`}
                         </Button>
                     </form>
@@ -235,13 +235,13 @@ function ArchiveClientInner({
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center">
+                                    <TableCell colSpan={4} className="h-[24px] text-center">
                                         Загрузка...
                                     </TableCell>
                                 </TableRow>
                             ) : initialDrivers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={4} className="h-[24px] text-center text-muted-foreground">
                                         В архиве нет водителей, соответствующих поиску.
                                     </TableCell>
                                 </TableRow>
@@ -327,7 +327,7 @@ function ArchiveClientInner({
                 </div>
 
                 {/* Pagination */}
-                <div className="flex items-center justify-between border-t bg-muted/20 px-4 py-3 sm:px-6">
+                <div className="flex items-center justify-between border-t bg-muted/20 px-[4px] py-3 sm:px-6">
                     <div className="text-sm text-muted-foreground">
                         Показаны с{" "}
                         <span className="font-medium text-foreground">
@@ -340,16 +340,16 @@ function ArchiveClientInner({
                         из{" "}
                         <span className="font-medium text-foreground">{total}</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-[2px]">
                         <Button
                             variant="outline"
                             size="icon"
                             onClick={() => updateFilters({ page: currentPage - 1 })}
                             disabled={currentPage <= 1 || isLoading}
                         >
-                            <ChevronLeft className="h-4 w-4" />
+                            <ChevronLeft className="h-[4px] w-[4px]" />
                         </Button>
-                        <div className="flex items-center justify-center px-4 font-medium text-sm">
+                        <div className="flex items-center justify-center px-[4px] font-medium text-sm">
                             {currentPage} / {totalPages || 1}
                         </div>
                         <Button
@@ -358,7 +358,7 @@ function ArchiveClientInner({
                             onClick={() => updateFilters({ page: currentPage + 1 })}
                             disabled={currentPage >= totalPages || isLoading}
                         >
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-[4px] w-[4px]" />
                         </Button>
                     </div>
                 </div>

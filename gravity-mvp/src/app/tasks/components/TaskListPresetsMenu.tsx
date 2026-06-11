@@ -74,10 +74,10 @@ export default function TaskListPresetsMenu({ scenario }: Props) {
                     <button
                         onClick={() => { setOpen(false); handleSave() }}
                         disabled={!hasCustomizations}
-                        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[#F8FAFC] transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[#1E40AF]"
+                        className="w-full flex items-center gap-[2px] px-3 py-[2px] hover:bg-[#F8FAFC] transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[#1E40AF]"
                         title={hasCustomizations ? 'Сохранить текущие настройки как пресет' : 'Нет пользовательских настроек для сохранения'}
                     >
-                        <BookmarkPlus className="w-4 h-4" />
+                        <BookmarkPlus className="w-[4px] h-[4px]" />
                         <span className="font-medium">Сохранить текущий вид…</span>
                     </button>
 
@@ -128,7 +128,7 @@ function PresetRow({
     const [draft, setDraft] = useState(preset.name)
 
     return (
-        <div className="flex items-center gap-1 px-2 py-1 hover:bg-[#F8FAFC] group">
+        <div className="flex items-center gap-1 px-[2px] py-1 hover:bg-[#F8FAFC] group">
             {editing ? (
                 <>
                     <input
@@ -139,7 +139,7 @@ function PresetRow({
                             if (e.key === 'Enter') { onRename(draft.trim() || preset.name); setEditing(false) }
                             if (e.key === 'Escape') { setDraft(preset.name); setEditing(false) }
                         }}
-                        className="flex-1 bg-white border border-[#CBD5E1] rounded px-2 py-0.5 outline-none focus:border-[#1E40AF]"
+                        className="flex-1 bg-white border border-[#CBD5E1] rounded px-[2px] py-0.5 outline-none focus:border-[#1E40AF]"
                     />
                     <button onClick={() => { onRename(draft.trim() || preset.name); setEditing(false) }}
                             className="p-1 hover:bg-[#F1F5FD] rounded text-[#1E40AF]">

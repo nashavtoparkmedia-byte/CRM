@@ -21,11 +21,11 @@ export default function TaskToastContainer() {
     if (items.length === 0) return null
 
     return (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 pointer-events-none">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-[2px] pointer-events-none">
             {items.map(t => (
                 <div
                     key={t.id}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border shadow-sm text-[13px] font-medium pointer-events-auto ${
+                    className={`flex items-center gap-[2px] px-3 py-[2px] rounded-lg border shadow-sm text-[13px] font-medium pointer-events-auto ${
                         KIND_STYLES[t.kind] ?? KIND_STYLES.info
                     }`}
                 >

@@ -47,29 +47,29 @@ export default function TaskOperationalHeader({ task }: Props) {
     const slaColor = task.slaDeadline ? getSlaColor(task.slaDeadline) : 'text-gray-500'
 
     return (
-        <div className="bg-white border border-[#E4ECFC] rounded-xl p-3 space-y-2">
+        <div className="bg-white border border-[#E4ECFC] rounded-xl p-3 space-y-[2px]">
             {/* Row 1: Status chips + SLA */}
             <div className="flex items-center flex-wrap gap-1.5">
                 {scenario && (
-                    <span className="inline-flex items-center h-[22px] px-2 rounded bg-indigo-100 text-indigo-700 text-[12px] font-semibold">
+                    <span className="inline-flex items-center h-[22px] px-[2px] rounded bg-indigo-100 text-indigo-700 text-[12px] font-semibold">
                         {scenario.label}
                     </span>
                 )}
                 {stage && (
-                    <span className="inline-flex items-center h-[22px] px-2 rounded bg-indigo-50 text-indigo-700 text-[12px] font-medium">
+                    <span className="inline-flex items-center h-[22px] px-[2px] rounded bg-indigo-50 text-indigo-700 text-[12px] font-medium">
                         {stage.label}
                     </span>
                 )}
-                <span className={`inline-flex items-center h-[22px] px-2 rounded text-[12px] font-semibold ${priority.className}`}>
+                <span className={`inline-flex items-center h-[22px] px-[2px] rounded text-[12px] font-semibold ${priority.className}`}>
                     Приоритет: {priority.label}
                 </span>
                 {task.status && (
-                    <span className="inline-flex items-center h-[22px] px-2 rounded bg-gray-100 text-gray-600 text-[12px] font-medium">
+                    <span className="inline-flex items-center h-[22px] px-[2px] rounded bg-gray-100 text-gray-600 text-[12px] font-medium">
                         {STATUS_LABELS[task.status] ?? task.status}
                     </span>
                 )}
                 {slaRemaining && (
-                    <span className={`inline-flex items-center h-[22px] px-2 rounded text-[12px] font-medium gap-1 ${slaColor} bg-gray-50`}>
+                    <span className={`inline-flex items-center h-[22px] px-[2px] rounded text-[12px] font-medium gap-1 ${slaColor} bg-gray-50`}>
                         <Clock size={11} />
                         SLA: {slaRemaining}
                     </span>
@@ -182,7 +182,7 @@ function EditableFieldBadge({
     const tone = toneFor(field.id, value)
 
     return (
-        <span className={`inline-flex items-center h-[22px] pl-2 pr-1 rounded gap-1 font-medium group ${tone}`}>
+        <span className={`inline-flex items-center h-[22px] pl-[2px] pr-1 rounded gap-1 font-medium group ${tone}`}>
             <button
                 onClick={() => setEditing(true)}
                 className="flex items-center gap-1 hover:opacity-75"

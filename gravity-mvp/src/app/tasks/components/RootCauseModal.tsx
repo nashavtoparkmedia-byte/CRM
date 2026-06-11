@@ -49,18 +49,18 @@ export default function RootCauseModal({
         <div
             ref={overlayRef}
             onClick={handleOverlayClick}
-            className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 animate-in fade-in duration-200"
+            className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-[4px] animate-in fade-in duration-200"
         >
             <div
                 onClick={(e) => e.stopPropagation()}
-                className="w-full max-w-[400px] bg-white rounded-xl border border-gray-100 p-5 space-y-4"
+                className="w-full max-w-[400px] bg-white rounded-xl border border-gray-100 p-5 space-y-[4px]"
             >
                 <div className="flex items-center justify-between">
                     <h4 className="text-[15px] font-semibold text-gray-900">
                         Решение эскалации
                     </h4>
                     <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-                        <X className="w-4 h-4 text-gray-400" />
+                        <X className="w-[4px] h-[4px] text-gray-400" />
                     </button>
                 </div>
 
@@ -72,7 +72,7 @@ export default function RootCauseModal({
                             {RESOLUTION_TYPES.map((r) => (
                                 <label
                                     key={r.value}
-                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                                    className={`flex items-center gap-3 px-3 py-[2px] rounded-lg cursor-pointer transition-colors ${
                                         resolutionType === r.value
                                             ? 'bg-blue-50 border border-blue-200'
                                             : 'bg-gray-50 border border-transparent hover:bg-gray-100'
@@ -84,7 +84,7 @@ export default function RootCauseModal({
                                         value={r.value}
                                         checked={resolutionType === r.value}
                                         onChange={() => setResolutionType(r.value)}
-                                        className="w-4 h-4 text-blue-600 accent-blue-600"
+                                        className="w-[4px] h-[4px] text-blue-600 accent-blue-600"
                                     />
                                     <span className="text-[13px] text-gray-800">{r.label}</span>
                                 </label>
@@ -114,12 +114,12 @@ export default function RootCauseModal({
                             value={comment}
                             onChange={(e) => setComment(e.target.value.slice(0, 500))}
                             placeholder="Необязательно..."
-                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-500 transition-colors h-16 resize-none"
+                            className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-[2px] text-[13px] outline-none focus:border-blue-500 transition-colors h-[16px] resize-none"
                         />
                     </div>
                 </div>
 
-                <div className="flex gap-2 pt-1">
+                <div className="flex gap-[2px] pt-1">
                     <button
                         onClick={onClose}
                         className="flex-1 py-2.5 rounded-lg bg-gray-50 text-gray-600 text-[13px] font-semibold hover:bg-gray-100 transition-colors"

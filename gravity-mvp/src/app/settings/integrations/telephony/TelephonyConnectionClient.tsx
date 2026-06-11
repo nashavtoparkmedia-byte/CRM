@@ -124,7 +124,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
             <TelephonyTabs active="connection" />
 
             {!canEdit && (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[13px] text-muted-foreground">
+                <div className="flex items-center gap-[2px] rounded-md border border-border bg-surface px-3 py-[2px] text-[13px] text-muted-foreground">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Только Администратор или Руководитель может редактировать настройки.
                 </div>
@@ -147,7 +147,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                     </button>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-[2px] md:grid-cols-2">
                     {!status && statusLoading && (
                         <div className="col-span-full text-center text-[13px] text-muted-foreground py-3">Загружаем статус…</div>
                     )}
@@ -163,7 +163,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                             <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white ${
                                 check.ok ? 'bg-emerald-500' : 'bg-red-500'
                             }`}>
-                                {check.ok ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                                {check.ok ? <CheckCircle2 className="h-[4px] w-[4px]" /> : <AlertCircle className="h-[4px] w-[4px]" />}
                             </span>
                             <div className="min-w-0 flex-1">
                                 <div className="text-[13px] font-medium text-foreground truncate">{check.label}</div>
@@ -175,7 +175,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
             </section>
 
             {/* ── MultiFon credentials ────────────────────────────────── */}
-            <section className="flex flex-col gap-4 rounded-md border border-border bg-card p-5">
+            <section className="flex flex-col gap-[4px] rounded-md border border-border bg-card p-5">
                 <div className="flex items-center justify-between">
                     <div>
                         <div className="text-[15px] font-semibold text-foreground">Подключение к МультиФон</div>
@@ -187,14 +187,14 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                 </div>
 
                 {loading && (
-                    <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center justify-center py-[8px]">
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                 )}
 
                 {!loading && error && (
-                    <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[13px] text-destructive">
-                        <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div className="flex items-start gap-[2px] rounded-md border border-destructive/30 bg-destructive/5 px-3 py-[2px] text-[13px] text-destructive">
+                        <AlertCircle className="h-[4px] w-[4px] shrink-0 mt-0.5" />
                         <div className="min-w-0">
                             <div className="font-medium">{error}</div>
                             <div className="text-[11px] opacity-70 mt-1 font-mono">{confPath}</div>
@@ -234,7 +234,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                         className="h-9 w-9 inline-flex items-center justify-center text-muted-foreground hover:text-foreground"
                                         title={showPassword ? 'Скрыть' : 'Показать'}
                                     >
-                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        {showPassword ? <EyeOff className="h-[4px] w-[4px]" /> : <Eye className="h-[4px] w-[4px]" />}
                                     </button>
                                 }
                             />
@@ -272,8 +272,8 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                             />
                         </div>
 
-                        <div className="flex items-start gap-2 rounded-md bg-surface px-3 py-2 text-[12px] text-muted-foreground">
-                            <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
+                        <div className="flex items-start gap-[2px] rounded-md bg-surface px-3 py-[2px] text-[12px] text-muted-foreground">
+                            <Info className="h-[4px] w-[4px] shrink-0 mt-0.5 text-primary" />
                             <div>
                                 Файл конфигурации FreeSWITCH:{' '}
                                 <span className="font-mono text-foreground">{confPath || '...'}</span>.
@@ -286,8 +286,8 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
             </section>
 
             {/* ── Future: manager extension passwords, WS URL etc. ────── */}
-            <section className="flex flex-col gap-2 rounded-md border border-dashed border-border bg-surface/30 p-5">
-                <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
+            <section className="flex flex-col gap-[2px] rounded-md border border-dashed border-border bg-surface/30 p-5">
+                <div className="flex items-center gap-[2px] text-[13px] font-medium text-foreground">
                     <ExternalLink className="h-3.5 w-3.5" />
                     Технические параметры
                 </div>
@@ -299,7 +299,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
             </section>
 
             {/* ── Save footer ─────────────────────────────────────────── */}
-            <footer className="sticky bottom-4 z-10 flex items-center justify-between rounded-md border border-border bg-card px-4 py-3 shadow-sm">
+            <footer className="sticky bottom-[4px] z-10 flex items-center justify-between rounded-md border border-border bg-card px-[4px] py-3 shadow-sm">
                 <div className="text-[12px] text-muted-foreground">
                     {saveMsg?.kind === 'ok' && (
                         <span className="inline-flex items-center gap-1 text-emerald-600">
@@ -321,9 +321,9 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                     type="button"
                     onClick={handleSave}
                     disabled={!canEdit || !dirty || saving || loading}
-                    className="inline-flex h-11 items-center gap-2 rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-11 items-center gap-[2px] rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {saving ? <Loader2 className="h-[4px] w-[4px] animate-spin" /> : <Save className="h-[4px] w-[4px]" />}
                     Сохранить и применить
                 </button>
             </footer>

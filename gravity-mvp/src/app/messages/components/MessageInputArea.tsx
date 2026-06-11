@@ -308,7 +308,7 @@ export default function MessageInputArea({
             const fileSizeKb = Math.round(imagePreview.file.size / 1024)
             return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setImagePreview(null)}>
-                <div className="bg-white rounded-2xl shadow-2xl p-4 max-w-sm w-full mx-4 flex flex-col gap-3" onClick={e => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl p-[4px] max-w-sm w-full mx-[4px] flex flex-col gap-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between">
                         <span className="font-semibold text-[15px] text-gray-800">{title}</span>
                         <button onClick={() => setImagePreview(null)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
@@ -332,7 +332,7 @@ export default function MessageInputArea({
                             </div>
                         </div>
                     )}
-                    <div className="flex gap-2">
+                    <div className="flex gap-[2px]">
                         <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
                             Отмена
                         </button>
@@ -367,10 +367,10 @@ export default function MessageInputArea({
 
             {/* Reply Context Badge */}
             {replyContext && (
-                <div className="px-3 pt-2 pb-1 flex items-center gap-3 border-t border-[#E8E8E8]">
-                    <div className="w-[3px] h-8 bg-[#3390EC] rounded-full shrink-0" />
+                <div className="px-3 pt-[2px] pb-1 flex items-center gap-3 border-t border-[#E8E8E8]">
+                    <div className="w-[3px] h-[8px] bg-[#3390EC] rounded-full shrink-0" />
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-[2px]">
                             <span className="text-[12px] font-bold text-[#3390EC]">{replyContext.authorLabel}</span>
                             <span className="text-[10px] text-gray-400">{replyContext.timestamp}</span>
                         </div>
@@ -399,7 +399,7 @@ export default function MessageInputArea({
                 </div>
             )}
 
-            <div className={`flex items-end gap-1.5 px-2 py-1.5 ${!replyContext && !channelHintReason ? 'border-t border-[#E8E8E8]' : ''}`}>
+            <div className={`flex items-end gap-1.5 px-[2px] py-1.5 ${!replyContext && !channelHintReason ? 'border-t border-[#E8E8E8]' : ''}`}>
                 <input
                     ref={fileInputRef}
                     type="file"
@@ -443,7 +443,7 @@ export default function MessageInputArea({
                     <button 
                         onClick={() => !isChannelLocked && setChannelDropdownOpen(!channelDropdownOpen)}
                         disabled={isChannelLocked}
-                        className={`h-[32px] px-2 rounded-lg flex items-center gap-1 text-[11px] font-bold transition-colors shrink-0 ${
+                        className={`h-[32px] px-[2px] rounded-lg flex items-center gap-1 text-[11px] font-bold transition-colors shrink-0 ${
                             isChannelLocked 
                             ? `${currentChannelInfo.bg} ${currentChannelInfo.color} cursor-default`
                             : `${currentChannelInfo.bg} ${currentChannelInfo.color} hover:opacity-80 cursor-pointer`
@@ -464,19 +464,19 @@ export default function MessageInputArea({
                                         setManualSendChannelMode(ch.id)
                                         setChannelDropdownOpen(false)
                                     }}
-                                    className={`w-full px-3 h-[30px] flex items-center gap-2 text-[12px] font-medium hover:bg-gray-50 transition-colors ${
+                                    className={`w-full px-3 h-[30px] flex items-center gap-[2px] text-[12px] font-medium hover:bg-gray-50 transition-colors ${
                                         effectiveNormalized === ch.id ? `${ch.color} bg-gray-50` : 'text-[#111]'
                                     }`}
                                 >
-                                    <span className={`w-2 h-2 rounded-full ${ch.activeBg}`} />
+                                    <span className={`w-[2px] h-[2px] rounded-full ${ch.activeBg}`} />
                                     {ch.label}
                                     {effectiveNormalized === ch.id && <span className="ml-auto text-[10px]">✓</span>}
                                 </button>
                             ))}
-                            <div className="h-px bg-[#E8E8E8] mx-2 my-1" />
+                            <div className="h-px bg-[#E8E8E8] mx-[2px] my-1" />
                             <div className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Аккаунт</div>
-                            <button className="w-full px-3 h-[30px] flex items-center gap-2 text-[12px] font-medium text-[#111] hover:bg-gray-50 transition-colors">
-                                <div className="w-4 h-4 rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-bold text-gray-500">Ю</div>
+                            <button className="w-full px-3 h-[30px] flex items-center gap-[2px] text-[12px] font-medium text-[#111] hover:bg-gray-50 transition-colors">
+                                <div className="w-[4px] h-[4px] rounded-full bg-gray-200 flex items-center justify-center text-[8px] font-bold text-gray-500">Ю</div>
                                 Основной аккаунт
                                 <span className="ml-auto text-[10px] text-[#3390EC]">✓</span>
                             </button>
@@ -498,7 +498,7 @@ export default function MessageInputArea({
                         onKeyDown={handleKeyDown}
                         onFocus={onTextareaFocus}
                         placeholder="Написать сообщение..."
-                        className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-4 resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
+                        className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-[4px] resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
                         rows={1}
                     />
                 </div>

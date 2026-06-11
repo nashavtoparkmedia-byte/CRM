@@ -66,11 +66,11 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
         <div className="space-y-6">
             {/* Trigger List */}
             {triggers.length === 0 && !showForm ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center rounded-xl border border-dashed border-muted-foreground/30  text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-[12px] text-center rounded-xl border border-dashed border-muted-foreground/30  text-muted-foreground">
                     <Zap size={40} className="mb-3 opacity-30" />
                     <p className="font-medium">Нет триггеров</p>
-                    <p className="text-xs mt-1 mb-4">Создайте правила для автоматизации коммуникаций</p>
-                    <Button onClick={() => setShowForm(true)} className="gap-2">
+                    <p className="text-xs mt-1 mb-[4px]">Создайте правила для автоматизации коммуникаций</p>
+                    <Button onClick={() => setShowForm(true)} className="gap-[2px]">
                         <Plus size={16} /> Создать триггер
                     </Button>
                 </div>
@@ -80,7 +80,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                         {triggers.map((trigger) => (
                             <div
                                 key={trigger.id}
-                                className={`flex items-center gap-4 rounded-xl border bg-card p-4 shadow-sm transition-opacity ${
+                                className={`flex items-center gap-[4px] rounded-xl border bg-card p-[4px] shadow-sm transition-opacity ${
                                     !trigger.isActive ? "opacity-50" : ""
                                 }`}
                             >
@@ -97,7 +97,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                                 </button>
 
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-0.5">
+                                    <div className="flex items-center gap-[2px] mb-0.5">
                                         <span className="text-sm font-bold text-foreground">{trigger.name}</span>
                                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground uppercase font-medium">
                                             {ACTION_LABELS[trigger.action] || trigger.action}
@@ -109,7 +109,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                                     <p className="text-xs text-muted-foreground">
                                         {CONDITION_LABELS[trigger.condition] || trigger.condition}: {trigger.threshold}
                                         {trigger.messageTemplate && (
-                                            <span className="ml-2 italic">«{trigger.messageTemplate.substring(0, 60)}...»</span>
+                                            <span className="ml-[2px] italic">«{trigger.messageTemplate.substring(0, 60)}...»</span>
                                         )}
                                     </p>
                                 </div>
@@ -117,7 +117,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                    className="h-[8px] w-[8px] text-destructive hover:bg-destructive/10"
                                     onClick={() => handleDelete(trigger.id)}
                                 >
                                     <Trash2 size={14} />
@@ -127,7 +127,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                     </div>
 
                     {!showForm && (
-                        <Button onClick={() => setShowForm(true)} variant="outline" className="gap-2">
+                        <Button onClick={() => setShowForm(true)} variant="outline" className="gap-[2px]">
                             <Plus size={16} /> Добавить триггер
                         </Button>
                     )}
@@ -136,12 +136,12 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
 
             {/* Create Form */}
             {showForm && (
-                <div className="rounded-xl border bg-card p-6 shadow-sm space-y-4 animate-in slide-in-from-top-2 duration-200">
-                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <div className="rounded-xl border bg-card p-6 shadow-sm space-y-[4px] animate-in slide-in-from-top-2 duration-200">
+                    <h3 className="text-lg font-semibold text-foreground flex items-center gap-[2px]">
                         <Zap size={18} className="text-primary" /> Новый триггер
                     </h3>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-[4px]">
                         <div>
                             <label className="block text-xs font-medium text-muted-foreground uppercase mb-1">
                                 Название
@@ -160,7 +160,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                             <select
                                 value={form.condition}
                                 onChange={(e) => setForm({ ...form, condition: e.target.value })}
-                                className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm"
+                                className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-[2px] text-sm"
                             >
                                 {Object.entries(CONDITION_LABELS).map(([k, v]) => (
                                     <option key={k} value={k}>{v}</option>
@@ -186,7 +186,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                             <select
                                 value={form.action}
                                 onChange={(e) => setForm({ ...form, action: e.target.value })}
-                                className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm"
+                                className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-[2px] text-sm"
                             >
                                 {Object.entries(ACTION_LABELS).map(([k, v]) => (
                                     <option key={k} value={k}>{v}</option>
@@ -200,7 +200,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                             <select
                                 value={form.channel}
                                 onChange={(e) => setForm({ ...form, channel: e.target.value })}
-                                className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-2 text-sm"
+                                className="flex h-10 w-full rounded-md border bg-secondary/50 px-3 py-[2px] text-sm"
                             >
                                 <option value="telegram">Telegram</option>
                                 <option value="whatsapp">WhatsApp</option>
@@ -216,7 +216,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                             <textarea
                                 value={form.messageTemplate}
                                 onChange={(e) => setForm({ ...form, messageTemplate: e.target.value })}
-                                className="w-full h-24 resize-none rounded-xl border bg-secondary/50 p-3 text-sm outline-none"
+                                className="w-full h-[24px] resize-none rounded-xl border bg-secondary/50 p-3 text-sm outline-none"
                                 placeholder="Привет, {name}! Заметили, что вы не катаете уже {days} дней..."
                             />
                             <p className="text-[11px] text-muted-foreground mt-1">
@@ -226,7 +226,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                     )}
 
                     <div className="flex gap-3">
-                        <Button onClick={handleCreate} disabled={!form.name || saving} className="gap-2">
+                        <Button onClick={handleCreate} disabled={!form.name || saving} className="gap-[2px]">
                             <Plus size={16} /> {saving ? "Сохранение..." : "Создать"}
                         </Button>
                         <Button variant="outline" onClick={() => setShowForm(false)}>Отмена</Button>

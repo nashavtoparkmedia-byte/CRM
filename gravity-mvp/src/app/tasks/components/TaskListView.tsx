@@ -78,7 +78,7 @@ export default function TaskListView() {
             <div className="flex flex-col gap-3">
                 {isChurnActive && mode === 'control' && <TaskControlChips />}
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="w-16 h-16 rounded-2xl bg-[#f3f4f6] flex items-center justify-center mb-4">
+                    <div className="w-[16px] h-[16px] rounded-2xl bg-[#f3f4f6] flex items-center justify-center mb-[4px]">
                         <Inbox className="w-7 h-7 text-[#9ca3af]" />
                     </div>
                     <p className="text-[15px] font-medium text-[#6b7280]">Нет задач</p>
@@ -97,7 +97,7 @@ export default function TaskListView() {
         const isTable = mode === 'table'
 
         return (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-[2px]">
                 {mode === 'control' && <TaskControlChips />}
 
                 <div className="flex flex-col overflow-x-auto border-t border-[#EEF2FF]">
@@ -169,7 +169,7 @@ export default function TaskListView() {
 
 function GroupHeader({ label, count }: { label: string; count: number }) {
     return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-[#F8FAFC] border-b border-[#EEF2FF] text-[11px] uppercase tracking-wide font-semibold text-[#64748B]">
+        <div className="flex items-center gap-[2px] px-3 py-1.5 bg-[#F8FAFC] border-b border-[#EEF2FF] text-[11px] uppercase tracking-wide font-semibold text-[#64748B]">
             <span>{label}</span>
             <span className="text-[#CBD5E1] font-normal">· {count}</span>
         </div>

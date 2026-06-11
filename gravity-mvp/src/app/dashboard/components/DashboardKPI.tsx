@@ -14,7 +14,7 @@ const KPI_CONFIG = [
 
 export function DashboardKPI({ stats }: { stats: DashboardStats }) {
     return (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-[4px]">
             {KPI_CONFIG.map((kpi) => {
                 const value = stats[kpi.key as keyof DashboardStats]
                 const Icon = kpi.icon
@@ -25,7 +25,7 @@ export function DashboardKPI({ stats }: { stats: DashboardStats }) {
                         className="group relative overflow-hidden rounded-2xl border bg-card p-5 shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
                     >
                         {/* Background accent */}
-                        <div className={`absolute top-0 right-0 w-20 h-20 ${kpi.bgColor} rounded-full -mr-8 -mt-8 opacity-60 transition-transform group-hover:scale-125`} />
+                        <div className={`absolute top-0 right-0 w-20 h-20 ${kpi.bgColor} rounded-full -mr-[8px] -mt-[8px] opacity-60 transition-transform group-hover:scale-125`} />
 
                         <div className="relative">
                             <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${kpi.bgColor} mb-3`}>
