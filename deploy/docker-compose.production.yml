@@ -316,6 +316,7 @@ services:
       args:
         NEXT_PUBLIC_AVITO_LEADS_URL: ${NEXT_PUBLIC_AVITO_LEADS_URL:-}
         NEXT_PUBLIC_MAX_SCRAPER_PHONE: ${NEXT_PUBLIC_MAX_SCRAPER_PHONE:-}
+        NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS: ${NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS:-}
     image: crm/gravity-mvp:latest
     container_name: crm-gravity-mvp
     restart: unless-stopped

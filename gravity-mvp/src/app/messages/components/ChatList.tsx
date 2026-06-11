@@ -385,6 +385,8 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
     ]
 
     // Dynamic channel tabs: show channel if it has data OR connected accounts OR is a built-in CRM module
+    // DEV-флаг NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=true показывает все табы
+    // независимо от данных — полезно для отладки UI на пустой БД.
     const channelTabs = useMemo(() => {
         const channelsWithData = new Set(conversations.map(c => c.channel))
         const channelsWithAccounts = new Set(
@@ -399,6 +401,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
             { id: 'av', label: 'AV', dotColor: 'bg-green-500', channel: 'avito' },
             { id: 'phone', label: 'Тел', dotColor: 'bg-orange-500', channel: 'phone', alwaysShow: true },
         ]
+        if (process.env.NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS === 'true') return all
         return all.filter(ch => ch.alwaysShow || channelsWithData.has(ch.channel) || channelsWithAccounts.has(ch.channel))
     }, [conversations, channelAccounts])
 
