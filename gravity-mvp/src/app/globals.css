@@ -103,6 +103,11 @@
     color: var(--foreground);
     @apply antialiased;
   }
+  /* shadcn по умолчанию не ставит pointer на кнопки */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
+  }
 }
 
 @layer utilities {
