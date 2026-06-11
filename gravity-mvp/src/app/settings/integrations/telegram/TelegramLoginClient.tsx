@@ -234,7 +234,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
                                 <div className="flex items-center justify-end gap-1 pt-3 mt-3 border-t border-dashed">
                                     {!conn.isDefault && !conn.isPaused && (
-                                        <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
+                                        <Button variant="ghost" size="sm" className="h-[32px] px-3 text-xs text-muted-foreground hover:bg-secondary" onClick={() => handleSetDefault(conn)}>
                                             <Star size={12} className="mr-1.5" /> Основным
                                         </Button>
                                     )}
@@ -242,7 +242,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-[8px] px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                                            className="h-[32px] px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
                                             onClick={() => setResumeDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}
                                         >
                                             <PlayCircle size={13} className="mr-1.5" /> Включить
@@ -251,13 +251,13 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="h-[8px] px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
+                                            className="h-[32px] px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700"
                                             onClick={() => setPauseDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}
                                         >
                                             <PauseCircle size={13} className="mr-1.5" /> Пауза
                                         </Button>
                                     )}
-                                    <Button variant="ghost" size="sm" className="h-[8px] px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}>
+                                    <Button variant="ghost" size="sm" className="h-[32px] px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog({ connId: conn.id, connName: conn.name || conn.phoneNumber || conn.id })}>
                                         <LogOut size={13} className="mr-1.5" /> Отключить
                                     </Button>
                                 </div>
