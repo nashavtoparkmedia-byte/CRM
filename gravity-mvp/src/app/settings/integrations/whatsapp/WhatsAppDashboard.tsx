@@ -473,22 +473,22 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
             {liveStatus === 'ready' && (
                 <div className="flex items-center justify-end gap-1 pt-3 mt-auto border-t border-dashed">
                     {livePaused ? (
-                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog(true)} disabled={loading}>
+                        <Button variant="ghost" size="sm" className="h-[32px] px-3 text-xs cursor-pointer text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" onClick={() => setResumeDialog(true)} disabled={loading}>
                             <PlayCircle size={13} className="mr-1.5" /> Включить
                         </Button>
                     ) : (
-                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog(true)} disabled={loading}>
+                        <Button variant="ghost" size="sm" className="h-[32px] px-3 text-xs cursor-pointer text-amber-600 hover:bg-amber-50 hover:text-amber-700" onClick={() => setPauseDialog(true)} disabled={loading}>
                             <PauseCircle size={13} className="mr-1.5" /> Пауза
                         </Button>
                     )}
-                    <Button variant="ghost" size="sm" className="h-8 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog(true)} disabled={loading}>
+                    <Button variant="ghost" size="sm" className="h-[32px] px-3 text-xs cursor-pointer text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDisconnectDialog(true)} disabled={loading}>
                         <LogOut size={13} className="mr-1.5" /> Отключить
                     </Button>
                 </div>
             )}
             {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
                 <div className="flex items-center justify-end pt-3 mt-auto border-t border-dashed">
-                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }} disabled={loading} className="h-8 px-3 text-xs">
+                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }} disabled={loading} className="h-[32px] px-3 text-xs cursor-pointer">
                         {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
                     </Button>
                 </div>
