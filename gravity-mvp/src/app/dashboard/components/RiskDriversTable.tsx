@@ -95,7 +95,7 @@ function RiskDriverRow({ driver }: { driver: RiskDriver }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-[8px] w-[8px] text-blue-600 hover:bg-blue-50"
+                            className="h-8 w-8 text-blue-600 hover:bg-blue-50"
                             onClick={handleMessage}
                             title="Написать"
                         >
@@ -104,7 +104,7 @@ function RiskDriverRow({ driver }: { driver: RiskDriver }) {
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-[8px] w-[8px] text-green-600 hover:bg-green-50"
+                            className="h-8 w-8 text-green-600 hover:bg-green-50"
                             onClick={handleCall}
                             title="Позвонить"
                         >

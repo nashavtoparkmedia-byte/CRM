@@ -118,7 +118,7 @@ function CallHeader({ call, peerName, peerNumber }: { call: CallDetail; peerName
     const Icon = iconFor(call)
     return (
         <div className="flex items-center gap-[4px] rounded-md border border-border bg-card p-5">
-            <div className={`flex h-[12px] w-[12px] items-center justify-center rounded-full ${bgFor(call)}`}>
+            <div className={`flex h-12 w-12 items-center justify-center rounded-full ${bgFor(call)}`}>
                 <Icon className={`h-5 w-5 ${colorFor(call)}`} />
             </div>
             <div className="min-w-0 flex-1">

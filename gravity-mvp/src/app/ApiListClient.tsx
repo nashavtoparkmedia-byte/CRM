@@ -109,7 +109,7 @@ export default function ApiListClient({
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => deleteApiConnection(conn.id)}
-                                    className="h-[8px] w-[8px] text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                                    className="h-8 w-8 text-muted-foreground hover:bg-red-50 hover:text-red-600"
                                 >
                                     <Trash2 size={16} />
                                 </Button>

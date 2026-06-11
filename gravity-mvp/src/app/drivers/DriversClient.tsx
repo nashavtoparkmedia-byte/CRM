@@ -129,7 +129,7 @@ function SendMessageModal({
             <div className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl animate-in zoom-in-95 duration-200">
                 <button
                     onClick={onClose}
-                    className="absolute right-[4px] top-[4px] w-[8px] h-[8px] rounded-lg text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#111] flex items-center justify-center transition-colors"
+                    className="absolute right-[4px] top-[4px] w-8 h-8 rounded-lg text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#111] flex items-center justify-center transition-colors"
                 >
                     <X size={18} />
                 </button>
@@ -144,7 +144,7 @@ function SendMessageModal({
 
                 {status === "success" ? (
                     <div className="py-10 text-center animate-in zoom-in">
-                        <div className="w-[12px] h-[12px] rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto mb-3">
                             <svg xmlns="http://www.w3.org/2000/svg" width={24} height={24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                 <polyline points="20 6 9 17 4 12" />
                             </svg>
@@ -646,7 +646,7 @@ export default function DriversClient({
                                     <TableCell className="py-[2px] px-3 align-middle text-right">
                                         <div className="relative group/actions inline-block">
                                             <button
-                                                className="h-[8px] w-[8px] rounded-lg hover:bg-[#F0F2F5] flex items-center justify-center transition-colors"
+                                                className="h-8 w-8 rounded-lg hover:bg-[#F0F2F5] flex items-center justify-center transition-colors"
                                                 onClick={(e) => e.stopPropagation()}
                                             >
                                                 <MessageSquare size={15} className="text-[#8A9099]" />

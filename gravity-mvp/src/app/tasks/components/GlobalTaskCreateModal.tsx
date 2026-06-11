@@ -96,7 +96,7 @@ export default function GlobalTaskCreateModal({ onClose }: { onClose: () => void
                                         onClick={() => setSelectedDriver({ id: d.id, fullName: d.fullName })}
                                         className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-indigo-50 transition-colors text-left group"
                                     >
-                                        <div className="w-[8px] h-[8px] rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
+                                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
                                             <User size={14} />
                                         </div>
                                         <div>

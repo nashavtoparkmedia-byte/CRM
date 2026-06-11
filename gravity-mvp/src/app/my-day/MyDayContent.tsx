@@ -174,7 +174,7 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
                             {task.driverPhone && (
                                 <button
                                     onClick={onCall}
-                                    className="w-[8px] h-[8px] rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
                                     title="Позвонить"
                                 >
                                     <Phone className="w-3.5 h-3.5 text-[#6b7280]" />
@@ -182,7 +182,7 @@ function FocusTaskCard({ task, onStart, onCall, onWrite }: {
                             )}
                             <button
                                 onClick={onWrite}
-                                className="w-[8px] h-[8px] rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
+                                className="w-8 h-8 rounded-lg flex items-center justify-center border border-[#e5e7eb] hover:bg-[#f3f4f6] transition-colors"
                                 title="Написать"
                             >
                                 <MessageSquare className="w-3.5 h-3.5 text-[#6b7280]" />

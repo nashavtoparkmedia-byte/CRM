@@ -114,7 +114,7 @@ export default function TaskTimelineView() {
                             <div key={group.driverId} className="flex border-b border-gray-100 hover:bg-gray-50/50 transition-colors group/row">
                                 {/* Driver Info */}
                                 <div className="w-[320px] shrink-0 h-[56px] px-3 flex items-center gap-[2px] border-r border-gray-200 bg-white group-hover/row:bg-transparent">
-                                    <div className="w-[8px] h-[8px] rounded-full bg-indigo-100 text-indigo-600 font-bold text-[12px] flex items-center justify-center shrink-0">
+                                    <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 font-bold text-[12px] flex items-center justify-center shrink-0">
                                         {group.driverName.charAt(0)}
                                     </div>
                                     <div className="flex-1 min-w-0 pr-[2px] cursor-pointer" onClick={() => router.push(`/drivers/${group.driverId}`)}>

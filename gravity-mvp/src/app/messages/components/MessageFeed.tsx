@@ -483,7 +483,7 @@ export default function MessageFeed({
                 {!isOutbound && (
                     <div className="w-[8px] mr-[2px] flex-shrink-0 flex items-end">
                         {showAvatar && (
-                            <div className={`w-[8px] h-[8px] rounded-full flex items-center justify-center text-[10px] font-bold border ${
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border ${
                                 msg.channel === 'telegram' || msg.channel === 'tg' ? 'bg-[#3390EC]/10 border-[#3390EC]/20 text-[#3390EC]' :
                                 msg.channel === 'whatsapp' || msg.channel === 'wa' ? 'bg-[#25D366]/10 border-[#25D366]/20 text-[#25D366]' :
                                 msg.channel === 'max' ? 'bg-[#8E24AA]/10 border-[#8E24AA]/20 text-[#8E24AA]' :

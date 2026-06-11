@@ -100,7 +100,7 @@ function TaskCard({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-[8px] w-[8px] text-green-600 hover:bg-green-50 hover:text-green-700"
+                    className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
                     onClick={() => onResolve(task.id, "done")}
                     title="Выполнено"
                 >
@@ -109,7 +109,7 @@ function TaskCard({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="h-[8px] w-[8px] text-muted-foreground hover:bg-secondary"
+                    className="h-8 w-8 text-muted-foreground hover:bg-secondary"
                     onClick={() => onResolve(task.id, "skipped")}
                     title="Пропустить"
                 >
@@ -118,7 +118,7 @@ function TaskCard({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className={`h-[8px] w-[8px] ${callLogged ? "text-emerald-600 bg-emerald-50" : "text-blue-600 hover:bg-blue-50"}`}
+                    className={`h-8 w-8 ${callLogged ? "text-emerald-600 bg-emerald-50" : "text-blue-600 hover:bg-blue-50"}`}
                     onClick={handleCall}
                     title="Позвонил"
                 >

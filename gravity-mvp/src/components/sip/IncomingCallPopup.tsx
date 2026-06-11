@@ -111,7 +111,7 @@ export default function IncomingCallPopup() {
             <div className="flex items-center gap-3 px-[4px] pt-[4px]">
                 <div className="relative">
                     <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"/>
-                    <div className="relative flex h-[12px] w-[12px] items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
                         <User className="h-6 w-6"/>
                     </div>
                 </div>

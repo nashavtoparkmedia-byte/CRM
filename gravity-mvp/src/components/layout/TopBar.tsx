@@ -22,7 +22,7 @@ export default function TopBar() {
             <div className="flex items-center gap-[4px]">
                 <div className="flex items-center justify-center lg:hidden mr-[2px]">
                     {/* Mobile Logo Placeholder */}
-                    <div className="flex h-[8px] w-[8px] items-center justify-center rounded bg-primary text-primary-foreground font-bold">
+                    <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground font-bold">
                         Y
                     </div>
                 </div>

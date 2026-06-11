@@ -110,7 +110,7 @@ export default function UsersPage() {
                     {users.map((user) => (
                         <div key={user.id} className="flex items-center justify-between px-[4px] py-3 hover:bg-gray-50 transition-colors">
                             <div className="flex items-center gap-3">
-                                <div className="w-[8px] h-[8px] rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
+                                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-gray-700 text-xs">
                                     {user.firstName[0]}{user.lastName[0]}
                                 </div>
                                 <div className="flex flex-col">

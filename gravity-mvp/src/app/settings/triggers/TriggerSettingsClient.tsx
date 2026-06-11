@@ -117,7 +117,7 @@ export function TriggerSettingsClient({ initialTriggers }: TriggerSettingsClient
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-[8px] w-[8px] text-destructive hover:bg-destructive/10"
+                                    className="h-8 w-8 text-destructive hover:bg-destructive/10"
                                     onClick={() => handleDelete(trigger.id)}
                                 >
                                     <Trash2 size={14} />

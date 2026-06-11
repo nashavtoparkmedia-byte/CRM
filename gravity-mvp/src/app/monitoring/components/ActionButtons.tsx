@@ -33,7 +33,7 @@ export function ActionButtons({
             <Button
                 variant="ghost"
                 size="sm"
-                className="h-[8px] w-[8px] p-0"
+                className="h-8 w-8 p-0"
                 title="Позвонить"
                 onClick={(e) => {
                     e.stopPropagation();
@@ -49,7 +49,7 @@ export function ActionButtons({
             <Button
                 variant="ghost"
                 size="sm"
-                className="h-[8px] w-[8px] p-0"
+                className="h-8 w-8 p-0"
                 title="Написать в Telegram"
                 onClick={(e) => {
                     e.stopPropagation();
@@ -61,7 +61,7 @@ export function ActionButtons({
             <Button
                 variant="ghost"
                 size="sm"
-                className="h-[8px] w-[8px] p-0"
+                className="h-8 w-8 p-0"
                 title={isFleetCheckDisabled ? 'Проверка уже идёт или лимит достигнут' : 'Проверить Fleet'}
                 onClick={(e) => {
                     e.stopPropagation();
@@ -77,7 +77,7 @@ export function ActionButtons({
                     <Button
                         variant="ghost"
                         size="sm"
-                        className="h-[8px] w-[8px] p-0 text-green-600 hover:text-green-700"
+                        className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
                         title="Закрыть задачу"
                         onClick={(e) => {
                             e.stopPropagation();

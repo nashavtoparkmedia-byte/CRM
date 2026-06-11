@@ -52,7 +52,7 @@ export function AddToAttentionModal({ driverName, onSubmit, onClose }: AddToAtte
             >
                 <div className="flex items-center justify-between mb-[4px]">
                     <h3 className="text-lg font-semibold text-gray-900">Добавить в наблюдение</h3>
-                    <Button variant="ghost" size="sm" onClick={onClose} className="h-[8px] w-[8px] p-0">
+                    <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
                         <X className="h-[4px] w-[4px]" />
                     </Button>
                 </div>

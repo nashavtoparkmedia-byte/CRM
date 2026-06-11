@@ -561,7 +561,7 @@ export default function Messenger() {
                         {/* Header */}
                         <div className="h-20 px-[8px] border-b flex items-center justify-between bg-card/40 backdrop-blur-xl sticky top-0 z-20">
                             <div className="flex items-center gap-5">
-                                <div className="h-[12px] w-[12px] rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary shadow-inner">
+                                <div className="h-12 w-12 rounded-2xl bg-primary/5 border border-primary/10 flex items-center justify-center text-primary shadow-inner">
                                     <User size={24} />
                                 </div>
                                 <div className="space-y-0.5">
@@ -774,7 +774,7 @@ export default function Messenger() {
                                     <Button 
                                         onClick={handleSendMessage}
                                         disabled={!newMessage.trim()}
-                                        className="h-[12px] w-[12px] rounded-[1.2rem] bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 shrink-0 transition-transform active:scale-90 group"
+                                        className="h-12 w-12 rounded-[1.2rem] bg-primary hover:bg-primary/90 shadow-xl shadow-primary/20 shrink-0 transition-transform active:scale-90 group"
                                     >
                                         <SendHorizonal size={22} className="group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                                     </Button>
@@ -788,7 +788,7 @@ export default function Messenger() {
                             <div className="h-44 w-44 rounded-[3.5rem] bg-gradient-to-br from-primary/20 to-primary/5 shadow-2xl flex items-center justify-center rotate-3 scale-110">
                                 <MessageSquare size={72} className="text-primary opacity-80 -rotate-3" />
                             </div>
-                            <div className="absolute -top-[4px] -right-[4px] h-[16px] w-[16px] rounded-[1.5rem] bg-background shadow-xl border border-border/50 flex items-center justify-center animate-bounce">
+                            <div className="absolute -top-[4px] -right-[4px] h-16 w-16 rounded-[1.5rem] bg-background shadow-xl border border-border/50 flex items-center justify-center animate-bounce">
                                 <PlusCircle size={32} className="text-primary" />
                             </div>
                         </div>
@@ -814,7 +814,7 @@ export default function Messenger() {
                                 <h3 className="text-2xl font-black tracking-tighter text-slate-900">Новый чат</h3>
                                 <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-1">Найдите водителя и выберите канал</p>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => setIsNewChatModalOpen(false)} className="rounded-2xl h-[12px] w-[12px] hover:bg-slate-200 font-bold text-lg text-slate-900">×</Button>
+                            <Button variant="ghost" size="icon" onClick={() => setIsNewChatModalOpen(false)} className="rounded-2xl h-12 w-12 hover:bg-slate-200 font-bold text-lg text-slate-900">×</Button>
                         </div>
                         
                         <div className="p-[8px] space-y-6 overflow-y-auto">
@@ -842,7 +842,7 @@ export default function Messenger() {
                                                 }`}
                                             >
                                                 <div className="flex items-center gap-[4px]">
-                                                    <div className="h-[12px] w-[12px] rounded-2xl bg-muted border flex items-center justify-center font-black text-xs">
+                                                    <div className="h-12 w-12 rounded-2xl bg-muted border flex items-center justify-center font-black text-xs">
                                                         {driver.fullName.substring(0, 2).toUpperCase()}
                                                     </div>
                                                     <div className="text-left">

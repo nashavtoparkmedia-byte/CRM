@@ -98,7 +98,7 @@ export default function ReassignModal({ sourceManager, allManagers, onClose, onD
                 <div className="absolute inset-0 bg-black/40" />
                 <div className="relative bg-white rounded-xl w-[400px] p-6" onClick={e => e.stopPropagation()}>
                     <div className="text-center">
-                        <div className="w-[12px] h-[12px] rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                        <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
                             <Check className="w-6 h-6 text-green-600" />
                         </div>
                         <h3 className="text-[17px] font-semibold text-[#111827] mb-[2px]">Задачи переданы</h3>

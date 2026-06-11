@@ -19,7 +19,7 @@ export default function LoginPage() {
     return (
         <div className="flex flex-col items-center justify-center h-screen bg-gray-50 p-6">
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xl w-full max-w-sm text-center">
-                <div className="w-[12px] h-[12px] rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto mb-[4px]">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary mx-auto mb-[4px]">
                     <LogIn size={24} />
                 </div>
                 <h1 className="text-xl font-bold text-gray-900 mb-1">CRM Вход</h1>

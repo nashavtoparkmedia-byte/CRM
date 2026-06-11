@@ -355,7 +355,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
 
                         {status === '2fa_required' && (
                             <div className="w-full max-w-sm text-center animate-in zoom-in-95 duration-300">
-                                <div className="mx-auto mb-[4px] flex h-[16px] w-[16px] items-center justify-center rounded-2xl bg-blue-100 text-blue-600 shadow-sm">
+                                <div className="mx-auto mb-[4px] flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 shadow-sm">
                                     <CheckCircle2 size={32} />
                                 </div>
                                 <h3 className="mb-[2px] text-lg font-bold text-foreground">Облачный пароль</h3>

@@ -524,7 +524,7 @@ function InterventionRow({ manager: m, historyPoints, onClick, onAction }: {
                 onClick={onClick}
                 className="w-full flex items-center gap-3 px-[4px] py-2.5 hover:bg-[#f9fafb] transition-colors cursor-pointer"
             >
-                <div className={`w-[8px] h-[8px] rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-[12px] font-bold shrink-0 ${
                     m.interventionPriority === 'urgent' ? 'bg-red-600' : 'bg-orange-500'
                 }`}>
                     {initials}

@@ -244,7 +244,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
 
                         {initialConnections.length === 0 ? (
                             <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed p-[12px] text-center text-muted-foreground">
-                                <MessageSquare className="mb-[4px] h-[12px] w-[12px] opacity-20" />
+                                <MessageSquare className="mb-[4px] h-12 w-12 opacity-20" />
                                 <p>Нет подключенных ботов</p>
                                 <p className="text-xs">Добавьте бота справа, чтобы начать писать в MAX</p>
                             </div>
@@ -390,12 +390,12 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                 <div className="mb-6 select-none bg-white p-3 rounded-xl shadow-sm border inline-flex items-center justify-center" style={{ width: 320, height: 320 }}>
                                     {qrLoading ? (
                                         <div className="flex flex-col items-center text-muted-foreground">
-                                            <RefreshCw className="h-[8px] w-[8px] animate-spin mb-[4px]" />
+                                            <RefreshCw className="h-8 w-8 animate-spin mb-[4px]" />
                                             <span className="text-sm">Запуск браузера и загрузка QR...</span>
                                         </div>
                                     ) : !isScraperOnline ? (
                                         <div className="flex flex-col items-center text-muted-foreground">
-                                            <ShieldAlert className="h-[12px] w-[12px] text-destructive mb-[4px] opacity-50" />
+                                            <ShieldAlert className="h-12 w-12 text-destructive mb-[4px] opacity-50" />
                                             <span className="text-sm">Скрейпер офлайн</span>
                                             <Button variant="link" onClick={checkPersonalStatus} className="text-xs mt-[2px]">Проверить связь</Button>
                                         </div>
@@ -409,7 +409,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                         />
                                     ) : (
                                         <div className="flex flex-col items-center text-muted-foreground">
-                                            <MessageSquare className="h-[12px] w-[12px] opacity-20 mb-[4px]" />
+                                            <MessageSquare className="h-12 w-12 opacity-20 mb-[4px]" />
                                             <span className="text-sm">Ожидание QR кода...</span>
                                         </div>
                                     )}

@@ -78,7 +78,7 @@ export default function TaskListView() {
             <div className="flex flex-col gap-3">
                 {isChurnActive && mode === 'control' && <TaskControlChips />}
                 <div className="flex flex-col items-center justify-center py-20 text-center">
-                    <div className="w-[16px] h-[16px] rounded-2xl bg-[#f3f4f6] flex items-center justify-center mb-[4px]">
+                    <div className="w-16 h-16 rounded-2xl bg-[#f3f4f6] flex items-center justify-center mb-[4px]">
                         <Inbox className="w-7 h-7 text-[#9ca3af]" />
                     </div>
                     <p className="text-[15px] font-medium text-[#6b7280]">Нет задач</p>
