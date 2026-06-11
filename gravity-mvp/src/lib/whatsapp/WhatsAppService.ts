@@ -756,7 +756,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         }),
         puppeteer: {
             headless: true,
-            executablePath: process.env.WA_CHROMIUM_PATH || 'D:\\shared\\playwright-browsers\\chromium-1217\\chrome-win64\\chrome.exe',
+            executablePath: process.env.WA_CHROMIUM_PATH || process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium',
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',

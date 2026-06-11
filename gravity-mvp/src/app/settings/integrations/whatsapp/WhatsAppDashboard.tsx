@@ -119,8 +119,8 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
     useEffect(() => {
         if (!isClient) return
         // Poll while transitioning; also poll for degraded/reconnecting/broken so recovery shows up.
-        // broken must be polled — recoverable via auto-reconnect (Baileys code 515 is common after first auth).
-        const shouldPoll = ['idle', 'qr', 'qr_required', 'qr_expired', 'authenticated', 'initializing', 'degraded', 'reconnecting', 'broken'].includes(liveStatus)
+        // 'error'/'auth_failed': poll to discover real state after container restart (no registry entry → getActualStatus returns 'idle')
+        const shouldPoll = ['idle', 'qr', 'qr_required', 'qr_expired', 'authenticated', 'initializing', 'degraded', 'reconnecting', 'broken', 'error', 'auth_failed'].includes(liveStatus)
         if (shouldPoll) {
             pollingRef.current = setInterval(async () => {
                 const fresh = await getWhatsAppStatus(conn.id)
@@ -488,7 +488,7 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
             )}
             {(liveStatus === 'idle' || liveStatus === 'disconnected' || liveStatus === 'error') && (
                 <div className="flex items-center justify-end pt-3 mt-auto border-t border-dashed">
-                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); onRefresh(); setLoading(false) }} disabled={loading} className="h-[32px] px-3 text-xs cursor-pointer">
+                    <Button size="sm" onClick={async () => { setLoading(true); await refreshWhatsAppQR(conn.id); setLiveStatus('idle'); onRefresh(); setLoading(false) }} disabled={loading} className="h-[32px] px-3 text-xs cursor-pointer">
                         {loading ? <Loader2 size={13} className="mr-1.5 animate-spin" /> : <Wifi size={13} className="mr-1.5" />} Переподключить
                     </Button>
                 </div>
