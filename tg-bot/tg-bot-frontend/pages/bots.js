@@ -8,6 +8,7 @@ export default function BotsList() {
     const [showModal, setShowModal] = useState(false);
     const [newBotToken, setNewBotToken] = useState('');
     const [newBotName, setNewBotName] = useState('');
+    const [errorMsg, setErrorMsg] = useState(null);
 
     useEffect(() => {
         loadBots();
@@ -19,8 +20,8 @@ export default function BotsList() {
             setBots(data);
         } catch (error) {
             console.error('Bot load error:', error);
-            const errorMsg = error.response?.data?.error || error.message || 'Ошибка при загрузке ботов';
-            alert(`Ошибка: ${errorMsg}`);
+            const msg = error.response?.data?.error || error.message || 'Ошибка при загрузке ботов';
+            setErrorMsg(msg);
         } finally {
             setLoading(false);
         }
@@ -36,8 +37,8 @@ export default function BotsList() {
             loadBots();
         } catch (err) {
             console.error('Bot creation error:', err);
-            const errorMsg = err.response?.data?.error || 'Неизвестная ошибка при создании бота';
-            alert(`Ошибка: ${errorMsg}`);
+            const msg = err.response?.data?.error || 'Неизвестная ошибка при создании бота';
+            setErrorMsg(msg);
         }
     };
 
@@ -62,6 +63,12 @@ export default function BotsList() {
                     Добавить бота
                 </button>
             </div>
+
+            {errorMsg && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                    {errorMsg}
+                </div>
+            )}
 
             {bots.length === 0 ? (
                 <div className="neu-panel-inner p-12 text-center flex flex-col items-center justify-center border-dashed border-2 border-[#2b2f35]">

@@ -385,6 +385,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3004
+      TG_BOT_API_URL: http://tg-bot:3001
     networks:
       - crm_internal
     depends_on:

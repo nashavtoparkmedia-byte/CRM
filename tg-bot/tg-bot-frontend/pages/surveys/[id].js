@@ -39,6 +39,7 @@ export default function SurveyBuilder() {
     const [showModal, setShowModal] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState(null);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [notif, setNotif] = useState(null); // { msg, type: 'error'|'success' }
 
     // For branching logic: list of { buttonLabel, nextQuestionId }
     const [branchingRules, setBranchingRules] = useState([]);
@@ -140,13 +141,13 @@ export default function SurveyBuilder() {
                 params.set('columns', visibleQIds);
             }
 
-            const backendUrl = `http://localhost:3001/api/admin/surveys/${surveyId}/export/${encodeURIComponent(fileName)}?${params.toString()}`;
+            const backendUrl = `/api/admin/surveys/${surveyId}/export/${encodeURIComponent(fileName)}?${params.toString()}`;
             window.location.assign(backendUrl);
 
             setShowExportModal(false);
         } catch (error) {
             console.error("Export error:", error);
-            alert("Ошибка при выгрузке: " + error.message);
+            setNotif({ msg: 'Ошибка при выгрузке: ' + error.message, type: 'error' });
         }
     };
 
@@ -175,7 +176,7 @@ export default function SurveyBuilder() {
             setSurvey(updated);
         } catch (err) {
             console.error('Ошибка при изменении статуса:', err);
-            alert('Не удалось изменить статус опроса');
+            setNotif({ msg: 'Не удалось изменить статус опроса', type: 'error' });
         } finally {
             setShowArchivePrompt(false);
         }
@@ -188,7 +189,7 @@ export default function SurveyBuilder() {
             setSurvey(updated);
         } catch (err) {
             console.error(err);
-            alert('Ошибка при сохранении режима опроса');
+            setNotif({ msg: 'Ошибка при сохранении режима опроса', type: 'error' });
         }
     };
 
@@ -250,7 +251,7 @@ export default function SurveyBuilder() {
                     .map(r => ({ if_answer: r.label, next_question_id: r.nextId }));
 
                 if (options.length === 0) {
-                    alert('Для кнопок нужно добавить хотя бы один вариант ответа');
+                    setNotif({ msg: 'Для кнопок нужно добавить хотя бы один вариант ответа', type: 'error' });
                     return;
                 }
             }
@@ -271,7 +272,7 @@ export default function SurveyBuilder() {
             loadData();
         } catch (err) {
             console.error(err);
-            alert('Ошибка при сохранении вопроса');
+            setNotif({ msg: 'Ошибка при сохранении вопроса', type: 'error' });
         }
     };
 
@@ -296,6 +297,14 @@ export default function SurveyBuilder() {
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {notif && (
+                <div
+                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl text-sm font-medium shadow-lg border ${notif.type === 'error' ? 'bg-red-900/90 border-red-500/40 text-red-200' : 'bg-emerald-900/90 border-emerald-500/40 text-emerald-200'}`}
+                    onClick={() => setNotif(null)}
+                >
+                    {notif.msg}
+                </div>
+            )}
             {/* --- ANALYTICS TOP SECTION --- */}
             {!survey.isActive && (
                 <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-4 mb-6 flex items-center gap-3 backdrop-blur-sm shadow-neu-inner">

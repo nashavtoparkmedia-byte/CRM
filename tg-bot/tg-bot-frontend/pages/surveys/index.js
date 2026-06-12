@@ -14,6 +14,7 @@ export default function SurveysList() {
     const [activeTab, setActiveTab] = useState('ACTIVE'); // ACTIVE, ARCHIVED
     const [duplicatingId, setDuplicatingId] = useState(null);
     const [archivePrompt, setArchivePrompt] = useState(null); // survey object или null
+    const [createError, setCreateError] = useState(null);
 
     useEffect(() => {
         loadSurveys();
@@ -50,8 +51,8 @@ export default function SurveysList() {
             setNewSurveyData({ triggerButton: '', botId: bots[0]?.id || '', isLinear: true });
             await loadSurveys();
         } catch (err) {
-            alert('Ошибка создания опроса. Убедитесь, что сервер включен.');
             console.error('Create survey errored:', err.response?.data || err.message);
+            setCreateError(err.response?.data?.error || 'Ошибка создания опроса. Убедитесь, что сервер включён.');
         }
     };
 
@@ -210,10 +211,16 @@ export default function SurveysList() {
                                 </div>
                             </div>
 
+                            {createError && (
+                                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                                    {createError}
+                                </div>
+                            )}
+
                             <div className="pt-4 flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => setIsCreateModalOpen(false)}
+                                    onClick={() => { setIsCreateModalOpen(false); setCreateError(null); }}
                                     className="flex-1 neu-button !text-slate-400"
                                 >
                                     Отмена

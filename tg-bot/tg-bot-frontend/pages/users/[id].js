@@ -10,6 +10,7 @@ export default function UserDetail() {
     const [loading, setLoading] = useState(true);
     const [messageText, setMessageText] = useState('');
     const [sending, setSending] = useState(false);
+    const [notif, setNotif] = useState(null); // { msg, type: 'error'|'success' }
 
     useEffect(() => {
         if (id) loadData();
@@ -31,10 +32,10 @@ export default function UserDetail() {
         setSending(true);
         try {
             await sendMessageToUser(id, messageText);
-            alert('Сообщение отправлено!');
+            setNotif({ msg: 'Сообщение отправлено!', type: 'success' });
             setMessageText('');
         } catch (err) {
-            alert('Ошибка отправки');
+            setNotif({ msg: 'Ошибка отправки', type: 'error' });
         } finally {
             setSending(false);
         }
@@ -44,6 +45,14 @@ export default function UserDetail() {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
+            {notif && (
+                <div
+                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl text-sm font-medium shadow-lg border ${notif.type === 'error' ? 'bg-red-900/90 border-red-500/40 text-red-200' : 'bg-emerald-900/90 border-emerald-500/40 text-emerald-200'}`}
+                    onClick={() => setNotif(null)}
+                >
+                    {notif.msg}
+                </div>
+            )}
             <h1 className="text-2xl font-bold text-gray-900">Детали пользователя (История ответов)</h1>
 
             <div className="bg-white shadow overflow-hidden sm:rounded-lg">

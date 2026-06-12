@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_BASE = 'http://localhost:3001/api/admin';
+// Relative URL — Next.js rewrites to TG_BOT_API_URL/api/admin (see next.config.mjs)
+const API_BASE = '/api/admin';
 
 // Create an axios instance
 const api = axios.create({
