@@ -337,10 +337,14 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       NODE_ENV: production
+      # whatsapp-web.js LocalAuth dir → persistent volume (see below). Без этого
+      # сессия писалась в node_modules/.wwebjs_auth внутри образа и стиралась при
+      # каждом редеплое → WA-подключение слетало. Должен совпадать с mount ниже.
+      WA_AUTH_PATH: /app/whatsapp_auth
     volumes:
       # Записи звонков и медиа — write-through в S3, но локальный кэш нужен
       - gravity_recordings:/app/recordings
-      # Сессия WhatsApp (Baileys/wwebjs) — отдельный volume для долгоживущей сессии
+      # Сессия WhatsApp (wwebjs LocalAuth) — отдельный volume для долгоживущей сессии
       - gravity_whatsapp:/app/whatsapp_auth
     networks:
       - crm_internal

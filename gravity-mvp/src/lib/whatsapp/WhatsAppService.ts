@@ -9,6 +9,7 @@ import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
+import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -752,7 +753,9 @@ async function doInitializeClient(connectionId: string): Promise<void> {
     const client = new Client({
         authStrategy: new LocalAuth({
             clientId: connectionId,
-            dataPath: path.join(process.cwd(), 'node_modules', '.wwebjs_auth')
+            // Persistent volume in prod (WA_AUTH_PATH=/app/whatsapp_auth); the old
+            // node_modules path was ephemeral and lost the session on every redeploy.
+            dataPath: WWEBJS_AUTH_DIR
         }),
         puppeteer: {
             headless: true,
@@ -2370,9 +2373,7 @@ async function doForceResetSession(connectionId: string): Promise<void> {
         })
     }
 
-    const sessionDir = path.join(
-        process.cwd(), 'node_modules', '.wwebjs_auth', `session-${connectionId}`
-    )
+    const sessionDir = path.join(WWEBJS_AUTH_DIR, `session-${connectionId}`)
 
     // Retry wipe up to 3 times — Windows sometimes needs an extra moment
     // after Chrome process exits before it releases all DB/cache files.

@@ -19,7 +19,18 @@ import * as path from 'path'
 
 const execFileAsync = promisify(execFile)
 
-const WWEBJS_AUTH_DIR = path.join(process.cwd(), 'node_modules', '.wwebjs_auth')
+/**
+ * Single source of truth for the whatsapp-web.js LocalAuth data dir.
+ *
+ * CRITICAL: in Docker this MUST point at a persistent volume. The old default
+ * (node_modules/.wwebjs_auth) lives inside the image layer, so every container
+ * rebuild/redeploy wiped the session → the linked-device dropped and the user
+ * had to re-scan the QR ("подключаю → через время падает"). Production sets
+ * WA_AUTH_PATH=/app/whatsapp_auth (a named volume). Local dev keeps the old
+ * node_modules path so nothing changes off-Docker.
+ */
+export const WWEBJS_AUTH_DIR = process.env.WA_AUTH_PATH
+    || path.join(process.cwd(), 'node_modules', '.wwebjs_auth')
 
 // Chrome leaves these in the user profile when it runs; holding them
 // indicates "another browser is using this profile". We remove them
