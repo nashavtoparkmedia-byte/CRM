@@ -168,6 +168,8 @@ services:
       MANAGER_103_PASSWORD: ${MANAGER_103_PASSWORD:-changeme103}
       RTP_START_PORT: 16384
       RTP_END_PORT:   16484
+      FREESWITCH_SIP_IP: ${FREESWITCH_SIP_IP:-0.0.0.0}
+      FREESWITCH_EXT_IP: ${FREESWITCH_EXT_IP:-127.0.0.1}
     volumes:
       - freeswitch_recordings:/var/lib/freeswitch/recordings
       - freeswitch_logs:/var/log/freeswitch
