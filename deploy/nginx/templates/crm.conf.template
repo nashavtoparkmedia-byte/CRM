@@ -61,6 +61,18 @@ server {
 
     client_max_body_size 64m;
 
+    # SIP WebSocket: browser connects wss://yokoone.ru/wss-sip
+    # nginx proxies WSS → plain WS → crm-freeswitch:7080
+    location /wss-sip {
+        proxy_pass http://crm-freeswitch:7080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
     location / {
         proxy_pass http://gravity_mvp_upstream;
         proxy_http_version 1.1;

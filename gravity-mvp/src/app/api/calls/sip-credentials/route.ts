@@ -27,6 +27,10 @@ export async function GET() {
 
     const sipDomain = process.env.SIP_DOMAIN ?? 'crm.local'
 
+    const turnUrl = process.env.TURN_URL ?? 'turn:127.0.0.1:3478?transport=tcp'
+    const turnUsername = process.env.TURN_USERNAME ?? 'crm'
+    const turnCredential = process.env.TURN_CREDENTIAL ?? 'turnpass'
+
     return NextResponse.json({
         enabled: true,
         wsUrl,
@@ -35,5 +39,6 @@ export async function GET() {
         password: ext.password,
         displayName: `${user.firstName} ${user.lastName}`.trim(),
         extension: ext.extension,
+        turn: { url: turnUrl, username: turnUsername, credential: turnCredential },
     })
 }

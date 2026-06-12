@@ -55,20 +55,22 @@
     <param name="outbound-codec-prefs" value="PCMA"/>
     <param name="inbound-codec-negotiation" value="generous"/>
 
-    <!-- RTP / SIP bind addresses — loopback only, see header comment -->
-    <param name="rtp-ip" value="127.0.0.1"/>
-    <param name="ext-rtp-ip" value="127.0.0.1"/>
-    <param name="sip-ip" value="127.0.0.1"/>
+    <!-- RTP / SIP bind addresses — from env vars (see vars.xml exec-set).
+         WSL2 local dev: both default to 127.0.0.1.
+         VPS Docker: FREESWITCH_SIP_IP=0.0.0.0, FREESWITCH_EXT_IP=<public-ip> -->
+    <param name="rtp-ip" value="$${sip_bind_ip}"/>
+    <param name="ext-rtp-ip" value="$${freeswitch_ext_ip}"/>
+    <param name="sip-ip" value="$${sip_bind_ip}"/>
     <param name="sip-port" value="5060"/>
     <param name="rtp-timer-name" value="soft"/>
     <param name="rtp-hold-timeout-sec" value="1800"/>
     <param name="rtp-port-min" value="16384"/>
     <param name="rtp-port-max" value="32768"/>
 
-    <!-- WebSocket binding for browser softphones (sip.js / JsSIP).
-         Plain ws:// is fine on localhost — Chrome treats loopback as a
-         secure context, so getUserMedia + WebRTC still work. -->
-    <param name="ws-binding" value="127.0.0.1:7080"/>
+    <!-- WebSocket binding for browser softphones (JsSIP).
+         Bind to all interfaces so nginx (in crm_internal Docker network) can
+         proxy WSS → WS to this port. -->
+    <param name="ws-binding" value="0.0.0.0:7080"/>
 
     <!-- Authentication — managers must register with a password. -->
     <param name="auth-calls" value="true"/>
@@ -101,10 +103,10 @@
          browser. Reachability is provided by WSL2 mirrored networking:
          FS on WSL2 can reach 192.168.0.100 via the host route. -->
     <param name="apply-candidate-acl" value="rfc1918.auto"/>
-    <!-- Also accept loopback candidates: coturn relays via 127.0.0.1 because
-         WSL2 mirrored networking only exposes loopback to Chrome on Windows.
-         Multiple apply-candidate-acl params are OR'd together. -->
+    <!-- loopback: coturn on WSL2 relays via 127.0.0.1 -->
     <param name="apply-candidate-acl" value="loopback.auto"/>
+    <!-- wan: coturn on VPS relays via public IP (e.g. 155.212.130.14) -->
+    <param name="apply-candidate-acl" value="wan.auto"/>
 
     <!-- No blind registrations -->
     <param name="accept-blind-reg" value="false"/>

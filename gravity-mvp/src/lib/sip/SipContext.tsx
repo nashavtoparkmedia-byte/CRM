@@ -30,18 +30,10 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 const CODEC_PRIORITY = ['PCMA', 'PCMU', 'telephone-event', 'CN']
 const KEEPABLE_CODEC = /^(PCMA|PCMU|telephone-event|CN)\//i
 
-// WebRTC ICE config — route ALL media through coturn TURN relay running in
-// WSL2 on 127.0.0.1:3478. Chrome on Windows reaches it via mirrored networking,
-// FreeSWITCH (also WSL2) receives relayed RTP at 127.0.0.1:relay-port.
-// `iceTransportPolicy: 'relay'` is critical: it disables host candidate
-// gathering so Chrome can't pick a candidate-pair that doesn't actually work
-// across the WSL2 UDP namespace boundary. Browser only ever exposes the relay
-// candidate, FS's symmetric-RTP / auto-adjust handles the return path.
-const TURN_PC_CONFIG = {
+// Default WebRTC ICE config — overridden at runtime from /api/calls/sip-credentials.
+// Fallback keeps WSL2 local dev working without env vars.
+const DEFAULT_TURN_PC_CONFIG = {
     iceServers: [
-        // TCP transport — UDP through WSL2 mirrored networking loopback
-        // doesn't deliver to coturn (Chrome on Windows ↔ WSL2 UDP namespace).
-        // TCP works reliably and coturn relays via internal-only UDP to FS.
         { urls: 'turn:127.0.0.1:3478?transport=tcp', username: 'crm', credential: 'turnpass' },
     ],
     iceTransportPolicy: 'relay' as const,
@@ -151,6 +143,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
     const uaRef = useRef<any>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
+    const pcConfigRef = useRef<RTCConfiguration>(DEFAULT_TURN_PC_CONFIG)
 
     // --- Ringback tone (RU ГОСТ: 425 Hz, 1s on / 4s off) ---
     // JsSIP doesn't play SIP 180 Ringing progress media for us — and in the
@@ -265,6 +258,14 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 // Телефония не настроена (нет SIP_WS_URL) — не поднимать UA вовсе
                 setStatus('disabled')
                 return
+            }
+
+            // Override TURN config with server-provided values (from env vars on the server)
+            if (creds.turn?.url) {
+                pcConfigRef.current = {
+                    iceServers: [{ urls: creds.turn.url, username: creds.turn.username, credential: creds.turn.credential }],
+                    iceTransportPolicy: 'relay',
+                }
             }
 
             setExtension(creds.extension)
@@ -435,7 +436,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             try {
                 session.answer({
                     mediaConstraints: { audio: true, video: false },
-                    pcConfig: TURN_PC_CONFIG,
+                    pcConfig: pcConfigRef.current,
                 })
             } catch (err: any) {
                 stopRingback()
@@ -549,7 +550,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         const target = `sip:${digits}@crm.local`
         ua.call(target, {
             mediaConstraints: { audio: true, video: false },
-            pcConfig: TURN_PC_CONFIG,
+            pcConfig: pcConfigRef.current,
         })
     }
 
@@ -569,7 +570,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         try {
             incomingCall.session.answer({
                 mediaConstraints: { audio: true, video: false },
-                pcConfig: TURN_PC_CONFIG,
+                pcConfig: pcConfigRef.current,
             })
             console.info('[SIP] session.answer() returned (waiting for accepted/failed event)')
         } catch (err: any) {

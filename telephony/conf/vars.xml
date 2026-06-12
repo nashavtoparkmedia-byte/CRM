@@ -39,13 +39,19 @@
   <X-PRE-PROCESS cmd="set" data="global_codec_prefs=PCMA,PCMU"/>
   <X-PRE-PROCESS cmd="set" data="outbound_codec_prefs=PCMA,PCMU"/>
 
+  <!-- SIP bind IP and external RTP IP driven by env vars so the same Docker
+       image works for WSL2 local dev (loopback) and VPS (all ifaces + public IP).
+       FREESWITCH_SIP_IP  — default 127.0.0.1  (0.0.0.0 for VPS Docker)
+       FREESWITCH_EXT_IP  — default 127.0.0.1  (public VPS IP for prod) -->
+  <X-PRE-PROCESS cmd="exec-set" data="sip_bind_ip=sh -c 'echo ${FREESWITCH_SIP_IP:-127.0.0.1}'"/>
+  <X-PRE-PROCESS cmd="exec-set" data="freeswitch_ext_ip=sh -c 'echo ${FREESWITCH_EXT_IP:-127.0.0.1}'"/>
+
   <!-- vanilla FreeSWITCH defines these in its vars.xml; we overlay our own
        so we must keep them or the default external.xml / verto profile
-       refuses to start ("Invalid ext-rtp-ip"). For dev we point both at the
-       auto-detected local IP — fine while everything's on one host. -->
-  <X-PRE-PROCESS cmd="set" data="external_rtp_ip=$${local_ip_v4}"/>
-  <X-PRE-PROCESS cmd="set" data="external_sip_ip=$${local_ip_v4}"/>
-  <X-PRE-PROCESS cmd="set" data="internal_sip_ip=$${local_ip_v4}"/>
+       refuses to start ("Invalid ext-rtp-ip"). -->
+  <X-PRE-PROCESS cmd="set" data="external_rtp_ip=$${freeswitch_ext_ip}"/>
+  <X-PRE-PROCESS cmd="set" data="external_sip_ip=$${freeswitch_ext_ip}"/>
+  <X-PRE-PROCESS cmd="set" data="internal_sip_ip=$${sip_bind_ip}"/>
   <X-PRE-PROCESS cmd="set" data="internal_sip_port=5060"/>
   <X-PRE-PROCESS cmd="set" data="internal_ssl_port=5061"/>
   <X-PRE-PROCESS cmd="set" data="internal_tls_port=5061"/>

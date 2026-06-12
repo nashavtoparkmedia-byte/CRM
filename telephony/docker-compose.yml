@@ -31,9 +31,11 @@ services:
       # RTP port range — must match the port mapping above
       - RTP_START_PORT=16384
       - RTP_END_PORT=16484
-      # SIP external/internal IPs: FreeSWITCH auto-detects $${local_ip_v4}
-      # from sip_profiles when these env vars are absent. The literal string
-      # "auto" makes sofia.c reject the profile (Invalid ext-rtp-ip).
+      # SIP bind + external IP driven by env (see conf/vars.xml exec-set).
+      # WSL2 local dev: leave unset → defaults to 127.0.0.1.
+      # VPS production: set in .env or pass directly.
+      - FREESWITCH_SIP_IP=${FREESWITCH_SIP_IP:-127.0.0.1}
+      - FREESWITCH_EXT_IP=${FREESWITCH_EXT_IP:-127.0.0.1}
     volumes:
       # Config files are now baked into the image via Dockerfile (replacing
       # the vanilla files the entrypoint copies into /etc/freeswitch). Only
