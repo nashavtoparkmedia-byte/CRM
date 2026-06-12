@@ -5,22 +5,26 @@
     so we don't depend on the image's vars.xml sed-substitution (which only
     rewrites the single `default_password` line).
   -->
-  <!-- exec-set with `printenv` doesn't work — printenv is not in the alpine
-       FreeSWITCH image. We had `sh: printenv: not found` errors that made
-       $${ESL_PASSWORD} stay literal and ESL auth fail. For dev we hardcode
-       these here. Prod should mount secrets via a config volume. -->
+  <!-- `printenv` is not in this FreeSWITCH image (`sh: printenv: not found`),
+       but `sh -c 'echo ${VAR:-default}'` works — that's the pattern we use to
+       read secrets from container env, with a dev fallback after `:-`.
+       CRITICAL: the manager + ESL passwords MUST match what gravity-mvp hands
+       out (it reads the same MANAGER_NNN_PASSWORD / ESL_PASSWORD env vars).
+       Hardcoding them caused REGISTER 403 (red SIP dot) and ESL auth failures
+       on the VPS, where the real passwords live in env, not in this file. -->
   <X-PRE-PROCESS cmd="set" data="megafon_username=79221853150"/>
   <X-PRE-PROCESS cmd="set" data="megafon_password=QktspvGj"/>
   <X-PRE-PROCESS cmd="set" data="megafon_proxy=sbc.megafon.ru"/>
   <X-PRE-PROCESS cmd="set" data="megafon_realm=multifon.ru"/>
 
-  <!-- Manager SIP extension passwords. Hardcoded — same reason. -->
-  <X-PRE-PROCESS cmd="set" data="manager_101_password=changeme101"/>
-  <X-PRE-PROCESS cmd="set" data="manager_102_password=changeme102"/>
-  <X-PRE-PROCESS cmd="set" data="manager_103_password=changeme103"/>
+  <!-- Manager SIP extension passwords — from env, fallback to dev defaults. -->
+  <X-PRE-PROCESS cmd="exec-set" data="manager_101_password=sh -c 'echo ${MANAGER_101_PASSWORD:-changeme101}'"/>
+  <X-PRE-PROCESS cmd="exec-set" data="manager_102_password=sh -c 'echo ${MANAGER_102_PASSWORD:-changeme102}'"/>
+  <X-PRE-PROCESS cmd="exec-set" data="manager_103_password=sh -c 'echo ${MANAGER_103_PASSWORD:-changeme103}'"/>
 
-  <!-- ESL password — consumed by autoload_configs/event_socket.conf.xml -->
-  <X-PRE-PROCESS cmd="set" data="ESL_PASSWORD=ClueCon"/>
+  <!-- ESL password — consumed by autoload_configs/event_socket.conf.xml.
+       Must match FS_ESL_PASSWORD/ESL_PASSWORD that gravity-mvp + audio-bridge use. -->
+  <X-PRE-PROCESS cmd="exec-set" data="ESL_PASSWORD=sh -c 'echo ${ESL_PASSWORD:-ClueCon}'"/>
 
   <!-- Domain for internal extensions. Must match the realm clients send in
        REGISTER, otherwise FreeSWITCH directory lookup fails with 403.
