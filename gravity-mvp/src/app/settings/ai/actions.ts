@@ -73,14 +73,23 @@ export async function saveAiConfig(data: Record<string, any>) {
         // Upsert вручную через raw SQL
         const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
         if (existing.length === 0) {
-            const allData = { id: 'singleton', ...data }
+            // updatedAt is NOT NULL with NO db default (Prisma @updatedAt, which
+            // raw queries don't auto-fill). On the very first insert — when the
+            // singleton row doesn't exist yet — omitting it triggers 23502
+            // (NOT NULL violation). createdAt is fine (CURRENT_TIMESTAMP default).
+            // Strip any client-sent updatedAt and always set it to NOW() here.
+            const { updatedAt: _ignored, ...rest } = data as Record<string, any>
+            const allData = { id: 'singleton', ...rest }
             const cols  = Object.keys(allData).map(k => `"${k}"`).join(', ')
             const vals  = Object.values(allData)
             const marks = Object.keys(allData).map((k, i) => {
                 const cast = ENUM_CASTS[k]
                 return cast ? `$${i + 1}::"${cast}"` : `$${i + 1}`
             }).join(', ')
-            await prisma.$executeRawUnsafe(`INSERT INTO "AiAgentConfig" (${cols}) VALUES (${marks})`, ...vals)
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "AiAgentConfig" (${cols}, "updatedAt") VALUES (${marks}, NOW())`,
+                ...vals,
+            )
         } else {
             const sets  = fields.map((k, i) => {
                 const cast = ENUM_CASTS[k]
