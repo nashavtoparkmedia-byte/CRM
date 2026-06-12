@@ -47,11 +47,12 @@ RUN npx prisma generate && chown -R app:app /app
 USER app
 
 # Healthcheck — проверяем что Node-процесс жив через файл-маркер,
-# который бот трогает при успешном polling iteration (см. heartbeat watchdog
-# в коммите 0b478da). Если бот делал heartbeat watchdog, файл /tmp/bot-alive
-# должен обновляться. Пока — простая проверка процесса.
+# Проверяем, что HTTP API бота (порт 3001, его проксирует tg-bot-frontend)
+# слушает. `pgrep` нет в этом образе (procps не установлен) — он всегда
+# падал с "pgrep: not found" и контейнер вечно висел unhealthy. node есть
+# гарантированно, поэтому проверяем TCP-коннект к 3001 средствами node.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD pgrep -f "node.*bot" >/dev/null || exit 1
+    CMD node -e "require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))" || exit 1
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "start.js"]
