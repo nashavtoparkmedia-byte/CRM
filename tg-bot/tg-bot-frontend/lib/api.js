@@ -14,7 +14,7 @@ const api = axios.create({
 // Intercept requests to add Basic Auth header
 api.interceptors.request.use(
     (config) => {
-        // In a real app, prefer HttpOnly Cookies or JWT. 
+        // In a real app, prefer HttpOnly Cookies or JWT.
         // Here we use Base64 Basic Auth stored in localStorage per MVP spec.
         const token = typeof window !== 'undefined' ? localStorage.getItem('crm_token') : null;
         if (token) {
@@ -23,6 +23,19 @@ api.interceptors.request.use(
         return config;
     },
     (error) => Promise.reject(error)
+);
+
+// On 401 drop the stale token so a reload re-triggers SSO injection from the
+// parent CRM (or the /login fallback). Without this an invalid token kept
+// failing every request with no recovery path.
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401 && typeof window !== 'undefined') {
+            localStorage.removeItem('crm_token');
+        }
+        return Promise.reject(error);
+    }
 );
 
 // --- BOTS ---

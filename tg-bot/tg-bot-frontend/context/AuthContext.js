@@ -9,8 +9,23 @@ export const AuthProvider = ({ children }) => {
     const router = useRouter();
 
     useEffect(() => {
-        // Check if token exists on load
-        const storedToken = localStorage.getItem('crm_token');
+        // SSO-lite: the parent CRM embeds this panel in an iframe and injects
+        // Basic Auth credentials via `#auth=<base64(user:pass)>`. Read it first
+        // and let it OVERWRITE any stale token in localStorage (a token whose
+        // password no longer matches ADMIN_PASS would otherwise brick the panel
+        // with permanent 401 and no way to re-login). Then strip the hash.
+        let injected = null;
+        if (typeof window !== 'undefined' && window.location.hash.startsWith('#auth=')) {
+            const raw = window.location.hash.slice('#auth='.length);
+            injected = decodeURIComponent(raw);
+            if (injected) {
+                localStorage.setItem('crm_token', injected);
+                // Remove the hash so the credential doesn't linger in the URL.
+                window.history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+        }
+
+        const storedToken = injected || localStorage.getItem('crm_token');
         if (storedToken) {
             setToken(storedToken);
         }
