@@ -121,20 +121,32 @@ class SessionController {
     // QR генерируется из opcode 288 (qrLink) в index.js — здесь скриншот не нужен
     console.log('[Session] Ожидание QR-авторизации (QR генерируется из WS opcode 288)...')
 
-    // Ждём пока isLoggedIn станет true (от transport.onWsAuth → index.js)
-    // или до 5 минут, каждые 3с обновляем скриншот QR
-    const deadline = Date.now() + 5 * 60 * 1000
-    let tick = 0
+    // MAX выдаёт QR с TTL ~2 мин и НЕ присылает новый сам по истечении. Раньше
+    // мы просто ждали — QR протухал, висел мёртвым, и после таймаута скрейпер
+    // залипал со стухшим кодом (UI показывал «офлайн»/дохлый QR днями). Теперь
+    // перезагружаем страницу каждые QR_REFRESH_MS (< TTL), пока не залогинен:
+    // reload → web.max.ru заново → новый WS → свежий opcode 288 → свежий QR.
+    const QR_REFRESH_MS = 90 * 1000          // < 120с TTL, чтобы показанный QR всегда был валиден
+    const deadline = Date.now() + 30 * 60 * 1000  // широкое окно на скан
+    let lastRefresh = Date.now()
     while (Date.now() < deadline) {
       if (this.isLoggedIn) {
         console.log('[Session] QR-авторизация выполнена (WS auth detected)')
         return
       }
-      tick++
+      if (Date.now() - lastRefresh >= QR_REFRESH_MS) {
+        lastRefresh = Date.now()
+        console.log('[Session] QR скоро истечёт — перезагружаю страницу для нового QR')
+        try {
+          await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
+        } catch (e) {
+          console.warn('[Session] reload для нового QR не удался:', e.message)
+        }
+      }
       await new Promise(r => setTimeout(r, 1000))
     }
 
-    console.log('[Session] Таймаут QR-авторизации (5 мин)')
+    console.log('[Session] Таймаут QR-авторизации (30 мин без скана)')
   }
 
   // ─── Keepalive ──────────────────────────────────────────────────────────
