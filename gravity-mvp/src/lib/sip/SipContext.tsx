@@ -283,6 +283,13 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             try { JsSIP.debug?.enable('JsSIP:*') } catch {}
 
             const socket = new JsSIP.WebSocketInterface(creds.wsUrl)
+            // nginx terminates TLS, so FreeSWITCH's ws-binding sees a PLAIN ws
+            // connection. JsSIP defaults the SIP Via transport to "WSS" for a
+            // wss:// URL, and FreeSWITCH silently DROPS any REGISTER whose Via
+            // says WSS on its ws listener → REGISTER times out → red SIP dot.
+            // Force the Via transport to WS so it matches what FS actually sees.
+            // (Verified: REGISTER with Via WS → 401 challenge; with Via WSS → dropped.)
+            socket.via_transport = 'WS'
             const ua = new JsSIP.UA({
                 uri: creds.sipUri,
                 password: creds.password,
