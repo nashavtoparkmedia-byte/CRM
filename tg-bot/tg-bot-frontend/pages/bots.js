@@ -56,7 +56,7 @@ export default function BotsList() {
                     <p className="text-slate-400 text-sm mt-1">Список всех подключенных Telegram-ботов</p>
                 </div>
                 <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => { setErrorMsg(null); setShowModal(true); }}
                     className="mt-4 sm:mt-0 neu-button-primary"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -120,6 +120,11 @@ export default function BotsList() {
                             <h3 className="text-lg font-semibold text-white">Подключение нового бота</h3>
                         </div>
                         <form onSubmit={handleCreateBot} className="p-6">
+                            {errorMsg && (
+                                <div className="mb-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+                                    {errorMsg}
+                                </div>
+                            )}
                             <div className="space-y-5">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-400 mb-2">Название проекта</label>
@@ -147,7 +152,7 @@ export default function BotsList() {
                             <div className="mt-8 flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => setShowModal(false)}
+                                    onClick={() => { setShowModal(false); setErrorMsg(null); }}
                                     className="flex-1 neu-button !text-slate-400"
                                 >
                                     Отмена

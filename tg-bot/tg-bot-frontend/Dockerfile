@@ -14,6 +14,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+# next.config.mjs bakes the /api/admin rewrite destination into routes-manifest
+# at `next build` time — runtime env is too late. Without this the proxy froze
+# to http://localhost:3001 → ECONNREFUSED in the container → bot creation 500.
+# Default to the compose service name; override via --build-arg for other setups.
+ARG TG_BOT_API_URL=http://tg-bot:3001
+ENV TG_BOT_API_URL=${TG_BOT_API_URL}
 RUN npm run build
 
 FROM node:20-bookworm-slim AS runner
