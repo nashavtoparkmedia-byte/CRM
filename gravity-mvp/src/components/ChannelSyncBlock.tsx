@@ -44,7 +44,7 @@ const MODE_HINTS: Record<SyncMode, string> = {
     last_n_days:          'Загрузить переписку за последние несколько дней',
 }
 
-export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = 'http://localhost:3005' }: Props) {
+export default function ChannelSyncBlock({ channel, connectionId, scraperUrl = '/api/max-scraper' }: Props) {
     const [lastJob, setLastJob] = useState<ImportJob | null>(null)
     const [prevJob, setPrevJob] = useState<ImportJob | null>(null)
     const [isImporting, setIsImporting] = useState(false)

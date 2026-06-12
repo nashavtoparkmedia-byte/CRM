@@ -57,7 +57,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
     // Check MAX Scraper status
     const checkPersonalStatus = async () => {
         try {
-            const res = await fetch("http://localhost:3005/status")
+            const res = await fetch("/api/max-scraper/status", { cache: "no-store" })
             if (!res.ok) throw new Error("Scraper returned error")
             const data = await res.json()
             const loggedIn = data.isLoggedIn ?? data.isReady ?? false
@@ -67,7 +67,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
             if (!loggedIn) {
                 // Используем qrUpdatedAt как cache-buster — QR обновится автоматически
                 const ts = data.qrUpdatedAt || Date.now()
-                setQrUrl(`http://localhost:3005/qr?t=${ts}`)
+                setQrUrl(`/api/max-scraper/qr?t=${ts}`)
             } else {
                 setQrUrl(null)
             }
@@ -94,7 +94,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
         setQrLoading(true)
         setError(null)
         try {
-            const res = await fetch("http://localhost:3005/restart", { method: "POST" })
+            const res = await fetch("/api/max-scraper/restart", { method: "POST" })
             if (!res.ok) throw new Error("Не удалось связаться со скрейпером")
             
             // Ждем немного, пока playwright начнет инициализацию
@@ -362,7 +362,7 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                 </div>
 
                                 {/* История сообщений */}
-                                <ChannelSyncBlock channel="max" scraperUrl="http://localhost:3005" />
+                                <ChannelSyncBlock channel="max" scraperUrl="/api/max-scraper" />
 
                                 <div className="flex items-center justify-end gap-1 pt-3 mt-3 border-t border-dashed">
                                     {isPersonalPaused ? (
