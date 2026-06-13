@@ -204,7 +204,7 @@ export default function ChatHeader({
                                     const subtitle = driverPhone && driverPhone !== detailed.title ? driverPhone : null
                                     return (
                                         <>
-                                            <h3 className={`font-semibold text-[15px] leading-none shrink-0 ${detailed.isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}>
+                                            <h3 className={`font-semibold text-[15px] leading-none truncate min-w-0 lg:shrink-0 lg:overflow-visible ${detailed.isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}>
                                                 {detailed.title}
                                             </h3>
                                             {detailed.isUnlinked && (
@@ -378,14 +378,14 @@ export default function ChatHeader({
 
                             <button
                                 onClick={() => setIsSearchActive(true)}
-                                className="h-[28px] w-[28px] rounded-md hover:bg-gray-100 flex items-center justify-center text-gray-400 transition-colors"
+                                className="hidden lg:flex h-[28px] w-[28px] rounded-md hover:bg-gray-100 items-center justify-center text-gray-400 transition-colors"
                                 title="Поиск (Cmd/Ctrl+F)"
                             >
                                 <Search size={15} />
                             </button>
                             <button
                                 onClick={() => toggleProfileDrawer(!isProfileOpenFromUrl)}
-                                className={`h-[28px] w-[28px] rounded-md flex items-center justify-center transition-colors ${
+                                className={`hidden lg:flex h-[28px] w-[28px] rounded-md items-center justify-center transition-colors ${
                                     isProfileOpenFromUrl ? 'bg-[#3390EC]/10 text-[#3390EC]' : 'hover:bg-gray-100 text-gray-400'
                                 }`}
                                 title="Профиль контакта"
