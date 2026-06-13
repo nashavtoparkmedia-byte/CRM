@@ -387,9 +387,10 @@ export default function MessageInputArea({
                 </div>
             )}
 
-            {/* FC-09: Channel hint line */}
+            {/* FC-09: Channel hint line — служебная инфа «Отправка через MAX»,
+                на мобиле скрываем (канал и так виден в табах сверху). */}
             {channelHintReason && (
-                <div className={`flex items-center gap-1.5 px-3 py-1 ${!replyContext ? 'border-t border-[#E8E8E8]' : ''}`}>
+                <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1 ${!replyContext ? 'border-t border-[#E8E8E8]' : ''}`}>
                     <span className={`w-1.5 h-1.5 rounded-full ${currentChannelInfo.activeBg}`} />
                     <span className="text-[11px] text-gray-400">
                         Отправка через <span className={`font-medium ${currentChannelInfo.color}`}>{currentChannelInfo.label}</span>
@@ -407,8 +408,10 @@ export default function MessageInputArea({
                     className="hidden"
                     onChange={handleFileSelect}
                 />
+                {/* Скрепка: на ПК слева (как было), на мобиле скрыта здесь и
+                    показана справа у поля ввода — как в Telegram. */}
                 <button
-                    className={`h-[36px] w-[36px] rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
+                    className={`hidden lg:flex h-[36px] w-[36px] rounded-full hover:bg-gray-100 items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
                     onClick={() => fileInputRef.current?.click()}
                     title="Прикрепить файл"
                 >
@@ -438,8 +441,9 @@ export default function MessageInputArea({
                     />
                 </div>
 
-                {/* Channel + Account selector */}
-                <div className="relative" ref={dropdownRef}>
+                {/* Channel + Account selector — на мобиле скрыт (канал виден в табах
+                    сверху, дублировать пиктограмму внизу незачем). */}
+                <div className="relative hidden lg:block" ref={dropdownRef}>
                     <button 
                         onClick={() => !isChannelLocked && setChannelDropdownOpen(!channelDropdownOpen)}
                         disabled={isChannelLocked}
@@ -503,8 +507,17 @@ export default function MessageInputArea({
                     />
                 </div>
 
+                {/* Скрепка справа — только мобайл (Telegram-стиль). */}
+                <button
+                    className={`lg:hidden h-[36px] w-[36px] rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Прикрепить файл"
+                >
+                    <Paperclip size={17} />
+                </button>
+
                 {/* Send button with clear state differentiation */}
-                <button 
+                <button
                     onClick={handleSend}
                     disabled={!hasText}
                     className={`h-[36px] w-[36px] rounded-full flex items-center justify-center transition-all shrink-0 ${

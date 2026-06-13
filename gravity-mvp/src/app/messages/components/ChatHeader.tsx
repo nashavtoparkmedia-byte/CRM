@@ -235,13 +235,13 @@ export default function ChatHeader({
                         <div className="flex items-center gap-0.5">
                             {/* 📌 Tasks button */}
                             <div className="relative" ref={tasksPopoverRef}>
-                                <button 
+                                <button
                                     onClick={() => setShowTasksPopover(!showTasksPopover)}
-                                    className={`h-[28px] px-[2px] rounded-md flex items-center gap-1 text-[11px] font-medium transition-colors ${
-                                        showTasksPopover 
-                                        ? 'bg-[#3390EC]/10 text-[#3390EC]' 
-                                        : taskCount > 0 
-                                            ? 'hover:bg-gray-100 text-gray-600' 
+                                    className={`h-[28px] px-[2px] rounded-md hidden lg:flex items-center gap-1 text-[11px] font-medium transition-colors ${
+                                        showTasksPopover
+                                        ? 'bg-[#3390EC]/10 text-[#3390EC]'
+                                        : taskCount > 0
+                                            ? 'hover:bg-gray-100 text-gray-600'
                                             : 'hover:bg-gray-100 text-gray-400'
                                     }`}
                                     title="Задачи"
@@ -320,7 +320,7 @@ export default function ChatHeader({
                                     title="Взять себе"
                                 >
                                     <UserPlus size={13} />
-                                    <span>Взять</span>
+                                    <span className="hidden lg:inline">Взять</span>
                                 </button>
                             ) : (
                                 <button
@@ -345,7 +345,7 @@ export default function ChatHeader({
                                     title="Завершить"
                                 >
                                     <CheckCircle2 size={13} />
-                                    <span>Завершить</span>
+                                    <span className="hidden lg:inline">Завершить</span>
                                 </button>
                             ) : (
                                 <button
@@ -357,7 +357,7 @@ export default function ChatHeader({
                                     title="Переоткрыть"
                                 >
                                     <RotateCcw size={13} />
-                                    <span>Открыть</span>
+                                    <span className="hidden lg:inline">Открыть</span>
                                 </button>
                             )}
 
@@ -411,21 +411,23 @@ export default function ChatHeader({
                                         {segment === 'vip' ? 'VIP' : segment === 'active' ? 'Активный' : segment === 'new' ? 'Новый' : segment === 'inactive' ? 'Неактивный' : segment === 'churned' ? 'Ушёл' : segment}
                                     </span>
                                 )}
+                                {/* «Источник» и счётчик каналов — служебная инфа, на мобиле
+                                    скрываем (юзеру в шапке диалога не нужна), на ПК оставляем. */}
                                 {masterSource && (
-                                    <>
+                                    <span className="hidden lg:inline-flex items-center gap-[2px]">
                                         <span className="text-[10px] text-gray-300">·</span>
                                         <span className="text-[10px] text-gray-400">
                                             Источник: <span className="font-medium text-gray-500">{SOURCE_LABEL[masterSource] || masterSource}</span>
                                         </span>
-                                    </>
+                                    </span>
                                 )}
                                 {channelCount > 0 && (
-                                    <>
+                                    <span className="hidden lg:inline-flex items-center gap-[2px]">
                                         <span className="text-[10px] text-gray-300">·</span>
                                         <span className="text-[10px] text-gray-400">
                                             {channelCount} {channelCount === 1 ? 'канал' : channelCount < 5 ? 'канала' : 'каналов'}
                                         </span>
-                                    </>
+                                    </span>
                                 )}
                             </div>
                         )}

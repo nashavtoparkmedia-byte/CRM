@@ -46,8 +46,14 @@ export function formatChatTitleDetailed(input: {
     chatName?:          string | null
     externalChatId?:    string | null
 }): { title: string; isUnlinked: boolean } {
+    // JID-строки (165...@lid, 79...@c.us, ...@g.us, ...@s.whatsapp.net) — это НЕ
+    // имена. Раньше «7158...@lid» проходил как имя, потому что в «lid» есть буквы,
+    // и в шапке показывался сырой JID вместо ФИО/телефона. Исключаем их.
+    const isJid = (s: string) => /@(lid|c\.us|g\.us|s\.whatsapp\.net|broadcast)/i.test(s)
     const hasLetters = (s: string) =>
-        /[А-Яа-яA-Za-z]/.test(s) && !/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+\d+$/i.test(s.trim())
+        /[А-Яа-яA-Za-z]/.test(s)
+        && !/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+\d+$/i.test(s.trim())
+        && !isJid(s)
 
     const looksLikePhone = (s: string) => {
         const t = s.trim()
