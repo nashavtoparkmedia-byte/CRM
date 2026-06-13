@@ -82,6 +82,7 @@ export default function ChatWorkspace({
             initialMessageId={initialMessageId}
             chat={chat}
             conversations={conversations}
+            onBack={onBack}
         />
     )
 }
@@ -95,6 +96,7 @@ function ChatWorkspaceInner({
     initialMessageId,
     chat,
     conversations,
+    onBack,
 }: {
     chatId: string
     effectiveChatId: string | null
@@ -103,6 +105,7 @@ function ChatWorkspaceInner({
     initialMessageId?: string | null
     chat: any
     conversations: any[]
+    onBack?: () => void
 }) {
     const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
 
