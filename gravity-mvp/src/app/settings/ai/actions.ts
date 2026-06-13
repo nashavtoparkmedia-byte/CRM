@@ -52,7 +52,14 @@ async function assertCanEditAi() {
 export async function getAiConfig() {
     try {
         const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
-        return rows[0] ?? null
+        const cfg = rows[0] ?? null
+        // activeChannels — String[] без DB-default. Частичный первый INSERT в
+        // saveAiConfig мог оставить колонку NULL, и клиент падал на
+        // config.activeChannels.map(...) → "Cannot read properties of null
+        // (reading 'map')" (вся страница /settings/ai = client-side exception).
+        // Коалесцируем к [] здесь — защищает всех consumer'ов разом.
+        if (cfg && cfg.activeChannels == null) cfg.activeChannels = []
+        return cfg
     } catch { return null }
 }
 
