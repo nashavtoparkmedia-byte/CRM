@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList, UserPlus, CheckCircle2, RotateCcw, UserMinus } from "lucide-react"
+import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList, UserPlus, CheckCircle2, RotateCcw, UserMinus, ArrowLeft } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
@@ -28,6 +28,7 @@ interface ChatHeaderProps {
     onSearchNavigate: (direction: 'up' | 'down') => void
     onOpenCreateTask?: () => void
     onConversationUpdate?: () => void
+    onBack?: () => void
 }
 
 export default function ChatHeader({ 
@@ -41,7 +42,8 @@ export default function ChatHeader({
     activeSearchIndex,
     onSearchNavigate,
     onOpenCreateTask,
-    onConversationUpdate
+    onConversationUpdate,
+    onBack
 }: ChatHeaderProps) {
     const { toggleProfileDrawer } = useChatNavigation()
     const searchInputRef = useRef<HTMLInputElement>(null)
@@ -172,6 +174,17 @@ export default function ChatHeader({
                         {/* Line 1: name, phone, status, action buttons */}
                         <div className="h-[48px] flex items-center justify-between">
                         <div className="flex items-center gap-2.5 min-w-0">
+                            {/* Mobile-only back arrow — returns to the chat list (TG pattern) */}
+                            {onBack && (
+                                <button
+                                    onClick={onBack}
+                                    className="lg:hidden h-[36px] w-[36px] -ml-1 shrink-0 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                                    title="Назад к списку"
+                                    aria-label="Назад к списку"
+                                >
+                                    <ArrowLeft size={22} />
+                                </button>
+                            )}
                             <div className="flex items-center gap-1.5 min-w-0">
                                 {(() => {
                                     /* PR-З: title с правильным приоритетом источников.

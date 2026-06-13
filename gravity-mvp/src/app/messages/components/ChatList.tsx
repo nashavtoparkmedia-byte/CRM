@@ -604,7 +604,9 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
     }
 
     return (
-        <div className="w-[400px] bg-[#FAFAFA] border-r border-[#E8E8E8] shrink-0 h-full flex flex-col relative">
+        // Mobile (<lg): single-pane — full width, hidden once a chat is open.
+        // Desktop (lg+): unchanged — fixed 400px column always visible.
+        <div className={`${selectedChatId ? 'hidden lg:flex' : 'flex'} flex-col w-full lg:w-[400px] bg-[#FAFAFA] border-r border-[#E8E8E8] shrink-0 h-full relative`}>
             {/* Header */}
             <div className="h-[48px] px-3.5 flex items-center justify-between shrink-0 bg-white border-b border-[#E8E8E8]">
                 <TooltipProvider delayDuration={300}>

@@ -51,7 +51,8 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
         { id: 'wa', label: 'WhatsApp', short: 'WhatsApp', dot: 'bg-emerald-500', channelKey: 'whatsapp' },
         { id: 'tg', label: 'Telegram', short: 'Telegram', dot: 'bg-blue-500', channelKey: 'telegram' },
         { id: 'max', label: 'MAX', short: 'MAX', dot: 'bg-purple-500', channelKey: 'max' },
-        { id: 'phone', label: 'Телефон', short: 'Телефон', dot: 'bg-orange-500', channelKey: 'phone' }
+        { id: 'av', label: 'Авито', short: 'AV', dot: 'bg-green-600', channelKey: 'avito' },
+        { id: 'phone', label: 'Телефон', short: 'Тел', dot: 'bg-orange-500', channelKey: 'phone' }
     ]
 
     // Get unread count for a channel
@@ -69,7 +70,7 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
             setExpandedChannel(null)
             return
         }
-        const normalizedChannel = chId === 'wa' ? 'whatsapp' : chId === 'tg' ? 'telegram' : chId
+        const normalizedChannel = chId === 'wa' ? 'whatsapp' : chId === 'tg' ? 'telegram' : chId === 'av' ? 'avito' : chId
         const targetChatId = chat.channelMap?.[normalizedChannel]
         const updates: Record<string, string | null> = { channel: chId }
         if (targetChatId && targetChatId !== chat.id) {

@@ -19,12 +19,14 @@ export default function ChatWorkspace({
     chatId,
     activeChannelTab,
     isProfileOpen,
-    initialMessageId
+    initialMessageId,
+    onBack
 }: {
     chatId: string | null
     activeChannelTab: string
     isProfileOpen: boolean
     initialMessageId?: string | null
+    onBack?: () => void
 }) {
     const { conversations } = useConversations()
 
@@ -52,7 +54,9 @@ export default function ChatWorkspace({
 
     if (!chatId || !chat) {
         return (
-            <div className="flex-1 flex flex-col items-center justify-center messenger-bg animate-in fade-in duration-500">
+            // Empty "выберите диалог" — only on desktop; on mobile the list owns
+            // the whole screen when nothing is selected.
+            <div className="flex-1 hidden lg:flex flex-col items-center justify-center messenger-bg animate-in fade-in duration-500">
                 <div className="flex flex-col items-center">
                     <div className="w-16 h-16 rounded-full bg-white/60 flex items-center justify-center mb-[4px] text-[#B0B5BA]">
                         <MessageSquare size={28} />
@@ -280,6 +284,7 @@ function ChatWorkspaceInner({
                 onSearchNavigate={handleSearchNavigate}
                 onOpenCreateTask={() => setIsTaskModalOpenForChat(true)}
                 onConversationUpdate={refreshConversations}
+                onBack={onBack}
             />
 
             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />

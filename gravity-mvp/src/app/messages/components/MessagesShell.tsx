@@ -64,6 +64,18 @@ export default function MessagesShell({
         })
     }
 
+    // Mobile "back": deselect the chat so the list takes over the screen again.
+    // On desktop the back arrow is hidden, so this only fires on small screens.
+    const handleBack = () => {
+        setChatIdState(null)
+        startTransition(() => {
+            const params = new URLSearchParams(searchParams.toString())
+            params.delete('id')
+            const qs = params.toString()
+            router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+        })
+    }
+
     return (
         <>
             <ChatList
@@ -79,6 +91,7 @@ export default function MessagesShell({
                 activeChannelTab={channelTab}
                 isProfileOpen={isProfileOpen}
                 initialMessageId={initialMessageId}
+                onBack={handleBack}
             />
 
             {isProfileOpen && chatId && (
