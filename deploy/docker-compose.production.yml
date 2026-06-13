@@ -496,10 +496,17 @@ services:
     env_file:
       - ../.env.production
     environment:
-      CRM_WEBHOOK_URL: http://gravity-mvp:3002
+      # ВАЖНО: путь /api/webhooks/max обязателен — forwardToWebhook шлёт POST
+      # ровно на этот URL. Без пути сообщения уходят на / (домашняя страница,
+      # 200 OK) и молча теряются — в БД не попадает ни одного MAX-сообщения.
+      CRM_WEBHOOK_URL: http://gravity-mvp:3002/api/webhooks/max
     volumes:
-      # Сессия web.max.ru
-      - max_user_data:/app/userData
+      # Сессия web.max.ru. ВАЖНО: путь должен совпадать с USER_DATA_DIR в
+      # index.js (= /app/user_data, через __dirname). Раньше монтировалось в
+      # /app/userData (camelCase) — playwright-профиль писался в /app/user_data
+      # (ephemeral слой), volume оставался пустым, и MAX требовал скан QR после
+      # каждого пересоздания контейнера. Тот же класс бага, что чинили для WA.
+      - max_user_data:/app/user_data
     networks:
       - crm_internal
     depends_on:

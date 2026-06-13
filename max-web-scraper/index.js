@@ -58,7 +58,16 @@ async function finishImportSession(status = 'completed', resultType = 'partial')
   const { jobId, crmApiUrl, startedAt, messagesImported, chatsSet, minMessageDate, maxMessageDate } = importSession
   importSession = null
 
-  if (!jobId || !crmApiUrl) return
+  if (!jobId) return
+
+  // База для job-колбэка — origin рабочего CRM_WEBHOOK_URL (по нему скрапер
+  // уже успешно льёт сообщения, значит адрес достижим). crmApiUrl, который
+  // передаёт gravity, ненадёжен: внутри docker gravity не знает свой внешний
+  // URL и шлёт localhost:3002 → в сети контейнера это сам скрапер
+  // (ECONNREFUSED) → job навсегда висел в queued, а в UI крутился спиннер.
+  const crmBase = (CRM_WEBHOOK_URL || '').replace(/\/api\/.*$/, '')
+    || crmApiUrl
+    || 'http://127.0.0.1:3002'
 
   const body = JSON.stringify({
     status,
@@ -73,7 +82,7 @@ async function finishImportSession(status = 'completed', resultType = 'partial')
   })
 
   try {
-    const url = new URL(`${crmApiUrl}/api/import-jobs/${jobId}`)
+    const url = new URL(`${crmBase}/api/import-jobs/${jobId}`)
     const mod = url.protocol === 'https:' ? https : http
     await new Promise((resolve, reject) => {
       const req = mod.request({
