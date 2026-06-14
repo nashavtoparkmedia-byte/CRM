@@ -220,10 +220,11 @@ export default function ChatHeader({
                                 {(() => {
                                     /* PR-З: title с правильным приоритетом источников */
                                     const detailed = formatChatTitleDetailed({
-                                        driverFullName:     chat.driver?.fullName,
-                                        contactDisplayName: contact?.displayName ?? chat.contact?.displayName,
-                                        chatName:           chat.name,
-                                        externalChatId:     chat.externalChatId,
+                                        driverFullName:       chat.driver?.fullName,
+                                        contactDisplayName:   contact?.displayName ?? chat.contact?.displayName,
+                                        contactNameIsManual:  contact?.displayNameSource === 'manual',
+                                        chatName:             chat.name,
+                                        externalChatId:       chat.externalChatId,
                                     })
                                     const driverPhone = chat.driver?.phone
                                     // Показываем номер из linked Driver если он не дубль title

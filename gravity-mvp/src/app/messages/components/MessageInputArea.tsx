@@ -200,23 +200,27 @@ export default function MessageInputArea({
     }
 
     const handleMediaPointerDown = (e: React.PointerEvent) => {
-        if (mediaMode !== 'mic' || isRecording) return
+        if (isRecording) return
         e.preventDefault()
         longPressTimerRef.current = setTimeout(() => {
             longPressTimerRef.current = null
-            startRecording()
+            if (mediaMode === 'mic') startRecording()
+            // long press on camera icon: switch back to mic
+            else setMediaMode('mic')
         }, 450)
     }
 
     const handleMediaPointerUp = () => {
         if (longPressTimerRef.current) {
-            // Short tap: toggle mode
+            // Short tap
             clearTimeout(longPressTimerRef.current)
             longPressTimerRef.current = null
             if (mediaMode === 'mic') {
+                // Switch to camera AND open picker immediately (sync, within user gesture)
                 setMediaMode('camera')
-                setTimeout(() => cameraInputRef.current?.click(), 80)
+                cameraInputRef.current?.click()
             } else {
+                // Switch back to mic
                 setMediaMode('mic')
             }
         } else if (isRecording) {
@@ -348,13 +352,14 @@ export default function MessageInputArea({
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (!fileInputRef.current) return
-        fileInputRef.current.value = ''
+        e.target.value = ''
         if (!file) return
 
         const reader = new FileReader()
         reader.onload = () => {
             setImagePreview({ dataUrl: reader.result as string, file })
+            // After picking photo from camera, return to mic mode
+            if (e.target === cameraInputRef.current) setMediaMode('mic')
         }
         reader.readAsDataURL(file)
     }

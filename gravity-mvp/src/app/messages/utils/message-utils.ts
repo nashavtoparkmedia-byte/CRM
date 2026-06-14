@@ -41,10 +41,11 @@ export function formatChatTitle(input: {
  * Детальный вариант: возвращает title + флаг isUnlinked для UI badge.
  */
 export function formatChatTitleDetailed(input: {
-    driverFullName?:    string | null
-    contactDisplayName?: string | null
-    chatName?:          string | null
-    externalChatId?:    string | null
+    driverFullName?:        string | null
+    contactDisplayName?:    string | null
+    contactNameIsManual?:   boolean
+    chatName?:              string | null
+    externalChatId?:        string | null
 }): { title: string; isUnlinked: boolean } {
     // JID-строки (165...@lid, 79...@c.us, ...@g.us, ...@s.whatsapp.net) — это НЕ
     // имена. Раньше «7158...@lid» проходил как имя, потому что в «lid» есть буквы,
@@ -78,6 +79,10 @@ export function formatChatTitleDetailed(input: {
     // === 1. Реальное ИМЯ (с буквами) ===
     if (input.driverFullName && hasLetters(input.driverFullName)) {
         return { title: input.driverFullName.trim(), isUnlinked: false }
+    }
+    // Manually set contact name wins over chatName (chat has short TG first_name, operator set full FIO)
+    if (input.contactNameIsManual && input.contactDisplayName && hasLetters(input.contactDisplayName)) {
+        return { title: input.contactDisplayName.trim(), isUnlinked: false }
     }
     if (input.chatName && hasLetters(input.chatName)) {
         return {
