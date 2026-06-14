@@ -89,8 +89,8 @@ export default function MessageInputArea({
     const isTouchDevice = useRef(false)
     const [isSendingImage, setIsSendingImage] = useState(false)
 
-    // Mic / camera toggle + voice recording
-    const [mediaMode, setMediaMode] = useState<'mic' | 'camera'>('mic')
+    // Mic / camera: tap = camera, long press = voice
+    const longPressTriggered = useRef(false)
     const [isRecording, setIsRecording] = useState(false)
     const [recordingSeconds, setRecordingSeconds] = useState(0)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -201,28 +201,20 @@ export default function MessageInputArea({
 
     const handleMediaPointerDown = (e: React.PointerEvent) => {
         if (isRecording) return
-        e.preventDefault()
+        // No e.preventDefault() — label must receive the click event for camera to open
+        longPressTriggered.current = false
         longPressTimerRef.current = setTimeout(() => {
             longPressTimerRef.current = null
-            if (mediaMode === 'mic') startRecording()
-            // long press on camera icon: switch back to mic
-            else setMediaMode('mic')
-        }, 450)
+            longPressTriggered.current = true
+            startRecording()
+        }, 500)
     }
 
     const handleMediaPointerUp = () => {
         if (longPressTimerRef.current) {
-            // Short tap
+            // Short tap — clear timer; label's native click will open camera
             clearTimeout(longPressTimerRef.current)
             longPressTimerRef.current = null
-            if (mediaMode === 'mic') {
-                // Switch to camera AND open picker immediately (sync, within user gesture)
-                setMediaMode('camera')
-                cameraInputRef.current?.click()
-            } else {
-                // Switch back to mic
-                setMediaMode('mic')
-            }
         } else if (isRecording) {
             stopRecording()
         }
@@ -231,6 +223,15 @@ export default function MessageInputArea({
     const handleMediaPointerCancel = () => {
         if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null }
         if (isRecording) cancelRecording()
+    }
+
+    // Prevent camera from opening after a long-press (voice recording)
+    const handleMicLabelClick = (e: React.MouseEvent) => {
+        if (longPressTriggered.current || isRecording) {
+            e.preventDefault()
+            longPressTriggered.current = false
+        }
+        // Short tap: allow label's default → opens camera input natively
     }
 
     // Close channel dropdown on outside click
@@ -358,8 +359,6 @@ export default function MessageInputArea({
         const reader = new FileReader()
         reader.onload = () => {
             setImagePreview({ dataUrl: reader.result as string, file })
-            // After picking photo from camera, return to mic mode
-            if (e.target === cameraInputRef.current) setMediaMode('mic')
         }
         reader.readAsDataURL(file)
     }
@@ -628,8 +627,9 @@ export default function MessageInputArea({
                     </div>
                 )}
 
-                {/* Camera input (hidden) for capturing photos */}
+                {/* Camera input (hidden) — triggered natively by the mic/camera label below */}
                 <input
+                    id="msg-camera-input"
                     ref={cameraInputRef}
                     type="file"
                     accept="image/*"
@@ -660,7 +660,7 @@ export default function MessageInputArea({
                     <SendHorizonal size={17} className="translate-x-[1px]" />
                 </button>
 
-                {/* Mobile: mic/camera toggle button */}
+                {/* Mobile: tap = camera, long press = voice record */}
                 {isRecording ? (
                     <button
                         className="lg:hidden h-[36px] w-[36px] rounded-full bg-red-100 flex items-center justify-center shrink-0"
@@ -670,17 +670,17 @@ export default function MessageInputArea({
                         <X size={16} className="text-red-500" />
                     </button>
                 ) : (
-                    <button
-                        className={`lg:hidden h-[36px] w-[36px] rounded-full flex items-center justify-center shrink-0 transition-colors select-none ${
-                            mediaMode === 'camera' ? 'text-[#3390EC] hover:bg-blue-50' : 'text-gray-400 hover:bg-gray-100'
-                        }`}
+                    <label
+                        htmlFor="msg-camera-input"
+                        className="lg:hidden h-[36px] w-[36px] rounded-full flex items-center justify-center shrink-0 cursor-pointer text-gray-400 hover:bg-gray-100 active:bg-gray-200 transition-colors select-none"
                         onPointerDown={handleMediaPointerDown}
                         onPointerUp={handleMediaPointerUp}
                         onPointerCancel={handleMediaPointerCancel}
-                        title={mediaMode === 'mic' ? 'Удерживайте для записи / нажмите для камеры' : 'Камера (нажмите для фото / ещё раз для mic)'}
+                        onClick={handleMicLabelClick}
+                        title="Нажмите для камеры / удерживайте для записи голоса"
                     >
-                        {mediaMode === 'mic' ? <Mic size={18} /> : <Camera size={18} />}
-                    </button>
+                        <Mic size={18} />
+                    </label>
                 )}
             </div>
         </div>
