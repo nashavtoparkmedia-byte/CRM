@@ -477,6 +477,8 @@ export class MessageService {
         }
 
         // 2. Save message to DB first (Optimistic)
+        // Use currentChatId (= targetChatId after channel switch) so that TG/WA messages
+        // land in the correct channel chat and are visible when that channel tab is open.
         const messageId = `msg_${Date.now()}`
         const now = new Date()
 
@@ -484,7 +486,7 @@ export class MessageService {
             data: {
                 id: messageId,
                 clientMessageId: clientMessageId || null,
-                chatId: chatId,
+                chatId: currentChatId,
                 content,
                 direction: 'outbound',
                 status: 'sent',
@@ -498,7 +500,7 @@ export class MessageService {
         // mirror so they see the reply without waiting for a poll tick.
         try {
             const { broadcastChatMessage } = await import('@/lib/messageStreamBus')
-            broadcastChatMessage(chatId, created)
+            broadcastChatMessage(currentChatId, created)
         } catch { /* bus must never break send */ }
 
         // 2. Deliver via Provider
@@ -628,13 +630,13 @@ export class MessageService {
             })
             const now = new Date()
             await (prisma.chat as any).update({
-                where: { id: chatId },
+                where: { id: currentChatId },
                 data: { lastMessageAt: now }
             })
 
             // Workflow: outbound message state update
             if (deliveryStatus !== 'failed') {
-                await ConversationWorkflowService.onOutboundMessage(chatId, now)
+                await ConversationWorkflowService.onOutboundMessage(currentChatId, now)
             }
         } catch (updErr) {
             opsLog('error', 'message_status_update_failed', { operation: 'send', chatId, error: (updErr as any)?.message })
@@ -644,9 +646,9 @@ export class MessageService {
         try {
             const { updateReachabilityByChatId } = await import('@/lib/ReachabilityService')
             if (deliveryStatus === 'failed') {
-                await updateReachabilityByChatId(chatId, 'unreachable')
+                await updateReachabilityByChatId(currentChatId, 'unreachable')
             } else if (deliveryStatus === 'delivered' || deliveryStatus === 'sent') {
-                await updateReachabilityByChatId(chatId, 'confirmed')
+                await updateReachabilityByChatId(currentChatId, 'confirmed')
             }
         } catch (reachErr: any) {
             // Non-critical — don't break send flow

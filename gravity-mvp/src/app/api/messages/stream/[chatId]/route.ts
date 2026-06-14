@@ -49,8 +49,9 @@ export async function GET(
             // Initial handshake
             send({ type: 'connected', chatId })
 
-            // Subscribe to bus
-            const unsub = subscribeChat(chatId, (ev) => send(ev))
+            // Subscribe to bus — support comma-joined chatIds (unified "all channels" view)
+            const chatIds = chatId.split(',').map(s => s.trim()).filter(Boolean)
+            const unsubs = chatIds.map(id => subscribeChat(id, (ev) => send(ev)))
 
             // Keepalive — many proxies / dev tunnels close idle connections
             // around 30-60s. SSE comments are ignored by EventSource API.
@@ -59,7 +60,7 @@ export async function GET(
             // Cleanup on client abort
             req.signal.addEventListener('abort', () => {
                 clearInterval(pingInterval)
-                unsub()
+                unsubs.forEach(u => u())
                 try { controller.close() } catch { /* already closed */ }
             })
         },

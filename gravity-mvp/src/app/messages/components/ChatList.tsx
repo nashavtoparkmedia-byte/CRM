@@ -503,9 +503,20 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                 ? <Users size={20} />
                                 : ((chat.driver?.fullName || chat.contact?.displayName || chat.name)?.substring(0, 1).toUpperCase() || "D")}
                         </div>
-                        <div className={`absolute -bottom-0.5 -right-0.5 rounded-full p-0.5 border ${isSelected ? 'bg-[#3390EC] border-[#3390EC]' : 'bg-white border-white'}`}>
-                            {getChannelBadge(chat.channel)}
-                        </div>
+                        {/* Show all channel badges when no channel filter active */}
+                        {selectedChannels.size === 0 && chat.allChannels && chat.allChannels.length > 1 ? (
+                            <div className="absolute -bottom-0.5 -right-0.5 flex gap-px">
+                                {(chat.allChannels as string[]).slice(0, 3).map((ch: string) => (
+                                    <div key={ch} className={`rounded-full p-0.5 border ${isSelected ? 'bg-[#3390EC] border-[#3390EC]' : 'bg-white border-white'}`}>
+                                        {getChannelBadge(ch)}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className={`absolute -bottom-0.5 -right-0.5 rounded-full p-0.5 border ${isSelected ? 'bg-[#3390EC] border-[#3390EC]' : 'bg-white border-white'}`}>
+                                {getChannelBadge(chat.channel)}
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-1 min-w-0 flex flex-col justify-center">

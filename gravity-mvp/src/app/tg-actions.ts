@@ -317,22 +317,35 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
         let chatCreated = false
 
+        // Derive display name from GramJS sender entity
+        const senderName = (() => {
+            const fn = (message.sender?.firstName ?? '').trim()
+            const ln = (message.sender?.lastName  ?? '').trim()
+            const full = [fn, ln].filter(Boolean).join(' ').trim()
+            if (/[А-Яа-яA-Za-z]/.test(full) && !/^[.\s\-_$]+$/.test(full)) return full
+            if (message.sender?.username) return `@${message.sender.username}`
+            return null
+        })()
+
         if (!unifiedChat) {
             unifiedChat = await (prisma.chat as any).create({
                 data: {
                     externalChatId,
                     channel: 'telegram',
-                    name: `TG ${senderId}`,
+                    name: senderName || `TG ${senderId}`,
                     lastMessageAt: now,
                     status: 'new'
                 }
             })
             chatCreated = true
-            console.log(`[${loggerPrefix}] AUTO-CREATED chat=${unifiedChat.id} for externalChatId=${externalChatId}`)
+            console.log(`[${loggerPrefix}] AUTO-CREATED chat=${unifiedChat.id} for externalChatId=${externalChatId} name="${senderName || `TG ${senderId}`}"`)
         } else {
             await (prisma.chat as any).update({
                 where: { id: unifiedChat.id },
-                data: { lastMessageAt: now }
+                data: {
+                    lastMessageAt: now,
+                    ...(senderName ? { name: senderName } : {}),
+                }
             })
         }
 
