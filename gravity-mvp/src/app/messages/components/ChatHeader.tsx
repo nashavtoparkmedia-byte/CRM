@@ -221,7 +221,7 @@ export default function ChatHeader({
                                     /* PR-З: title с правильным приоритетом источников */
                                     const detailed = formatChatTitleDetailed({
                                         driverFullName:     chat.driver?.fullName,
-                                        contactDisplayName: chat.contact?.displayName,
+                                        contactDisplayName: contact?.displayName ?? chat.contact?.displayName,
                                         chatName:           chat.name,
                                         externalChatId:     chat.externalChatId,
                                     })

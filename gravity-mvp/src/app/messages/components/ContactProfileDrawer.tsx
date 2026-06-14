@@ -247,6 +247,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             body: JSON.stringify({ displayName: nameInput.trim() }),
                                         })
                                         await refetchContact()
+                                        refreshConversations()
                                         setEditingName(false)
                                         setNameSaving(false)
                                     }
@@ -266,6 +267,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         body: JSON.stringify({ displayName: nameInput.trim() }),
                                     })
                                     await refetchContact()
+                                    refreshConversations()
                                     setEditingName(false)
                                     setNameSaving(false)
                                 }}

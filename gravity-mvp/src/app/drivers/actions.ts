@@ -773,7 +773,7 @@ async function syncDriversByStatuses(
  */
 export async function syncActiveDrivers() {
     const result = await syncDriversByStatuses(['working'], 'syncActiveDrivers')
-    revalidatePath('/drivers')
+    try { revalidatePath('/drivers') } catch { /* cron context — no request store */ }
     return result
 }
 
@@ -782,11 +782,7 @@ export async function syncActiveDrivers() {
  * Supports pagination via cursor to fetch all records.
  */
 export async function syncArchivedDrivers() {
-    try {
-        const result = await syncDriversByStatuses(['dismissed'], 'syncArchivedDrivers')
-        revalidatePath('/drivers/archive')
-        return result
-    } catch (err: any) {
-        throw err
-    }
+    const result = await syncDriversByStatuses(['dismissed'], 'syncArchivedDrivers')
+    try { revalidatePath('/drivers/archive') } catch { /* cron context — no request store */ }
+    return result
 }
