@@ -89,18 +89,14 @@ export default function MessageInputArea({
     const isTouchDevice = useRef(false)
     const [isSendingImage, setIsSendingImage] = useState(false)
 
-    // Mic / camera: tap = camera, long press = voice
-    const longPressTriggered = useRef(false)
+    // Mic: hold to record, release to send. Camera: separate button, simple tap.
     const [isRecording, setIsRecording] = useState(false)
-    const isRecordingRef = useRef(false)          // sync mirror for event handlers (avoids stale closure)
-    const shouldStopAfterStart = useRef(false)    // user released before getUserMedia resolved
-    const docPointerUpRef = useRef<((e: Event) => void) | null>(null)  // cleanup handle
-    const justStoppedRecording = useRef(false)    // blocks camera from synthetic click after release
+    const isRecordingRef = useRef(false)        // sync mirror — avoids stale closure in pointerup
+    const shouldStopAfterStart = useRef(false)  // user released before getUserMedia resolved
     const [recordingSeconds, setRecordingSeconds] = useState(0)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
     const audioChunksRef = useRef<Blob[]>([])
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
 
     // Restore draft on chat/channel change
@@ -145,8 +141,6 @@ export default function MessageInputArea({
     useEffect(() => {
         return () => {
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
-            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
-            if (docPointerUpRef.current) document.removeEventListener('pointerup', docPointerUpRef.current)
         }
     }, [])
 
@@ -190,27 +184,13 @@ export default function MessageInputArea({
     }
 
     const stopRecording = () => {
-        if (docPointerUpRef.current) {
-            document.removeEventListener('pointerup', docPointerUpRef.current)
-            docPointerUpRef.current = null
-        }
         if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
         isRecordingRef.current = false
         setIsRecording(false)
-        longPressTriggered.current = false
-        // Block camera from accidental synthetic click fired ~300ms after touchend
-        justStoppedRecording.current = true
-        setTimeout(() => { justStoppedRecording.current = false }, 400)
         if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
     }
 
     const cancelRecording = () => {
-        // Guard: if stopRecording already ran (to save audio), don't discard
-        if (!isRecordingRef.current && !shouldStopAfterStart.current) return
-        if (docPointerUpRef.current) {
-            document.removeEventListener('pointerup', docPointerUpRef.current)
-            docPointerUpRef.current = null
-        }
         shouldStopAfterStart.current = false
         audioChunksRef.current = []
         if (mediaRecorderRef.current) {
@@ -224,56 +204,27 @@ export default function MessageInputArea({
         }
         isRecordingRef.current = false
         setIsRecording(false)
-        longPressTriggered.current = false
         if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
     }
 
-    const handleMediaPointerDown = (e: React.PointerEvent) => {
-        if (isRecordingRef.current) return
-        // No e.preventDefault() — label must receive the click event for camera to open
-        longPressTriggered.current = false
+    // Mic button: pointerdown = start instantly, pointerup = stop+send, cancel = discard
+    const handleMicPointerDown = (e: React.PointerEvent) => {
+        e.preventDefault()
         shouldStopAfterStart.current = false
-        longPressTimerRef.current = setTimeout(() => {
-            longPressTimerRef.current = null
-            longPressTriggered.current = true
-            // Attach doc-level pointerup BEFORE startRecording so we catch the release
-            // even if the label element gets unmounted (React swaps it for the cancel button).
-            const onDocUp = () => {
-                document.removeEventListener('pointerup', onDocUp)
-                if (docPointerUpRef.current === onDocUp) docPointerUpRef.current = null
-                if (isRecordingRef.current) {
-                    stopRecording()
-                } else {
-                    shouldStopAfterStart.current = true
-                }
-            }
-            docPointerUpRef.current = onDocUp
-            document.addEventListener('pointerup', onDocUp)
-            startRecording()
-        }, 500)
+        startRecording()
     }
 
-    const handleMediaPointerUp = () => {
-        if (longPressTimerRef.current) {
-            // Short tap — clear timer; label's native click will open camera
-            clearTimeout(longPressTimerRef.current)
-            longPressTimerRef.current = null
+    const handleMicPointerUp = () => {
+        if (isRecordingRef.current) {
+            stopRecording()
+        } else {
+            // getUserMedia still resolving — flag to stop as soon as it starts
+            shouldStopAfterStart.current = true
         }
-        // Long press release is handled by the doc-level listener added in the timer callback
     }
 
-    const handleMediaPointerCancel = () => {
-        if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null }
+    const handleMicPointerCancel = () => {
         cancelRecording()
-    }
-
-    // Prevent camera from opening after a long-press (voice recording)
-    const handleMicLabelClick = (e: React.MouseEvent) => {
-        if (longPressTriggered.current || isRecording || justStoppedRecording.current) {
-            e.preventDefault()
-            longPressTriggered.current = false
-        }
-        // Short tap: allow label's default → opens camera input natively
     }
 
     // Close channel dropdown on outside click
@@ -643,10 +594,17 @@ export default function MessageInputArea({
 
                 {isRecording ? (
                     /* Recording overlay replaces textarea */
-                    <div className="flex-1 bg-red-50 rounded-[18px] flex items-center px-4 min-h-[36px] border border-red-200 gap-3">
+                    <div className="flex-1 bg-red-50 rounded-[18px] flex items-center px-3 min-h-[36px] border border-red-200 gap-2">
+                        <button
+                            onClick={cancelRecording}
+                            className="w-[20px] h-[20px] rounded-full bg-red-200 hover:bg-red-300 flex items-center justify-center shrink-0 transition-colors"
+                            title="Отменить запись"
+                        >
+                            <X size={11} className="text-red-600" />
+                        </button>
                         <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
                         <span className="text-[13px] font-medium text-red-600 flex-1">{formatRecTime(recordingSeconds)}</span>
-                        <span className="text-[11px] text-gray-400">Отпустите чтобы отправить</span>
+                        <span className="text-[11px] text-gray-400 hidden xs:inline">Отпустите → отправить</span>
                     </div>
                 ) : (
                     <div className={`flex-1 bg-[#F4F5F7] rounded-[18px] flex items-end min-h-[36px] border border-transparent transition-colors ${
@@ -669,7 +627,7 @@ export default function MessageInputArea({
                     </div>
                 )}
 
-                {/* Camera input (hidden) — triggered natively by the mic/camera label below */}
+                {/* Hidden camera/file input — triggered by the camera label below */}
                 <input
                     id="msg-camera-input"
                     ref={cameraInputRef}
@@ -680,9 +638,9 @@ export default function MessageInputArea({
                     onChange={handleFileSelect}
                 />
 
-                {/* Mobile: скрепка когда нет текста; отправка когда есть текст */}
+                {/* Mobile: скрепка когда нет текста и не идёт запись */}
                 <button
-                    className={`${hasText ? 'hidden' : 'flex'} lg:hidden h-[36px] w-[36px] rounded-full hover:bg-gray-100 items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400'}`}
+                    className={`${hasText || isRecording ? 'hidden' : 'flex'} lg:hidden h-[36px] w-[36px] rounded-full hover:bg-gray-100 items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400'}`}
                     onClick={() => fileInputRef.current?.click()}
                     title="Прикрепить файл"
                 >
@@ -702,28 +660,32 @@ export default function MessageInputArea({
                     <SendHorizonal size={17} className="translate-x-[1px]" />
                 </button>
 
-                {/* Mobile: tap = camera, long press = voice record */}
-                {isRecording ? (
-                    <button
-                        className="lg:hidden h-[36px] w-[36px] rounded-full bg-red-100 flex items-center justify-center shrink-0"
-                        onClick={cancelRecording}
-                        title="Отменить запись"
-                    >
-                        <X size={16} className="text-red-500" />
-                    </button>
-                ) : (
+                {/* Camera — simple tap; скрыта пока идёт запись */}
+                {!isRecording && (
                     <label
                         htmlFor="msg-camera-input"
-                        className="lg:hidden h-[36px] w-[36px] rounded-full flex items-center justify-center shrink-0 cursor-pointer text-gray-400 hover:bg-gray-100 active:bg-gray-200 transition-colors select-none"
-                        onPointerDown={handleMediaPointerDown}
-                        onPointerUp={handleMediaPointerUp}
-                        onPointerCancel={handleMediaPointerCancel}
-                        onClick={handleMicLabelClick}
-                        title="Нажмите для камеры / удерживайте для записи голоса"
+                        className="lg:hidden h-[36px] w-[36px] rounded-full flex items-center justify-center shrink-0 cursor-pointer text-gray-400 hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                        title="Камера"
                     >
-                        <Mic size={18} />
+                        <Camera size={18} />
                     </label>
                 )}
+
+                {/* Mic — ВСЕГДА в DOM, иначе pointerup не придёт после начала записи.
+                    Меняет цвет на синий во время записи. */}
+                <button
+                    className={`lg:hidden h-[36px] w-[36px] rounded-full flex items-center justify-center shrink-0 select-none touch-none transition-colors ${
+                        isRecording
+                            ? 'bg-[#3390EC] text-white'
+                            : 'text-gray-400 hover:bg-gray-100 active:bg-gray-200'
+                    }`}
+                    onPointerDown={handleMicPointerDown}
+                    onPointerUp={handleMicPointerUp}
+                    onPointerCancel={handleMicPointerCancel}
+                    title={isRecording ? "Отпустите чтобы отправить" : "Удерживайте для записи голоса"}
+                >
+                    <Mic size={18} />
+                </button>
             </div>
         </div>
         </>
