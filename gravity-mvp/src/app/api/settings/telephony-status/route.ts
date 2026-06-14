@@ -65,7 +65,10 @@ export async function GET() {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-    const wsHost = '127.0.0.1'
+    // FreeSWITCH runs in its own container (or host) — reuse the same host the
+    // ESL listener dials (FS_ESL_HOST), not loopback. Inside the gravity
+    // container 127.0.0.1:7080 is nothing; the WS port listens on `freeswitch`.
+    const wsHost = process.env.FS_ESL_HOST ?? '127.0.0.1'
     const wsPort = 7080  // FreeSWITCH WSS (JsSIP)
     const proxyEnv = process.env.HTTPS_PROXY || process.env.https_proxy || ''
     const proxyMatch = /^https?:\/\/([^:]+):(\d+)/i.exec(proxyEnv)
@@ -77,10 +80,17 @@ export async function GET() {
     const minioHost = minioMatch?.[1] ?? '127.0.0.1'
     const minioPort = minioMatch?.[2] ? Number(minioMatch[2]) : (minioEnv.startsWith('https') ? 443 : 80)
 
-    const redisEnv = process.env.REDIS_URL ?? 'redis://localhost:6379'
-    const redisMatch = /^redis:\/\/([^:]+):?(\d+)?/i.exec(redisEnv)
-    const redisHost = redisMatch?.[1] ?? '127.0.0.1'
-    const redisPort = redisMatch?.[2] ? Number(redisMatch[2]) : 6379
+    // REDIS_URL is redis://[user]:[pass]@host:port in production. The old
+    // regex tripped on the empty-username form (redis://:pass@host) — `[^:]+`
+    // stalls on the `:` right after `//` — and fell back to localhost, painting
+    // a perfectly healthy Redis red. URL parsing handles every auth shape.
+    let redisHost = '127.0.0.1'
+    let redisPort = 6379
+    try {
+        const u = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379')
+        if (u.hostname) redisHost = u.hostname
+        if (u.port) redisPort = Number(u.port)
+    } catch {}
 
     const [
         eslConnected,
@@ -111,7 +121,7 @@ export async function GET() {
             proxy: {
                 ok: proxyReachable,
                 label: 'VPN-прокси для OpenAI',
-                detail: proxyReachable ? `${proxyHost}:${proxyPort}` : 'не доступен',
+                detail: proxyReachable ? `${proxyHost}:${proxyPort}` : (proxyEnv ? 'не доступен' : 'не настроен'),
             },
             redis: { ok: redisReachable, label: 'Redis (очередь BullMQ)', detail: redisReachable ? `${redisHost}:${redisPort}` : 'не доступен' },
             minio: { ok: minioReachable, label: 'MinIO (хранилище записей)', detail: minioReachable ? `${minioHost}:${minioPort}` : 'не доступен' },

@@ -78,6 +78,11 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
 
+    // Edit display name state
+    const [editingName, setEditingName] = useState(false)
+    const [nameInput, setNameInput] = useState("")
+    const [nameSaving, setNameSaving] = useState(false)
+
     // Add-phone inline form state
     const [showAddPhone, setShowAddPhone] = useState(false)
     const [newPhoneInput, setNewPhoneInput] = useState('')
@@ -225,7 +230,67 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     <div className="w-14 h-14 rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[20px] font-bold mb-[2px]">
                         {displayName.substring(0, 2).toUpperCase()}
                     </div>
-                    <h3 className="text-[15px] font-semibold text-[#111]">{displayName}</h3>
+                    {contact && editingName ? (
+                        <div className="flex items-center gap-1 mt-0.5 w-full justify-center">
+                            <input
+                                autoFocus
+                                value={nameInput}
+                                onChange={e => setNameInput(e.target.value)}
+                                onKeyDown={async e => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        if (!nameInput.trim() || nameSaving) return
+                                        setNameSaving(true)
+                                        await fetch(`/api/contacts/${contact.id}`, {
+                                            method: 'PATCH',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ displayName: nameInput.trim() }),
+                                        })
+                                        await refetchContact()
+                                        setEditingName(false)
+                                        setNameSaving(false)
+                                    }
+                                    if (e.key === 'Escape') { setEditingName(false) }
+                                }}
+                                className="text-[15px] font-semibold text-[#111] border-b border-[#3390EC] outline-none bg-transparent text-center w-full max-w-[180px]"
+                                placeholder="Введите имя"
+                            />
+                            <button
+                                disabled={nameSaving || !nameInput.trim()}
+                                onClick={async () => {
+                                    if (!nameInput.trim() || nameSaving) return
+                                    setNameSaving(true)
+                                    await fetch(`/api/contacts/${contact.id}`, {
+                                        method: 'PATCH',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ displayName: nameInput.trim() }),
+                                    })
+                                    await refetchContact()
+                                    setEditingName(false)
+                                    setNameSaving(false)
+                                }}
+                                className="text-[#3390EC] disabled:opacity-40"
+                            >
+                                <Check size={14} />
+                            </button>
+                            <button onClick={() => setEditingName(false)} className="text-gray-400">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center gap-1 mt-0.5">
+                            <h3 className="text-[15px] font-semibold text-[#111]">{displayName}</h3>
+                            {contact && (
+                                <button
+                                    onClick={() => { setNameInput(displayName); setEditingName(true) }}
+                                    className="text-gray-300 hover:text-gray-500 transition-colors"
+                                    title="Редактировать имя"
+                                >
+                                    <Pencil size={12} />
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${sourceInfo.color}`}>
                             {sourceInfo.label}

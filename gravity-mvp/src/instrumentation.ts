@@ -97,9 +97,12 @@ export async function register() {
         try {
             const { prisma } = await import('@/lib/prisma')
             const { initializeClient } = await import('@/lib/whatsapp/WhatsAppService')
+            // Include 'error'/'idle' so connections that crashed or expired in a
+            // previous container run are retried on startup. If the session file
+            // is still valid on disk → auto-reconnect; if not → QR shown in UI.
             const readyConns = await prisma.whatsAppConnection.findMany({
-                where: { status: { in: ['ready', 'authenticated'] } },
-                select: { id: true, name: true },
+                where: { status: { in: ['ready', 'authenticated', 'error', 'idle'] } },
+                select: { id: true, name: true, status: true },
             })
             opsLog('info', 'whatsapp_warmup_start', { operation: 'startup', count: readyConns.length })
             // FIX 8: sequential warmup — previous parallel forEach caused Chromium process storms

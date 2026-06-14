@@ -85,6 +85,7 @@ export default function MessageInputArea({
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const dropdownRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const isTouchDevice = useRef(false)
     const [isSendingImage, setIsSendingImage] = useState(false)
     const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
 
@@ -121,6 +122,10 @@ export default function MessageInputArea({
         }, 10)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefillToken])
+
+    useEffect(() => {
+        isTouchDevice.current = window.matchMedia('(pointer: coarse)').matches
+    }, [])
 
     // Close channel dropdown on outside click
     useEffect(() => {
@@ -221,7 +226,7 @@ export default function MessageInputArea({
             }
         }
 
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice.current) {
             e.preventDefault()
             handleSend()
         }

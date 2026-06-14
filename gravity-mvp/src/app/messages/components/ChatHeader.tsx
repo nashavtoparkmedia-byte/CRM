@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList, UserPlus, CheckCircle2, RotateCcw, UserMinus, ArrowLeft } from "lucide-react"
+import { Search, PanelRightClose, PanelRightOpen, AlertCircle, X, ChevronUp, ChevronDown, ClipboardList, UserPlus, CheckCircle2, RotateCcw, UserMinus, ArrowLeft, MoreVertical, Check } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
@@ -49,6 +49,9 @@ export default function ChatHeader({
     const searchInputRef = useRef<HTMLInputElement>(null)
     const [showTasksPopover, setShowTasksPopover] = useState(false)
     const tasksPopoverRef = useRef<HTMLDivElement>(null)
+    const [showMobileMenu, setShowMobileMenu] = useState(false)
+    const mobileMenuRef = useRef<HTMLDivElement>(null)
+    const [copiedPhone, setCopiedPhone] = useState(false)
     // PR-О: modal для привязки чата к водителю
     const [showLinkModal, setShowLinkModal] = useState(false)
 
@@ -123,10 +126,28 @@ export default function ChatHeader({
             if (tasksPopoverRef.current && !tasksPopoverRef.current.contains(e.target as Node)) {
                 setShowTasksPopover(false)
             }
+            if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+                setShowMobileMenu(false)
+            }
         }
         document.addEventListener('mousedown', handleClickOutside)
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
+
+    const handleCopyPhone = async () => {
+        const phone =
+            chat.driver?.phone ||
+            contact?.phones?.find?.((p: any) => p.isPrimary)?.phone ||
+            contact?.phones?.[0]?.phone ||
+            (chat.externalChatId?.startsWith('+') ? chat.externalChatId.split(':')[0] : null) ||
+            chat.name
+        if (!phone) return
+        try {
+            await navigator.clipboard.writeText(phone)
+            setCopiedPhone(true)
+            setTimeout(() => setCopiedPhone(false), 2000)
+        } catch { /* clipboard unavailable */ }
+    }
 
     const handleSearchKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter') {
@@ -187,12 +208,7 @@ export default function ChatHeader({
                             )}
                             <div className="flex items-center gap-1.5 min-w-0">
                                 {(() => {
-                                    /* PR-З: title с правильным приоритетом источников.
-                                       Раньше formatChatTitle брал contact.displayName раньше chat.name,
-                                       и для WA-чатов отображал fake @lid номер вместо реального
-                                       pushname из chat.name. Также для placeholder TG/MAX показывал
-                                       голый internal user ID, выглядящий как телефон.
-                                       Теперь: реальное имя/телефон или явное «Без имени» + badge. */
+                                    /* PR-З: title с правильным приоритетом источников */
                                     const detailed = formatChatTitleDetailed({
                                         driverFullName:     chat.driver?.fullName,
                                         contactDisplayName: chat.contact?.displayName,
@@ -204,10 +220,20 @@ export default function ChatHeader({
                                     const subtitle = driverPhone && driverPhone !== detailed.title ? driverPhone : null
                                     return (
                                         <>
-                                            <h3 className={`font-semibold text-[15px] leading-none truncate min-w-0 lg:shrink-0 lg:overflow-visible ${detailed.isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}>
+                                            <button
+                                                onClick={handleCopyPhone}
+                                                className={`font-semibold text-[15px] leading-none truncate min-w-0 lg:shrink-0 lg:overflow-visible text-left active:opacity-70 transition-opacity ${detailed.isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}
+                                                title="Нажмите чтобы скопировать"
+                                            >
                                                 {detailed.title}
-                                            </h3>
-                                            {detailed.isUnlinked && (
+                                            </button>
+                                            {copiedPhone && (
+                                                <span className="shrink-0 text-[11px] text-emerald-500 flex items-center gap-0.5">
+                                                    <Check size={10} />
+                                                    Скопировано
+                                                </span>
+                                            )}
+                                            {detailed.isUnlinked && !copiedPhone && (
                                                 <button
                                                     onClick={() => setShowLinkModal(true)}
                                                     className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0 hover:bg-amber-100 transition-colors cursor-pointer"
@@ -216,16 +242,20 @@ export default function ChatHeader({
                                                     Привязать
                                                 </button>
                                             )}
-                                            {subtitle && (
+                                            {subtitle && !copiedPhone && (
                                                 <>
                                                     <span className="text-[11px] text-gray-400">·</span>
                                                     <span className="text-[11px] text-gray-500 font-mono truncate">{subtitle}</span>
                                                 </>
                                             )}
-                                            <span className="text-[11px] text-gray-400">·</span>
-                                            <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>
-                                                {getStatusLabel(chat.status)}
-                                            </span>
+                                            {!copiedPhone && (
+                                                <>
+                                                    <span className="text-[11px] text-gray-400">·</span>
+                                                    <span className={`text-[11px] font-medium ${chat.status === 'open' || chat.status === 'waiting_customer' ? 'text-[#3390EC]' : chat.status === 'resolved' ? 'text-green-500' : 'text-gray-500'}`}>
+                                                        {getStatusLabel(chat.status)}
+                                                    </span>
+                                                </>
+                                            )}
                                         </>
                                     )
                                 })()}
@@ -233,7 +263,7 @@ export default function ChatHeader({
                         </div>
 
                         <div className="flex items-center gap-0.5">
-                            {/* 📌 Tasks button */}
+                            {/* 📌 Tasks button — desktop only (mobile: inside ⋮ menu) */}
                             <div className="relative" ref={tasksPopoverRef}>
                                 <button
                                     onClick={() => setShowTasksPopover(!showTasksPopover)}
@@ -307,7 +337,7 @@ export default function ChatHeader({
                                 )}
                             </div>
 
-                            {/* Workflow action buttons */}
+                            {/* Workflow action buttons — desktop only (mobile: inside ⋮ menu) */}
                             {!chat.assignedToUserId ? (
                                 <button
                                     onClick={async () => {
@@ -316,11 +346,11 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-[2px] rounded-md hover:bg-blue-50 flex items-center gap-1 text-[11px] font-medium text-[#3390EC] transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-blue-50 hidden lg:flex items-center gap-1 text-[11px] font-medium text-[#3390EC] transition-colors"
                                     title="Взять себе"
                                 >
                                     <UserPlus size={13} />
-                                    <span className="hidden lg:inline">Взять</span>
+                                    <span>Взять</span>
                                 </button>
                             ) : (
                                 <button
@@ -328,7 +358,7 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/unassign`, { method: 'POST' })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-[2px] rounded-md hover:bg-gray-100 flex items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-gray-100 hidden lg:flex items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors"
                                     title="Снять назначение"
                                 >
                                     <UserMinus size={13} />
@@ -341,11 +371,11 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/resolve`, { method: 'POST' })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-[2px] rounded-md hover:bg-green-50 flex items-center gap-1 text-[11px] font-medium text-emerald-500 transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-green-50 hidden lg:flex items-center gap-1 text-[11px] font-medium text-emerald-500 transition-colors"
                                     title="Завершить"
                                 >
                                     <CheckCircle2 size={13} />
-                                    <span className="hidden lg:inline">Завершить</span>
+                                    <span>Завершить</span>
                                 </button>
                             ) : (
                                 <button
@@ -353,19 +383,15 @@ export default function ChatHeader({
                                         await fetch(`/api/chats/${chat.id}/reopen`, { method: 'POST' })
                                         onConversationUpdate?.()
                                     }}
-                                    className="h-[28px] px-[2px] rounded-md hover:bg-amber-50 flex items-center gap-1 text-[11px] font-medium text-amber-500 transition-colors"
+                                    className="h-[28px] px-[2px] rounded-md hover:bg-amber-50 hidden lg:flex items-center gap-1 text-[11px] font-medium text-amber-500 transition-colors"
                                     title="Переоткрыть"
                                 >
                                     <RotateCcw size={13} />
-                                    <span className="hidden lg:inline">Открыть</span>
+                                    <span>Открыть</span>
                                 </button>
                             )}
 
-                            {/* "Позвонить" — звонилка прямо из шапки чата.
-                                Берём первый доступный номер: linked driver →
-                                resolved contact's primary phone → раздроблённый
-                                externalChatId (для WhatsApp в формате "+7...:wa").
-                                Если ни одного — кнопка не показывается. */}
+                            {/* Call button — visible on all screens */}
                             {(() => {
                                 const phone =
                                     chat.driver?.phone ||
@@ -376,22 +402,104 @@ export default function ChatHeader({
                                 return <CallButton phoneNumber={phone} label="" />
                             })()}
 
+                            {/* Search — visible on all screens */}
                             <button
                                 onClick={() => setIsSearchActive(true)}
-                                className="hidden lg:flex h-[28px] w-[28px] rounded-md hover:bg-gray-100 items-center justify-center text-gray-400 transition-colors"
+                                className="flex h-[28px] w-[28px] rounded-md hover:bg-gray-100 items-center justify-center text-gray-400 transition-colors"
                                 title="Поиск (Cmd/Ctrl+F)"
                             >
                                 <Search size={15} />
                             </button>
+
+                            {/* Profile — visible on all screens */}
                             <button
                                 onClick={() => toggleProfileDrawer(!isProfileOpenFromUrl)}
-                                className={`hidden lg:flex h-[28px] w-[28px] rounded-md items-center justify-center transition-colors ${
+                                className={`flex h-[28px] w-[28px] rounded-md items-center justify-center transition-colors ${
                                     isProfileOpenFromUrl ? 'bg-[#3390EC]/10 text-[#3390EC]' : 'hover:bg-gray-100 text-gray-400'
                                 }`}
                                 title="Профиль контакта"
                             >
                                 {isProfileOpenFromUrl ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
                             </button>
+
+                            {/* ⋮ Three-dot menu — mobile only */}
+                            <div className="relative lg:hidden" ref={mobileMenuRef}>
+                                <button
+                                    onClick={() => setShowMobileMenu(v => !v)}
+                                    className={`h-[28px] w-[28px] rounded-md flex items-center justify-center transition-colors ${showMobileMenu ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:bg-gray-100'}`}
+                                    title="Ещё"
+                                >
+                                    <MoreVertical size={15} />
+                                </button>
+                                {showMobileMenu && (
+                                    <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-xl border border-[#E0E0E0] w-[200px] z-50 overflow-hidden py-1">
+                                        {/* Tasks item */}
+                                        {chat.driver?.id && (
+                                            <button
+                                                onClick={() => { setShowMobileMenu(false); onOpenCreateTask?.() }}
+                                                className="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-[13px] text-[#111] hover:bg-gray-50 transition-colors"
+                                            >
+                                                <ClipboardList size={15} className="text-gray-400 shrink-0" />
+                                                <span>Задачи <span className="text-gray-400">({taskCount})</span></span>
+                                            </button>
+                                        )}
+                                        {/* Assign/unassign */}
+                                        {!chat.assignedToUserId ? (
+                                            <button
+                                                onClick={async () => {
+                                                    setShowMobileMenu(false)
+                                                    const userId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1]
+                                                    if (!userId) return
+                                                    await fetch(`/api/chats/${chat.id}/assign`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId }) })
+                                                    onConversationUpdate?.()
+                                                }}
+                                                className="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-[13px] text-[#3390EC] hover:bg-gray-50 transition-colors"
+                                            >
+                                                <UserPlus size={15} className="shrink-0" />
+                                                <span>Взять себе</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={async () => {
+                                                    setShowMobileMenu(false)
+                                                    await fetch(`/api/chats/${chat.id}/unassign`, { method: 'POST' })
+                                                    onConversationUpdate?.()
+                                                }}
+                                                className="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors"
+                                            >
+                                                <UserMinus size={15} className="shrink-0" />
+                                                <span>Снять назначение</span>
+                                            </button>
+                                        )}
+                                        {/* Resolve/reopen */}
+                                        {chat.status !== 'resolved' ? (
+                                            <button
+                                                onClick={async () => {
+                                                    setShowMobileMenu(false)
+                                                    await fetch(`/api/chats/${chat.id}/resolve`, { method: 'POST' })
+                                                    onConversationUpdate?.()
+                                                }}
+                                                className="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-[13px] text-emerald-600 hover:bg-gray-50 transition-colors"
+                                            >
+                                                <CheckCircle2 size={15} className="shrink-0" />
+                                                <span>Завершить чат</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={async () => {
+                                                    setShowMobileMenu(false)
+                                                    await fetch(`/api/chats/${chat.id}/reopen`, { method: 'POST' })
+                                                    onConversationUpdate?.()
+                                                }}
+                                                className="w-full px-3.5 py-2.5 flex items-center gap-2.5 text-[13px] text-amber-600 hover:bg-gray-50 transition-colors"
+                                            >
+                                                <RotateCcw size={15} className="shrink-0" />
+                                                <span>Открыть чат</span>
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         </div>
 
