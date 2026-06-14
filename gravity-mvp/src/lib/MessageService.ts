@@ -212,6 +212,19 @@ export class MessageService {
                     }
                 }
 
+                // Channel where the driver (contact) last wrote — used for badge
+                // in the "Все" tab so the operator sees which channel is active,
+                // rather than always seeing the primary channel (usually MAX).
+                let lastInboundChannel: string | null = null
+                let latestInboundAt: Date | null = null
+                for (const c of driverChats) {
+                    const t = c.lastInboundAt ? new Date(c.lastInboundAt) : null
+                    if (t && (!latestInboundAt || t > latestInboundAt)) {
+                        latestInboundAt = t
+                        lastInboundChannel = c.channel
+                    }
+                }
+
                 mergedEntries.push({
                     ...primary,
                     unreadCount: allUnread,
@@ -223,7 +236,9 @@ export class MessageService {
                     allProfiles, // List of { channel, profileId }
                     channelChats, // { whatsapp: {chat}, telegram: {chat}, ... }
                     // For display in channel-filter tabs, keep all channels the driver has
-                    allChannels: driverChats.map((c: any) => c.channel)
+                    allChannels: driverChats.map((c: any) => c.channel),
+                    // Channel of the most recent inbound message across all channels
+                    lastInboundChannel,
                 })
             }
 

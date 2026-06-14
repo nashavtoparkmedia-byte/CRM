@@ -272,6 +272,7 @@ export async function getTelegramRuntimeStatus() {
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
+import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 
 function detectTgMediaType(message: any): { type: string; fallback: string } | null {
     if (!message.media) return null
@@ -443,11 +444,96 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
             }
 
             console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
+            ConversationWorkflowService.onInboundMessage(unifiedChat.id, now).catch(e =>
+                console.error(`[${loggerPrefix}] onInboundMessage error:`, e.message)
+            )
             emitMessageReceived(savedMsg).catch(e =>
                 console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
             )
         }
     }
+}
+
+/**
+ * Mirrors outbound messages sent from any Telegram client (not via CRM).
+ * Called when GramJS fires NewMessage with message.out === true.
+ *
+ * Dedup strategy:
+ *   1. Check externalId (set by sendTelegramMessage if CRM sent it)
+ *   2. Check content+time within 30s (handles race: GramJS fires before DB update)
+ *   3. If found → update externalId if missing, skip create
+ *   4. If not found → external send, create new outbound message
+ */
+async function processOutboundMirrorMessage(message: any, connectionId: string, loggerPrefix = 'TG-MIRROR') {
+    if (!message?.out) return
+
+    // Recipient = the person we're writing TO
+    const recipientId = message.peerId?.userId?.toString()
+    const text = message.message || ''
+    if (!recipientId || !text) return
+
+    const externalChatId = `telegram:${recipientId}`
+    const externalMsgId = message.id?.toString()
+    const validated = validateTgDate(message.date)
+    if (!validated) return
+    const sentAt = validated
+
+    const chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
+    if (!chat) {
+        // Don't create chats for unknown recipients (e.g. group chats, bots)
+        return
+    }
+
+    // Dedup: by externalId OR by content+time (30s window handles send→event race)
+    const existing = await (prisma.message as any).findFirst({
+        where: {
+            OR: [
+                ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
+                {
+                    chatId: chat.id,
+                    content: text,
+                    direction: 'outbound',
+                    sentAt: {
+                        gte: new Date(sentAt.getTime() - 30000),
+                        lte: new Date(sentAt.getTime() + 30000),
+                    },
+                },
+            ],
+        },
+    })
+
+    if (existing) {
+        // If CRM sent this but externalId not yet written, fill it in
+        if (!existing.externalId && externalMsgId) {
+            await (prisma.message as any).update({
+                where: { id: existing.id },
+                data: { externalId: externalMsgId },
+            })
+        }
+        console.log(`[${loggerPrefix}] DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
+        return
+    }
+
+    // New outbound message sent from outside CRM — mirror it
+    const saved = await (prisma.message as any).create({
+        data: {
+            chatId: chat.id,
+            direction: 'outbound',
+            content: text,
+            channel: 'telegram',
+            type: 'text',
+            sentAt,
+            status: 'delivered',
+            externalId: externalMsgId,
+        },
+    })
+
+    console.log(`[${loggerPrefix}] MIRRORED outbound msgId=${externalMsgId} chat=${chat.id}`)
+
+    // Push to SSE so open chat tabs see the message instantly
+    emitMessageReceived(saved).catch(e =>
+        console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
+    )
 }
 
 async function catchUpMissedMessages(client: TelegramClient, connectionId: string) {
@@ -481,7 +567,12 @@ function attachInboundListener(client: TelegramClient, connectionId: string) {
 
     client.addEventHandler(async (event: any) => {
         try {
-            await processInboundTelegramMessage(event.message, connectionId, 'TG-LISTENER')
+            const msg = event.message
+            if (msg?.out) {
+                await processOutboundMirrorMessage(msg, connectionId, 'TG-MIRROR')
+            } else {
+                await processInboundTelegramMessage(msg, connectionId, 'TG-LISTENER')
+            }
         } catch (err: any) {
             console.error(`[TG-LISTENER] Error (conn=${connectionId}):`, err.message)
         }
