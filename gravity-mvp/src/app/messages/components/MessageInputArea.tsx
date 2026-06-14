@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useMemo } from "react"
-import { SendHorizonal, Paperclip, X, ChevronDown, Plus, Zap } from "lucide-react"
+import { SendHorizonal, Paperclip, X, ChevronDown, Plus, Zap, Mic, Camera } from "lucide-react"
 import QuickReplySuggestions from "./QuickReplySuggestions"
 import type { QuickReplyTemplate } from "./QuickReplySuggestions"
 import QuickReplyPopover from "./QuickReplyPopover"
@@ -85,8 +85,18 @@ export default function MessageInputArea({
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const dropdownRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
+    const cameraInputRef = useRef<HTMLInputElement>(null)
     const isTouchDevice = useRef(false)
     const [isSendingImage, setIsSendingImage] = useState(false)
+
+    // Mic / camera toggle + voice recording
+    const [mediaMode, setMediaMode] = useState<'mic' | 'camera'>('mic')
+    const [isRecording, setIsRecording] = useState(false)
+    const [recordingSeconds, setRecordingSeconds] = useState(0)
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+    const audioChunksRef = useRef<Blob[]>([])
+    const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
 
     // Restore draft on chat/channel change
@@ -126,6 +136,98 @@ export default function MessageInputArea({
     useEffect(() => {
         isTouchDevice.current = window.matchMedia('(pointer: coarse)').matches
     }, [])
+
+    // Cleanup recording on unmount
+    useEffect(() => {
+        return () => {
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+        }
+    }, [])
+
+    const formatRecTime = (s: number) =>
+        `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+
+    const startRecording = async () => {
+        if (!navigator.mediaDevices?.getUserMedia) return
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+            const mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+                .find(t => MediaRecorder.isTypeSupported(t)) || 'audio/webm'
+            const recorder = new MediaRecorder(stream, { mimeType })
+            audioChunksRef.current = []
+            recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+            recorder.onstop = () => {
+                stream.getTracks().forEach(t => t.stop())
+                const blob = new Blob(audioChunksRef.current, { type: mimeType })
+                const reader = new FileReader()
+                reader.onload = () => {
+                    const dataUrl = reader.result as string
+                    const file = new File([blob], 'voice_message.webm', { type: mimeType })
+                    setImagePreview({ dataUrl, file })
+                }
+                reader.readAsDataURL(blob)
+            }
+            recorder.start()
+            mediaRecorderRef.current = recorder
+            setIsRecording(true)
+            setRecordingSeconds(0)
+            recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
+        } catch {
+            // mic permission denied or not available
+        }
+    }
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+        setIsRecording(false)
+        if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
+    }
+
+    const cancelRecording = () => {
+        audioChunksRef.current = []
+        if (mediaRecorderRef.current) {
+            mediaRecorderRef.current.ondataavailable = null
+            mediaRecorderRef.current.onstop = null
+            if (mediaRecorderRef.current.state === 'recording') {
+                mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop())
+                mediaRecorderRef.current.stop()
+            }
+            mediaRecorderRef.current = null
+        }
+        setIsRecording(false)
+        if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
+    }
+
+    const handleMediaPointerDown = (e: React.PointerEvent) => {
+        if (mediaMode !== 'mic' || isRecording) return
+        e.preventDefault()
+        longPressTimerRef.current = setTimeout(() => {
+            longPressTimerRef.current = null
+            startRecording()
+        }, 450)
+    }
+
+    const handleMediaPointerUp = () => {
+        if (longPressTimerRef.current) {
+            // Short tap: toggle mode
+            clearTimeout(longPressTimerRef.current)
+            longPressTimerRef.current = null
+            if (mediaMode === 'mic') {
+                setMediaMode('camera')
+                setTimeout(() => cameraInputRef.current?.click(), 80)
+            } else {
+                setMediaMode('mic')
+            }
+        } else if (isRecording) {
+            stopRecording()
+        }
+    }
+
+    const handleMediaPointerCancel = () => {
+        if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null }
+        if (isRecording) cancelRecording()
+    }
 
     // Close channel dropdown on outside click
     useEffect(() => {
@@ -493,46 +595,88 @@ export default function MessageInputArea({
                     )}
                 </div>
 
-                <div className={`flex-1 bg-[#F4F5F7] rounded-[18px] flex items-end min-h-[36px] border border-transparent transition-colors ${
-                    hasText ? 'focus-within:border-[#3390EC]/30 focus-within:bg-white' : 'focus-within:bg-[#EEEFF1]'
-                } relative`}>
-                    <textarea
-                        id="message-composer"
-                        ref={textareaRef}
-                        value={text}
-                        onChange={(e) => {
-                            handleTextChange(e.target.value)
-                            handleInput()
-                        }}
-                        onKeyDown={handleKeyDown}
-                        onFocus={onTextareaFocus}
-                        placeholder="Написать сообщение..."
-                        className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-[4px] resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
-                        rows={1}
-                    />
-                </div>
+                {isRecording ? (
+                    /* Recording overlay replaces textarea */
+                    <div className="flex-1 bg-red-50 rounded-[18px] flex items-center px-4 min-h-[36px] border border-red-200 gap-3">
+                        <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
+                        <span className="text-[13px] font-medium text-red-600 flex-1">{formatRecTime(recordingSeconds)}</span>
+                        <span className="text-[11px] text-gray-400">Отпустите чтобы отправить</span>
+                    </div>
+                ) : (
+                    <div className={`flex-1 bg-[#F4F5F7] rounded-[18px] flex items-end min-h-[36px] border border-transparent transition-colors ${
+                        hasText ? 'focus-within:border-[#3390EC]/30 focus-within:bg-white' : 'focus-within:bg-[#EEEFF1]'
+                    } relative`}>
+                        <textarea
+                            id="message-composer"
+                            ref={textareaRef}
+                            value={text}
+                            onChange={(e) => {
+                                handleTextChange(e.target.value)
+                                handleInput()
+                            }}
+                            onKeyDown={handleKeyDown}
+                            onFocus={onTextareaFocus}
+                            placeholder="Написать сообщение..."
+                            className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-[4px] resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
+                            rows={1}
+                        />
+                    </div>
+                )}
 
-                {/* Скрепка справа — только мобайл (Telegram-стиль). */}
+                {/* Camera input (hidden) for capturing photos */}
+                <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                />
+
+                {/* Mobile: скрепка когда нет текста; отправка когда есть текст */}
                 <button
-                    className={`lg:hidden h-[36px] w-[36px] rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400 hover:text-gray-600'}`}
+                    className={`${hasText ? 'hidden' : 'flex'} lg:hidden h-[36px] w-[36px] rounded-full hover:bg-gray-100 items-center justify-center transition-colors shrink-0 ${isSendingImage ? 'text-purple-500 animate-pulse' : 'text-gray-400'}`}
                     onClick={() => fileInputRef.current?.click()}
                     title="Прикрепить файл"
                 >
-                    <Paperclip size={17} />
+                    <Paperclip size={18} />
                 </button>
 
-                {/* Send button with clear state differentiation */}
+                {/* Send button: mobile — only when has text; desktop — always */}
                 <button
                     onClick={handleSend}
                     disabled={!hasText}
-                    className={`h-[36px] w-[36px] rounded-full flex items-center justify-center transition-all shrink-0 ${
-                        hasText 
-                        ? 'bg-[#3390EC] text-white hover:bg-[#2B7FD4] active:scale-95 shadow-sm shadow-[#3390EC]/30' 
-                        : 'bg-transparent text-gray-300 cursor-default'
+                    className={`h-[36px] w-[36px] rounded-full items-center justify-center transition-all shrink-0 ${
+                        hasText
+                        ? 'flex bg-[#3390EC] text-white hover:bg-[#2B7FD4] active:scale-95'
+                        : 'hidden lg:flex bg-transparent text-gray-300 cursor-default'
                     }`}
                 >
-                    <SendHorizonal size={hasText ? 17 : 16} className="translate-x-[1px]" />
+                    <SendHorizonal size={17} className="translate-x-[1px]" />
                 </button>
+
+                {/* Mobile: mic/camera toggle button */}
+                {isRecording ? (
+                    <button
+                        className="lg:hidden h-[36px] w-[36px] rounded-full bg-red-100 flex items-center justify-center shrink-0"
+                        onClick={cancelRecording}
+                        title="Отменить запись"
+                    >
+                        <X size={16} className="text-red-500" />
+                    </button>
+                ) : (
+                    <button
+                        className={`lg:hidden h-[36px] w-[36px] rounded-full flex items-center justify-center shrink-0 transition-colors select-none ${
+                            mediaMode === 'camera' ? 'text-[#3390EC] hover:bg-blue-50' : 'text-gray-400 hover:bg-gray-100'
+                        }`}
+                        onPointerDown={handleMediaPointerDown}
+                        onPointerUp={handleMediaPointerUp}
+                        onPointerCancel={handleMediaPointerCancel}
+                        title={mediaMode === 'mic' ? 'Удерживайте для записи / нажмите для камеры' : 'Камера (нажмите для фото / ещё раз для mic)'}
+                    >
+                        {mediaMode === 'mic' ? <Mic size={18} /> : <Camera size={18} />}
+                    </button>
+                )}
             </div>
         </div>
         </>

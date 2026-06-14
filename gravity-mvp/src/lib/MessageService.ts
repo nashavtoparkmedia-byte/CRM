@@ -63,14 +63,18 @@ export class MessageService {
                         take: 1
                     }
                 },
-                orderBy: { lastMessageAt: 'desc' }
+                orderBy: { lastMessageAt: 'desc' },
+                take: 400,
             })
 
             // 1b. Enrich with fields not in Prisma client types (chatType, workflow fields)
-            const extraRows = await (prisma as any).$queryRaw`
+            // Scoped to the same set of chatIds to avoid a full-table scan.
+            const chatIds: string[] = chats.map((c: any) => c.id)
+            const extraRows: any[] = chatIds.length > 0 ? await (prisma as any).$queryRaw`
                 SELECT id, "chatType", "assignedToUserId", "lastInboundAt", "lastOutboundAt"
                 FROM "Chat"
-            `
+                WHERE id = ANY(${chatIds})
+            ` : []
             const extraMap = new Map<string, any>()
             for (const row of extraRows) {
                 extraMap.set(row.id, row)

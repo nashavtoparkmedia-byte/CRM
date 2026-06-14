@@ -135,15 +135,25 @@ export default function ChatHeader({
     }, [])
 
     const handleCopyPhone = async () => {
-        const phone =
+        const raw =
             chat.driver?.phone ||
             contact?.phones?.find?.((p: any) => p.isPrimary)?.phone ||
             contact?.phones?.[0]?.phone ||
             (chat.externalChatId?.startsWith('+') ? chat.externalChatId.split(':')[0] : null) ||
             chat.name
-        if (!phone) return
+        if (!raw) return
+        // Normalize: strip non-digits → reformat as +7XXXXXXXXXX
+        const digits = String(raw).replace(/\D/g, '')
+        let normalized = raw
+        if (digits.length === 11 && (digits[0] === '7' || digits[0] === '8')) {
+            normalized = '+7' + digits.slice(1)
+        } else if (digits.length === 10) {
+            normalized = '+7' + digits
+        } else if (digits.length > 6) {
+            normalized = '+' + digits
+        }
         try {
-            await navigator.clipboard.writeText(phone)
+            await navigator.clipboard.writeText(normalized)
             setCopiedPhone(true)
             setTimeout(() => setCopiedPhone(false), 2000)
         } catch { /* clipboard unavailable */ }
@@ -402,34 +412,36 @@ export default function ChatHeader({
                                 return <CallButton phoneNumber={phone} label="" />
                             })()}
 
-                            {/* Search — visible on all screens */}
+                            {/* Search — visible on all screens; larger tap target on mobile */}
                             <button
                                 onClick={() => setIsSearchActive(true)}
-                                className="flex h-[28px] w-[28px] rounded-md hover:bg-gray-100 items-center justify-center text-gray-400 transition-colors"
+                                className="flex h-[36px] w-[36px] lg:h-[28px] lg:w-[28px] rounded-md hover:bg-gray-100 items-center justify-center text-gray-400 transition-colors"
                                 title="Поиск (Cmd/Ctrl+F)"
                             >
-                                <Search size={15} />
+                                <Search size={17} className="lg:hidden" />
+                                <Search size={15} className="hidden lg:block" />
                             </button>
 
-                            {/* Profile — visible on all screens */}
+                            {/* Profile — visible on all screens; larger tap target on mobile */}
                             <button
                                 onClick={() => toggleProfileDrawer(!isProfileOpenFromUrl)}
-                                className={`flex h-[28px] w-[28px] rounded-md items-center justify-center transition-colors ${
+                                className={`flex h-[36px] w-[36px] lg:h-[28px] lg:w-[28px] rounded-md items-center justify-center transition-colors ${
                                     isProfileOpenFromUrl ? 'bg-[#3390EC]/10 text-[#3390EC]' : 'hover:bg-gray-100 text-gray-400'
                                 }`}
                                 title="Профиль контакта"
                             >
-                                {isProfileOpenFromUrl ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+                                {isProfileOpenFromUrl ? <PanelRightClose size={17} className="lg:hidden" /> : <PanelRightOpen size={17} className="lg:hidden" />}
+                                {isProfileOpenFromUrl ? <PanelRightClose size={15} className="hidden lg:block" /> : <PanelRightOpen size={15} className="hidden lg:block" />}
                             </button>
 
-                            {/* ⋮ Three-dot menu — mobile only */}
+                            {/* ⋮ Three-dot menu — mobile only; larger tap target */}
                             <div className="relative lg:hidden" ref={mobileMenuRef}>
                                 <button
                                     onClick={() => setShowMobileMenu(v => !v)}
-                                    className={`h-[28px] w-[28px] rounded-md flex items-center justify-center transition-colors ${showMobileMenu ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:bg-gray-100'}`}
+                                    className={`h-[36px] w-[36px] rounded-md flex items-center justify-center transition-colors ${showMobileMenu ? 'bg-gray-100 text-gray-700' : 'text-gray-400 hover:bg-gray-100'}`}
                                     title="Ещё"
                                 >
-                                    <MoreVertical size={15} />
+                                    <MoreVertical size={17} />
                                 </button>
                                 {showMobileMenu && (
                                     <div className="absolute top-full right-0 mt-1 bg-white rounded-xl shadow-xl border border-[#E0E0E0] w-[200px] z-50 overflow-hidden py-1">
@@ -503,9 +515,9 @@ export default function ChatHeader({
                         </div>
                         </div>
 
-                        {/* Line 2: contact metadata */}
+                        {/* Line 2: contact metadata — скрыта на мобиле (каналы видны в табах) */}
                         {hasMetadata && (
-                            <div className="h-[24px] flex items-center gap-[2px] pb-1">
+                            <div className="h-[24px] hidden lg:flex items-center gap-[2px] pb-1">
                                 {/* Бейдж этапа жизни: Лид · Канал /
                                     Водитель · Канал / Отток · Канал.
                                     contact.driver приходит из useContact —
