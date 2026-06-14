@@ -467,10 +467,14 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 async function processOutboundMirrorMessage(message: any, connectionId: string, loggerPrefix = 'TG-MIRROR') {
     if (!message?.out) return
 
-    // Recipient = the person we're writing TO
+    // Recipient = the person we're writing TO (only private chats)
     const recipientId = message.peerId?.userId?.toString()
-    const text = message.message || ''
-    if (!recipientId || !text) return
+    if (!recipientId) return  // group/channel — skip
+
+    const mediaInfo = detectTgMediaType(message)
+    const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
+    // Skip only if there's truly nothing to save (no text, no media)
+    if (!text && !mediaInfo) return
 
     const externalChatId = `telegram:${recipientId}`
     const externalMsgId = message.id?.toString()
@@ -479,10 +483,10 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     const sentAt = validated
 
     const chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-    if (!chat) {
-        // Don't create chats for unknown recipients (e.g. group chats, bots)
-        return
-    }
+    if (!chat) return  // unknown recipient — skip
+
+    const msgType = mediaInfo?.type || 'text'
+    const contentForDedup = text
 
     // Dedup: by externalId OR by content+time (30s window handles send→event race)
     const existing = await (prisma.message as any).findFirst({
@@ -491,7 +495,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
                 ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
                 {
                     chatId: chat.id,
-                    content: text,
+                    content: contentForDedup,
                     direction: 'outbound',
                     sentAt: {
                         gte: new Date(sentAt.getTime() - 30000),
@@ -503,7 +507,6 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     })
 
     if (existing) {
-        // If CRM sent this but externalId not yet written, fill it in
         if (!existing.externalId && externalMsgId) {
             await (prisma.message as any).update({
                 where: { id: existing.id },
@@ -521,16 +524,44 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
             direction: 'outbound',
             content: text,
             channel: 'telegram',
-            type: 'text',
+            type: msgType,
             sentAt,
             status: 'delivered',
             externalId: externalMsgId,
         },
     })
 
-    console.log(`[${loggerPrefix}] MIRRORED outbound msgId=${externalMsgId} chat=${chat.id}`)
+    // Download media if present
+    if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
+        try {
+            const buffer = await message.downloadMedia({ progressCallback: null })
+            if (buffer) {
+                const mimeType = message.media?.document?.mimeType || (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
+                const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                await (prisma as any).messageAttachment.create({
+                    data: {
+                        messageId: saved.id,
+                        type: msgType,
+                        mimeType,
+                        fileName,
+                        fileSize: buffer.length,
+                        data: buffer,
+                    },
+                })
+            }
+        } catch (mediaErr: any) {
+            console.error(`[${loggerPrefix}] Media download failed:`, mediaErr.message)
+        }
+    }
 
-    // Push to SSE so open chat tabs see the message instantly
+    // Update chat's lastMessageAt
+    await (prisma.chat as any).update({
+        where: { id: chat.id },
+        data: { lastMessageAt: sentAt },
+    })
+
+    console.log(`[${loggerPrefix}] MIRRORED outbound msgId=${externalMsgId} type=${msgType} chat=${chat.id}`)
+
     emitMessageReceived(saved).catch(e =>
         console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
     )
@@ -539,18 +570,22 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
 async function catchUpMissedMessages(client: TelegramClient, connectionId: string) {
     try {
         console.log(`[TG-CATCHUP] Fetching recent dialogs for connectionId=${connectionId}`)
-        const dialogs = await client.getDialogs({ limit: 15 })
+        const dialogs = await client.getDialogs({ limit: 30 })
         let processedCount = 0
         for (const dialog of dialogs) {
-            if (dialog.unreadCount > 0 && dialog.isUser) {
-                const messages = await client.getMessages(dialog.entity, { limit: Math.min(dialog.unreadCount, 15) })
-                for (const msg of messages.reverse()) { // chronological order
+            if (!dialog.isUser) continue
+            const total = (dialog.unreadCount || 0) + 5 // also grab a few sent to catch our outbounds
+            const messages = await client.getMessages(dialog.entity, { limit: Math.min(total, 20) })
+            for (const msg of messages.reverse()) {
+                if (msg?.out) {
+                    await processOutboundMirrorMessage(msg, connectionId, 'TG-CATCHUP-OUT')
+                } else if (dialog.unreadCount > 0) {
                     await processInboundTelegramMessage(msg, connectionId, 'TG-CATCHUP')
-                    processedCount++
                 }
+                processedCount++
             }
         }
-        console.log(`[TG-CATCHUP] Finished. Processed ${processedCount} unread messages.`)
+        console.log(`[TG-CATCHUP] Finished. Processed ${processedCount} messages.`)
     } catch (err: any) {
         console.error(`[TG-CATCHUP] Error: ${err.message}`)
     }
@@ -576,7 +611,7 @@ function attachInboundListener(client: TelegramClient, connectionId: string) {
         } catch (err: any) {
             console.error(`[TG-LISTENER] Error (conn=${connectionId}):`, err.message)
         }
-    }, new NewMessage({}))
+    }, new NewMessage({ incoming: true, outgoing: true }))
 
     initializedListeners.add(connectionId)
     console.log(`[TG-LISTENER] Listener attached for connectionId=${connectionId}`)
