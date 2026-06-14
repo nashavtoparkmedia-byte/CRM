@@ -92,6 +92,10 @@ export default function MessageInputArea({
     // Mic / camera: tap = camera, long press = voice
     const longPressTriggered = useRef(false)
     const [isRecording, setIsRecording] = useState(false)
+    const isRecordingRef = useRef(false)          // sync mirror for event handlers (avoids stale closure)
+    const shouldStopAfterStart = useRef(false)    // user released before getUserMedia resolved
+    const docPointerUpRef = useRef<((e: Event) => void) | null>(null)  // cleanup handle
+    const justStoppedRecording = useRef(false)    // blocks camera from synthetic click after release
     const [recordingSeconds, setRecordingSeconds] = useState(0)
     const mediaRecorderRef = useRef<MediaRecorder | null>(null)
     const audioChunksRef = useRef<Blob[]>([])
@@ -142,6 +146,7 @@ export default function MessageInputArea({
         return () => {
             if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
             if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+            if (docPointerUpRef.current) document.removeEventListener('pointerup', docPointerUpRef.current)
         }
     }, [])
 
@@ -170,21 +175,43 @@ export default function MessageInputArea({
             }
             recorder.start()
             mediaRecorderRef.current = recorder
+            isRecordingRef.current = true
             setIsRecording(true)
             setRecordingSeconds(0)
             recordingTimerRef.current = setInterval(() => setRecordingSeconds(s => s + 1), 1000)
+            // User released before getUserMedia resolved — stop immediately
+            if (shouldStopAfterStart.current) {
+                shouldStopAfterStart.current = false
+                stopRecording()
+            }
         } catch {
-            // mic permission denied or not available
+            shouldStopAfterStart.current = false
         }
     }
 
     const stopRecording = () => {
+        if (docPointerUpRef.current) {
+            document.removeEventListener('pointerup', docPointerUpRef.current)
+            docPointerUpRef.current = null
+        }
         if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
+        isRecordingRef.current = false
         setIsRecording(false)
+        longPressTriggered.current = false
+        // Block camera from accidental synthetic click fired ~300ms after touchend
+        justStoppedRecording.current = true
+        setTimeout(() => { justStoppedRecording.current = false }, 400)
         if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
     }
 
     const cancelRecording = () => {
+        // Guard: if stopRecording already ran (to save audio), don't discard
+        if (!isRecordingRef.current && !shouldStopAfterStart.current) return
+        if (docPointerUpRef.current) {
+            document.removeEventListener('pointerup', docPointerUpRef.current)
+            docPointerUpRef.current = null
+        }
+        shouldStopAfterStart.current = false
         audioChunksRef.current = []
         if (mediaRecorderRef.current) {
             mediaRecorderRef.current.ondataavailable = null
@@ -195,17 +222,33 @@ export default function MessageInputArea({
             }
             mediaRecorderRef.current = null
         }
+        isRecordingRef.current = false
         setIsRecording(false)
+        longPressTriggered.current = false
         if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null }
     }
 
     const handleMediaPointerDown = (e: React.PointerEvent) => {
-        if (isRecording) return
+        if (isRecordingRef.current) return
         // No e.preventDefault() — label must receive the click event for camera to open
         longPressTriggered.current = false
+        shouldStopAfterStart.current = false
         longPressTimerRef.current = setTimeout(() => {
             longPressTimerRef.current = null
             longPressTriggered.current = true
+            // Attach doc-level pointerup BEFORE startRecording so we catch the release
+            // even if the label element gets unmounted (React swaps it for the cancel button).
+            const onDocUp = () => {
+                document.removeEventListener('pointerup', onDocUp)
+                if (docPointerUpRef.current === onDocUp) docPointerUpRef.current = null
+                if (isRecordingRef.current) {
+                    stopRecording()
+                } else {
+                    shouldStopAfterStart.current = true
+                }
+            }
+            docPointerUpRef.current = onDocUp
+            document.addEventListener('pointerup', onDocUp)
             startRecording()
         }, 500)
     }
@@ -215,19 +258,18 @@ export default function MessageInputArea({
             // Short tap — clear timer; label's native click will open camera
             clearTimeout(longPressTimerRef.current)
             longPressTimerRef.current = null
-        } else if (isRecording) {
-            stopRecording()
         }
+        // Long press release is handled by the doc-level listener added in the timer callback
     }
 
     const handleMediaPointerCancel = () => {
         if (longPressTimerRef.current) { clearTimeout(longPressTimerRef.current); longPressTimerRef.current = null }
-        if (isRecording) cancelRecording()
+        cancelRecording()
     }
 
     // Prevent camera from opening after a long-press (voice recording)
     const handleMicLabelClick = (e: React.MouseEvent) => {
-        if (longPressTriggered.current || isRecording) {
+        if (longPressTriggered.current || isRecording || justStoppedRecording.current) {
             e.preventDefault()
             longPressTriggered.current = false
         }

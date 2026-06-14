@@ -24,6 +24,7 @@ export interface Conversation {
     contact?: {
         id: string
         displayName: string | null
+        displayNameSource?: string | null
     }
     messages?: { content: string; type?: string; metadata?: Record<string, any> | null }[]
     metadata?: Record<string, any> | null

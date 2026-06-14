@@ -56,6 +56,7 @@ export class MessageService {
                         select: {
                             id: true,
                             displayName: true,
+                            displayNameSource: true,
                         },
                     },
                     messages: {
