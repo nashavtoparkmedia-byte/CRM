@@ -92,22 +92,18 @@ export async function POST(req: NextRequest) {
             // USE BOT TIMESTAMP FOR STABLE SORTING
             const sentAt = timestamp ? new Date(timestamp) : new Date()
 
-            // PR-А + PR-М: Chat.name приоритет — REAL name > @username > TG id.
-            // first_name в TG может быть мусором: ".", "...", "$$", emoji-only.
-            // Раньше мы сохраняли такой first_name как chat.name, и UI показывал
-            // ". " вместо нормального username. Теперь:
-            //   1. Если first_name+last_name содержит буквы и не сплошные
-            //      точки/символы — это РЕАЛЬНОЕ имя, используем
-            //   2. Иначе — @username (часто это лучше "Денис" vs "@Ognevskjj")
-            //   3. Иначе — `TG <id>` (placeholder, будет показано как «Без имени»)
+            // Chat.name приоритет — @username > REAL name > TG id.
+            // @username уникален для аккаунта и стабилен; first_name может быть
+            // "Check", "Тест", "." и т.п. Оператор всегда может поставить ФИО
+            // через карандаш в профиле (displayNameSource = 'manual').
             const tgDisplayName = (() => {
+                if (username) return `@${username}`
                 const fn = (firstName ?? '').trim()
                 const ln = (lastName  ?? '').trim()
                 const fullName = [fn, ln].filter(Boolean).join(' ').trim()
                 const hasRealName = /[А-Яа-яA-Za-z]/.test(fullName) && !/^[.\s\-_$]+$/.test(fullName)
                 if (hasRealName) return fullName
-                if (username)    return `@${username}`
-                if (fullName)    return fullName  // last resort — хоть какой-то
+                if (fullName)    return fullName
                 return `TG ${telegramId}`
             })()
 
@@ -158,6 +154,21 @@ export async function POST(req: NextRequest) {
                     null,  // Bot webhook не передаёт номер телефона
                     tgDisplayName === `TG ${telegramId}` ? null : tgDisplayName,
                 )
+                // For existing contacts with auto-set name (source=channel), update to @username
+                // so the header immediately reflects the username instead of old first_name.
+                // Does NOT touch contacts edited manually (displayNameSource = 'manual' or 'yandex').
+                if (!contactResult.isNew && username && tgDisplayName.startsWith('@')) {
+                    const existing = await prisma.contact.findUnique({
+                        where: { id: contactResult.contact.id },
+                        select: { displayNameSource: true },
+                    })
+                    if (existing?.displayNameSource === 'channel') {
+                        await prisma.contact.update({
+                            where: { id: contactResult.contact.id },
+                            data: { displayName: tgDisplayName },
+                        })
+                    }
+                }
                 await ContactService.ensureChatLinked(
                     unifiedChat.id,
                     contactResult.contact.id,
