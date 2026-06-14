@@ -49,6 +49,59 @@ function formatPhone(phone: string): string {
     return phone
 }
 
+function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
+    identity: ContactIdentity
+    cfg: { label: string; icon: string; color: string; dotColor: string } | undefined
+    isWriting: boolean
+    onWrite: () => void
+    contact: Contact | null
+}) {
+    const [copiedId, setCopiedId] = useState(false)
+    const identifierLabel = identity.displayName?.startsWith('@')
+        ? identity.displayName
+        : `ID: ${identity.externalId.length > 15 ? identity.externalId.substring(0, 15) + '…' : identity.externalId}`
+    const handleCopyId = () => {
+        const value = identity.displayName?.startsWith('@') ? identity.displayName : identity.externalId
+        navigator.clipboard.writeText(value).then(() => {
+            setCopiedId(true)
+            setTimeout(() => setCopiedId(false), 2000)
+        }).catch(() => {})
+    }
+    return (
+        <div className="mb-2.5">
+            <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="text-[11px]">{cfg?.icon || '?'}</span>
+                <span className="text-[12px] font-medium text-[#111]">
+                    {cfg?.label || identity.channel}
+                </span>
+                <button
+                    onClick={handleCopyId}
+                    title="Нажмите чтобы скопировать"
+                    className="text-[11px] text-gray-400 font-mono hover:text-[#3390EC] transition-colors"
+                >
+                    {copiedId ? <span className="text-emerald-500 text-[10px]">✓ скопировано</span> : identifierLabel}
+                </button>
+                {identity.source === 'auto' && contact && contact.identities.length > 1 && (
+                    <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded">авто</span>
+                )}
+                {identity.source === 'manual' && (
+                    <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded">ручной</span>
+                )}
+            </div>
+            <div className="ml-[4px]">
+                <button
+                    onClick={onWrite}
+                    disabled={isWriting}
+                    className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                    {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
+                    Написать
+                </button>
+            </div>
+        </div>
+    )
+}
+
 export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const { toggleProfileDrawer, updateQuery } = useChatNavigation()
     const { conversations } = useConversations()
@@ -629,38 +682,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             )
                         })}
 
-                        {/* Identities without phone (e.g. MAX) */}
+                        {/* Identities without phone (e.g. MAX, TG with no phone) */}
                         {orphanIdentities.map(identity => {
                             const cfg = CHANNEL_CONFIG[identity.channel]
                             const isWriting = writingIdentityId === identity.id
                             return (
-                                <div key={identity.id} className="mb-2.5">
-                                    <div className="flex items-center gap-1.5 mb-0.5">
-                                        <span className="text-[11px]">{cfg?.icon || '?'}</span>
-                                        <span className="text-[12px] font-medium text-[#111]">
-                                            {cfg?.label || identity.channel}
-                                        </span>
-                                        <span className="text-[11px] text-gray-400 font-mono">
-                                            ID: {identity.externalId.length > 15 ? identity.externalId.substring(0, 15) + '...' : identity.externalId}
-                                        </span>
-                                        {identity.source === 'auto' && contact && contact.identities.length > 1 && (
-                                            <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded">авто</span>
-                                        )}
-                                        {identity.source === 'manual' && (
-                                            <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded">ручной</span>
-                                        )}
-                                    </div>
-                                    <div className="ml-[4px]">
-                                        <button
-                                            onClick={() => handleWrite(identity.channel, identity.id)}
-                                            disabled={isWriting}
-                                            className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                        >
-                                            {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
-                                            Написать
-                                        </button>
-                                    </div>
-                                </div>
+                                <OrphanIdentityRow
+                                    key={identity.id}
+                                    identity={identity}
+                                    cfg={cfg}
+                                    isWriting={isWriting}
+                                    onWrite={() => handleWrite(identity.channel, identity.id)}
+                                    contact={contact}
+                                />
                             )
                         })}
                     </div>
