@@ -59,15 +59,34 @@ async function handleCheckLink(payload: any) {
     let driverName = mapping.username || null
     let carInfo: string | null = null
 
+    // Return cached car label immediately — avoids 9 sequential Yandex API calls
+    // which (a) trigger 429 rate-limiting and (b) cost ~5 seconds per check_link.
+    // Cache is populated below on first successful lookup.
+    if (mapping.carLabel) {
+        try {
+            const cachedDriver = await prisma.driver.findFirst({
+                where: { OR: [{ id: mapping.driverId }, { yandexDriverId: mapping.driverId }] },
+                select: { fullName: true }
+            })
+            if (cachedDriver?.fullName) driverName = cachedDriver.fullName
+        } catch { /* use username fallback */ }
+        return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo: mapping.carLabel })
+    }
+
     try {
-        // mapping.driverId is the CRM Driver.id, NOT the Yandex contractor id.
-        // Yandex Fleet API expects yandexDriverId (Driver.yandexDriverId), so we
-        // look it up here. Without this, v2 returns 404 and the user sees
-        // "Alexander_yoko" (username fallback) with carInfo: null.
-        const driver = await prisma.driver.findUnique({
+        // Try CRM id first (manually-linked records), then Yandex contractor id
+        // (records created by sync_user which stores the Yandex driver_profile.id).
+        let driver = await prisma.driver.findUnique({
             where: { id: mapping.driverId },
             select: { yandexDriverId: true, fullName: true }
         })
+        if (!driver) {
+            driver = await prisma.driver.findFirst({
+                where: { yandexDriverId: mapping.driverId },
+                select: { yandexDriverId: true, fullName: true }
+            })
+        }
+
         const yandexContractorId = driver?.yandexDriverId
         if (driver?.fullName) driverName = driver.fullName
         if (!yandexContractorId) {
@@ -106,6 +125,11 @@ async function handleCheckLink(payload: any) {
                     if (car) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
+                        // Cache to DriverTelegram so future check_link calls skip Yandex pagination
+                        await prisma.driverTelegram.update({
+                            where: { id: mapping.id },
+                            data: { carLabel: carInfo }
+                        }).catch(() => {})
                     }
                 }
             } else {
@@ -142,14 +166,21 @@ async function findCarById(connection: any, carId: string) {
                 offset: page * PAGE
             })
         })
-        if (!res.ok) break
+        // 429 = rate-limited; other errors abort
+        if (!res.ok) {
+            console.warn('[findCarById] Yandex status', res.status, 'on page', page)
+            break
+        }
         const data = await res.json()
         const cars: any[] = data.cars || []
         const found = cars.find((c: any) => c.id === carId)
         if (found) {
             return { brand: found.brand, model: found.model, plate: found.number, color: found.color, year: found.year }
         }
-        if (page * PAGE + cars.length >= (data.total || 0)) break
+        // Use ?? null to distinguish "total=0" from "total missing"
+        const total: number | null = data.total ?? null
+        if (total !== null && page * PAGE + cars.length >= total) break
+        if (total === null && cars.length < PAGE) break // last page (no total field)
     }
     return null
 }
@@ -199,8 +230,19 @@ async function handleSyncUser(payload: any) {
                 })
 
                 if (matched) {
-                    const driverId = matched.driver_profile.id
+                    const yandexId = matched.driver_profile.id
                     const driverName = `${matched.driver_profile.first_name || ''} ${matched.driver_profile.last_name || ''}`.trim()
+
+                    // Resolve Yandex contractor ID → CRM Driver.id so that check_link
+                    // can look up the driver via prisma.driver.findUnique({ where: { id } }).
+                    // If the driver isn't in CRM yet (not scraped), fall back to yandexId.
+                    let driverId = yandexId
+                    try {
+                        const crmDriver = await prisma.driver.findFirst({
+                            where: { yandexDriverId: yandexId }
+                        })
+                        if (crmDriver) driverId = crmDriver.id
+                    } catch { /* keep yandexId as fallback */ }
 
                     // Auto-link in DB
                     await prisma.driverTelegram.upsert({
