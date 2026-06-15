@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Loader2, X, Search } from "lucide-react"
+import { Loader2, X, Search, MessageCircle } from "lucide-react"
 
 interface LinkedDriver {
     id: string
@@ -12,6 +12,7 @@ interface LinkedDriver {
     driverPhone: string | null
     activeParkId: string | null
     parkName: string | null
+    chatId: string | null
     createdAt: string
 }
 
@@ -20,6 +21,7 @@ interface PendingRequest {
     telegramId: string
     phone: string | null
     username: string | null
+    chatId: string | null
     createdAt: string
 }
 
@@ -56,6 +58,15 @@ function DriverRow({ row, onUnlink }: { row: LinkedDriver; onUnlink: () => void 
                 </div>
             </div>
             <div className="text-[11px] text-[#64748B] mr-3 shrink-0">{formatDate(row.createdAt)}</div>
+            {row.chatId && (
+                <a
+                    href={`/messages?chatId=${row.chatId}`}
+                    title="Открыть чат"
+                    className="shrink-0 mr-2 text-[#64748B] hover:text-[#2AABEE] transition-colors"
+                >
+                    <MessageCircle size={15} />
+                </a>
+            )}
             {confirming ? (
                 <div className="flex items-center gap-1.5 shrink-0">
                     <span className="text-[11px] text-[#64748B]">Отвязать?</span>
@@ -135,6 +146,15 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                     <div className="text-[11px] text-[#64748B]">ID {row.telegramId} · {formatDate(row.createdAt)}</div>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {row.chatId && (
+                        <a
+                            href={`/messages?chatId=${row.chatId}`}
+                            title="Открыть чат"
+                            className="text-[#64748B] hover:text-[#2AABEE] transition-colors"
+                        >
+                            <MessageCircle size={15} />
+                        </a>
+                    )}
                     {!showSearch && (
                         <>
                             <button

@@ -18,34 +18,49 @@ export async function GET() {
   ])
 
   const driverIds = dtRows.map(r => r.driverId)
-  const drivers = driverIds.length
-    ? await prisma.driver.findMany({
-        where: { id: { in: driverIds } },
-        select: { id: true, fullName: true, phone: true },
-      })
-    : []
-  const parkIds = dtRows.map(r => r.activeParkId).filter(Boolean) as string[]
-  const parks = parkIds.length
-    ? await prisma.apiConnection.findMany({
-        where: { parkId: { in: parkIds } },
-        select: { parkId: true, name: true },
-      })
-    : []
+  const allTelegramIds = [
+    ...dtRows.map(r => r.telegramId.toString()),
+    ...requests.map(r => r.telegramId.toString()),
+  ]
+
+  const [drivers, parks, chats] = await Promise.all([
+    driverIds.length
+      ? prisma.driver.findMany({
+          where: { id: { in: driverIds } },
+          select: { id: true, fullName: true, phone: true },
+        })
+      : [],
+    dtRows.some(r => r.activeParkId)
+      ? prisma.apiConnection.findMany({
+          where: { parkId: { in: dtRows.map(r => r.activeParkId).filter(Boolean) as string[] } },
+          select: { parkId: true, name: true },
+        })
+      : [],
+    allTelegramIds.length
+      ? prisma.chat.findMany({
+          where: { channel: 'telegram', externalChatId: { in: allTelegramIds } },
+          select: { id: true, externalChatId: true },
+        })
+      : [],
+  ])
 
   const driverMap = Object.fromEntries(drivers.map(d => [d.id, d]))
   const parkMap = Object.fromEntries(parks.map(p => [p.parkId, p.name || p.parkId]))
+  const chatMap = Object.fromEntries(chats.map(c => [c.externalChatId, c.id]))
 
   const linked = dtRows.map(row => {
     const driver = driverMap[row.driverId]
+    const tgId = row.telegramId.toString()
     return {
       id: row.id,
-      telegramId: row.telegramId.toString(),
+      telegramId: tgId,
       username: row.username,
       driverId: row.driverId,
       driverName: driver?.fullName ?? null,
       driverPhone: driver?.phone ?? null,
       activeParkId: row.activeParkId,
       parkName: row.activeParkId ? (parkMap[row.activeParkId] ?? null) : null,
+      chatId: chatMap[tgId] ?? null,
       createdAt: row.createdAt.toISOString(),
     }
   })
@@ -60,6 +75,7 @@ export async function GET() {
       telegramId,
       phone: phoneMatch?.[1] ?? null,
       username: usernameMatch?.[1] ?? null,
+      chatId: chatMap[telegramId] ?? null,
       createdAt: r.createdAt.toISOString(),
     }
   })
