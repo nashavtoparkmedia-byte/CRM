@@ -562,6 +562,22 @@ async function withDriverProfile<T>(fn: (page: Page) => Promise<T>): Promise<T> 
         ignoreDefaultArgs: ['--enable-automation'],
     });
     await context.addInitScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+
+    // Import saved fleet.yandex.ru session cookies (uploaded via POST /api/fleet-cookies)
+    const cookiesPath = process.env.FLEET_COOKIES_PATH || '/app/data/fleet_cookies.json';
+    try {
+        const { readFileSync, existsSync } = await import('fs');
+        if (existsSync(cookiesPath)) {
+            const { cookies } = JSON.parse(readFileSync(cookiesPath, 'utf-8'));
+            if (Array.isArray(cookies) && cookies.length > 0) {
+                await context.addCookies(cookies);
+                console.log(`[withDriverProfile] loaded ${cookies.length} fleet cookies`);
+            }
+        }
+    } catch (e: any) {
+        console.warn(`[withDriverProfile] cookie load failed: ${e.message}`);
+    }
+
     try {
         const page = context.pages()[0] ?? await context.newPage();
         return await fn(page);

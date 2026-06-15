@@ -334,6 +334,31 @@ fastify.get('/api/driver-actions/:taskId', async (request, reply) => {
     return JSON.parse(raw);
 });
 
+// Fleet cookies — write/read session cookies for fleet.yandex.ru
+// POST /api/fleet-cookies   { cookies: [...PlaywrightCookie] }
+// GET  /api/fleet-cookies   → { count, savedAt }
+import fs from 'fs';
+const FLEET_COOKIES_PATH = process.env.FLEET_COOKIES_PATH || '/app/data/fleet_cookies.json';
+
+fastify.post('/api/fleet-cookies', async (request, reply) => {
+    const { cookies } = request.body as any;
+    if (!Array.isArray(cookies) || cookies.length === 0) {
+        return reply.code(400).send({ error: 'cookies array required' });
+    }
+    const payload = { cookies, savedAt: new Date().toISOString() };
+    fs.writeFileSync(FLEET_COOKIES_PATH, JSON.stringify(payload, null, 2));
+    console.log(`[fleet-cookies] saved ${cookies.length} cookies to ${FLEET_COOKIES_PATH}`);
+    return reply.send({ ok: true, count: cookies.length, savedAt: payload.savedAt });
+});
+
+fastify.get('/api/fleet-cookies', async (_request, reply) => {
+    if (!fs.existsSync(FLEET_COOKIES_PATH)) {
+        return reply.code(404).send({ ok: false, error: 'no cookies saved yet' });
+    }
+    const data = JSON.parse(fs.readFileSync(FLEET_COOKIES_PATH, 'utf-8'));
+    return reply.send({ ok: true, count: data.cookies?.length ?? 0, savedAt: data.savedAt });
+});
+
 // Health & Metrics
 fastify.get('/health', async () => {
     try {
