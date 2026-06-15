@@ -512,10 +512,16 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             message: 'Профиль не привязан. Нажмите «Мой автомобиль» и поделитесь номером.',
         })
     }
-    const driver = await prisma.driver.findUnique({
+    let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
         select: { id: true, fullName: true, yandexDriverId: true },
     })
+    if (!driver) {
+        driver = await prisma.driver.findFirst({
+            where: { yandexDriverId: mapping.driverId },
+            select: { id: true, fullName: true, yandexDriverId: true },
+        })
+    }
     if (!driver?.yandexDriverId) {
         // Audit even when we can't proceed — useful for support.
         await prisma.driverAction.create({
