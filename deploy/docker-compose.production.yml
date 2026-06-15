@@ -427,6 +427,9 @@ services:
     environment:
       DATABASE_URL: "file:/app/data/dev.db"
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
       PORT: 3003
     # yandex-fleet-scraper не имеет migrations/ — используем db push для создания
@@ -456,6 +459,9 @@ services:
     environment:
       DATABASE_URL: "file:/app/data/dev.db"
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
       PLAYWRIGHT_HEADLESS: "true"
     command: ["npm", "run", "start:worker"]
