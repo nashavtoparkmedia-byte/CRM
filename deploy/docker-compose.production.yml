@@ -469,8 +469,7 @@ services:
       # SQLite БД — общий с api
       - yfs_db:/app/data
       # Профиль браузера fleet.yandex.ru — критично сохранять между рестартами
-      - yfs_chrome_profile:/app/chrome_profile
-      - yfs_chrome_user_data:/app/chrome_user_data
+      - yfs_chrome_profile:/app/.bot_profile
     networks:
       - crm_internal
     depends_on:

@@ -897,11 +897,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             return
         }
 
-        // Drop empty text frames — type='chat' with no body is protocol
-        // noise (receipts, mute markers, read acks that slip through).
-        // Media messages keep an empty body legitimately (caption absent).
-        if ((msg.type === 'chat' || !msg.type) && !bodyTrimmed && !msg.hasMedia) {
-            console.log(`[WA-SERVICE] skip empty-text msg id=${msg.id._serialized} type=${msg.type}`)
+        // Drop any message that produces no displayable content.
+        // The old guard only caught type='chat' — but WA also sends reaction,
+        // revoked, e2e_notification, notification_template, etc. with empty body.
+        // waContentWithFallback returns '' for all unknown types, so if the result
+        // is empty and there's no media attachment we'd save a blank Message row
+        // that renders as an empty bubble in the UI. Better to drop it here.
+        if (!waContentWithFallback(msg.body, msg.type) && !msg.hasMedia) {
+            console.log(`[WA-SERVICE] skip no-content msg id=${msg.id._serialized} type=${msg.type}`)
             return
         }
 

@@ -461,6 +461,11 @@ export default function MessageFeed({
     const renderMessage = (item: MessageUIItem) => {
         if (item.message.type === 'call') return renderCallMessage(item)
 
+        // Safety: never render empty non-media bubbles (guard against legacy rows
+        // or WA protocol frames that slipped past the backend guard).
+        const isMediaMsg = ['image', 'video', 'voice', 'audio', 'sticker', 'document'].includes(item.message.type)
+        if (!isMediaMsg && !(item.message.content || '').trim()) return null
+
         const { message: msg, position, showAvatar, showName, showTail, spacingTop, statusPlacement } = item
         const isOutbound = msg.direction === 'outbound'
         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
