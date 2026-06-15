@@ -59,9 +59,12 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
     const [copiedId, setCopiedId] = useState(false)
     // metadata may contain { username, firstName, lastName } saved by TG webhook
     const meta = (identity.metadata as Record<string, string | null> | null) ?? {}
+    // Only use metadata (populated on each incoming TG message).
+    // Falls back to displayName ONLY for @username format — regular names
+    // like "Check" are placeholder-grade and not shown until metadata arrives.
     const tgName = meta.firstName
         ? [meta.firstName, meta.lastName].filter(Boolean).join(' ')
-        : (!identity.displayName?.startsWith('@') ? (identity.displayName || null) : null)
+        : null
     const tgUsername = meta.username
         ? `@${meta.username}`
         : (identity.displayName?.startsWith('@') ? identity.displayName : null)
