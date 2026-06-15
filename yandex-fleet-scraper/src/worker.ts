@@ -550,7 +550,7 @@ interface DriverActionJob {
 async function withDriverProfile<T>(fn: (page: Page) => Promise<T>): Promise<T> {
     const userDataDir = path.join(process.cwd(), '.bot_profile');
     const context = await chromium.launchPersistentContext(userDataDir, {
-        headless: false,
+        headless: process.env.PLAYWRIGHT_HEADLESS !== 'false',
         args: [
             '--disable-blink-features=AutomationControlled',
             '--no-sandbox',
