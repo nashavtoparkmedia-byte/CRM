@@ -540,7 +540,87 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
 
-    // 2. Enqueue scraper task
+    // 2a. For GET_PRICE — query fleet API directly, no scraper needed
+    if (kind === 'GET_PRICE') {
+        const conn = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+        if (conn) {
+            try {
+                const from = new Date(Date.now() - 2 * 86400_000).toISOString()
+                const to   = new Date(Date.now() + 3600_000).toISOString()
+                const apiRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/orders/list', {
+                    method: 'POST',
+                    headers: {
+                        'X-Client-ID': conn.clid,
+                        'X-Api-Key': conn.apiKey,
+                        'Accept-Language': 'ru',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: {
+                            park: {
+                                id: conn.parkId,
+                                order: { booked_at: { from, to } },
+                            },
+                        },
+                        limit: 50,
+                    }),
+                })
+                if (apiRes.ok) {
+                    const data = await apiRes.json()
+                    const INACTIVE = ['complete', 'cancelled', 'failed']
+                    const active = (data.orders || []).find((o: any) =>
+                        o.driver_profile?.id === driver!.yandexDriverId &&
+                        !INACTIVE.includes(o.status)
+                    )
+                    const action = await prisma.driverAction.create({
+                        data: {
+                            driverId: driver.id,
+                            kind,
+                            requestedBy: String(telegramId),
+                            status: 'DONE',
+                        },
+                    })
+                    if (!active) {
+                        return NextResponse.json({
+                            ok: true,
+                            actionId: action.id,
+                            status: 'DONE',
+                            result: { noActiveOrder: true },
+                        })
+                    }
+                    // Build result from fleet API data
+                    const shortOrderId = active.id?.slice(-7) || ''
+                    const fromAddress = active.address_from?.address || active.route?.points?.[0]?.fullname || ''
+                    const toAddress   = (active.route_points || []).slice(-1)[0]?.address || active.route?.destination?.fullname || ''
+                    const tariff      = active.category || active.tariff?.fullname || ''
+                    const paymentMethod = (active.amenities || []).includes('creditcard') ? 'card' : (active.payment?.type || 'cash')
+                    const bookedAt    = active.booked_at
+                        ? new Date(active.booked_at).toLocaleString('ru-RU', { timeZone: 'Asia/Yekaterinburg', hour: '2-digit', minute: '2-digit' })
+                        : undefined
+                    return NextResponse.json({
+                        ok: true,
+                        actionId: action.id,
+                        status: 'DONE',
+                        result: {
+                            shortOrderId,
+                            fromAddress,
+                            toAddress,
+                            tariff,
+                            paymentMethod,
+                            bookedAt,
+                            priceRub: active.total_price?.amount ?? null,
+                            orderSource: active.source || undefined,
+                        },
+                    })
+                }
+                console.warn(`[handleDriverAction] fleet API ${apiRes.status} — falling through to scraper`)
+            } catch (e: any) {
+                console.warn(`[handleDriverAction] fleet API error: ${e.message} — falling through to scraper`)
+            }
+        }
+    }
+
+    // 2b. Enqueue scraper task (COMPLETE_ORDER, CANCEL_ORDER, or fleet API fallback)
     let scraperTaskId: string | null = null
     try {
         const res = await fetch(`${SCRAPER_URL}/api/driver-actions`, {
