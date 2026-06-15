@@ -250,7 +250,7 @@ const carManagementScene = new Scenes.WizardScene(
 
         await ctx.reply(`🔍 Ищу автомобиль по номеру *${platePrefix.toUpperCase()}*...`, { parse_mode: 'Markdown' });
 
-        const result = await callCRM('search_car_by_plate', { platePrefix });
+        const result = await callCRM('search_car_by_plate', { platePrefix, telegramId: String(ctx.from.id) });
 
         if (result.status === 0 || result.status === 504) {
             await ctx.reply('🔌 CRM недоступна. Попробуйте позже.');

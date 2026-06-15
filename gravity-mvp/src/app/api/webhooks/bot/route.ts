@@ -100,7 +100,10 @@ async function handleCheckLink(payload: any) {
             return NextResponse.json({ linked: true, driverId: mapping.driverId, driverName, carInfo })
         }
 
-        const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+        // Use driver's activeParkId if available — otherwise fall back to any connection
+        const connection = mapping.activeParkId
+            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
         if (connection) {
             const headers: Record<string, string> = {
                 'X-Client-ID': connection.clid,
@@ -376,12 +379,20 @@ async function handleChangeLimit(payload: any) {
 
 // Search cars by plate prefix (min 6 chars). Yandex ignores filters, so we paginate all cars.
 async function handleSearchCarByPlate(payload: any) {
-    const { platePrefix } = payload
+    const { platePrefix, telegramId } = payload
     if (!platePrefix || platePrefix.length < 3) {
         return NextResponse.json({ error: 'platePrefix must be at least 3 characters' }, { status: 400 })
     }
 
-    const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+    // Use driver's activeParkId if telegramId provided
+    let connection = null
+    if (telegramId) {
+        const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+        if (mapping?.activeParkId) {
+            connection = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+        }
+    }
+    if (!connection) connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const prefix = platePrefix.toUpperCase().replace(/\s/g, '')
@@ -438,7 +449,9 @@ async function handleUpdateDriverCar(payload: any) {
     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
     if (!mapping?.driverId) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
 
-    const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+    const connection = mapping.activeParkId
+        ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+        : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const headers: Record<string, string> = {
