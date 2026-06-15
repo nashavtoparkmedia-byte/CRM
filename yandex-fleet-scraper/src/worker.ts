@@ -254,7 +254,7 @@ export async function processCheck(job: Job) {
         console.log(`[Worker][${checkId}] Launching browser with persistent profile: ${localUserDataDir}`);
 
         context = await chromium.launchPersistentContext(localUserDataDir, {
-            headless: false,
+            headless: process.env.PLAYWRIGHT_HEADLESS !== 'false',
             args: [
                 '--disable-blink-features=AutomationControlled',
                 '--disable-infobars',
