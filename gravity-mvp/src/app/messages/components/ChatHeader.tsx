@@ -222,7 +222,7 @@ export default function ChatHeader({
                                     const detailed = formatChatTitleDetailed({
                                         driverFullName:       chat.driver?.fullName,
                                         contactDisplayName:   contact?.displayName ?? chat.contact?.displayName,
-                                        contactNameIsManual:  (contact?.displayNameSource ?? chat.contact?.displayNameSource) === 'manual',
+                                        contactNameIsManual:  ['manual', 'yandex'].includes((contact?.displayNameSource ?? chat.contact?.displayNameSource) ?? ''),
                                         chatName:             chat.name,
                                         externalChatId:       chat.externalChatId,
                                     })

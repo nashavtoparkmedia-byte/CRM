@@ -541,6 +541,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                     const detailed = formatChatTitleDetailed({
                                         driverFullName:     chat.driver?.fullName,
                                         contactDisplayName: chat.contact?.displayName,
+                                        contactNameIsManual: ['manual', 'yandex'].includes(chat.contact?.displayNameSource ?? ''),
                                         chatName:           chat.name,
                                         externalChatId:     chat.externalChatId,
                                     })
