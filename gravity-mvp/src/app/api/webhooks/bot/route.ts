@@ -697,11 +697,33 @@ async function handleListParks() {
 async function handleSetActivePark(payload: any) {
     const { telegramId, parkId } = payload
     if (!telegramId || !parkId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+
     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
     if (!mapping) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
+
     const park = await prisma.apiConnection.findFirst({ where: { parkId } })
+    if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
+
+    // Resolve yandexDriverId
+    let yandexDriverId: string | null = null
+    try {
+        let driver = await prisma.driver.findUnique({ where: { id: mapping.driverId }, select: { yandexDriverId: true } })
+        if (!driver) driver = await prisma.driver.findFirst({ where: { yandexDriverId: mapping.driverId }, select: { yandexDriverId: true } })
+        yandexDriverId = driver?.yandexDriverId || mapping.driverId
+    } catch { yandexDriverId = mapping.driverId }
+
+    // Verify driver exists in target park
+    const checkRes = await fetch(
+        `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${yandexDriverId}`,
+        { headers: { 'X-Client-ID': park.clid, 'X-Api-Key': park.apiKey, 'X-Park-ID': park.parkId, 'Accept-Language': 'ru' } }
+    )
+    if (!checkRes.ok) {
+        console.log(`[set_active_park] driver ${yandexDriverId} not found in park ${park.name || parkId}: HTTP ${checkRes.status}`)
+        return NextResponse.json({ error: 'NOT_IN_PARK', parkName: park.name || parkId })
+    }
+
     await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId } })
-    return NextResponse.json({ success: true, parkName: park?.name || parkId })
+    return NextResponse.json({ success: true, parkName: park.name || parkId })
 }
 
 async function handleGetParkInfo(payload: any) {

@@ -102,7 +102,14 @@ const parkSelectScene = new Scenes.WizardScene('parkSelect',
             payload: { telegramId, parkId: selected.parkId }
         });
 
-        if (!ok) {
+        if (data?.error === 'NOT_IN_PARK') {
+            await ctx.reply(
+                `❌ У вас нет профиля в парке *${data.parkName || selected.name}*.\n\nВыберите другой парк или обратитесь к менеджеру.`,
+                { parse_mode: 'Markdown' }
+            );
+            // Stay in scene so driver can pick another park
+            return;
+        } else if (!ok) {
             await ctx.reply('❌ Не удалось сохранить выбор. Попробуйте позже.');
         } else {
             await ctx.reply(`✅ Активный парк: *${data.parkName || selected.name}*`, { parse_mode: 'Markdown' });
