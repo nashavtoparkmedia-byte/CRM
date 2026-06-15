@@ -599,6 +599,16 @@ async function locateActiveOrder(page: Page, driverYandexId: string, parkId: str
         throw new Error('NEED_REAUTH');
     }
 
+    const debug = await page.evaluate(() => {
+        const trCount = document.querySelectorAll('tr').length;
+        const allLinks = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href*="/orders/"]'))
+            .map(a => ({ text: (a.textContent || '').trim().slice(0, 60), href: a.href.slice(0, 100) }))
+            .slice(0, 10);
+        const bodySnippet = (document.body?.innerText || '').slice(0, 500);
+        return { trCount, allLinks, bodySnippet };
+    });
+    console.log(`[locateActiveOrder][${driverYandexId}] trCount=${debug.trCount} orderLinks=${JSON.stringify(debug.allLinks)} body=${debug.bodySnippet.replace(/\n/g,' ').slice(0,300)}`);
+
     return await page.evaluate(() => {
         const rows = Array.from(document.querySelectorAll<HTMLElement>('tr'));
         for (const row of rows) {
