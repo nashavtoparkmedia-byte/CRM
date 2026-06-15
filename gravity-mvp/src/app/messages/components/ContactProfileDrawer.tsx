@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search } from "lucide-react"
+import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search, Copy } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useContactSearch } from "../hooks/useContactSearch"
@@ -145,6 +145,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
 
+    // TG Bot link state
+    const [tgIdCopied, setTgIdCopied] = useState(false)
+    const [botLinkInfo, setBotLinkInfo] = useState<{ linked: boolean; driverName?: string; driverId?: string } | null>(null)
+    const [botLinkLoading, setBotLinkLoading] = useState(false)
+    const [showBotLinkSearch, setShowBotLinkSearch] = useState(false)
+    const [botLinkQuery, setBotLinkQuery] = useState('')
+    const [botLinkResults, setBotLinkResults] = useState<{ id: string; fullName: string; phone: string | null }[]>([])
+    const [botLinkSearching, setBotLinkSearching] = useState(false)
+    const [botLinkSaving, setBotLinkSaving] = useState(false)
+
     // Edit display name state
     const [editingName, setEditingName] = useState(false)
     const [nameInput, setNameInput] = useState("")
@@ -187,6 +197,38 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
         return () => { cancelled = true }
     }, [contact?.id])
+
+    // Load bot link status when a TG identity is present
+    const tgIdentity = contact?.identities.find(i => i.channel === 'telegram') ?? null
+    useEffect(() => {
+        if (!tgIdentity?.externalId) { setBotLinkInfo(null); return }
+        setBotLinkLoading(true)
+        fetch(`/api/bot-link?telegramId=${encodeURIComponent(tgIdentity.externalId)}`)
+            .then(r => r.json())
+            .then(d => setBotLinkInfo(d))
+            .catch(() => setBotLinkInfo(null))
+            .finally(() => setBotLinkLoading(false))
+    }, [tgIdentity?.externalId])
+
+    // Debounced driver search for bot link
+    useEffect(() => {
+        if (botLinkQuery.length < 3) { setBotLinkResults([]); return }
+        setBotLinkSearching(true)
+        const timer = setTimeout(async () => {
+            try {
+                const res = await fetch('/api/bot-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'search', query: botLinkQuery }),
+                })
+                const d = await res.json()
+                setBotLinkResults(d.drivers || [])
+            } finally {
+                setBotLinkSearching(false)
+            }
+        }, 300)
+        return () => { clearTimeout(timer); setBotLinkSearching(false) }
+    }, [botLinkQuery])
 
     /** Get effective reachability for a channel: live > persisted > null */
     const getReachability = (identity: ContactIdentity): boolean | null => {
@@ -744,6 +786,120 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                 ) : null}
 
                 <div className="h-px bg-[#E8E8E8] mx-3" />
+
+                {/* TG Bot link section */}
+                {contact && tgIdentity && (
+                    <>
+                        <div className="px-[4px] py-2.5">
+                            <div className="flex items-center justify-between mb-[6px]">
+                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Telegram Bot</h4>
+                                {!botLinkLoading && !showBotLinkSearch && (
+                                    <button
+                                        onClick={() => { setShowBotLinkSearch(true); setBotLinkQuery(''); setBotLinkResults([]) }}
+                                        className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4]"
+                                    >
+                                        {botLinkInfo?.linked ? 'Сменить' : '+ Привязать'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* TG numeric ID row */}
+                            <div className="flex items-center gap-1 mb-1.5">
+                                <span className="text-[11px] text-gray-400 font-mono">ID {tgIdentity.externalId}</span>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText(tgIdentity.externalId).catch(() => {})
+                                        setTgIdCopied(true)
+                                        setTimeout(() => setTgIdCopied(false), 2000)
+                                    }}
+                                    className="text-gray-300 hover:text-[#3390EC] transition-colors"
+                                    title="Скопировать TG ID"
+                                >
+                                    {tgIdCopied ? <span className="text-[9px] text-emerald-500">✓</span> : <Copy size={9} />}
+                                </button>
+                            </div>
+
+                            {/* Bot link status */}
+                            {botLinkLoading ? (
+                                <div className="animate-pulse h-3 bg-gray-100 rounded w-28" />
+                            ) : botLinkInfo?.linked ? (
+                                <div className="text-[12px] text-[#111]">
+                                    <span className="text-gray-400 mr-1">Водитель:</span>
+                                    <span className="font-medium">{botLinkInfo.driverName}</span>
+                                </div>
+                            ) : (
+                                <div className="text-[11px] text-gray-400 italic">Не привязан к водителю</div>
+                            )}
+
+                            {/* Driver search/link UI */}
+                            {showBotLinkSearch && (
+                                <div className="mt-2">
+                                    <div className="flex items-center gap-1 mb-1.5">
+                                        <input
+                                            autoFocus
+                                            value={botLinkQuery}
+                                            onChange={e => setBotLinkQuery(e.target.value)}
+                                            placeholder="Телефон или имя водителя..."
+                                            className="flex-1 h-[28px] rounded-md border border-gray-200 px-2 text-[12px] outline-none focus:border-[#3390EC] bg-white"
+                                        />
+                                        <button
+                                            onClick={() => { setShowBotLinkSearch(false); setBotLinkQuery(''); setBotLinkResults([]) }}
+                                            className="text-gray-400 hover:text-gray-600 shrink-0"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+
+                                    {botLinkSearching ? (
+                                        <div className="text-[11px] text-gray-400 flex items-center gap-1">
+                                            <Loader2 size={10} className="animate-spin" /> Ищу...
+                                        </div>
+                                    ) : botLinkResults.length > 0 ? (
+                                        <div className="space-y-px">
+                                            {botLinkResults.map(driver => (
+                                                <div key={driver.id} className="flex items-center justify-between py-1 px-1 hover:bg-gray-50 rounded">
+                                                    <div className="min-w-0 mr-1">
+                                                        <div className="text-[12px] font-medium text-[#111] truncate">{driver.fullName}</div>
+                                                        {driver.phone && <div className="text-[10px] text-gray-400 font-mono">{driver.phone}</div>}
+                                                    </div>
+                                                    <button
+                                                        disabled={botLinkSaving}
+                                                        onClick={async () => {
+                                                            setBotLinkSaving(true)
+                                                            try {
+                                                                const res = await fetch('/api/bot-link', {
+                                                                    method: 'POST',
+                                                                    headers: { 'Content-Type': 'application/json' },
+                                                                    body: JSON.stringify({ action: 'link', telegramId: tgIdentity.externalId, driverId: driver.id }),
+                                                                })
+                                                                if (res.ok) {
+                                                                    setBotLinkInfo({ linked: true, driverName: driver.fullName, driverId: driver.id })
+                                                                    setShowBotLinkSearch(false)
+                                                                    setBotLinkQuery('')
+                                                                    setBotLinkResults([])
+                                                                }
+                                                            } finally {
+                                                                setBotLinkSaving(false)
+                                                            }
+                                                        }}
+                                                        className="shrink-0 text-[10px] font-semibold text-white bg-[#3390EC] px-2 py-0.5 rounded hover:bg-[#2B7FD4] disabled:opacity-50 flex items-center gap-1"
+                                                    >
+                                                        {botLinkSaving ? <Loader2 size={9} className="animate-spin" /> : 'Привязать'}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : botLinkQuery.length >= 3 ? (
+                                        <div className="text-[11px] text-gray-400 italic">Водители не найдены</div>
+                                    ) : (
+                                        <div className="text-[11px] text-gray-400">Введите минимум 3 символа</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        <div className="h-px bg-[#E8E8E8] mx-3" />
+                    </>
+                )}
 
                 {/* Custom Fields */}
                 <div className="px-[4px] py-2.5">
