@@ -203,7 +203,23 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     if (!chat) return null
 
     // Determine display data: Contact > Driver > Chat fallback
-    const displayName = contact?.displayName || chat.driver?.fullName || chat.name || 'Водитель'
+    // For auto-generated TG/WA/MAX placeholder names, prefer @username from identity metadata
+    const _rawDisplayName = contact?.displayName || chat.driver?.fullName || chat.name || 'Водитель'
+    const _isPlaceholder = /^(TG|WA|MAX|AV|Telegram|WhatsApp|Max)\s+\d+/i.test(_rawDisplayName)
+    const _src = contact?.displayNameSource
+    const displayName = (() => {
+        if (_src === 'yandex') return _rawDisplayName
+        if (_src === 'manual' && !_isPlaceholder) return _rawDisplayName
+        // Auto-generated placeholder or channel-sourced — try real TG identity
+        const tgId = contact?.identities.find(i => i.channel === 'telegram')
+        if (tgId) {
+            const m = (tgId.metadata as Record<string, string | null> | null) ?? {}
+            if (m.username) return `@${m.username}`
+            if (m.firstName) return [m.firstName, m.lastName].filter(Boolean).join(' ')
+            if (tgId.displayName?.startsWith('@')) return tgId.displayName
+        }
+        return _rawDisplayName
+    })()
     const masterSource = contact?.masterSource || (chat.driver ? 'yandex' : 'chat')
     const sourceInfo = SOURCE_LABELS[masterSource] || SOURCE_LABELS.chat
     const contactOrDriverId = contact?.id || chat.driver?.id
