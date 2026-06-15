@@ -21,6 +21,7 @@ export interface ContactIdentity {
     confidence: number
     reachabilityStatus: 'confirmed' | 'unreachable' | 'unknown'
     reachabilityCheckedAt: string | null
+    metadata?: Record<string, string | null> | null
 }
 
 export interface ContactChat {

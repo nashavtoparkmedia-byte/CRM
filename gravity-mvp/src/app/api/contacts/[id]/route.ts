@@ -49,6 +49,7 @@ export async function GET(
             createdAt: true,
             reachabilityStatus: true,
             reachabilityCheckedAt: true,
+            metadata: true,
           },
         },
         chats: {
