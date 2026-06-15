@@ -174,6 +174,17 @@ export async function POST(req: NextRequest) {
                     contactResult.contact.id,
                     contactResult.identity.id,
                 )
+                // Store username + name in identity metadata so the profile can show "Name (@username)"
+                await prisma.contactIdentity.update({
+                    where: { id: contactResult.identity.id },
+                    data: {
+                        metadata: {
+                            username:   username   || null,
+                            firstName:  firstName  || null,
+                            lastName:   lastName   || null,
+                        }
+                    },
+                })
             } catch (contactErr: any) {
                 console.error(`[WEBHOOK-TG] ContactService error (non-blocking): ${contactErr.message}`)
             }

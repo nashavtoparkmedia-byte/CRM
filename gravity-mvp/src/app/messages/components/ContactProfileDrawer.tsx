@@ -57,11 +57,20 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
     contact: Contact | null
 }) {
     const [copiedId, setCopiedId] = useState(false)
-    const identifierLabel = identity.displayName?.startsWith('@')
-        ? identity.displayName
-        : `ID: ${identity.externalId.length > 15 ? identity.externalId.substring(0, 15) + '…' : identity.externalId}`
+    // metadata may contain { username, firstName, lastName } saved by TG webhook
+    const meta = (identity.metadata as Record<string, string | null> | null) ?? {}
+    const tgName = meta.firstName
+        ? [meta.firstName, meta.lastName].filter(Boolean).join(' ')
+        : (!identity.displayName?.startsWith('@') ? (identity.displayName || null) : null)
+    const tgUsername = meta.username
+        ? `@${meta.username}`
+        : (identity.displayName?.startsWith('@') ? identity.displayName : null)
+    // Format: "Имя (@username)" | "@username" | "Имя" — без числового ID
+    const identifierLabel = tgName && tgUsername
+        ? `${tgName} (${tgUsername})`
+        : (tgName || tgUsername || null)
     const handleCopyId = () => {
-        const value = identity.displayName?.startsWith('@') ? identity.displayName : identity.externalId
+        const value = tgUsername || tgName || identity.externalId
         navigator.clipboard.writeText(value).then(() => {
             setCopiedId(true)
             setTimeout(() => setCopiedId(false), 2000)
@@ -74,13 +83,15 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
                 <span className="text-[12px] font-medium text-[#111]">
                     {cfg?.label || identity.channel}
                 </span>
-                <button
-                    onClick={handleCopyId}
-                    title="Нажмите чтобы скопировать"
-                    className="text-[11px] text-gray-400 font-mono hover:text-[#3390EC] transition-colors"
-                >
-                    {copiedId ? <span className="text-emerald-500 text-[10px]">✓ скопировано</span> : identifierLabel}
-                </button>
+                {identifierLabel && (
+                    <button
+                        onClick={handleCopyId}
+                        title="Нажмите чтобы скопировать"
+                        className="text-[11px] text-gray-400 hover:text-[#3390EC] transition-colors"
+                    >
+                        {copiedId ? <span className="text-emerald-500 text-[10px]">✓ скопировано</span> : identifierLabel}
+                    </button>
+                )}
                 {identity.source === 'auto' && contact && contact.identities.length > 1 && (
                     <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded">авто</span>
                 )}
