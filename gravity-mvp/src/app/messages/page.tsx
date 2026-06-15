@@ -13,7 +13,7 @@ export default async function MessagesPage({
     const resolvedParams = await searchParams
 
     // Normalize id — also resolve driverId/phone to chatId if needed
-    let idParam = resolvedParams.id
+    let idParam = resolvedParams.id ?? resolvedParams.chatId
     if (!idParam && (typeof resolvedParams.driver === 'string' || typeof resolvedParams.phone === 'string')) {
         try {
             let chat = null
