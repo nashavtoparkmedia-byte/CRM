@@ -273,7 +273,53 @@ async function handleSyncUser(payload: any) {
         }
     })
 
+    // Notify manager: drop a system message into the driver's existing TG chat
+    await notifyManagerPendingLink({ telegramId, username, phone })
+
     return NextResponse.json({ success: true, autoLinked: false, message: 'Pending manual link by manager' })
+}
+
+// Inject a system message into the driver's TG chat so the manager sees the pending link request
+async function notifyManagerPendingLink({ telegramId, username, phone }: {
+    telegramId: string
+    username?: string
+    phone?: string
+}) {
+    try {
+        const chat = await prisma.chat.findFirst({
+            where: { channel: 'telegram', externalChatId: String(telegramId) },
+            select: { id: true },
+        })
+        if (!chat) return
+
+        const userLabel = username ? `@${username}` : `TG ID ${telegramId}`
+        const phoneLabel = phone ? `+${phone.replace(/^\+/, '')}` : 'не известен'
+
+        await prisma.message.create({
+            data: {
+                chatId: chat.id,
+                direction: 'system',
+                type: 'system',
+                channel: 'telegram',
+                content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
+                status: 'sent',
+                externalId: `bot_link_req_${telegramId}_${Date.now()}`,
+                sentAt: new Date(),
+            },
+        })
+
+        await prisma.chat.update({
+            where: { id: chat.id },
+            data: {
+                status: 'open',
+                requiresResponse: true,
+                unreadCount: { increment: 1 },
+                lastMessageAt: new Date(),
+            },
+        })
+    } catch (err: any) {
+        console.error('[notifyManagerPendingLink] Error:', err.message)
+    }
 }
 
 // Called by TelegramLinkClient or TelegramManualLinkClient when manager links a driver
