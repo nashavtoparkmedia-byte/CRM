@@ -12,6 +12,7 @@ model ApiConnection {
   clid      String
   apiKey    String
   parkId    String
+  name      String?
   createdAt DateTime @default(now())
   logs      ApiLog[]
 }
@@ -158,6 +159,7 @@ model DriverTelegram {
   botState      String   @default("IDLE")
   carId         String?
   carLabel      String?
+  activeParkId  String?
   createdAt     DateTime @default(now())
 }
 
