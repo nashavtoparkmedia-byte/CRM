@@ -220,8 +220,8 @@ async function handleSyncUser(payload: any) {
                 },
                 body: JSON.stringify({
                     query: { park: { id: connection.parkId }, text: phone },
-                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones'], car: [], account: [], current_status: ['status'] },
-                    limit: 5,
+                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: ['status'] },
+                    limit: 10,
                     offset: 0
                 })
             })
@@ -230,10 +230,13 @@ async function handleSyncUser(payload: any) {
             const yandexData = await yandexRes.json()
             const profiles = yandexData.driver_profiles || []
 
-            const matched = profiles.find((p: any) => {
+            // All profiles matching by phone
+            const phoneMatches = profiles.filter((p: any) => {
                 const phones: string[] = p.driver_profile.phones || []
                 return phones.some((ph: string) => ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone) || normalizedPhone.includes(ph.replace(/[\s+\-()]/g, '')))
             })
+            // Prefer working status — handles "swap" scenario (two profiles same driver)
+            const matched = phoneMatches.find((p: any) => p.driver_profile.work_status !== 'fired') || phoneMatches[0]
 
             if (matched) {
                 const yandexId = matched.driver_profile.id
@@ -529,7 +532,6 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
     if (!driver?.yandexDriverId) {
-        // Audit even when we can't proceed — useful for support.
         await prisma.driverAction.create({
             data: {
                 driverId: mapping.driverId,
@@ -546,7 +548,43 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
 
-    // 2. Enqueue scraper task — Playwright on fleet.yandex.ru (price, map, full addresses)
+    // 2a. Profile-swap guard: if linked profile is fired, find the working twin in same park
+    let effectiveYandexId = driver.yandexDriverId!
+    try {
+        const conn = mapping.activeParkId
+            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+        if (conn && driver.fullName) {
+            const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+                method: 'POST',
+                headers: { 'X-Client-ID': conn.clid, 'X-Api-Key': conn.apiKey, 'Accept-Language': 'ru', 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    query: { park: { id: conn.parkId }, text: driver.fullName },
+                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'work_status'], car: [], account: [], current_status: [] },
+                    limit: 10, offset: 0
+                })
+            })
+            if (checkRes.ok) {
+                const checkData = await checkRes.json()
+                const profiles: any[] = checkData.driver_profiles || []
+                const linked = profiles.find((p: any) => p.driver_profile.id === effectiveYandexId)
+                if (linked?.driver_profile.work_status === 'fired') {
+                    const twin = profiles.find((p: any) =>
+                        p.driver_profile.id !== effectiveYandexId &&
+                        p.driver_profile.work_status !== 'fired'
+                    )
+                    if (twin) {
+                        console.log(`[handleDriverAction] profile swap detected: ${effectiveYandexId} fired → using twin ${twin.driver_profile.id}`)
+                        effectiveYandexId = twin.driver_profile.id
+                    }
+                }
+            }
+        }
+    } catch (e: any) {
+        console.warn(`[handleDriverAction] swap-guard failed: ${e.message}`)
+    }
+
+    // 2b. Enqueue scraper task — Playwright on fleet.yandex.ru (price, map, full addresses)
     let scraperTaskId: string | null = null
     try {
         const res = await fetch(`${SCRAPER_URL}/api/driver-actions`, {
@@ -554,7 +592,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 kind,
-                driverYandexId: driver.yandexDriverId,
+                driverYandexId: effectiveYandexId,
                 parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
                 reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
             }),
