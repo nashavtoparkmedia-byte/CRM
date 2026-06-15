@@ -80,8 +80,8 @@ export function formatChatTitleDetailed(input: {
     if (input.driverFullName && hasLetters(input.driverFullName)) {
         return { title: input.driverFullName.trim(), isUnlinked: false }
     }
-    // Manually set contact name wins over chatName (chat has short TG first_name, operator set full FIO)
-    if (input.contactNameIsManual && input.contactDisplayName && hasLetters(input.contactDisplayName)) {
+    // Manual name always wins — no hasLetters filter (operator knows what they're setting)
+    if (input.contactNameIsManual && input.contactDisplayName?.trim()) {
         return { title: input.contactDisplayName.trim(), isUnlinked: false }
     }
     if (input.chatName && hasLetters(input.chatName)) {
