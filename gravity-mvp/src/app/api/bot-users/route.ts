@@ -19,8 +19,8 @@ export async function GET() {
 
   const driverIds = dtRows.map(r => r.driverId)
   const allTelegramIds = [
-    ...dtRows.map(r => r.telegramId.toString()),
-    ...requests.map(r => r.telegramId.toString()),
+    ...dtRows.map(r => `telegram:${r.telegramId}`),
+    ...requests.map(r => `telegram:${r.telegramId}`),
   ]
 
   const [drivers, parks, chats] = await Promise.all([
@@ -46,7 +46,10 @@ export async function GET() {
 
   const driverMap = Object.fromEntries(drivers.map(d => [d.id, d]))
   const parkMap = Object.fromEntries(parks.map(p => [p.parkId, p.name || p.parkId]))
-  const chatMap = Object.fromEntries(chats.map(c => [c.externalChatId, c.id]))
+  // chatMap keyed by raw telegramId string (without prefix)
+  const chatMap = Object.fromEntries(
+    chats.map(c => [c.externalChatId.replace('telegram:', ''), c.id])
+  )
 
   const linked = dtRows.map(row => {
     const driver = driverMap[row.driverId]
