@@ -159,6 +159,7 @@ function renderOrderCard(state) {
     }
     if (r.tariff) lines.push(`🚗 Тариф: ${r.tariff}`);
     if (r.paymentMethod) lines.push(`💳 Оплата: ${r.paymentMethod}`);
+    if (r.parkName) lines.push(`ℹ️ Парк: ${r.parkName}`);
     if (r.mock) lines.push('_(временно — мок-данные)_');
     return lines.join('\n');
 }

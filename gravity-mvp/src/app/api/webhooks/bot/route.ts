@@ -32,6 +32,12 @@ export async function POST(request: Request) {
                 return await handleDriverAction(payload, 'CANCEL_ORDER')
             case 'poll_driver_action':
                 return await handlePollDriverAction(payload)
+            case 'list_parks':
+                return await handleListParks()
+            case 'set_active_park':
+                return await handleSetActivePark(payload)
+            case 'get_park_info':
+                return await handleGetParkInfo(payload)
             default:
                 return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
         }
@@ -195,14 +201,12 @@ async function handleSyncUser(payload: any) {
 
     console.log(`[Webhook] sync_user: TG ${telegramId}, Phone ${phone}`)
 
-    // 1. Try to auto-link by phone via Yandex API
-    const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+    // 1. Try to auto-link by phone via Yandex API — search ALL parks
+    const connections = await prisma.apiConnection.findMany({ orderBy: { createdAt: 'asc' } })
+    const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
 
-    if (connection) {
+    for (const connection of connections) {
         try {
-            // Normalize phone: strip + and spaces
-            const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
-
             const yandexRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
                 headers: {
@@ -219,48 +223,37 @@ async function handleSyncUser(payload: any) {
                 })
             })
 
-            if (yandexRes.ok) {
-                const yandexData = await yandexRes.json()
-                const profiles = yandexData.driver_profiles || []
+            if (!yandexRes.ok) continue
+            const yandexData = await yandexRes.json()
+            const profiles = yandexData.driver_profiles || []
 
-                // Find a profile whose phone matches
-                const matched = profiles.find((p: any) => {
-                    const phones: string[] = p.driver_profile.phones || []
-                    return phones.some((ph: string) => ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone) || normalizedPhone.includes(ph.replace(/[\s+\-()]/g, '')))
+            const matched = profiles.find((p: any) => {
+                const phones: string[] = p.driver_profile.phones || []
+                return phones.some((ph: string) => ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone) || normalizedPhone.includes(ph.replace(/[\s+\-()]/g, '')))
+            })
+
+            if (matched) {
+                const yandexId = matched.driver_profile.id
+                const driverName = `${matched.driver_profile.first_name || ''} ${matched.driver_profile.last_name || ''}`.trim()
+
+                let driverId = yandexId
+                try {
+                    const crmDriver = await prisma.driver.findFirst({ where: { yandexDriverId: yandexId } })
+                    if (crmDriver) driverId = crmDriver.id
+                } catch { /* keep yandexId as fallback */ }
+
+                await prisma.driverTelegram.upsert({
+                    where: { driverId },
+                    update: { telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId },
+                    create: { driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId }
                 })
 
-                if (matched) {
-                    const yandexId = matched.driver_profile.id
-                    const driverName = `${matched.driver_profile.first_name || ''} ${matched.driver_profile.last_name || ''}`.trim()
-
-                    // Resolve Yandex contractor ID → CRM Driver.id so that check_link
-                    // can look up the driver via prisma.driver.findUnique({ where: { id } }).
-                    // If the driver isn't in CRM yet (not scraped), fall back to yandexId.
-                    let driverId = yandexId
-                    try {
-                        const crmDriver = await prisma.driver.findFirst({
-                            where: { yandexDriverId: yandexId }
-                        })
-                        if (crmDriver) driverId = crmDriver.id
-                    } catch { /* keep yandexId as fallback */ }
-
-                    // Auto-link in DB
-                    await prisma.driverTelegram.upsert({
-                        where: { driverId },
-                        update: { telegramId: BigInt(telegramId), username: username || null },
-                        create: { driverId, telegramId: BigInt(telegramId), username: username || null }
-                    })
-
-                    console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName})`)
-
-                    // Notify the driver about successful link
-                    await notifyDriverLinked(telegramId.toString(), driverName)
-
-                    return NextResponse.json({ success: true, autoLinked: true, driverName })
-                }
+                console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName}) park=${connection.name || connection.parkId}`)
+                await notifyDriverLinked(telegramId.toString(), driverName)
+                return NextResponse.json({ success: true, autoLinked: true, driverName, parkName: connection.name || connection.parkId })
             }
         } catch (err: any) {
-            console.error('[Webhook] Auto-link attempt failed:', err.message)
+            console.error(`[Webhook] Auto-link failed for park ${connection.parkId}:`, err.message)
         }
     }
 
@@ -542,7 +535,9 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
 
     // 2a. For GET_PRICE — query fleet API directly, no scraper needed
     if (kind === 'GET_PRICE') {
-        const conn = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+        const conn = mapping.activeParkId
+            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
         if (conn) {
             try {
                 const from = new Date(Date.now() - 2 * 86400_000).toISOString()
@@ -610,6 +605,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                             bookedAt,
                             priceRub: active.total_price?.amount ?? null,
                             orderSource: active.source || undefined,
+                            parkName: conn.name || undefined,
                         },
                     })
                 }
@@ -629,7 +625,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             body: JSON.stringify({
                 kind,
                 driverYandexId: driver.yandexDriverId,
-                parkId: DRIVER_ACTIONS_PARK_ID,
+                parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
                 reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
             }),
         })
@@ -673,6 +669,39 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         status: 'PENDING',
         message: '⏳ Передаю в систему…',
     })
+}
+
+async function handleListParks() {
+    const parks = await prisma.apiConnection.findMany({
+        select: { parkId: true, name: true },
+        orderBy: { createdAt: 'asc' }
+    })
+    return NextResponse.json({
+        parks: parks.map(p => ({ parkId: p.parkId, name: p.name || p.parkId }))
+    })
+}
+
+async function handleSetActivePark(payload: any) {
+    const { telegramId, parkId } = payload
+    if (!telegramId || !parkId) return NextResponse.json({ error: 'Missing params' }, { status: 400 })
+    const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+    if (!mapping) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
+    const park = await prisma.apiConnection.findFirst({ where: { parkId } })
+    await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId } })
+    return NextResponse.json({ success: true, parkName: park?.name || parkId })
+}
+
+async function handleGetParkInfo(payload: any) {
+    const { telegramId } = payload
+    if (!telegramId) return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
+    const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+    if (!mapping) return NextResponse.json({ linked: false })
+    let parkName: string | null = null
+    if (mapping.activeParkId) {
+        const park = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+        parkName = park?.name || mapping.activeParkId
+    }
+    return NextResponse.json({ linked: true, activeParkId: mapping.activeParkId || null, parkName })
 }
 
 async function handlePollDriverAction(payload: any) {

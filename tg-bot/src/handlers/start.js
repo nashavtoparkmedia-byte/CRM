@@ -1,8 +1,39 @@
 const { Markup } = require('telegraf');
+const https = require('https');
+const http = require('http');
 const userService = require('../services/userService');
 const sheetsService = require('../services/sheets');
 const logger = require('../utils/logger');
 const config = require('../config');
+
+function crmParkRequest(action, payload) {
+    return new Promise((resolve) => {
+        const base = (() => {
+            if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
+            const fwd = process.env.CRM_WEBHOOK_URL;
+            if (fwd) { try { const u = new URL(fwd); return `${u.protocol}//${u.host}/api/webhooks/bot`; } catch {} }
+            return 'http://localhost:3002/api/webhooks/bot';
+        })();
+        const data = JSON.stringify({ action, payload });
+        const parsed = new URL(base);
+        const lib = parsed.protocol === 'https:' ? https : http;
+        const req = lib.request({
+            hostname: parsed.hostname,
+            port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+            path: parsed.pathname,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data), 'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret' }
+        }, (res) => {
+            let body = '';
+            res.on('data', c => body += c);
+            res.on('end', () => { try { resolve({ ok: res.statusCode < 300, data: JSON.parse(body) }); } catch { resolve({ ok: false, data: {} }); } });
+        });
+        req.setTimeout(5000, () => { req.destroy(); resolve({ ok: false, data: {} }); });
+        req.on('error', () => resolve({ ok: false, data: {} }));
+        req.write(data);
+        req.end();
+    });
+}
 
 // Admin list
 const ADMINS = [316425068];
@@ -53,12 +84,21 @@ async function getMainMenu(ctx) {
         surveyButtons = ['📊 Опрос качества'];
     }
 
+    // Fetch active park for this user (fast — just 2 DB reads on CRM side)
+    let parkButtonLabel = '🏢 Выбрать парк';
+    try {
+        const parkRes = await crmParkRequest('get_park_info', { telegramId: String(userId) });
+        if (parkRes.ok && parkRes.data?.linked && parkRes.data?.parkName) {
+            parkButtonLabel = `🏢 ${parkRes.data.parkName}`;
+        }
+    } catch { /* use default */ }
+
     // Standard buttons for regular users
     const userButtons = [
         ['🛠 Поддержка', ...surveyButtons.slice(0, 1)], // First row: Support + First Survey
         ['🚘 Мой автомобиль'],
         ['💳 Только безнал', '💵 Включить наличку'],
-        ['🚖 Текущий заказ'],
+        ['🚖 Текущий заказ', parkButtonLabel],
         ['🚖 Yandex Taxi Fun', '🚗 Подключиться'],
         ['📖 Новости']
     ];
@@ -185,6 +225,12 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
         }
     } catch (err) {
         logger.error('Error checking dynamic surveys:', err);
+    }
+
+    // Park selector button (dynamic label "🏢 <ParkName>")
+    if (text?.startsWith('🏢')) {
+        if (ctx.scene) return await ctx.scene.enter('parkSelect');
+        return await ctx.reply('Выбор парка временно недоступен.');
     }
 
     // STATIC BUTTONS

@@ -14,6 +14,7 @@ const limitManagementScene = require('./handlers/balanceLimit');
 const carManagementScene = require('./handlers/carManagement');
 const driverOrderScene = require('./handlers/driverOrder');
 const quickLimitScene = require('./handlers/quickLimit');
+const parkSelectScene = require('./handlers/parkSelect');
 
 // Validate configuration
 config.validate();
@@ -63,7 +64,10 @@ bot.use(async (ctx, next) => {
     if (text) {
         let isInterrupt = false;
 
-        if (staticButtons.includes(text)) {
+        // Park button has dynamic label "🏢 ParkName" — match by prefix
+        if (text.startsWith('🏢')) {
+            isInterrupt = true;
+        } else if (staticButtons.includes(text)) {
             isInterrupt = true;
         } else {
             // Check if text matches any active survey trigger
@@ -112,7 +116,7 @@ bot.use(async (ctx, next) => {
 });
 
 // 2. Stage initialization
-const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene, quickLimitScene]);
+const stage = new Scenes.Stage([surveyHandler.dynamicSurveyScene, limitManagementScene, carManagementScene, driverOrderScene, quickLimitScene, parkSelectScene]);
 
 // 2.1 Universal Commands within Stage
 stage.start(startHandler.handleStart);
@@ -191,6 +195,12 @@ bot.hears('🚖 Текущий заказ', async (ctx) => {
     const userId = ctx.from.id;
     console.log(`[BUTTON CLICK] 🚖 Текущий заказ ${userId}`);
     return await ctx.scene.enter('driverOrder');
+});
+
+bot.hears(/^🏢/, async (ctx) => {
+    const userId = ctx.from.id;
+    console.log(`[BUTTON CLICK] 🏢 Park select ${userId}`);
+    return await ctx.scene.enter('parkSelect');
 });
 
 // Quick limit presets (one tap each)
