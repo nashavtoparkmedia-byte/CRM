@@ -313,9 +313,9 @@ export async function getWhatsAppMessages(chatId: string) {
     })
 }
 
-export async function sendWhatsAppMessage(connectionId: string, chatId: string, text: string) {
+export async function sendWhatsAppMessage(connectionId: string, chatId: string, text: string, quotedMsgId?: string) {
     console.log(`[WA-ACTIONS] sendWhatsAppMessage called for: ${connectionId}, chat: ${chatId}`)
-    const result = await waSendMessage(connectionId, chatId, text)
+    const result = await waSendMessage(connectionId, chatId, text, quotedMsgId)
     revalidatePath(`/whatsapp/chat/${chatId}`)
     return result
 }

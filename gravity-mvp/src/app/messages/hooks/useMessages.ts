@@ -27,6 +27,7 @@ export interface Message {
     channel: string
     origin?: 'operator' | 'ai' | 'auto' | 'system'
     account?: string
+    externalId?: string
     metadata?: Record<string, any>
     attachments?: MessageAttachment[]
 }
@@ -257,7 +258,7 @@ export function useMessages(chatId: string | null) {
         setHasMoreHistory(false) 
     }
 
-    const sendMessage = async (content: string, channel: string) => {
+    const sendMessage = async (content: string, channel: string, quotedMsgId?: string) => {
         if (!chatId) return
 
         // Normalize channel for API (wa→whatsapp, tg→telegram)
@@ -298,7 +299,7 @@ export function useMessages(chatId: string | null) {
             const res = await fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel, clientMessageId })
+                body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel, clientMessageId, quotedMsgId })
             })
             
             if (res.ok) {

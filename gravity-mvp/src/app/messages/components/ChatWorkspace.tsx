@@ -207,7 +207,9 @@ function ChatWorkspaceInner({
 
     const handleSendMessage = (content: string, effectiveChannel: string) => {
         setLastSentAt(Date.now())
-        sendMessage(content, effectiveChannel)
+        const quotedId = replyContext?.externalId
+        setReplyContext(null)
+        sendMessage(content, effectiveChannel, quotedId)
 
         // Auto-assign on first reply: if chat is unassigned, assign to current user
         if (!chat.assignedToUserId) {
@@ -250,6 +252,7 @@ function ChatWorkspaceInner({
     const handleReply = (msg: Message) => {
         setReplyContext({
             messageId: msg.id,
+            externalId: msg.externalId,
             channel: msg.channel,
             authorLabel: msg.direction === 'outbound' ? 'Вы' : (conversations.find((c: any) => c.id === chatId)?.name || 'Водитель'),
             snippet: msg.content.substring(0, 60),

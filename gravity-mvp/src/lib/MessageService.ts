@@ -373,7 +373,7 @@ export class MessageService {
     /**
      * Sends a message through the appropriate channel.
      */
-    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string) {
+    static async send(chatId: string, content: string, channelOverride?: ChatChannel, profileId?: string, clientMessageId?: string, quotedMsgId?: string) {
         console.log(`[MessageService] START send: chatId=${chatId}, channelOverride=${channelOverride}, clientMessageId=${clientMessageId || 'none'}`)
 
         const chat = await (prisma.chat as any).findUnique({
@@ -535,12 +535,12 @@ export class MessageService {
                     const connId = profileId || (targetChat.metadata as any)?.connectionId
                     console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
                     if (connId) {
-                        await deliverWA(connId, rawExternalChatId, content)
+                        await deliverWA(connId, rawExternalChatId, content, quotedMsgId)
                     } else {
                         const conn = await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' } })
                         console.log(`[MessageService] WA Fallback: found ready conn=${conn?.id}`)
                         if (!conn) throw new Error('No ready WhatsApp connection available.')
-                        await deliverWA(conn.id, rawExternalChatId, content)
+                        await deliverWA(conn.id, rawExternalChatId, content, quotedMsgId)
                     }
                     deliveryStatus = 'delivered'
                     break

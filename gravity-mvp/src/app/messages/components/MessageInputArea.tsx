@@ -22,6 +22,7 @@ const DEFAULT_TEMPLATES: QuickReplyTemplate[] = [
 
 export interface ReplyContextType {
     messageId: string
+    externalId?: string
     channel: string
     authorLabel: string
     snippet: string

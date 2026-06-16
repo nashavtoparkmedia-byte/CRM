@@ -1495,7 +1495,7 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
     return { checkedCount: entries.length, unhealthyCount, details }
 }
 
-export async function sendMessage(connectionId: string, chatId: string, text: string): Promise<{ externalId: string }> {
+export async function sendMessage(connectionId: string, chatId: string, text: string, quotedMsgId?: string): Promise<{ externalId: string }> {
     let client = clients.get(connectionId)
 
     // Lightweight runtime validation: detect stale client (puppeteer dead but object in map)
@@ -1557,7 +1557,11 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
 
     let msg
     try {
-        msg = await client.sendMessage(targetChatId, text)
+        const sendOpts: Record<string, any> = {}
+        if (quotedMsgId) {
+            sendOpts.quotedMessageId = quotedMsgId
+        }
+        msg = await client.sendMessage(targetChatId, text, sendOpts)
     } catch (sendErr: any) {
         // Detect puppeteer crash: "detached Frame", "Protocol error", "Target closed"
         const errMsg = sendErr.message || ''
