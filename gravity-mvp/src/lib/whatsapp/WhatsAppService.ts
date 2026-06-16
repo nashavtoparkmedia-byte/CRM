@@ -1262,6 +1262,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         const elapsedMs = Date.now() - initStartedAt
         const msg = err?.message ?? String(err)
         const errorClass =
+            /browser is already running/i.test(msg) ? 'browser_already_running' :
             /Execution context was destroyed/i.test(msg) ? 'cdp_context_destroyed' :
             /Navigation timeout/i.test(msg) ? 'navigation_timeout' :
             /Target closed/i.test(msg) ? 'browser_closed' :
@@ -1272,6 +1273,18 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             errorMessage: msg,
             errorStack: err?.stack?.split('\n').slice(0, 5).join('\n'),
         })
+
+        if (errorClass === 'browser_already_running') {
+            // Stale Chrome from a previous JS-context is still running.
+            // Don't mark as error — schedule cleanup+restart which will kill it and reconnect.
+            registry.setFailed(connectionId, instanceId, `init_failed: ${errorClass}`)
+            try { await client.destroy() } catch { /* zombie */ }
+            clients.delete(connectionId)
+            instanceIds.delete(connectionId)
+            scheduleHardRestart(connectionId, 'browser_already_running')
+            return
+        }
+
         // Critical: write error status to DB so UI doesn't show stale "ready" from previous session
         await safeUpdateConnection(connectionId, { status: 'error' })
         registry.setFailed(connectionId, instanceId, `init_failed: ${errorClass}`)
