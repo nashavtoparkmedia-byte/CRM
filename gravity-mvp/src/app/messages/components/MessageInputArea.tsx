@@ -389,6 +389,27 @@ export default function MessageInputArea({
         }
     }
 
+    // Enter отправляет медиа-превью (включая аудио — там нет текстового
+    // input для caption, поэтому фокус остаётся вне поля, и onKeyDown на
+    // самом input не сработал бы). Document-level listener покрывает все
+    // случаи сразу, без дублирования с caption input — поэтому там Enter
+    // не обрабатывается отдельно.
+    useEffect(() => {
+        if (!imagePreview) return
+        const handleModalKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                handleSendImage()
+            } else if (e.key === 'Escape') {
+                e.preventDefault()
+                setImagePreview(null)
+            }
+        }
+        document.addEventListener('keydown', handleModalKeyDown)
+        return () => document.removeEventListener('keydown', handleModalKeyDown)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [imagePreview])
+
     const isChannelLocked = activeChannelTab !== 'all' || !!replyContext
     const hasText = text.trim().length > 0
 
@@ -442,12 +463,6 @@ export default function MessageInputArea({
                             type="text"
                             value={text}
                             onChange={(e) => handleTextChange(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault()
-                                    handleSendImage()
-                                }
-                            }}
                             placeholder="Добавить подпись..."
                             autoFocus
                             className="w-full h-10 px-3 rounded-lg border border-gray-200 text-[14px] outline-none focus:border-[#3390EC] placeholder-gray-400"

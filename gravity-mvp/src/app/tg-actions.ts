@@ -6,7 +6,7 @@ import { StringSession } from 'telegram/sessions'
 import { CustomFile } from 'telegram/client/uploads'
 import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
-import { NewMessage } from 'telegram/events'
+import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
 
 // Global map to keep track of active login clients for QR
@@ -274,6 +274,29 @@ import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 
+/**
+ * Скачивание медиа из Telegram падает transient-ошибкой, если соединение
+ * GramJS рвётся в момент скачивания (например, контейнер пересоздаётся
+ * при деплое ровно когда пришло сообщение с вложением). Без retry такое
+ * сообщение навсегда остаётся без attachment — DEDUP блокирует повторную
+ * попытку при следующей обработке того же msgId. 3 попытки с backoff
+ * закрывают почти все короткие обрывы за 1.5-6 секунд.
+ */
+async function downloadTgMediaWithRetry(downloadFn: () => Promise<any>, maxAttempts = 3): Promise<Buffer | null> {
+    let lastErr: any
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const buffer = await downloadFn()
+            if (buffer && Buffer.isBuffer(buffer)) return buffer
+            lastErr = new Error('downloadMedia returned empty/non-buffer result')
+        } catch (e) {
+            lastErr = e
+        }
+        if (attempt < maxAttempts) await new Promise(r => setTimeout(r, attempt * 1500))
+    }
+    throw lastErr || new Error('downloadMedia failed after retries')
+}
+
 function detectTgMediaType(message: any): { type: string; fallback: string } | null {
     if (!message.media) return null
     const mediaClass = message.media.className || ''
@@ -399,6 +422,40 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 
         if (existing) {
             console.log(`[${loggerPrefix}] DB-DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
+            // Self-heal: if a prior attempt created the message but the media
+            // download failed (e.g. connection dropped mid-deploy), retry it
+            // here — this path re-runs on every catchup/restart, so a message
+            // stuck without an attachment gets another chance each time.
+            if (mediaInfo && message.downloadMedia) {
+                try {
+                    const attCount = await (prisma.messageAttachment as any).count({ where: { messageId: existing.id } })
+                    if (attCount === 0) {
+                        const client = clientCache.get(connectionId)
+                        if (client) {
+                            const buffer = await downloadTgMediaWithRetry(() => client.downloadMedia(message, {}))
+                            if (buffer) {
+                                const mimeType = message.media?.document?.mimeType ||
+                                    (mediaInfo.type === 'image' ? 'image/jpeg' : 'application/octet-stream')
+                                const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+                                const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                                await (prisma.messageAttachment as any).create({
+                                    data: {
+                                        messageId: existing.id,
+                                        type: mediaInfo.type,
+                                        url: dataUrl,
+                                        fileName,
+                                        fileSize: buffer.length,
+                                        mimeType,
+                                    }
+                                })
+                                console.log(`[${loggerPrefix}] MEDIA retry-saved for existing msg=${existing.id}`)
+                            }
+                        }
+                    }
+                } catch (retryErr: any) {
+                    console.error(`[${loggerPrefix}] MEDIA retry failed for existing msg=${existing.id}:`, retryErr.message)
+                }
+            }
         } else {
             const msgType = mediaInfo?.type || 'text'
             const savedMsg = await (prisma.message as any).create({
@@ -419,8 +476,8 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 try {
                     const client = clientCache.get(connectionId)
                     if (client) {
-                        const buffer = await client.downloadMedia(message, {})
-                        if (buffer && Buffer.isBuffer(buffer)) {
+                        const buffer = await downloadTgMediaWithRetry(() => client.downloadMedia(message, {}))
+                        if (buffer) {
                             const mimeType = message.media?.document?.mimeType ||
                                 (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                             const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
@@ -534,7 +591,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     // Download media if present
     if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
         try {
-            const buffer = await message.downloadMedia({ progressCallback: null })
+            const buffer = await downloadTgMediaWithRetry(() => message.downloadMedia({ progressCallback: null }))
             if (buffer) {
                 const mimeType = message.media?.document?.mimeType || (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                 const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
@@ -594,6 +651,47 @@ async function catchUpMissedMessages(client: TelegramClient, connectionId: strin
 /**
  * Attaches the NewMessage listener to a client. Idempotent per connectionId.
  */
+/**
+ * Водитель ставит реакцию на сообщение в Telegram → сервер шлёт
+ * UpdateMessageReactions (НЕ обычный NewMessage). Без этого обработчика
+ * реакции от собеседника были видны в самом Telegram, но не в CRM.
+ * Формат хранения — тот же {emoji: count} в Message.metadata.reactions,
+ * что уже использует /api/messages/reaction для НАШИХ исходящих реакций.
+ */
+async function processReactionUpdate(event: any) {
+    try {
+        const msgId = event.msgId
+        const externalId = msgId != null ? String(msgId) : null
+        if (!externalId) return
+
+        const message = await (prisma.message as any).findUnique({
+            where: { externalId },
+            select: { id: true, chatId: true, metadata: true },
+        })
+        if (!message) return // не наше сообщение (другой чат/история) — пропускаем
+
+        const results = event.reactions?.results || []
+        const reactionsMap: Record<string, number> = {}
+        for (const r of results) {
+            const emoji = r.reaction?.emoticon
+            if (emoji) reactionsMap[emoji] = r.count
+        }
+
+        const updatedMetadata = { ...((message.metadata as Record<string, any>) || {}), reactions: reactionsMap }
+        await (prisma.message as any).update({
+            where: { id: message.id },
+            data: { metadata: updatedMetadata },
+        })
+
+        const { broadcastChatMessage } = await import('@/lib/messageStreamBus')
+        broadcastChatMessage(message.chatId, { id: message.id, metadata: updatedMetadata })
+
+        console.log(`[TG-REACTION] msg=${message.id} reactions=${JSON.stringify(reactionsMap)}`)
+    } catch (err: any) {
+        console.error(`[TG-REACTION] Error:`, err.message)
+    }
+}
+
 function attachInboundListener(client: TelegramClient, connectionId: string) {
     if (initializedListeners.has(connectionId)) {
         console.log(`[TG-LISTENER] Listener already attached for ${connectionId}, skipping.`)
@@ -612,6 +710,11 @@ function attachInboundListener(client: TelegramClient, connectionId: string) {
             console.error(`[TG-LISTENER] Error (conn=${connectionId}):`, err.message)
         }
     }, new NewMessage({ incoming: true, outgoing: true }))
+
+    client.addEventHandler(
+        (event: any) => processReactionUpdate(event),
+        new Raw({ types: [Api.UpdateMessageReactions] })
+    )
 
     initializedListeners.add(connectionId)
     console.log(`[TG-LISTENER] Listener attached for connectionId=${connectionId}`)
