@@ -1058,14 +1058,28 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
             if (unifiedChat) {
                 // Always update potential variant IDs to the standardized format
-                await (prisma.chat as any).update({
-                    where: { id: unifiedChat.id },
-                    data: { 
-                        externalChatId: normalizedExternalId, 
-                        lastMessageAt: ts, 
-                        metadata: { ...(unifiedChat.metadata as any || {}), connectionId } 
+                try {
+                    await (prisma.chat as any).update({
+                        where: { id: unifiedChat.id },
+                        data: {
+                            externalChatId: normalizedExternalId,
+                            lastMessageAt: ts,
+                            metadata: { ...(unifiedChat.metadata as any || {}), connectionId }
+                        }
+                    })
+                } catch (updateErr: any) {
+                    if (updateErr.code === 'P2002') {
+                        // Another chat already has normalizedExternalId — use it as the canonical chat
+                        const phoneChat = await (prisma.chat as any).findUnique({ where: { externalChatId: normalizedExternalId } })
+                        if (phoneChat) {
+                            console.warn(`[WA-SERVICE] Unique conflict on externalChatId update — redirecting to phone chat ${phoneChat.id}`)
+                            unifiedChat = phoneChat
+                            await (prisma.chat as any).update({ where: { id: phoneChat.id }, data: { lastMessageAt: ts } })
+                        }
+                    } else {
+                        throw updateErr
                     }
-                })
+                }
             } else {
                 unifiedChat = await (prisma.chat as any).create({
                     data: {
@@ -1614,10 +1628,25 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
     
     if (unifiedChat) {
         if (unifiedChat.externalChatId !== normalizedTarget) {
-             unifiedChat = await prisma.chat.update({
-                 where: { id: unifiedChat.id },
-                 data: { externalChatId: normalizedTarget }
-             });
+            try {
+                unifiedChat = await prisma.chat.update({
+                    where: { id: unifiedChat.id },
+                    data: { externalChatId: normalizedTarget }
+                });
+            } catch (updateErr: any) {
+                // P2002 = another chat already has normalizedTarget as externalChatId.
+                // This happens when a phone-format chat was created while the @lid chat
+                // existed separately (duplicate). Fall back to the phone-format chat.
+                if (updateErr.code === 'P2002') {
+                    const phoneChat = await prisma.chat.findUnique({ where: { externalChatId: normalizedTarget } })
+                    if (phoneChat) {
+                        console.warn(`[WA-SERVICE] Unique conflict on externalChatId rename — switching to phone chat ${phoneChat.id}`)
+                        unifiedChat = phoneChat
+                    }
+                } else {
+                    throw updateErr
+                }
+            }
         }
         
         const existing = await prisma.message.findFirst({
