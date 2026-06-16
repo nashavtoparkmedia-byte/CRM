@@ -1111,6 +1111,21 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     contactResult.contact.id,
                     contactResult.identity.id,
                 )
+                // Backfill phone onto contact when LID resolved to a real number.
+                // resolveContact may have returned an existing contact (found via old
+                // @lid identity) that was created before phone resolution was available.
+                // addPhoneToContact is idempotent — safe to call on every message.
+                if (lidResolved && phoneDigits.length >= 10) {
+                    const e164 = '+7' + phoneDigits.slice(-10)
+                    const backfill = await ContactService.addPhoneToContact(
+                        contactResult.contact.id,
+                        e164,
+                        { source: 'whatsapp', isPrimary: true },
+                    )
+                    if (backfill.kind === 'added') {
+                        console.log(`[WA-SERVICE] Backfilled phone ${e164} → contact ${contactResult.contact.id}`)
+                    }
+                }
             } catch (contactErr: any) {
                 console.error(`[WA-SERVICE] ContactService error (non-blocking): ${contactErr.message}`)
             }
