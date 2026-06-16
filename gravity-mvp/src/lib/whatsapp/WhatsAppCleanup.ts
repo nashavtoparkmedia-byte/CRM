@@ -44,14 +44,59 @@ const LOCK_FILES = ['SingletonLock', 'SingletonCookie', 'SingletonSocket', 'lock
  * Windows-only (no-op on other platforms — Linux/macOS don't have this issue).
  */
 async function killZombieWhatsAppChromes(): Promise<number> {
-    if (process.platform !== 'win32') return 0
+    if (process.platform === 'win32') {
+        return killZombieChromesWindows()
+    }
+    return killZombieChromesLinux()
+}
 
+async function killZombieChromesLinux(): Promise<number> {
     let pids: number[] = []
     try {
-        // Use PowerShell CIM — more reliable than tasklist on modern Windows,
-        // doesn't need interactive elevation.
-        // execFile avoids quoting hell: each arg is passed literally, no need
-        // to escape nested quotes around the filter value.
+        // Read /proc/*/cmdline to find Chrome processes using our WA auth dir
+        const { readdir, readFile } = await import('fs/promises')
+        const procEntries = await readdir('/proc')
+        for (const entry of procEntries) {
+            if (!/^\d+$/.test(entry)) continue
+            try {
+                const cmdline = await readFile(`/proc/${entry}/cmdline`, 'utf8')
+                if (
+                    (cmdline.includes('chromium') || cmdline.includes('chrome')) &&
+                    cmdline.includes('whatsapp_auth')
+                ) {
+                    pids.push(parseInt(entry, 10))
+                }
+            } catch { /* process may have exited */ }
+        }
+    } catch (err: any) {
+        console.warn(`[WA-CLEANUP] Failed to scan /proc for chrome: ${err.message}`)
+        return 0
+    }
+
+    if (pids.length === 0) return 0
+
+    let killed = 0
+    for (const pid of pids) {
+        try {
+            process.kill(pid, 'SIGKILL')
+            killed++
+        } catch (err: any) {
+            if (err.code !== 'ESRCH') {
+                console.warn(`[WA-CLEANUP] Failed to kill pid ${pid}: ${err.message}`)
+            }
+        }
+    }
+
+    if (killed > 0) {
+        console.log(`[WA-CLEANUP] Killed ${killed} zombie chrome processes (of ${pids.length} candidates)`)
+        await new Promise(resolve => setTimeout(resolve, 1500))
+    }
+    return killed
+}
+
+async function killZombieChromesWindows(): Promise<number> {
+    let pids: number[] = []
+    try {
         const psCommand =
             `Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | ` +
             `Where-Object { $_.CommandLine -match '\\.wwebjs_auth' } | ` +
@@ -70,7 +115,6 @@ async function killZombieWhatsAppChromes(): Promise<number> {
             .map(s => parseInt(s, 10))
             .filter(n => Number.isFinite(n) && n > 0)
     } catch (err: any) {
-        // Don't block startup if query fails — just log and continue.
         console.warn(`[WA-CLEANUP] Failed to list chrome processes: ${err.message}`)
         return 0
     }
@@ -80,12 +124,9 @@ async function killZombieWhatsAppChromes(): Promise<number> {
     let killed = 0
     for (const pid of pids) {
         try {
-            // On Windows, process.kill with any signal calls TerminateProcess.
-            // Works without admin rights if we started the process (we did — puppeteer).
             process.kill(pid, 'SIGTERM')
             killed++
         } catch (err: any) {
-            // ESRCH = already dead. EPERM = we didn't launch it (someone else's chrome).
             if (err.code !== 'ESRCH') {
                 console.warn(`[WA-CLEANUP] Failed to kill pid ${pid}: ${err.message}`)
             }
