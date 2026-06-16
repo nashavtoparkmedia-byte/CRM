@@ -7,6 +7,7 @@ import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { emitMessageReceived } from '@/lib/messageEvents'
+import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
@@ -271,8 +272,17 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
     })
 
     // Media — reuse the same helper the 1:1 path uses.
+    let groupMediaDownloaded = false
     if (msg.hasMedia && unifiedType !== 'text') {
-        await downloadAndSaveMedia(msg, savedMsg.id, unifiedType, `group-live ${msg.id._serialized.slice(-16)}`)
+        groupMediaDownloaded = await downloadAndSaveMedia(msg, savedMsg.id, unifiedType, `group-live ${msg.id._serialized.slice(-16)}`)
+    }
+
+    if (groupMediaDownloaded) {
+        const msgWithAttachments = await prisma.message.findUnique({
+            where: { id: savedMsg.id },
+            include: { attachments: { select: { id: true, type: true, mimeType: true, fileName: true, fileSize: true } } }
+        })
+        if (msgWithAttachments) broadcastChatMessage(unifiedChat.id, msgWithAttachments)
     }
 
     emitMessageReceived(savedMsg).catch(e =>
@@ -1220,8 +1230,9 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
                 // Download and save media attachment (image, voice, video, document, sticker).
                 // msgType here is unified ('text' | 'image' | ...), so exclude 'text'.
+                let mediaDownloaded = false
                 if (msg.hasMedia && msgType !== 'text') {
-                    await downloadAndSaveMedia(msg, savedMsg.id, msgType, `live ${msg.id._serialized.slice(-16)}`)
+                    mediaDownloaded = await downloadAndSaveMedia(msg, savedMsg.id, msgType, `live ${msg.id._serialized.slice(-16)}`)
                 }
 
                 // Workflow: route by direction
@@ -1232,12 +1243,28 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 }
 
                 console.log(`[WA-SERVICE] SAVED ${direction} msgId=${msg.id._serialized} to chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
-                // emitMessageReceived now handles BOTH directions:
-                //   - inbound  → AI pipeline + bus broadcast
-                //   - outbound → bus broadcast only (no AI)
-                // Phase 4 SSE depends on this so an outbound from the
-                // operator's phone (msg.fromMe=true) reaches the CRM UI
-                // without waiting for the next polling tick.
+
+                // If media was saved, re-fetch the message with attachments so the SSE
+                // broadcast includes them — otherwise the UI shows "Медиа недоступно"
+                // until the next manual refresh.
+                if (mediaDownloaded) {
+                    const msgWithAttachments = await prisma.message.findUnique({
+                        where: { id: savedMsg.id },
+                        include: {
+                            attachments: {
+                                select: { id: true, type: true, mimeType: true, fileName: true, fileSize: true }
+                            }
+                        }
+                    })
+                    if (msgWithAttachments) {
+                        broadcastChatMessage(unifiedChat.id, msgWithAttachments)
+                        emitMessageReceived(savedMsg).catch(e =>
+                            console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
+                        )
+                        return
+                    }
+                }
+
                 emitMessageReceived(savedMsg).catch(e =>
                     console.error(`[WA-SERVICE] emitMessageReceived error:`, e.message)
                 )
