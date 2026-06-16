@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { X, ZoomIn, ZoomOut, RotateCcw, Download, ChevronLeft, ChevronRight } from "lucide-react"
+import { X, ZoomIn, ZoomOut, RotateCcw, RotateCw, Download, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface ImageLightboxProps {
     images: string[]
@@ -17,6 +17,7 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
     const [currentIndex, setCurrentIndex] = useState(initialIndex)
     const [zoom, setZoom] = useState(1)
     const [position, setPosition] = useState({ x: 0, y: 0 })
+    const [rotation, setRotation] = useState(0)
     const [isDragging, setIsDragging] = useState(false)
     const dragStart = useRef({ x: 0, y: 0, posX: 0, posY: 0 })
     const containerRef = useRef<HTMLDivElement>(null)
@@ -25,7 +26,8 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
     const hasPrev = currentIndex > 0
     const hasNext = currentIndex < images.length - 1
 
-    const resetView = () => { setZoom(1); setPosition({ x: 0, y: 0 }) }
+    const resetView = () => { setZoom(1); setPosition({ x: 0, y: 0 }); setRotation(0) }
+    const handleRotate = () => setRotation(r => (r + 90) % 360)
 
     const goNext = useCallback(() => {
         if (currentIndex < images.length - 1) {
@@ -50,6 +52,7 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
             if (e.key === "+" || e.key === "=") setZoom(z => Math.min(z + ZOOM_STEP, ZOOM_MAX))
             if (e.key === "-") setZoom(z => Math.max(z - ZOOM_STEP, ZOOM_MIN))
             if (e.key === "0") resetView()
+            if (e.key === "r" || e.key === "R") handleRotate()
         }
         document.addEventListener("keydown", handleKey)
         return () => document.removeEventListener("keydown", handleKey)
@@ -168,7 +171,7 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
                     alt="фото"
                     className="max-w-[90vw] max-h-[80vh] object-contain select-none"
                     style={{
-                        transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
+                        transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px) rotate(${rotation}deg)`,
                         transition: isDragging ? 'none' : 'transform 0.15s ease',
                     }}
                     draggable={false}
@@ -233,6 +236,14 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
                 </button>
 
                 <div className="w-px h-5 bg-white/20 mx-1" />
+
+                <button
+                    onClick={handleRotate}
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                    title="Повернуть (R)"
+                >
+                    <RotateCw size={16} />
+                </button>
 
                 <button
                     onClick={resetView}

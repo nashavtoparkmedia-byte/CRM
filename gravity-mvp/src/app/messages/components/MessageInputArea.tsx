@@ -437,6 +437,22 @@ export default function MessageInputArea({
                             </div>
                         </div>
                     )}
+                    {!isAudio && (
+                        <input
+                            type="text"
+                            value={text}
+                            onChange={(e) => handleTextChange(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    handleSendImage()
+                                }
+                            }}
+                            placeholder="Добавить подпись..."
+                            autoFocus
+                            className="w-full h-10 px-3 rounded-lg border border-gray-200 text-[14px] outline-none focus:border-[#3390EC] placeholder-gray-400"
+                        />
+                    )}
                     <div className="flex gap-[2px]">
                         <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
                             Отмена
