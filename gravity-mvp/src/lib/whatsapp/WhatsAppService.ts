@@ -624,10 +624,15 @@ async function syncHistory(connectionId: string, client: Client) {
 
                             if (existing) {
                                 if (!existing.externalId) {
-                                    await prisma.message.update({
-                                        where: { id: existing.id },
-                                        data: { externalId: msg.id }
-                                    })
+                                    try {
+                                        await prisma.message.update({
+                                            where: { id: existing.id },
+                                            data: { externalId: msg.id }
+                                        })
+                                    } catch (updErr: any) {
+                                        if (updErr.code !== 'P2002') throw updErr
+                                        // Another message already has this externalId — skip silently
+                                    }
                                 }
                             } else {
                                 const savedMsg = await prisma.message.create({
@@ -1209,10 +1214,14 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             if (existingUnified) {
                 console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
                 if (!existingUnified.externalId) {
-                    await prisma.message.update({
-                        where: { id: existingUnified.id },
-                        data: { externalId: msg.id._serialized }
-                    })
+                    try {
+                        await prisma.message.update({
+                            where: { id: existingUnified.id },
+                            data: { externalId: msg.id._serialized }
+                        })
+                    } catch (updErr: any) {
+                        if (updErr.code !== 'P2002') throw updErr
+                    }
                 }
             } else {
                 const msgType = mapToUnifiedMessageType(msg.type)
