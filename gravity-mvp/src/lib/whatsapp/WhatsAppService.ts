@@ -1145,19 +1145,31 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             }
             // ──────────────────────────────────────────────────────────
 
-            // Legacy WhatsAppMessage
-            await prisma.whatsAppMessage.upsert({
-                where: { id_chatId: { id: msg.id._serialized, chatId: rawChatId } },
-                update: {},
-                create: {
-                    id: msg.id._serialized,
-                    chatId: rawChatId,
-                    body: msg.body || '',
-                    fromMe: isOutbound,
-                    timestamp: ts,
-                    type: mapMsgType(msg.type)
-                }
-            })
+            // Legacy WhatsAppMessage — use the canonical chat JID so the FK is satisfied
+            // even when rawChatId is an @lid JID that was later renamed.
+            const legacyChatId = rawChatId.endsWith('@lid') && rawChatId === rawChatId
+                ? (unifiedChat?.externalChatId?.startsWith('whatsapp:')
+                    ? normalizedPhone.length >= 10 ? `${normalizedPhone}@c.us` : rawChatId
+                    : rawChatId)
+                : rawChatId
+            try {
+                await prisma.whatsAppMessage.upsert({
+                    where: { id_chatId: { id: msg.id._serialized, chatId: legacyChatId } },
+                    update: {},
+                    create: {
+                        id: msg.id._serialized,
+                        chatId: legacyChatId,
+                        body: msg.body || '',
+                        fromMe: isOutbound,
+                        timestamp: ts,
+                        type: mapMsgType(msg.type)
+                    }
+                })
+            } catch (waLegacyErr: any) {
+                // P2002 = message already exists with a different chatId (e.g. after @lid→phone migration).
+                // Non-critical: the unified Message table below is the source of truth.
+                if (waLegacyErr.code !== 'P2002') throw waLegacyErr
+            }
 
             // Unified Message — dedup by externalId OR by content+direction+time window.
             // For outbound messages, this also catches echoes from CRM-initiated sends
@@ -1599,16 +1611,22 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
     })
 
     // Legacy WhatsAppMessage
-    await prisma.whatsAppMessage.create({
-        data: {
-            id: msg.id._serialized,
-            chatId: targetChatId,
-            body: text,
-            fromMe: true,
-            timestamp: ts,
-            type: 'chat'
-        }
-    })
+    try {
+        await prisma.whatsAppMessage.upsert({
+            where: { id_chatId: { id: msg.id._serialized, chatId: targetChatId } },
+            update: {},
+            create: {
+                id: msg.id._serialized,
+                chatId: targetChatId,
+                body: text,
+                fromMe: true,
+                timestamp: ts,
+                type: 'chat'
+            }
+        })
+    } catch (waLegacyErr: any) {
+        if (waLegacyErr.code !== 'P2002') throw waLegacyErr
+    }
     
     // Unified Message
     // DE-DUPLICATION: Check if there is already a unified message with same content and recent timestamp
