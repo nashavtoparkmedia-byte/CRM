@@ -538,12 +538,18 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                             </span>
                                         )
                                     }
+                                    const tgMeta = (chat.contact?.identities?.[0]?.metadata as Record<string, string | null> | null) ?? {}
                                     const detailed = formatChatTitleDetailed({
                                         driverFullName:     chat.driver?.fullName,
                                         contactDisplayName: chat.contact?.displayName,
                                         contactNameIsManual: ['manual', 'yandex'].includes(chat.contact?.displayNameSource ?? ''),
                                         chatName:           chat.name,
                                         externalChatId:     chat.externalChatId,
+                                        preferTelegramIdentity: chat.channel === 'telegram',
+                                        tgFirstName:        tgMeta.firstName,
+                                        tgLastName:         tgMeta.lastName,
+                                        tgUsername:         tgMeta.username,
+                                        tgPhone:            chat.driver?.phone,
                                     })
                                     return (
                                         <>

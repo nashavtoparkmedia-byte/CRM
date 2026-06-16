@@ -57,6 +57,14 @@ export class MessageService {
                             id: true,
                             displayName: true,
                             displayNameSource: true,
+                            // TG identity metadata (firstName/lastName/username) — used by
+                            // ChatList to show "Имя (@username)" when operator filters by
+                            // the Telegram tab, instead of always falling back to driver FIO.
+                            identities: {
+                                where: { channel: 'telegram' },
+                                select: { metadata: true },
+                                take: 1,
+                            },
                         },
                     },
                     messages: {
