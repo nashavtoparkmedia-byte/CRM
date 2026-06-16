@@ -573,19 +573,24 @@ async function syncHistory(connectionId: string, client: Client) {
 
                         const msgType = mapMsgType(msg.type)
 
-                        // Legacy WhatsAppMessage
-                        await prisma.whatsAppMessage.upsert({
-                            where: { id_chatId: { id: msg.id, chatId: chatRaw.id._serialized } },
-                            update: {},
-                            create: {
-                                id: msg.id,
-                                chatId: chatRaw.id._serialized,
-                                body: msg.body || '',
-                                fromMe: msg.fromMe,
-                                timestamp: ts,
-                                type: msgType,
-                            }
-                        })
+                        // Legacy WhatsAppMessage — P2002 guard: message may already exist
+                        // with a different chatId after @lid→phone migration.
+                        try {
+                            await prisma.whatsAppMessage.upsert({
+                                where: { id_chatId: { id: msg.id, chatId: chatRaw.id._serialized } },
+                                update: {},
+                                create: {
+                                    id: msg.id,
+                                    chatId: chatRaw.id._serialized,
+                                    body: msg.body || '',
+                                    fromMe: msg.fromMe,
+                                    timestamp: ts,
+                                    type: msgType,
+                                }
+                            })
+                        } catch (legacyErr: any) {
+                            if (legacyErr.code !== 'P2002') throw legacyErr
+                        }
 
                         // Unified Message
                         const unifiedChat = await prisma.chat.findUnique({ where: { externalChatId: syncCanonicalExt } })
@@ -2049,19 +2054,23 @@ export async function importWhatsAppHistory(
                         const msgType = mapMsgType(msg.type)
                         const msgId = msg.id // already a string from rawMessages
 
-                        // Legacy
-                        await prisma.whatsAppMessage.upsert({
-                            where: { id_chatId: { id: msgId, chatId: chatRaw.id._serialized } },
-                            update: {},
-                            create: {
-                                id: msgId,
-                                chatId: chatRaw.id._serialized,
-                                body: msg.body || '',
-                                fromMe: msg.fromMe,
-                                timestamp: ts,
-                                type: msgType,
-                            }
-                        })
+                        // Legacy — P2002 guard for @lid→phone migration duplicates
+                        try {
+                            await prisma.whatsAppMessage.upsert({
+                                where: { id_chatId: { id: msgId, chatId: chatRaw.id._serialized } },
+                                update: {},
+                                create: {
+                                    id: msgId,
+                                    chatId: chatRaw.id._serialized,
+                                    body: msg.body || '',
+                                    fromMe: msg.fromMe,
+                                    timestamp: ts,
+                                    type: msgType,
+                                }
+                            })
+                        } catch (legacyErr: any) {
+                            if (legacyErr.code !== 'P2002') throw legacyErr
+                        }
 
                         // Unified Message with dedup
                         const existing = await prisma.message.findFirst({
