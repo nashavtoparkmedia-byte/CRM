@@ -291,6 +291,7 @@ function ChatWorkspaceInner({
                 onOpenCreateTask={() => setIsTaskModalOpenForChat(true)}
                 onConversationUpdate={refreshConversations}
                 onBack={onBack}
+                activeChannelTab={activeChannelTab}
             />
 
             <ChatChannelTabs activeChannelTab={activeChannelTab} chat={chat} failedChannels={failedChannels} />

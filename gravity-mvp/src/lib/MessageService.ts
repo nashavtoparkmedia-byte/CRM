@@ -578,11 +578,12 @@ export class MessageService {
                             if (!target) throw new Error('No target for TG')
                             
                             try {
-                                const res = await deliverTG(target, content, activeProfileId, { 
+                                const res = await deliverTG(target, content, activeProfileId, {
                                     // @ts-ignore - dynamic type mismatch
                                     messageId: messageId,
                                     chatId: targetChat.id,
-                                    driverId: chat.driver?.id
+                                    driverId: chat.driver?.id,
+                                    quotedMsgId
                                 })
                                 if (res.externalId) deliveryExternalId = res.externalId
                                 deliveryStatus = 'delivered'

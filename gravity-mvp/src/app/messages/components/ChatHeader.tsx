@@ -29,10 +29,11 @@ interface ChatHeaderProps {
     onOpenCreateTask?: () => void
     onConversationUpdate?: () => void
     onBack?: () => void
+    activeChannelTab?: string
 }
 
-export default function ChatHeader({ 
-    chat, 
+export default function ChatHeader({
+    chat,
     isProfileOpen,
     isSearchActive,
     setIsSearchActive,
@@ -43,7 +44,8 @@ export default function ChatHeader({
     onSearchNavigate,
     onOpenCreateTask,
     onConversationUpdate,
-    onBack
+    onBack,
+    activeChannelTab
 }: ChatHeaderProps) {
     const { toggleProfileDrawer } = useChatNavigation()
     const searchInputRef = useRef<HTMLInputElement>(null)
@@ -219,12 +221,19 @@ export default function ChatHeader({
                             <div className="flex items-center gap-1.5 min-w-0">
                                 {(() => {
                                     /* PR-З: title с правильным приоритетом источников */
+                                    const tgIdentity = contact?.identities?.find(i => i.channel === 'telegram')
+                                    const tgMeta = (tgIdentity?.metadata as Record<string, string | null> | null) ?? {}
                                     const detailed = formatChatTitleDetailed({
                                         driverFullName:       chat.driver?.fullName,
                                         contactDisplayName:   contact?.displayName ?? chat.contact?.displayName,
                                         contactNameIsManual:  ['manual', 'yandex'].includes((contact?.displayNameSource ?? chat.contact?.displayNameSource) ?? ''),
                                         chatName:             chat.name,
                                         externalChatId:       chat.externalChatId,
+                                        preferTelegramIdentity: activeChannelTab === 'tg' || activeChannelTab === 'telegram',
+                                        tgFirstName:          tgMeta.firstName,
+                                        tgLastName:           tgMeta.lastName,
+                                        tgUsername:           tgMeta.username,
+                                        tgPhone:              chat.driver?.phone,
                                     })
                                     const driverPhone = chat.driver?.phone
                                     // Показываем номер из linked Driver если он не дубль title

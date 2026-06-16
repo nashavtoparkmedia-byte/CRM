@@ -834,7 +834,19 @@ async function getTelegramClient(connection: any) {
     return client
 }
 
-export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string }) {
+/**
+ * Thin wrapper around getTelegramClient for callers (e.g. reaction route)
+ * that only have a connectionId, not the full connection row.
+ */
+export async function getClientForReaction(connectionId: string) {
+    const connection = await (prisma as any).telegramConnection.findUnique({
+        where: { id: connectionId, isActive: true }
+    })
+    if (!connection || !connection.sessionString) return null
+    return getTelegramClient(connection)
+}
+
+export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, quotedMsgId?: string }) {
     console.log(`[TG-SEND] START: phone=${phoneNumber}, connectionId=${connectionId}, metadata=${JSON.stringify(metadata)}`)
     let connection
     
@@ -927,8 +939,10 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         console.log(`[TG-SEND] Sending message to entity...`)
         
         // Add a safety timeout for the actual sending
+        const sendOpts: any = { message }
+        if (metadata?.quotedMsgId) sendOpts.replyTo = Number(metadata.quotedMsgId)
         const result = await Promise.race([
-            client.sendMessage(entity || target, { message }),
+            client.sendMessage(entity || target, sendOpts),
             new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Telegram sendMessage timeout (25s)')), 25000))
         ])
         

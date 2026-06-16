@@ -46,7 +46,24 @@ export function formatChatTitleDetailed(input: {
     contactNameIsManual?:   boolean
     chatName?:              string | null
     externalChatId?:        string | null
+    // Когда оператор смотрит конкретно вкладку Telegram — предпочитаем
+    // имя/username из самого Telegram (хочется видеть "это точно тот аккаунт"),
+    // а не ФИО водителя, которое и так известно. Формат: "Имя (@username)" |
+    // "Имя (телефон)" | "Имя" | "@username".
+    preferTelegramIdentity?: boolean
+    tgFirstName?:           string | null
+    tgLastName?:            string | null
+    tgUsername?:            string | null
+    tgPhone?:                string | null
 }): { title: string; isUnlinked: boolean } {
+    if (input.preferTelegramIdentity && (input.tgFirstName || input.tgUsername)) {
+        const name = input.tgFirstName
+            ? [input.tgFirstName, input.tgLastName].filter(Boolean).join(' ')
+            : null
+        const handle = input.tgUsername ? `@${input.tgUsername}` : (input.tgPhone || null)
+        const title = name && handle ? `${name} (${handle})` : (name || handle)
+        if (title) return { title, isUnlinked: false }
+    }
     // JID-строки (165...@lid, 79...@c.us, ...@g.us, ...@s.whatsapp.net) — это НЕ
     // имена. Раньше «7158...@lid» проходил как имя, потому что в «lid» есть буквы,
     // и в шапке показывался сырой JID вместо ФИО/телефона. Исключаем их.
