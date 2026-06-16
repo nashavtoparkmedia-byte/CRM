@@ -156,7 +156,7 @@ async function forwardToWebhook(payload) {
 
 // ─── Обработка входящего сообщения ───────────────────────────────────────────
 
-async function handleIncoming(msg, mediaPipeline, messageSync) {
+async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   if (messageSync.isDuplicate(msg)) return
 
   let payload = MessageParser.toCrmPayload(msg)
@@ -171,11 +171,22 @@ async function handleIncoming(msg, mediaPipeline, messageSync) {
   if (msg.attachments && msg.attachments.length > 0) {
     const downloaded = []
     for (const att of msg.attachments) {
-      if (!att.url) { downloaded.push(att); continue }
+      let attUrl = att.url
+      // VIDEO/FILE не несут прямой ссылки — только videoId/fileId+token.
+      // Резолвим через opcode 83/88 перед скачиванием (см. resolveAttachmentUrl).
+      if (!attUrl && transport) {
+        try {
+          attUrl = await resolveAttachmentUrl(transport, att, msg.chatId, msg.id)
+        } catch (e) {
+          console.error('[App] resolveAttachmentUrl error:', e.message)
+        }
+      }
+      if (!attUrl) { downloaded.push(att); continue }
       try {
-        const file = await mediaPipeline.downloadAttachment(att.url, att.mimeType)
+        const file = await mediaPipeline.downloadAttachment(attUrl, att.mimeType)
         downloaded.push({
           ...att,
+          url:       attUrl,
           localPath: file.localPath,
           size:      file.size,
           downloadStatus: 'ok',  // PR-Ч
@@ -186,6 +197,7 @@ async function handleIncoming(msg, mediaPipeline, messageSync) {
         // downloadStatus='failed' + downloadError для диагностики.
         downloaded.push({
           ...att,
+          url: attUrl,
           downloadStatus: 'failed',
           downloadError:  e.message,
         })
@@ -231,13 +243,11 @@ async function handleIncoming(msg, mediaPipeline, messageSync) {
 
 // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
 
-async function sendText(transport, chatId, text) {
+async function sendText(transport, chatId, text, replyToMessageId) {
   const cid = -Date.now()
-  await transport.sendFrame(OP.SEND_MESSAGE, {
-    chatId,
-    message: { text, cid, elements: [], attaches: [] },
-    notify:  true,
-  })
+  const message = { text, cid, elements: [], attaches: [] }
+  if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
+  await transport.sendFrame(OP.SEND_MESSAGE, { chatId, message, notify: true })
 }
 
 // ─── Отправка медиа: opcode 80 → HTTP upload → opcode 64 ──────────────────
@@ -346,6 +356,59 @@ async function sendGenericMedia(transport, chatId, fileBuffer, filename, mimeTyp
     },
     notify: true,
   })
+}
+
+// ─── Реакции: opcode 178 (поставить) / 179 (снять) ───────────────────────────
+
+async function sendReaction(transport, chatId, messageId, emoji) {
+  await transport.sendFrame(OP.SEND_REACTION, {
+    chatId,
+    messageId: String(messageId),
+    reaction: { reactionType: 'EMOJI', id: emoji },
+  })
+}
+
+async function removeReaction(transport, chatId, messageId) {
+  await transport.sendFrame(OP.REMOVE_REACTION, {
+    chatId,
+    messageId: String(messageId),
+  })
+}
+
+// ─── Резолв видео/файла: opcode 83 / 88 ──────────────────────────────────────
+// VIDEO и FILE-вложения приходят без прямой ссылки — только videoId/fileId +
+// opaque token. Реальный URL нужно запросить отдельным фреймом. Формат ответа
+// сервера не зафиксирован живым тестом — берём первую http(s)-строку из
+// ответа рекурсивным поиском и логируем сырой payload для проверки.
+
+function findFirstUrl(obj, depth = 0) {
+  if (depth > 5 || obj == null) return null
+  if (typeof obj === 'string' && /^https?:\/\//.test(obj)) return obj
+  if (Array.isArray(obj)) {
+    for (const v of obj) { const r = findFirstUrl(v, depth + 1); if (r) return r }
+    return null
+  }
+  if (typeof obj === 'object') {
+    for (const k in obj) { const r = findFirstUrl(obj[k], depth + 1); if (r) return r }
+  }
+  return null
+}
+
+async function resolveAttachmentUrl(transport, att, chatId, messageId) {
+  const type = (att.type || '').toLowerCase()
+  let opcode, payload
+  if (type === 'video' && att.videoId && att.token) {
+    opcode = OP.RESOLVE_VIDEO
+    payload = { videoId: att.videoId, token: att.token, chatId, messageId: String(messageId) }
+  } else if ((type === 'file' || type === 'document') && att.fileId) {
+    opcode = OP.RESOLVE_FILE
+    payload = { fileId: att.fileId, chatId, messageId: String(messageId) }
+  } else {
+    return null
+  }
+  const resp = await transport.sendFrame(opcode, payload, { waitResponse: true })
+  console.log(`[ResolveAttachment] opcode=${opcode} payload=${JSON.stringify(payload)} response=${JSON.stringify(resp).slice(0, 800)}`)
+  return findFirstUrl(resp)
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
@@ -504,7 +567,7 @@ async function init() {
   })
 
   transport.onMessage(msg => {
-    handleIncoming(msg, mediaPipeline, sync).catch(e =>
+    handleIncoming(msg, mediaPipeline, sync, transport).catch(e =>
       console.error('[App] handleIncoming error:', e.message)
     )
   })
@@ -597,7 +660,7 @@ app.get('/resolve-phone', (req, res) => {
 // Body: { chatId: number|string, message: string, phone?: string }
 // chatId может быть MAX internal ID или телефон — если телефон, автоматически резолвим
 app.post('/send-message', async (req, res) => {
-  let { chatId, message, phone } = req.body
+  let { chatId, message, phone, quotedMsgId } = req.body
   if (!message) {
     return res.status(400).json({ error: 'message is required' })
   }
@@ -633,8 +696,33 @@ app.post('/send-message', async (req, res) => {
   }
 
   try {
-    await enqueueSend(() => sendText(transport, Number(chatId), message))
+    await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId))
     res.json({ success: true, chatId: String(chatId) })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// Поставить/снять emoji-реакцию на сообщение
+// Body: { chatId: number|string, messageId: string, emoji?: string, remove?: boolean }
+app.post('/send-reaction', async (req, res) => {
+  const { chatId, messageId, emoji, remove } = req.body
+  if (!chatId || !messageId) {
+    return res.status(400).json({ error: 'chatId and messageId are required' })
+  }
+  if (!remove && !emoji) {
+    return res.status(400).json({ error: 'emoji is required unless remove=true' })
+  }
+  if (!isReady) {
+    return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
+  }
+  try {
+    if (remove) {
+      await removeReaction(transport, Number(chatId), messageId)
+    } else {
+      await sendReaction(transport, Number(chatId), messageId, emoji)
+    }
+    res.json({ success: true })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

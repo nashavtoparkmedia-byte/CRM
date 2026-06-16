@@ -101,10 +101,13 @@ class MessageParser {
     return attaches.map(a => ({
       type:        (a._type || 'file').toLowerCase(),
       url:         a.baseUrl || a.url || null,
-      name:        a.filename || null,
+      name:        a.name || a.filename || null,
       size:        a.size || null,
       previewData: a.previewData || null,
       photoId:     a.photoId || null,
+      videoId:     a.videoId || null,
+      fileId:      a.fileId || null,
+      token:       a.token || null,
     }))
   }
 

@@ -93,8 +93,7 @@ async function sendReactionToChannel(
             await sendTelegramReaction(externalMsgId, externalChatId, emoji, isRemoving, chatMetadata)
             break
         case 'max':
-            // MAX protocol doesn't have a documented reaction opcode yet
-            console.log(`[reaction] MAX reactions not supported yet, stored in CRM only`)
+            await sendMaxReaction(externalMsgId, externalChatId, emoji, isRemoving)
             break
         default:
             console.log(`[reaction] Channel ${channel} not supported for reactions`)
@@ -197,4 +196,27 @@ async function sendTelegramReaction(
     )
 
     console.log(`[reaction/TG] ${isRemoving ? 'Removed' : 'Sent'} ${emoji} on msg ${externalMsgId} in peer ${peerIdStr}`)
+}
+
+/**
+ * MAX: react to a message via max-web-scraper /send-reaction (opcode 178/179)
+ */
+async function sendMaxReaction(
+    externalMsgId: string,
+    externalChatId: string,
+    emoji: string,
+    isRemoving: boolean
+) {
+    const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+    const chatId = externalChatId.replace(/^max:/, '')
+    const res = await fetch(`${maxScraperUrl}/send-reaction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, messageId: externalMsgId, emoji, remove: isRemoving }),
+    })
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `MAX reaction failed: ${res.status}`)
+    }
+    console.log(`[reaction/MAX] ${isRemoving ? 'Removed' : 'Sent'} ${emoji} on msg ${externalMsgId} in chat ${chatId}`)
 }

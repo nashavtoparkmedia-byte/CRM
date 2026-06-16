@@ -549,10 +549,11 @@ export class MessageService {
                     const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
                     const isPersonal = profileId === 'scraper' || !profileId
                     console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}`)
-                    await deliverMax(rawExternalChatId, content, { 
+                    await deliverMax(rawExternalChatId, content, {
                         isPersonal,
                         connectionId: isPersonal ? undefined : profileId,
-                        name: chat.driver?.fullName
+                        name: chat.driver?.fullName,
+                        quotedMsgId
                     })
                     deliveryStatus = 'delivered'
                     break

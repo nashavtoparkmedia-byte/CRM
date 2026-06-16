@@ -35,6 +35,8 @@ const OP = {
   AUTH:            19,
   SEND_MESSAGE:    64,
   TYPING:          65,
+  RESOLVE_VIDEO:   83,
+  RESOLVE_FILE:    88,
   GET_UPLOAD_URL:  80,
   GET_CHATS:       48,
   GET_HISTORY:     49,
@@ -42,6 +44,8 @@ const OP = {
   INCOMING_MSG:    128,
   PRESENCE:        132,
   CONTACTS:        32,
+  SEND_REACTION:   178,
+  REMOVE_REACTION: 179,
 }
 
 class TransportInterceptor {
@@ -183,11 +187,16 @@ class TransportInterceptor {
   _extractMaxAttachments(attaches) {
     return attaches.map(a => ({
       type:        (a._type || 'file').toLowerCase(),
-      url:         a.baseUrl || a.url || null,  // MAX uses baseUrl for photos
-      name:        a.filename || null,
+      url:         a.baseUrl || a.url || null,  // MAX uses baseUrl for photos, url for audio
+      name:        a.name || a.filename || null,
       size:        a.size || null,
       previewData: a.previewData || null,       // base64 webp thumbnail, ready to use
       photoId:     a.photoId || null,
+      // VIDEO/FILE carry no direct url — only an opaque token that must be
+      // resolved via OP.RESOLVE_VIDEO/RESOLVE_FILE before downloading.
+      videoId:     a.videoId || null,
+      fileId:      a.fileId || null,
+      token:       a.token || null,
     }))
   }
 
