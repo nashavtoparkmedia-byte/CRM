@@ -27,7 +27,8 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
     const hasNext = currentIndex < images.length - 1
 
     const resetView = () => { setZoom(1); setPosition({ x: 0, y: 0 }); setRotation(0) }
-    const handleRotate = () => setRotation(r => (r + 90) % 360)
+    const handleRotateCw = () => setRotation(r => (r + 90) % 360)
+    const handleRotateCcw = () => setRotation(r => (r + 270) % 360) // -90, без отрицательных чисел в modulo
 
     const goNext = useCallback(() => {
         if (currentIndex < images.length - 1) {
@@ -52,7 +53,8 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
             if (e.key === "+" || e.key === "=") setZoom(z => Math.min(z + ZOOM_STEP, ZOOM_MAX))
             if (e.key === "-") setZoom(z => Math.max(z - ZOOM_STEP, ZOOM_MIN))
             if (e.key === "0") resetView()
-            if (e.key === "r" || e.key === "R") handleRotate()
+            if (e.key === "r") handleRotateCw()
+            if (e.key === "R") handleRotateCcw() // Shift+R — против часовой
         }
         document.addEventListener("keydown", handleKey)
         return () => document.removeEventListener("keydown", handleKey)
@@ -238,19 +240,19 @@ export default function ImageLightbox({ images, initialIndex, onClose }: ImageLi
                 <div className="w-px h-5 bg-white/20 mx-1" />
 
                 <button
-                    onClick={handleRotate}
+                    onClick={handleRotateCcw}
                     className="w-9 h-9 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                    title="Повернуть (R)"
+                    title="Повернуть против часовой (⇧R)"
                 >
-                    <RotateCw size={16} />
+                    <RotateCcw size={16} />
                 </button>
 
                 <button
-                    onClick={resetView}
+                    onClick={handleRotateCw}
                     className="w-9 h-9 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                    title="Сбросить (0)"
+                    title="Повернуть по часовой (R)"
                 >
-                    <RotateCcw size={16} />
+                    <RotateCw size={16} />
                 </button>
             </div>
         </div>
