@@ -79,7 +79,7 @@ export default function MessageContextMenu({
 
     const actions = [
         { icon: Reply, label: "Ответить", action: () => { onReply?.(msg); onClose() }, show: !!onReply },
-        { icon: Copy, label: "Копировать", action: () => { navigator.clipboard.writeText(msg.content); onClose() }, show: true },
+        { icon: Copy, label: "Копировать", action: () => { navigator.clipboard.writeText(msg.content ?? ''); onClose() }, show: !!(msg.content ?? '').trim() },
         { icon: ClipboardList, label: "Создать задачу", action: () => { onCreateTask?.(msg); onClose() }, show: !!onCreateTask },
     ].filter(a => a.show)
 

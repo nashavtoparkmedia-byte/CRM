@@ -34,7 +34,6 @@ export default function MessageFeed({
     onReaction,
     activeSearchMessageId,
     onFocusComposer,
-    lastSentAt
 }: {
     chatId: string
     channelTab: string
@@ -49,7 +48,6 @@ export default function MessageFeed({
     onReaction?: (msgId: string, emoji: string) => void
     activeSearchMessageId?: string | null
     onFocusComposer?: () => void
-    lastSentAt?: number
 }) {
     // Ссылка на scrollable div (заменяет VirtuosoHandle)
     const scrollerRef = useRef<HTMLDivElement>(null)

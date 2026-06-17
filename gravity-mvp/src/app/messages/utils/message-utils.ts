@@ -246,7 +246,7 @@ export function prepareMessagesForUI(messages: Message[]): UIItem[] {
             : (position === 'start' || position === 'single' ? SPACING.BETWEEN_GROUPS : SPACING.IN_GROUP);
 
         // statusPlacement Logic: overlay if text length <= 15 or media
-        const statusPlacement: StatusPlacement = (msg.type === 'image' || msg.content.length <= 15) ? 'overlay' : 'inline';
+        const statusPlacement: StatusPlacement = (msg.type === 'image' || (msg.content ?? '').length <= 15) ? 'overlay' : 'inline';
 
         items.push({
             type: 'message',

@@ -126,7 +126,6 @@ function ChatWorkspaceInner({
     const [searchQuery, setSearchQuery] = useState("")
     const [searchResults, setSearchResults] = useState<string[]>([])
     const [activeSearchIndex, setActiveSearchIndex] = useState(-1)
-    const [lastSentAt, setLastSentAt] = useState<number>(0)
     const [taskModalContext, setTaskModalContext] = useState<Message | null>(null)
     const [isTaskModalOpenForChat, setIsTaskModalOpenForChat] = useState(false)
 
@@ -206,7 +205,6 @@ function ChatWorkspaceInner({
     }
 
     const handleSendMessage = (content: string, effectiveChannel: string) => {
-        setLastSentAt(Date.now())
         const quotedId = replyContext?.externalId
         setReplyContext(null)
         sendMessage(content, effectiveChannel, quotedId)
@@ -255,7 +253,7 @@ function ChatWorkspaceInner({
             externalId: msg.externalId,
             channel: msg.channel,
             authorLabel: msg.direction === 'outbound' ? 'Вы' : (conversations.find((c: any) => c.id === chatId)?.name || 'Водитель'),
-            snippet: msg.content.substring(0, 60),
+            snippet: (msg.content ?? '').substring(0, 60),
             timestamp: new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         })
     }
@@ -325,7 +323,6 @@ function ChatWorkspaceInner({
                     onReaction={handleReaction}
                     activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
                     onFocusComposer={() => document.getElementById('message-composer')?.focus()}
-                    lastSentAt={lastSentAt}
                 />
             )}
 
