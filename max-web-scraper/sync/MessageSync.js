@@ -21,7 +21,10 @@ class MessageSync {
   isDuplicate(msg) {
     // Primary: exact key match
     if (this.seen.has(this._key(msg))) return true
-    // Secondary: fuzzy match by content+chatId within 30s window (catches cross-source duplicates)
+    // Secondary: fuzzy match only when there is no reliable external ID.
+    // When the protocol assigns an ID (MAX always does), identical texts
+    // are legitimate repeated messages — skip fuzzy to avoid false dedup.
+    if (msg.id || msg.externalId) return false
     return this._isFuzzyDuplicate(msg)
   }
 
