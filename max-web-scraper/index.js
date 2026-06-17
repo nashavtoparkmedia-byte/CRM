@@ -564,8 +564,23 @@ async function init() {
         console.log('[QR] Сгенерирован из qrLink:', qrLink)
       } catch (e) { console.error('[QR] Ошибка генерации:', e.message) }
     }
-    // Логируем неизвестные опкоды для обнаружения реакционных пушей и других событий
-    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 83, 88, 128, 132, 178, 179, 288])
+    // Opcode 135 — сервер пушит обновление реакции в реальном времени
+    // Срабатывает при любой реакции (нашей или от собеседника)
+    if (data.opcode === 135 && data.payload?.chat?.lastReactedMessageId) {
+      const chat = data.payload.chat
+      const externalMsgId = String(chat.lastReactedMessageId)
+      const emoji         = chat.lastReaction || ''
+      const isRemove      = !emoji
+      const reactionUrl   = CRM_WEBHOOK_URL.replace(/\/api\/webhook\/max\/?.*$/, '/api/webhook/max/reaction')
+      console.log(`[App] opcode135 reaction push: msgId=${externalMsgId} emoji=${emoji}`)
+      fetch(reactionUrl, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ externalMsgId, emoji, isRemove }),
+      }).catch(e => console.error('[App] opcode135 reaction sync error:', e.message))
+    }
+    // Логируем остальные неизвестные push-опкоды
+    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 83, 88, 128, 130, 132, 135, 178, 179, 288])
     if (!KNOWN_OPCODES.has(data.opcode) && data.cmd === 0) {
       const ps = JSON.stringify(data.payload || {}).slice(0, 400)
       console.log(`[App] NEW opcode=${data.opcode} cmd=${data.cmd}: ${ps}`)
@@ -578,25 +593,30 @@ async function init() {
     )
   })
 
-  // Синхронизация реакций, поставленных пользователем через MAX веб-интерфейс
+  // Синхронизация реакций, поставленных пользователем через MAX веб-интерфейс (фоллбэк)
+  // Опкод 135 (сервер push) надёжнее, но на случай если он не пришёл — перехватываем
+  // исходящий WS фрейм. Пропускаем наши собственные фреймы (seq >= 500).
   transport.onSentReaction(async data => {
-    const p = data.payload || {}
-    const chatId    = p.chatId
-    const msgId     = p.messageId
-    const emoji     = p.reaction || ''
-    const isRemove  = data.opcode === OP.REMOVE_REACTION || emoji === ''
-    if (!chatId || !msgId) return
+    if (data.seq >= 500) return  // наш собственный фрейм — CRM уже сохранил
+    const p        = data.payload || {}
+    const chatId   = p.chatId
+    const msgId    = p.messageId
+    // MAX веб шлёт reaction как объект {reactionType,id}, наш скрапер — строкой
+    const reaction = p.reaction
+    const emoji    = typeof reaction === 'object' ? (reaction?.id || '') : (reaction || '')
+    const isRemove = data.opcode === OP.REMOVE_REACTION || !emoji
+    if (!msgId) return
     const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhook\/max\/?.*$/, '/api/webhook/max/reaction')
     try {
       const res = await fetch(reactionUrl, {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: String(chatId), externalMsgId: String(msgId), emoji, isRemove }),
+        body:    JSON.stringify({ externalMsgId: String(msgId), emoji, isRemove }),
       })
-      if (!res.ok) console.warn(`[App] reaction sync HTTP ${res.status}`)
-      else console.log(`[App] reaction sync: chatId=${chatId} msgId=${msgId} emoji=${emoji} remove=${isRemove}`)
+      if (!res.ok) console.warn(`[App] sentReaction sync HTTP ${res.status}`)
+      else console.log(`[App] sentReaction sync: msgId=${msgId} emoji=${emoji} remove=${isRemove}`)
     } catch (e) {
-      console.error('[App] reaction sync error:', e.message)
+      console.error('[App] sentReaction sync error:', e.message)
     }
   })
 

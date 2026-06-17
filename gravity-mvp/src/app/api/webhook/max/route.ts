@@ -21,7 +21,7 @@ function isPlaceholderName(name?: string | null): boolean {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing, replyToExternalId } = body
+        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing, replyToExternalId, externalId: maxExternalId } = body
 
         if (!text) {
             return NextResponse.json({ error: 'Missing required field: text' }, { status: 400 })
@@ -213,11 +213,12 @@ export async function POST(req: NextRequest) {
         const textHash = crypto.createHash('md5').update(text).digest('hex').substring(0, 8)
         const messageId = `${dirPrefix}_${phoneDigits}_${sentAt.getTime()}_${textHash}`
 
-        // Check if message already exists (by deterministic ID OR content+time echo with ANY direction)
+        // Check if message already exists (by deterministic ID, externalId, or content+time echo)
         const existingMessage = await (prisma.message as any).findFirst({
             where: {
                 OR: [
                     { id: messageId },
+                    ...(maxExternalId ? [{ externalId: String(maxExternalId) }] : []),
                     {
                         chatId: unifiedChat.id,
                         content: text,
@@ -241,6 +242,7 @@ export async function POST(req: NextRequest) {
                     type: 'text',
                     sentAt,
                     status: 'delivered',
+                    ...(maxExternalId ? { externalId: String(maxExternalId) } : {}),
                     ...(replyToExternalId ? { metadata: { replyToExternalId } } : {}),
                 }
             })
