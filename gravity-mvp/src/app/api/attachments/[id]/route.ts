@@ -24,6 +24,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import sharp from 'sharp'
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
@@ -61,19 +62,31 @@ export async function GET(
             ? Buffer.from(dataPart, 'base64')
             : Buffer.from(decodeURIComponent(dataPart), 'utf-8')
 
+        // Convert WEBP images to JPEG so browsers offer .jpg in "Save image as"
+        let outputBytes: Buffer = bytes
+        let outputMime = mime
+        let outputFileName = att.fileName || null
+        if (mime === 'image/webp') {
+            try {
+                outputBytes = Buffer.from(await sharp(bytes).jpeg({ quality: 92 }).toBuffer())
+                outputMime = 'image/jpeg'
+                if (outputFileName) {
+                    outputFileName = outputFileName.replace(/\.webp$/i, '.jpg')
+                }
+            } catch {}
+        }
+
         const headers: Record<string, string> = {
-            'Content-Type': mime,
-            'Content-Length': String(bytes.length),
+            'Content-Type': outputMime,
+            'Content-Length': String(outputBytes.length),
             // Aggressive cache — content is keyed on attachment id, which
             // never changes (we'd create a new row instead).
             'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
         }
-        if (att.fileName) {
-            // inline so the browser shows it in <img>; download flag is
-            // controlled by the UI <a download> attribute, not us.
-            headers['Content-Disposition'] = `inline; filename="${att.fileName.replace(/"/g, '')}"`
+        if (outputFileName) {
+            headers['Content-Disposition'] = `inline; filename="${outputFileName.replace(/"/g, '')}"`
         }
-        return new NextResponse(new Uint8Array(bytes), { status: 200, headers })
+        return new NextResponse(new Uint8Array(outputBytes), { status: 200, headers })
     }
 
     // Unknown scheme — best-effort 404
