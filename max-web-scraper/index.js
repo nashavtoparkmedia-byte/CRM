@@ -894,8 +894,7 @@ app.post('/send-reaction', async (req, res) => {
 
 // Удалить сообщение в MAX
 // Body: { chatId: number|string, messageId: string }
-// Opcode 66 — предположительный DELETE_MESSAGE. Если не работает —
-// проверить логи [Transport SENT] при удалении через MAX web UI.
+// Opcode 180 — DELETE_MESSAGE (обнаружен 2026-06-18 через [Transport SENT] логи)
 app.post('/delete-message', async (req, res) => {
   const { chatId, messageId } = req.body
   if (!chatId || !messageId) {
@@ -905,11 +904,11 @@ app.post('/delete-message', async (req, res) => {
     return res.status(503).json({ error: 'Not ready' })
   }
   try {
-    const result = await transport.sendFrame(66, {
-      chatId: Number(chatId),
-      messageId: String(messageId),
+    const result = await transport.sendFrame(OP.DELETE_MESSAGE, {
+      chatId:     Number(chatId),
+      messageIds: [String(messageId)],
     }, { waitResponse: true })
-    console.log(`[delete-message] chatId=${chatId} msgId=${messageId} result=${JSON.stringify(result)}`)
+    console.log(`[delete-message] chatId=${chatId} msgId=${messageId} ok result=${JSON.stringify(result)}`)
     res.json({ success: true })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)

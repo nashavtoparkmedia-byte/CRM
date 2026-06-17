@@ -48,6 +48,7 @@ const OP = {
   CONTACTS:              32,
   SEND_REACTION:         178,
   REMOVE_REACTION:       179,
+  DELETE_MESSAGE:        180,
   // Legacy alias (keep for compat with old references)
   GET_UPLOAD_URL:        80,
 }
@@ -94,8 +95,9 @@ class TransportInterceptor {
     // Перехватываем исходящие фреймы: реакции + логирование неизвестных опкодов
     const NOISY_SENT = new Set([OP.SEND_MESSAGE, OP.TYPING, OP.GET_UPLOAD_IMAGE_URL,
       OP.GET_UPLOAD_VIDEO_URL, OP.GET_UPLOAD_FILE_URL, OP.RESOLVE_VIDEO, OP.RESOLVE_FILE,
-      OP.SUBSCRIBE_CHAT, OP.SEND_REACTION, OP.REMOVE_REACTION, OP.HANDSHAKE, OP.AUTH,
-      OP.GET_CHATS, OP.GET_HISTORY])
+      OP.SUBSCRIBE_CHAT, OP.SEND_REACTION, OP.REMOVE_REACTION, OP.DELETE_MESSAGE,
+      OP.HANDSHAKE, OP.AUTH, OP.GET_CHATS, OP.GET_HISTORY,
+      1, 32, 53, 128])
     this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
       if (!response.payloadData) return
       try {
