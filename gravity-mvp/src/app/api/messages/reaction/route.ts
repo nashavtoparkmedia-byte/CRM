@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { broadcastChatMessage } from '@/lib/messageStreamBus'
 
 /**
  * POST /api/messages/reaction
@@ -50,10 +51,13 @@ export async function POST(req: NextRequest) {
 
         const updatedMetadata = { ...metadata, reactions }
 
-        await prisma.message.update({
+        const updated = await prisma.message.update({
             where: { id: messageId },
             data: { metadata: updatedMetadata }
         })
+
+        // Broadcast immediately so all open chat tabs refresh without waiting for channel round-trip
+        try { broadcastChatMessage(updated.chatId, updated) } catch {}
 
         // Send reaction to messenger channel (best-effort, don't fail on error)
         try {

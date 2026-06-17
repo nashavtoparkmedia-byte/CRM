@@ -89,6 +89,7 @@ export default function MessageInputArea({
     const cameraInputRef = useRef<HTMLInputElement>(null)
     const isTouchDevice = useRef(false)
     const [isSendingImage, setIsSendingImage] = useState(false)
+    const [sendingFile, setSendingFile] = useState<{ name: string; mimeType: string } | null>(null)
 
     // Mic: hold to record, release to send. Camera: separate button, simple tap.
     const [isRecording, setIsRecording] = useState(false)
@@ -362,6 +363,7 @@ export default function MessageInputArea({
         const { dataUrl, file } = imagePreview
         setImagePreview(null)
         setIsSendingImage(true)
+        setSendingFile({ name: file.name, mimeType: file.type || 'application/octet-stream' })
         try {
             const base64 = dataUrl.split(',')[1]
             const res = await fetch('/api/messages/send-media', {
@@ -386,6 +388,7 @@ export default function MessageInputArea({
             console.error('[send-media] error:', err)
         } finally {
             setIsSendingImage(false)
+            setSendingFile(null)
         }
     }
 
@@ -520,6 +523,17 @@ export default function MessageInputArea({
                     >
                         <X size={14} />
                     </button>
+                </div>
+            )}
+
+            {/* Sending progress bar — появляется пока идёт загрузка медиа */}
+            {isSendingImage && sendingFile && (
+                <div className="mx-2 mb-1 mt-1 flex items-center gap-2 bg-[#F0F8FF] rounded-xl px-3 py-2 border border-[#DAEEF9]">
+                    <div className="w-4 h-4 rounded-full border-2 border-[#2AABEE]/30 border-t-[#2AABEE] animate-spin shrink-0" />
+                    <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-semibold text-[#2AABEE] leading-tight">Отправка файла...</div>
+                        <div className="text-[12px] text-[#444] truncate leading-[1.3] mt-[1px]">{sendingFile.name}</div>
+                    </div>
                 </div>
             )}
 

@@ -632,7 +632,7 @@ async function init() {
       const p            = data.payload
       const externalMsgId = String(p.messageId)
       const counters      = p.counters || []
-      const reactionUrl   = CRM_WEBHOOK_URL.replace(/\/api\/webhook\/max\/?.*$/, '/api/webhook/max/reaction')
+      const reactionUrl   = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
       console.log(`[App] opcode155 reaction snapshot: msgId=${externalMsgId} counters=${JSON.stringify(counters)}`)
       fetch(reactionUrl, {
         method:  'POST',
@@ -669,7 +669,7 @@ async function init() {
     const emoji    = typeof reaction === 'object' ? (reaction?.id || '') : (reaction || '')
     const isRemove = data.opcode === OP.REMOVE_REACTION || !emoji
     if (!msgId) return
-    const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhook\/max\/?.*$/, '/api/webhook/max/reaction')
+    const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
     try {
       const res = await fetch(reactionUrl, {
         method:  'POST',
