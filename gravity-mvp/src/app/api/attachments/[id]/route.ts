@@ -43,9 +43,32 @@ export async function GET(
         return NextResponse.json({ error: 'not found' }, { status: 404 })
     }
 
-    // External URL → just redirect. Browser handles caching upstream.
+    // External URL — proxy and convert WEBP→JPEG so browser saves as .jpg
     if (att.url.startsWith('http://') || att.url.startsWith('https://')) {
-        return NextResponse.redirect(att.url, 302)
+        try {
+            const upstream = await fetch(att.url, { next: { revalidate: 0 } })
+            if (!upstream.ok) return NextResponse.redirect(att.url, 302)
+            const upstreamMime = upstream.headers.get('content-type')?.split(';')[0].trim() || att.mimeType || 'application/octet-stream'
+            let bytes = Buffer.from(await upstream.arrayBuffer())
+            let outputMime = upstreamMime
+            let outputFileName = att.fileName || att.url.split('/').pop() || 'image'
+            if (upstreamMime === 'image/webp') {
+                bytes = Buffer.from(await sharp(bytes).jpeg({ quality: 92 }).toBuffer())
+                outputMime = 'image/jpeg'
+                outputFileName = outputFileName.replace(/\.webp$/i, '.jpg')
+            }
+            return new NextResponse(new Uint8Array(bytes), {
+                status: 200,
+                headers: {
+                    'Content-Type': outputMime,
+                    'Content-Length': String(bytes.length),
+                    'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
+                    'Content-Disposition': `inline; filename="${outputFileName.replace(/"/g, '')}"`,
+                },
+            })
+        } catch {
+            return NextResponse.redirect(att.url, 302)
+        }
     }
 
     // data URL → decode and stream as bytes.
