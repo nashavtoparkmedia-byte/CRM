@@ -106,6 +106,24 @@ async function finishImportSession(status = 'completed', resultType = 'partial')
 // Без фильтра это создаёт дублирующее обновление в CRM (реакция уже сохранена через broadcastChatMessage).
 const recentOwnReactionIds = new Set()
 
+// ─── Маппинг ID → emoji (из opcode 28) ────────────────────────────────────────
+// MAX хранит реакции как { reactionType:'EMOJI', id: <integer> } где id — это
+// animoji-ID. Этот маппинг позволяет преобразовать integer ID обратно в emoji-символ.
+const reactionEmojiById = new Map()
+
+function normalizeReactionEmoji(raw) {
+  if (!raw) return ''
+  // Если это объект { id, reactionType } — извлекаем id
+  if (typeof raw === 'object') raw = raw.id || raw.emoji || ''
+  // Если id — число (или строка числа) → ищем emoji символ в карте
+  const asNum = Number(raw)
+  if (!isNaN(asNum) && reactionEmojiById.has(asNum)) {
+    return reactionEmojiById.get(asNum)
+  }
+  // Иначе уже emoji символ — вернуть как есть
+  return String(raw)
+}
+
 // ─── Очередь отправки ────────────────────────────────────────────────────────
 
 const sendQueue = []
@@ -617,6 +635,15 @@ async function init() {
         if (added > 0) console.log(`[ChatCache] +${added} чатов, всего: ${chatCache.size}`)
       } catch (e) { console.error('[App] onRawFrame GET_CHATS error:', e.message) }
     }
+    // opcode 28 — animoji/реакции маппинг: id → emoji символ
+    if (data.opcode === 28 && data.payload?.animojis) {
+      try {
+        for (const a of data.payload.animojis) {
+          if (a.id && a.emoji) reactionEmojiById.set(Number(a.id), a.emoji)
+        }
+        console.log(`[App] reactionEmojiById: ${reactionEmojiById.size} записей`)
+      } catch (e) { console.error('[App] opcode28 animoji error:', e.message) }
+    }
     // opcode 288 — QR link от MAX сервера
     if (data.opcode === 288 && data.payload?.qrLink) {
       try {
@@ -636,7 +663,9 @@ async function init() {
     if (data.opcode === 155 && data.payload?.messageId) {
       const p            = data.payload
       const externalMsgId = String(p.messageId)
-      const counters      = p.counters || []
+      // Нормализуем reaction в каждом counter: может быть integer ID → emoji символ
+      const rawCounters   = p.counters || []
+      const counters      = rawCounters.map(c => ({ ...c, reaction: normalizeReactionEmoji(c.reaction) }))
       const reactionUrl   = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
       console.log(`[App] opcode155 reaction snapshot: msgId=${externalMsgId} counters=${JSON.stringify(counters)}`)
       fetch(reactionUrl, {
@@ -650,10 +679,10 @@ async function init() {
     // Пропускаем если реакция пришла в ответ на нашу собственную отправку (seq >= 500).
     if (data.opcode === 135 && data.payload?.chat?.lastReactedMessageId && data.payload?.chat?.lastReaction) {
       const externalMsgId = String(data.payload.chat.lastReactedMessageId)
-      const emoji          = data.payload.chat.lastReaction
+      const emoji          = normalizeReactionEmoji(data.payload.chat.lastReaction)
       if (!recentOwnReactionIds.has(externalMsgId)) {
         const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
-        console.log(`[App] opcode135 reaction: msgId=${externalMsgId} emoji=${emoji}`)
+        console.log(`[App] opcode135 reaction: msgId=${externalMsgId} raw=${JSON.stringify(data.payload.chat.lastReaction)} emoji=${emoji}`)
         fetch(reactionUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -685,9 +714,9 @@ async function init() {
     const p        = data.payload || {}
     const chatId   = p.chatId
     const msgId    = p.messageId
-    // MAX веб шлёт reaction как объект {reactionType,id}, наш скрапер — строкой
+    // MAX веб шлёт reaction как объект {reactionType,id} где id может быть integer или emoji-символ
     const reaction = p.reaction
-    const emoji    = typeof reaction === 'object' ? (reaction?.id || '') : (reaction || '')
+    const emoji    = normalizeReactionEmoji(reaction)
     const isRemove = data.opcode === OP.REMOVE_REACTION || !emoji
     if (!msgId) return
     const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
