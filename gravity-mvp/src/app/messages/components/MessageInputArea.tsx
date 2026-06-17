@@ -348,6 +348,35 @@ export default function MessageInputArea({
         }
     }
 
+    const handlePasteFile = (file: File) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+            setImagePreview({ dataUrl: reader.result as string, file })
+        }
+        reader.readAsDataURL(file)
+    }
+
+    const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        const { files, items } = e.clipboardData || {}
+        // Files copied from filesystem (Ctrl+C in Explorer → Ctrl+V here)
+        if (files && files.length > 0) {
+            e.preventDefault()
+            handlePasteFile(files[0])
+            return
+        }
+        // Image data in clipboard (screenshots, Ctrl+C on an image in browser)
+        if (items) {
+            for (const item of Array.from(items)) {
+                if (item.kind === 'file') {
+                    e.preventDefault()
+                    const file = item.getAsFile()
+                    if (file) handlePasteFile(file)
+                    return
+                }
+            }
+        }
+    }
+
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
         e.target.value = ''
@@ -672,6 +701,7 @@ export default function MessageInputArea({
                             }}
                             onKeyDown={handleKeyDown}
                             onFocus={onTextareaFocus}
+                            onPaste={handlePaste}
                             placeholder="Написать сообщение..."
                             className="bg-transparent outline-none flex-1 text-[14px] placeholder-gray-400 py-[7px] px-[4px] resize-none w-full max-h-[120px] custom-scrollbar overflow-y-auto"
                             rows={1}
