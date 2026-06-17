@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useMemo } from "react"
-import { SendHorizonal, Paperclip, X, ChevronDown, Plus, Zap, Mic, Camera } from "lucide-react"
+import { SendHorizonal, Paperclip, X, ChevronDown, Plus, Zap, Mic, Camera, CornerUpLeft } from "lucide-react"
 import QuickReplySuggestions from "./QuickReplySuggestions"
 import type { QuickReplyTemplate } from "./QuickReplySuggestions"
 import QuickReplyPopover from "./QuickReplyPopover"
@@ -501,22 +501,22 @@ export default function MessageInputArea({
                 />
             )}
 
-            {/* Reply Context Badge */}
+            {/* Reply Context Bar — Telegram style */}
             {replyContext && (
-                <div className="px-3 pt-[2px] pb-1 flex items-center gap-3 border-t border-[#E8E8E8]">
-                    <div className="w-[3px] h-[8px] bg-[#3390EC] rounded-full shrink-0" />
+                <div className="mx-2 mb-1 mt-1 flex items-center gap-2 bg-[#F0F8FF] rounded-xl px-3 py-2 border border-[#DAEEF9]">
+                    <CornerUpLeft size={15} className="text-[#2AABEE] shrink-0" />
+                    <div className="w-[3px] self-stretch min-h-[28px] bg-[#2AABEE] rounded-full shrink-0" />
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-[2px]">
-                            <span className="text-[12px] font-bold text-[#3390EC]">{replyContext.authorLabel}</span>
-                            <span className="text-[10px] text-gray-400">{replyContext.timestamp}</span>
+                        <div className="text-[12px] font-semibold text-[#2AABEE] truncate leading-tight">
+                            {replyContext.authorLabel}
                         </div>
-                        <div className="text-[13px] text-gray-500 truncate leading-tight mt-0.5">
-                            {replyContext.snippet}
+                        <div className="text-[12px] text-[#444] truncate leading-[1.3] mt-[1px]">
+                            {replyContext.snippet || <span className="italic text-gray-400">Медиа</span>}
                         </div>
                     </div>
-                    <button 
+                    <button
                         onClick={onClearReply}
-                        className="w-6 h-6 flex text-gray-400 hover:text-gray-900 justify-center items-center hover:bg-gray-100 rounded-full transition-colors"
+                        className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-[#999] hover:text-[#555] hover:bg-[#E0F0FB] rounded-full transition-colors"
                     >
                         <X size={14} />
                     </button>
