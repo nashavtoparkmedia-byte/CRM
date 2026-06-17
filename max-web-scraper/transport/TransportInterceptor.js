@@ -31,21 +31,25 @@ const WS_INIT_SCRIPT = `(function () {
 
 // ─── Опкоды MAX протокола ────────────────────────────────────────────────────
 const OP = {
-  HANDSHAKE:       6,
-  AUTH:            19,
-  SEND_MESSAGE:    64,
-  TYPING:          65,
-  RESOLVE_VIDEO:   83,
-  RESOLVE_FILE:    88,
-  GET_UPLOAD_URL:  80,
-  GET_CHATS:       48,
-  GET_HISTORY:     49,
-  SUBSCRIBE_CHAT:  75,
-  INCOMING_MSG:    128,
-  PRESENCE:        132,
-  CONTACTS:        32,
-  SEND_REACTION:   178,
-  REMOVE_REACTION: 179,
+  HANDSHAKE:             6,
+  AUTH:                  19,
+  SEND_MESSAGE:          64,
+  TYPING:                65,
+  GET_UPLOAD_IMAGE_URL:  80,   // opcode 80: upload image → {url: "iu.oneme.ru/uploadImage?..."}
+  GET_UPLOAD_VIDEO_URL:  82,   // opcode 82: upload video → {info:[{videoId,url,token}]}
+  RESOLVE_VIDEO:         83,
+  GET_UPLOAD_FILE_URL:   87,   // opcode 87: upload file/audio → {info:[{fileId,url}]}
+  RESOLVE_FILE:          88,
+  GET_CHATS:             48,
+  GET_HISTORY:           49,
+  SUBSCRIBE_CHAT:        75,
+  INCOMING_MSG:          128,
+  PRESENCE:              132,
+  CONTACTS:              32,
+  SEND_REACTION:         178,
+  REMOVE_REACTION:       179,
+  // Legacy alias (keep for compat with old references)
+  GET_UPLOAD_URL:        80,
 }
 
 class TransportInterceptor {

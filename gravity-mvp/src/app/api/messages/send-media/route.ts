@@ -81,11 +81,13 @@ export async function POST(req: NextRequest) {
                     mediaType,
                 }),
             })
+            const resData = await res.json().catch(() => ({ error: res.statusText }))
             if (!res.ok) {
-                const err = await res.json().catch(() => ({ error: res.statusText }))
-                sendError = err.error || res.statusText
+                sendError = resData.error || res.statusText
                 console.error('[send-media] MAX error (saving as failed):', sendError)
                 // Don't return — save to DB so operator sees the attempt in chat
+            } else {
+                externalId = resData.externalId || null
             }
         } else if (channel === 'whatsapp') {
             const { sendMedia } = await import('@/lib/whatsapp/WhatsAppService')

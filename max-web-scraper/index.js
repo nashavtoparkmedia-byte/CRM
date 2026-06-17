@@ -260,49 +260,35 @@ async function sendText(transport, chatId, text, replyToMessageId) {
   }
 }
 
-// ─── Отправка медиа: opcode 80 → HTTP upload → opcode 64 ──────────────────
+// ─── Отправка медиа ───────────────────────────────────────────────────────────
 
 /**
- * Upload a file to MAX servers and get a token.
- * @param {object} transport
- * @param {Buffer} fileBuffer
- * @param {string} filename
- * @param {string} mimeType
- * @param {string} fieldName - form field name (e.g. 'photo' for images, 'file' for others)
- * @returns {Promise<object>} upload response JSON
+ * Upload image via FormData (opcode 80 → iu.oneme.ru/uploadImage).
+ * Returns the upload response JSON: {photos: {"<photoId>": {token: "..."}}}
  */
-async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName = 'photo') {
-  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_URL, { count: 1 }, { waitResponse: true })
-  if (!uploadResp || !uploadResp.url) {
-    throw new Error('Не получен URL для загрузки')
-  }
+async function uploadImageToMax(transport, fileBuffer, filename, mimeType) {
+  const uploadResp = await transport.sendFrame(OP.GET_UPLOAD_IMAGE_URL, { count: 1 }, { waitResponse: true })
+  if (!uploadResp?.url) throw new Error('Не получен URL для загрузки изображения')
 
-  const uploadUrl = uploadResp.url
-  const uploadData = await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const boundary = '----MaxBoundary' + Date.now()
     const header = Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="${fieldName}"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
+      `--${boundary}\r\nContent-Disposition: form-data; name="photo"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`
     )
     const footer = Buffer.from(`\r\n--${boundary}--\r\n`)
     const body = Buffer.concat([header, fileBuffer, footer])
-
-    const urlObj = new URL(uploadUrl)
-    const options = {
+    const urlObj = new URL(uploadResp.url)
+    const req = https.request({
       hostname: urlObj.hostname,
       path:     urlObj.pathname + urlObj.search,
       method:   'POST',
-      headers: {
-        'Content-Type':   `multipart/form-data; boundary=${boundary}`,
-        'Content-Length': body.length,
-      },
-    }
-
-    const req = https.request(options, res => {
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length },
+    }, res => {
       let data = ''
       res.on('data', c => { data += c })
       res.on('end', () => {
-        console.log(`[uploadFile] Upload status: ${res.statusCode} response: ${data.slice(0, 300)}`)
-        if (res.statusCode >= 400) { reject(new Error(`Upload HTTP ${res.statusCode}: ${data}`)); return }
+        console.log(`[uploadImage] status=${res.statusCode} response=${data.slice(0, 200)}`)
+        if (res.statusCode >= 400) return reject(new Error(`Upload HTTP ${res.statusCode}: ${data}`))
         try { resolve(JSON.parse(data)) } catch { resolve(null) }
       })
     })
@@ -310,62 +296,110 @@ async function uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldN
     req.write(body)
     req.end()
   })
-
-  return uploadData
 }
 
 /**
- * Send a photo message (opcode 80 upload + opcode 64 send).
+ * Upload file/video/audio as raw binary stream.
+ * Used by opcode 82 (video) and opcode 87 (file/audio).
+ * The upload response is intentionally ignored — token comes from the WS opcode response.
+ */
+async function uploadRawBinary(url, fileBuffer, filename, mimeType) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url)
+    const req = https.request({
+      hostname: urlObj.hostname,
+      path:     urlObj.pathname + urlObj.search,
+      method:   'POST',
+      headers: {
+        'Content-Type':        mimeType,
+        'Content-Disposition': `attachment; filename=${encodeURIComponent(filename)}`,
+        'Content-Range':       `0-${fileBuffer.length - 1}/${fileBuffer.length}`,
+        'Content-Length':      fileBuffer.length,
+      },
+    }, res => {
+      let data = ''
+      res.on('data', c => { data += c })
+      res.on('end', () => {
+        console.log(`[uploadBinary] status=${res.statusCode} response=${data.slice(0, 200)}`)
+        if (res.statusCode >= 400) return reject(new Error(`Upload HTTP ${res.statusCode}: ${data}`))
+        resolve()
+      })
+    })
+    req.on('error', reject)
+    req.write(fileBuffer)
+    req.end()
+  })
+}
+
+/**
+ * Send a photo message: opcode 80 → FormData upload → opcode 64.
  */
 async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType, caption) {
-  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, 'photo')
+  const uploadData = await uploadImageToMax(transport, fileBuffer, filename, mimeType)
   const photoToken = uploadData?.photoToken
     || uploadData?.token
     || (uploadData?.photos && Object.values(uploadData.photos)[0]?.token)
   if (!photoToken) throw new Error(`photoToken не найден в ответе: ${JSON.stringify(uploadData)}`)
 
   const cid = -Date.now()
-  await transport.sendFrame(OP.SEND_MESSAGE, {
+  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
+    chatId,
+    message: { cid, text: caption || '', attaches: [{ _type: 'PHOTO', photoToken }] },
+    notify: true,
+  }, { waitResponse: true })
+  return resp?.message?.id ? String(resp.message.id) : null
+}
+
+/**
+ * Send video: opcode 82 → raw binary upload → opcode 64.
+ * Response from opcode 82: {info: [{videoId, url, token}]}
+ */
+async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, caption) {
+  const urlResp = await transport.sendFrame(OP.GET_UPLOAD_VIDEO_URL, { count: 1 }, { waitResponse: true })
+  const info = urlResp?.info?.[0]
+  if (!info?.url || info?.videoId == null) {
+    throw new Error(`Не получен URL для загрузки видео. Ответ: ${JSON.stringify(urlResp)}`)
+  }
+  console.log(`[sendVideo] videoId=${info.videoId} url=${info.url.slice(0, 80)}`)
+  await uploadRawBinary(info.url, fileBuffer, filename, mimeType)
+
+  const cid = -Date.now()
+  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
     chatId,
     message: {
       cid,
       text:    caption || '',
-      attaches: [{ _type: 'PHOTO', photoToken }],
+      attaches: [{ _type: 'VIDEO', videoId: info.videoId, token: info.token || undefined, duration: null }],
     },
     notify: true,
-  })
+  }, { waitResponse: true })
+  return resp?.message?.id ? String(resp.message.id) : null
 }
 
 /**
- * Send a generic media message (document, video, audio, voice).
- * Uses same upload endpoint but with different attach type.
+ * Send file/audio/PDF/OGG: opcode 87 → raw binary upload → opcode 64.
+ * Response from opcode 87: {info: [{fileId, url}]}  (no token — fileId is enough)
  */
-async function sendGenericMedia(transport, chatId, fileBuffer, filename, mimeType, caption, mediaType) {
-  const fieldName = mediaType === 'video' ? 'video' : (mediaType === 'audio' || mediaType === 'voice' ? 'audio' : 'file')
-  const uploadData = await uploadFileToMax(transport, fileBuffer, filename, mimeType, fieldName)
-  const token = uploadData?.token
-    || uploadData?.fileToken
-    || uploadData?.videoToken
-    || uploadData?.audioToken
-    || (uploadData?.files && Object.values(uploadData.files)[0]?.token)
-    || (uploadData?.videos && Object.values(uploadData.videos)[0]?.token)
-    || (uploadData?.audios && Object.values(uploadData.audios)[0]?.token)
-  if (!token) throw new Error(`token не найден для ${mediaType}: ${JSON.stringify(uploadData)}`)
-
-  const typeMap = { video: 'VIDEO', audio: 'AUDIO', voice: 'AUDIO', document: 'FILE' }
-  const maxType = typeMap[mediaType] || 'FILE'
-  const tokenField = mediaType === 'video' ? 'videoToken' : (mediaType === 'audio' || mediaType === 'voice' ? 'audioToken' : 'fileToken')
+async function sendFile(transport, chatId, fileBuffer, filename, mimeType, caption) {
+  const urlResp = await transport.sendFrame(OP.GET_UPLOAD_FILE_URL, { count: 1 }, { waitResponse: true })
+  const info = urlResp?.info?.[0]
+  if (!info?.url || info?.fileId == null) {
+    throw new Error(`Не получен URL для загрузки файла. Ответ: ${JSON.stringify(urlResp)}`)
+  }
+  console.log(`[sendFile] fileId=${info.fileId} url=${info.url.slice(0, 80)}`)
+  await uploadRawBinary(info.url, fileBuffer, filename, mimeType)
 
   const cid = -Date.now()
-  await transport.sendFrame(OP.SEND_MESSAGE, {
+  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
     chatId,
     message: {
       cid,
-      text: caption || '',
-      attaches: [{ _type: maxType, [tokenField]: token, name: filename, mimeType }],
+      text:    caption || '',
+      attaches: [{ _type: 'FILE', fileId: info.fileId, name: filename, size: fileBuffer.length }],
     },
     notify: true,
-  })
+  }, { waitResponse: true })
+  return resp?.message?.id ? String(resp.message.id) : null
 }
 
 // ─── Реакции: opcode 178 (поставить) / 179 (снять) ───────────────────────────
@@ -591,7 +625,7 @@ async function init() {
     // Opcode 135 — фоллбэк: last reaction in chat (ненадёжен — указывает на lastMessage, не на реагированное)
     // Оставляем как запасной, но не отправляем в CRM — opcode 155 надёжнее
     // Логируем остальные неизвестные push-опкоды
-    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 83, 88, 128, 130, 132, 135, 155, 178, 179, 180, 288])
+    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 82, 83, 87, 88, 128, 130, 132, 135, 155, 178, 179, 180, 288])
     if (!KNOWN_OPCODES.has(data.opcode) && data.cmd === 0) {
       const ps = JSON.stringify(data.payload || {}).slice(0, 400)
       console.log(`[App] NEW opcode=${data.opcode} cmd=${data.cmd}: ${ps}`)
@@ -799,16 +833,17 @@ app.post('/send-image', async (req, res) => {
   }
   try {
     const fileBuffer = Buffer.from(base64, 'base64')
-    await enqueueSend(() =>
+    const externalId = await enqueueSend(() =>
       sendImage(transport, page, Number(chatId), fileBuffer, filename, mimeType, caption)
     )
-    res.json({ success: true })
+    res.json({ success: true, externalId: externalId || null })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
 })
 
 // Универсальный endpoint для отправки любого медиа
+// mediaType: 'image' | 'video' | 'document' | 'audio' | 'voice'
 app.post('/send-media', async (req, res) => {
   const { chatId, base64, filename, mimeType, caption, mediaType } = req.body
   if (!chatId || !base64 || !filename || !mimeType || !mediaType) {
@@ -819,14 +854,20 @@ app.post('/send-media', async (req, res) => {
   }
   try {
     const fileBuffer = Buffer.from(base64, 'base64')
-    await enqueueSend(async () => {
-      if (mediaType === 'image') {
-        return sendImage(transport, page, Number(chatId), fileBuffer, filename, mimeType, caption)
+    const cid = Number(chatId)
+
+    const externalId = await enqueueSend(async () => {
+      if (mediaType === 'image' || mimeType.startsWith('image/')) {
+        return sendImage(transport, page, cid, fileBuffer, filename, mimeType, caption)
+      } else if (mediaType === 'video' || mimeType.startsWith('video/')) {
+        return sendVideo(transport, cid, fileBuffer, filename, mimeType, caption)
       } else {
-        return sendGenericMedia(transport, Number(chatId), fileBuffer, filename, mimeType, caption, mediaType)
+        // document, audio, voice, OGG, PDF — all go via opcode 87
+        return sendFile(transport, cid, fileBuffer, filename, mimeType, caption)
       }
     })
-    res.json({ success: true })
+
+    res.json({ success: true, externalId: externalId || null })
   } catch (e) {
     console.error('[send-media] Error:', e.message)
     res.status(500).json({ error: e.message })
