@@ -247,7 +247,17 @@ async function sendText(transport, chatId, text, replyToMessageId) {
   const cid = -Date.now()
   const message = { text, cid, elements: [], attaches: [] }
   if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
-  await transport.sendFrame(OP.SEND_MESSAGE, { chatId, message, notify: true })
+  try {
+    const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId, message, notify: true }, { waitResponse: true })
+    // MAX responds with the created message; extract its server-assigned ID
+    const maxMsgId = resp?.message?.id ? String(resp.message.id) : null
+    if (maxMsgId) console.log(`[Send] MAX assigned msgId=${maxMsgId} for chatId=${chatId}`)
+    return maxMsgId
+  } catch (e) {
+    // Timeout or no ack — send still went through, just no ID
+    console.warn(`[sendText] No ack from MAX (${e.message}) — send delivered but externalId unknown`)
+    return null
+  }
 }
 
 // ─── Отправка медиа: opcode 80 → HTTP upload → opcode 64 ──────────────────
@@ -745,8 +755,8 @@ app.post('/send-message', async (req, res) => {
   }
 
   try {
-    await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId))
-    res.json({ success: true, chatId: String(chatId) })
+    const maxMsgId = await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId))
+    res.json({ success: true, chatId: String(chatId), externalId: maxMsgId || null })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

@@ -211,12 +211,12 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             body: JSON.stringify({ chatId: cleanTarget, message, quotedMsgId })
         })
 
+        const data = await response.json().catch(() => ({}))
         if (!response.ok) {
-            const data = await response.json().catch(() => ({ error: "Unknown error" }))
             throw new Error(data.error || "Failed to send message via Scraper")
         }
 
-        return { success: true }
+        return { success: true, externalId: data.externalId || null }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)
         throw new Error(error.message || "Failed to call scraper API")
