@@ -92,12 +92,7 @@ class TransportInterceptor {
       this._handleFrame(response.payloadData)
     })
 
-    // Перехватываем исходящие фреймы: реакции + логирование неизвестных опкодов
-    const NOISY_SENT = new Set([OP.SEND_MESSAGE, OP.TYPING, OP.GET_UPLOAD_IMAGE_URL,
-      OP.GET_UPLOAD_VIDEO_URL, OP.GET_UPLOAD_FILE_URL, OP.RESOLVE_VIDEO, OP.RESOLVE_FILE,
-      OP.SUBSCRIBE_CHAT, OP.SEND_REACTION, OP.REMOVE_REACTION, OP.DELETE_MESSAGE,
-      OP.HANDSHAKE, OP.AUTH, OP.GET_CHATS, OP.GET_HISTORY,
-      1, 32, 53, 128])
+    // Перехватываем ВСЕ исходящие WS-фреймы для диагностики + реакции
     this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
       if (!response.payloadData) return
       try {
@@ -105,12 +100,23 @@ class TransportInterceptor {
         if (data.opcode === OP.SEND_REACTION || data.opcode === OP.REMOVE_REACTION) {
           for (const h of this._sentReactionHandlers) try { h(data) } catch {}
         }
-        // Логируем неизвестные исходящие опкоды для разведки протокола
-        if (!NOISY_SENT.has(data.opcode)) {
-          console.log('[Transport SENT] opcode:', data.opcode, 'seq:', data.seq,
-            JSON.stringify(data.payload || {}).slice(0, 300))
+        // Логируем ВСЕ исходящие опкоды кроме самых шумных
+        const SKIP = new Set([OP.SEND_MESSAGE, OP.TYPING, OP.HANDSHAKE, OP.AUTH, 1])
+        if (!SKIP.has(data.opcode)) {
+          console.log('[WS→MAX] op:', data.opcode, 'seq:', data.seq,
+            JSON.stringify(data.payload || {}).slice(0, 200))
         }
       } catch {}
+    })
+
+    // Перехватываем HTTP-запросы — delete может идти через REST API
+    this._cdpClient.on('Network.requestWillBeSent', ({ requestId, request }) => {
+      const url = request.url || ''
+      const method = request.method || ''
+      if (method === 'POST' && (url.includes('delete') || url.includes('revoke') || url.includes('remove'))) {
+        console.log('[HTTP→MAX] DELETE-кандидат:', method, url.split('?')[0],
+          (request.postData || '').slice(0, 200))
+      }
     })
 
     this._cdpClient.on('Network.webSocketClosed', () => {

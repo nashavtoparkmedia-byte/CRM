@@ -40,7 +40,7 @@ export default function DeleteMessageModal({
                             )}
                         </div>
                         <span className="text-[15px] text-[#0F172A]">
-                            {contactName ? `Удалить у ${contactName}` : 'Удалить для всех'}
+                            Удалить для всех
                         </span>
                     </button>
                 </div>
