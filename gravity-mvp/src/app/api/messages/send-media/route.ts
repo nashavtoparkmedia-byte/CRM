@@ -158,9 +158,6 @@ export async function POST(req: NextRequest) {
             })
         }
 
-        // Broadcast immediately so optimistic UI message is replaced via SSE
-        try { broadcastChatMessage(chatId, message) } catch {}
-
         try {
             await prisma.messageAttachment.create({
             data: {
@@ -175,6 +172,20 @@ export async function POST(req: NextRequest) {
         } catch (attErr: any) {
             console.warn('[send-media] DB attachment.create failed (non-blocking):', attErr?.message)
         }
+
+        // Broadcast AFTER attachment is saved — include attachment metadata (without url/base64)
+        // so the SSE replaces the optimistic cmid-* placeholder with the real message + attachment
+        try {
+            const fullMsg = await (prisma.message as any).findUnique({
+                where: { id: message.id },
+                include: {
+                    attachments: {
+                        select: { id: true, type: true, fileName: true, fileSize: true, mimeType: true }
+                    }
+                }
+            })
+            if (fullMsg) broadcastChatMessage(chatId, fullMsg)
+        } catch {}
 
         try {
             await prisma.chat.update({
