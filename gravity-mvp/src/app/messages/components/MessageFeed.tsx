@@ -694,8 +694,17 @@ export default function MessageFeed({
                         {['image', 'video', 'voice', 'audio', 'sticker', 'document'].includes(msg.type) &&
                          (!msg.attachments || msg.attachments.length === 0) && (
                             <div className="mb-1 text-[13px] italic text-[#64748B] flex items-center gap-1.5">
-                                <span>📎</span>
-                                <span>Медиа недоступно (файл слишком большой или не загружен)</span>
+                                {msg.id.startsWith('cmid-') ? (
+                                    <>
+                                        <div className="w-3 h-3 rounded-full border-2 border-[#64748B]/30 border-t-[#64748B] animate-spin shrink-0" />
+                                        <span>Отправляется...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span>📎</span>
+                                        <span>Медиа недоступно (файл слишком большой или не загружен)</span>
+                                    </>
+                                )}
                             </div>
                         )}
 
