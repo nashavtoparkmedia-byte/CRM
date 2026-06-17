@@ -77,7 +77,7 @@ export default function MessageFeed({
     const [deleteModal, setDeleteModal] = useState<Message | null>(null)
     // Lightbox state
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-    const [showNewMessagesBadge, setShowNewMessagesBadge] = useState(false)
+    const [newMsgCount, setNewMsgCount] = useState(0)
     const seenMessageIds = useRef<Set<string>>(new Set())
     const prevItemCount = useRef(uiItems.length)
     const isInitialLoad = useRef(true)
@@ -247,7 +247,7 @@ export default function MessageFeed({
     if (uiItems.length > prevItemCount.current) {
         const lastItem = uiItems[uiItems.length - 1]
         if (lastItem.type === 'message' && lastItem.message.direction === 'outbound') {
-            setShowNewMessagesBadge(false)
+            setNewMsgCount(0)
         }
         prevItemCount.current = uiItems.length
     }
@@ -287,9 +287,9 @@ export default function MessageFeed({
                 } else {
                     if (atBottom && el) {
                         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-                        setShowNewMessagesBadge(false)
+                        setNewMsgCount(0)
                     } else {
-                        setShowNewMessagesBadge(true)
+                        setNewMsgCount(prev => prev + 1)
                     }
                 }
             }
@@ -324,7 +324,7 @@ export default function MessageFeed({
             if (prev !== isAtBottom) return isAtBottom
             return prev
         })
-        if (isAtBottom) setShowNewMessagesBadge(false)
+        if (isAtBottom) setNewMsgCount(0)
 
         // Загрузка истории при прокрутке вверх
         if (el.scrollTop < 150 && hasMoreHistoryRef.current && !isLoadingRef.current) {
@@ -338,7 +338,7 @@ export default function MessageFeed({
     const scrollToBottom = () => {
         const el = scrollerRef.current
         if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-        setShowNewMessagesBadge(false)
+        setNewMsgCount(0)
     }
 
     // ──────────────────────────────────────────────────────────
@@ -858,14 +858,21 @@ export default function MessageFeed({
                     </div>
                 </div>
 
-                {/* Бейдж новых сообщений */}
-                {showNewMessagesBadge && (
-                    <div className="absolute bottom-[4px] left-1/2 -translate-x-1/2 z-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {/* Scroll-to-bottom button (Telegram style) */}
+                {!atBottom && (
+                    <div className="absolute bottom-4 right-4 z-10 animate-in fade-in zoom-in-90 duration-150">
                         <button
                             onClick={scrollToBottom}
-                            className="bg-[#111]/90 backdrop-blur-md text-white text-[12px] font-black px-5 py-[2px] rounded-full shadow-2xl flex items-center gap-[2px] hover:bg-black transition-all hover:scale-105"
+                            className="w-10 h-10 rounded-full bg-white border border-[#E4ECFC] shadow-md flex items-center justify-center text-[#64748B] hover:bg-[#F1F5FD] transition-colors relative"
                         >
-                            <ArrowDown size={14} strokeWidth={3} /> НОВЫЕ СООБЩЕНИЯ
+                            <ArrowDown size={18} strokeWidth={2} />
+                            {newMsgCount > 0 && (
+                                <div className="absolute -top-1.5 -right-1 min-w-[18px] h-[18px] bg-[#2AABEE] rounded-full flex items-center justify-center px-1">
+                                    <span className="text-[11px] font-bold text-white leading-none">
+                                        {newMsgCount > 99 ? '99+' : newMsgCount}
+                                    </span>
+                                </div>
+                            )}
                         </button>
                     </div>
                 )}
