@@ -21,7 +21,7 @@ function isPlaceholderName(name?: string | null): boolean {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing } = body
+        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing, replyToExternalId } = body
 
         if (!text) {
             return NextResponse.json({ error: 'Missing required field: text' }, { status: 400 })
@@ -240,7 +240,8 @@ export async function POST(req: NextRequest) {
                     channel: 'max',
                     type: 'text',
                     sentAt,
-                    status: 'delivered'
+                    status: 'delivered',
+                    ...(replyToExternalId ? { metadata: { replyToExternalId } } : {}),
                 }
             })
 

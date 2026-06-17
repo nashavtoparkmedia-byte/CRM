@@ -520,7 +520,8 @@ export class MessageService {
                 status: 'sent',
                 channel: channel,
                 sentAt: now,
-                type: 'text'
+                type: 'text',
+                ...(quotedMsgId ? { metadata: { quotedMsgId } } : {}),
             }
         })
 

@@ -10,15 +10,16 @@ class MessageParser {
    */
   static toCrmPayload(msg, chatId) {
     return {
-      externalId:  msg.id || null,
-      chatId:      chatId || msg.chatId || null,  // chatId для ответа из CRM
-      senderId:    msg.from || null,              // userId отправителя в MAX
-      phone:       MessageParser.normalizePhone(msg.from),
-      text:        msg.text || '',
-      timestamp:   MessageParser.normalizeTimestamp(msg.timestamp),
-      messageType: msg.type || 'text',
-      attachments: msg.attachments || [],
-      isOutgoing:  msg.isOutgoing || false,
+      externalId:        msg.id || null,
+      chatId:            chatId || msg.chatId || null,
+      senderId:          msg.from || null,
+      phone:             MessageParser.normalizePhone(msg.from),
+      text:              msg.text || '',
+      timestamp:         MessageParser.normalizeTimestamp(msg.timestamp),
+      messageType:       msg.type || 'text',
+      attachments:       msg.attachments || [],
+      isOutgoing:        msg.isOutgoing || false,
+      replyToExternalId: msg.replyToMessageId || null,
     }
   }
 

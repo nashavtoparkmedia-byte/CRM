@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
         console.log(`[send-media] channel=${channel} mediaType=${mediaType} filename=${filename} mime=${mimeType}`)
 
         let externalId: string | null = null
+        let sendError: string | null = null
 
         // Route to appropriate channel backend
         if (channel === 'max') {
@@ -82,7 +83,9 @@ export async function POST(req: NextRequest) {
             })
             if (!res.ok) {
                 const err = await res.json().catch(() => ({ error: res.statusText }))
-                return NextResponse.json({ error: 'MAX scraper error', details: err }, { status: 502 })
+                sendError = err.error || res.statusText
+                console.error('[send-media] MAX error (saving as failed):', sendError)
+                // Don't return — save to DB so operator sees the attempt in chat
             }
         } else if (channel === 'whatsapp') {
             const { sendMedia } = await import('@/lib/whatsapp/WhatsAppService')
@@ -108,33 +111,6 @@ export async function POST(req: NextRequest) {
             const result = await sendTelegramMedia(target, base64, filename, mimeType, caption, profileId)
             // PR-Щ hotfix: TG может вернуть BigInt — приводим к string явно
             externalId = result.externalId != null ? String(result.externalId) : null
-        } else if (channel === 'max') {
-            // PR-Щ: max-web-scraper уже имеет POST /send-media (использует
-            // sendImage / sendGenericMedia через MAX WebSocket protocol).
-            // Просто проксируем туда.
-            const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
-            // Target — MAX internal chatId из externalChatId (без префикса)
-            // или phone digits если scraper умеет резолвить.
-            const target = chat.externalChatId?.replace(/^max:/, '') ||
-                           chat.driver?.phone?.replace(/\D/g, '') || ''
-            const cleanBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64
-            const resp = await fetch(`${maxScraperUrl}/send-media`, {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({
-                    chatId:    target,
-                    base64:    cleanBase64,
-                    filename,
-                    mimeType,
-                    caption:   caption || '',
-                    mediaType,
-                }),
-            })
-            if (!resp.ok) {
-                const errData = await resp.json().catch(() => ({ error: `MAX scraper ${resp.status}` }))
-                throw new Error(errData.error || `MAX send-media failed: ${resp.status}`)
-            }
-            externalId = null
         } else {
             return NextResponse.json(
                 { error: `Media send not implemented for channel: ${channel}` },
@@ -161,9 +137,12 @@ export async function POST(req: NextRequest) {
                     content: contentFallback(mediaType, caption),
                     channel: channel as any,
                     externalId,
-                    status: 'delivered',
+                    status: sendError ? 'failed' : 'delivered',
                     sentAt: new Date(),
-                    metadata: { origin: 'operator', filename, mimeType },
+                    metadata: {
+                        origin: 'operator', filename, mimeType,
+                        ...(sendError ? { sendError } : {}),
+                    },
                 },
             })
         } catch (dbErr: any) {
@@ -197,6 +176,13 @@ export async function POST(req: NextRequest) {
             })
         } catch {}
 
+        if (sendError) {
+            return NextResponse.json({
+                success: false, messageId: message.id,
+                error: sendError,
+                warning: 'Файл не отправлен получателю, попытка сохранена в переписке',
+            })
+        }
         return NextResponse.json({ success: true, messageId: message.id, externalId })
     } catch (err: any) {
         console.error('[send-media] Error:', err)

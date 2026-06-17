@@ -538,6 +538,39 @@ export default function MessageFeed({
                             </div>
                         )}
 
+                        {/* Reply preview (цитата) */}
+                        {(() => {
+                            const quotedId = (msg.metadata?.quotedMsgId || msg.metadata?.replyToExternalId) as string | undefined
+                            if (!quotedId) return null
+                            const quotedMsg = uiItems.find(
+                                (i): i is MessageUIItem => i.type === 'message' && (
+                                    i.message.externalId === quotedId || i.message.id === quotedId
+                                )
+                            )?.message
+                            const senderName = quotedMsg
+                                ? (quotedMsg.direction === 'outbound' ? 'Вы' : (quotedMsg.account || 'Контакт'))
+                                : 'Сообщение'
+                            const snippet = quotedMsg
+                                ? (quotedMsg.type === 'image' ? '📷 Фото'
+                                    : quotedMsg.type === 'video' ? '🎥 Видео'
+                                    : quotedMsg.type === 'voice' ? '🎤 Голосовое'
+                                    : quotedMsg.type === 'document' ? '📎 Документ'
+                                    : (quotedMsg.content || '').substring(0, 80))
+                                : null
+                            return (
+                                <div className={`mb-2 rounded-[6px] overflow-hidden border-l-[3px] ${
+                                    isOutbound ? 'border-[#3a7a50] bg-[#aee89a]/40' : 'border-[#3390EC] bg-[#3390EC]/10'
+                                } pl-2 pr-1 py-1`}>
+                                    <div className={`text-[11px] font-semibold truncate ${
+                                        isOutbound ? 'text-[#2a7a3e]' : 'text-[#3390EC]'
+                                    }`}>{senderName}</div>
+                                    <div className="text-[12px] text-[#555] truncate leading-tight">
+                                        {snippet || <span className="italic text-[#999]">Медиа</span>}
+                                    </div>
+                                </div>
+                            )
+                        })()}
+
                         {showTail && (
                             <div className={`absolute bottom-0 w-3 h-[4px] ${isOutbound ? '-right-1.5' : '-left-1.5'}`}>
                                 <svg viewBox="0 0 12 16" className={`w-full h-full ${isOutbound ? 'text-[#D1F7B6]' : 'text-white'}`} fill="currentColor">
@@ -613,25 +646,45 @@ export default function MessageFeed({
 
                         {/* Документ */}
                         {msg.type === 'document' && msg.attachments && msg.attachments.length > 0 && (
-                            <div className="mb-1">
-                                {msg.attachments.filter(a => a.id).map(att => (
-                                    <a
-                                        key={att.id}
-                                        href={attachmentUrl(att.id)}
-                                        download={att.fileName || 'document'}
-                                        className="inline-flex items-center gap-[2px] rounded-lg bg-[#F1F5FD] px-3 py-[2px] text-[13px] hover:bg-[#E4ECFC] transition-colors"
-                                    >
-                                        <span className="text-[#2AABEE]">📎</span>
-                                        <span className="font-medium truncate max-w-[200px]">
-                                            {att.fileName || 'Документ'}
-                                        </span>
-                                        {att.fileSize ? (
-                                            <span className="text-[#64748B] text-[11px]">
-                                                {(att.fileSize / 1024).toFixed(0)} KB
+                            <div className="mb-1 flex flex-col gap-1">
+                                {msg.attachments.filter(a => a.id).map(att => {
+                                    const ext = ((att.fileName || '').split('.').pop() || '').toLowerCase()
+                                    const fi = ext === 'pdf'
+                                        ? { label: 'PDF', cls: 'bg-red-50 text-red-600 border-red-200' }
+                                        : ['doc', 'docx'].includes(ext)
+                                        ? { label: 'DOC', cls: 'bg-blue-50 text-blue-600 border-blue-200' }
+                                        : ['xls', 'xlsx'].includes(ext)
+                                        ? { label: 'XLS', cls: 'bg-green-50 text-green-700 border-green-200' }
+                                        : ['ppt', 'pptx'].includes(ext)
+                                        ? { label: 'PPT', cls: 'bg-orange-50 text-orange-600 border-orange-200' }
+                                        : ['zip', 'rar', '7z', 'tar'].includes(ext)
+                                        ? { label: 'ZIP', cls: 'bg-purple-50 text-purple-600 border-purple-200' }
+                                        : { label: (ext.toUpperCase().slice(0, 4) || 'FILE'), cls: 'bg-gray-50 text-gray-500 border-gray-200' }
+                                    return (
+                                        <a
+                                            key={att.id}
+                                            href={attachmentUrl(att.id)}
+                                            download={att.fileName || 'document'}
+                                            className="inline-flex items-center gap-2 rounded-lg bg-[#F1F5FD] px-3 py-2 hover:bg-[#E4ECFC] transition-colors"
+                                        >
+                                            <span className={`flex-shrink-0 w-8 h-8 rounded border text-[9px] font-black flex items-center justify-center ${fi.cls}`}>
+                                                {fi.label}
                                             </span>
-                                        ) : null}
-                                    </a>
-                                ))}
+                                            <div className="min-w-0">
+                                                <div className="text-[13px] font-medium truncate max-w-[200px]">
+                                                    {att.fileName || 'Документ'}
+                                                </div>
+                                                {att.fileSize ? (
+                                                    <div className="text-[11px] text-[#64748B]">
+                                                        {att.fileSize > 1024 * 1024
+                                                            ? `${(att.fileSize / 1024 / 1024).toFixed(1)} МБ`
+                                                            : `${(att.fileSize / 1024).toFixed(0)} КБ`}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </a>
+                                    )
+                                })}
                             </div>
                         )}
 

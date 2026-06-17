@@ -564,6 +564,12 @@ async function init() {
         console.log('[QR] Сгенерирован из qrLink:', qrLink)
       } catch (e) { console.error('[QR] Ошибка генерации:', e.message) }
     }
+    // Логируем неизвестные опкоды для обнаружения реакционных пушей и других событий
+    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 83, 88, 128, 132, 178, 179, 288])
+    if (!KNOWN_OPCODES.has(data.opcode) && data.cmd === 0) {
+      const ps = JSON.stringify(data.payload || {}).slice(0, 400)
+      console.log(`[App] NEW opcode=${data.opcode} cmd=${data.cmd}: ${ps}`)
+    }
   })
 
   transport.onMessage(msg => {

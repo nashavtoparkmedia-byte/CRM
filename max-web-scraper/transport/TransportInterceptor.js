@@ -163,15 +163,16 @@ class TransportInterceptor {
     const hasAttaches = Array.isArray(m.attaches) && m.attaches.length > 0
 
     return {
-      id:          m.id    || null,
-      chatId:      payload.chatId || null,
-      from:        String(m.sender || ''),
-      text:        m.text  || '',
-      timestamp:   m.time  || Date.now(),
-      type:        hasAttaches ? this._detectMaxType(m.attaches) : 'text',
-      attachments: this._extractMaxAttachments(m.attaches || []),
-      isOutgoing:  this._myUserId ? String(m.sender) === this._myUserId : false,
-      raw:         payload,
+      id:                m.id    || null,
+      chatId:            payload.chatId || null,
+      from:              String(m.sender || ''),
+      text:              m.text  || '',
+      timestamp:         m.time  || Date.now(),
+      type:              hasAttaches ? this._detectMaxType(m.attaches) : 'text',
+      attachments:       this._extractMaxAttachments(m.attaches || []),
+      isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : false,
+      replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
+      raw:               payload,
     }
   }
 
