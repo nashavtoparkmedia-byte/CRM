@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
+import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
@@ -12,7 +13,20 @@ import { opsLog } from '@/lib/opsLog'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing } = body
+    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, deleted } = body
+
+    // MAX server confirmed a message was deleted — remove from CRM DB
+    if (deleted && externalId) {
+      const msg = await prisma.message.findUnique({ where: { externalId: String(externalId) } })
+      if (msg) {
+        await prisma.messageAttachment.deleteMany({ where: { messageId: msg.id } })
+        await prisma.message.delete({ where: { id: msg.id } })
+        console.log(`[MAX Webhook] deleted externalId=${externalId}`)
+        // Broadcast directly (skip AI pipeline — message is gone)
+        broadcastChatMessage(msg.chatId, { ...msg, deleted: true })
+      }
+      return NextResponse.json({ ok: true, deleted: externalId })
+    }
 
     if (!chatId) {
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })

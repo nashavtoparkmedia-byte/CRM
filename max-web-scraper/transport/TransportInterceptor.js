@@ -48,7 +48,10 @@ const OP = {
   CONTACTS:              32,
   SEND_REACTION:         178,
   REMOVE_REACTION:       179,
-  DELETE_MESSAGE:        180,
+  MARK_READ:             180,  // outgoing: mark messages as read, payload {chatId, messageIds:[...]}
+  // opcode 128 is bidirectional: server→client = INCOMING_MSG, client→server = DELETE_MESSAGE
+  // DELETE_MESSAGE payload: {chatId, messageId} (singular, not array)
+  DELETE_MESSAGE:        128,
   // Legacy alias (keep for compat with old references)
   GET_UPLOAD_URL:        80,
 }
@@ -213,6 +216,7 @@ class TransportInterceptor {
       attachments:       this._extractMaxAttachments(m.attaches || []),
       isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : false,
       replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
+      status:            m.status || null,  // 'REMOVED' when server confirms deletion
       raw:               payload,
     }
   }

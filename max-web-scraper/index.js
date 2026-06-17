@@ -180,6 +180,18 @@ async function forwardToWebhook(payload) {
 // ─── Обработка входящего сообщения ───────────────────────────────────────────
 
 async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
+  // Server push: message was deleted in MAX — propagate to CRM
+  if (msg.status === 'REMOVED') {
+    if (!msg.id) return
+    try {
+      await forwardToWebhook({ deleted: true, externalId: String(msg.id), chatId: msg.chatId })
+      console.log(`[App] REMOVED push → CRM delete: externalId=${msg.id} chatId=${msg.chatId}`)
+    } catch (e) {
+      console.error('[App] REMOVED webhook error:', e.message)
+    }
+    return
+  }
+
   if (messageSync.isDuplicate(msg)) return
 
   let payload = MessageParser.toCrmPayload(msg)
@@ -894,7 +906,7 @@ app.post('/send-reaction', async (req, res) => {
 
 // Удалить сообщение в MAX
 // Body: { chatId: number|string, messageId: string }
-// Opcode 180 — DELETE_MESSAGE (обнаружен 2026-06-18 через [Transport SENT] логи)
+// Opcode 128 outgoing: {chatId, messageId} (singular) — server confirms via REMOVED push (opcode 128 cmd:0)
 app.post('/delete-message', async (req, res) => {
   const { chatId, messageId } = req.body
   if (!chatId || !messageId) {
@@ -904,15 +916,17 @@ app.post('/delete-message', async (req, res) => {
     return res.status(503).json({ error: 'Not ready' })
   }
   try {
-    const result = await transport.sendFrame(OP.DELETE_MESSAGE, {
-      chatId:     Number(chatId),
-      messageIds: [String(messageId)],
-    }, { waitResponse: true })
-    console.log(`[delete-message] chatId=${chatId} msgId=${messageId} ok result=${JSON.stringify(result)}`)
+    // Fire-and-forget: server responds with a cmd:0 REMOVED push, not a cmd:1 ack.
+    // The REMOVED push arrives via handleIncoming and is forwarded to CRM webhook.
+    await transport.sendFrame(OP.DELETE_MESSAGE, {
+      chatId:    Number(chatId),
+      messageId: String(messageId),
+    }, { waitResponse: false })
+    console.log(`[delete-message] sent op128 chatId=${chatId} msgId=${messageId}`)
     res.json({ success: true })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)
-    res.status(500).json({ error: e.message, maxError: e.maxError })
+    res.status(500).json({ error: e.message })
   }
 })
 
