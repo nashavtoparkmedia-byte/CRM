@@ -892,6 +892,31 @@ app.post('/send-reaction', async (req, res) => {
   }
 })
 
+// Удалить сообщение в MAX
+// Body: { chatId: number|string, messageId: string }
+// Opcode 66 — предположительный DELETE_MESSAGE. Если не работает —
+// проверить логи [Transport SENT] при удалении через MAX web UI.
+app.post('/delete-message', async (req, res) => {
+  const { chatId, messageId } = req.body
+  if (!chatId || !messageId) {
+    return res.status(400).json({ error: 'chatId and messageId required' })
+  }
+  if (!isReady) {
+    return res.status(503).json({ error: 'Not ready' })
+  }
+  try {
+    const result = await transport.sendFrame(66, {
+      chatId: Number(chatId),
+      messageId: String(messageId),
+    }, { waitResponse: true })
+    console.log(`[delete-message] chatId=${chatId} msgId=${messageId} result=${JSON.stringify(result)}`)
+    res.json({ success: true })
+  } catch (e) {
+    console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)
+    res.status(500).json({ error: e.message, maxError: e.maxError })
+  }
+})
+
 // Отправить изображение
 // Body: { chatId: number, base64: string, filename: string, mimeType: string, caption?: string }
 app.post('/send-image', async (req, res) => {

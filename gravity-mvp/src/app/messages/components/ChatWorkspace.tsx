@@ -324,6 +324,7 @@ function ChatWorkspaceInner({
                     onDeleteMessage={deleteMessage}
                     activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
                     onFocusComposer={() => document.getElementById('message-composer')?.focus()}
+                    contactName={chat?.driver?.fullName || chat?.contact?.displayName || chat?.name}
                 />
             )}
 

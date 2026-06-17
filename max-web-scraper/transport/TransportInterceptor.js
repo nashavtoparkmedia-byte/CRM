@@ -91,14 +91,23 @@ class TransportInterceptor {
       this._handleFrame(response.payloadData)
     })
 
-    // Перехватываем исходящие фреймы — только реакции (опкоды 178, 179)
-    // Нужно чтобы видеть реакции, поставленные пользователем через MAX веб-интерфейс
+    // Перехватываем исходящие фреймы: реакции + логирование неизвестных опкодов
+    const NOISY_SENT = new Set([OP.SEND_MESSAGE, OP.TYPING, OP.GET_UPLOAD_IMAGE_URL,
+      OP.GET_UPLOAD_VIDEO_URL, OP.GET_UPLOAD_FILE_URL, OP.RESOLVE_VIDEO, OP.RESOLVE_FILE,
+      OP.SUBSCRIBE_CHAT, OP.SEND_REACTION, OP.REMOVE_REACTION, OP.HANDSHAKE, OP.AUTH,
+      OP.GET_CHATS, OP.GET_HISTORY])
     this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
       if (!response.payloadData) return
       try {
         const data = JSON.parse(response.payloadData)
-        if (data.opcode !== OP.SEND_REACTION && data.opcode !== OP.REMOVE_REACTION) return
-        for (const h of this._sentReactionHandlers) try { h(data) } catch {}
+        if (data.opcode === OP.SEND_REACTION || data.opcode === OP.REMOVE_REACTION) {
+          for (const h of this._sentReactionHandlers) try { h(data) } catch {}
+        }
+        // Логируем неизвестные исходящие опкоды для разведки протокола
+        if (!NOISY_SENT.has(data.opcode)) {
+          console.log('[Transport SENT] opcode:', data.opcode, 'seq:', data.seq,
+            JSON.stringify(data.payload || {}).slice(0, 300))
+        }
       } catch {}
     })
 

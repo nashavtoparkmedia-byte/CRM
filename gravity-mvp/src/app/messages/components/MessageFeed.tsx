@@ -36,6 +36,7 @@ export default function MessageFeed({
     onDeleteMessage,
     activeSearchMessageId,
     onFocusComposer,
+    contactName,
 }: {
     chatId: string
     channelTab: string
@@ -51,6 +52,7 @@ export default function MessageFeed({
     onDeleteMessage?: (msgId: string, deleteForEveryone: boolean) => void
     activeSearchMessageId?: string | null
     onFocusComposer?: () => void
+    contactName?: string
 }) {
     // Ссылка на scrollable div (заменяет VirtuosoHandle)
     const scrollerRef = useRef<HTMLDivElement>(null)
@@ -900,6 +902,7 @@ export default function MessageFeed({
                         setDeleteModal(null)
                     }}
                     onClose={() => setDeleteModal(null)}
+                    contactName={contactName}
                 />
             )}
 
