@@ -8,7 +8,7 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { chatId: maxChatId, externalMsgId, emoji, isRemove } = body
+        const { externalMsgId, emoji, isRemove, counters } = body
 
         if (!externalMsgId) {
             return NextResponse.json({ error: 'externalMsgId required' }, { status: 400 })
@@ -24,14 +24,23 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: false, reason: 'message not found' })
         }
 
-        // Update reactions in metadata
         const meta = (message.metadata as any) || {}
-        const reactions: Record<string, number> = { ...(meta.reactions || {}) }
+        let reactions: Record<string, number>
 
-        if (isRemove || !emoji) {
-            if (emoji) delete reactions[emoji]
+        if (Array.isArray(counters)) {
+            // Opcode 155: full snapshot — replace entirely
+            reactions = {}
+            for (const c of counters) {
+                if (c.reaction && c.count > 0) reactions[c.reaction] = c.count
+            }
         } else {
-            reactions[emoji] = (reactions[emoji] || 0) + 1
+            // Fallback: single emoji add/remove
+            reactions = { ...(meta.reactions || {}) }
+            if (isRemove || !emoji) {
+                if (emoji) delete reactions[emoji]
+            } else {
+                reactions[emoji] = (reactions[emoji] || 0) + 1
+            }
         }
 
         const updated = await (prisma.message as any).update({

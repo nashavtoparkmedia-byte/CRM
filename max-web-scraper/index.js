@@ -564,23 +564,24 @@ async function init() {
         console.log('[QR] Сгенерирован из qrLink:', qrLink)
       } catch (e) { console.error('[QR] Ошибка генерации:', e.message) }
     }
-    // Opcode 135 — сервер пушит обновление реакции в реальном времени
-    // Срабатывает при любой реакции (нашей или от собеседника)
-    if (data.opcode === 135 && data.payload?.chat?.lastReactedMessageId) {
-      const chat = data.payload.chat
-      const externalMsgId = String(chat.lastReactedMessageId)
-      const emoji         = chat.lastReaction || ''
-      const isRemove      = !emoji
+    // Opcode 155 — сервер пушит полный snapshot реакций на конкретное сообщение
+    // Это основной механизм: counters = [{count, reaction}]
+    if (data.opcode === 155 && data.payload?.messageId) {
+      const p            = data.payload
+      const externalMsgId = String(p.messageId)
+      const counters      = p.counters || []
       const reactionUrl   = CRM_WEBHOOK_URL.replace(/\/api\/webhook\/max\/?.*$/, '/api/webhook/max/reaction')
-      console.log(`[App] opcode135 reaction push: msgId=${externalMsgId} emoji=${emoji}`)
+      console.log(`[App] opcode155 reaction snapshot: msgId=${externalMsgId} counters=${JSON.stringify(counters)}`)
       fetch(reactionUrl, {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ externalMsgId, emoji, isRemove }),
-      }).catch(e => console.error('[App] opcode135 reaction sync error:', e.message))
+        body:    JSON.stringify({ externalMsgId, counters }),
+      }).catch(e => console.error('[App] opcode155 reaction sync error:', e.message))
     }
+    // Opcode 135 — фоллбэк: last reaction in chat (ненадёжен — указывает на lastMessage, не на реагированное)
+    // Оставляем как запасной, но не отправляем в CRM — opcode 155 надёжнее
     // Логируем остальные неизвестные push-опкоды
-    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 83, 88, 128, 130, 132, 135, 178, 179, 288])
+    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 83, 88, 128, 130, 132, 135, 155, 178, 179, 180, 288])
     if (!KNOWN_OPCODES.has(data.opcode) && data.cmd === 0) {
       const ps = JSON.stringify(data.payload || {}).slice(0, 400)
       console.log(`[App] NEW opcode=${data.opcode} cmd=${data.cmd}: ${ps}`)
