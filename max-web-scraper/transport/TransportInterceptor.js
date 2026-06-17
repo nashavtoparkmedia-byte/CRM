@@ -134,12 +134,20 @@ class TransportInterceptor {
       console.log('[Transport ATTACH]', JSON.stringify(data.payload.message.attaches))
     }
 
-    // Ответы на наши запросы (cmd:1, seq наш)
-    if (data.cmd === 1 && this._pendingReqs.has(data.seq)) {
-      const { resolve, timeout } = this._pendingReqs.get(data.seq)
+    // Ответы на наши запросы (cmd:1 = success, cmd:3 = error)
+    if ((data.cmd === 1 || data.cmd === 3) && this._pendingReqs.has(data.seq)) {
+      const { resolve, reject, timeout } = this._pendingReqs.get(data.seq)
       clearTimeout(timeout)
       this._pendingReqs.delete(data.seq)
-      resolve(data.payload)
+      if (data.cmd === 3) {
+        const err = Object.assign(
+          new Error(data.payload?.localizedMessage || data.payload?.error || 'MAX error cmd=3'),
+          { maxError: data.payload?.error, maxPayload: data.payload }
+        )
+        reject(err)
+      } else {
+        resolve(data.payload)
+      }
       return
     }
 

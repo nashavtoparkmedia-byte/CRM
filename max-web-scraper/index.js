@@ -351,7 +351,39 @@ async function sendImage(transport, page, chatId, fileBuffer, filename, mimeType
 }
 
 /**
- * Send video: opcode 82 → raw binary upload → opcode 64.
+ * Send SEND_MESSAGE with attachment, retrying if server says "attachment.not.ready".
+ * MAX processes uploads asynchronously — the file may not be ready immediately after upload.
+ */
+async function sendMessageWithRetry(transport, chatId, messagePayload, maxRetries = 6, initialDelay = 2000) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) {
+      const delay = initialDelay + (attempt - 1) * 1500  // 2s, 3.5s, 5s, 6.5s, 8s, 9.5s
+      console.log(`[sendMsgRetry] attempt ${attempt}/${maxRetries}, wait ${delay}ms...`)
+      await new Promise(r => setTimeout(r, delay))
+    } else {
+      // Always wait a bit after upload before first attempt — MAX needs time to process
+      await new Promise(r => setTimeout(r, initialDelay))
+    }
+    try {
+      const cid = -Date.now()
+      const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
+        chatId,
+        message: { ...messagePayload, cid },
+        notify: true,
+      }, { waitResponse: true })
+      return resp?.message?.id ? String(resp.message.id) : null
+    } catch (e) {
+      if (e.maxError === 'attachment.not.ready' && attempt < maxRetries) {
+        console.log(`[sendMsgRetry] attachment.not.ready — will retry`)
+        continue
+      }
+      throw e
+    }
+  }
+}
+
+/**
+ * Send video: opcode 82 → raw binary upload → opcode 64 (with retry).
  * Response from opcode 82: {info: [{videoId, url, token}]}
  */
 async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, caption) {
@@ -363,21 +395,14 @@ async function sendVideo(transport, chatId, fileBuffer, filename, mimeType, capt
   console.log(`[sendVideo] videoId=${info.videoId} url=${info.url.slice(0, 80)}`)
   await uploadRawBinary(info.url, fileBuffer, filename, mimeType)
 
-  const cid = -Date.now()
-  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
-    chatId,
-    message: {
-      cid,
-      text:    caption || '',
-      attaches: [{ _type: 'VIDEO', videoId: info.videoId, token: info.token || undefined, duration: null }],
-    },
-    notify: true,
-  }, { waitResponse: true })
-  return resp?.message?.id ? String(resp.message.id) : null
+  return sendMessageWithRetry(transport, chatId, {
+    text:    caption || '',
+    attaches: [{ _type: 'VIDEO', videoId: info.videoId, token: info.token || undefined, duration: null }],
+  })
 }
 
 /**
- * Send file/audio/PDF/OGG: opcode 87 → raw binary upload → opcode 64.
+ * Send file/audio/PDF/OGG: opcode 87 → raw binary upload → opcode 64 (with retry).
  * Response from opcode 87: {info: [{fileId, url}]}  (no token — fileId is enough)
  */
 async function sendFile(transport, chatId, fileBuffer, filename, mimeType, caption) {
@@ -389,17 +414,10 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
   console.log(`[sendFile] fileId=${info.fileId} url=${info.url.slice(0, 80)}`)
   await uploadRawBinary(info.url, fileBuffer, filename, mimeType)
 
-  const cid = -Date.now()
-  const resp = await transport.sendFrame(OP.SEND_MESSAGE, {
-    chatId,
-    message: {
-      cid,
-      text:    caption || '',
-      attaches: [{ _type: 'FILE', fileId: info.fileId, name: filename, size: fileBuffer.length }],
-    },
-    notify: true,
-  }, { waitResponse: true })
-  return resp?.message?.id ? String(resp.message.id) : null
+  return sendMessageWithRetry(transport, chatId, {
+    text:    caption || '',
+    attaches: [{ _type: 'FILE', fileId: info.fileId, name: filename, size: fileBuffer.length }],
+  })
 }
 
 // ─── Реакции: opcode 178 (поставить) / 179 (снять) ───────────────────────────
