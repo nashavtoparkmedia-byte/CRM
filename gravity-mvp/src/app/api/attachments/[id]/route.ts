@@ -51,12 +51,34 @@ export async function GET(
             const upstreamMime = upstream.headers.get('content-type')?.split(';')[0].trim() || att.mimeType || 'application/octet-stream'
             let bytes = Buffer.from(await upstream.arrayBuffer())
             let outputMime = upstreamMime
-            let outputFileName = att.fileName || att.url.split('/').pop() || 'image'
+
+            // Build a clean filename: strip query params/hash from URL path
+            let outputFileName = att.fileName
+            if (!outputFileName) {
+                try {
+                    const u = new URL(att.url)
+                    outputFileName = u.pathname.split('/').pop() || 'file'
+                } catch {
+                    outputFileName = att.url.split('/').pop()?.split('?')[0] || 'file'
+                }
+            }
+
             if (upstreamMime === 'image/webp') {
                 bytes = Buffer.from(await sharp(bytes).jpeg({ quality: 92 }).toBuffer())
                 outputMime = 'image/jpeg'
                 outputFileName = outputFileName.replace(/\.webp$/i, '.jpg')
             }
+
+            // Ensure image files have a proper extension so browser offers correct file type
+            if (!outputFileName.includes('.')) {
+                const extByMime: Record<string, string> = {
+                    'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
+                    'image/webp': '.webp', 'video/mp4': '.mp4', 'audio/ogg': '.ogg',
+                    'application/pdf': '.pdf',
+                }
+                outputFileName += extByMime[outputMime] || ''
+            }
+
             return new NextResponse(new Uint8Array(bytes), {
                 status: 200,
                 headers: {

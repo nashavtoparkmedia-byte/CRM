@@ -697,21 +697,26 @@ export default function MessageFeed({
                             (e.g., file too big, download failed, cold session). Without this,
                             the PLACEHOLDERS-hider below would produce an empty bubble. */}
                         {['image', 'video', 'voice', 'audio', 'sticker', 'document'].includes(msg.type) &&
-                         (!msg.attachments || msg.attachments.length === 0) && (
-                            <div className="mb-1 text-[13px] italic text-[#64748B] flex items-center gap-1.5">
-                                {msg.id.startsWith('cmid-') ? (
-                                    <>
-                                        <div className="w-3 h-3 rounded-full border-2 border-[#64748B]/30 border-t-[#64748B] animate-spin shrink-0" />
-                                        <span>Отправляется...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <span>📎</span>
-                                        <span>Медиа недоступно (файл слишком большой или не загружен)</span>
-                                    </>
-                                )}
-                            </div>
-                        )}
+                         (!msg.attachments || msg.attachments.length === 0) && (() => {
+                            const isOptimistic  = msg.id.startsWith('cmid-')
+                            const ageMs         = Date.now() - new Date(msg.sentAt).getTime()
+                            const isLoading     = isOptimistic || ageMs < 90_000
+                            return (
+                                <div className="mb-1 text-[13px] italic text-[#64748B] flex items-center gap-1.5">
+                                    {isLoading ? (
+                                        <>
+                                            <div className="w-3 h-3 rounded-full border-2 border-[#64748B]/30 border-t-[#64748B] animate-spin shrink-0" />
+                                            <span>{isOptimistic ? 'Отправляется...' : 'Загружается...'}</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <span>📎</span>
+                                            <span>Медиа недоступно</span>
+                                        </>
+                                    )}
+                                </div>
+                            )
+                        })()}
 
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
                             {(() => {
@@ -790,13 +795,14 @@ export default function MessageFeed({
                     {/* Reaction badges */}
                     {msg.metadata?.reactions && Object.keys(msg.metadata.reactions as Record<string, number>).length > 0 && (
                         <div className={`flex flex-wrap gap-1 mt-0.5 ${isOutbound ? 'justify-end' : 'justify-start'}`}>
-                            {Object.entries(msg.metadata.reactions as Record<string, number>).map(([emoji]) => (
+                            {Object.entries(msg.metadata.reactions as Record<string, number>).map(([emoji, count]) => (
                                 <button
                                     key={emoji}
                                     onClick={() => onReaction?.(msg.id, emoji)}
-                                    className="h-6 px-1.5 rounded-full bg-white border border-gray-200 shadow-sm flex items-center gap-0.5 text-[13px] hover:border-[#3390EC]/40 transition-colors"
+                                    className="h-6 px-2 rounded-full bg-white border border-gray-200 shadow-sm flex items-center gap-1 text-[13px] hover:border-[#3390EC]/40 transition-colors"
                                 >
-                                    {emoji}
+                                    <span>{emoji}</span>
+                                    {count > 1 && <span className="text-[11px] text-[#64748B] font-medium">{count}</span>}
                                 </button>
                             ))}
                         </div>
