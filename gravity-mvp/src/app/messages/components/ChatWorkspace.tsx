@@ -107,7 +107,7 @@ function ChatWorkspaceInner({
     conversations: any[]
     onBack?: () => void
 }) {
-    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage, sendMedia } = useMessages(effectiveChatId)
+    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage, sendMedia, deleteMessage } = useMessages(effectiveChatId)
 
     // A3: Compute channels that have failed outbound messages
     const failedChannels = useMemo(() => {
@@ -321,6 +321,7 @@ function ChatWorkspaceInner({
                     onRetry={handleRetry}
                     onCreateTask={setTaskModalContext}
                     onReaction={handleReaction}
+                    onDeleteMessage={deleteMessage}
                     activeSearchMessageId={activeSearchIndex >= 0 ? searchResults[activeSearchIndex] : (initialMessageId ?? null)}
                     onFocusComposer={() => document.getElementById('message-composer')?.focus()}
                 />

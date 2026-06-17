@@ -184,6 +184,15 @@ export function useMessages(chatId: string | null) {
                 try { payload = JSON.parse(e.data) } catch { return }
                 if (!payload || payload.type !== 'message' || !payload.data) return
                 const incoming = payload.data
+                // Handle deletion broadcast
+                if (incoming.deleted === true) {
+                    setMessages(prev => {
+                        const next = prev.filter(m => m.id !== incoming.id)
+                        messageCache.set(chatId, next)
+                        return next
+                    })
+                    return
+                }
                 // Append (or REPLACE existing entry without forcing a refetch).
                 // Replace happens on three keys to avoid the optimistic /
                 // server "mirror" effect:
@@ -399,5 +408,20 @@ export function useMessages(chatId: string | null) {
         }
     }
 
-    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage, sendMedia }
+    const deleteMessage = async (messageId: string, deleteForEveryone: boolean) => {
+        if (!chatId) return
+        // Optimistic: remove instantly from local state
+        setMessages(prev => {
+            const next = prev.filter(m => m.id !== messageId)
+            messageCache.set(chatId, next)
+            return next
+        })
+        await fetch('/api/messages/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messageId, deleteForEveryone }),
+        }).catch(() => {})
+    }
+
+    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage, sendMedia, deleteMessage }
 }

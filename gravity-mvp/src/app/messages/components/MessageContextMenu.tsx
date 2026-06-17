@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { Reply, Copy, ClipboardList, ChevronRight } from "lucide-react"
+import { Reply, Copy, ClipboardList, ChevronRight, Trash2 } from "lucide-react"
 import { Message } from "../hooks/useMessages"
 
 const QUICK_EMOJIS = ["👍", "❤️", "🔥", "😂", "😮", "😢"]
@@ -20,10 +20,11 @@ interface MessageContextMenuProps {
     onReply?: (msg: Message) => void
     onCreateTask?: (msg: Message) => void
     onReaction?: (msgId: string, emoji: string) => void
+    onDeleteMessage?: (msg: Message) => void
 }
 
 export default function MessageContextMenu({
-    msg, x, y, onClose, onReply, onCreateTask, onReaction
+    msg, x, y, onClose, onReply, onCreateTask, onReaction, onDeleteMessage
 }: MessageContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null)
     const [showExtended, setShowExtended] = useState(false)
@@ -78,9 +79,10 @@ export default function MessageContextMenu({
     }
 
     const actions = [
-        { icon: Reply, label: "Ответить", action: () => { onReply?.(msg); onClose() }, show: !!onReply },
-        { icon: Copy, label: "Копировать", action: () => { navigator.clipboard.writeText(msg.content ?? ''); onClose() }, show: !!(msg.content ?? '').trim() },
-        { icon: ClipboardList, label: "Создать задачу", action: () => { onCreateTask?.(msg); onClose() }, show: !!onCreateTask },
+        { icon: Reply, label: "Ответить", action: () => { onReply?.(msg); onClose() }, show: !!onReply, destructive: false },
+        { icon: Copy, label: "Копировать", action: () => { navigator.clipboard.writeText(msg.content ?? ''); onClose() }, show: !!(msg.content ?? '').trim(), destructive: false },
+        { icon: ClipboardList, label: "Создать задачу", action: () => { onCreateTask?.(msg); onClose() }, show: !!onCreateTask, destructive: false },
+        { icon: Trash2, label: "Удалить", action: () => { onDeleteMessage?.(msg); onClose() }, show: true, destructive: true },
     ].filter(a => a.show)
 
     return (
@@ -115,9 +117,11 @@ export default function MessageContextMenu({
                         <button
                             key={i}
                             onClick={a.action}
-                            className="w-full px-3 py-[2px] text-left text-[13px] text-[#111] hover:bg-gray-50 transition-colors flex items-center gap-2.5"
+                            className={`w-full px-3 py-[2px] text-left text-[13px] hover:bg-gray-50 transition-colors flex items-center gap-2.5 ${
+                                a.destructive ? 'text-[#DC2626]' : 'text-[#111]'
+                            }`}
                         >
-                            <a.icon size={16} className="text-gray-400" />
+                            <a.icon size={16} className={a.destructive ? 'text-[#DC2626]' : 'text-gray-400'} />
                             {a.label}
                         </button>
                     ))}

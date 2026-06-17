@@ -8,6 +8,7 @@ import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue,
 import { usePathname, useRouter } from "next/navigation"
 import MessageContextMenu from "./MessageContextMenu"
 import ImageLightbox from "./ImageLightbox"
+import DeleteMessageModal from "./DeleteMessageModal"
 
 // ── Anchor-based scroll memory (module-level, survives remounts) ──
 // Primary: anchor msgId + offset from viewport top
@@ -32,6 +33,7 @@ export default function MessageFeed({
     onRetry,
     onCreateTask,
     onReaction,
+    onDeleteMessage,
     activeSearchMessageId,
     onFocusComposer,
 }: {
@@ -46,6 +48,7 @@ export default function MessageFeed({
     onRetry?: (msg: Message) => void
     onCreateTask?: (msg: Message) => void
     onReaction?: (msgId: string, emoji: string) => void
+    onDeleteMessage?: (msgId: string, deleteForEveryone: boolean) => void
     activeSearchMessageId?: string | null
     onFocusComposer?: () => void
 }) {
@@ -70,6 +73,8 @@ export default function MessageFeed({
     const [atBottom, setAtBottom] = useState(true)
     // Context menu state
     const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null)
+    // Delete confirmation modal
+    const [deleteModal, setDeleteModal] = useState<Message | null>(null)
     // Lightbox state
     const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
     const [showNewMessagesBadge, setShowNewMessagesBadge] = useState(false)
@@ -870,6 +875,18 @@ export default function MessageFeed({
                     onReply={onReply}
                     onCreateTask={onCreateTask}
                     onReaction={onReaction}
+                    onDeleteMessage={(msg) => { setDeleteModal(msg); setContextMenu(null) }}
+                />
+            )}
+
+            {/* Delete confirmation modal */}
+            {deleteModal && (
+                <DeleteMessageModal
+                    onConfirm={(deleteForEveryone) => {
+                        onDeleteMessage?.(deleteModal.id, deleteForEveryone)
+                        setDeleteModal(null)
+                    }}
+                    onClose={() => setDeleteModal(null)}
                 />
             )}
 
