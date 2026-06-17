@@ -578,6 +578,28 @@ async function init() {
     )
   })
 
+  // Синхронизация реакций, поставленных пользователем через MAX веб-интерфейс
+  transport.onSentReaction(async data => {
+    const p = data.payload || {}
+    const chatId    = p.chatId
+    const msgId     = p.messageId
+    const emoji     = p.reaction || ''
+    const isRemove  = data.opcode === OP.REMOVE_REACTION || emoji === ''
+    if (!chatId || !msgId) return
+    const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhook\/max\/?.*$/, '/api/webhook/max/reaction')
+    try {
+      const res = await fetch(reactionUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: String(chatId), externalMsgId: String(msgId), emoji, isRemove }),
+      })
+      if (!res.ok) console.warn(`[App] reaction sync HTTP ${res.status}`)
+      else console.log(`[App] reaction sync: chatId=${chatId} msgId=${msgId} emoji=${emoji} remove=${isRemove}`)
+    } catch (e) {
+      console.error('[App] reaction sync error:', e.message)
+    }
+  })
+
   // 5. Авторизация
   session.attach(page, context, transport)
 

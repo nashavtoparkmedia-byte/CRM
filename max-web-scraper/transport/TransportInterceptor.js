@@ -50,14 +50,15 @@ const OP = {
 
 class TransportInterceptor {
   constructor() {
-    this._messageHandlers = []
-    this._rawHandlers     = []  // для перехвата опкодов (32, 48 и т.д.)
-    this._page            = null
-    this._cdpClient       = null
-    this._pendingReqs     = new Map()  // seq → {resolve, reject, timeout}
-    this._localSeq        = 500        // наши seq начинаются с 500 (браузер использует 0–499)
-    this._myUserId        = null       // userId нашего аккаунта (из opcode 19)
-    this._wsAuthHandlers  = []
+    this._messageHandlers      = []
+    this._rawHandlers          = []  // для перехвата опкодов (32, 48 и т.д.)
+    this._sentReactionHandlers = []  // срабатывают когда пользователь ставит реакцию в MAX веб
+    this._page                 = null
+    this._cdpClient            = null
+    this._pendingReqs          = new Map()  // seq → {resolve, reject, timeout}
+    this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
+    this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
+    this._wsAuthHandlers       = []
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -84,6 +85,17 @@ class TransportInterceptor {
       if (!response.payloadData) return
       if (response.opcode === 2) return  // binary frame — пропускаем
       this._handleFrame(response.payloadData)
+    })
+
+    // Перехватываем исходящие фреймы — только реакции (опкоды 178, 179)
+    // Нужно чтобы видеть реакции, поставленные пользователем через MAX веб-интерфейс
+    this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
+      if (!response.payloadData) return
+      try {
+        const data = JSON.parse(response.payloadData)
+        if (data.opcode !== OP.SEND_REACTION && data.opcode !== OP.REMOVE_REACTION) return
+        for (const h of this._sentReactionHandlers) try { h(data) } catch {}
+      } catch {}
     })
 
     this._cdpClient.on('Network.webSocketClosed', () => {
@@ -262,9 +274,15 @@ class TransportInterceptor {
     this._rawHandlers.push(handler)
   }
 
+  /** Срабатывает когда пользователь ставит/убирает реакцию через MAX веб-интерфейс */
+  onSentReaction(handler) {
+    this._sentReactionHandlers.push(handler)
+  }
+
   detach() {
-    this._messageHandlers = []
-    this._rawHandlers     = []
+    this._messageHandlers      = []
+    this._rawHandlers          = []
+    this._sentReactionHandlers = []
     for (const { timeout } of this._pendingReqs.values()) clearTimeout(timeout)
     this._pendingReqs.clear()
     if (this._cdpClient) {
