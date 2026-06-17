@@ -107,7 +107,7 @@ function ChatWorkspaceInner({
     conversations: any[]
     onBack?: () => void
 }) {
-    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage } = useMessages(effectiveChatId)
+    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage, sendMedia } = useMessages(effectiveChatId)
 
     // A3: Compute channels that have failed outbound messages
     const failedChannels = useMemo(() => {
@@ -392,6 +392,7 @@ function ChatWorkspaceInner({
                 manualSendChannelMode={manualSendChannelMode}
                 setManualSendChannelMode={setManualSendChannelMode}
                 onSendMessage={handleSendMessage}
+                onSendMedia={sendMedia}
                 onTextareaFocus={ai.trigger}
                 prefillText={aiPrefillText}
                 prefillToken={aiPrefillToken}

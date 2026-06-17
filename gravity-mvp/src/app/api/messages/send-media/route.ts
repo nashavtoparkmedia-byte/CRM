@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { broadcastChatMessage } from '@/lib/messageStreamBus'
 
 const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
 
@@ -28,7 +29,7 @@ function contentFallback(mediaType: string, caption?: string): string {
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
-        const { chatId, base64, filename, mimeType, caption, profileId } = body
+        const { chatId, base64, filename, mimeType, caption, profileId, clientMessageId } = body
 
         if (!chatId || !base64 || !filename || !mimeType) {
             return NextResponse.json(
@@ -139,6 +140,7 @@ export async function POST(req: NextRequest) {
                     content: contentFallback(mediaType, caption),
                     channel: channel as any,
                     externalId,
+                    ...(clientMessageId ? { clientMessageId: String(clientMessageId) } : {}),
                     status: sendError ? 'failed' : 'delivered',
                     sentAt: new Date(),
                     metadata: {
@@ -155,6 +157,9 @@ export async function POST(req: NextRequest) {
                 warning: `Сообщение доставлено клиенту, но не сохранилось в БД: ${dbErr?.message}`,
             })
         }
+
+        // Broadcast immediately so optimistic UI message is replaced via SSE
+        try { broadcastChatMessage(chatId, message) } catch {}
 
         try {
             await prisma.messageAttachment.create({

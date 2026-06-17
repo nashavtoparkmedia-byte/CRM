@@ -37,6 +37,7 @@ interface MessageInputAreaProps {
     manualSendChannelMode: string | null
     setManualSendChannelMode: (channel: string) => void
     onSendMessage: (content: string, effectiveChannel: string) => void
+    onSendMedia?: (file: File, dataUrl: string, caption: string, channel: string) => Promise<void>
     /**
      * PR9.46 «AI стажёр»: триггер при фокусе в textarea. Родитель
      * (ChatWorkspace) дёргает proposed-reply generation. Дёшево и
@@ -72,6 +73,7 @@ export default function MessageInputArea({
     manualSendChannelMode,
     setManualSendChannelMode,
     onSendMessage,
+    onSendMedia,
     onTextareaFocus,
     prefillText,
     prefillToken,
@@ -361,28 +363,32 @@ export default function MessageInputArea({
     const handleSendImage = async () => {
         if (!imagePreview) return
         const { dataUrl, file } = imagePreview
+        const captionText = text.trim()
         setImagePreview(null)
+        setText('')
+        draftCache.delete(cacheKey)
         setIsSendingImage(true)
         setSendingFile({ name: file.name, mimeType: file.type || 'application/octet-stream' })
         try {
-            const base64 = dataUrl.split(',')[1]
-            const res = await fetch('/api/messages/send-media', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chatId,
-                    base64,
-                    filename: file.name,
-                    mimeType: file.type || 'application/octet-stream',
-                    caption: text.trim() || '',
-                }),
-            })
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}))
-                console.error('[send-media] failed:', err)
+            if (onSendMedia) {
+                await onSendMedia(file, dataUrl, captionText, effectiveNormalized)
             } else {
-                setText('')
-                draftCache.delete(cacheKey)
+                const base64 = dataUrl.split(',')[1]
+                const res = await fetch('/api/messages/send-media', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chatId,
+                        base64,
+                        filename: file.name,
+                        mimeType: file.type || 'application/octet-stream',
+                        caption: captionText,
+                    }),
+                })
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}))
+                    console.error('[send-media] failed:', err)
+                }
             }
         } catch (err) {
             console.error('[send-media] error:', err)

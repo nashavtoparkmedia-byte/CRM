@@ -338,5 +338,66 @@ export function useMessages(chatId: string | null) {
         }
     }
 
-    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage }
+    const sendMedia = async (file: File, dataUrl: string, caption: string, channel: string) => {
+        if (!chatId) return
+
+        const mimeType = file.type || 'application/octet-stream'
+        let msgType: Message['type'] = 'document'
+        let contentLabel = caption || ''
+        if (mimeType.startsWith('image/'))       { msgType = 'image';    contentLabel = contentLabel || '[Фото]' }
+        else if (mimeType.startsWith('video/'))  { msgType = 'video';    contentLabel = contentLabel || '[Видео]' }
+        else if (mimeType === 'audio/ogg' || mimeType.includes('opus')) { msgType = 'voice'; contentLabel = contentLabel || '[Голосовое]' }
+        else if (mimeType.startsWith('audio/'))  { msgType = 'audio';    contentLabel = contentLabel || '[Аудио]' }
+        else                                     { msgType = 'document'; contentLabel = contentLabel || file.name || '[Файл]' }
+
+        const clientMessageId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
+
+        const optimisticMsg: Message = {
+            id: `cmid-${clientMessageId}`,
+            direction: 'outbound',
+            type: msgType,
+            content: contentLabel,
+            sentAt: new Date().toISOString(),
+            status: 'sent',
+            channel,
+            origin: 'operator',
+        }
+
+        const currentMsgs = messageCache.get(chatId) || []
+        const newMsgs = [...currentMsgs, optimisticMsg]
+        messageCache.set(chatId, newMsgs)
+        setMessages(newMsgs)
+
+        try {
+            const base64 = dataUrl.split(',')[1]
+            const res = await fetch('/api/messages/send-media', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chatId: chatId.split(',')[0],
+                    base64,
+                    filename: file.name,
+                    mimeType,
+                    caption,
+                    clientMessageId,
+                }),
+            })
+            if (!res.ok) {
+                const failedMsgs = (messageCache.get(chatId) || []).map(m =>
+                    m.id === `cmid-${clientMessageId}` ? { ...m, status: 'failed' as const } : m
+                )
+                messageCache.set(chatId, failedMsgs)
+                setMessages(failedMsgs)
+            }
+            // On success: broadcastChatMessage in send-media route fires SSE → replaces optimistic msg
+        } catch {
+            const failedMsgs = (messageCache.get(chatId) || []).map(m =>
+                m.id === `cmid-${clientMessageId}` ? { ...m, status: 'failed' as const } : m
+            )
+            messageCache.set(chatId, failedMsgs)
+            setMessages(failedMsgs)
+        }
+    }
+
+    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage, sendMedia }
 }

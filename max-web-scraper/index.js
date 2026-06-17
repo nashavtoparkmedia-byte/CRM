@@ -101,6 +101,11 @@ async function finishImportSession(status = 'completed', resultType = 'partial')
   }
 }
 
+// ─── Дедупликация собственных реакций (opcode 135 echo) ─────────────────────
+// Когда мы отправляем реакцию из CRM, MAX сервер пушит opcode 135 обратно.
+// Без фильтра это создаёт дублирующее обновление в CRM (реакция уже сохранена через broadcastChatMessage).
+const recentOwnReactionIds = new Set()
+
 // ─── Очередь отправки ────────────────────────────────────────────────────────
 
 const sendQueue = []
@@ -640,8 +645,24 @@ async function init() {
         body:    JSON.stringify({ externalMsgId, counters }),
       }).catch(e => console.error('[App] opcode155 reaction sync error:', e.message))
     }
-    // Opcode 135 — фоллбэк: last reaction in chat (ненадёжен — указывает на lastMessage, не на реагированное)
-    // Оставляем как запасной, но не отправляем в CRM — opcode 155 надёжнее
+    // Opcode 135 — chat update push; содержит lastReaction + lastReactedMessageId
+    // В реальности opcode 155 не приходит при реакции другого пользователя — только 135.
+    // Пропускаем если реакция пришла в ответ на нашу собственную отправку (seq >= 500).
+    if (data.opcode === 135 && data.payload?.chat?.lastReactedMessageId && data.payload?.chat?.lastReaction) {
+      const externalMsgId = String(data.payload.chat.lastReactedMessageId)
+      const emoji          = data.payload.chat.lastReaction
+      if (!recentOwnReactionIds.has(externalMsgId)) {
+        const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
+        console.log(`[App] opcode135 reaction: msgId=${externalMsgId} emoji=${emoji}`)
+        fetch(reactionUrl, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ externalMsgId, emoji, isRemove: false }),
+        }).catch(e => console.error('[App] opcode135 reaction sync error:', e.message))
+      } else {
+        console.log(`[App] opcode135 skip own-reaction echo: msgId=${externalMsgId}`)
+      }
+    }
     // Логируем остальные неизвестные push-опкоды
     const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 82, 83, 87, 88, 128, 130, 132, 135, 155, 178, 179, 180, 288])
     if (!KNOWN_OPCODES.has(data.opcode) && data.cmd === 0) {
@@ -831,6 +852,9 @@ app.post('/send-reaction', async (req, res) => {
     if (remove) {
       await removeReaction(transport, Number(chatId), messageId)
     } else {
+      // Помечаем как нашу собственную реакцию чтобы opcode 135 echo не дублировал обновление
+      recentOwnReactionIds.add(String(messageId))
+      setTimeout(() => recentOwnReactionIds.delete(String(messageId)), 8000)
       await sendReaction(transport, Number(chatId), messageId, emoji)
     }
     res.json({ success: true })
