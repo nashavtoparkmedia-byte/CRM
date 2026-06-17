@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { findIdentityByPhoneAndChannel, updateReachability } from '@/lib/ReachabilityService'
+import { prisma } from '@/lib/prisma'
 
 /**
  * POST /api/channels/check-reachability
@@ -53,16 +54,24 @@ export async function POST(req: NextRequest) {
     }
 
     // Persist result only for definitive outcomes (not soft fallback).
-    // Soft fallback returns reachable:true but was triggered by timeout/error,
-    // so we only persist when we got a real answer (reachable:false is always real;
-    // reachable:true with telegramId is real for TG; for WA reachable:true without
-    // error is a real positive check).
     // Definitive если: явный negative, либо явный positive с маркером (TG: telegramId, WA: confirmed).
     // Без маркера reachable:true — это soft fallback (timeout/no connection/etc), не персистим.
     const isDefinitive = result.reachable === false || !!result.telegramId || !!result.confirmed
     if (isDefinitive) {
       const identityId = await findIdentityByPhoneAndChannel(normalized, channel)
       if (identityId) {
+        if (result.reachable === false) {
+          // isRegisteredUser can return false due to privacy settings or WA API limitations.
+          // Protect existing 'confirmed' identities — a single negative live check is not
+          // enough evidence to override confirmed-via-actual-communication status.
+          const existing = await prisma.contactIdentity.findUnique({
+            where: { id: identityId },
+            select: { reachabilityStatus: true },
+          })
+          if (existing?.reachabilityStatus === 'confirmed') {
+            return NextResponse.json({ reachable: true })
+          }
+        }
         await updateReachability(identityId, result.reachable ? 'confirmed' : 'unreachable')
       }
     }

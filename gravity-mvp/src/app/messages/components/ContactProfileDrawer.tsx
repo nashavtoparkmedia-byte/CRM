@@ -188,7 +188,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                 .then(data => {
                     if (cancelled) return
                     // Only override if we got a definitive answer (not soft fallback)
-                    if (data.reachable === false || data.telegramId) {
+                    if (data.reachable === false || data.telegramId || data.confirmed) {
                         setLiveReachability(prev => ({ ...prev, [channel]: data.reachable }))
                     }
                 })
@@ -230,15 +230,21 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         return () => { clearTimeout(timer); setBotLinkSearching(false) }
     }, [botLinkQuery])
 
-    /** Get effective reachability for a channel: live > persisted > null */
+    /** Get effective reachability for a channel: live > persisted > chat-presence > null */
     const getReachability = (identity: ContactIdentity): boolean | null => {
         // Live check result takes priority (if definitive)
         if (liveReachability[identity.channel] !== undefined) {
             return liveReachability[identity.channel]
         }
-        // Fall back to persisted status from DB
+        // Persisted status
         if (identity.reachabilityStatus === 'confirmed') return true
-        if (identity.reachabilityStatus === 'unreachable') return false
+        if (identity.reachabilityStatus === 'unreachable') {
+            // An existing chat proves channel was reachable — overrides stale 'unreachable'
+            // from an unreliable isRegisteredUser result.
+            const hasChat = contact?.chats?.some(c => c.contactIdentityId === identity.id)
+            if (hasChat) return true
+            return false
+        }
         return null // unknown
     }
 
