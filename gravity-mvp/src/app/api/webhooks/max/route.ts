@@ -172,7 +172,7 @@ export async function POST(request: Request) {
             url:       att.url,
             fileName:  att.name || null,
             fileSize:  att.size || null,
-            mimeType:  null,
+            mimeType:  att.mimeType || null,
           },
         })
       }

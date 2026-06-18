@@ -219,9 +219,15 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
       if (!attUrl) { downloaded.push(att); continue }
       try {
         const file = await mediaPipeline.downloadAttachment(attUrl, att.mimeType)
+        // Convert to data URL so CRM stores the file permanently.
+        // Resolved CDN URLs (opcode 83/88) expire within minutes — if we
+        // store the raw CDN URL, /api/attachments/{id} will get 403 later.
+        const fileBuffer = fs.readFileSync(file.localPath)
+        const dataUrl = `data:${file.mimeType};base64,${fileBuffer.toString('base64')}`
         downloaded.push({
           ...att,
-          url:       attUrl,
+          url:       dataUrl,
+          mimeType:  file.mimeType,
           localPath: file.localPath,
           size:      file.size,
           downloadStatus: 'ok',  // PR-Ч

@@ -29,7 +29,7 @@ import sharp from 'sharp'
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
 export async function GET(
-    _req: NextRequest,
+    req: NextRequest,
     { params }: { params: Promise<{ id: string }> },
 ) {
     const { id } = await params
@@ -49,6 +49,13 @@ export async function GET(
             const upstream = await fetch(att.url, { next: { revalidate: 0 } })
             if (!upstream.ok) return NextResponse.redirect(att.url, 302)
             const upstreamMime = upstream.headers.get('content-type')?.split(';')[0].trim() || att.mimeType || 'application/octet-stream'
+
+            // External page (ok.ru, YouTube, etc.) masquerading as video attachment —
+            // redirect user to the page instead of proxying HTML into a <video> element.
+            const isMedia = upstreamMime.startsWith('video/') || upstreamMime.startsWith('audio/')
+                         || upstreamMime.startsWith('image/') || upstreamMime === 'application/pdf'
+            if (!isMedia) return NextResponse.redirect(att.url, 302)
+
             let bytes = Buffer.from(await upstream.arrayBuffer())
             let outputMime = upstreamMime
 
@@ -66,11 +73,11 @@ export async function GET(
             if (upstreamMime === 'image/webp') {
                 bytes = Buffer.from(await sharp(bytes).jpeg({ quality: 92 }).toBuffer())
                 outputMime = 'image/jpeg'
-                outputFileName = outputFileName.replace(/\.webp$/i, '.jpg')
+                outputFileName = outputFileName!.replace(/\.webp$/i, '.jpg')
             }
 
             // Ensure image files have a proper extension so browser offers correct file type
-            if (!outputFileName.includes('.')) {
+            if (!outputFileName!.includes('.')) {
                 const extByMime: Record<string, string> = {
                     'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif',
                     'image/webp': '.webp', 'video/mp4': '.mp4', 'audio/ogg': '.ogg',
@@ -84,8 +91,9 @@ export async function GET(
                 headers: {
                     'Content-Type': outputMime,
                     'Content-Length': String(bytes.length),
+                    'Accept-Ranges': 'bytes',
                     'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
-                    'Content-Disposition': `inline; filename="${outputFileName.replace(/"/g, '')}"`,
+                    'Content-Disposition': `inline; filename="${outputFileName!.replace(/"/g, '')}"`,
                 },
             })
         } catch {
@@ -121,9 +129,32 @@ export async function GET(
             } catch {}
         }
 
+        // Video/audio: support HTTP range requests so Chrome can seek and play.
+        // Without Accept-Ranges + 206 responses, Chrome refuses to play MP4.
+        const rangeHeader = req.headers.get('range')
+        if (rangeHeader && (outputMime.startsWith('video/') || outputMime.startsWith('audio/'))) {
+            const totalSize = outputBytes.length
+            const match = rangeHeader.match(/bytes=(\d+)-(\d*)/)
+            if (match) {
+                const start = parseInt(match[1], 10)
+                const end   = match[2] ? Math.min(parseInt(match[2], 10), totalSize - 1) : totalSize - 1
+                const chunk = outputBytes.subarray(start, end + 1)
+                const rangeHeaders: Record<string, string> = {
+                    'Content-Type':   outputMime,
+                    'Content-Range':  `bytes ${start}-${end}/${totalSize}`,
+                    'Accept-Ranges':  'bytes',
+                    'Content-Length': String(chunk.length),
+                    'Cache-Control':  `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
+                }
+                if (outputFileName) rangeHeaders['Content-Disposition'] = `inline; filename="${outputFileName.replace(/"/g, '')}"`
+                return new NextResponse(new Uint8Array(chunk), { status: 206, headers: rangeHeaders })
+            }
+        }
+
         const headers: Record<string, string> = {
-            'Content-Type': outputMime,
+            'Content-Type':  outputMime,
             'Content-Length': String(outputBytes.length),
+            'Accept-Ranges': 'bytes',
             // Aggressive cache — content is keyed on attachment id, which
             // never changes (we'd create a new row instead).
             'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
