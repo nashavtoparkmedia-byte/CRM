@@ -541,22 +541,21 @@ export default function MessageInputArea({
 
             {/* Reply Context Bar — Telegram style */}
             {replyContext && (
-                <div className="mx-2 mb-1 mt-1 flex items-center gap-2 bg-[#F0F8FF] rounded-xl px-3 py-2 border border-[#DAEEF9]">
-                    <CornerUpLeft size={15} className="text-[#2AABEE] shrink-0" />
-                    <div className="w-[3px] self-stretch min-h-[28px] bg-[#2AABEE] rounded-full shrink-0" />
+                <div className="flex items-center gap-2 border-t border-[#E4ECFC] px-3 pt-2 pb-1">
+                    <div className="w-[3px] self-stretch min-h-[32px] bg-[#2AABEE] rounded-full shrink-0" />
                     <div className="flex-1 min-w-0">
                         <div className="text-[12px] font-semibold text-[#2AABEE] truncate leading-tight">
                             {replyContext.authorLabel}
                         </div>
-                        <div className="text-[12px] text-[#444] truncate leading-[1.3] mt-[1px]">
-                            {replyContext.snippet || <span className="italic text-gray-400">Медиа</span>}
+                        <div className="text-[12px] text-[#64748B] truncate leading-[1.3] mt-[1px]">
+                            {replyContext.snippet || <span className="italic text-[#94A3B8]">Медиа</span>}
                         </div>
                     </div>
                     <button
                         onClick={onClearReply}
-                        className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-[#999] hover:text-[#555] hover:bg-[#E0F0FB] rounded-full transition-colors"
+                        className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-[#94A3B8] hover:text-[#475569] hover:bg-[#F1F5FD] rounded-full transition-colors"
                     >
-                        <X size={14} />
+                        <X size={15} />
                     </button>
                 </div>
             )}
@@ -573,13 +572,12 @@ export default function MessageInputArea({
             )}
 
             {/* FC-09: Channel hint line — служебная инфа «Отправка через MAX»,
-                на мобиле скрываем (канал и так виден в табах сверху). */}
-            {channelHintReason && (
-                <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1 ${!replyContext ? 'border-t border-[#E8E8E8]' : ''}`}>
+                скрываем при reply (контекст уже виден в reply bar) и на мобиле. */}
+            {channelHintReason && !replyContext && (
+                <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 border-t border-[#E8E8E8]">
                     <span className={`w-1.5 h-1.5 rounded-full ${currentChannelInfo.activeBg}`} />
                     <span className="text-[11px] text-gray-400">
                         Отправка через <span className={`font-medium ${currentChannelInfo.color}`}>{currentChannelInfo.label}</span>
-                        {channelHintReason === 'ответ' && <span className="text-gray-300"> · ответ на сообщение</span>}
                         {channelHintReason === 'вкладка' && <span className="text-gray-300"> · по вкладке канала</span>}
                     </span>
                 </div>

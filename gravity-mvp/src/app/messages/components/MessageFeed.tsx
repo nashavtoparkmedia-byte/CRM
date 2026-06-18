@@ -651,11 +651,35 @@ export default function MessageFeed({
                             </div>
                         )}
 
-                        {/* Документ */}
+                        {/* Документ / Video-doc / Audio-doc */}
                         {msg.type === 'document' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1 flex flex-col gap-1">
                                 {msg.attachments.filter(a => a.id).map(att => {
                                     const ext = ((att.fileName || '').split('.').pop() || '').toLowerCase()
+                                    const mime = (att.mimeType || '').toLowerCase()
+
+                                    // Video files → inline player (WA sends mp4/3gp as document)
+                                    if (['mp4', 'mov', 'avi', 'mkv', 'webm', '3gp', 'm4v'].includes(ext) || mime.startsWith('video/')) {
+                                        return (
+                                            <video
+                                                key={att.id}
+                                                src={attachmentUrl(att.id)}
+                                                controls
+                                                className="max-w-[280px] max-h-[320px] rounded-lg"
+                                                preload="metadata"
+                                            />
+                                        )
+                                    }
+
+                                    // Audio/voice files → inline player (WA sends ogg/opus as document)
+                                    if (['ogg', 'oga', 'opus', 'mp3', 'aac', 'wav', 'm4a', 'flac', 'amr'].includes(ext) || mime.startsWith('audio/')) {
+                                        return (
+                                            <audio key={att.id} controls preload="none" className="max-w-[260px] h-10" style={{ minWidth: 200 }}>
+                                                <source src={attachmentUrl(att.id)} type={mime || undefined} />
+                                            </audio>
+                                        )
+                                    }
+
                                     const fi = ext === 'pdf'
                                         ? { label: 'PDF', cls: 'bg-red-50 text-red-600 border-red-200' }
                                         : ['doc', 'docx'].includes(ext)
