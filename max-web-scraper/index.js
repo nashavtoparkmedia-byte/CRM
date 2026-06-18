@@ -916,10 +916,15 @@ app.post('/delete-message', async (req, res) => {
     return res.status(503).json({ error: 'Not ready' })
   }
   try {
-    // Real delete opcode not yet identified — WS op128 rejected by server (0x80 unknown).
-    // Deletion from CRM DB already done by /api/messages/delete route.
-    // Logging here so scraper logs confirm the call was received.
-    console.log(`[delete-message] PENDING real opcode — chatId=${chatId} msgId=${messageId} (CRM-side delete already done)`)
+    // Opcode 66 = DELETE_MESSAGE. Confirmed from web.max.ru bundle:
+    // yield*r(66,{...revertId(chatId), messageIds:[id,...], forMe:!forAll})
+    // forMe:false = delete for everyone, forMe:true = delete only for sender
+    const result = await transport.sendFrame(OP.DELETE_MESSAGE, {
+      chatId:     Number(chatId),
+      messageIds: [String(messageId)],
+      forMe:      false,
+    }, { waitResponse: true })
+    console.log(`[delete-message] op66 OK chatId=${chatId} msgId=${messageId}`, JSON.stringify(result).slice(0, 100))
     res.json({ success: true })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)

@@ -49,9 +49,9 @@ const OP = {
   SEND_REACTION:         178,
   REMOVE_REACTION:       179,
   MARK_READ:             180,  // outgoing: mark messages as read, payload {chatId, messageIds:[...]}
-  // opcode 128 is bidirectional: server→client = INCOMING_MSG, client→server = DELETE_MESSAGE
-  // DELETE_MESSAGE payload: {chatId, messageId} (singular, not array)
-  DELETE_MESSAGE:        128,
+  // opcode 66: delete messages. payload {chatId, messageIds:[...], forMe:false=for_everyone, forMe:true=for_me_only}
+  // Confirmed from web.max.ru bundle: U_=async function({forAll:n},{send:r}){yield*r(66,{chatId,messageIds,forMe:!n})}
+  DELETE_MESSAGE:        66,
   // Legacy alias (keep for compat with old references)
   GET_UPLOAD_URL:        80,
 }
