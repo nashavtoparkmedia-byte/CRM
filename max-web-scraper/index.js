@@ -916,13 +916,10 @@ app.post('/delete-message', async (req, res) => {
     return res.status(503).json({ error: 'Not ready' })
   }
   try {
-    // Fire-and-forget: server responds with a cmd:0 REMOVED push, not a cmd:1 ack.
-    // The REMOVED push arrives via handleIncoming and is forwarded to CRM webhook.
-    await transport.sendFrame(OP.DELETE_MESSAGE, {
-      chatId:    Number(chatId),
-      messageId: String(messageId),
-    }, { waitResponse: false })
-    console.log(`[delete-message] sent op128 chatId=${chatId} msgId=${messageId}`)
+    // Real delete opcode not yet identified — WS op128 rejected by server (0x80 unknown).
+    // Deletion from CRM DB already done by /api/messages/delete route.
+    // Logging here so scraper logs confirm the call was received.
+    console.log(`[delete-message] PENDING real opcode — chatId=${chatId} msgId=${messageId} (CRM-side delete already done)`)
     res.json({ success: true })
   } catch (e) {
     console.error(`[delete-message] FAILED chatId=${chatId} msgId=${messageId}: ${e.message}`)

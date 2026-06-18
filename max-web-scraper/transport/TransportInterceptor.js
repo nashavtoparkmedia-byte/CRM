@@ -112,13 +112,30 @@ class TransportInterceptor {
       } catch {}
     })
 
-    // Перехватываем HTTP-запросы — delete может идти через REST API
+    // Перехватываем ВСЕ HTTP-запросы к MAX/oneme API — ищем реальный delete endpoint
     this._cdpClient.on('Network.requestWillBeSent', ({ requestId, request }) => {
       const url = request.url || ''
       const method = request.method || ''
-      if (method === 'POST' && (url.includes('delete') || url.includes('revoke') || url.includes('remove'))) {
-        console.log('[HTTP→MAX] DELETE-кандидат:', method, url.split('?')[0],
-          (request.postData || '').slice(0, 200))
+      const isMaxApi = url.includes('oneme.ru') || url.includes('max.ru')
+      if (!isMaxApi) return
+      // Пропускаем мусор: картинки, статику, WS-апгрейд
+      const SKIP_EXT = /\.(png|jpg|jpeg|gif|webp|svg|ico|woff|woff2|css|map)(\?|$)/i
+      if (SKIP_EXT.test(url)) return
+      if (url.includes('ws-api.oneme.ru')) return  // WS — уже перехватываем отдельно
+      const body = (request.postData || '').slice(0, 300)
+      console.log(`[HTTP→MAX] ${method} ${url.split('?')[0]}${body ? ' | ' + body : ''}`)
+      this._pendingHttpReqs = this._pendingHttpReqs || new Map()
+      this._pendingHttpReqs.set(requestId, { method, url })
+    })
+
+    this._cdpClient.on('Network.responseReceived', ({ requestId, response }) => {
+      if (!this._pendingHttpReqs) return
+      const req = this._pendingHttpReqs.get(requestId)
+      if (!req) return
+      this._pendingHttpReqs.delete(requestId)
+      const status = response.status
+      if (status >= 400 || req.method === 'DELETE' || req.url.match(/delete|revoke|remove|recall/i)) {
+        console.log(`[HTTP←MAX] ${status} ${req.method} ${req.url.split('?')[0]}`)
       }
     })
 
