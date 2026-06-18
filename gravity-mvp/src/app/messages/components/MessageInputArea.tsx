@@ -541,8 +541,9 @@ export default function MessageInputArea({
 
             {/* Reply Context Bar — Telegram style */}
             {replyContext && (
-                <div className="flex items-center gap-2 border-t border-[#E4ECFC] px-3 pt-2 pb-1">
-                    <div className="w-[3px] self-stretch min-h-[32px] bg-[#2AABEE] rounded-full shrink-0" />
+                <div className="mx-2 mt-1.5 mb-0.5 flex items-center gap-2 bg-[#EBF4FD] rounded-xl px-3 py-[7px]">
+                    <CornerUpLeft size={15} className="text-[#2AABEE] shrink-0 mt-[1px]" />
+                    <div className="w-[2.5px] self-stretch min-h-[28px] bg-[#2AABEE] rounded-full shrink-0" />
                     <div className="flex-1 min-w-0">
                         <div className="text-[12px] font-semibold text-[#2AABEE] truncate leading-tight">
                             {replyContext.authorLabel}
@@ -553,7 +554,7 @@ export default function MessageInputArea({
                     </div>
                     <button
                         onClick={onClearReply}
-                        className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-[#94A3B8] hover:text-[#475569] hover:bg-[#F1F5FD] rounded-full transition-colors"
+                        className="flex-shrink-0 w-7 h-7 flex items-center justify-center text-[#94A3B8] hover:text-[#475569] hover:bg-[#D5E8F8] rounded-full transition-colors"
                     >
                         <X size={15} />
                     </button>
