@@ -16,3 +16,4 @@ COPY ./conf/dialplan/default/02_megafon_inbound.xml /usr/share/freeswitch/conf/v
 COPY ./conf/dialplan/default/03_user_outbound.xml /usr/share/freeswitch/conf/vanilla/dialplan/default/03_user_outbound.xml
 COPY ./conf/autoload_configs/event_socket.conf.xml /usr/share/freeswitch/conf/vanilla/autoload_configs/event_socket.conf.xml
 COPY ./conf/autoload_configs/acl.conf.xml /usr/share/freeswitch/conf/vanilla/autoload_configs/acl.conf.xml
+COPY ./conf/dialplan/public/00_inbound_did.xml /usr/share/freeswitch/conf/vanilla/dialplan/public/00_inbound_did.xml

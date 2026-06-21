@@ -29,7 +29,7 @@
       <action application="record_session" data="${recording_file}"/>
 
       <!-- Ring everyone for up to 30s. comma = fork in parallel. -->
-      <action application="bridge" data="{leg_timeout=30}user/101,user/102"/>
+      <action application="bridge" data="{leg_timeout=30}user/101,user/102,user/103"/>
     </condition>
   </extension>
 </include>

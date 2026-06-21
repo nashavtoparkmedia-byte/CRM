@@ -1,0 +1,15 @@
+<include>
+  <!--
+    Route incoming Megafon DID to the default context where
+    02_megafon_inbound.xml rings all registered manager extensions.
+
+    The sofia_profile_name variable is preserved across transfers,
+    so the `^external$` condition in 02_megafon_inbound.xml still matches.
+  -->
+  <extension name="megafon_did_79221853150">
+    <condition field="destination_number" expression="^(79221853150)$">
+      <action application="set" data="domain_name=$${domain}"/>
+      <action application="transfer" data="$1 XML default"/>
+    </condition>
+  </extension>
+</include>

@@ -108,7 +108,7 @@ export default function IncomingCallPopup() {
 
     return (
         <div className="fixed bottom-6 right-6 z-50 w-[360px] rounded-md border border-border bg-white shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-200">
-            <div className="flex items-center gap-3 px-[4px] pt-[4px]">
+            <div className="flex items-center gap-3 px-4 pt-4">
                 <div className="relative">
                     <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"/>
                     <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -123,7 +123,7 @@ export default function IncomingCallPopup() {
             </div>
 
             {incomingCall.driverId && (
-                <div className="px-[4px] pt-[2px]">
+                <div className="px-4 pt-1">
                     <Link
                         href={`/drivers/${incomingCall.driverId}`}
                         className="text-[12px] text-primary hover:underline"
@@ -133,20 +133,20 @@ export default function IncomingCallPopup() {
                 </div>
             )}
 
-            <div className="flex gap-[2px] px-[4px] py-[4px]">
+            <div className="flex gap-2 px-4 py-3">
                 <button
                     onClick={decline}
-                    className="flex flex-1 items-center justify-center gap-[2px] rounded-md bg-destructive py-[2px] text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-destructive py-2.5 text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium"
                 >
-                    <PhoneOff className="h-[4px] w-[4px]"/>
+                    <PhoneOff className="h-4 w-4"/>
                     Отклонить
                 </button>
                 <button
                     onClick={answer}
                     autoFocus
-                    className="flex flex-1 items-center justify-center gap-[2px] rounded-md bg-emerald-600 py-[2px] text-white hover:bg-emerald-700 transition-colors text-[14px] font-medium shadow"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 py-2.5 text-white hover:bg-emerald-700 transition-colors text-[14px] font-medium shadow"
                 >
-                    <Phone className="h-[4px] w-[4px]"/>
+                    <Phone className="h-4 w-4"/>
                     Принять
                 </button>
             </div>
