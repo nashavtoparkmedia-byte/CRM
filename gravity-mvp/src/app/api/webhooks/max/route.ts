@@ -13,7 +13,7 @@ import { opsLog } from '@/lib/opsLog'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, deleted } = body
+    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom } = body
 
     // MAX server confirmed a message was deleted — remove from CRM DB
     if (deleted && externalId) {
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
         externalId: externalId || null,
         status:    'delivered',
         sentAt,   // validated above
-        metadata:  { senderId, maxChatId: chatId, attachments: attachments || [] },
+        metadata:  { senderId, maxChatId: chatId, attachments: attachments || [], ...(forwardedFrom ? { forwardedFrom } : {}) },
       },
     })
 

@@ -573,6 +573,20 @@ export default function MessageFeed({
                             </div>
                         )}
 
+                        {/* Forwarded-from header (входящие пересланные) */}
+                        {!isOutbound && msg.metadata?.forwardedFrom && (() => {
+                            const fwd = msg.metadata.forwardedFrom as { id?: string; name?: string; phone?: string }
+                            const label = fwd.name || fwd.phone || fwd.id || '?'
+                            return (
+                                <div className="mb-1.5 flex items-center gap-1 text-[11px] text-[#8E24AA]/80">
+                                    <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
+                                        <path d="M9 3L14 8L9 13V10C5.686 10 3.286 11.286 2 14C2 10 3.5 6 9 5V3Z"/>
+                                    </svg>
+                                    <span className="font-medium truncate">Переслано от {label}</span>
+                                </div>
+                            )
+                        })()}
+
                         {/* Reply preview (цитата) */}
                         {(() => {
                             const quotedId = (msg.metadata?.quotedMsgId || msg.metadata?.replyToExternalId) as string | undefined

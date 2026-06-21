@@ -202,11 +202,14 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   if (senderName)  payload = { ...payload, senderName }
   if (senderPhone) payload = { ...payload, senderPhone }
 
-  // Переслано: добавляем префикс кем написано оригинальное сообщение
+  // Переслано: передаём структурированные данные об источнике
   if (msg.forwardedFromId) {
-    const fwdName = contactStore.getName(msg.forwardedFromId) || msg.forwardedFromId
-    const prefix  = `[↩ ${fwdName}]`
-    payload = { ...payload, text: payload.text ? `${prefix}\n${payload.text}` : prefix }
+    const fwdName  = contactStore.getName(msg.forwardedFromId) || null
+    const fwdPhone = contactStore.getPhone(msg.forwardedFromId) || null
+    payload = {
+      ...payload,
+      forwardedFrom: { id: msg.forwardedFromId, name: fwdName, phone: fwdPhone },
+    }
   }
 
   // Скачиваем вложения
