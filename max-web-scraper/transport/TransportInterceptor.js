@@ -170,6 +170,10 @@ class TransportInterceptor {
     if (data.opcode === OP.INCOMING_MSG && data.payload?.message?.attaches?.length > 0) {
       console.log('[Transport ATTACH]', JSON.stringify(data.payload.message.attaches))
     }
+    // DEBUG: log full FORWARD payload so we can inspect link.message structure
+    if (data.opcode === OP.INCOMING_MSG && data.payload?.message?.link?.type === 'FORWARD') {
+      console.log('[Transport FORWARD]', JSON.stringify(data.payload.message.link.message).slice(0, 600))
+    }
 
     // Ответы на наши запросы (cmd:1 = success, cmd:3 = error)
     if ((data.cmd === 1 || data.cmd === 3) && this._pendingReqs.has(data.seq)) {
