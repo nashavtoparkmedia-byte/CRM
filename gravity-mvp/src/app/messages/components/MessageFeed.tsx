@@ -573,12 +573,17 @@ export default function MessageFeed({
                             </div>
                         )}
 
-                        {/* Forwarded-from header (входящие пересланные) */}
-                        {!isOutbound && msg.metadata?.forwardedFrom && (() => {
-                            const fwd = msg.metadata.forwardedFrom as { id?: string; name?: string; phone?: string }
-                            const label = fwd.name || fwd.phone || fwd.id || '?'
+                        {/* Forwarded-from header — metadata (новые) или префикс [↩ Name] в content (старые) */}
+                        {(() => {
+                            const fwd = msg.metadata?.forwardedFrom as { id?: string; name?: string; phone?: string } | undefined
+                            const metaLabel = fwd ? (fwd.name || fwd.phone || fwd.id || '?') : null
+                            // Fallback: parse [↩ Name] from content start
+                            const contentMatch = !metaLabel ? (msg.content || '').match(/^\[↩ ([^\]]+)\]/) : null
+                            const label = metaLabel || (contentMatch ? contentMatch[1] : null)
+                            if (!label) return null
+                            const color = isOutbound ? 'text-[#2a7a3e]/70' : 'text-[#8E24AA]/80'
                             return (
-                                <div className="mb-1.5 flex items-center gap-1 text-[11px] text-[#8E24AA]/80">
+                                <div className={`mb-1.5 flex items-center gap-1 text-[11px] ${color}`}>
                                     <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
                                         <path d="M9 3L14 8L9 13V10C5.686 10 3.286 11.286 2 14C2 10 3.5 6 9 5V3Z"/>
                                     </svg>
@@ -789,9 +794,11 @@ export default function MessageFeed({
                                     '[Фото]', '[Видео]', '[Голосовое]',
                                     '[Аудио]', '[Документ]', '[Стикер]', '[Контакт]',
                                 ])
-                                const trimmed = (msg.content || '').trim()
+                                // Strip [↩ Name]\n prefix — already shown as styled header above
+                                const raw = (msg.content || '').replace(/^\[↩ [^\]]+\]\n?/, '')
+                                const trimmed = raw.trim()
                                 if (PLACEHOLDERS.has(trimmed)) return null
-                                return msg.content
+                                return raw || null
                             })()}
                             <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]'}`} />
                         </div>

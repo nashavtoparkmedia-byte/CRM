@@ -202,12 +202,14 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   if (senderName)  payload = { ...payload, senderName }
   if (senderPhone) payload = { ...payload, senderPhone }
 
-  // Переслано: передаём структурированные данные об источнике
+  // Переслано: текстовый префикс в content + структурированные метаданные
   if (msg.forwardedFromId) {
-    const fwdName  = contactStore.getName(msg.forwardedFromId) || null
+    const fwdName  = contactStore.getName(msg.forwardedFromId) || msg.forwardedFromId
     const fwdPhone = contactStore.getPhone(msg.forwardedFromId) || null
+    const prefix   = `[↩ ${fwdName}]`
     payload = {
       ...payload,
+      text:          payload.text ? `${prefix}\n${payload.text}` : prefix,
       forwardedFrom: { id: msg.forwardedFromId, name: fwdName, phone: fwdPhone },
     }
   }
