@@ -3,6 +3,8 @@
 const fs     = require('fs')
 const path   = require('path')
 const crypto = require('crypto')
+const https  = require('https')
+const http   = require('http')
 
 const { ENDPOINTS } = require('../transport/TransportInterceptor')
 
@@ -84,7 +86,16 @@ class MediaPipeline {
       }
     }
 
-    if (!result || !result.ok) throw new Error(`Download failed after retries: ${lastError}`)
+    if (!result || !result.ok) {
+      // Browser fetch failed (likely CORS on CDN domain). Try Node.js download —
+      // signed CDN URLs are valid without browser cookies; CORS doesn't apply in Node.
+      console.log(`[MediaPipeline] Browser fetch failed (${lastError}), trying Node.js fallback for ${url.split('?')[0]}`)
+      try {
+        result = await this._downloadViaNodejs(url)
+      } catch (nodeErr) {
+        throw new Error(`Download failed: browser="${lastError}", nodejs="${nodeErr.message}"`)
+      }
+    }
     if (result.size > MAX_FILE_SIZE) {
       throw new Error(`Файл слишком большой: ${result.size} байт (лимит ${MAX_FILE_SIZE})`)
     }
@@ -107,6 +118,45 @@ class MediaPipeline {
       mimeType:  resolvedMime,
       size:      result.size
     }
+  }
+
+  // ─── Node.js fallback download (no CORS restrictions) ───────────────────
+
+  _downloadViaNodejs(url, redirectDepth = 0) {
+    if (redirectDepth > 5) return Promise.reject(new Error('Too many redirects'))
+    const mod = url.startsWith('https:') ? https : http
+    const urlObj = new URL(url)
+    return new Promise((resolve, reject) => {
+      const req = mod.get({
+        hostname: urlObj.hostname,
+        path:     urlObj.pathname + urlObj.search,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120',
+          'Accept':     '*/*',
+        },
+        timeout: 30000,
+      }, res => {
+        if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) && res.headers.location) {
+          res.resume()
+          return this._downloadViaNodejs(res.headers.location, redirectDepth + 1).then(resolve).catch(reject)
+        }
+        if (res.statusCode !== 200) {
+          res.resume()
+          return reject(new Error(`HTTP ${res.statusCode}`))
+        }
+        const chunks = []
+        res.on('data', c => chunks.push(c))
+        res.on('end', () => {
+          const buffer  = Buffer.concat(chunks)
+          const mime    = (res.headers['content-type'] || '').split(';')[0].trim() || 'application/octet-stream'
+          console.log(`[MediaPipeline] Node.js download OK: ${buffer.length} bytes, mime=${mime}`)
+          resolve({ ok: true, base64: buffer.toString('base64'), mimeType: mime, size: buffer.length })
+        })
+        res.on('error', reject)
+      })
+      req.on('error', reject)
+      req.on('timeout', () => { req.destroy(); reject(new Error('Node.js download timeout')) })
+    })
   }
 
   // ─── Исходящие: загрузить файл ───────────────────────────────────────────

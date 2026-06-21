@@ -497,6 +497,21 @@ function findFirstUrl(obj, depth = 0) {
   return null
 }
 
+// Opcode 83 (RESOLVE_VIDEO) returns {EXTERNAL, MP4_480, MP4_720, ...}.
+// findFirstUrl picks EXTERNAL (alphabetically first), which is an ok.ru
+// page — not a streamable video. Prefer direct MP4 CDN URLs instead.
+function findBestVideoUrl(obj) {
+  if (!obj || typeof obj !== 'object') return findFirstUrl(obj)
+  for (const key of ['MP4_720', 'MP4_480', 'MP4_360', 'MP4_240', 'HLS', 'url']) {
+    if (obj[key] && /^https?:\/\//.test(obj[key])) return obj[key]
+  }
+  for (const [k, v] of Object.entries(obj)) {
+    if (k === 'EXTERNAL') continue
+    if (typeof v === 'string' && /^https?:\/\//.test(v)) return v
+  }
+  return obj.EXTERNAL || null
+}
+
 async function resolveAttachmentUrl(transport, att, chatId, messageId) {
   const type = (att.type || '').toLowerCase()
   let opcode, payload
@@ -511,7 +526,7 @@ async function resolveAttachmentUrl(transport, att, chatId, messageId) {
   }
   const resp = await transport.sendFrame(opcode, payload, { waitResponse: true })
   console.log(`[ResolveAttachment] opcode=${opcode} payload=${JSON.stringify(payload)} response=${JSON.stringify(resp).slice(0, 800)}`)
-  return findFirstUrl(resp)
+  return opcode === OP.RESOLVE_VIDEO ? findBestVideoUrl(resp) : findFirstUrl(resp)
 }
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────

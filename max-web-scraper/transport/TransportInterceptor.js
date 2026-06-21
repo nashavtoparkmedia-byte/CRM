@@ -221,19 +221,31 @@ class TransportInterceptor {
     const m = payload.message
     if (!m) return null
 
-    const hasAttaches = Array.isArray(m.attaches) && m.attaches.length > 0
+    let text    = m.text || ''
+    let attaches = m.attaches || []
+
+    // Forwarded messages: content lives in m.link.message, not in m.text/m.attaches.
+    // Without this, text='' + attaches=[] → webhook skips with 'empty_text'.
+    if (m.link?.type === 'FORWARD' && m.link.message) {
+      const fwd = m.link.message
+      if (!text) text = fwd.text || ''
+      if (!attaches.length && fwd.attaches?.length > 0) attaches = fwd.attaches
+      if (!text && !attaches.length) text = '[Переслано]'
+    }
+
+    const hasAttaches = Array.isArray(attaches) && attaches.length > 0
 
     return {
       id:                m.id    || null,
       chatId:            payload.chatId || null,
       from:              String(m.sender || ''),
-      text:              m.text  || '',
+      text,
       timestamp:         m.time  || Date.now(),
-      type:              hasAttaches ? this._detectMaxType(m.attaches) : 'text',
-      attachments:       this._extractMaxAttachments(m.attaches || []),
+      type:              hasAttaches ? this._detectMaxType(attaches) : 'text',
+      attachments:       this._extractMaxAttachments(attaches),
       isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : false,
       replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
-      status:            m.status || null,  // 'REMOVED' when server confirms deletion
+      status:            m.status || null,
       raw:               payload,
     }
   }
@@ -241,9 +253,10 @@ class TransportInterceptor {
   _detectMaxType(attaches) {
     if (!attaches || !attaches.length) return 'text'
     const t = (attaches[0]._type || '').toUpperCase()
-    if (t === 'PHOTO')                  return 'image'
-    if (t === 'VIDEO')                  return 'video'
-    if (t === 'AUDIO' || t === 'VOICE') return 'voice'
+    if (t === 'PHOTO')                     return 'image'
+    if (t === 'VIDEO')                     return 'video'
+    if (t === 'AUDIO' || t === 'VOICE')    return 'voice'
+    if (t === 'STICKER' || t === 'SMILE')  return 'sticker'
     return 'document'
   }
 
