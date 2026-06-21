@@ -249,6 +249,7 @@ class TransportInterceptor {
       attachments:       this._extractMaxAttachments(attaches),
       isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : false,
       replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
+      forwardedFromId:   (m.link?.type === 'FORWARD' && m.link.message?.sender) ? String(m.link.message.sender) : null,
       status:            m.status || null,
       raw:               payload,
     }

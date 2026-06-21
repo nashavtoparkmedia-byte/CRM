@@ -202,6 +202,13 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   if (senderName)  payload = { ...payload, senderName }
   if (senderPhone) payload = { ...payload, senderPhone }
 
+  // Переслано: добавляем префикс кем написано оригинальное сообщение
+  if (msg.forwardedFromId) {
+    const fwdName = contactStore.getName(msg.forwardedFromId) || msg.forwardedFromId
+    const prefix  = `[↩ ${fwdName}]`
+    payload = { ...payload, text: payload.text ? `${prefix}\n${payload.text}` : prefix }
+  }
+
   // Скачиваем вложения
   if (msg.attachments && msg.attachments.length > 0) {
     const downloaded = []
