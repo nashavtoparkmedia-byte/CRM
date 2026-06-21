@@ -10,6 +10,34 @@ import MessageContextMenu from "./MessageContextMenu"
 import ImageLightbox from "./ImageLightbox"
 import DeleteMessageModal from "./DeleteMessageModal"
 
+// ── Inline video player with fallback for unplayable sources (ok.ru etc.) ──
+function VideoPlayer({ id }: { id: string }) {
+    const [failed, setFailed] = useState(false)
+    const url = `/api/attachments/${id}`
+    if (failed) {
+        return (
+            <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-[#F1F5FD] px-3 py-2 text-[13px] font-medium text-[#2AABEE] hover:bg-[#E4ECFC] transition-colors"
+            >
+                <Play size={14} />
+                Открыть видео
+            </a>
+        )
+    }
+    return (
+        <video
+            src={url}
+            controls
+            className="max-w-[280px] max-h-[320px] rounded-lg"
+            preload="metadata"
+            onError={() => setFailed(true)}
+        />
+    )
+}
+
 // ── Anchor-based scroll memory (module-level, survives remounts) ──
 // Primary: anchor msgId + offset from viewport top
 // Fallback: raw scrollTop (pixel-based, less stable)
@@ -625,13 +653,7 @@ export default function MessageFeed({
                         {msg.type === 'video' && msg.attachments && msg.attachments.length > 0 && (
                             <div className="mb-1">
                                 {msg.attachments.filter(a => a.id).map(att => (
-                                    <video
-                                        key={att.id}
-                                        src={attachmentUrl(att.id)}
-                                        controls
-                                        className="max-w-[280px] max-h-[320px] rounded-lg"
-                                        preload="metadata"
-                                    />
+                                    <VideoPlayer key={att.id} id={att.id} />
                                 ))}
                             </div>
                         )}
