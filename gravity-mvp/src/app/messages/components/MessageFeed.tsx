@@ -577,13 +577,27 @@ export default function MessageFeed({
                         {(() => {
                             const fwd = msg.metadata?.forwardedFrom as { id?: string; name?: string; phone?: string } | undefined
                             const metaLabel = fwd ? (fwd.name || fwd.phone || fwd.id || '?') : null
+                            const fwdId   = fwd?.id || null
                             // Fallback: parse [↩ Name] from content start
                             const contentMatch = !metaLabel ? (msg.content || '').match(/^\[↩ ([^\]]+)\]/) : null
                             const label = metaLabel || (contentMatch ? contentMatch[1] : null)
                             if (!label) return null
                             const color = isOutbound ? 'text-[#2a7a3e]/70' : 'text-[#8E24AA]/80'
+                            const handleOpenContact = fwdId ? async (e: React.MouseEvent) => {
+                                e.stopPropagation()
+                                try {
+                                    const res  = await fetch(`/api/chats/find-max?externalChatId=${encodeURIComponent(fwdId)}`)
+                                    const data = await res.json()
+                                    if (data.chatId) {
+                                        router.push(`/messages?id=${data.chatId}&channel=max`)
+                                    }
+                                } catch {}
+                            } : undefined
                             return (
-                                <div className={`mb-1.5 flex items-center gap-1 text-[11px] ${color}`}>
+                                <div
+                                    className={`mb-1.5 flex items-center gap-1 text-[11px] ${color} ${handleOpenContact ? 'cursor-pointer hover:underline' : ''}`}
+                                    onClick={handleOpenContact}
+                                >
                                     <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
                                         <path d="M9 3L14 8L9 13V10C5.686 10 3.286 11.286 2 14C2 10 3.5 6 9 5V3Z"/>
                                     </svg>
@@ -856,7 +870,7 @@ export default function MessageFeed({
                         </div>
 
                         {/* Quick reply button (hover) */}
-                        <div className={`absolute -top-1 opacity-0 group-hover:opacity-100 transition-opacity z-20 ${isOutbound ? 'right-full mr-1' : 'left-full ml-1'}`}>
+                        <div className={`absolute -top-1 opacity-0 group-hover/msg:opacity-100 transition-opacity z-20 ${isOutbound ? 'right-full mr-1' : 'left-full ml-1'}`}>
                            <button onClick={() => onReply && onReply(msg)} className="w-7 h-7 rounded-full bg-white/90 shadow flex items-center justify-center text-gray-400 hover:text-[#3390EC] transition-colors" title="Ответить"><Reply size={13} /></button>
                         </div>
                     </div>
