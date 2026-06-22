@@ -136,6 +136,32 @@ export function useSip(): SipApi {
     return ctx
 }
 
+// ---------------------------------------------------------------------------
+// Module-level UA singleton
+//
+// WHY: SipProvider remounts every time incomingCall state changes (React
+// concurrent-mode re-render or Next.js hydration artefact). Without a
+// singleton, each remount kills the JsSIP UA and creates a new one.
+// FreeSWITCH retransmits the unanswered INVITE to the new UA, which
+// immediately triggers another setIncomingCall → remount → new UA → …
+// The call is never answerable.
+//
+// FIX: keep the UA alive across React remounts via a module-level variable.
+// Forwarding callbacks (_sipCallbacks) always point at the CURRENT component
+// instance's handlers so state updates reach the mounted component.
+// ---------------------------------------------------------------------------
+let _singletonUa: any = null
+let _singletonPcConfig: RTCConfiguration = DEFAULT_TURN_PC_CONFIG
+
+// Forwarding callbacks — updated on every render, called by the singleton UA.
+const _sipCallbacks = {
+    onRegistered: null as (() => void) | null,
+    onUnregistered: null as (() => void) | null,
+    onRegistrationFailed: null as ((e: any) => void) | null,
+    onIncomingSession: null as ((session: any, request: any) => void) | null,
+    onOutgoingSession: null as ((session: any) => void) | null,
+}
+
 export function SipProvider({ children }: { children: React.ReactNode }) {
     const [status, setStatus] = useState<SipStatus>('idle')
     const [extension, setExtension] = useState<string | null>(null)
@@ -145,6 +171,14 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     const uaRef = useRef<any>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const pcConfigRef = useRef<RTCConfiguration>(DEFAULT_TURN_PC_CONFIG)
+
+    // Update forwarding callbacks on every render so the singleton UA always
+    // dispatches events to the currently mounted component's handlers.
+    _sipCallbacks.onRegistered = () => setStatus('registered')
+    _sipCallbacks.onUnregistered = () => setStatus('unregistered')
+    _sipCallbacks.onRegistrationFailed = () => setStatus('failed')
+    _sipCallbacks.onIncomingSession = (session, request) => handleIncomingSession(session, request)
+    _sipCallbacks.onOutgoingSession = (session) => handleOutgoingSession(session)
 
     // --- Ringback tone (RU ГОСТ: 425 Hz, 1s on / 4s off) ---
     // JsSIP doesn't play SIP 180 Ringing progress media for us — and in the
@@ -246,6 +280,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         let cancelled = false
         ;(async () => {
+            // If the singleton UA already exists, this is a React remount.
+            // Reuse the running UA instead of creating a new one — prevents the
+            // INVITE-retransmit cycle (each new UA → setIncomingCall → remount → ...).
+            if (_singletonUa) {
+                console.info('[SIP] component remounted — reusing singleton UA')
+                uaRef.current = _singletonUa
+                pcConfigRef.current = _singletonPcConfig
+                setStatus(_singletonUa.isRegistered() ? 'registered' : 'connecting')
+                return
+            }
+
             setStatus('connecting')
             let creds: any
             try {
@@ -307,9 +352,11 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 session_timers: false,
             })
 
-            ua.on('registered', () => { console.info('[SIP] registered'); setStatus('registered') })
-            ua.on('unregistered', () => { console.info('[SIP] unregistered'); setStatus('unregistered') })
-            ua.on('registrationFailed', (e: any) => { console.error('[SIP] registrationFailed', e?.cause, e); setStatus('failed') })
+            // Use forwarding callbacks (_sipCallbacks) so that event handlers
+            // always reach the CURRENTLY mounted component even after a remount.
+            ua.on('registered', () => { console.info('[SIP] registered'); _sipCallbacks.onRegistered?.() })
+            ua.on('unregistered', () => { console.info('[SIP] unregistered'); _sipCallbacks.onUnregistered?.() })
+            ua.on('registrationFailed', (e: any) => { console.error('[SIP] registrationFailed', e?.cause, e); _sipCallbacks.onRegistrationFailed?.(e) })
             ua.on('connecting', () => console.info('[SIP] ua connecting'))
             ua.on('connected', () => console.info('[SIP] ua connected'))
             ua.on('disconnected', (e: any) => console.warn('[SIP] ua disconnected', e?.code, e?.reason))
@@ -320,17 +367,22 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                     // Pass `data.request` explicitly — JsSIP 3.13 doesn't populate
                     // `session.request` synchronously at this point; the event
                     // payload is the only reliable place to read incoming headers.
-                    handleIncomingSession(session, data.request)
+                    _sipCallbacks.onIncomingSession?.(session, data.request)
                 } else {
-                    handleOutgoingSession(session)
+                    _sipCallbacks.onOutgoingSession?.(session)
                 }
             })
 
+            _singletonUa = ua
+            _singletonPcConfig = pcConfigRef.current
             uaRef.current = ua
             ua.start()
         })()
 
-        return () => { cancelled = true; uaRef.current?.stop() }
+        // Cleanup: keep the singleton UA alive across React remounts.
+        // Only the module-level reference persists; the component's uaRef
+        // is cleared so stale refs don't accumulate.
+        return () => { cancelled = true; uaRef.current = null }
     }, [])
 
     // --- Sync with server events ---
