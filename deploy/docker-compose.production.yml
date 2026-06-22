@@ -152,13 +152,12 @@ services:
     image: crm/freeswitch:latest
     container_name: crm-freeswitch
     restart: unless-stopped
-    ports:
-      - "5060:5060/udp"             # internal SIP profile
-      - "5060:5060/tcp"
-      - "5080:5080/udp"             # external (МегаФон SBC)
-      - "7080:7080/tcp"             # WebRTC WS
-      - "16384-16484:16384-16484/udp"  # RTP media
-      - "127.0.0.1:8021:8021/tcp"   # ESL — только loopback
+    # Host networking: FreeSWITCH binds directly to the VPS public IP (155.212.130.14).
+    # ICE candidates in the B-leg INVITE carry the real public IP → browser can reach FS.
+    # With bridge+port-mapping FS offered 172.19.0.8 (docker-internal) as the ICE candidate,
+    # which is unreachable from the internet, so DTLS/ICE negotiation hung indefinitely.
+    network_mode: "host"
+    # No ports: section — host mode gives FS all host ports directly.
     environment:
       MEGAFON_SIP_USERNAME: ${MEGAFON_SIP_USERNAME:?MEGAFON_SIP_USERNAME required}
       MEGAFON_SIP_PASSWORD: ${MEGAFON_SIP_PASSWORD:?MEGAFON_SIP_PASSWORD required}
@@ -167,14 +166,12 @@ services:
       MANAGER_102_PASSWORD: ${MANAGER_102_PASSWORD:-changeme102}
       MANAGER_103_PASSWORD: ${MANAGER_103_PASSWORD:-changeme103}
       RTP_START_PORT: 16384
-      RTP_END_PORT:   16484
+      RTP_END_PORT:   32768
       FREESWITCH_SIP_IP: ${FREESWITCH_SIP_IP:-0.0.0.0}
       FREESWITCH_EXT_IP: ${FREESWITCH_EXT_IP:-127.0.0.1}
     volumes:
       - freeswitch_recordings:/var/lib/freeswitch/recordings
       - freeswitch_logs:/var/log/freeswitch
-    networks:
-      - crm_internal
     depends_on:
       minio:
         condition: service_healthy
@@ -209,11 +206,14 @@ services:
     environment:
       AUDIO_BRIDGE_PORT: 3030
       # ESL — bridge подключается к FreeSWITCH по ESL для подписки на события
-      FS_ESL_HOST: freeswitch
+      # FS runs host-network — use host.docker.internal to reach it from bridge containers.
+      FS_ESL_HOST: host.docker.internal
       FS_ESL_PORT: 8021
       ESL_PASSWORD: ${ESL_PASSWORD:-ClueCon}
       # CRM webhook — для finalize POST после окончания звонка
       CRM_BASE_URL: http://gravity-mvp:3002
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - crm_internal
     depends_on:
@@ -278,6 +278,9 @@ services:
     image: nginx:1.27-alpine
     container_name: crm-nginx
     restart: unless-stopped
+    # host.docker.internal allows nginx (bridge) to proxy /wss-sip → FS (host network).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "80:80"     # HTTP — Let's Encrypt validation + 301 на HTTPS
       - "443:443"   # HTTPS — основной
