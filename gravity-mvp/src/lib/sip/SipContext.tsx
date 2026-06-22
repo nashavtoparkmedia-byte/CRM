@@ -34,9 +34,10 @@ const KEEPABLE_CODEC = /^(PCMA|PCMU|telephone-event|CN)\//i
 // Fallback keeps WSL2 local dev working without env vars.
 const DEFAULT_TURN_PC_CONFIG = {
     iceServers: [
+        { urls: 'stun:127.0.0.1:3478' },
         { urls: 'turn:127.0.0.1:3478?transport=tcp', username: 'crm', credential: 'turnpass' },
     ],
-    iceTransportPolicy: 'relay' as const,
+    iceTransportPolicy: 'all' as const,
 }
 
 function transformSdpForMegafon(sdp: string): string {
@@ -260,11 +261,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 return
             }
 
-            // Override TURN config with server-provided values (from env vars on the server)
+            // Override TURN config with server-provided values (from env vars on the server).
+            // Use iceTransportPolicy='all' so the browser tries host → STUN → TURN in order.
+            // FreeSWITCH has a public IP so direct ICE usually succeeds without relay.
             if (creds.turn?.url) {
+                const turnHost = creds.turn.url.replace(/^turn:/, '').replace(/\?.*$/, '')
                 pcConfigRef.current = {
-                    iceServers: [{ urls: creds.turn.url, username: creds.turn.username, credential: creds.turn.credential }],
-                    iceTransportPolicy: 'relay',
+                    iceServers: [
+                        { urls: `stun:${turnHost}` },
+                        { urls: creds.turn.url, username: creds.turn.username, credential: creds.turn.credential },
+                    ],
+                    iceTransportPolicy: 'all',
                 }
             }
 
