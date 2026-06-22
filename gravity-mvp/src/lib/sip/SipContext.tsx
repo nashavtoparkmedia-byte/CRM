@@ -566,16 +566,17 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             console.warn('[SIP] answer() called with no incomingCall')
             return
         }
-        // Hand the session straight to JsSIP — it does its own getUserMedia
-        // and emits "failed" on the session if the mic is denied. Probing
-        // up-front turned out to silently abort the whole answer flow when
-        // it failed (e.g. because of an active AudioContext for ringtone),
-        // leaving the popup stuck and the call timing out at FS.
-        console.info('[SIP] answer() — calling session.answer()', {
-            sessionStatus: incomingCall.session?.status,
-        })
+        const session = incomingCall.session
+        // JsSIP STATUS_WAITING_FOR_ANSWER = 4. Any other status means the session
+        // has already been answered, cancelled, or terminated — calling answer()
+        // again would throw "Invalid status: N" and show a confusing toast.
+        if (session?.status !== undefined && session.status !== 4) {
+            console.warn('[SIP] answer() skipped — session already in status', session.status)
+            return
+        }
+        console.info('[SIP] answer() — calling session.answer()', { sessionStatus: session?.status })
         try {
-            incomingCall.session.answer({
+            session.answer({
                 mediaConstraints: { audio: true, video: false },
                 pcConfig: pcConfigRef.current,
             })

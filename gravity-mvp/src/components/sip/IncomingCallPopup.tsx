@@ -19,8 +19,14 @@ import { useSip } from "@/lib/sip/SipContext"
 export default function IncomingCallPopup() {
     const { incomingCall, answer, decline } = useSip()
     const [elapsed, setElapsed] = useState(0)
+    const [isAnswering, setIsAnswering] = useState(false)
     const ringtoneRef = useRef<{ stop: () => void } | null>(null)
     const originalTitleRef = useRef<string>('')
+
+    // Reset answering state when popup clears (call ended/declined)
+    useEffect(() => {
+        if (!incomingCall) setIsAnswering(false)
+    }, [incomingCall])
 
     useEffect(() => {
         if (!incomingCall) {
@@ -136,18 +142,23 @@ export default function IncomingCallPopup() {
             <div className="flex gap-2 px-4 py-3">
                 <button
                     onClick={decline}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-destructive py-2.5 text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium"
+                    disabled={isAnswering}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-destructive py-2.5 text-white hover:bg-destructive/90 transition-colors text-[14px] font-medium disabled:opacity-50"
                 >
                     <PhoneOff className="h-4 w-4"/>
                     Отклонить
                 </button>
                 <button
-                    onClick={answer}
+                    onClick={() => { setIsAnswering(true); answer() }}
                     autoFocus
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 py-2.5 text-white hover:bg-emerald-700 transition-colors text-[14px] font-medium shadow"
+                    disabled={isAnswering}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 py-2.5 text-white hover:bg-emerald-700 transition-colors text-[14px] font-medium disabled:opacity-75"
                 >
-                    <Phone className="h-4 w-4"/>
-                    Принять
+                    {isAnswering
+                        ? <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="32" strokeLinecap="round"/></svg>
+                        : <Phone className="h-4 w-4"/>
+                    }
+                    {isAnswering ? 'Подключение...' : 'Принять'}
                 </button>
             </div>
         </div>
