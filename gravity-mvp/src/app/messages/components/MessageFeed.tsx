@@ -573,14 +573,29 @@ export default function MessageFeed({
                             </div>
                         )}
 
-                        {/* Forwarded-from header — metadata (новые) или префикс [↩ Name] в content (старые) */}
+                        {/* Forwarded-from header — metadata (новые) или префикс [↩ ID:Name]/[↩ Name] в content */}
                         {(() => {
                             const fwd = msg.metadata?.forwardedFrom as { id?: string; name?: string; phone?: string } | undefined
                             const metaLabel = fwd ? (fwd.name || fwd.phone || fwd.id || '?') : null
-                            const fwdId   = fwd?.id || null
-                            // Fallback: parse [↩ Name] from content start
+                            const fwdIdFromMeta = fwd?.id || null
+
+                            // Fallback: parse [↩ ID:Name] (новый формат) или [↩ Name] (старый) из content
                             const contentMatch = !metaLabel ? (msg.content || '').match(/^\[↩ ([^\]]+)\]/) : null
-                            const label = metaLabel || (contentMatch ? contentMatch[1] : null)
+                            let contentId: string | null = null
+                            let contentLabel: string | null = null
+                            if (contentMatch) {
+                                const inner = contentMatch[1]
+                                const colonIdx = inner.indexOf(':')
+                                if (colonIdx > 0 && /^\d+$/.test(inner.slice(0, colonIdx))) {
+                                    contentId    = inner.slice(0, colonIdx)
+                                    contentLabel = inner.slice(colonIdx + 1)
+                                } else {
+                                    contentLabel = inner
+                                }
+                            }
+
+                            const fwdId = fwdIdFromMeta || contentId
+                            const label = metaLabel || contentLabel
                             if (!label) return null
                             const color = isOutbound ? 'text-[#2a7a3e]/70' : 'text-[#8E24AA]/80'
                             const handleOpenContact = fwdId ? async (e: React.MouseEvent) => {

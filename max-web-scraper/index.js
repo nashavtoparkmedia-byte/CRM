@@ -206,7 +206,7 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   if (msg.forwardedFromId) {
     const fwdName  = contactStore.getName(msg.forwardedFromId) || msg.forwardedFromId
     const fwdPhone = contactStore.getPhone(msg.forwardedFromId) || null
-    const prefix   = `[↩ ${fwdName}]`
+    const prefix   = `[↩ ${msg.forwardedFromId}:${fwdName}]`
     payload = {
       ...payload,
       text:          payload.text ? `${prefix}\n${payload.text}` : prefix,
