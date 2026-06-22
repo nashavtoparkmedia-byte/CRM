@@ -581,6 +581,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             console.warn('[SIP] answer() skipped — session already in status', session.status)
             return
         }
+        console.info('[SIP] answer() — pcConfig:', JSON.stringify(pcConfigRef.current))
         console.info('[SIP] answer() — calling session.answer()', { sessionStatus: session?.status })
         try {
             session.answer({
@@ -588,6 +589,29 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 pcConfig: pcConfigRef.current,
             })
             console.info('[SIP] session.answer() returned (waiting for accepted/failed event)')
+            // Attach ICE debug listeners immediately after answer() so we can diagnose hangs
+            setTimeout(() => {
+                const pc = session.connection
+                if (!pc) { console.warn('[SIP] no session.connection after answer()'); return }
+                console.info('[SIP] RTCPeerConnection created, signalingState:', pc.signalingState,
+                    'iceConnectionState:', pc.iceConnectionState, 'iceGatheringState:', pc.iceGatheringState)
+                pc.addEventListener('iceconnectionstatechange', () =>
+                    console.info('[SIP] iceConnectionState →', pc.iceConnectionState))
+                pc.addEventListener('icegatheringstatechange', () =>
+                    console.info('[SIP] iceGatheringState →', pc.iceGatheringState))
+                pc.addEventListener('signalingstatechange', () =>
+                    console.info('[SIP] signalingState →', pc.signalingState))
+                pc.addEventListener('connectionstatechange', () =>
+                    console.info('[SIP] connectionState →', pc.connectionState))
+                pc.addEventListener('icecandidate', (e: RTCPeerConnectionIceEvent) =>
+                    console.info('[SIP] local ICE candidate:', e.candidate?.candidate ?? '(null=done)'))
+                pc.onicecandidateerror = (e: any) =>
+                    console.warn('[SIP] ICE candidate error:', e.errorCode, e.errorText, e.url)
+                // Log remote SDP to see what FreeSWITCH sent
+                if (pc.remoteDescription) {
+                    console.info('[SIP] remote SDP:\n' + pc.remoteDescription.sdp)
+                }
+            }, 0)
         } catch (err: any) {
             console.error('[SIP] session.answer() threw:', err)
             import('sonner').then(s => s.toast.error(`Не удалось принять: ${err?.message ?? err}`)).catch(() => {})
