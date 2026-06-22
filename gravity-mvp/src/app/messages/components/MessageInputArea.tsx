@@ -6,6 +6,7 @@ import QuickReplySuggestions from "./QuickReplySuggestions"
 import type { QuickReplyTemplate } from "./QuickReplySuggestions"
 import QuickReplyPopover from "./QuickReplyPopover"
 import ImproveDraftPopover from "./ImproveDraftPopover"
+import EmojiPicker from "./EmojiPicker"
 
 // In-memory Draft cache globally preserved across mounts (by chatId + channel)
 const draftCache = new Map<string, string>()
@@ -102,6 +103,7 @@ export default function MessageInputArea({
     const audioChunksRef = useRef<Blob[]>([])
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
     // Restore draft on chat/channel change
     useEffect(() => {
@@ -448,6 +450,26 @@ export default function MessageInputArea({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [imagePreview])
 
+    const handleEmojiSelect = (emoji: string) => {
+        const textarea = textareaRef.current
+        if (!textarea) {
+            handleTextChange(text + emoji)
+            return
+        }
+        const start = textarea.selectionStart ?? text.length
+        const end   = textarea.selectionEnd   ?? text.length
+        const newText = text.slice(0, start) + emoji + text.slice(end)
+        handleTextChange(newText)
+        // Restore cursor position after React re-render
+        setTimeout(() => {
+            textarea.focus()
+            const pos = start + emoji.length
+            textarea.setSelectionRange(pos, pos)
+            textarea.style.height = 'auto'
+            textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`
+        }, 0)
+    }
+
     const isChannelLocked = activeChannelTab !== 'all' || !!replyContext
     const hasText = text.trim().length > 0
 
@@ -601,6 +623,27 @@ export default function MessageInputArea({
                 >
                     <Paperclip size={17} />
                 </button>
+
+                {/* 😊 Emoji picker button */}
+                <div className="relative">
+                    <button
+                        onClick={() => setShowEmojiPicker(p => !p)}
+                        className={`h-[36px] w-[36px] rounded-full flex items-center justify-center transition-colors shrink-0 text-[18px] leading-none ${
+                            showEmojiPicker
+                            ? 'bg-[#2AABEE]/15 text-[#2AABEE]'
+                            : 'hover:bg-gray-100 text-gray-400'
+                        }`}
+                        title="Эмодзи"
+                    >
+                        😊
+                    </button>
+                    {showEmojiPicker && (
+                        <EmojiPicker
+                            onSelect={(emoji) => { handleEmojiSelect(emoji) }}
+                            onClose={() => setShowEmojiPicker(false)}
+                        />
+                    )}
+                </div>
 
                 {/* ⚡ Quick Reply button */}
                 <button
