@@ -253,7 +253,7 @@ function ChatWorkspaceInner({
             externalId: msg.externalId,
             channel: msg.channel,
             authorLabel: msg.direction === 'outbound' ? 'Вы' : (conversations.find((c: any) => c.id === chatId)?.name || 'Водитель'),
-            snippet: (msg.content ?? '').substring(0, 60),
+            snippet: (msg.content ?? '').replace(/^\[↩ [^\]]+\]\n?/, '').substring(0, 60),
             timestamp: new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         })
     }

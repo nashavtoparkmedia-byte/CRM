@@ -586,7 +586,9 @@ export default function MessageFeed({
                             const handleOpenContact = fwdId ? async (e: React.MouseEvent) => {
                                 e.stopPropagation()
                                 try {
-                                    const res  = await fetch(`/api/chats/find-max?externalChatId=${encodeURIComponent(fwdId)}`)
+                                    const params = new URLSearchParams({ externalChatId: fwdId })
+                                    if (label) params.set('name', label)
+                                    const res  = await fetch(`/api/chats/find-max?${params}`)
                                     const data = await res.json()
                                     if (data.chatId) {
                                         router.push(`/messages?id=${data.chatId}&channel=max`)
