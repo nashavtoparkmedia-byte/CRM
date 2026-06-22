@@ -49,6 +49,12 @@ export default function MessagesShell({
         setChannelTab(urlChannel)
     }, [urlChannel])
 
+    // Sync chatId from URL — handles external router.push (e.g., forwarded-from click)
+    const urlChatId = searchParams.get('id') || null
+    useEffect(() => {
+        if (urlChatId && urlChatId !== chatId) setChatIdState(urlChatId)
+    }, [urlChatId])
+
     const handleSelectChat = (id: string, channelHint?: string) => {
         setChatIdState(id)
         if (channelHint) {
