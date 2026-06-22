@@ -68,9 +68,14 @@
     <param name="rtp-port-max" value="32768"/>
 
     <!-- WebSocket binding for browser softphones (JsSIP).
-         Bind to all interfaces so nginx (in crm_internal Docker network) can
-         proxy WSS → WS to this port. -->
-    <param name="ws-binding" value="0.0.0.0:7080"/>
+         MUST bind to 172.17.0.1 (docker0 bridge gateway), NOT 0.0.0.0.
+         nginx proxies WSS→WS via host.docker.internal:7080 → 172.17.0.1:7080.
+         If FS binds to 0.0.0.0, sofia-sip creates multiple primary WS transports
+         (one per interface). nginx connects via 172.17.0.1, the child transport
+         is stored under that primary. But when originating to a registered WS
+         client, sofia looks in the 0.0.0.0/155.212.130.14 primary and fails
+         with "not found by name ws/172.19.0.6:PORT" → NORMAL_TEMPORARY_FAILURE. -->
+    <param name="ws-binding" value="172.17.0.1:7080"/>
 
     <!-- Authentication — managers must register with a password. -->
     <param name="auth-calls" value="true"/>
@@ -107,6 +112,13 @@
     <param name="apply-candidate-acl" value="loopback.auto"/>
     <!-- wan: coturn on VPS relays via public IP (e.g. 155.212.130.14) -->
     <param name="apply-candidate-acl" value="wan.auto"/>
+
+    <!-- Allow only one active registration per user agent.
+         When a new REGISTER arrives, the oldest binding is evicted.
+         Prevents ghost registrations from accumulating across page reloads
+         (each reload generates a new random Contact URI, so without this
+         FreeSWITCH keeps all of them and sofia_contact returns stale ones). -->
+    <param name="max-reg-count" value="1"/>
 
     <!-- No blind registrations -->
     <param name="accept-blind-reg" value="false"/>

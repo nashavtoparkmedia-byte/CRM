@@ -152,6 +152,9 @@ export function useSip(): SipApi {
 // ---------------------------------------------------------------------------
 let _singletonUa: any = null
 let _singletonPcConfig: RTCConfiguration = DEFAULT_TURN_PC_CONFIG
+// Synchronous guard: set to true BEFORE the first await so concurrent
+// React mount calls all see it and skip duplicate UA creation.
+let _uaStarting = false
 
 // Forwarding callbacks — updated on every render, called by the singleton UA.
 const _sipCallbacks = {
@@ -280,9 +283,8 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         let cancelled = false
         ;(async () => {
-            // If the singleton UA already exists, this is a React remount.
-            // Reuse the running UA instead of creating a new one — prevents the
-            // INVITE-retransmit cycle (each new UA → setIncomingCall → remount → ...).
+            // If the singleton UA already exists OR is being created, this is a
+            // React remount or a race-condition concurrent call. Reuse / skip.
             if (_singletonUa) {
                 console.info('[SIP] component remounted — reusing singleton UA')
                 uaRef.current = _singletonUa
@@ -290,18 +292,25 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 setStatus(_singletonUa.isRegistered() ? 'registered' : 'connecting')
                 return
             }
+            if (_uaStarting) {
+                console.info('[SIP] UA creation already in progress — skipping duplicate')
+                return
+            }
+            // Claim the creation slot synchronously (before any await).
+            _uaStarting = true
 
             setStatus('connecting')
             let creds: any
             try {
                 const res = await fetch('/api/calls/sip-credentials', { cache: 'no-store' })
-                if (!res.ok) { setStatus('failed'); return }
+                if (!res.ok) { _uaStarting = false; setStatus('failed'); return }
                 creds = await res.json()
-            } catch { setStatus('failed'); return }
-            if (cancelled) return
+            } catch { _uaStarting = false; setStatus('failed'); return }
+            if (cancelled) { _uaStarting = false; return }
 
             if (creds.enabled === false) {
                 // Телефония не настроена (нет SIP_WS_URL) — не поднимать UA вовсе
+                _uaStarting = false
                 setStatus('disabled')
                 return
             }
@@ -328,6 +337,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             const JsSIP: any = (jssipModule as any).default ?? jssipModule
             if (!JsSIP?.WebSocketInterface || !JsSIP?.UA) {
                 console.error('[SIP] JsSIP module shape unexpected:', Object.keys(jssipModule), Object.keys(JsSIP ?? {}))
+                _uaStarting = false
                 setStatus('failed')
                 return
             }
@@ -342,11 +352,27 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             // Force the Via transport to WS so it matches what FS actually sees.
             // (Verified: REGISTER with Via WS → 401 challenge; with Via WSS → dropped.)
             socket.via_transport = 'WS'
+
+            // Persist the Contact URI user-part across page reloads so FreeSWITCH
+            // sees the same Contact every time and REPLACES the existing binding
+            // (same AOR + same Contact → UPDATE). Without this, each reload generates
+            // a new random user-part, FS creates a new binding alongside the old one,
+            // and sofia_contact keeps returning the stale dead WS port.
+            const contactUser = (() => {
+                const key = `__sip_contact_user_${creds.extension}__`
+                try {
+                    let v = localStorage.getItem(key)
+                    if (!v) { v = Math.random().toString(36).slice(2, 10); localStorage.setItem(key, v) }
+                    return v
+                } catch { return Math.random().toString(36).slice(2, 10) }
+            })()
+
             const ua = new JsSIP.UA({
                 uri: creds.sipUri,
                 password: creds.password,
                 authorization_user: creds.authUser,
                 display_name: creds.displayName,
+                contact_uri: `sip:${contactUser}@crm-softphone.invalid;transport=ws`,
                 sockets: [socket],
                 register: true,
                 session_timers: false,

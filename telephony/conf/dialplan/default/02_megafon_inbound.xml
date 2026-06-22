@@ -26,16 +26,13 @@
            DTLS-SRTP via the internal profile. -->
       <action application="set" data="rtp_secure_media=false"/>
 
-      <!-- Stage 3: stereo recording (L=caller, R=callee) — better speaker
-           separation for Stage 4 transcription. Variable recording_file is
-           read by the ESL hangup handler. -->
-      <action application="set" data="recording_follow_transfer=true"/>
-      <action application="set" data="RECORD_STEREO=true"/>
-      <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
-      <action application="record_session" data="${recording_file}"/>
-
-      <!-- Ring everyone for up to 30s. comma = fork in parallel. -->
-      <action application="bridge" data="{leg_timeout=30}user/101,user/102,user/103"/>
+      <!-- Bridge directly to user/103 (browser softphone).
+           Multi-user simultaneous ring via bridge is incompatible with
+           BRIDGE_BLEG mode on the Megafon inbound leg — it only calls the
+           first element. Use a single destination for now; ring groups can
+           be added later via ESL originate or loopback. -->
+      <action application="set" data="call_timeout=30"/>
+      <action application="bridge" data="user/103"/>
     </condition>
   </extension>
 </include>
