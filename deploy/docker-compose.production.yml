@@ -247,12 +247,14 @@ services:
       # не сматчится, поэтому они инертны на старых установках без этих env.
       CRM_WWW_DOMAIN: ${CRM_WWW_DOMAIN:-_disabled_www_}
       CRM_APP_DOMAIN: ${CRM_APP_DOMAIN:-_disabled_app_}
+      # SEO-сайт — отдельный контейнер seo-site (свой docker-compose).
+      SITE_DOMAIN: ${SITE_DOMAIN:-_disabled_site_}
     command:
       - sh
       - -c
       - |
         apk add --no-cache openssl >/dev/null
-        for d in "$$CRM_DOMAIN" "$$BOT_ADMIN_DOMAIN" "$$CRM_APP_DOMAIN"; do
+        for d in "$$CRM_DOMAIN" "$$BOT_ADMIN_DOMAIN" "$$CRM_APP_DOMAIN" "$$SITE_DOMAIN"; do
           [ -z "$$d" ] && continue
           cert_dir="/etc/letsencrypt/live/$$d"
           if [ -f "$$cert_dir/fullchain.pem" ]; then
@@ -306,6 +308,7 @@ services:
       # не сматчится, поэтому они инертны на старых установках без этих env.
       CRM_WWW_DOMAIN: ${CRM_WWW_DOMAIN:-_disabled_www_}
       CRM_APP_DOMAIN: ${CRM_APP_DOMAIN:-_disabled_app_}
+      SITE_DOMAIN: ${SITE_DOMAIN:-_disabled_site_}
       NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx/conf.d
     networks:
       - crm_internal
@@ -336,10 +339,17 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env.production
+    # FreeSWITCH живёт на хосте (network_mode: host) и недоступен по имени
+    # сервиса из bridge-сети. host.docker.internal → gateway хоста.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       NODE_ENV: production
+      # FreeSWITCH ESL — host.docker.internal перекрывает FS_ESL_HOST=freeswitch из .env.production
+      # (freeswitch не резолвится из bridge-контейнера, FS в host network mode)
+      FS_ESL_HOST: host.docker.internal
       # whatsapp-web.js LocalAuth dir → persistent volume (see below). Без этого
       # сессия писалась в node_modules/.wwebjs_auth внутри образа и стиралась при
       # каждом редеплое → WA-подключение слетало. Должен совпадать с mount ниже.
