@@ -307,10 +307,81 @@ async function sendText(transport, chatId, text, replyToMessageId) {
     if (maxMsgId) console.log(`[Send] MAX assigned msgId=${maxMsgId} for chatId=${chatId}`)
     return maxMsgId
   } catch (e) {
-    // Timeout or no ack — send still went through, just no ID
-    console.warn(`[sendText] No ack from MAX (${e.message}) — send delivered but externalId unknown`)
+    // Re-throw MAX protocol errors (not.found, etc.) — these are real failures, not timeouts
+    if (e.maxError) throw e
+    // Pure timeout (no response) — message likely went through but no ID returned
+    console.warn(`[sendText] No ack from MAX (timeout) — send may be delivered but externalId unknown`)
     return null
   }
+}
+
+// ─── Live phone → MAX userId resolution ──────────────────────────────────────
+// Used when contactStore doesn't have the contact (e.g. brand-new outbound)
+async function resolvePhoneLive(digits) {
+  // 1. Check chatCache — chats where name/title contains the phone number
+  const tail10 = digits.slice(-10)
+  for (const [chatIdStr, chatData] of chatCache.entries()) {
+    const title = String(chatData.name || chatData.title || chatData.subject || '')
+    const titleDigits = title.replace(/\D/g, '')
+    if (titleDigits.length >= 10 && titleDigits.slice(-10) === tail10) {
+      console.log(`[ResolvePhone] chatCache hit: ${digits} → chatId ${chatIdStr}`)
+      return chatIdStr
+    }
+  }
+
+  // 2. Try MAX REST API via authenticated browser session
+  if (!page) return null
+
+  const phone7 = digits.startsWith('7') ? digits : '7' + digits.slice(-10)
+  console.log(`[ResolvePhone] Probing MAX REST API for ${digits} (7-format: ${phone7})...`)
+
+  try {
+    const results = await page.evaluate(async (phone) => {
+      const candidates = [
+        { method: 'POST', url: '/v1/contacts/resolve',     body: JSON.stringify({ phones: [phone] }) },
+        { method: 'POST', url: '/v1/users/findByPhone',    body: JSON.stringify({ phone }) },
+        { method: 'GET',  url: `/v1/users/search?phone=${phone}` },
+        { method: 'GET',  url: `/v1/chats/${phone}` },
+        { method: 'POST', url: '/api/v1/users/findByPhone', body: JSON.stringify({ phone }) },
+      ]
+      const out = []
+      for (const c of candidates) {
+        try {
+          const opts = { method: c.method, credentials: 'include' }
+          if (c.body) { opts.body = c.body; opts.headers = { 'Content-Type': 'application/json' } }
+          const r = await fetch(c.url, opts)
+          const text = await r.text().catch(() => '')
+          out.push({ url: c.url, status: r.status, body: text.slice(0, 400) })
+        } catch (e) {
+          out.push({ url: c.url, error: e.message })
+        }
+      }
+      return out
+    }, phone7)
+
+    console.log('[ResolvePhone] REST probe:', JSON.stringify(results))
+
+    // Try to parse a userId from any 200 response
+    for (const r of (results || [])) {
+      if (r.status === 200 && r.body) {
+        try {
+          const data = JSON.parse(r.body)
+          const userId = data.id || data.userId || data.user_id ||
+                         data.contact?.id || data.user?.id ||
+                         (data.contacts?.[0]?.id) ||
+                         (Array.isArray(data) && data[0]?.id)
+          if (userId) {
+            console.log(`[ResolvePhone] Resolved via ${r.url}: userId=${userId}`)
+            return String(userId)
+          }
+        } catch {}
+      }
+    }
+  } catch (e) {
+    console.warn('[ResolvePhone] page.evaluate failed:', e.message)
+  }
+
+  return null
 }
 
 // ─── Отправка медиа ───────────────────────────────────────────────────────────
@@ -877,35 +948,55 @@ app.post('/send-message', async (req, res) => {
     return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
   }
 
-  // Auto-resolve phone to chatId if chatId looks like a phone number (10+ digits)
+  // Detect if chatId looks like a phone number (10+ digits)
+  // MAX internal userIds are smaller numbers (typically 6-9 digits)
   const chatIdStr = String(chatId || '')
   const digits = chatIdStr.replace(/\D/g, '')
-  if (digits.length >= 10 && contactStore) {
-    const resolved = contactStore.findByPhone(digits)
-    if (resolved) {
-      console.log(`[Send] Resolved phone ${digits} → chatId ${resolved}`)
-      chatId = resolved
+  const looksLikePhone = digits.length >= 10
+
+  if (looksLikePhone) {
+    // Must resolve phone → MAX internal userId before sending
+    const fromStore = contactStore ? contactStore.findByPhone(digits) : null
+    if (fromStore) {
+      console.log(`[Send] contactStore: ${digits} → chatId ${fromStore}`)
+      chatId = fromStore
+    } else {
+      const liveId = await resolvePhoneLive(digits)
+      if (liveId) {
+        console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}`)
+        chatId = liveId
+        // Cache for subsequent sends in this session
+        if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
+      } else {
+        console.warn(`[Send] Phone ${digits} not found — contactStore has ${contactStore?._map.size || 0} contacts`)
+        return res.status(404).json({
+          error: `Контакт не найден в MAX. Дождитесь первого входящего сообщения от контакта, или добавьте номер ${digits} в адресную книгу MAX.`,
+          phone: digits,
+        })
+      }
     }
   }
 
-  // Also try phone field
+  // Also try phone field when chatId was null initially
   if (!chatId && phone && contactStore) {
     const resolved = contactStore.findByPhone(String(phone))
     if (resolved) {
-      console.log(`[Send] Resolved phone field ${phone} → chatId ${resolved}`)
+      console.log(`[Send] phone field resolved: ${phone} → chatId ${resolved}`)
       chatId = resolved
     }
   }
 
   if (!chatId) {
-    return res.status(404).json({ error: 'Could not resolve phone to MAX chatId. Contact not found.' })
+    return res.status(400).json({ error: 'chatId required' })
   }
 
   try {
     const maxMsgId = await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId))
     res.json({ success: true, chatId: String(chatId), externalId: maxMsgId || null })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    const isMaxErr = e.maxError
+    console.error(`[Send] sendText failed: ${e.message}`)
+    res.status(isMaxErr ? 422 : 500).json({ error: e.message, maxError: e.maxError || null })
   }
 })
 
