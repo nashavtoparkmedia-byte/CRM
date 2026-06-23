@@ -321,13 +321,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             // first (which fail on symmetric NAT), only allocates TURN ~60 s later via trickle
             // ICE — but FreeSWITCH doesn't accept trickle candidates after the 200 OK exchange.
             if (creds.turn?.url) {
-                const turnHost = creds.turn.url.replace(/^turn:/, '').replace(/\?.*$/, '')
                 pcConfigRef.current = {
                     iceServers: [
-                        { urls: `stun:${turnHost}` },
-                        // UDP TURN — preferred for real-time audio (lower overhead)
-                        { urls: `turn:${turnHost}`, username: creds.turn.username, credential: creds.turn.credential },
-                        // TCP TURN — fallback if UDP is blocked by user's firewall
+                        // TCP TURN only — UDP TURN (port 3478/udp) is often blocked by ISPs,
+                        // causing Chrome to wait ~25 s for UDP timeout before gathering completes.
+                        // With FS originate timeout=60 s and user answering at T=37, gathering
+                        // would finish at T=62 → NO_ANSWER. TCP avoids this delay.
                         { urls: creds.turn.url, username: creds.turn.username, credential: creds.turn.credential },
                     ],
                     iceTransportPolicy: 'relay',
