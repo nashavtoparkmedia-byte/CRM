@@ -97,14 +97,10 @@ async function getMainMenu(ctx) {
     const userButtons = [
         [parkButtonLabel],
         ['💳 Только безнал', '💵 Включить наличку'],
-        ['🚖 Текущий заказ'],
-        ['🚘 Мой автомобиль'],
-        ['🚗 Подключиться'],
-        [surveyButtons[0]],
-        ['🚖 Yandex Taxi Fun'],
-        ['📖 Новости'],
-        ['🔙 Меню'],
-        ['🛠 Поддержка'],
+        ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
+        ['🚗 Подключиться', surveyButtons[0]],
+        ['🚖 Yandex Taxi Fun', '📖 Новости'],
+        ['🔙 Меню', '🛠 Поддержка'],
     ];
 
     // Add any remaining survey buttons to new rows (2 per row)
