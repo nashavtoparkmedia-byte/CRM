@@ -414,11 +414,15 @@ export class MessageService {
             console.log(`[MessageService] Channel mismatch: requested ${channelOverride}, chat has ${chat.channel}. Switching context...`)
             
             const rawDigits = chat.externalChatId?.replace(/\D/g, '') || ''
-            const finalRawId = channelOverride === 'telegram' && chat.driver?.id 
-                ? (await prisma.$queryRaw<{telegramId: bigint}[]>`SELECT "telegramId" FROM "DriverTelegram" WHERE "driverId" = ${chat.driver.id} LIMIT 1`)[0]?.telegramId.toString() || chat.driver.phone?.replace(/\D/g, '') || ''
-                : (channelOverride === 'whatsapp' 
-                    ? (chat.driver?.phone?.replace(/\D/g, '').length >= 10 ? '7' + chat.driver?.phone?.replace(/\D/g, '').slice(-10) : chat.driver?.phone?.replace(/\D/g, '') || rawDigits) 
-                    : (chat.driver?.phone?.replace(/\D/g, '') || rawDigits))
+            // Normalize Russian mobile: 8XXXXXXXXXX / 9XXXXXXXXXX → 7XXXXXXXXXX
+            // Applied to all channels so TG/MAX match WA behaviour.
+            const normPhone = (p?: string | null): string => {
+                const d = (p || '').replace(/\D/g, '')
+                return d.length >= 10 ? '7' + d.slice(-10) : d
+            }
+            const finalRawId = channelOverride === 'telegram' && chat.driver?.id
+                ? (await prisma.$queryRaw<{telegramId: bigint}[]>`SELECT "telegramId" FROM "DriverTelegram" WHERE "driverId" = ${chat.driver.id} LIMIT 1`)[0]?.telegramId.toString() || normPhone(chat.driver.phone) || ''
+                : (normPhone(chat.driver?.phone) || rawDigits)
 
             // Standardize ID format: always prefix with channel
             const prefixedId = channelOverride === 'whatsapp' 
@@ -836,6 +840,7 @@ const RETRYABLE_PATTERNS: Array<{ pattern: string; code: ErrorCode }> = [
 const TERMINAL_PATTERNS: Array<{ pattern: string; code: ErrorCode }> = [
     { pattern: 'cannot find or import user', code: 'RECIPIENT_NOT_FOUND' },
     { pattern: 'contact import returned empty', code: 'RECIPIENT_NOT_FOUND' },
+    { pattern: 'контакт не найден в max', code: 'RECIPIENT_NOT_FOUND' },
     { pattern: 'auth_failure', code: 'AUTH_FAILURE' },
     { pattern: 'logout', code: 'AUTH_FAILURE' },
     { pattern: 'no target', code: 'VALIDATION_ERROR' },
