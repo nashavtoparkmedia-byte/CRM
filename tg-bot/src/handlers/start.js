@@ -95,12 +95,16 @@ async function getMainMenu(ctx) {
 
     // Standard buttons for regular users
     const userButtons = [
-        ['🛠 Поддержка', ...surveyButtons.slice(0, 1)], // First row: Support + First Survey
-        ['🚘 Мой автомобиль'],
+        [parkButtonLabel],
         ['💳 Только безнал', '💵 Включить наличку'],
-        ['🚖 Текущий заказ', parkButtonLabel],
-        ['🚖 Yandex Taxi Fun', '🚗 Подключиться'],
-        ['📖 Новости']
+        ['🚖 Текущий заказ'],
+        ['🚘 Мой автомобиль'],
+        ['🚗 Подключиться'],
+        [surveyButtons[0]],
+        ['🚖 Yandex Taxi Fun'],
+        ['📖 Новости'],
+        ['🔙 Меню'],
+        ['🛠 Поддержка'],
     ];
 
     // Add any remaining survey buttons to new rows (2 per row)
@@ -108,9 +112,6 @@ async function getMainMenu(ctx) {
     for (let i = 0; i < extraSurveys.length; i += 2) {
         userButtons.push(extraSurveys.slice(i, i + 2));
     }
-
-    // Push final row
-    userButtons.push(['🔙 Меню']);
 
     let adminButtons = [];
     if (isUserAdmin) {
