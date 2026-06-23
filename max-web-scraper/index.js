@@ -1521,17 +1521,21 @@ app.get('/scan-max-bundle', async (req, res) => {
 
   try {
     const findings = await page.evaluate(async () => {
+      // MAX web uses chunk-based bundles (not SvelteKit _app/immutable)
       const scripts = [...document.querySelectorAll('script[src]')]
         .map(s => s.src)
-        .filter(u => u.includes('_app/immutable') && !u.includes('worker'))
-        .slice(0, 10)
+        .filter(u => u.length > 10 && (u.includes('.js') || !u.includes('.')))
+        .slice(0, 15)
 
-      const out = []
+      // Also log all script URLs for inspection
+      const allScripts = [...document.querySelectorAll('script[src]')].map(s => s.src)
+
+      const out = [{ type: 'script_urls', matches: allScripts }]
       for (const url of scripts) {
         let src = ''
         try { src = await fetch(url, { credentials: 'include' }).then(r => r.text()) } catch { continue }
         if (!src || src.length < 200) continue
-        const fname = url.split('/').pop()
+        const fname = url.split('/').pop().slice(0, 60)
 
         // Opcode maps: objects with 5+ numeric values
         const opMaps = (src.match(/\{(?:\s*\w+\s*:\s*\d{1,3}\s*,?\s*){5,}\}/g) || []).slice(0, 3).map(m => m.slice(0, 400))
@@ -1556,6 +1560,136 @@ app.get('/scan-max-bundle', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
+})
+
+// ─── Диагностика: вкладка Contacts в MAX web ─────────────────────────────────
+// GET /probe-contacts-tab?phone=79126787532 — кликает вкладку Contacts,
+// вводит телефон в поиск контактов, захватывает все WS-фреймы.
+app.get('/probe-contacts-tab', async (req, res) => {
+  const phone = (req.query.phone || '79126787532').replace(/\D/g, '')
+  if (!transport || !page || !isReady) return res.status(503).json({ error: 'Not ready' })
+
+  const capturedIn = []
+  const rawHandler = (data) => {
+    if (data.opcode !== 132) {
+      capturedIn.push({ opcode: data.opcode, cmd: data.cmd, seq: data.seq,
+        payload: JSON.stringify(data.payload || {}).slice(0, 600) })
+    }
+  }
+  transport._rawHandlers.push(rawHandler)
+
+  try {
+    const phone7 = phone.startsWith('7') ? phone : '7' + phone.slice(-10)
+
+    const uiResult = await page.evaluate(async (ph) => {
+      const log = []
+
+      // Click "Contacts" tab button
+      const btns = [...document.querySelectorAll('button')]
+      const contactsBtn = btns.find(b => b.textContent?.trim() === 'Contacts' || b.textContent?.trim() === 'Контакты')
+      if (contactsBtn) {
+        contactsBtn.click()
+        log.push({ step: 'clicked_contacts_tab', text: contactsBtn.textContent?.trim() })
+      } else {
+        log.push({ step: 'no_contacts_tab', tried: btns.map(b => b.textContent?.trim().slice(0, 20)).filter(Boolean) })
+      }
+      await new Promise(r => setTimeout(r, 1500))
+
+      // Capture page structure after tab click
+      const inputs = [...document.querySelectorAll('input')].filter(i => i.offsetParent !== null)
+      log.push({ step: 'inputs_after_contacts_click', count: inputs.length,
+        details: inputs.map(i => ({ ph: i.placeholder, type: i.type, className: i.className?.slice(0, 60) }))
+      })
+
+      // Find contact list items visible on screen
+      const listItems = [...document.querySelectorAll('[class*="cell"], [class*="contact"], [class*="user"], [class*="item"]')]
+        .filter(el => el.offsetParent !== null && el.textContent?.trim().length > 2)
+        .slice(0, 10)
+        .map(el => ({ text: el.textContent?.trim().slice(0, 60), className: el.className?.slice(0, 60), dataId: el.dataset?.id }))
+      log.push({ step: 'contact_list_items', count: listItems.length, items: listItems })
+
+      // Find search input and type phone
+      const searchInput = inputs.find(i => {
+        const ph = (i.placeholder || '').toLowerCase()
+        return ph.includes('поис') || ph.includes('search') || ph.includes('name') || ph.includes('contact')
+      }) || inputs[0]
+
+      if (searchInput) {
+        searchInput.focus()
+        searchInput.value = ''
+        for (const char of ph) {
+          searchInput.value += char
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+          searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }))
+          await new Promise(r => setTimeout(r, 50))
+        }
+        log.push({ step: 'typed_phone', phone: ph, placeholder: searchInput.placeholder })
+        await new Promise(r => setTimeout(r, 2500))
+
+        // Capture results
+        const results = [...document.querySelectorAll('[class*="result"], [class*="contact"], [class*="cell"], [class*="item"], [class*="row"]')]
+          .filter(el => el.offsetParent !== null && el.textContent?.trim().length > 2 && el.children.length < 8)
+          .slice(0, 10)
+          .map(el => ({
+            text: el.textContent?.trim().slice(0, 80),
+            dataId: el.dataset?.id || el.dataset?.userId || el.dataset?.chatId,
+            className: el.className?.slice(0, 80)
+          }))
+        log.push({ step: 'search_results', count: results.length, items: results })
+      }
+
+      // Return to chat list (Escape or click All)
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      const allBtn = [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === 'All' || b.textContent?.trim() === 'Все')
+      if (allBtn) allBtn.click()
+
+      return log
+    }, phone7)
+
+    await new Promise(r => setTimeout(r, 1500))
+
+    const idx = transport._rawHandlers.indexOf(rawHandler)
+    if (idx > -1) transport._rawHandlers.splice(idx, 1)
+
+    res.json({ phone: phone7, uiInteraction: uiResult, capturedWsFrames: capturedIn })
+  } catch (e) {
+    const idx = transport._rawHandlers.indexOf(rawHandler)
+    if (idx > -1) transport._rawHandlers.splice(idx, 1)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Диагностика: запросить userId по телефону через op:32 ────────────────────
+// GET /lookup-user?phone=79126787532 — пробует разные подходы WS для поиска
+app.get('/lookup-user', async (req, res) => {
+  const phone = (req.query.phone || '').replace(/\D/g, '')
+  if (!phone || phone.length < 10) return res.status(400).json({ error: 'phone required' })
+  if (!transport || !isReady) return res.status(503).json({ error: 'Not ready' })
+
+  const phone7 = phone.startsWith('7') ? phone : '7' + phone.slice(-10)
+  const results = []
+
+  // Try known search opcodes with phone as query
+  const tryOpcodes = [
+    { op: 68, payload: { query: phone7, count: 30 } },
+    { op: 60, payload: { query: phone7, count: 30, type: 'ALL' } },
+    { op: 60, payload: { query: phone7, count: 30, type: 'CONTACTS' } },
+    { op: 68, payload: { query: phone7, count: 30, type: 'CONTACTS' } },
+  ]
+
+  for (const { op, payload } of tryOpcodes) {
+    try {
+      const resp = await transport.sendFrame(op, payload, { waitResponse: true })
+      results.push({ op, payload, response: JSON.stringify(resp).slice(0, 600) })
+      if (resp?.result?.length > 0 || resp?.contacts?.length > 0 || resp?.users?.length > 0) {
+        console.log(`[lookup-user] op:${op} HIT for ${phone7}:`, JSON.stringify(resp).slice(0, 200))
+      }
+    } catch (e) {
+      results.push({ op, payload, error: e.message })
+    }
+  }
+
+  res.json({ phone: phone7, results })
 })
 
 // ─── Старт ───────────────────────────────────────────────────────────────────
