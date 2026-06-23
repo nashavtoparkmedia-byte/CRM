@@ -1423,75 +1423,80 @@ app.get('/probe-ui-search', async (req, res) => {
     const uiResult = await page.evaluate(async (ph) => {
       const log = []
 
-      // Scan buttons
+      // Step 1: Click "Start chatting" button (compose dialog — different from global search)
       const btns = [...document.querySelectorAll('button')]
-      log.push({ step: 'buttons', count: btns.length,
-        samples: btns.slice(0, 8).map(b => ({
-          title: b.getAttribute('title'),
-          ariaLabel: b.getAttribute('aria-label'),
-          text: b.textContent?.trim().slice(0, 30),
-          className: b.className?.slice(0, 80)
+      const startChatBtn = btns.find(b => b.getAttribute('aria-label') === 'Start chatting')
+      if (startChatBtn) {
+        startChatBtn.click()
+        log.push({ step: 'clicked_start_chatting', found: true })
+      } else {
+        // Fallback: click any compose-like button
+        for (const btn of btns) {
+          const label = (btn.getAttribute('title') || btn.getAttribute('aria-label') || '').toLowerCase()
+          if (label.includes('написать') || label.includes('создать') || label.includes('compose') ||
+              label.includes('new') || label.includes('start')) {
+            btn.click()
+            log.push({ step: 'clicked_fallback_compose', label })
+            break
+          }
+        }
+      }
+      await new Promise(r => setTimeout(r, 1200))
+
+      // Step 2: Inspect all DOM after compose dialog opens
+      const allEls = [...document.querySelectorAll('input, [contenteditable], textarea')]
+        .filter(el => el.offsetParent !== null)
+      log.push({ step: 'compose_dialog_inputs', count: allEls.length,
+        details: allEls.map(el => ({
+          tag: el.tagName, ph: el.placeholder, type: el.type,
+          ce: el.contentEditable, className: el.className?.slice(0, 80)
         }))
       })
 
-      // Try Ctrl+N shortcut
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true }))
-      await new Promise(r => setTimeout(r, 600))
-
-      // Click compose button
-      for (const btn of btns) {
-        const label = (btn.getAttribute('title') || btn.getAttribute('aria-label') || '').toLowerCase()
-        if (label.includes('написать') || label.includes('создать') || label.includes('compose') ||
-            label.includes('new') || label.includes('pencil') || label.includes('pen')) {
-          btn.click()
-          log.push({ step: 'clicked_compose', label })
-          await new Promise(r => setTimeout(r, 1000))
-          break
-        }
-      }
-
-      // Find inputs
-      const allInputs = [...document.querySelectorAll('input')]
-      log.push({ step: 'inputs', count: allInputs.length,
-        details: allInputs.map(i => ({ ph: i.placeholder, type: i.type, visible: i.offsetParent !== null, className: i.className?.slice(0, 60) }))
+      // Also capture visible modal/overlay structure
+      const modals = [...document.querySelectorAll('[class*="modal"], [class*="dialog"], [class*="popup"], [class*="compose"], [class*="new-chat"], [class*="overlay"]')]
+        .filter(el => el.offsetParent !== null)
+      log.push({ step: 'compose_dialog_modals', count: modals.length,
+        items: modals.slice(0, 5).map(el => ({ className: el.className?.slice(0, 100), role: el.getAttribute('role') }))
       })
 
-      const searchInput = allInputs
-        .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
-        .find(i => {
-          const ph = (i.placeholder || '').toLowerCase()
-          return ph.includes('поис') || ph.includes('кому') || ph.includes('найти') || ph.includes('search') || ph.includes('to')
-        })
+      // Step 3: Find and fill the contact search input
+      const contactSearch = allEls.find(el => {
+        const ph = (el.placeholder || '').toLowerCase()
+        return ph.includes('поис') || ph.includes('кому') || ph.includes('найти') ||
+               ph.includes('search') || ph.includes('contact') || ph.includes('name') || ph.includes('to')
+      }) || allEls[0]
 
-      if (searchInput) {
-        searchInput.focus()
-        searchInput.value = ''
+      if (contactSearch) {
+        contactSearch.focus()
+        contactSearch.value = ''
         for (const char of ph) {
-          searchInput.value += char
-          searchInput.dispatchEvent(new Event('input', { bubbles: true }))
-          await new Promise(r => setTimeout(r, 40))
+          contactSearch.value += char
+          contactSearch.dispatchEvent(new Event('input', { bubbles: true }))
+          contactSearch.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }))
+          await new Promise(r => setTimeout(r, 50))
         }
-        log.push({ step: 'typed', phone: ph, placeholder: searchInput.placeholder })
+        log.push({ step: 'typed_in_compose', phone: ph, placeholder: contactSearch.placeholder, tag: contactSearch.tagName })
         await new Promise(r => setTimeout(r, 2500))
 
-        // Capture result DOM
-        const allEls = [...document.querySelectorAll('*')].filter(el => {
-          const text = el.textContent?.trim() || ''
-          return text.includes(ph.slice(-4)) && el.offsetParent !== null && el.children.length < 5
-        })
-        log.push({ step: 'dom_contains_phone', count: allEls.length,
-          items: allEls.slice(0, 10).map(el => ({
-            tag: el.tagName, text: el.textContent?.slice(0, 80),
-            dataId: el.dataset?.id || el.dataset?.userId,
+        // Capture results in the compose dialog
+        const results = [...document.querySelectorAll('[class*="result"], [class*="contact"], [class*="user"], [class*="item"], [class*="row"], [class*="cell"]')]
+          .filter(el => el.offsetParent !== null && el.children.length < 8)
+          .map(el => ({
+            tag: el.tagName,
+            text: el.textContent?.trim().slice(0, 80),
+            dataId: el.dataset?.id || el.dataset?.userId || el.dataset?.chatId,
             className: el.className?.slice(0, 80)
           }))
-        })
+          .filter(el => el.text && el.text.length > 0)
+        log.push({ step: 'compose_results', count: results.length, items: results.slice(0, 10) })
       } else {
-        log.push({ step: 'no_search_input_found' })
+        log.push({ step: 'no_compose_input_found' })
       }
 
       // Close
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await new Promise(r => setTimeout(r, 300))
       return log
     }, phone7)
 
