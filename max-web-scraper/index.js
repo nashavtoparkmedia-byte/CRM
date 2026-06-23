@@ -338,11 +338,18 @@ async function resolvePhoneLive(digits) {
   try {
     const results = await page.evaluate(async (phone) => {
       const candidates = [
+        // GET variants (POST was 405 — method not allowed, route exists)
+        { method: 'GET',  url: `/v1/contacts/resolve?phone=${phone}` },
+        { method: 'GET',  url: `/v1/contacts/resolve?phones=${phone}` },
+        { method: 'GET',  url: `/v1/users/findByPhone?phone=${phone}` },
+        { method: 'GET',  url: `/v1/users/byPhone?phone=${phone}` },
+        { method: 'GET',  url: `/v1/users?phone=${phone}` },
+        { method: 'GET',  url: `/v1/contacts?phone=${phone}` },
+        { method: 'GET',  url: `/v1/users/search?query=${phone}` },
+        { method: 'GET',  url: `/v1/users/search?phone=${phone}` },
+        // POST variants (keep for reference)
         { method: 'POST', url: '/v1/contacts/resolve',     body: JSON.stringify({ phones: [phone] }) },
         { method: 'POST', url: '/v1/users/findByPhone',    body: JSON.stringify({ phone }) },
-        { method: 'GET',  url: `/v1/users/search?phone=${phone}` },
-        { method: 'GET',  url: `/v1/chats/${phone}` },
-        { method: 'POST', url: '/api/v1/users/findByPhone', body: JSON.stringify({ phone }) },
       ]
       const out = []
       for (const c of candidates) {
