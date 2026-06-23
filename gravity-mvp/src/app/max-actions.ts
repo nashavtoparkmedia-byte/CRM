@@ -216,7 +216,7 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             throw new Error(data.error || "Failed to send message via Scraper")
         }
 
-        return { success: true, externalId: data.externalId || null }
+        return { success: true, externalId: data.externalId || null, resolvedChatId: data.chatId || null }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)
         throw new Error(error.message || "Failed to call scraper API")

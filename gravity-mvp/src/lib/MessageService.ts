@@ -570,6 +570,16 @@ export class MessageService {
                     })
                     deliveryStatus = 'delivered'
                     if ((maxRes as any)?.externalId) deliveryExternalId = (maxRes as any).externalId
+                    // Phone was resolved to userId by scraper — update externalChatId proactively
+                    // so future sends go directly without phone re-resolution each time
+                    const resolvedMaxId = (maxRes as any)?.resolvedChatId
+                    if (resolvedMaxId && resolvedMaxId !== rawExternalChatId) {
+                        await (prisma.chat as any).update({
+                            where: { id: currentChatId },
+                            data: { externalChatId: resolvedMaxId }
+                        })
+                        console.log(`[MessageService] MAX externalChatId updated: ${rawExternalChatId} → ${resolvedMaxId}`)
+                    }
                     break
 
                 case 'telegram':

@@ -196,11 +196,13 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
 
   let payload = MessageParser.toCrmPayload(msg)
 
-  // Добавляем имя и телефон контакта из ContactStore
-  const senderName  = contactStore.getName(payload.senderId)
-  const senderPhone = contactStore.getPhone(payload.senderId)
-  if (senderName)  payload = { ...payload, senderName }
-  if (senderPhone) payload = { ...payload, senderPhone }
+  // Добавляем имя и телефон контакта из ContactStore.
+  // chatId = партнёрский userId для входящих (chatId==senderId) и исходящих echo (chatId=партнёр, senderId=мы).
+  // Поэтому ищем телефон по chatId, а не senderId.
+  const senderName   = contactStore.getName(payload.senderId)
+  const contactPhone = contactStore.getPhone(String(payload.chatId || payload.senderId))
+  if (senderName)    payload = { ...payload, senderName, driverName: senderName }
+  if (contactPhone)  payload = { ...payload, senderPhone: contactPhone, phone: contactPhone }
 
   // Переслано: текстовый префикс в content + структурированные метаданные
   if (msg.forwardedFromId) {
