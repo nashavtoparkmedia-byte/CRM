@@ -1659,7 +1659,7 @@ app.get('/probe-contacts-tab', async (req, res) => {
   }
 })
 
-// ─── Диагностика: запросить userId по телефону через op:32 ────────────────────
+// ─── Диагностика: запросить userId по телефону / пробовать WS-опкоды ──────────
 // GET /lookup-user?phone=79126787532 — пробует разные подходы WS для поиска
 app.get('/lookup-user', async (req, res) => {
   const phone = (req.query.phone || '').replace(/\D/g, '')
@@ -1669,20 +1669,21 @@ app.get('/lookup-user', async (req, res) => {
   const phone7 = phone.startsWith('7') ? phone : '7' + phone.slice(-10)
   const results = []
 
-  // Try known search opcodes with phone as query
+  // Try known search opcodes with phone as query (safe ones only)
   const tryOpcodes = [
     { op: 68, payload: { query: phone7, count: 30 } },
     { op: 60, payload: { query: phone7, count: 30, type: 'ALL' } },
-    { op: 60, payload: { query: phone7, count: 30, type: 'CONTACTS' } },
-    { op: 68, payload: { query: phone7, count: 30, type: 'CONTACTS' } },
+    // op:48 chatIds:[0] — special "get all chats" from startup sequence
+    { op: 48, payload: { chatIds: [0] } },
   ]
 
   for (const { op, payload } of tryOpcodes) {
     try {
       const resp = await transport.sendFrame(op, payload, { waitResponse: true })
-      results.push({ op, payload, response: JSON.stringify(resp).slice(0, 600) })
-      if (resp?.result?.length > 0 || resp?.contacts?.length > 0 || resp?.users?.length > 0) {
-        console.log(`[lookup-user] op:${op} HIT for ${phone7}:`, JSON.stringify(resp).slice(0, 200))
+      const preview = JSON.stringify(resp).slice(0, 800)
+      results.push({ op, payload, response: preview })
+      if (resp?.result?.length > 0 || resp?.contacts?.length > 0 || resp?.chats?.length > 0) {
+        console.log(`[lookup-user] op:${op} HIT:`, preview.slice(0, 200))
       }
     } catch (e) {
       results.push({ op, payload, error: e.message })
@@ -1690,6 +1691,50 @@ app.get('/lookup-user', async (req, res) => {
   }
 
   res.json({ phone: phone7, results })
+})
+
+// ─── Диагностика: извлечь все контакты из DOM вкладки Contacts ───────────────
+// GET /extract-contacts-dom — кликает Contacts tab, прокручивает список,
+// возвращает все видимые контакты (имя + data-id если есть)
+app.get('/extract-contacts-dom', async (req, res) => {
+  if (!page || !isReady) return res.status(503).json({ error: 'Not ready' })
+
+  try {
+    const contacts = await page.evaluate(async () => {
+      // Click Contacts tab
+      const btns = [...document.querySelectorAll('button')]
+      const contactsBtn = btns.find(b => b.textContent?.trim() === 'Contacts' || b.textContent?.trim() === 'Контакты')
+      if (contactsBtn) { contactsBtn.click(); await new Promise(r => setTimeout(r, 1500)) }
+
+      // Scroll the contact list to load more
+      const scrollable = document.querySelector('[class*="list"], [class*="scroll"], [class*="chat-list"], main, [class*="sidebar"]')
+      const allContacts = []
+      const seen = new Set()
+
+      for (let i = 0; i < 10; i++) {
+        const cells = [...document.querySelectorAll('.cell--clickable, [class*="cell"][class*="clickable"], [class*="item"][class*="svelte"]')]
+          .filter(el => el.offsetParent !== null)
+        for (const el of cells) {
+          const text = el.textContent?.trim()
+          if (!text || text.length < 3 || seen.has(text)) continue
+          // Skip nav items
+          if (['All', 'All 2', 'New 2', 'Channels', 'Settings', 'Calls', 'Contacts'].includes(text.split('\n')[0]?.trim())) continue
+          seen.add(text)
+          const dataId = el.dataset?.id || el.dataset?.userId || el.dataset?.chatId
+          const href = el.querySelector('a')?.href || ''
+          allContacts.push({ name: text.split('\n')[0]?.trim().slice(0, 60), dataId, href: href.slice(0, 80) })
+        }
+        if (scrollable) scrollable.scrollTop += 400
+        await new Promise(r => setTimeout(r, 500))
+      }
+
+      return allContacts
+    })
+
+    res.json({ count: contacts.length, contacts })
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ─── Старт ───────────────────────────────────────────────────────────────────
