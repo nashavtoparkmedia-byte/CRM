@@ -89,7 +89,7 @@ async function getMainMenu(ctx) {
     try {
         const parkRes = await crmParkRequest('get_park_info', { telegramId: String(userId) });
         if (parkRes.ok && parkRes.data?.linked && parkRes.data?.parkName) {
-            parkButtonLabel = `🏢 ${parkRes.data.parkName}`;
+            parkButtonLabel = `🏢 Парк: ${parkRes.data.parkName}`;
         }
     } catch { /* use default */ }
 
