@@ -315,21 +315,20 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 return
             }
 
-            // Override TURN config with server-provided values (from env vars on the server).
-            // Use iceTransportPolicy='relay' so Chrome gathers ONLY relay (TURN) candidates
-            // and includes them in the 200 OK SDP answer. With 'all', Chrome tries host+srflx
-            // first (which fail on symmetric NAT), only allocates TURN ~60 s later via trickle
-            // ICE — but FreeSWITCH doesn't accept trickle candidates after the 200 OK exchange.
+            // ICE config: use STUN-only + iceTransportPolicy:'all' so Chrome gathers
+            // host+srflx candidates quickly (~150ms). With 'relay'+TURN only, Chrome
+            // waits for TURN ALLOCATE which is blocked by corporate/AV firewalls
+            // (STUN method 0x0001 passes, ALLOCATE 0x0003 is dropped locally).
+            // FS is on a public IP (155.212.130.14) so srflx candidates work without TURN.
+            // For symmetric-NAT users who need relay, configure TURN with long-term
+            // credentials (not no-auth) so Chrome's ALLOCATE actually completes.
             if (creds.turn?.url) {
+                const turnHost = creds.turn.url.replace(/^turns?:/, '').replace(/\?.*$/, '')
                 pcConfigRef.current = {
                     iceServers: [
-                        // TCP TURN only — UDP TURN (port 3478/udp) is often blocked by ISPs,
-                        // causing Chrome to wait ~25 s for UDP timeout before gathering completes.
-                        // With FS originate timeout=60 s and user answering at T=37, gathering
-                        // would finish at T=62 → NO_ANSWER. TCP avoids this delay.
-                        { urls: creds.turn.url, username: creds.turn.username, credential: creds.turn.credential },
+                        { urls: `stun:${turnHost}` },
                     ],
-                    iceTransportPolicy: 'relay',
+                    iceTransportPolicy: 'all',
                 }
             }
 
