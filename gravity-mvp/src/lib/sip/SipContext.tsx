@@ -316,16 +316,21 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             }
 
             // Override TURN config with server-provided values (from env vars on the server).
-            // Use iceTransportPolicy='all' so the browser tries host → STUN → TURN in order.
-            // FreeSWITCH has a public IP so direct ICE usually succeeds without relay.
+            // Use iceTransportPolicy='relay' so Chrome gathers ONLY relay (TURN) candidates
+            // and includes them in the 200 OK SDP answer. With 'all', Chrome tries host+srflx
+            // first (which fail on symmetric NAT), only allocates TURN ~60 s later via trickle
+            // ICE — but FreeSWITCH doesn't accept trickle candidates after the 200 OK exchange.
             if (creds.turn?.url) {
                 const turnHost = creds.turn.url.replace(/^turn:/, '').replace(/\?.*$/, '')
                 pcConfigRef.current = {
                     iceServers: [
                         { urls: `stun:${turnHost}` },
+                        // UDP TURN — preferred for real-time audio (lower overhead)
+                        { urls: `turn:${turnHost}`, username: creds.turn.username, credential: creds.turn.credential },
+                        // TCP TURN — fallback if UDP is blocked by user's firewall
                         { urls: creds.turn.url, username: creds.turn.username, credential: creds.turn.credential },
                     ],
-                    iceTransportPolicy: 'all',
+                    iceTransportPolicy: 'relay',
                 }
             }
 
