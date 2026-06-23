@@ -315,6 +315,167 @@ async function sendText(transport, chatId, text, replyToMessageId) {
   }
 }
 
+// ─── Contact sync: refresh contact list from MAX ─────────────────────────────
+let _lastContactSync = 0  // timestamp последнего успешного sync
+
+async function syncContacts(timeoutMs = 8000) {
+  if (!transport || !isReady) return false
+
+  const fresh = await new Promise((resolve) => {
+    let done = false
+    const timer = setTimeout(() => {
+      const idx = transport._rawHandlers.indexOf(handler)
+      if (idx > -1) transport._rawHandlers.splice(idx, 1)
+      done = true; resolve(false)
+    }, timeoutMs)
+
+    function handler(data) {
+      if (data.opcode === 32 && data.payload?.contacts) {
+        clearTimeout(timer)
+        const idx = transport._rawHandlers.indexOf(handler)
+        if (idx > -1) transport._rawHandlers.splice(idx, 1)
+        contactStore.ingest(data.payload)
+        if (!done) { done = true; resolve(true) }
+      }
+    }
+    transport._rawHandlers.push(handler)
+
+    // Try to trigger a contacts refresh by sending opcode 32 as a request
+    // MAX server should respond with cmd:1 payload.contacts OR push a fresh opcode 32
+    transport.sendFrame(32, {}, { waitResponse: false })
+      .catch(e => console.warn('[syncContacts] sendFrame(32) failed:', e.message))
+  })
+
+  if (fresh) {
+    _lastContactSync = Date.now()
+    console.log(`[syncContacts] Refreshed: ${contactStore._map.size} contacts`)
+  } else {
+    console.warn('[syncContacts] Timeout — opcode 32 not returned by MAX')
+  }
+  return fresh
+}
+
+// ─── Puppeteer UI search in MAX web ──────────────────────────────────────────
+// Last-resort resolver when contactStore doesn't have the phone after sync.
+// Opens MAX compose dialog, types phone, extracts userId from DOM results.
+async function resolveViaUiSearch(digits) {
+  if (!page) return null
+
+  const phone7 = digits.startsWith('7') ? digits : '7' + digits.slice(-10)
+  console.log(`[ResolvePhone] Trying MAX web UI search for ${phone7}...`)
+
+  try {
+    // Capture incoming WS frames for the duration of the UI search
+    const capturedFrames = []
+    const rawHandler = (data) => {
+      if (data.opcode !== 132) { // skip PRESENCE noise
+        capturedFrames.push({ opcode: data.opcode, cmd: data.cmd, seq: data.seq, payload: data.payload })
+      }
+    }
+    transport._rawHandlers.push(rawHandler)
+
+    const result = await page.evaluate(async (phone) => {
+      // Try keyboard shortcut for new chat (Ctrl+N or similar)
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true }))
+      await new Promise(r => setTimeout(r, 300))
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', code: 'KeyN', ctrlKey: true, bubbles: true }))
+      await new Promise(r => setTimeout(r, 800))
+
+      // Try clicking compose/new message button by aria-label or title
+      const btns = [...document.querySelectorAll('button')]
+      for (const btn of btns) {
+        const label = (btn.getAttribute('title') || btn.getAttribute('aria-label') || '').toLowerCase()
+        if (label.includes('написать') || label.includes('создать') || label.includes('compose') ||
+            label.includes('new') || label.includes('pencil') || label.includes('pen') || label.includes('add')) {
+          btn.click()
+          await new Promise(r => setTimeout(r, 800))
+          break
+        }
+      }
+
+      // Find visible text input (search/recipient field)
+      const visible = [...document.querySelectorAll('input')]
+        .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
+      const searchInput = visible.find(i => {
+        const ph = (i.placeholder || '').toLowerCase()
+        return ph.includes('поис') || ph.includes('кому') || ph.includes('найти') ||
+               ph.includes('search') || ph.includes('recipient') || ph.includes('to')
+      }) || visible[0]
+
+      if (!searchInput) {
+        return { found: false, inputs: visible.map(i => ({ ph: i.placeholder, className: i.className.slice(0, 60) })) }
+      }
+
+      // Type phone number character by character to trigger search
+      searchInput.focus()
+      searchInput.value = ''
+      for (const char of phone) {
+        searchInput.value += char
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+        searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }))
+        await new Promise(r => setTimeout(r, 40))
+      }
+      await new Promise(r => setTimeout(r, 2500))
+
+      // Extract userId from DOM search results (look for data-id, href with /u/ or numeric IDs in links)
+      const resultEls = [...document.querySelectorAll('[class*="result"], [class*="contact"], [class*="user"], [class*="item"]')]
+        .filter(el => el.offsetParent !== null)
+      const extracted = []
+      for (const el of resultEls.slice(0, 10)) {
+        const dataId   = el.dataset?.id || el.dataset?.userId || el.dataset?.contactId
+        const href     = el.querySelector('a')?.href || ''
+        const idInHref = href.match(/\/(\d{6,10})(?:\/|$)/)
+        const text     = (el.textContent || '').slice(0, 100)
+        if (dataId || idInHref) {
+          extracted.push({ dataId, idInHref: idInHref?.[1], text, className: el.className.slice(0, 60) })
+        }
+      }
+
+      // Close compose dialog
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await new Promise(r => setTimeout(r, 300))
+
+      return { found: true, inputPlaceholder: searchInput.placeholder, results: extracted }
+    }, phone7)
+
+    await new Promise(r => setTimeout(r, 1000))
+
+    const idx = transport._rawHandlers.indexOf(rawHandler)
+    if (idx > -1) transport._rawHandlers.splice(idx, 1)
+
+    console.log('[ResolvePhone] UI search result:', JSON.stringify(result).slice(0, 400))
+    console.log('[ResolvePhone] Captured WS frames:', capturedFrames.length,
+      capturedFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(', '))
+
+    // Look for userId in DOM results
+    if (result?.results?.length > 0) {
+      for (const r of result.results) {
+        const id = r.dataId || r.idInHref
+        if (id && /^\d{6,10}$/.test(String(id))) {
+          console.log(`[ResolvePhone] UI search resolved: ${digits} → userId ${id}`)
+          return String(id)
+        }
+      }
+    }
+
+    // Look for userId in captured WS frames (a response to a search request)
+    for (const frame of capturedFrames) {
+      const p = frame.payload || {}
+      const userId = p.id || p.userId || p.user_id ||
+                     p.contact?.id || p.user?.id ||
+                     (p.contacts?.[0]?.id) || (p.users?.[0]?.id)
+      if (userId && frame.cmd === 1) {
+        console.log(`[ResolvePhone] WS frame op:${frame.opcode} resolved: ${digits} → userId ${userId}`)
+        return String(userId)
+      }
+    }
+  } catch (e) {
+    console.warn('[ResolvePhone] UI search failed:', e.message)
+  }
+
+  return null
+}
+
 // ─── Live phone → MAX userId resolution ──────────────────────────────────────
 // Used when contactStore doesn't have the contact (e.g. brand-new outbound)
 async function resolvePhoneLive(digits) {
@@ -329,64 +490,23 @@ async function resolvePhoneLive(digits) {
     }
   }
 
-  // 2. Try MAX REST API via authenticated browser session
-  if (!page) return null
-
-  const phone7 = digits.startsWith('7') ? digits : '7' + digits.slice(-10)
-  console.log(`[ResolvePhone] Probing MAX REST API for ${digits} (7-format: ${phone7})...`)
-
-  try {
-    const results = await page.evaluate(async (phone) => {
-      const candidates = [
-        // GET variants (POST was 405 — method not allowed, route exists)
-        { method: 'GET',  url: `/v1/contacts/resolve?phone=${phone}` },
-        { method: 'GET',  url: `/v1/contacts/resolve?phones=${phone}` },
-        { method: 'GET',  url: `/v1/users/findByPhone?phone=${phone}` },
-        { method: 'GET',  url: `/v1/users/byPhone?phone=${phone}` },
-        { method: 'GET',  url: `/v1/users?phone=${phone}` },
-        { method: 'GET',  url: `/v1/contacts?phone=${phone}` },
-        { method: 'GET',  url: `/v1/users/search?query=${phone}` },
-        { method: 'GET',  url: `/v1/users/search?phone=${phone}` },
-        // POST variants (keep for reference)
-        { method: 'POST', url: '/v1/contacts/resolve',     body: JSON.stringify({ phones: [phone] }) },
-        { method: 'POST', url: '/v1/users/findByPhone',    body: JSON.stringify({ phone }) },
-      ]
-      const out = []
-      for (const c of candidates) {
-        try {
-          const opts = { method: c.method, credentials: 'include' }
-          if (c.body) { opts.body = c.body; opts.headers = { 'Content-Type': 'application/json' } }
-          const r = await fetch(c.url, opts)
-          const text = await r.text().catch(() => '')
-          out.push({ url: c.url, status: r.status, body: text.slice(0, 400) })
-        } catch (e) {
-          out.push({ url: c.url, error: e.message })
-        }
-      }
-      return out
-    }, phone7)
-
-    console.log('[ResolvePhone] REST probe:', JSON.stringify(results))
-
-    // Try to parse a userId from any 200 response
-    for (const r of (results || [])) {
-      if (r.status === 200 && r.body) {
-        try {
-          const data = JSON.parse(r.body)
-          const userId = data.id || data.userId || data.user_id ||
-                         data.contact?.id || data.user?.id ||
-                         (data.contacts?.[0]?.id) ||
-                         (Array.isArray(data) && data[0]?.id)
-          if (userId) {
-            console.log(`[ResolvePhone] Resolved via ${r.url}: userId=${userId}`)
-            return String(userId)
-          }
-        } catch {}
+  // 2. Refresh contactStore if stale (> 5 min since last sync), then retry
+  const staleMs = Date.now() - _lastContactSync
+  if (staleMs > 5 * 60 * 1000) {
+    console.log(`[ResolvePhone] contactStore stale (${Math.round(staleMs / 60000)}min), syncing...`)
+    const synced = await syncContacts(8000)
+    if (synced) {
+      const fromStore = contactStore.findByPhone(digits)
+      if (fromStore) {
+        console.log(`[ResolvePhone] Found after sync: ${digits} → ${fromStore}`)
+        return fromStore
       }
     }
-  } catch (e) {
-    console.warn('[ResolvePhone] page.evaluate failed:', e.message)
   }
+
+  // 3. Puppeteer UI search in MAX web — interacts with compose dialog to find userId
+  const uiId = await resolveViaUiSearch(digits)
+  if (uiId) return uiId
 
   return null
 }
@@ -1271,6 +1391,166 @@ app.post('/import-history', async (req, res) => {
       await finishImportSession('failed', 'failed')
     }
   })()
+})
+
+// ─── Синхронизация контактов ──────────────────────────────────────────────────
+// POST /sync-contacts — принудительно запрашивает свежий список контактов от MAX
+app.post('/sync-contacts', async (req, res) => {
+  if (!isReady) return res.status(503).json({ error: 'Not ready' })
+  const oldSize = contactStore._map.size
+  const ok = await syncContacts(10000)
+  res.json({ success: ok, oldSize, newSize: contactStore._map.size, reason: ok ? 'opcode32_received' : 'timeout' })
+})
+
+// ─── Диагностика: Puppeteer UI search в MAX web ───────────────────────────────
+// GET /probe-ui-search?phone=79126787532 — открывает compose в MAX web,
+// вводит телефон, логирует все WS-фреймы и DOM-результаты.
+app.get('/probe-ui-search', async (req, res) => {
+  const phone = (req.query.phone || '79126787532').replace(/\D/g, '')
+  if (!transport || !page || !isReady) return res.status(503).json({ error: 'Not ready' })
+
+  const capturedIn = []
+  const rawHandler = (data) => {
+    if (data.opcode !== 132) {
+      capturedIn.push({ opcode: data.opcode, cmd: data.cmd, seq: data.seq, payload: JSON.stringify(data.payload || {}).slice(0, 500) })
+    }
+  }
+  transport._rawHandlers.push(rawHandler)
+
+  try {
+    const phone7 = phone.startsWith('7') ? phone : '7' + phone.slice(-10)
+
+    const uiResult = await page.evaluate(async (ph) => {
+      const log = []
+
+      // Scan buttons
+      const btns = [...document.querySelectorAll('button')]
+      log.push({ step: 'buttons', count: btns.length,
+        samples: btns.slice(0, 8).map(b => ({
+          title: b.getAttribute('title'),
+          ariaLabel: b.getAttribute('aria-label'),
+          text: b.textContent?.trim().slice(0, 30),
+          className: b.className?.slice(0, 80)
+        }))
+      })
+
+      // Try Ctrl+N shortcut
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true }))
+      await new Promise(r => setTimeout(r, 600))
+
+      // Click compose button
+      for (const btn of btns) {
+        const label = (btn.getAttribute('title') || btn.getAttribute('aria-label') || '').toLowerCase()
+        if (label.includes('написать') || label.includes('создать') || label.includes('compose') ||
+            label.includes('new') || label.includes('pencil') || label.includes('pen')) {
+          btn.click()
+          log.push({ step: 'clicked_compose', label })
+          await new Promise(r => setTimeout(r, 1000))
+          break
+        }
+      }
+
+      // Find inputs
+      const allInputs = [...document.querySelectorAll('input')]
+      log.push({ step: 'inputs', count: allInputs.length,
+        details: allInputs.map(i => ({ ph: i.placeholder, type: i.type, visible: i.offsetParent !== null, className: i.className?.slice(0, 60) }))
+      })
+
+      const searchInput = allInputs
+        .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
+        .find(i => {
+          const ph = (i.placeholder || '').toLowerCase()
+          return ph.includes('поис') || ph.includes('кому') || ph.includes('найти') || ph.includes('search') || ph.includes('to')
+        })
+
+      if (searchInput) {
+        searchInput.focus()
+        searchInput.value = ''
+        for (const char of ph) {
+          searchInput.value += char
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+          await new Promise(r => setTimeout(r, 40))
+        }
+        log.push({ step: 'typed', phone: ph, placeholder: searchInput.placeholder })
+        await new Promise(r => setTimeout(r, 2500))
+
+        // Capture result DOM
+        const allEls = [...document.querySelectorAll('*')].filter(el => {
+          const text = el.textContent?.trim() || ''
+          return text.includes(ph.slice(-4)) && el.offsetParent !== null && el.children.length < 5
+        })
+        log.push({ step: 'dom_contains_phone', count: allEls.length,
+          items: allEls.slice(0, 10).map(el => ({
+            tag: el.tagName, text: el.textContent?.slice(0, 80),
+            dataId: el.dataset?.id || el.dataset?.userId,
+            className: el.className?.slice(0, 80)
+          }))
+        })
+      } else {
+        log.push({ step: 'no_search_input_found' })
+      }
+
+      // Close
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      return log
+    }, phone7)
+
+    await new Promise(r => setTimeout(r, 2000))
+
+    const idx = transport._rawHandlers.indexOf(rawHandler)
+    if (idx > -1) transport._rawHandlers.splice(idx, 1)
+
+    res.json({ phone: phone7, uiInteraction: uiResult, capturedWsFrames: capturedIn })
+  } catch (e) {
+    const idx = transport._rawHandlers.indexOf(rawHandler)
+    if (idx > -1) transport._rawHandlers.splice(idx, 1)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+// ─── Диагностика: сканирование JS-бандла MAX web ─────────────────────────────
+// GET /scan-max-bundle — скачивает JS из браузерной сессии (с куками) и
+// ищет опкоды, связанные с поиском контактов по телефону.
+app.get('/scan-max-bundle', async (req, res) => {
+  if (!page) return res.status(503).json({ error: 'Page not ready' })
+
+  try {
+    const findings = await page.evaluate(async () => {
+      const scripts = [...document.querySelectorAll('script[src]')]
+        .map(s => s.src)
+        .filter(u => u.includes('_app/immutable') && !u.includes('worker'))
+        .slice(0, 10)
+
+      const out = []
+      for (const url of scripts) {
+        let src = ''
+        try { src = await fetch(url, { credentials: 'include' }).then(r => r.text()) } catch { continue }
+        if (!src || src.length < 200) continue
+        const fname = url.split('/').pop()
+
+        // Opcode maps: objects with 5+ numeric values
+        const opMaps = (src.match(/\{(?:\s*\w+\s*:\s*\d{1,3}\s*,?\s*){5,}\}/g) || []).slice(0, 3).map(m => m.slice(0, 400))
+        if (opMaps.length) out.push({ file: fname, type: 'opcode_map', matches: opMaps })
+
+        // Phone-related code
+        const ph = (src.match(/[a-z_$]{0,20}phone[a-z_$]{0,20}[^\n;]{0,120}/gi) || []).slice(0, 6).map(m => m.slice(0, 200))
+        if (ph.length) out.push({ file: fname, type: 'phone_code', matches: ph })
+
+        // Opcode usage patterns
+        const ops = (src.match(/(?:opcode|op)\s*(?:===|:)\s*(\d{1,3})[^\n;]{0,80}/gi) || []).slice(0, 10).map(m => m.slice(0, 200))
+        if (ops.length) out.push({ file: fname, type: 'opcode_use', matches: ops })
+
+        // Search-related terms
+        const search = (src.match(/(?:search|findUser|byPhone|lookup|resolve)[^;\n]{0,120}/gi) || []).slice(0, 5).map(m => m.slice(0, 200))
+        if (search.length) out.push({ file: fname, type: 'search_code', matches: search })
+      }
+      return out
+    })
+
+    res.json(findings)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
 })
 
 // ─── Старт ───────────────────────────────────────────────────────────────────
