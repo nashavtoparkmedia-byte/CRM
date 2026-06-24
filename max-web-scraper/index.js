@@ -492,25 +492,62 @@ async function resolveViaPhoneLookupDialog(digits) {
     await page.screenshot({ path: '/tmp/max_contacts_state.png', fullPage: false }).catch(() => {})
     console.log('[ResolvePhone] Screenshot saved: /tmp/max_contacts_state.png')
 
-    // 4. Find the "+" button — it should be an SVG-only (no text) button
-    //    that is NOT "Start chatting" (that one opens the compose/search dialog)
-    //    We try EACH SVG-only button and check if it opens a PHONE input
+    // 4. "Start chatting" (aria-label) IS the blue "+" button (x=422, y=18 in viewport).
+    //    Click it and inspect the resulting dialog for phone-number mode.
     let plusClicked = false
 
-    // Priority: known aria-label patterns for "Найти по номеру" button
-    const namedPlusSelectors = [
-      'button[aria-label*="номер"]', 'button[aria-label*="Номер"]',
-      'button[aria-label*="phone"]', 'button[aria-label*="Phone"]',
-      'button[aria-label*="найти"]', 'button[aria-label*="Найти"]',
-      'button[aria-label*="добав"]', 'button[aria-label*="Добав"]',
-      'button[title*="номер"]', 'button[title*="phone"]',
-    ]
-    for (const sel of namedPlusSelectors) {
-      if (await page.locator(sel).first().isVisible({ timeout: 200 }).catch(() => false)) {
-        await page.locator(sel).first().click()
+    const startChattingEl = page.locator('[aria-label="Start chatting"]').first()
+    if (await startChattingEl.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await startChattingEl.click()
+      console.log('[ResolvePhone] Clicked "Start chatting" (blue + button)')
+      await page.waitForTimeout(1000)
+
+      // Dump ALL interactive elements in the dialog to find phone-mode switcher
+      const dialogDump = await page.evaluate(() => {
+        return [...document.querySelectorAll('button, input, a, [role="button"], [role="tab"]')]
+          .filter(el => {
+            const s = getComputedStyle(el)
+            return s.display !== 'none' && s.visibility !== 'hidden' && parseFloat(s.opacity) > 0.1
+          })
+          .map(el => ({
+            tag: el.tagName, text: el.innerText?.trim().slice(0, 50),
+            label: el.getAttribute('aria-label'), role: el.getAttribute('role'),
+            type: el.getAttribute('type'), ph: el.getAttribute('placeholder'),
+            cls: (el.className || '').toString().slice(0, 80),
+          }))
+      })
+      console.log('[ResolvePhone] Dialog after StartChatting:', JSON.stringify(dialogDump))
+      await page.screenshot({ path: '/tmp/max_start_chatting_dialog.png' }).catch(() => {})
+
+      // Check if phone input already visible
+      const directInput = await findPhoneInput()
+      if (directInput) {
         plusClicked = true
-        console.log(`[ResolvePhone] Named + button: ${sel}`)
-        break
+        console.log('[ResolvePhone] Phone input directly visible after Start chatting!')
+      } else {
+        // Look for a phone/number mode tab or button inside the dialog
+        const phoneModeSels = [
+          'button:has-text("Номер")', 'button:has-text("номер")',
+          'button:has-text("Телефон")', 'button:has-text("телефон")',
+          'button:has-text("Phone")', 'button:has-text("By phone")',
+          '[role="tab"]:has-text("phone")', '[role="tab"]:has-text("номер")',
+          '[class*="phone-tab"]', '[class*="phoneTab"]',
+        ]
+        for (const sel of phoneModeSels) {
+          if (await page.locator(sel).first().isVisible({ timeout: 200 }).catch(() => false)) {
+            await page.locator(sel).first().click()
+            console.log(`[ResolvePhone] Clicked phone mode: ${sel}`)
+            await page.waitForTimeout(600)
+            if (await findPhoneInput()) { plusClicked = true; break }
+          }
+        }
+
+        if (!plusClicked) {
+          // Not the right dialog — close it
+          await page.keyboard.press('Escape').catch(() => {})
+          await page.waitForTimeout(400)
+          console.log('[ResolvePhone] "Start chatting" dialog has no phone mode — need another button')
+        }
       }
     }
 
