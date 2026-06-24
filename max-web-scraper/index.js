@@ -545,10 +545,73 @@ async function resolveViaPhoneLookupDialog(digits) {
           }
         }
 
-        if (clickedMenuItem && await findPhoneInput()) {
-          plusClicked = true
-          console.log('[ResolvePhone] Phone input found after "Search by number"!')
-        } else if (!clickedMenuItem) {
+        if (clickedMenuItem) {
+          // Phone dialog is open — confirm by looking for "Find in MAX" button
+          const findInMaxSels = [
+            'button:has-text("Find in MAX")',
+            'button[aria-label="Find in MAX"]',
+            'button:has-text("Найти в МАХ")',
+            'button:has-text("Найти в MAX")',
+            'button[aria-label="Найти в МАХ"]',
+          ]
+          let dialogConfirmed = false
+          for (const sel of findInMaxSels) {
+            if (await page.locator(sel).first().isVisible({ timeout: 500 }).catch(() => false)) {
+              dialogConfirmed = true
+              console.log(`[ResolvePhone] Phone lookup dialog confirmed (${sel})`)
+              break
+            }
+          }
+
+          if (dialogConfirmed) {
+            // Find the actual phone input — try broader selectors
+            // The input might be next to the country flag button
+            const findDialogPhoneInput = async () => {
+              // Try our standard selectors first
+              const std = await findPhoneInput()
+              if (std) return std
+              // The dialog input might be ANY visible input (the other one is "Search" in contacts)
+              // Since the phone dialog opens as an overlay, try to find input not in contacts list
+              const allInputs = await page.evaluate(() =>
+                [...document.querySelectorAll('input')]
+                  .filter(i => i.type !== 'hidden')
+                  .map(i => ({ ph: i.placeholder, type: i.type, mode: i.inputMode, cls: i.className?.slice(0, 60), vis: i.offsetParent !== null }))
+              )
+              console.log('[ResolvePhone] All inputs in phone dialog:', JSON.stringify(allInputs))
+              // Return any input that's visible and not the "Search" contacts input
+              for (const i of allInputs) {
+                if (i.vis && i.ph !== 'Search') {
+                  const loc = page.locator(`input[placeholder="${i.ph || ''}"]`).first()
+                  if (await loc.isVisible({ timeout: 200 }).catch(() => false)) return loc
+                }
+              }
+              // Last resort: try clicking the country button area and typing into it
+              const countryBtn = page.locator('button[class*="country"]').first()
+              if (await countryBtn.isVisible({ timeout: 200 }).catch(() => false)) {
+                await countryBtn.click()
+                await page.waitForTimeout(300)
+                const afterClick = await findPhoneInput()
+                if (afterClick) return afterClick
+                await page.keyboard.press('Escape').catch(() => {}) // close country picker
+                await page.waitForTimeout(200)
+              }
+              return null
+            }
+
+            const phoneDialogInput = await findDialogPhoneInput()
+            if (phoneDialogInput) {
+              plusClicked = true
+              console.log('[ResolvePhone] Phone input found in dialog!')
+            } else {
+              // Still can't find the input — but we know the dialog is open
+              // Try typing directly (keyboard.type goes to focused element)
+              console.log('[ResolvePhone] Dialog open but phone input not found by selector — will try keyboard.type')
+              plusClicked = true  // proceed to the typing/submit stage
+            }
+          } else {
+            console.log('[ResolvePhone] "Search by number" clicked but dialog not confirmed')
+          }
+        } else {
           // Menu didn't have expected item — close it
           await page.keyboard.press('Escape').catch(() => {})
           await page.waitForTimeout(400)
@@ -775,29 +838,76 @@ async function resolveViaPhoneLookupDialog(digits) {
 
     await page.screenshot({ path: '/tmp/max_phone_dialog_open.png' }).catch(() => {})
 
-    // 3. Find phone input (re-check after button iteration above may have already found it)
-    const dialogInput = await findPhoneInput()
+    // 3. Find phone input — try standard selectors + broader fallback
+    let dialogInput = await findPhoneInput()
 
     if (!dialogInput) {
-      const inputs = await page.evaluate(() =>
-        [...document.querySelectorAll('input')]
-          .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
-          .map(i => ({ ph: i.placeholder, type: i.type, mode: i.inputMode, cls: i.className?.slice(0, 60) }))
-      )
-      console.log('[ResolvePhone] No phone input found. Visible inputs:', JSON.stringify(inputs))
-      cleanup(); await returnHome(); return null
-    }
-    console.log('[ResolvePhone] Phone input confirmed — filling...')
+      // Check if "Find in MAX" / "Найти в МАХ" is visible — means dialog IS open but input is non-standard
+      const findInMaxVisible = await page.locator(
+        'button:has-text("Find in MAX"), button:has-text("Найти в МАХ"), button:has-text("Найти в MAX"), button[aria-label="Find in MAX"]'
+      ).first().isVisible({ timeout: 600 }).catch(() => false)
 
-    // 4. Type local 10 digits into the dialog input
-    await dialogInput.click()
-    await dialogInput.fill('')
+      if (findInMaxVisible) {
+        console.log('[ResolvePhone] Dialog open (Find in MAX visible). Trying broader input search...')
+        // Find ANY input that is not "Search" (the contacts panel search bar)
+        const anyInput = await page.evaluate(() => {
+          const inputs = [...document.querySelectorAll('input')]
+            .filter(i => i.type !== 'hidden' && i.placeholder !== 'Search' && i.getAttribute('placeholder') !== 'Поиск')
+          if (!inputs.length) return null
+          const i = inputs[0]
+          return { ph: i.placeholder, type: i.type, mode: i.inputMode, cls: i.className?.slice(0, 60) }
+        })
+        console.log('[ResolvePhone] Non-search input in dialog:', JSON.stringify(anyInput))
+
+        if (anyInput !== null) {
+          const sel = anyInput.ph
+            ? `input[placeholder="${anyInput.ph}"]`
+            : anyInput.cls ? `input.${anyInput.cls.split(' ')[0]}` : 'input'
+          dialogInput = page.locator(sel).first()
+        }
+
+        if (!dialogInput) {
+          // No input at all — the phone "input" might be a contenteditable or custom element
+          // Try clicking the country button (🇷🇺) to focus the numeric field
+          const countryEl = page.locator('button[class*="country"], [class*="country"][role="button"]').first()
+          if (await countryEl.isVisible({ timeout: 300 }).catch(() => false)) {
+            const box = await countryEl.boundingBox()
+            if (box) {
+              // Click right-adjacent to country button where the phone digits go
+              await page.mouse.click(box.x + box.width + 20, box.y + box.height / 2)
+              console.log('[ResolvePhone] Clicked right of country button to focus phone field')
+              await page.waitForTimeout(300)
+              dialogInput = await findPhoneInput()
+            }
+          }
+        }
+      } else {
+        const inputs = await page.evaluate(() =>
+          [...document.querySelectorAll('input')]
+            .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
+            .map(i => ({ ph: i.placeholder, type: i.type, mode: i.inputMode, cls: i.className?.slice(0, 60) }))
+        )
+        console.log('[ResolvePhone] No phone dialog found. Visible inputs:', JSON.stringify(inputs))
+        cleanup(); await returnHome(); return null
+      }
+    }
+
+    // 4. Type local 10 digits into the dialog input (or use keyboard if input not found)
+    if (dialogInput) {
+      console.log('[ResolvePhone] Phone input confirmed — filling...')
+      await dialogInput.click({ timeout: 2000 }).catch(() => {})
+      await dialogInput.fill('').catch(() => {})
+    } else {
+      console.log('[ResolvePhone] No input found — typing directly (focussed element fallback)')
+    }
     await page.keyboard.type(local10, { delay: 50 })
     await page.waitForTimeout(500)
     await page.screenshot({ path: '/tmp/max_phone_dialog_typed.png' }).catch(() => {})
 
-    // 5. Click "Найти в МАХ" button
+    // 5. Click "Find in MAX" / "Найти в МАХ" button
     const searchBtnSel = [
+      'button:has-text("Find in MAX")',
+      'button[aria-label="Find in MAX"]',
       'button:has-text("Найти в МАХ")',
       'button:has-text("Найти в MAX")',
       'button:has-text("Найти")',
