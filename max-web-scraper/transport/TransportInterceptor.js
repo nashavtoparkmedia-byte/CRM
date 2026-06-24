@@ -202,7 +202,11 @@ class TransportInterceptor {
 
   _handleFrame(raw) {
     let data
-    try { data = JSON.parse(raw) } catch { return }
+    try { data = JSON.parse(raw) } catch {
+      // Log first 200 chars of unparseable frames to diagnose encoding/format issues
+      console.log('[Transport PARSE_FAIL] len:', raw.length, 'hex0:', raw.charCodeAt(0).toString(16), 'start:', raw.slice(0, 120))
+      return
+    }
 
     // Diagnostic frames from WS_INIT_SCRIPT
     if (data.__diag) {
