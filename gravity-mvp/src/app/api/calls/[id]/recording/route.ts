@@ -1,19 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { prisma } from '@/lib/prisma'
-import { getRecordingUrl } from '@/lib/storage/minio'
+import { getObject } from '@/lib/storage/minio'
 
 /**
  * GET /api/calls/[id]/recording
  *
- * Returns a short-lived presigned URL for the call's MP3 recording.
- * Open to any authenticated CRM user (Stage 3 ACL choice — see project_telephony.md).
+ * Streams the MP3 recording through the Next.js server.
+ * Streaming avoids the mixed-content problem that arises when MinIO is
+ * accessed via an internal Docker hostname (http://minio:9000) while the
+ * CRM runs on HTTPS — browsers block http:// resources on https:// pages.
  *
- * The presigned URL points directly at MinIO/Yandex S3 — the browser
- * streams the file without going through the Next.js server. Lifetime
- * defaults to 1 hour, so a copied URL stops working after one work session.
+ * Supports partial content (Range) so the browser audio player can seek.
  */
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
@@ -26,8 +26,37 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!call.recordingPath) return NextResponse.json({ error: 'no_recording' }, { status: 404 })
 
     try {
-        const url = await getRecordingUrl(call.recordingPath)
-        return NextResponse.json({ url })
+        const buffer = await getObject(call.recordingPath)
+        const total = buffer.byteLength
+
+        const rangeHeader = req.headers.get('range')
+        if (rangeHeader) {
+            // Partial content — browser is seeking
+            const [, rangeSpec] = rangeHeader.split('=')
+            const [startStr, endStr] = rangeSpec.split('-')
+            const start = parseInt(startStr, 10)
+            const end = endStr ? parseInt(endStr, 10) : total - 1
+            const chunkSize = end - start + 1
+            return new NextResponse(buffer.slice(start, end + 1), {
+                status: 206,
+                headers: {
+                    'Content-Type': 'audio/mpeg',
+                    'Content-Range': `bytes ${start}-${end}/${total}`,
+                    'Content-Length': String(chunkSize),
+                    'Accept-Ranges': 'bytes',
+                },
+            })
+        }
+
+        return new NextResponse(buffer, {
+            status: 200,
+            headers: {
+                'Content-Type': 'audio/mpeg',
+                'Content-Length': String(total),
+                'Accept-Ranges': 'bytes',
+                'Cache-Control': 'private, max-age=3600',
+            },
+        })
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 })
     }

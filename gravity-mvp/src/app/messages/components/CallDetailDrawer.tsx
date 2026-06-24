@@ -254,48 +254,28 @@ function TabButton({
 }
 
 function AudioPane({ call, autoPlay }: { call: CallDetail; autoPlay?: boolean }) {
-    const [url, setUrl] = useState<string | null>(null)
-    const [loading, setLoading] = useState(false)
-    const [err, setErr] = useState<string | null>(null)
-    const triedRef = useRef(false)
     const audioRef = useRef<HTMLAudioElement | null>(null)
-
-    useEffect(() => {
-        if (!call.recordingPath || url || triedRef.current) return
-        triedRef.current = true
-        setLoading(true)
-        fetch(`/api/calls/${call.id}/recording`)
-            .then(r => r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`)))
-            .then(d => setUrl(d.url))
-            .catch(e => setErr(e.message ?? 'не удалось загрузить запись'))
-            .finally(() => setLoading(false))
-    }, [call.id, call.recordingPath, url])
-
-    // Once the signed URL arrives AND we opened the drawer via the play
-    // button on a pill (autoPlay=true), kick playback. We can't rely on the
-    // HTML `autoplay` attribute alone — Chrome's autoplay policy needs the
-    // play() call to come from a user-gesture-rooted code path, which this is
-    // (the click on the pill's play button triggered the URL update that
-    // ultimately mounted this element).
-    useEffect(() => {
-        if (!autoPlay || !url || !audioRef.current) return
-        const el = audioRef.current
-        el.play().catch(() => {
-            // Autoplay blocked — leave the controls visible so the user can
-            // press play manually. No-op on the catch is intentional.
-        })
-    }, [autoPlay, url])
 
     if (!call.recordingPath) {
         return <EmptyState icon={Headphones} title="Записи нет" hint="Запись появляется через несколько секунд после завершения разговора." />
     }
-    if (loading) return <div className="flex items-center gap-[2px] text-[13px] text-muted-foreground"><Loader2 className="h-[4px] w-[4px] animate-spin" /> Получаем ссылку…</div>
-    if (err || !url) return <div className="text-[13px] text-destructive">{err}</div>
 
     return (
         <div className="flex flex-col gap-3">
-            <audio ref={audioRef} src={url} controls preload="auto" className="w-full" />
-            <p className="text-[11px] text-muted-foreground">Ссылка действует 1 час.</p>
+            <audio
+                ref={audioRef}
+                src={`/api/calls/${call.id}/recording`}
+                controls
+                preload="auto"
+                className="w-full"
+                onLoadedMetadata={() => {
+                    // autoPlay triggered from play-button pill click — safe under Chrome autoplay policy
+                    // because the gesture chain is still active when metadata loads.
+                    if (autoPlay && audioRef.current) {
+                        audioRef.current.play().catch(() => { /* blocked — controls visible */ })
+                    }
+                }}
+            />
         </div>
     )
 }

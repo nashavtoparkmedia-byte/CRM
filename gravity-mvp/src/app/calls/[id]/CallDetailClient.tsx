@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
     Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff,
@@ -191,36 +191,15 @@ function Tabs({ active, onChange, call }: { active: TabKey; onChange: (t: TabKey
 }
 
 function AudioPane({ call }: { call: CallDetail }) {
-    const [url, setUrl] = useState<string | null>(null)
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState<string | null>(null)
-    const audioRef = useRef<HTMLAudioElement | null>(null)
-
-    useEffect(() => {
-        if (!call.recordingPath || url) return
-        setLoading(true)
-        fetch(`/api/calls/${call.id}/recording`)
-            .then(r => r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`)))
-            .then(d => setUrl(d.url))
-            .catch(err => setError(err.message ?? 'не удалось загрузить запись'))
-            .finally(() => setLoading(false))
-    }, [call.id, call.recordingPath, url])
-
     if (!call.recordingPath) {
         return <EmptyState icon={Headphones} title="Записи нет" hint="Запись появляется через несколько секунд после завершения разговора." />
-    }
-    if (loading) {
-        return <div className="flex items-center gap-[2px] text-[13px] text-muted-foreground"><Loader2 className="h-[4px] w-[4px] animate-spin" /> Загрузка ссылки на запись…</div>
-    }
-    if (error || !url) {
-        return <div className="text-[13px] text-destructive">Не удалось получить запись: {error}</div>
     }
 
     return (
         <div className="flex flex-col gap-3">
-            <audio ref={audioRef} src={url} controls preload="metadata" className="w-full" />
+            <audio src={`/api/calls/${call.id}/recording`} controls preload="metadata" className="w-full" />
             <p className="text-[12px] text-muted-foreground">
-                Ссылка действует 1 час. Перейдите по табу <span className="text-foreground">Транскрипт</span> или <span className="text-foreground">AI-анализ</span>, чтобы увидеть обработку.
+                Перейдите по табу <span className="text-foreground">Транскрипт</span> или <span className="text-foreground">AI-анализ</span>, чтобы увидеть обработку.
             </p>
         </div>
     )
