@@ -442,95 +442,146 @@ async function resolveViaPhoneLookupDialog(digits) {
     if (idx > -1) transport._rawHandlers.splice(idx, 1)
   }
 
-  try {
-    // 1. Go to contacts section
-    await page.goto('https://web.max.ru/contacts', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
-    await page.waitForTimeout(1500)
-
-    // 2. Click "+" button to open "Найти по номеру" dialog
-    // The button is the blue circular + in the Contacts header
-    let plusClicked = false
-    const plusSelectors = [
-      'button[title*="Найти"]', 'button[aria-label*="Найти"]',
-      'button[title*="добавить"]', 'button[aria-label*="добавить"]',
-      'button[title*="Добавить"]', 'button[aria-label*="Добавить"]',
-      'button[title*="новый"]', 'button[aria-label*="новый"]',
-    ]
-    for (const sel of plusSelectors) {
+  // Helper: find a phone-type input on the page (not a text search)
+  const findPhoneInput = async () => {
+    for (const sel of [
+      'input[placeholder*="123"]', 'input[placeholder*="456"]',
+      'input[type="tel"]', 'input[inputmode="numeric"]', 'input[inputmode="tel"]',
+      'input[placeholder*="номер"]', 'input[placeholder*="Номер"]',
+      'input[placeholder*="phone"]', 'input[placeholder*="Phone"]',
+    ]) {
       if (await page.locator(sel).first().isVisible({ timeout: 300 }).catch(() => false)) {
+        return page.locator(sel).first()
+      }
+    }
+    return null
+  }
+
+  try {
+    // 1. Navigate to home so we have a clean state
+    await page.goto('https://web.max.ru', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
+    await page.waitForTimeout(1000)
+
+    // 2. Click "Contacts" tab to activate contacts section
+    // The tab has text "Contacts" (EN) or "Контакты" (RU)
+    const contactsTab = page.locator('button:has-text("Contacts"), button:has-text("Контакты")').first()
+    if (await contactsTab.isVisible({ timeout: 1500 }).catch(() => false)) {
+      await contactsTab.click()
+      console.log('[ResolvePhone] Clicked Contacts tab')
+      await page.waitForTimeout(1000)
+    } else {
+      console.log('[ResolvePhone] Contacts tab not found, trying /contacts URL')
+      await page.goto('https://web.max.ru/contacts', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
+      await page.waitForTimeout(1000)
+    }
+
+    // 3. Dump all visible buttons to find the "+" for "Найти по номеру"
+    const btns = await page.evaluate(() =>
+      [...document.querySelectorAll('button')]
+        .filter(b => b.offsetParent !== null)
+        .map(b => ({
+          text: b.innerText?.trim().slice(0, 30),
+          title: b.getAttribute('title'),
+          label: b.getAttribute('aria-label'),
+          cls: b.className?.slice(0, 80),
+        }))
+    )
+    console.log('[ResolvePhone] Contacts section buttons:', JSON.stringify(btns))
+
+    // 4. Find the "+" button — it should be an SVG-only (no text) button
+    //    that is NOT "Start chatting" (that one opens the compose/search dialog)
+    //    We try EACH SVG-only button and check if it opens a PHONE input
+    let plusClicked = false
+
+    // Priority: known aria-label patterns for "Найти по номеру" button
+    const namedPlusSelectors = [
+      'button[aria-label*="номер"]', 'button[aria-label*="Номер"]',
+      'button[aria-label*="phone"]', 'button[aria-label*="Phone"]',
+      'button[aria-label*="найти"]', 'button[aria-label*="Найти"]',
+      'button[aria-label*="добав"]', 'button[aria-label*="Добав"]',
+      'button[title*="номер"]', 'button[title*="phone"]',
+    ]
+    for (const sel of namedPlusSelectors) {
+      if (await page.locator(sel).first().isVisible({ timeout: 200 }).catch(() => false)) {
         await page.locator(sel).first().click()
         plusClicked = true
-        console.log(`[ResolvePhone] + button clicked (${sel})`)
+        console.log(`[ResolvePhone] Named + button: ${sel}`)
         break
       }
     }
 
     if (!plusClicked) {
-      // Fallback: dump visible buttons for debug, then click SVG-only (icon) button
-      const btns = await page.evaluate(() =>
-        [...document.querySelectorAll('button')]
-          .filter(b => b.offsetParent !== null)
-          .slice(0, 30)
-          .map(b => ({
-            text: b.innerText?.trim().slice(0, 30),
-            title: b.getAttribute('title'),
-            label: b.getAttribute('aria-label'),
-            cls: b.className?.slice(0, 80),
-          }))
+      // Iterate over ALL SVG-only buttons (no text), skip "Start chatting"
+      // Click each one and check if a phone input appears
+      const svgBtns = btns.filter(b =>
+        !b.text &&           // no visible text
+        b.label !== 'Start chatting' &&  // not the compose button
+        b.label !== 'Еще'                // not the "more" menu button on cells
       )
-      console.log('[ResolvePhone] Contacts buttons:', JSON.stringify(btns))
+      console.log('[ResolvePhone] SVG-only candidates:', JSON.stringify(svgBtns))
 
-      // Click the first SVG-only button (icon buttons have no text, usually the + btn)
-      const clicked = await page.evaluate(() => {
-        const btns = [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null)
-        for (const b of btns) {
-          if (!(b.innerText?.trim()) && b.querySelector('svg')) {
-            b.click(); return b.className?.slice(0, 60) || 'clicked'
+      for (const candidate of svgBtns) {
+        // Build a selector to click this specific button
+        const escaped = (s) => s?.replace(/"/g, '\\"')
+        const sel = candidate.label
+          ? `button[aria-label="${escaped(candidate.label)}"]`
+          : candidate.title
+            ? `button[title="${escaped(candidate.title)}"]`
+            : null
+
+        let clicked = false
+        if (sel) {
+          if (await page.locator(sel).first().isVisible({ timeout: 200 }).catch(() => false)) {
+            await page.locator(sel).first().click()
+            clicked = true
+          }
+        } else {
+          // No aria-label or title — click by class substring match
+          const clsFrag = candidate.cls?.match(/svelte-\w+/)?.[0]
+          if (clsFrag) {
+            clicked = await page.evaluate((frag) => {
+              const btns = [...document.querySelectorAll(`button.${frag}`)].filter(b => b.offsetParent !== null && !b.innerText?.trim())
+              if (btns[0]) { btns[0].click(); return true }
+              return false
+            }, clsFrag)
           }
         }
-        return null
-      })
-      if (clicked) {
-        plusClicked = true
-        console.log('[ResolvePhone] SVG-only button clicked:', clicked)
+
+        if (!clicked) continue
+        console.log(`[ResolvePhone] Tried button: label="${candidate.label}" cls="${candidate.cls?.slice(0,40)}"`)
+        await page.waitForTimeout(700)
+
+        // Check if a PHONE input appeared (not a text search input)
+        const phoneInput = await findPhoneInput()
+        if (phoneInput) {
+          plusClicked = true
+          console.log('[ResolvePhone] Phone input found after button click!')
+          break
+        }
+
+        // Wrong button — close any opened overlay with Escape and try next
+        await page.keyboard.press('Escape').catch(() => {})
+        await page.waitForTimeout(400)
       }
+    } else {
+      await page.waitForTimeout(700)
     }
 
-    await page.waitForTimeout(800)
     await page.screenshot({ path: '/tmp/max_phone_dialog_open.png' }).catch(() => {})
 
-    // 3. Find phone input in the dialog "Найти по номеру"
-    // Placeholder is "123 456 78 90" — contains "123"
-    const inputSelectors = [
-      'input[placeholder*="123"]',
-      'input[placeholder*="456"]',
-      'input[type="tel"]',
-      'input[inputmode="numeric"]',
-      'input[inputmode="tel"]',
-      'input[placeholder*="номер"]',
-      'input[placeholder*="Номер"]',
-      'input[placeholder*="phone"]',
-      'input[placeholder*="Phone"]',
-    ]
-    let dialogInput = null
-    for (const sel of inputSelectors) {
-      if (await page.locator(sel).first().isVisible({ timeout: 500 }).catch(() => false)) {
-        dialogInput = page.locator(sel).first()
-        console.log(`[ResolvePhone] Dialog input found: ${sel}`)
-        break
-      }
-    }
+    // 3. Find phone input (re-check after button iteration above may have already found it)
+    const dialogInput = await findPhoneInput()
 
     if (!dialogInput) {
-      // Log all visible inputs for debug
       const inputs = await page.evaluate(() =>
         [...document.querySelectorAll('input')]
           .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
           .map(i => ({ ph: i.placeholder, type: i.type, mode: i.inputMode, cls: i.className?.slice(0, 60) }))
       )
-      console.log('[ResolvePhone] Visible inputs after + click:', JSON.stringify(inputs))
+      console.log('[ResolvePhone] No phone input found. Visible inputs:', JSON.stringify(inputs))
       cleanup(); await returnHome(); return null
     }
+    console.log('[ResolvePhone] Phone input confirmed — filling...')
 
     // 4. Type local 10 digits into the dialog input
     await dialogInput.click()
