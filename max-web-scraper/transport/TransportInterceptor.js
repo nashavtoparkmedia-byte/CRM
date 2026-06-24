@@ -9,7 +9,14 @@ const WS_INIT_SCRIPT = `(function () {
     var ws = protocols != null ? new _OrigWS(url, protocols) : new _OrigWS(url);
     if (url && (url.indexOf('ws-api.oneme.ru') !== -1 || url.indexOf('api.oneme.ru') !== -1)) {
       window.__maxWs = ws;
-      console.log('[MAX-WS] patched:', url);
+      // Intercept all incoming messages via addEventListener so Node.js receives
+      // them through __maxWsReceive even when CDP/Playwright cannot see WS frames
+      // (e.g. HTTP/2-based WebSocket on api.oneme.ru/websocket).
+      ws.addEventListener('message', function (event) {
+        try {
+          if (window.__maxWsReceive) window.__maxWsReceive(event.data);
+        } catch (e) {}
+      });
     }
     return ws;
   }
@@ -74,26 +81,18 @@ class TransportInterceptor {
 
   async injectHooks(page) {
     this._page = page
+
+    // JS-level bridge: browser calls window.__maxWsReceive(data) for every incoming
+    // WS message; Node.js receives it here. This bypasses CDP + Playwright WS interception
+    // which both fail for api.oneme.ru/websocket (likely HTTP/2 WebSocket).
+    await page.exposeFunction('__maxWsReceive', (data) => {
+      try { this._handleFrame(String(data)) } catch {}
+    })
+
     await page.addInitScript(WS_INIT_SCRIPT)
     console.log('[Transport] WS-хук инжектирован')
 
-    // Playwright-level WS frame interception — works for initial page load WS
-    // (CDP.webSocketFrameReceived misses frames from the first WS created during page.goto
-    // because CDP is attached only AFTER goto returns).
-    page.on('websocket', ws => {
-      const url = ws.url()
-      if (!url.includes('api.oneme.ru')) return
-      console.log('[Transport] WS (playwright) создан:', url)
-      ws.on('framereceived', ({ payload }) => {
-        try {
-          const text = Buffer.isBuffer(payload) ? payload.toString('utf8') : String(payload)
-          this._handleFrame(text)
-        } catch {
-          console.log('[Transport] WS frame parse error for payload len:', (payload || '').length)
-        }
-      })
-      ws.on('close', () => console.log('[Transport] WS (playwright) закрыт'))
-    })
+    // Note: page.on('websocket') framereceived also removed — was not firing for api.oneme.ru/websocket.
   }
 
   // ─── Шаг 2: Прикрепляем CDP ПОСЛЕ page.goto ─────────────────────────────
@@ -108,22 +107,9 @@ class TransportInterceptor {
       console.log('[Transport] WS создан:', url)
     })
 
-    // CDP WS frame reception — now attached BEFORE page.goto so it catches the initial WS.
-    // Playwright page.on('websocket') is kept as a fallback in injectHooks.
-    this._cdpClient.on('Network.webSocketFrameReceived', ({ response }) => {
-      if (!response.payloadData) return
-      if (response.opcode === 2) {
-        // Binary frame: CDP returns base64-encoded binary data.
-        try {
-          const decoded = Buffer.from(response.payloadData, 'base64').toString('utf8')
-          this._handleFrame(decoded)
-        } catch {
-          console.log('[Transport BINARY] frame len:', response.payloadData.length)
-        }
-        return
-      }
-      this._handleFrame(response.payloadData)
-    })
+    // WS frame reception is handled via window.__maxWsReceive (exposeFunction in injectHooks).
+    // CDP.webSocketFrameReceived and Playwright ws.framereceived are disabled to avoid
+    // duplicate processing — both failed for api.oneme.ru/websocket anyway.
 
     // Перехватываем ВСЕ исходящие WS-фреймы для диагностики + реакции
     this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
