@@ -4,21 +4,36 @@
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
 // и добавляет window.__maxWsSend(rawString) для отправки фреймов из Node.js
 const WS_INIT_SCRIPT = `(function () {
+  // ── Patch Worker constructor to detect worker creation ───────────────────
+  var _OrigWorker = window.Worker;
+  if (_OrigWorker) {
+    window.Worker = function(url, opts) {
+      var w = (opts != null) ? new _OrigWorker(url, opts) : new _OrigWorker(url);
+      try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"worker_created","url":"' + url + '"}'); } catch(e) {}
+      return w;
+    };
+    window.Worker.prototype = _OrigWorker.prototype;
+  }
+
+  // ── Patch WebSocket in main thread ───────────────────────────────────────
   var _OrigWS = window.WebSocket;
   function PatchedWS(url, protocols) {
     var ws = protocols != null ? new _OrigWS(url, protocols) : new _OrigWS(url);
     if (url && (url.indexOf('ws-api.oneme.ru') !== -1 || url.indexOf('api.oneme.ru') !== -1)) {
       window.__maxWs = ws;
-      // Intercept all incoming messages via addEventListener so Node.js receives
-      // them through __maxWsReceive even when CDP/Playwright cannot see WS frames
-      // (e.g. HTTP/2-based WebSocket on api.oneme.ru/websocket).
-      // Test if the bridge is alive — logs something immediately on WS creation
+      // Force ArrayBuffer mode so binary frames don't arrive as Blob (unreadable synchronously)
+      ws.binaryType = 'arraybuffer';
       try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"ws_created","url":"' + url + '"}'); } catch(e) {}
       ws.addEventListener('message', function (event) {
         try {
+          // Diagnostic: report that the message event fired (with data type)
+          var dataType = typeof event.data;
+          var isAB = event.data instanceof ArrayBuffer;
+          try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"msg_arrived","type":"' + dataType + '","ab":' + isAB + '}'); } catch(e2) {}
+
           var d = event.data;
           if (typeof d !== 'string') {
-            // Binary frame (ArrayBuffer / Blob) — encode as latin1 string
+            // Binary frame (ArrayBuffer) — encode as latin1 string
             try {
               var arr = (d instanceof ArrayBuffer) ? new Uint8Array(d) : new Uint8Array(0);
               var s = '';
@@ -95,8 +110,7 @@ class TransportInterceptor {
     this._page = page
 
     // JS-level bridge: browser calls window.__maxWsReceive(data) for every incoming
-    // WS message; Node.js receives it here. This bypasses CDP + Playwright WS interception
-    // which both fail for api.oneme.ru/websocket (likely HTTP/2 WebSocket).
+    // WS message; Node.js receives it here.
     await page.exposeFunction('__maxWsReceive', (data) => {
       try { this._handleFrame(String(data)) } catch {}
     })
@@ -104,7 +118,10 @@ class TransportInterceptor {
     await page.addInitScript(WS_INIT_SCRIPT)
     console.log('[Transport] WS-хук инжектирован')
 
-    // Note: page.on('websocket') framereceived also removed — was not firing for api.oneme.ru/websocket.
+    // Detect Web Workers — MAX may create WS inside a Dedicated Worker
+    page.on('worker', (worker) => {
+      console.log('[Transport] Worker создан:', worker.url())
+    })
   }
 
   // ─── Шаг 2: Прикрепляем CDP ПОСЛЕ page.goto ─────────────────────────────
@@ -188,6 +205,20 @@ class TransportInterceptor {
   _handleFrame(raw) {
     let data
     try { data = JSON.parse(raw) } catch { return }
+
+    // Diagnostic frames from WS_INIT_SCRIPT
+    if (data.__diag) {
+      if (data.__diag === 'ws_created') {
+        console.log('[Transport DIAG] WS создан:', data.url)
+      } else if (data.__diag === 'msg_arrived') {
+        console.log('[Transport DIAG] message event СРАБОТАЛ — тип:', data.type, 'ab:', data.ab)
+      } else if (data.__diag === 'worker_created') {
+        console.log('[Transport DIAG] Worker создан из JS:', data.url)
+      } else {
+        console.log('[Transport DIAG]', JSON.stringify(data))
+      }
+      return
+    }
 
     // DEBUG: log all non-presence frames
     if (data.opcode !== OP.PRESENCE) {
