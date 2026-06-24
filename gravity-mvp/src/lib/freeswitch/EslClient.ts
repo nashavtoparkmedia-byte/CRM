@@ -194,6 +194,12 @@ async function handleChannelCreate(evt: any): Promise<void> {
     const localNumber = direction === 'inbound' ? calleeNumber : callerNumber
     const e164 = normalizePhoneE164(remoteNumber)
 
+    // Drop SIP scanner probes before touching the DB. Real phone numbers always
+    // normalize to E.164; short/bogus CallerIDs like "401" or "10001" return
+    // null from normalizePhoneE164 and are never real callers.
+    // Outbound calls are always legitimate (we dialed them ourselves).
+    if (direction === 'inbound' && e164 === null) return
+
     let driverId: string | null = null
     let contactId: string | null = null
     let displayName: string | null = null
