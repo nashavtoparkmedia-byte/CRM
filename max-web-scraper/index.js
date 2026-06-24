@@ -977,9 +977,26 @@ async function resolveViaPhoneLookupDialog(digits) {
       }
     }
 
-    // 6c. Check WS frames: op:60/68 search results
-    console.log(`[ResolvePhone] WS frames: ${capturedFrames.map(f => `op:${f.opcode}`).join(',')}`)
+    // 6c. Check WS frames: op:46 (phone lookup), op:60/68 (search results)
+    console.log(`[ResolvePhone] WS frames: ${capturedFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(',')}`)
     for (const f of capturedFrames) {
+      if (f.opcode === 46 && f.cmd === 1) {
+        // op:46 cmd:1 — phone lookup success
+        // Payload may contain userId, id, or a conversation object
+        const p = f.payload || {}
+        const userId = p.userId || p.id || p.user?.id || p.user?.userId
+        if (userId && /^\d{5,15}$/.test(String(userId))) {
+          console.log(`[ResolvePhone] op:46 phone lookup result: ${digits} → ${userId}`)
+          cleanup(); await returnHome(); return String(userId)
+        }
+        const convId = p.convId || p.chatId || p.conversationId
+        if (convId && /^\d{5,15}$/.test(String(convId))) {
+          console.log(`[ResolvePhone] op:46 convId: ${digits} → ${convId}`)
+          cleanup(); await returnHome(); return String(convId)
+        }
+        // Log the full payload for unknown structures
+        console.log(`[ResolvePhone] op:46 cmd:1 payload:`, JSON.stringify(p).slice(0, 300))
+      }
       if (f.opcode !== 60 && f.opcode !== 68) continue
       const results = Array.isArray(f.payload?.result) ? f.payload.result : []
       for (const r of results) {
@@ -989,20 +1006,6 @@ async function resolveViaPhoneLookupDialog(digits) {
           cleanup(); await returnHome(); return String(id)
         }
       }
-    }
-
-    // 6d. DOM fallback — any numeric id in visible elements
-    const domId = await page.evaluate(() => {
-      for (const el of document.querySelectorAll('[data-id],[data-user-id],a[href*="/"]')) {
-        const id = el.getAttribute('data-id') || el.getAttribute('data-user-id') ||
-                   (el.getAttribute('href') || '').match(/\/(\d{6,15})(?:\/|$)/)?.[1]
-        if (id && /^\d{6,15}$/.test(id)) return id
-      }
-      return null
-    })
-    if (domId) {
-      console.log(`[ResolvePhone] DOM id: ${digits} → ${domId}`)
-      cleanup(); await returnHome(); return domId
     }
 
     console.log(`[ResolvePhone] "Найти по номеру" — no result for ${local10}`)
