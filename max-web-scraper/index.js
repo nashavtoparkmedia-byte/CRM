@@ -436,9 +436,26 @@ async function resolveViaUiSearch(digits) {
   }
   transport._rawHandlers.push(rawHandler)
 
+  // Capture HTTP API responses during search
+  const capturedHttp = []
+  const httpHandler = async (response) => {
+    const url = response.url()
+    // Skip static assets
+    if (/\.(png|jpg|svg|css|js|ico|woff|woff2)(\?|$)/.test(url)) return
+    if (url.includes('/_app/') || url.includes('/immutable/')) return
+    try {
+      const text = await response.text().catch(() => '')
+      if (text && text.length < 5000) {
+        capturedHttp.push({ url, status: response.status(), body: text.slice(0, 500) })
+      }
+    } catch {}
+  }
+  page.on('response', httpHandler)
+
   const cleanup = () => {
     const idx = transport._rawHandlers.indexOf(rawHandler)
     if (idx > -1) transport._rawHandlers.splice(idx, 1)
+    page.off('response', httpHandler)
   }
 
   try {
@@ -645,11 +662,31 @@ async function resolveViaUiSearch(digits) {
         }
       }
     }
+
+    // Log any HTTP API calls captured during the search (for diagnostics)
+    if (capturedHttp.length > 0) {
+      console.log(`[ResolvePhone] HTTP responses (${capturedHttp.length}):`,
+        capturedHttp.map(h => `${h.status} ${h.url} → ${h.body.slice(0, 100)}`).join('\n'))
+    }
   } catch (e) {
     cleanup()
     console.warn('[ResolvePhone] UI search failed:', e.message)
   }
 
+  return null
+}
+
+// ─── chatCache participant lookup ─────────────────────────────────────────────
+// Find a known conversation by the OTHER participant's userId
+function findConvByParticipant(userId) {
+  const myId = String(transport?._myUserId || '')
+  const userIdStr = String(userId)
+  for (const [chatIdStr, chat] of chatCache.entries()) {
+    const parts = chat.participants ? Object.keys(chat.participants) : []
+    if (parts.includes(userIdStr) && (parts.includes(myId) || parts.length === 1)) {
+      return chatIdStr
+    }
+  }
   return null
 }
 
@@ -1288,6 +1325,23 @@ app.get('/debug/contacts', (req, res) => {
     }
   }
   res.json({ total: contactStore?._map.size || 0, withPhone })
+})
+
+// GET /debug/chats — chatCache: all known conversations with participants
+app.get('/debug/chats', (req, res) => {
+  const myId = String(transport?._myUserId || '')
+  const chats = []
+  for (const [chatId, chat] of chatCache.entries()) {
+    const participants = chat.participants ? Object.keys(chat.participants) : []
+    const other = participants.filter(p => p !== myId)
+    chats.push({
+      chatId,
+      type: chat.type || null,
+      participants: other,
+      title: chat.title || chat.name || null,
+    })
+  }
+  res.json({ total: chats.length, myUserId: myId, chats: chats.slice(0, 200) })
 })
 
 // Отправить текст
