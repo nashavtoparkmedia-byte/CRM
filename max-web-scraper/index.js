@@ -419,119 +419,174 @@ async function getContactPhone(senderId, timeoutMs = 4000) {
 
 // ─── Puppeteer UI search in MAX web ──────────────────────────────────────────
 // Last-resort resolver when contactStore doesn't have the phone after sync.
-// Opens MAX compose dialog, types phone, extracts userId from DOM results.
+// Uses Playwright native API (not page.evaluate synthetic events) so that
+// React/Vue event handlers are properly triggered.
 async function resolveViaUiSearch(digits) {
   if (!page) return null
 
   const phone7 = digits.startsWith('7') ? digits : '7' + digits.slice(-10)
-  console.log(`[ResolvePhone] Trying MAX web UI search for ${phone7}...`)
+  console.log(`[ResolvePhone] UI search: ${phone7}...`)
 
-  try {
-    // Capture incoming WS frames for the duration of the UI search
-    const capturedFrames = []
-    const rawHandler = (data) => {
-      if (data.opcode !== 132) { // skip PRESENCE noise
-        capturedFrames.push({ opcode: data.opcode, cmd: data.cmd, seq: data.seq, payload: data.payload })
-      }
+  // Capture ALL WS frames during search — the search request + results
+  const capturedFrames = []
+  const rawHandler = (data) => {
+    if (data.opcode !== 132) {
+      capturedFrames.push({ opcode: data.opcode, cmd: data.cmd, seq: data.seq, payload: data.payload })
     }
-    transport._rawHandlers.push(rawHandler)
+  }
+  transport._rawHandlers.push(rawHandler)
 
-    const result = await page.evaluate(async (phone) => {
-      // Try keyboard shortcut for new chat (Ctrl+N or similar)
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', ctrlKey: true, bubbles: true }))
-      await new Promise(r => setTimeout(r, 300))
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', code: 'KeyN', ctrlKey: true, bubbles: true }))
-      await new Promise(r => setTimeout(r, 800))
-
-      // Try clicking compose/new message button by aria-label or title
-      const btns = [...document.querySelectorAll('button')]
-      for (const btn of btns) {
-        const label = (btn.getAttribute('title') || btn.getAttribute('aria-label') || '').toLowerCase()
-        if (label.includes('написать') || label.includes('создать') || label.includes('compose') ||
-            label.includes('new') || label.includes('pencil') || label.includes('pen') || label.includes('add')) {
-          btn.click()
-          await new Promise(r => setTimeout(r, 800))
-          break
-        }
-      }
-
-      // Find visible text input (search/recipient field)
-      const visible = [...document.querySelectorAll('input')]
-        .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
-      const searchInput = visible.find(i => {
-        const ph = (i.placeholder || '').toLowerCase()
-        return ph.includes('поис') || ph.includes('кому') || ph.includes('найти') ||
-               ph.includes('search') || ph.includes('recipient') || ph.includes('to')
-      }) || visible[0]
-
-      if (!searchInput) {
-        return { found: false, inputs: visible.map(i => ({ ph: i.placeholder, className: i.className.slice(0, 60) })) }
-      }
-
-      // Type phone number character by character to trigger search
-      searchInput.focus()
-      searchInput.value = ''
-      for (const char of phone) {
-        searchInput.value += char
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }))
-        searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: char, bubbles: true }))
-        await new Promise(r => setTimeout(r, 40))
-      }
-      await new Promise(r => setTimeout(r, 2500))
-
-      // Extract userId from DOM search results (look for data-id, href with /u/ or numeric IDs in links)
-      const resultEls = [...document.querySelectorAll('[class*="result"], [class*="contact"], [class*="user"], [class*="item"]')]
-        .filter(el => el.offsetParent !== null)
-      const extracted = []
-      for (const el of resultEls.slice(0, 10)) {
-        const dataId   = el.dataset?.id || el.dataset?.userId || el.dataset?.contactId
-        const href     = el.querySelector('a')?.href || ''
-        const idInHref = href.match(/\/(\d{6,10})(?:\/|$)/)
-        const text     = (el.textContent || '').slice(0, 100)
-        if (dataId || idInHref) {
-          extracted.push({ dataId, idInHref: idInHref?.[1], text, className: el.className.slice(0, 60) })
-        }
-      }
-
-      // Close compose dialog
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-      await new Promise(r => setTimeout(r, 300))
-
-      return { found: true, inputPlaceholder: searchInput.placeholder, results: extracted }
-    }, phone7)
-
-    await new Promise(r => setTimeout(r, 1000))
-
+  const cleanup = () => {
     const idx = transport._rawHandlers.indexOf(rawHandler)
     if (idx > -1) transport._rawHandlers.splice(idx, 1)
+  }
 
-    console.log('[ResolvePhone] UI search result:', JSON.stringify(result).slice(0, 400))
-    console.log('[ResolvePhone] Captured WS frames:', capturedFrames.length,
-      capturedFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(', '))
+  try {
+    // Save debug screenshot before interaction
+    await page.screenshot({ path: '/tmp/max_resolve_before.png', fullPage: false }).catch(() => {})
 
-    // Look for userId in DOM results
-    if (result?.results?.length > 0) {
-      for (const r of result.results) {
-        const id = r.dataId || r.idInHref
-        if (id && /^\d{6,10}$/.test(String(id))) {
-          console.log(`[ResolvePhone] UI search resolved: ${digits} → userId ${id}`)
-          return String(id)
+    // ── Step 1: Open "new message" compose dialog ────────────────────────
+    // Strategy A: Playwright keyboard shortcut (actually fired, not synthetic)
+    await page.keyboard.press('Control+n').catch(() => {})
+    await page.waitForTimeout(600)
+
+    // Strategy B: click compose button (try multiple selectors)
+    const composeCandidates = [
+      'button[title*="Написать"]',
+      'button[title*="написать"]',
+      'button[aria-label*="Написать"]',
+      'button[aria-label*="написать"]',
+      '[data-testid*="compose"]',
+      '[class*="compose"]',
+      '[class*="newChat"]',
+      '[class*="new-chat"]',
+      '[class*="newMessage"]',
+    ]
+    let composeBtnClicked = false
+    for (const sel of composeCandidates) {
+      try {
+        const el = page.locator(sel).first()
+        if (await el.isVisible({ timeout: 300 }).catch(() => false)) {
+          await el.click()
+          composeBtnClicked = true
+          console.log(`[ResolvePhone] Compose button clicked: ${sel}`)
+          await page.waitForTimeout(800)
+          break
         }
-      }
+      } catch {}
     }
 
-    // Look for userId in captured WS frames (a response to a search request)
+    if (!composeBtnClicked) {
+      // Strategy C: look for any button with pencil SVG or similar icon — dump all button titles for debug
+      const btnInfo = await page.evaluate(() =>
+        [...document.querySelectorAll('button')].slice(0, 30).map(b => ({
+          title: b.getAttribute('title'),
+          label: b.getAttribute('aria-label'),
+          class: b.className.slice(0, 60),
+        }))
+      )
+      console.log('[ResolvePhone] Available buttons:', JSON.stringify(btnInfo))
+    }
+
+    // ── Step 2: Find and fill the search/recipient input ─────────────────
+    await page.screenshot({ path: '/tmp/max_resolve_compose.png', fullPage: false }).catch(() => {})
+
+    const inputCandidates = [
+      'input[placeholder*="Поис"]',
+      'input[placeholder*="поис"]',
+      'input[placeholder*="Кому"]',
+      'input[placeholder*="кому"]',
+      'input[placeholder*="Найти"]',
+      'input[placeholder*="найти"]',
+      'input[placeholder*="имя"]',
+      'input[placeholder*="Имя"]',
+    ]
+    let searchInputSel = null
+    for (const sel of inputCandidates) {
+      try {
+        if (await page.locator(sel).first().isVisible({ timeout: 300 }).catch(() => false)) {
+          searchInputSel = sel
+          break
+        }
+      } catch {}
+    }
+
+    if (!searchInputSel) {
+      // Fallback: any visible input
+      const allInputs = await page.evaluate(() =>
+        [...document.querySelectorAll('input')]
+          .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
+          .map(i => ({ ph: i.placeholder, cls: i.className.slice(0, 60) }))
+      )
+      console.log('[ResolvePhone] Visible inputs:', JSON.stringify(allInputs))
+      cleanup()
+      return null
+    }
+
+    console.log(`[ResolvePhone] Search input found: ${searchInputSel}`)
+    await page.locator(searchInputSel).first().click()
+    await page.keyboard.type(phone7, { delay: 50 })  // Playwright native type — triggers React events
+    await page.waitForTimeout(3000)  // wait for search results
+
+    // ── Step 3: Extract userId from DOM results ───────────────────────────
+    await page.screenshot({ path: '/tmp/max_resolve_results.png', fullPage: false }).catch(() => {})
+
+    const userId = await page.evaluate(() => {
+      // Look for numeric IDs in data attributes or hrefs
+      const candidates = [
+        ...document.querySelectorAll('[data-id], [data-user-id], [data-contact-id]'),
+        ...document.querySelectorAll('a[href*="/u/"]'),
+        ...document.querySelectorAll('[class*="result"] [data-id]'),
+        ...document.querySelectorAll('[class*="contact"] [data-id]'),
+      ]
+      for (const el of candidates) {
+        const id = el.getAttribute('data-id') || el.getAttribute('data-user-id') ||
+                   el.getAttribute('data-contact-id') ||
+                   (el.href || '').match(/\/u\/(\d+)/)?.[1] ||
+                   (el.href || '').match(/\/(\d{6,10})(?:\/|$)/)?.[1]
+        if (id && /^\d{6,10}$/.test(String(id))) return String(id)
+      }
+      return null
+    })
+
+    if (userId) {
+      console.log(`[ResolvePhone] DOM resolved: ${digits} → ${userId}`)
+      await page.keyboard.press('Escape').catch(() => {})
+      cleanup()
+      return userId
+    }
+
+    // ── Step 4: Check WS frames captured during search ───────────────────
+    await page.waitForTimeout(500)
+    await page.keyboard.press('Escape').catch(() => {})
+    cleanup()
+
+    console.log(`[ResolvePhone] Captured ${capturedFrames.length} WS frames:`,
+      capturedFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(', '))
+
     for (const frame of capturedFrames) {
       const p = frame.payload || {}
-      const userId = p.id || p.userId || p.user_id ||
-                     p.contact?.id || p.user?.id ||
-                     (p.contacts?.[0]?.id) || (p.users?.[0]?.id)
-      if (userId && frame.cmd === 1) {
-        console.log(`[ResolvePhone] WS frame op:${frame.opcode} resolved: ${digits} → userId ${userId}`)
-        return String(userId)
+      // Search results can arrive as cmd:0 (push) or cmd:1 (response)
+      const candidates = [
+        p.id, p.userId, p.user_id,
+        p.contact?.id, p.user?.id, p.contactId,
+        p.contacts?.[0]?.id, p.users?.[0]?.id,
+        p.result?.id, p.results?.[0]?.id,
+      ].filter(Boolean)
+      for (const cand of candidates) {
+        if (/^\d{6,10}$/.test(String(cand))) {
+          console.log(`[ResolvePhone] WS op:${frame.opcode} resolved: ${digits} → ${cand}`)
+          return String(cand)
+        }
+      }
+      // Log full payload of any non-presence frame for debugging
+      if (frame.opcode !== 132) {
+        console.log(`[ResolvePhone] WS frame detail: op:${frame.opcode} cmd:${frame.cmd}`,
+          JSON.stringify(p).slice(0, 300))
       }
     }
   } catch (e) {
+    cleanup()
     console.warn('[ResolvePhone] UI search failed:', e.message)
   }
 
@@ -1125,6 +1180,54 @@ app.get('/resolve-phone', (req, res) => {
   } else {
     res.status(404).json({ error: 'Contact not found', phone: String(phone) })
   }
+})
+
+// Debug: показывает состояние contactStore + живой resolve для диагностики
+// GET /debug/resolve?phone=79126787532
+app.get('/debug/resolve', async (req, res) => {
+  const { phone } = req.query
+  if (!phone) return res.status(400).json({ error: 'phone required' })
+  const digits = String(phone).replace(/\D/g, '')
+
+  const inStore  = contactStore ? contactStore.findByPhone(digits) : null
+  const storeSize = contactStore ? contactStore._map.size : 0
+
+  // Попытаться разрезолвить вживую (до 10 сек)
+  let liveResult = null
+  if (!inStore && isReady) {
+    try {
+      liveResult = await resolvePhoneLive(digits)
+    } catch (e) {
+      liveResult = `error: ${e.message}`
+    }
+  }
+
+  // Скриншоты (если сохранились после последнего resolveViaUiSearch)
+  const fs = require('fs')
+  const screenshots = ['/tmp/max_resolve_before.png', '/tmp/max_resolve_compose.png', '/tmp/max_resolve_results.png']
+    .map(f => ({ file: f, exists: fs.existsSync(f), size: fs.existsSync(f) ? fs.statSync(f).size : 0 }))
+
+  res.json({
+    phone: digits,
+    contactStoreSize: storeSize,
+    foundInStore: inStore,
+    liveResult,
+    isReady,
+    screenshots,
+    myUserId: transport._myUserId,
+  })
+})
+
+// Debug: все контакты в store с телефонами
+// GET /debug/contacts
+app.get('/debug/contacts', (req, res) => {
+  const withPhone = []
+  if (contactStore) {
+    for (const [userId, c] of contactStore._map.entries()) {
+      if (c.phone) withPhone.push({ userId, phone: c.phone, name: c.name || c.firstName || null })
+    }
+  }
+  res.json({ total: contactStore?._map.size || 0, withPhone })
 })
 
 // Отправить текст
