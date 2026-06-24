@@ -445,8 +445,11 @@ async function resolveViaPhoneLookupDialog(digits) {
   // Helper: find a phone-type input on the page (not a text search)
   const findPhoneInput = async () => {
     for (const sel of [
+      'input[inputmode="decimal"]',   // MAX Search by number dialog input (mode=decimal, empty placeholder)
+      'input[inputmode="numeric"]',
+      'input[inputmode="tel"]',
+      'input[type="tel"]',
       'input[placeholder*="123"]', 'input[placeholder*="456"]',
-      'input[type="tel"]', 'input[inputmode="numeric"]', 'input[inputmode="tel"]',
       'input[placeholder*="номер"]', 'input[placeholder*="Номер"]',
       'input[placeholder*="phone"]', 'input[placeholder*="Phone"]',
     ]) {
