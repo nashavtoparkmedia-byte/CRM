@@ -417,10 +417,240 @@ async function getContactPhone(senderId, timeoutMs = 4000) {
   })
 }
 
+// ─── "Найти по номеру" dialog ─────────────────────────────────────────────────
+// MAX Contacts → "+" button → "Найти по номеру" dialog.
+// This is the correct server-side phone lookup that works even for private profiles.
+// Returns convId (from URL after navigation) or userId (from WS search frames).
+async function resolveViaPhoneLookupDialog(digits) {
+  if (!page || !transport || !isReady) return null
+  const local10 = digits.slice(-10)
+  console.log(`[ResolvePhone] "Найти по номеру" dialog: ${local10}`)
+
+  const capturedFrames = []
+  const rawHandler = (data) => {
+    if (data.opcode !== 132 && data.opcode !== 1 && data.opcode !== 5) {
+      capturedFrames.push({ opcode: data.opcode, cmd: data.cmd, payload: data.payload })
+    }
+  }
+  transport._rawHandlers.push(rawHandler)
+
+  const returnHome = async () => {
+    try { await page.goto('https://web.max.ru', { timeout: 8000, waitUntil: 'domcontentloaded' }) } catch {}
+  }
+  const cleanup = () => {
+    const idx = transport._rawHandlers.indexOf(rawHandler)
+    if (idx > -1) transport._rawHandlers.splice(idx, 1)
+  }
+
+  try {
+    // 1. Go to contacts section
+    await page.goto('https://web.max.ru/contacts', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
+    await page.waitForTimeout(1500)
+
+    // 2. Click "+" button to open "Найти по номеру" dialog
+    // The button is the blue circular + in the Contacts header
+    let plusClicked = false
+    const plusSelectors = [
+      'button[title*="Найти"]', 'button[aria-label*="Найти"]',
+      'button[title*="добавить"]', 'button[aria-label*="добавить"]',
+      'button[title*="Добавить"]', 'button[aria-label*="Добавить"]',
+      'button[title*="новый"]', 'button[aria-label*="новый"]',
+    ]
+    for (const sel of plusSelectors) {
+      if (await page.locator(sel).first().isVisible({ timeout: 300 }).catch(() => false)) {
+        await page.locator(sel).first().click()
+        plusClicked = true
+        console.log(`[ResolvePhone] + button clicked (${sel})`)
+        break
+      }
+    }
+
+    if (!plusClicked) {
+      // Fallback: dump visible buttons for debug, then click SVG-only (icon) button
+      const btns = await page.evaluate(() =>
+        [...document.querySelectorAll('button')]
+          .filter(b => b.offsetParent !== null)
+          .slice(0, 30)
+          .map(b => ({
+            text: b.innerText?.trim().slice(0, 30),
+            title: b.getAttribute('title'),
+            label: b.getAttribute('aria-label'),
+            cls: b.className?.slice(0, 80),
+          }))
+      )
+      console.log('[ResolvePhone] Contacts buttons:', JSON.stringify(btns))
+
+      // Click the first SVG-only button (icon buttons have no text, usually the + btn)
+      const clicked = await page.evaluate(() => {
+        const btns = [...document.querySelectorAll('button')].filter(b => b.offsetParent !== null)
+        for (const b of btns) {
+          if (!(b.innerText?.trim()) && b.querySelector('svg')) {
+            b.click(); return b.className?.slice(0, 60) || 'clicked'
+          }
+        }
+        return null
+      })
+      if (clicked) {
+        plusClicked = true
+        console.log('[ResolvePhone] SVG-only button clicked:', clicked)
+      }
+    }
+
+    await page.waitForTimeout(800)
+    await page.screenshot({ path: '/tmp/max_phone_dialog_open.png' }).catch(() => {})
+
+    // 3. Find phone input in the dialog "Найти по номеру"
+    // Placeholder is "123 456 78 90" — contains "123"
+    const inputSelectors = [
+      'input[placeholder*="123"]',
+      'input[placeholder*="456"]',
+      'input[type="tel"]',
+      'input[inputmode="numeric"]',
+      'input[inputmode="tel"]',
+      'input[placeholder*="номер"]',
+      'input[placeholder*="Номер"]',
+      'input[placeholder*="phone"]',
+      'input[placeholder*="Phone"]',
+    ]
+    let dialogInput = null
+    for (const sel of inputSelectors) {
+      if (await page.locator(sel).first().isVisible({ timeout: 500 }).catch(() => false)) {
+        dialogInput = page.locator(sel).first()
+        console.log(`[ResolvePhone] Dialog input found: ${sel}`)
+        break
+      }
+    }
+
+    if (!dialogInput) {
+      // Log all visible inputs for debug
+      const inputs = await page.evaluate(() =>
+        [...document.querySelectorAll('input')]
+          .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
+          .map(i => ({ ph: i.placeholder, type: i.type, mode: i.inputMode, cls: i.className?.slice(0, 60) }))
+      )
+      console.log('[ResolvePhone] Visible inputs after + click:', JSON.stringify(inputs))
+      cleanup(); await returnHome(); return null
+    }
+
+    // 4. Type local 10 digits into the dialog input
+    await dialogInput.click()
+    await dialogInput.fill('')
+    await page.keyboard.type(local10, { delay: 50 })
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: '/tmp/max_phone_dialog_typed.png' }).catch(() => {})
+
+    // 5. Click "Найти в МАХ" button
+    const searchBtnSel = [
+      'button:has-text("Найти в МАХ")',
+      'button:has-text("Найти в MAX")',
+      'button:has-text("Найти")',
+      'button[type="submit"]',
+    ]
+    let searchBtn = null
+    for (const sel of searchBtnSel) {
+      if (await page.locator(sel).last().isVisible({ timeout: 500 }).catch(() => false)) {
+        searchBtn = page.locator(sel).last()
+        console.log(`[ResolvePhone] Search button found: ${sel}`)
+        break
+      }
+    }
+
+    if (!searchBtn) {
+      console.log('[ResolvePhone] "Найти в МАХ" button not found')
+      cleanup(); await returnHome(); return null
+    }
+
+    const urlBefore = page.url()
+    await searchBtn.click()
+    console.log('[ResolvePhone] Clicked "Найти в МАХ"')
+    await page.waitForTimeout(3500)
+    await page.screenshot({ path: '/tmp/max_phone_dialog_result.png' }).catch(() => {})
+
+    // 6a. URL changed → extract convId
+    const urlAfter = page.url()
+    if (urlAfter !== urlBefore) {
+      const convId = urlAfter.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
+      if (convId) {
+        console.log(`[ResolvePhone] URL-resolved: ${digits} → convId ${convId}`)
+        cleanup(); await returnHome(); return convId
+      }
+    }
+
+    // 6b. "Написать" / "Начать чат" button appeared — click and capture URL
+    const writeBtnSels = [
+      'button:has-text("Написать")',
+      'button:has-text("Начать чат")',
+      'button:has-text("Start chat")',
+      'button:has-text("Написать сообщение")',
+    ]
+    for (const sel of writeBtnSels) {
+      const btn = page.locator(sel).first()
+      if (await btn.isVisible({ timeout: 600 }).catch(() => false)) {
+        console.log(`[ResolvePhone] Found write button "${sel}" — clicking`)
+        await btn.click()
+        await page.waitForTimeout(3000)
+        const urlFinal = page.url()
+        const convId = urlFinal.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
+        if (convId) {
+          console.log(`[ResolvePhone] URL after "Написать": ${digits} → convId ${convId}`)
+          cleanup(); await returnHome(); return convId
+        }
+        // Also check WS op:48 for new chat
+        for (const f of capturedFrames) {
+          if (f.opcode !== 48) continue
+          for (const c of (f.payload?.chats || [])) {
+            const cid = String(c.chatId || c.id || '')
+            if (cid && /^\d{6,15}$/.test(cid) && !chatCache.has(cid)) {
+              console.log(`[ResolvePhone] New chat from op:48 after write: ${digits} → ${cid}`)
+              cleanup(); await returnHome(); return cid
+            }
+          }
+        }
+        break
+      }
+    }
+
+    // 6c. Check WS frames: op:60/68 search results
+    console.log(`[ResolvePhone] WS frames: ${capturedFrames.map(f => `op:${f.opcode}`).join(',')}`)
+    for (const f of capturedFrames) {
+      if (f.opcode !== 60 && f.opcode !== 68) continue
+      const results = Array.isArray(f.payload?.result) ? f.payload.result : []
+      for (const r of results) {
+        const id = r.id || r.userId || r.user_id
+        if (id && /^\d{5,12}$/.test(String(id))) {
+          console.log(`[ResolvePhone] op:${f.opcode} search result: ${digits} → ${id}`)
+          cleanup(); await returnHome(); return String(id)
+        }
+      }
+    }
+
+    // 6d. DOM fallback — any numeric id in visible elements
+    const domId = await page.evaluate(() => {
+      for (const el of document.querySelectorAll('[data-id],[data-user-id],a[href*="/"]')) {
+        const id = el.getAttribute('data-id') || el.getAttribute('data-user-id') ||
+                   (el.getAttribute('href') || '').match(/\/(\d{6,15})(?:\/|$)/)?.[1]
+        if (id && /^\d{6,15}$/.test(id)) return id
+      }
+      return null
+    })
+    if (domId) {
+      console.log(`[ResolvePhone] DOM id: ${digits} → ${domId}`)
+      cleanup(); await returnHome(); return domId
+    }
+
+    console.log(`[ResolvePhone] "Найти по номеру" — no result for ${local10}`)
+    cleanup(); await returnHome(); return null
+
+  } catch (e) {
+    cleanup()
+    console.warn('[ResolvePhone] Phone lookup dialog error:', e.message)
+    await returnHome()
+    return null
+  }
+}
+
 // ─── Puppeteer UI search in MAX web ──────────────────────────────────────────
-// Last-resort resolver when contactStore doesn't have the phone after sync.
-// Uses Playwright native API (not page.evaluate synthetic events) so that
-// React/Vue event handlers are properly triggered.
+// Legacy: tries Ctrl+N compose dialog. Kept as extra fallback.
 async function resolveViaUiSearch(digits) {
   if (!page) return null
 
@@ -823,13 +1053,10 @@ async function resolvePhoneLive(digits) {
     }
   }
 
-  // 4. Puppeteer UI search in MAX web — interacts with compose dialog to find userId
-  const uiId = await resolveViaUiSearch(digits)
-  if (uiId) return uiId
-
-  // 5. Contacts page search — MAX Contacts may search differently than global search
-  const contactsId = await resolveViaContactsPage(digits)
-  if (contactsId) return contactsId
+  // 4. "Найти по номеру" dialog — MAX Contacts → + → phone lookup
+  //    Works even for private profiles since MAX server knows the phone→userId mapping.
+  const dialogId = await resolveViaPhoneLookupDialog(digits)
+  if (dialogId) return dialogId
 
   return null
 }
