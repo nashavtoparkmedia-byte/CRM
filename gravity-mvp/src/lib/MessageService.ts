@@ -570,15 +570,34 @@ export class MessageService {
                     })
                     deliveryStatus = 'delivered'
                     if ((maxRes as any)?.externalId) deliveryExternalId = (maxRes as any).externalId
-                    // Phone was resolved to userId by scraper — update externalChatId proactively
-                    // so future sends go directly without phone re-resolution each time
+                    // Phone was resolved to conversationId by scraper echo capture.
+                    // Update externalChatId so future incoming messages route here.
+                    // If a chat with that conversationId already exists (duplicate scenario),
+                    // merge by moving messages from old phone-based chat into it.
                     const resolvedMaxId = (maxRes as any)?.resolvedChatId
                     if (resolvedMaxId && resolvedMaxId !== rawExternalChatId) {
-                        await (prisma.chat as any).update({
-                            where: { id: currentChatId },
-                            data: { externalChatId: resolvedMaxId }
-                        })
-                        console.log(`[MessageService] MAX externalChatId updated: ${rawExternalChatId} → ${resolvedMaxId}`)
+                        try {
+                            const conflictChat = await (prisma.chat as any).findFirst({
+                                where: { externalChatId: resolvedMaxId }
+                            })
+                            if (conflictChat && conflictChat.id !== currentChatId) {
+                                // Merge: move our messages into the "real" chat, delete the phone-based duplicate
+                                await (prisma.message as any).updateMany({
+                                    where: { chatId: currentChatId },
+                                    data:  { chatId: conflictChat.id }
+                                })
+                                await (prisma.chat as any).delete({ where: { id: currentChatId } })
+                                console.log(`[MessageService] MAX chat merged: ${currentChatId} (${rawExternalChatId}) → ${conflictChat.id} (${resolvedMaxId})`)
+                            } else {
+                                await (prisma.chat as any).update({
+                                    where: { id: currentChatId },
+                                    data:  { externalChatId: resolvedMaxId }
+                                })
+                                console.log(`[MessageService] MAX externalChatId updated: ${rawExternalChatId} → ${resolvedMaxId}`)
+                            }
+                        } catch (mergeErr: any) {
+                            console.warn(`[MessageService] MAX externalChatId update skipped: ${mergeErr.message}`)
+                        }
                     }
                     break
 
