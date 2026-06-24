@@ -511,22 +511,88 @@ async function resolveViaPhoneLookupDialog(digits) {
     }
 
     if (!plusClicked) {
-      // When "Contacts" tab is active, "Start chatting" btn may open "Найти по номеру"
-      // (different behavior than when chat list tab is active). Try it FIRST.
-      const startChatting = page.locator('button[aria-label="Start chatting"]').first()
-      if (await startChatting.isVisible({ timeout: 400 }).catch(() => false)) {
-        await startChatting.click()
-        console.log('[ResolvePhone] Clicked "Start chatting" with Contacts tab active')
-        await page.waitForTimeout(700)
-        const phoneInputAfterStart = await findPhoneInput()
-        if (phoneInputAfterStart) {
-          plusClicked = true
-          console.log('[ResolvePhone] "Start chatting" opened phone dialog!')
+      // Broaden search: look for ALL clickable elements (not just <button>)
+      // The "+" for "Найти по номеру" might be a <div>/<span> with role="button"
+      // or a <button> with position:fixed (offsetParent=null filters it out)
+      const allClickable = await page.evaluate(() => {
+        const candidates = []
+        const els = document.querySelectorAll(
+          'button, [role="button"], [tabindex="0"], a, [class*="add"], [class*="plus"], [class*="create"], [class*="fab"]'
+        )
+        for (const el of els) {
+          const style = window.getComputedStyle(el)
+          if (style.display === 'none' || style.visibility === 'hidden') continue
+          if (parseFloat(style.opacity) < 0.1) continue
+          const text = el.innerText?.trim().slice(0, 30) || ''
+          const label = el.getAttribute('aria-label') || ''
+          const cls = (el.className || '').toString().slice(0, 80)
+          const tag = el.tagName
+          const hasSvg = !!el.querySelector('svg')
+          candidates.push({ tag, text, label, cls, hasSvg })
+        }
+        return candidates
+      })
+      console.log('[ResolvePhone] All clickable elements:', JSON.stringify(allClickable))
+
+      // Filter: SVG-containing elements that are NOT known non-candidates
+      const SKIP_LABELS = ['Start chatting', 'Еще', 'Contact actions', 'Изменить ширину']
+      const SKIP_TEXT = ['All', 'Новые', 'Каналы', 'Contacts', 'Calls', 'Settings', 'Search']
+      const candidates = allClickable.filter(c =>
+        c.hasSvg &&
+        !c.text &&
+        !SKIP_LABELS.includes(c.label) &&
+        !SKIP_TEXT.includes(c.text)
+      )
+      console.log('[ResolvePhone] Filtered SVG candidates:', JSON.stringify(candidates))
+
+      for (const candidate of candidates) {
+        const escaped = (s) => s?.replace(/"/g, '\\"').replace(/'/g, "\\'")
+        let sel = null
+        if (candidate.label && !SKIP_LABELS.includes(candidate.label)) {
+          sel = `[aria-label="${escaped(candidate.label)}"]`
         } else {
-          // Opened compose search — close it and try other buttons
+          // Try to match by class fragment
+          const svelteCls = candidate.cls?.match(/svelte-\w+/)?.[0]
+          if (svelteCls) sel = `${candidate.tag}.${svelteCls}:not([aria-label="Start chatting"])`
+        }
+        if (!sel) continue
+
+        const el = page.locator(sel).first()
+        if (!await el.isVisible({ timeout: 200 }).catch(() => false)) continue
+
+        await el.click()
+        console.log(`[ResolvePhone] Tried: ${candidate.tag} label="${candidate.label}" cls="${candidate.cls?.slice(0,40)}"`)
+        await page.waitForTimeout(700)
+
+        const phoneInput = await findPhoneInput()
+        if (phoneInput) {
+          plusClicked = true
+          console.log('[ResolvePhone] Found phone input after click!')
+          break
+        }
+        await page.keyboard.press('Escape').catch(() => {})
+        await page.waitForTimeout(400)
+      }
+    }
+
+    if (!plusClicked) {
+      // Last resort: click the blue "+" button by looking for primary-styled button
+      // MAX uses "button--primary" class for blue accent buttons (different from neutral-primary)
+      const primaryBtns = [
+        'button[class*="--primary"]:not([class*="neutral"])',
+        '[class*="roundButton"]',
+        '[class*="round-button"]',
+        '[class*="floatButton"]',
+        '[class*="float-button"]',
+      ]
+      for (const sel of primaryBtns) {
+        if (await page.locator(sel).first().isVisible({ timeout: 200 }).catch(() => false)) {
+          await page.locator(sel).first().click()
+          console.log(`[ResolvePhone] Primary button click: ${sel}`)
+          await page.waitForTimeout(700)
+          if (await findPhoneInput()) { plusClicked = true; break }
           await page.keyboard.press('Escape').catch(() => {})
-          await page.waitForTimeout(400)
-          console.log('[ResolvePhone] "Start chatting" opened search dialog (not phone) — trying others')
+          await page.waitForTimeout(300)
         }
       }
     }
