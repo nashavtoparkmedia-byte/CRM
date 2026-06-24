@@ -203,8 +203,10 @@ class TransportInterceptor {
   _handleFrame(raw) {
     let data
     try { data = JSON.parse(raw) } catch {
-      // Log first 200 chars of unparseable frames to diagnose encoding/format issues
-      console.log('[Transport PARSE_FAIL] len:', raw.length, 'hex0:', raw.charCodeAt(0).toString(16), 'start:', raw.slice(0, 120))
+      // Hex dump first 32 bytes to diagnose binary protocol format
+      const hexBytes = []
+      for (let i = 0; i < Math.min(32, raw.length); i++) hexBytes.push(raw.charCodeAt(i).toString(16).padStart(2,'0'))
+      console.log('[Transport PARSE_FAIL] len:', raw.length, 'hex:', hexBytes.join(' '))
       return
     }
 
