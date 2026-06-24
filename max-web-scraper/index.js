@@ -527,6 +527,7 @@ async function resolveViaUiSearch(digits) {
 
     console.log(`[ResolvePhone] Search input found: ${searchInputSel}`)
     await page.locator(searchInputSel).first().click()
+    await page.locator(searchInputSel).first().fill('')  // clear existing content first
     await page.keyboard.type(phone7, { delay: 50 })  // Playwright native type — triggers React events
     await page.waitForTimeout(3000)  // wait for search results
 
@@ -609,25 +610,39 @@ async function resolveViaUiSearch(digits) {
     console.log(`[ResolvePhone] Captured ${capturedFrames.length} WS frames:`,
       capturedFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(', '))
 
+    // Log ALL frames for debug
     for (const frame of capturedFrames) {
+      if (frame.opcode !== 132 && frame.opcode !== 1 && frame.opcode !== 5) {
+        console.log(`[ResolvePhone] WS frame detail: op:${frame.opcode} cmd:${frame.cmd}`,
+          JSON.stringify(frame.payload || {}).slice(0, 400))
+      }
+    }
+
+    // Priority 1: op:60 and op:68 are MAX search result opcodes
+    // result[] items have {id, name, ...} for matching users
+    for (const frame of capturedFrames) {
+      if (frame.opcode !== 60 && frame.opcode !== 68) continue
       const p = frame.payload || {}
-      // Search results can arrive as cmd:0 (push) or cmd:1 (response)
-      const candidates = [
-        p.id, p.userId, p.user_id,
-        p.contact?.id, p.user?.id, p.contactId,
-        p.contacts?.[0]?.id, p.users?.[0]?.id,
-        p.result?.id, p.results?.[0]?.id,
-      ].filter(Boolean)
-      for (const cand of candidates) {
-        if (/^\d{6,10}$/.test(String(cand))) {
-          console.log(`[ResolvePhone] WS op:${frame.opcode} resolved: ${digits} → ${cand}`)
-          return String(cand)
+      const results = Array.isArray(p.result) ? p.result : []
+      for (const r of results) {
+        const id = r.id || r.userId || r.user_id || r.contactId
+        if (id && /^\d{5,12}$/.test(String(id))) {
+          console.log(`[ResolvePhone] Search op:${frame.opcode} resolved: ${digits} → ${id}`)
+          return String(id)
         }
       }
-      // Log full payload of any non-presence frame for debugging
-      if (frame.opcode !== 132) {
-        console.log(`[ResolvePhone] WS frame detail: op:${frame.opcode} cmd:${frame.cmd}`,
-          JSON.stringify(p).slice(0, 300))
+    }
+
+    // Priority 2: op:32 contacts — only accept if phone field matches
+    const tail10 = digits.replace(/\D/g, '').slice(-10)
+    for (const frame of capturedFrames) {
+      if (frame.opcode !== 32) continue
+      const contacts = frame.payload?.contacts || []
+      for (const c of contacts) {
+        if (c.phone && String(c.phone).replace(/\D/g, '').slice(-10) === tail10) {
+          console.log(`[ResolvePhone] op:32 phone match: ${digits} → ${c.id}`)
+          return String(c.id)
+        }
       }
     }
   } catch (e) {
