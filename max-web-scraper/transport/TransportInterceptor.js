@@ -7,8 +7,9 @@ const WS_INIT_SCRIPT = `(function () {
   var _OrigWS = window.WebSocket;
   function PatchedWS(url, protocols) {
     var ws = protocols != null ? new _OrigWS(url, protocols) : new _OrigWS(url);
-    if (url && url.indexOf('ws-api.oneme.ru') !== -1) {
+    if (url && (url.indexOf('ws-api.oneme.ru') !== -1 || url.indexOf('api.oneme.ru') !== -1)) {
       window.__maxWs = ws;
+      console.log('[MAX-WS] patched:', url);
     }
     return ws;
   }
@@ -91,7 +92,17 @@ class TransportInterceptor {
 
     this._cdpClient.on('Network.webSocketFrameReceived', ({ response }) => {
       if (!response.payloadData) return
-      if (response.opcode === 2) return  // binary frame — пропускаем
+      if (response.opcode === 2) {
+        // Binary WS frame — MAX may use binary on api.oneme.ru/websocket.
+        // Try base64-decode → UTF-8 → JSON.
+        try {
+          const decoded = Buffer.from(response.payloadData, 'base64').toString('utf8')
+          this._handleFrame(decoded)
+        } catch {
+          console.log('[Transport BINARY] undecodable frame len:', response.payloadData.length)
+        }
+        return
+      }
       this._handleFrame(response.payloadData)
     })
 

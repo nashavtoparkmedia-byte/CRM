@@ -331,8 +331,12 @@ async function sendText(transport, chatId, text, replyToMessageId) {
   } catch (e) {
     // Re-throw MAX protocol errors (not.found, etc.) — these are real failures, not timeouts
     if (e.maxError) throw e
-    // Pure timeout (no response) — message likely went through but no ID returned
-    console.warn(`[sendText] No ack from MAX (timeout) — send may be delivered but externalId unknown`)
+    const isWsFail = e.message && e.message.startsWith('WS send failed')
+    if (isWsFail) {
+      console.error(`[sendText] WS send FAILED (window.__maxWs not ready): ${e.message}`)
+    } else {
+      console.warn(`[sendText] No ack from MAX (timeout) — send may be delivered but externalId unknown`)
+    }
     return null
   }
 }
