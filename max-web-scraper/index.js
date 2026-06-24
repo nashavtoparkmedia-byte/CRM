@@ -525,28 +525,34 @@ async function resolveViaPhoneLookupDialog(digits) {
         plusClicked = true
         console.log('[ResolvePhone] Phone input directly visible after Start chatting!')
       } else {
-        // Look for a phone/number mode tab or button inside the dialog
-        const phoneModeSels = [
-          'button:has-text("Номер")', 'button:has-text("номер")',
-          'button:has-text("Телефон")', 'button:has-text("телефон")',
-          'button:has-text("Phone")', 'button:has-text("By phone")',
-          '[role="tab"]:has-text("phone")', '[role="tab"]:has-text("номер")',
-          '[class*="phone-tab"]', '[class*="phoneTab"]',
+        // "Start chatting" opens a dropdown menu. Click "Search by number" in it.
+        const searchByNumberSels = [
+          'button:has-text("Search by number")',
+          'button[aria-label="Search by number"]',
+          '[role="menuitem"]:has-text("Search by number")',
+          'button:has-text("Найти по номеру")',
+          'button:has-text("Поиск по номеру")',
+          '[role="menuitem"]:has-text("номеру")',
         ]
-        for (const sel of phoneModeSels) {
-          if (await page.locator(sel).first().isVisible({ timeout: 200 }).catch(() => false)) {
+        let clickedMenuItem = false
+        for (const sel of searchByNumberSels) {
+          if (await page.locator(sel).first().isVisible({ timeout: 400 }).catch(() => false)) {
             await page.locator(sel).first().click()
-            console.log(`[ResolvePhone] Clicked phone mode: ${sel}`)
-            await page.waitForTimeout(600)
-            if (await findPhoneInput()) { plusClicked = true; break }
+            console.log(`[ResolvePhone] Clicked menu item: ${sel}`)
+            await page.waitForTimeout(1000)
+            clickedMenuItem = true
+            break
           }
         }
 
-        if (!plusClicked) {
-          // Not the right dialog — close it
+        if (clickedMenuItem && await findPhoneInput()) {
+          plusClicked = true
+          console.log('[ResolvePhone] Phone input found after "Search by number"!')
+        } else if (!clickedMenuItem) {
+          // Menu didn't have expected item — close it
           await page.keyboard.press('Escape').catch(() => {})
           await page.waitForTimeout(400)
-          console.log('[ResolvePhone] "Start chatting" dialog has no phone mode — need another button')
+          console.log('[ResolvePhone] "Search by number" not found in menu')
         }
       }
     }
