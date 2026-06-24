@@ -492,6 +492,8 @@ async function resolveViaUiSearch(digits) {
     await page.screenshot({ path: '/tmp/max_resolve_compose.png', fullPage: false }).catch(() => {})
 
     const inputCandidates = [
+      'input[placeholder="Search"]',
+      'input[placeholder*="Search"]',
       'input[placeholder*="Поис"]',
       'input[placeholder*="поис"]',
       'input[placeholder*="Кому"]',
@@ -554,6 +556,49 @@ async function resolveViaUiSearch(digits) {
       await page.keyboard.press('Escape').catch(() => {})
       cleanup()
       return userId
+    }
+
+    // ── Step 3b: Click "Start chatting" and capture navigation URL ────────
+    // When MAX found the contact, this button appears. After click, URL changes to /chat/CONVID
+    // or MAX fires a WS frame. Either way we can extract the participant userId from the frame.
+    const startBtn = page.locator('button:has-text("Start chatting"), button:has-text("Начать чат")').first()
+    const startBtnVisible = await startBtn.isVisible({ timeout: 500 }).catch(() => false)
+    if (startBtnVisible) {
+      console.log('[ResolvePhone] "Start chatting" visible — clicking to capture convId')
+      // Listen for WS op:48 or op:128 that will have the conversation participants
+      let resolvedFromEcho = null
+      const echoHandler = (data) => {
+        if (resolvedFromEcho) return
+        if (data.opcode === 48 && data.payload?.chats?.[0]) {
+          const chat = data.payload.chats[0]
+          // participants list — find the non-fleet userId
+          const parts = chat.members || chat.participants || []
+          const other = parts.find(p => String(p) !== String(transport._myUserId))
+          if (other) resolvedFromEcho = String(other)
+        }
+        if (data.opcode === 128 && data.payload?.message) {
+          const sender = String(data.payload.message.sender || '')
+          if (sender && sender !== String(transport._myUserId)) resolvedFromEcho = sender
+        }
+      }
+      transport._rawHandlers.push(echoHandler)
+
+      await startBtn.click()
+      await page.waitForTimeout(2000)
+
+      const echoIdx = transport._rawHandlers.indexOf(echoHandler)
+      if (echoIdx > -1) transport._rawHandlers.splice(echoIdx, 1)
+
+      // Try URL: /chat/CONVID — load chat page, find other participant via WS
+      const currentUrl = page.url()
+      console.log('[ResolvePhone] URL after start chatting:', currentUrl)
+
+      if (resolvedFromEcho) {
+        console.log(`[ResolvePhone] Echo resolved: ${digits} → ${resolvedFromEcho}`)
+        await page.keyboard.press('Escape').catch(() => {})
+        cleanup()
+        return resolvedFromEcho
+      }
     }
 
     // ── Step 4: Check WS frames captured during search ───────────────────
