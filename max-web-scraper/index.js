@@ -194,15 +194,35 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
 
   if (messageSync.isDuplicate(msg)) return
 
+  // Исходящее echo от сообщения, которое /send-message сейчас перехватывает
+  // для получения реального conversation ID. Пропускаем здесь — CRM сам
+  // обновит externalChatId когда /send-message вернёт ответ.
+  if (msg.isOutgoing && msg.id && capturedEchoIds.has(String(msg.id))) {
+    console.log(`[handleIncoming] Echo msgId=${msg.id} suppressed — captured by /send-message`)
+    messageSync.markSeen(msg)
+    return
+  }
+
   let payload = MessageParser.toCrmPayload(msg)
 
   // Добавляем имя и телефон контакта из ContactStore.
-  // chatId = партнёрский userId для входящих (chatId==senderId) и исходящих echo (chatId=партнёр, senderId=мы).
-  // Поэтому ищем телефон по chatId, а не senderId.
-  const senderName   = contactStore.getName(payload.senderId)
-  const contactPhone = contactStore.getPhone(String(payload.chatId || payload.senderId))
-  if (senderName)    payload = { ...payload, senderName, driverName: senderName }
-  if (contactPhone)  payload = { ...payload, senderPhone: contactPhone, phone: contactPhone }
+  // В MAX opcode 128: chatId — это ID БЕСЕДЫ (не userId отправителя!),
+  // senderId/from — userId реального отправителя.
+  // Для входящих: ищем телефон по senderId. Если нет в store — запрашиваем op:32.
+  // Для исходящих echo: senderId=наш userId → getPhone вернёт null, это нормально.
+  const senderName = contactStore.getName(payload.senderId)
+  let contactPhone = contactStore.getPhone(String(payload.senderId))
+
+  if (!contactPhone && !msg.isOutgoing && payload.senderId && transport) {
+    const freshPhone = await getContactPhone(payload.senderId)
+    if (freshPhone) {
+      console.log(`[handleIncoming] op:32 resolved: sender=${payload.senderId} → phone=${freshPhone}`)
+      contactPhone = freshPhone
+    }
+  }
+
+  if (senderName)   payload = { ...payload, senderName, driverName: senderName }
+  if (contactPhone) payload = { ...payload, senderPhone: contactPhone, phone: contactPhone }
 
   // Переслано: текстовый префикс в content + структурированные метаданные
   if (msg.forwardedFromId) {
@@ -355,6 +375,46 @@ async function syncContacts(timeoutMs = 8000) {
     console.warn('[syncContacts] Timeout — opcode 32 not returned by MAX')
   }
   return fresh
+}
+
+// ─── Точечный запрос телефона конкретного контакта через op:32 ───────────────
+// Отправляет op:32 {contactIds:[userId]}, ждёт ответа до timeoutMs.
+// Обновляет contactStore при успехе. Возвращает phone-string или null.
+async function getContactPhone(senderId, timeoutMs = 4000) {
+  const existing = contactStore.getPhone(String(senderId))
+  if (existing) return existing
+
+  if (!transport || !isReady) return null
+  const userIdNum = Number(senderId)
+  if (isNaN(userIdNum)) return null
+
+  return new Promise((resolve) => {
+    let done = false
+    const timer = setTimeout(() => { done = true; resolve(null) }, timeoutMs)
+
+    function handler(data) {
+      if (data.opcode === 32 && data.payload?.contacts) {
+        const found = (data.payload.contacts || []).find(c => String(c.id) === String(senderId))
+        if (found) {
+          clearTimeout(timer)
+          const idx = transport._rawHandlers.indexOf(handler)
+          if (idx > -1) transport._rawHandlers.splice(idx, 1)
+          contactStore.ingest(data.payload)
+          if (!done) { done = true; resolve(found.phone ? String(found.phone) : null) }
+        }
+      }
+    }
+    transport._rawHandlers.push(handler)
+
+    transport.sendFrame(OP.CONTACTS, { contactIds: [userIdNum] }, { waitResponse: false })
+      .catch(e => {
+        clearTimeout(timer)
+        const idx = transport._rawHandlers.indexOf(handler)
+        if (idx > -1) transport._rawHandlers.splice(idx, 1)
+        if (!done) { done = true; resolve(null) }
+        console.warn('[getContactPhone] op:32 failed:', e.message)
+      })
+  })
 }
 
 // ─── Puppeteer UI search in MAX web ──────────────────────────────────────────
@@ -811,6 +871,11 @@ const contactStore = new ContactStore()
 
 const chatCache = new Map()  // chatId → chat object (собирается из opcode 48 при старте)
 
+// messageIds исходящих сообщений, чьё echo мы перехватываем в /send-message.
+// handleIncoming пропустит эти echo чтобы не создать дубль-чат до того как
+// CRM обновит externalChatId на реальный conversation ID.
+const capturedEchoIds = new Set()
+
 let page          = null
 let context       = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
 let mediaPipeline = null
@@ -1117,6 +1182,67 @@ app.post('/send-message', async (req, res) => {
 
   if (!chatId) {
     return res.status(400).json({ error: 'chatId required' })
+  }
+
+  // Для первой отправки по номеру телефона ждём эхо от MAX чтобы узнать
+  // реальный conversation ID (chatId в opcode 128 ≠ userId контакта).
+  // Перехватываем echo через rawHandler ДО отправки — echo может прийти
+  // раньше ack op:64. Подавляем echo в handleIncoming через capturedEchoIds
+  // чтобы не создать дубль-чат до того как CRM обновит externalChatId.
+  let echoConvId = null
+  let echoRawHandler = null
+  let echoResolve = null
+
+  if (looksLikePhone) {
+    const echoPromise = new Promise((resolve) => {
+      echoResolve = resolve
+      echoRawHandler = function (data) {
+        if (data.opcode === 128 && data.payload?.message?.id && data.payload.chatId) {
+          const sender = String(data.payload.message.sender || '')
+          if (sender === transport._myUserId) {
+            const idx = transport._rawHandlers.indexOf(echoRawHandler)
+            if (idx > -1) transport._rawHandlers.splice(idx, 1)
+            echoRawHandler = null
+            resolve(String(data.payload.chatId))
+          }
+        }
+      }
+      transport._rawHandlers.push(echoRawHandler)
+    })
+
+    try {
+      const maxMsgId = await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId))
+
+      if (maxMsgId) {
+        capturedEchoIds.add(String(maxMsgId))
+        // Ждём echo до 3 секунд
+        echoConvId = await Promise.race([
+          echoPromise,
+          new Promise(r => setTimeout(() => r(null), 3000)),
+        ])
+        capturedEchoIds.delete(String(maxMsgId))
+      }
+      // Убираем rawHandler если ещё висит (timeout)
+      if (echoRawHandler) {
+        const idx = transport._rawHandlers.indexOf(echoRawHandler)
+        if (idx > -1) transport._rawHandlers.splice(idx, 1)
+      }
+
+      const returnChatId = echoConvId || String(chatId)
+      if (echoConvId && echoConvId !== String(chatId)) {
+        console.log(`[Send] Conversation ID from echo: ${chatId} → ${echoConvId}`)
+      }
+      res.json({ success: true, chatId: returnChatId, externalId: maxMsgId || null })
+    } catch (e) {
+      if (echoRawHandler) {
+        const idx = transport._rawHandlers.indexOf(echoRawHandler)
+        if (idx > -1) transport._rawHandlers.splice(idx, 1)
+      }
+      const isMaxErr = e.maxError
+      console.error(`[Send] sendText failed: ${e.message}`)
+      res.status(isMaxErr ? 422 : 500).json({ error: e.message, maxError: e.maxError || null })
+    }
+    return
   }
 
   try {
