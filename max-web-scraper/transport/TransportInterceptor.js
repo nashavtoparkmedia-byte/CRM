@@ -108,9 +108,22 @@ class TransportInterceptor {
       console.log('[Transport] WS создан:', url)
     })
 
-    // WS frame reception is handled via page.on('websocket') in injectHooks —
-    // Playwright's native interception fires for both initial and reconnect WS connections,
-    // whereas CDP.webSocketFrameReceived misses the first WS created during page.goto.
+    // CDP WS frame reception — now attached BEFORE page.goto so it catches the initial WS.
+    // Playwright page.on('websocket') is kept as a fallback in injectHooks.
+    this._cdpClient.on('Network.webSocketFrameReceived', ({ response }) => {
+      if (!response.payloadData) return
+      if (response.opcode === 2) {
+        // Binary frame: CDP returns base64-encoded binary data.
+        try {
+          const decoded = Buffer.from(response.payloadData, 'base64').toString('utf8')
+          this._handleFrame(decoded)
+        } catch {
+          console.log('[Transport BINARY] frame len:', response.payloadData.length)
+        }
+        return
+      }
+      this._handleFrame(response.payloadData)
+    })
 
     // Перехватываем ВСЕ исходящие WS-фреймы для диагностики + реакции
     this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {

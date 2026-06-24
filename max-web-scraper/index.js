@@ -1781,12 +1781,12 @@ async function init() {
   // 1. Инжектируем WS-хук ДО навигации
   await transport.injectHooks(page)
 
-  // 2. Навигируем
+  // 2. Подключаем CDP ДО навигации — чтобы webSocketFrameReceived поймал первый WS
+  await transport.attachCdp(page, context)
+
+  // 3. Навигируем
   console.log('[App] Открываем web.max.ru...')
   await page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-
-  // 3. Подключаем CDP
-  await transport.attachCdp(page, context)
 
   // 4. Создаём зависимые объекты
   mediaPipeline = new MediaPipeline(page)
