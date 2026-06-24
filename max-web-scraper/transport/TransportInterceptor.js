@@ -12,9 +12,21 @@ const WS_INIT_SCRIPT = `(function () {
       // Intercept all incoming messages via addEventListener so Node.js receives
       // them through __maxWsReceive even when CDP/Playwright cannot see WS frames
       // (e.g. HTTP/2-based WebSocket on api.oneme.ru/websocket).
+      // Test if the bridge is alive — logs something immediately on WS creation
+      try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"ws_created","url":"' + url + '"}'); } catch(e) {}
       ws.addEventListener('message', function (event) {
         try {
-          if (window.__maxWsReceive) window.__maxWsReceive(event.data);
+          var d = event.data;
+          if (typeof d !== 'string') {
+            // Binary frame (ArrayBuffer / Blob) — encode as latin1 string
+            try {
+              var arr = (d instanceof ArrayBuffer) ? new Uint8Array(d) : new Uint8Array(0);
+              var s = '';
+              for (var i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
+              d = s;
+            } catch(e2) { d = ''; }
+          }
+          if (window.__maxWsReceive) window.__maxWsReceive(d);
         } catch (e) {}
       });
     }
