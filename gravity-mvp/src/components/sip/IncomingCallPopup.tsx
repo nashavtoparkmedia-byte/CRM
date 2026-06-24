@@ -17,7 +17,7 @@ import { useSip } from "@/lib/sip/SipContext"
  *  - Visible ring-duration counter, autoFocus on "Принять" (Enter accepts)
  */
 export default function IncomingCallPopup() {
-    const { incomingCall, answer, decline } = useSip()
+    const { incomingCall, answer, decline, activeCall } = useSip()
     const [elapsed, setElapsed] = useState(0)
     const [isAnswering, setIsAnswering] = useState(false)
     const ringtoneRef = useRef<{ stop: () => void } | null>(null)
@@ -113,7 +113,7 @@ export default function IncomingCallPopup() {
     const subtitle = incomingCall.displayName ? formatPhone(incomingCall.fromNumber) : 'Неизвестный номер'
 
     return (
-        <div className="fixed bottom-6 right-6 z-50 w-[360px] rounded-md border border-border bg-white shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className={`fixed ${activeCall ? 'bottom-[220px]' : 'bottom-6'} right-6 z-[60] w-[360px] rounded-md border border-border bg-white shadow-lg animate-in fade-in slide-in-from-bottom-4 duration-200`}>
             <div className="flex items-center gap-3 px-4 pt-4">
                 <div className="relative">
                     <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"/>

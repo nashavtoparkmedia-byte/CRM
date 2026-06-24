@@ -708,7 +708,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     function hangup() {
         if (activeCall) {
             if (activeCall.session) {
-                activeCall.session.terminate()
+                try { activeCall.session.terminate() } catch {}
             } else {
                 // Placeholder — no SIP session in the browser yet, but FS has
                 // an in-flight originate dialling Megafon → callee. We MUST
@@ -724,11 +724,14 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                         body: JSON.stringify({ fsUuid: activeCall.fsUuid }),
                     }).catch(err => console.warn('[SIP] cancel originate request failed:', err))
                 }
-                stopRingback()
-                setActiveCall(null)
             }
+            stopRingback()
+            setActiveCall(null)
         }
-        if (incomingCall) incomingCall.session.terminate()
+        if (incomingCall) {
+            try { incomingCall.session.terminate() } catch {}
+            setIncomingCall(null)
+        }
     }
 
     function toggleMute() {
