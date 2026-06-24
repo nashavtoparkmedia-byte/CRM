@@ -511,14 +511,36 @@ async function resolveViaPhoneLookupDialog(digits) {
     }
 
     if (!plusClicked) {
-      // Iterate over ALL SVG-only buttons (no text), skip "Start chatting"
-      // Click each one and check if a phone input appears
+      // When "Contacts" tab is active, "Start chatting" btn may open "Найти по номеру"
+      // (different behavior than when chat list tab is active). Try it FIRST.
+      const startChatting = page.locator('button[aria-label="Start chatting"]').first()
+      if (await startChatting.isVisible({ timeout: 400 }).catch(() => false)) {
+        await startChatting.click()
+        console.log('[ResolvePhone] Clicked "Start chatting" with Contacts tab active')
+        await page.waitForTimeout(700)
+        const phoneInputAfterStart = await findPhoneInput()
+        if (phoneInputAfterStart) {
+          plusClicked = true
+          console.log('[ResolvePhone] "Start chatting" opened phone dialog!')
+        } else {
+          // Opened compose search — close it and try other buttons
+          await page.keyboard.press('Escape').catch(() => {})
+          await page.waitForTimeout(400)
+          console.log('[ResolvePhone] "Start chatting" opened search dialog (not phone) — trying others')
+        }
+      }
+    }
+
+    if (!plusClicked) {
+      // Iterate over ALL SVG-only buttons (no text), skip known non-candidates
       const svgBtns = btns.filter(b =>
-        !b.text &&           // no visible text
-        b.label !== 'Start chatting' &&  // not the compose button
-        b.label !== 'Еще'                // not the "more" menu button on cells
+        !b.text &&                         // no visible text
+        b.label !== 'Start chatting' &&    // tried above already
+        b.label !== 'Еще' &&
+        b.label !== 'Contact actions' &&
+        b.label !== 'Изменить ширину'
       )
-      console.log('[ResolvePhone] SVG-only candidates:', JSON.stringify(svgBtns))
+      console.log('[ResolvePhone] Remaining SVG candidates:', JSON.stringify(svgBtns))
 
       for (const candidate of svgBtns) {
         // Build a selector to click this specific button
