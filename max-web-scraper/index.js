@@ -690,6 +690,96 @@ function findConvByParticipant(userId) {
   return null
 }
 
+// ─── Contacts page phone search ───────────────────────────────────────────────
+// MAX's /contacts page may find users by phone when global search fails.
+// Navigates to the contacts section, searches, extracts userId from op:32 WS frame.
+async function resolveViaContactsPage(digits) {
+  if (!page || !transport || !isReady) return null
+  const phone7 = digits.startsWith('7') ? digits : '7' + digits.slice(-10)
+  console.log(`[ResolvePhone] Contacts page search: ${phone7}...`)
+
+  const capturedFrames = []
+  const rawHandler = (data) => {
+    if (data.opcode !== 132 && data.opcode !== 1 && data.opcode !== 5) {
+      capturedFrames.push({ opcode: data.opcode, payload: data.payload })
+    }
+  }
+  transport._rawHandlers.push(rawHandler)
+
+  try {
+    // Navigate to contacts section
+    await page.goto('https://web.max.ru/contacts', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
+    await page.waitForTimeout(1500)
+
+    // Find search input on contacts page
+    const inputSel = await (async () => {
+      for (const sel of ['input[placeholder="Search"]', 'input[placeholder*="Search"]', 'input[placeholder*="Поис"]', 'input[placeholder*="Найти"]', 'input[type="search"]']) {
+        if (await page.locator(sel).first().isVisible({ timeout: 400 }).catch(() => false)) return sel
+      }
+      return null
+    })()
+
+    if (!inputSel) {
+      const allInputs = await page.evaluate(() =>
+        [...document.querySelectorAll('input')]
+          .filter(i => i.type !== 'hidden' && i.offsetParent !== null)
+          .map(i => ({ ph: i.placeholder, cls: i.className.slice(0, 50) }))
+      )
+      console.log('[ResolvePhone] Contacts page inputs:', JSON.stringify(allInputs))
+    } else {
+      await page.locator(inputSel).first().click()
+      await page.locator(inputSel).first().fill('')
+      await page.keyboard.type(phone7, { delay: 50 })
+      await page.waitForTimeout(2500)
+
+      await page.screenshot({ path: '/tmp/max_contacts_search.png', fullPage: false }).catch(() => {})
+
+      // Extract userId from DOM
+      const userId = await page.evaluate(() => {
+        for (const el of document.querySelectorAll('[data-id],[data-user-id],a[href*="/u/"]')) {
+          const id = el.getAttribute('data-id') || el.getAttribute('data-user-id') ||
+                     (el.href || '').match(/\/u\/(\d+)/)?.[1]
+          if (id && /^\d{5,12}$/.test(String(id))) return String(id)
+        }
+        return null
+      })
+      if (userId) {
+        console.log(`[ResolvePhone] Contacts DOM resolved: ${digits} → ${userId}`)
+        await page.goto('https://web.max.ru', { timeout: 5000 }).catch(() => {})
+        const idx = transport._rawHandlers.indexOf(rawHandler)
+        if (idx > -1) transport._rawHandlers.splice(idx, 1)
+        return userId
+      }
+
+      // Check op:60/68 search frames
+      for (const frame of capturedFrames) {
+        if (frame.opcode !== 60 && frame.opcode !== 68) continue
+        const results = Array.isArray(frame.payload?.result) ? frame.payload.result : []
+        for (const r of results) {
+          const id = r.id || r.userId || r.user_id
+          if (id && /^\d{5,12}$/.test(String(id))) {
+            console.log(`[ResolvePhone] Contacts op:${frame.opcode} resolved: ${digits} → ${id}`)
+            await page.goto('https://web.max.ru', { timeout: 5000 }).catch(() => {})
+            const idx = transport._rawHandlers.indexOf(rawHandler)
+            if (idx > -1) transport._rawHandlers.splice(idx, 1)
+            return String(id)
+          }
+        }
+      }
+
+      console.log(`[ResolvePhone] Contacts page: no result for ${phone7}. Frames:`,
+        capturedFrames.map(f => `op:${f.opcode}`).join(','))
+    }
+  } catch (e) {
+    console.warn('[ResolvePhone] Contacts page search failed:', e.message)
+  }
+
+  const idx = transport._rawHandlers.indexOf(rawHandler)
+  if (idx > -1) transport._rawHandlers.splice(idx, 1)
+  await page.goto('https://web.max.ru', { timeout: 5000 }).catch(() => {})
+  return null
+}
+
 // ─── Live phone → MAX userId resolution ──────────────────────────────────────
 // Used when contactStore doesn't have the contact (e.g. brand-new outbound)
 async function resolvePhoneLive(digits) {
@@ -718,9 +808,28 @@ async function resolvePhoneLive(digits) {
     }
   }
 
-  // 3. Puppeteer UI search in MAX web — interacts with compose dialog to find userId
+  // 3. chatCache participant scan — if any DIALOG participant has phone=target in contactStore
+  //    return the convId directly (avoids needing userId at all)
+  for (const [chatIdStr, chatData] of chatCache.entries()) {
+    if (chatData.type !== 'DIALOG') continue
+    const parts = chatData.participants ? Object.keys(chatData.participants) : []
+    for (const pId of parts) {
+      const pPhone = contactStore.getPhone(pId)
+      if (!pPhone) continue
+      if (pPhone.replace(/\D/g, '').slice(-10) === tail10) {
+        console.log(`[ResolvePhone] chatCache participant match: ${digits} → convId ${chatIdStr} (userId ${pId})`)
+        return chatIdStr  // return convId — looksLikePhone=false so will be sent directly
+      }
+    }
+  }
+
+  // 4. Puppeteer UI search in MAX web — interacts with compose dialog to find userId
   const uiId = await resolveViaUiSearch(digits)
   if (uiId) return uiId
+
+  // 5. Contacts page search — MAX Contacts may search differently than global search
+  const contactsId = await resolveViaContactsPage(digits)
+  if (contactsId) return contactsId
 
   return null
 }
