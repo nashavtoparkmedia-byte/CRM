@@ -534,16 +534,26 @@ async function resolveViaPhoneLookupDialog(digits) {
       })
       console.log('[ResolvePhone] All clickable elements:', JSON.stringify(allClickable))
 
-      // Filter: SVG-containing elements that are NOT known non-candidates
       const SKIP_LABELS = ['Start chatting', 'Еще', 'Contact actions', 'Изменить ширину']
       const SKIP_TEXT = ['All', 'Новые', 'Каналы', 'Contacts', 'Calls', 'Settings', 'Search']
-      const candidates = allClickable.filter(c =>
+
+      // Priority 1: elements with "addition"/"add"/"plus" in class — the "+" button
+      // may be styled via CSS pseudo-element (no SVG, no text) — e.g. DIV.addition.svelte-pu1tym
+      const addCandidates = allClickable.filter(c =>
+        !c.text &&
+        !SKIP_LABELS.includes(c.label) &&
+        (c.cls.includes('addition') || c.cls.includes('add-') || c.cls.includes('-add'))
+      )
+      // Priority 2: SVG-containing elements
+      const svgCandidates = allClickable.filter(c =>
         c.hasSvg &&
         !c.text &&
         !SKIP_LABELS.includes(c.label) &&
-        !SKIP_TEXT.includes(c.text)
+        !SKIP_TEXT.includes(c.text) &&
+        !addCandidates.includes(c)
       )
-      console.log('[ResolvePhone] Filtered SVG candidates:', JSON.stringify(candidates))
+      const candidates = [...addCandidates, ...svgCandidates]
+      console.log('[ResolvePhone] Filtered candidates (add-first):', JSON.stringify(candidates))
 
       for (const candidate of candidates) {
         const escaped = (s) => s?.replace(/"/g, '\\"').replace(/'/g, "\\'")
@@ -551,7 +561,7 @@ async function resolveViaPhoneLookupDialog(digits) {
         if (candidate.label && !SKIP_LABELS.includes(candidate.label)) {
           sel = `[aria-label="${escaped(candidate.label)}"]`
         } else {
-          // Try to match by class fragment
+          // Match by Svelte class hash
           const svelteCls = candidate.cls?.match(/svelte-\w+/)?.[0]
           if (svelteCls) sel = `${candidate.tag}.${svelteCls}:not([aria-label="Start chatting"])`
         }
@@ -573,6 +583,27 @@ async function resolveViaPhoneLookupDialog(digits) {
         await page.keyboard.press('Escape').catch(() => {})
         await page.waitForTimeout(400)
       }
+    }
+
+    if (!plusClicked) {
+      // Hover over contacts panel header — the "+" may only appear on hover
+      try {
+        const contactsBtn = page.locator('button.button--active, button:has-text("Contacts")').first()
+        if (await contactsBtn.isVisible({ timeout: 300 }).catch(() => false)) {
+          await contactsBtn.hover()
+          await page.waitForTimeout(500)
+          console.log('[ResolvePhone] Hovered contacts tab — checking for revealed buttons')
+          const afterHover = await findPhoneInput()
+          if (!afterHover) {
+            // Look for any newly appeared element after hover
+            const newEls = await page.evaluate(() =>
+              [...document.querySelectorAll('[class*="addition"], [class*="add-btn"]')]
+                .map(el => ({ tag: el.tagName, cls: el.className?.toString().slice(0, 60), visible: el.offsetParent !== null }))
+            )
+            console.log('[ResolvePhone] Elements after hover:', JSON.stringify(newEls))
+          }
+        }
+      } catch {}
     }
 
     if (!plusClicked) {
