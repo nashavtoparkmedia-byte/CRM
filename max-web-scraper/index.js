@@ -539,10 +539,12 @@ async function resolveViaPhoneLookupDialog(digits) {
 
       // Priority 1: elements with "addition"/"add"/"plus" in class — the "+" button
       // may be styled via CSS pseudo-element (no SVG, no text) — e.g. DIV.addition.svelte-pu1tym
+      // Exclude layer/container elements (layer-additional, layer-content, etc.)
       const addCandidates = allClickable.filter(c =>
         !c.text &&
         !SKIP_LABELS.includes(c.label) &&
-        (c.cls.includes('addition') || c.cls.includes('add-') || c.cls.includes('-add'))
+        !c.cls.includes('layer') &&
+        (c.cls.match(/\baddition\b/) || c.cls.includes('add-') || c.cls.includes('-add'))
       )
       // Priority 2: SVG-containing elements
       const svgCandidates = allClickable.filter(c =>
@@ -570,7 +572,7 @@ async function resolveViaPhoneLookupDialog(digits) {
         const el = page.locator(sel).first()
         if (!await el.isVisible({ timeout: 200 }).catch(() => false)) continue
 
-        await el.click()
+        await el.click({ timeout: 2000 }).catch(() => {})
         console.log(`[ResolvePhone] Tried: ${candidate.tag} label="${candidate.label}" cls="${candidate.cls?.slice(0,40)}"`)
         await page.waitForTimeout(700)
 

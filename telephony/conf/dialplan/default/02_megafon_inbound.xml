@@ -9,6 +9,20 @@
     branch on it here because we currently have a single Megafon number —
     all incoming traffic goes to the same manager pool.
   -->
+
+  <!-- Block SIP scanner probes: real Russian mobile/landline numbers are
+       always 10+ digits after stripping the country code. Short CallerIDs
+       like "401", "10001", "1000" are spoofed test IDs from internet scanners
+       that hit any open SIP port. Reject them immediately so they don't create
+       junk Call rows in the CRM database. -->
+  <extension name="reject_sip_scanners" continue="true">
+    <condition field="${sofia_profile_name}" expression="^external$" break="on-false"/>
+    <condition field="${caller_id_number}" expression="^\d{1,9}$">
+      <action application="respond" data="603 Declined"/>
+      <action application="hangup"/>
+    </condition>
+  </extension>
+
   <extension name="megafon_inbound_fork">
     <!-- Match ONLY calls coming from the Megafon SBC. The original
          `source=mod_sofia` matched every sofia channel, including outbound
@@ -25,6 +39,14 @@
            negotiate without crypto while the B-leg (WebRTC/JsSIP) still uses
            DTLS-SRTP via the internal profile. -->
       <action application="set" data="rtp_secure_media=false"/>
+
+      <!-- Recording: start when the call is answered, follow transfers.
+           Pre-generate the file path using ${uuid} so the ESL handler can
+           locate the WAV via variable_recording_file after hangup. -->
+      <action application="set" data="RECORD_STEREO=true"/>
+      <action application="set" data="recording_follow_transfer=true"/>
+      <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
+      <action application="set" data="execute_on_answer=record_session /var/lib/freeswitch/recordings/${uuid}.wav"/>
 
       <!-- Bridge directly to user/103 (browser softphone).
            Multi-user simultaneous ring via bridge is incompatible with
