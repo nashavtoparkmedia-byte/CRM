@@ -592,24 +592,62 @@ async function resolveViaPhoneLookupDialog(digits) {
     }
 
     if (!plusClicked) {
-      // Hover over contacts panel header — the "+" may only appear on hover
-      try {
-        const contactsBtn = page.locator('button.button--active, button:has-text("Contacts")').first()
-        if (await contactsBtn.isVisible({ timeout: 300 }).catch(() => false)) {
-          await contactsBtn.hover()
-          await page.waitForTimeout(500)
-          console.log('[ResolvePhone] Hovered contacts tab — checking for revealed buttons')
-          const afterHover = await findPhoneInput()
-          if (!afterHover) {
-            // Look for any newly appeared element after hover
-            const newEls = await page.evaluate(() =>
-              [...document.querySelectorAll('[class*="addition"], [class*="add-btn"]')]
-                .map(el => ({ tag: el.tagName, cls: el.className?.toString().slice(0, 60), visible: el.offsetParent !== null }))
-            )
-            console.log('[ResolvePhone] Elements after hover:', JSON.stringify(newEls))
-          }
+      // The "+" button is visually visible in screenshots but NOT captured by querySelectorAll.
+      // Get bounding rects for known elements and use mouse.click at their position,
+      // then also try coordinate-based click at known header location.
+      const rects = await page.evaluate(() => {
+        const res = {}
+        for (const sel of ['.addition', '[class*="addition"]', '.button--active', '[aria-label="Start chatting"]']) {
+          const el = document.querySelector(sel)
+          if (!el) continue
+          const r = el.getBoundingClientRect()
+          const inner = el.innerHTML?.slice(0, 80) || ''
+          res[sel] = { x: r.x, y: r.y, w: r.width, h: r.height, inner }
         }
-      } catch {}
+        return res
+      })
+      console.log('[ResolvePhone] Element rects:', JSON.stringify(rects))
+
+      // Try mouse.click at center of .addition bounding rect
+      const addRect = rects['.addition'] || rects['[class*="addition"]']
+      if (addRect && addRect.w > 0 && addRect.h > 0) {
+        const cx = addRect.x + addRect.w / 2
+        const cy = addRect.y + addRect.h / 2
+        console.log(`[ResolvePhone] mouse.click at .addition center (${cx}, ${cy})`)
+        await page.mouse.click(cx, cy)
+        await page.waitForTimeout(700)
+        if (await findPhoneInput()) { plusClicked = true; console.log('[ResolvePhone] Phone input found via .addition mouse.click!') }
+        else await page.keyboard.press('Escape').catch(() => {})
+      }
+    }
+
+    if (!plusClicked) {
+      // Coordinate scan: screenshot showed "+" at right side of contacts panel header.
+      // Active-button position helps us compute where the right-side "+" is.
+      // Try a few y-positions at x ≈ right edge of contacts panel
+      const activeBtn = await page.evaluate(() => {
+        const el = document.querySelector('.button--active')
+        if (!el) return null
+        const r = el.getBoundingClientRect()
+        return { x: r.x, y: r.y, w: r.width, h: r.height }
+      })
+      if (activeBtn) {
+        // The contacts panel right edge is approximately at startX + panelWidth
+        // From screenshots, panel is ~300px wide; "+" is at ~panel_right - 10px
+        const panelRight = activeBtn.x + activeBtn.w + 240  // rough estimate
+        const headerCy   = activeBtn.y + activeBtn.h / 2
+        // Scan a few x positions near the right edge of the contacts panel header
+        for (const xOffset of [220, 240, 255, 270]) {
+          const cx = activeBtn.x + activeBtn.w + xOffset
+          const cy = headerCy
+          console.log(`[ResolvePhone] Coordinate scan click at (${cx}, ${cy})`)
+          await page.mouse.click(cx, cy)
+          await page.waitForTimeout(600)
+          if (await findPhoneInput()) { plusClicked = true; console.log(`[ResolvePhone] Phone input found at coordinate (${cx}, ${cy})!`); break }
+          await page.keyboard.press('Escape').catch(() => {})
+          await page.waitForTimeout(300)
+        }
+      }
     }
 
     if (!plusClicked) {
