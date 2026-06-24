@@ -384,38 +384,44 @@ export async function register() {
     // Without these, an uncaught error in puppeteer / WA listeners crashes
     // Node.js instantly, leaving zombie chrome processes holding userDataDir
     // locks. We attempt best-effort cleanup, then exit.
-    process.on('uncaughtException', async (err: Error) => {
+    //
+    // IMPORTANT: handler is synchronous up to the stderr write so the log
+    // is guaranteed to flush before process.exit(). Async import is avoided
+    // here because it yields and the log may be lost if exit fires first.
+    process.on('uncaughtException', (err: Error) => {
+        // Synchronous stderr write — always flushes before exit()
         try {
-            const { opsLog } = await import('@/lib/opsLog')
-            opsLog('error', 'uncaught_exception', { error: err.message, stack: err.stack })
+            process.stderr.write(
+                JSON.stringify({ level: 'error', event: 'uncaught_exception', ts: new Date().toISOString(), error: err.message, stack: err.stack }) + '\n'
+            )
         } catch {
-            // opsLog itself failed — fall back to console
-            console.error('[UNCAUGHT]', err)
+            try { console.error('[UNCAUGHT]', err.message, err.stack) } catch { /* absolute last resort */ }
         }
-        try {
-            // Best-effort: close WA clients cleanly so their chromes don't linger.
-            // 5s cap — we're already in a bad state, don't block exit further.
-            const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
-            await Promise.race([
-                destroyAllClients(),
-                new Promise(resolve => setTimeout(resolve, 5000)),
-            ])
-        } catch {
-            // ignore — we're exiting anyway
-        }
-        process.exit(1)
+        // Best-effort async WA cleanup — we fire-and-forget with a 5s cap then exit.
+        const cleanup = (async () => {
+            try {
+                const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
+                await Promise.race([
+                    destroyAllClients(),
+                    new Promise(resolve => setTimeout(resolve, 5000)),
+                ])
+            } catch { /* ignore */ }
+        })()
+        cleanup.finally(() => process.exit(1))
+        // Hard cap: even if cleanup hangs, exit after 6s
+        setTimeout(() => process.exit(1), 6000).unref()
     })
 
-    process.on('unhandledRejection', async (reason: unknown) => {
-        // Don't exit on unhandled rejection — just log. These are typically
-        // benign (lost network call, late timeout) and crashing the whole
-        // server for one of them is overkill.
+    process.on('unhandledRejection', (reason: unknown) => {
+        // Synchronous log — don't exit on unhandled rejection (typically benign).
         const msg = reason instanceof Error ? reason.message : String(reason)
+        const stack = reason instanceof Error ? reason.stack : undefined
         try {
-            const { opsLog } = await import('@/lib/opsLog')
-            opsLog('error', 'unhandled_rejection', { reason: msg })
+            process.stderr.write(
+                JSON.stringify({ level: 'error', event: 'unhandled_rejection', ts: new Date().toISOString(), reason: msg, stack }) + '\n'
+            )
         } catch {
-            console.error('[UNHANDLED]', msg)
+            try { console.error('[UNHANDLED]', msg) } catch { /* ignore */ }
         }
     })
 }

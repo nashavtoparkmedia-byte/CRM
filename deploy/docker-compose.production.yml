@@ -71,7 +71,7 @@ services:
       --appendfsync everysec
       --save "300 1"
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     volumes:
@@ -357,6 +357,8 @@ services:
     volumes:
       # Записи звонков и медиа — write-through в S3, но локальный кэш нужен
       - gravity_recordings:/app/recordings
+      # FreeSWITCH recordings — read-only mount для обработки WAV → MP3 → MinIO
+      - freeswitch_recordings:/app/freeswitch-recordings:ro
       # Сессия WhatsApp (wwebjs LocalAuth) — отдельный volume для долгоживущей сессии
       - gravity_whatsapp:/app/whatsapp_auth
     networks:
