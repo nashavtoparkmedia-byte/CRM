@@ -76,6 +76,24 @@ class TransportInterceptor {
     this._page = page
     await page.addInitScript(WS_INIT_SCRIPT)
     console.log('[Transport] WS-хук инжектирован')
+
+    // Playwright-level WS frame interception — works for initial page load WS
+    // (CDP.webSocketFrameReceived misses frames from the first WS created during page.goto
+    // because CDP is attached only AFTER goto returns).
+    page.on('websocket', ws => {
+      const url = ws.url()
+      if (!url.includes('api.oneme.ru')) return
+      console.log('[Transport] WS (playwright) создан:', url)
+      ws.on('framereceived', ({ payload }) => {
+        try {
+          const text = Buffer.isBuffer(payload) ? payload.toString('utf8') : String(payload)
+          this._handleFrame(text)
+        } catch {
+          console.log('[Transport] WS frame parse error for payload len:', (payload || '').length)
+        }
+      })
+      ws.on('close', () => console.log('[Transport] WS (playwright) закрыт'))
+    })
   }
 
   // ─── Шаг 2: Прикрепляем CDP ПОСЛЕ page.goto ─────────────────────────────
@@ -90,21 +108,9 @@ class TransportInterceptor {
       console.log('[Transport] WS создан:', url)
     })
 
-    this._cdpClient.on('Network.webSocketFrameReceived', ({ response }) => {
-      if (!response.payloadData) return
-      if (response.opcode === 2) {
-        // Binary WS frame — MAX may use binary on api.oneme.ru/websocket.
-        // Try base64-decode → UTF-8 → JSON.
-        try {
-          const decoded = Buffer.from(response.payloadData, 'base64').toString('utf8')
-          this._handleFrame(decoded)
-        } catch {
-          console.log('[Transport BINARY] undecodable frame len:', response.payloadData.length)
-        }
-        return
-      }
-      this._handleFrame(response.payloadData)
-    })
+    // WS frame reception is handled via page.on('websocket') in injectHooks —
+    // Playwright's native interception fires for both initial and reconnect WS connections,
+    // whereas CDP.webSocketFrameReceived misses the first WS created during page.goto.
 
     // Перехватываем ВСЕ исходящие WS-фреймы для диагностики + реакции
     this._cdpClient.on('Network.webSocketFrameSent', ({ response }) => {
