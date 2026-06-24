@@ -488,6 +488,10 @@ async function resolveViaPhoneLookupDialog(digits) {
     )
     console.log('[ResolvePhone] Contacts section buttons:', JSON.stringify(btns))
 
+    // Screenshot for visual debugging — saved to /tmp/max_contacts_state.png
+    await page.screenshot({ path: '/tmp/max_contacts_state.png', fullPage: false }).catch(() => {})
+    console.log('[ResolvePhone] Screenshot saved: /tmp/max_contacts_state.png')
+
     // 4. Find the "+" button — it should be an SVG-only (no text) button
     //    that is NOT "Start chatting" (that one opens the compose/search dialog)
     //    We try EACH SVG-only button and check if it opens a PHONE input
