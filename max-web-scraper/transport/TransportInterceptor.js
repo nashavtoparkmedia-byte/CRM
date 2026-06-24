@@ -33,12 +33,10 @@ const WS_INIT_SCRIPT = `(function () {
 
           var d = event.data;
           if (typeof d !== 'string') {
-            // Binary frame (ArrayBuffer) — encode as latin1 string
+            // Binary frame (ArrayBuffer) — decode as UTF-8 (not latin1!)
+            // MAX sends JSON with Cyrillic text; latin1 String.fromCharCode breaks it
             try {
-              var arr = (d instanceof ArrayBuffer) ? new Uint8Array(d) : new Uint8Array(0);
-              var s = '';
-              for (var i = 0; i < arr.length; i++) s += String.fromCharCode(arr[i]);
-              d = s;
+              d = new TextDecoder('utf-8').decode(d instanceof ArrayBuffer ? d : new ArrayBuffer(0));
             } catch(e2) { d = ''; }
           }
           if (window.__maxWsReceive) window.__maxWsReceive(d);
