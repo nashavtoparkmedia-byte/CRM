@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Loader2, Sparkles } from "lucide-react"
+import { PhoneIncoming, PhoneOutgoing, PhoneMissed, Play, Pause, Sparkles } from "lucide-react"
 
 interface CallRow {
     id: string
@@ -21,15 +21,15 @@ interface CallRow {
  * once on mount; the SipProvider's SSE subscription keeps the floating
  * popup live, so this list intentionally stays simple.
  *
- * Recordings (Stage 3): if a call has recordingPath, an inline play button
- * lazily fetches a presigned URL from /api/calls/[id]/recording on first
- * click and plays via a single shared <audio> element (only one track at a time).
+ * Recordings: if a call has recordingPath, an inline play button sets the
+ * shared <audio> src to /api/calls/[id]/recording — Next.js streams the MP3
+ * from MinIO server-side, which avoids the Docker-internal hostname and
+ * mixed-content issues that arise with presigned URLs.
  */
 export default function CallsList({ driverId, contactId, limit = 10 }: { driverId?: string; contactId?: string; limit?: number }) {
     const [calls, setCalls] = useState<CallRow[]>([])
     const [loading, setLoading] = useState(true)
     const [playingCallId, setPlayingCallId] = useState<string | null>(null)
-    const [loadingCallId, setLoadingCallId] = useState<string | null>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
 
     useEffect(() => {
@@ -43,7 +43,7 @@ export default function CallsList({ driverId, contactId, limit = 10 }: { driverI
             .catch(() => setLoading(false))
     }, [driverId, contactId, limit])
 
-    async function togglePlay(call: CallRow) {
+    function togglePlay(call: CallRow) {
         if (!call.recordingPath) return
         const audio = audioRef.current
         if (!audio) return
@@ -54,20 +54,13 @@ export default function CallsList({ driverId, contactId, limit = 10 }: { driverI
             return
         }
 
-        setLoadingCallId(call.id)
-        try {
-            const res = await fetch(`/api/calls/${call.id}/recording`)
-            if (!res.ok) throw new Error(`status ${res.status}`)
-            const { url } = await res.json()
-            audio.src = url
-            await audio.play()
-            setPlayingCallId(call.id)
-        } catch (err) {
-            console.warn('recording play failed', err)
-            setPlayingCallId(null)
-        } finally {
-            setLoadingCallId(null)
-        }
+        audio.src = `/api/calls/${call.id}/recording`
+        audio.play()
+            .then(() => setPlayingCallId(call.id))
+            .catch(err => {
+                console.warn('recording play failed', err)
+                setPlayingCallId(null)
+            })
     }
 
     if (loading) return <div className="text-[13px] text-muted-foreground py-[2px]">Загрузка…</div>
@@ -83,7 +76,6 @@ export default function CallsList({ driverId, contactId, limit = 10 }: { driverI
                         key={c.id}
                         call={c}
                         isPlaying={playingCallId === c.id}
-                        isLoading={loadingCallId === c.id}
                         onTogglePlay={() => togglePlay(c)}
                     />
                 ))}
@@ -99,11 +91,10 @@ export default function CallsList({ driverId, contactId, limit = 10 }: { driverI
 }
 
 function CallRowItem({
-    call, isPlaying, isLoading, onTogglePlay,
+    call, isPlaying, onTogglePlay,
 }: {
     call: CallRow
     isPlaying: boolean
-    isLoading: boolean
     onTogglePlay: () => void
 }) {
     const Icon = iconFor(call)
@@ -144,13 +135,10 @@ function CallRowItem({
             {call.recordingPath && (
                 <button
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePlay() }}
-                    disabled={isLoading}
                     title={isPlaying ? 'Пауза' : 'Прослушать запись'}
-                    className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white hover:bg-primary-dark disabled:bg-gray-300 transition-colors"
+                    className="ml-1 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white hover:bg-primary-dark transition-colors"
                 >
-                    {isLoading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin"/>
-                    ) : isPlaying ? (
+                    {isPlaying ? (
                         <Pause className="h-3.5 w-3.5"/>
                     ) : (
                         <Play className="h-3.5 w-3.5"/>
