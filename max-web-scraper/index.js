@@ -2193,28 +2193,35 @@ async function init() {
   // 5. Авторизация
   session.attach(page, context, transport)
 
-  // Auto-recovery: когда сервер возвращает has_profile=false после успешного старта
-  // — браузерная WS-сессия протухла. Перезагружаем страницу чтобы восстановить auth.
+  // Auto-recovery: когда WS-сессия протухла (sendText таймауты накапливаются).
+  // Не реагируем на разовые has_profile=false (это нормальный WS keepalive).
+  // Перезагружаем страницу только при УСТОЙЧИВОМ сбое: ≥3 consecutive fails + >90s с момента старта.
   let _authFailReloadAt = 0
+  let _authFailStreak   = 0
+  let _wsReadyAt        = 0  // когда впервые получили WS auth OK
   transport._rawHandlers.push((data) => {
     if (data.opcode !== 19) return
     const hasProfile = !!(data.payload?.profile?.contact?.id)
-    if (!hasProfile && isReady && !_dialogBusy) {
-      const now = Date.now()
-      if (now - _authFailReloadAt < 60_000) return  // не чаще раза в минуту
-      _authFailReloadAt = now
-      console.warn('[App] WS auth lost (has_profile=false after ready) — reloading page...')
-      isReady = false
-      setTimeout(async () => {
-        try {
-          await page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-          console.log('[App] Page reloaded after auth loss — waiting for re-auth...')
-        } catch (e) {
-          console.error('[App] Auth-loss reload failed:', e.message)
-          isReady = true  // вернуть чтобы не завис навсегда
-        }
-      }, 3000)  // небольшая задержка чтобы auth fail успел устояться (не флуктуация)
-    }
+    if (hasProfile) { _authFailStreak = 0; return }  // успешный auth сбрасывает счётчик
+    if (!isReady || _dialogBusy) return
+    const now = Date.now()
+    if (_wsReadyAt === 0 || now - _wsReadyAt < 90_000) return  // grace period 90s
+    _authFailStreak++
+    if (_authFailStreak < 3) return  // ждём 3 consecutive fails
+    if (now - _authFailReloadAt < 120_000) return  // не чаще раза в 2 мин
+    _authFailStreak = 0
+    _authFailReloadAt = now
+    console.warn(`[App] WS auth lost (${_authFailStreak} consecutive has_profile=false) — reloading page...`)
+    isReady = false
+    setTimeout(async () => {
+      try {
+        await page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+        console.log('[App] Page reloaded after auth loss — waiting for re-auth...')
+      } catch (e) {
+        console.error('[App] Auth-loss reload failed:', e.message)
+        isReady = true  // вернуть чтобы не завис навсегда
+      }
+    }, 2000)
   })
 
   // WS-авторизация (opcode 19) — первичный и надёжный триггер
@@ -2244,6 +2251,7 @@ async function init() {
 
     console.log('[App] WS auth OK, userId:', userId)
     isReady = true
+    if (_wsReadyAt === 0) _wsReadyAt = Date.now()  // фиксируем момент первого успешного auth
     session.isLoggedIn = true  // сразу, до sync — чтобы _waitForQrLogin вышел немедленно
 
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
