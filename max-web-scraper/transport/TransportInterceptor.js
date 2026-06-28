@@ -1,5 +1,7 @@
 'use strict'
 
+const { decode: msgpackDecode } = require('@msgpack/msgpack')
+
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
 // и добавляет window.__maxWsSend(rawString) для отправки фреймов из Node.js
@@ -32,12 +34,18 @@ const WS_INIT_SCRIPT = `(function () {
           try { if (window.__maxWsReceive) window.__maxWsReceive('{"__diag":"msg_arrived","type":"' + dataType + '","ab":' + isAB + '}'); } catch(e2) {}
 
           var d = event.data;
-          if (typeof d !== 'string') {
-            // Binary frame (ArrayBuffer) — decode as UTF-8 (not latin1!)
-            // MAX sends JSON with Cyrillic text; latin1 String.fromCharCode breaks it
+          if (d instanceof ArrayBuffer) {
+            // MAX uses binary WS frames (new api.oneme.ru endpoint).
+            // Pass raw bytes as base64 so Node.js can decode the binary protocol
+            // without losing bytes to TextDecoder's UTF-8 replacement chars.
             try {
-              d = new TextDecoder('utf-8').decode(d instanceof ArrayBuffer ? d : new ArrayBuffer(0));
+              var bytes = new Uint8Array(d);
+              var binary = '';
+              for (var i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+              d = 'b64:' + btoa(binary);
             } catch(e2) { d = ''; }
+          } else if (typeof d !== 'string') {
+            d = '';
           }
           if (window.__maxWsReceive) window.__maxWsReceive(d);
         } catch (e) {}
@@ -201,12 +209,15 @@ class TransportInterceptor {
   // ─── Обработка входящих WS фреймов ──────────────────────────────────────
 
   _handleFrame(raw) {
+    // Binary frames from new api.oneme.ru endpoint arrive base64-encoded
+    if (raw.startsWith('b64:')) {
+      this._handleBinaryFrame(Buffer.from(raw.slice(4), 'base64'))
+      return
+    }
+
     let data
     try { data = JSON.parse(raw) } catch {
-      // Hex dump first 32 bytes to diagnose binary protocol format
-      const hexBytes = []
-      for (let i = 0; i < Math.min(32, raw.length); i++) hexBytes.push(raw.charCodeAt(i).toString(16).padStart(2,'0'))
-      console.log('[Transport PARSE_FAIL] len:', raw.length, 'hex:', hexBytes.join(' '))
+      console.log('[Transport PARSE_FAIL] not base64 and not JSON, len:', raw.length)
       return
     }
 
@@ -224,6 +235,10 @@ class TransportInterceptor {
       return
     }
 
+    this._processDecodedFrame(data)
+  }
+
+  _processDecodedFrame(data) {
     // DEBUG: log all non-presence frames
     if (data.opcode !== OP.PRESENCE) {
       const preview = data.payload ? JSON.stringify(data.payload).slice(0, 200) : ''
@@ -280,6 +295,62 @@ class TransportInterceptor {
       const msg = this._normalizeMaxMsg(data.payload)
       if (msg) this._emit(msg)
     }
+  }
+
+  // ─── Декодирование бинарных WS фреймов (новый api.oneme.ru протокол) ────
+  //
+  // Frame layout (observed via hex dump, 9-byte fixed header):
+  //   Byte 0:    0x0a = protocol magic (10)
+  //   Byte 1:    0x01 = version
+  //   Byte 2:    0x00 = flags
+  //   Bytes 3-4: uint16 BE = frame sequence number
+  //   Byte 5:    opcode (same numbers as JSON protocol)
+  //   Byte 6:    cmd (meaning differs from JSON: 1=push, 4=success, etc.)
+  //   Bytes 7-8: uint16 BE = request seq (for matching responses)
+  //   Bytes 9+:  MessagePack-encoded payload object
+  //
+  _handleBinaryFrame(buf) {
+    if (buf.length < 9) return
+
+    if (buf[0] !== 0x0a) {
+      console.log('[BIN] Unknown magic byte:', buf[0].toString(16))
+      return
+    }
+
+    const opcode   = buf[5]
+    const cmd      = buf[6]
+    const reqSeq   = (buf[7] << 8) | buf[8]
+    const frameSeq = (buf[3] << 8) | buf[4]
+
+    let payload = {}
+    if (buf.length > 9) {
+      try {
+        payload = msgpackDecode(buf.slice(9))
+      } catch (e) {
+        console.log('[BIN] MsgPack decode fail op:', opcode, e.message.slice(0, 60))
+        // Try decoding the WHOLE buffer as msgpack (no fixed header)
+        try {
+          const full = msgpackDecode(buf)
+          console.log('[BIN] Full-frame MsgPack:', JSON.stringify(full).slice(0, 200))
+        } catch {}
+        return
+      }
+    }
+
+    // Map binary frame to the same JSON-protocol data shape that _handleFrame uses
+    // In binary protocol: cmd=1 means "server push" (no reqSeq), cmd=4 means "success response"
+    // We normalise to old protocol: cmd=1 for success, cmd=0 for push
+    const mappedCmd = (cmd === 4) ? 1 : (cmd === 1 ? 0 : cmd)
+
+    const data = { opcode, cmd: mappedCmd, seq: reqSeq, payload, _frameSeq: frameSeq }
+
+    if (opcode !== OP.PRESENCE) {
+      console.log('[BIN] op:', opcode, 'cmd:', cmd, '→', mappedCmd, 'seq:', reqSeq,
+        JSON.stringify(payload).slice(0, 200))
+    }
+
+    // Feed into the common handler (reuse all existing opcode processing)
+    this._processDecodedFrame(data)
   }
 
   // ─── Нормализация входящего MAX сообщения ────────────────────────────────
