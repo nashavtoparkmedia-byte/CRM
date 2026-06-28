@@ -1072,7 +1072,6 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                 }
               }
               console.log(`[ResolvePhone] UI send timeout — no chatId in 10s`)
-            }
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }
