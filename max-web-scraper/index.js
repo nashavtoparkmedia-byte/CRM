@@ -971,7 +971,15 @@ async function resolveViaPhoneLookupDialog(digits) {
           await returnHome()
           cleanup(); return convId
         }
-        console.log(`[ResolvePhone] URL-resolved to user profile (${convId}) — clicking "Написать" to get conversation ID`)
+        console.log(`[ResolvePhone] URL-resolved to user profile (${convId}) — waiting for profile buttons...`)
+        await page.waitForTimeout(2500)
+        const profileBtns = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('button, [role="button"]')).slice(0, 25).map(b => ({
+            text: b.textContent?.trim().slice(0, 50),
+            label: b.getAttribute('aria-label')?.slice(0, 40),
+          }))
+        ).catch(() => [])
+        console.log('[ResolvePhone] Profile page buttons:', JSON.stringify(profileBtns))
         // Fall through to 6b write-button logic below
       }
     }
@@ -980,12 +988,16 @@ async function resolveViaPhoneLookupDialog(digits) {
     const writeBtnSels = [
       'button:has-text("Написать")',
       'button:has-text("Начать чат")',
+      'button:has-text("Start chatting")',
       'button:has-text("Start chat")',
       'button:has-text("Написать сообщение")',
+      'button:has-text("Message")',
+      'button[aria-label*="Написать"]',
+      'button[aria-label*="message" i]',
     ]
     for (const sel of writeBtnSels) {
       const btn = page.locator(sel).first()
-      if (await btn.isVisible({ timeout: 600 }).catch(() => false)) {
+      if (await btn.isVisible({ timeout: 2500 }).catch(() => false)) {
         console.log(`[ResolvePhone] Found write button "${sel}" — clicking`)
         await btn.click()
         await page.waitForTimeout(3000)
