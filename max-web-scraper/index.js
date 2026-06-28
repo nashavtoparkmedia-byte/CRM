@@ -1115,10 +1115,10 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                   }
                 }
               }
-              // Log diagnostic payloads on timeout
-              const diagFrames = capturedFrames.filter(f => [48, 64, 65, 71, 128, 198].includes(f.opcode))
+              // Log diagnostic payloads on timeout — include op:61 which may carry chatId
+              const diagFrames = capturedFrames.filter(f => [48, 61, 64, 65, 71, 128, 198].includes(f.opcode))
               console.log(`[ResolvePhone] UI send timeout — diag frames:`,
-                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 150)}`).join(' | '))
+                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 200)}`).join(' | '))
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }
