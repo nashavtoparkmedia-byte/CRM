@@ -344,6 +344,7 @@ async function sendText(transport, chatId, text, replyToMessageId) {
 
 // ─── Contact sync: refresh contact list from MAX ─────────────────────────────
 let _lastContactSync = 0  // timestamp последнего успешного sync
+let _dialogBusy      = false  // защита от параллельных вызовов resolveViaPhoneLookupDialog
 
 async function syncContacts(timeoutMs = 8000) {
   if (!transport || !isReady) return false
@@ -428,6 +429,13 @@ async function getContactPhone(senderId, timeoutMs = 4000) {
 // Returns convId (from URL after navigation) or userId (from WS search frames).
 async function resolveViaPhoneLookupDialog(digits) {
   if (!page || !transport || !isReady) return null
+  // Защита от параллельных вызовов: два одновременных диалога вешают браузер
+  if (_dialogBusy) {
+    console.log('[ResolvePhone] Dialog already running, skipping')
+    return null
+  }
+  _dialogBusy = true
+
   const local10 = digits.slice(-10)
   console.log(`[ResolvePhone] "Найти по номеру" dialog: ${local10}`)
 
@@ -439,12 +447,23 @@ async function resolveViaPhoneLookupDialog(digits) {
   }
   transport._rawHandlers.push(rawHandler)
 
+  // SPA-навигация назад: кликаем таб «Чаты» — не перезагружает страницу, не рвёт WS
   const returnHome = async () => {
-    try { await page.goto('https://web.max.ru', { timeout: 8000, waitUntil: 'domcontentloaded' }) } catch {}
+    try {
+      const chatsEl = page.locator('[aria-label="Chats"], button:has-text("Chats"), button:has-text("Чаты"), button:has-text("Диалоги")').first()
+      if (await chatsEl.isVisible({ timeout: 800 }).catch(() => false)) {
+        await chatsEl.click()
+        return
+      }
+      // Fallback: pushState (не перезагружает, не рвёт WS)
+      await page.evaluate(() => { try { window.history.pushState({}, '', '/') } catch {} })
+      await page.waitForTimeout(300)
+    } catch {}
   }
   const cleanup = () => {
     const idx = transport._rawHandlers.indexOf(rawHandler)
     if (idx > -1) transport._rawHandlers.splice(idx, 1)
+    _dialogBusy = false
   }
 
   // Helper: find a phone-type input on the page (not a text search)
@@ -466,21 +485,20 @@ async function resolveViaPhoneLookupDialog(digits) {
   }
 
   try {
-    // 1. Navigate to home so we have a clean state
-    await page.goto('https://web.max.ru', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
-    await page.waitForTimeout(1000)
-
-    // 2. Click "Contacts" tab to activate contacts section
-    // The tab has text "Contacts" (EN) or "Контакты" (RU)
-    const contactsTab = page.locator('button:has-text("Contacts"), button:has-text("Контакты")').first()
+    // 1. Click "Contacts" tab — SPA-навигация, не перезагружает страницу, WS остаётся жить
+    const contactsTab = page.locator('button:has-text("Contacts"), button:has-text("Контакты"), a[href="/contacts"]').first()
     if (await contactsTab.isVisible({ timeout: 1500 }).catch(() => false)) {
       await contactsTab.click()
       console.log('[ResolvePhone] Clicked Contacts tab')
       await page.waitForTimeout(1000)
     } else {
-      console.log('[ResolvePhone] Contacts tab not found, trying /contacts URL')
-      await page.goto('https://web.max.ru/contacts', { timeout: 8000, waitUntil: 'domcontentloaded' }).catch(() => {})
-      await page.waitForTimeout(1000)
+      // Нет таба — SPA-pushState (тоже не перезагружает)
+      console.log('[ResolvePhone] Contacts tab not found, trying SPA pushState')
+      await page.evaluate(() => {
+        try { window.history.pushState({}, '', '/contacts') } catch {}
+        window.dispatchEvent(new PopStateEvent('popstate', { state: {} }))
+      })
+      await page.waitForTimeout(1500)
     }
 
     // 3. Dump all visible buttons to find the "+" for "Найти по номеру"
