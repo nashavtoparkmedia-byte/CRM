@@ -395,25 +395,24 @@ class TransportInterceptor {
       return
     }
 
-    // op:6 HANDSHAKE — WS физически подключён и готов к отправке сразу после грита сервера.
-    // Сессия авторизована через cookie, поэтому MAX принимает sends с op:6.
-    // Не ждём op:53 (чаты) — это занимает 30-60s при загрузке контактов.
+    // op:6 HANDSHAKE — физическое WS-соединение установлено. НЕ достаточно для sends:
+    // MAX может переподключиться (WS #2) и op:19 ещё не пришёл. Ждём op:19.
     if (data.opcode === OP.HANDSHAKE) {
-      console.log('[Transport] WS handshake received — marking connected')
-      this._wsConnected = true
-      this._fireWsReady()
+      console.log('[Transport] WS handshake (op:6) received — waiting for op:19 before marking ready')
     }
 
-    // Авторизация (opcode 19) — запоминаем свой userId
-    // Проверяем opcode 19 независимо от cmd (MAX может слать как cmd:0, так и cmd:1)
+    // Авторизация (opcode 19) — запоминаем свой userId.
+    // op:19 = MAX подтвердил auth на этом WS. После него MAX обрабатывает sends (op:64).
+    // Проверяем независимо от cmd (MAX слает cmd:0, cmd:2, cmd:3 в разных сценариях).
     if (data.opcode === OP.AUTH) {
       const id = data.payload?.profile?.contact?.id
       console.log(`[Auth] Opcode 19: cmd=${data.cmd}, has_profile=${!!data.payload?.profile}, userId=${id || 'none'}`)
+      // Всегда помечаем WS как готовый после op:19 (auth confirmed, MAX примет op:64).
+      this._wsConnected = true
+      this._fireWsReady()
       if (id) {
         this._myUserId = String(id)
         console.log('[Transport] My userId:', this._myUserId)
-        this._wsConnected = true
-        this._fireWsReady()
         for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
       }
     }
