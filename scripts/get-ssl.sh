@@ -54,11 +54,14 @@ done
 # Если заданы — будут добавлены к выпуску cert.
 CRM_WWW_DOMAIN="${CRM_WWW_DOMAIN:-}"
 CRM_APP_DOMAIN="${CRM_APP_DOMAIN:-}"
+# SITE_DOMAIN — SEO-сайт (отдельный контейнер seo-site).
+SITE_DOMAIN="${SITE_DOMAIN:-}"
 
 echo "==> SSL $MODE for:"
 echo "    CRM:       $CRM_DOMAIN${CRM_WWW_DOMAIN:+ + $CRM_WWW_DOMAIN (SAN)}"
 echo "    Bot admin: $BOT_ADMIN_DOMAIN"
 [ -n "$CRM_APP_DOMAIN" ] && echo "    Legacy:    $CRM_APP_DOMAIN"
+[ -n "$SITE_DOMAIN" ] && [[ "$SITE_DOMAIN" != _disabled_* ]] && echo "    SEO site:  $SITE_DOMAIN"
 echo "    email:     $LETSENCRYPT_EMAIL"
 [ -n "$STAGING_FLAG" ] && echo "    STAGING mode (test certificates)"
 
@@ -109,6 +112,11 @@ if [ "$MODE" = "issue" ]; then
   # 3. Legacy app cert (если задан и нет уже валидного)
   if [ -n "$CRM_APP_DOMAIN" ]; then
     issue_cert "$CRM_APP_DOMAIN"
+  fi
+
+  # 4. SEO site cert (если задан)
+  if [ -n "$SITE_DOMAIN" ] && [[ "$SITE_DOMAIN" != _disabled_* ]]; then
+    issue_cert "$SITE_DOMAIN"
   fi
 else
   echo "==> Renewing existing certificates..."
