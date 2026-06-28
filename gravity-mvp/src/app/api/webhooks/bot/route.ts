@@ -163,7 +163,7 @@ async function handleCheckLink(payload: any) {
                                 },
                                 body: JSON.stringify({
                                     query: { park: { id: connection.parkId }, text: phone },
-                                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: ['id', 'brand', 'model', 'license_plate'], account: [], current_status: [] },
+                                    fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
                                     limit: 5, offset: 0
                                 })
                             })
