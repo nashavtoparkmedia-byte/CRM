@@ -2110,6 +2110,8 @@ app.post('/send-message', async (req, res) => {
   if (!chatId && !phone) {
     return res.status(400).json({ error: 'chatId or phone is required' })
   }
+  // Normalize: если передан phone без chatId — используем его как chatId (будет резолвится как телефон)
+  if (!chatId && phone) chatId = phone
   if (!isReady) {
     return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
   }
