@@ -46,10 +46,32 @@ const PARAM_KEYS = [
 type ParamKey = typeof PARAM_KEYS[number]
 type ParamMap = Partial<Record<ParamKey, string>>
 
-function getConfPath(): string {
+/**
+ * Returns the path to megafon.xml, or null when TELEPHONY_CONF_HOST_PATH is
+ * not set (production VPS: FS config is inside the FS container, not on the
+ * host filesystem reachable by gravity-mvp). In that case callers fall back
+ * to reading credentials from process.env (MEGAFON_SIP_* vars from .env.production).
+ */
+function getConfPath(): string | null {
     const base = process.env.TELEPHONY_CONF_HOST_PATH
-        ?? '\\\\wsl$\\Ubuntu-24.04\\usr\\local\\freeswitch\\conf'
+    if (!base) return null
     return path.join(base, 'sip_profiles', 'external', 'megafon.xml')
+}
+
+function getParamsFromEnv(): ParamMap {
+    const username = process.env.MEGAFON_SIP_USERNAME ?? ''
+    const realm = process.env.MEGAFON_REALM ?? 'multifon.ru'
+    return {
+        username,
+        password: process.env.MEGAFON_SIP_PASSWORD ?? '',
+        realm,
+        proxy: process.env.MEGAFON_PROXY ?? 'sbc.megafon.ru',
+        'from-user': process.env.MEGAFON_FROM_USER ?? username,
+        'from-domain': process.env.MEGAFON_FROM_DOMAIN ?? realm,
+        register: 'true',
+        'expire-seconds': '180',
+        'register-transport': 'udp',
+    }
 }
 
 function parseParams(xml: string): ParamMap {
@@ -95,16 +117,26 @@ export async function GET(req: NextRequest) {
     const reveal = req.nextUrl.searchParams.get('reveal') === '1' &&
         (user.role === 'Администратор' || user.role === 'Руководитель')
 
+    const confPath = getConfPath()
+
+    if (!confPath) {
+        // No TELEPHONY_CONF_HOST_PATH — read credentials from ENV (VPS production mode)
+        const params = getParamsFromEnv()
+        const safe: ParamMap = { ...params }
+        if (!reveal && safe.password) safe.password = MASKED
+        return NextResponse.json({ ok: true, params: safe, path: '(переменные окружения)', envMode: true })
+    }
+
     try {
-        const xml = await fs.readFile(getConfPath(), 'utf-8')
+        const xml = await fs.readFile(confPath, 'utf-8')
         const params = parseParams(xml)
         const safe: ParamMap = { ...params }
         if (!reveal && safe.password) safe.password = MASKED
-        return NextResponse.json({ ok: true, params: safe, path: getConfPath() })
+        return NextResponse.json({ ok: true, params: safe, path: confPath })
     } catch (err: any) {
         return NextResponse.json({
             error: `Не удалось прочитать конфиг: ${err.message}`,
-            path: getConfPath(),
+            path: confPath,
         }, { status: 500 })
     }
 }
@@ -125,8 +157,30 @@ export async function PUT(req: NextRequest) {
         if (typeof incoming[k] === 'string') filtered[k] = String(incoming[k])
     }
 
+    const confPath = getConfPath()
+
+    if (!confPath) {
+        // ENV mode: no file to write — only trigger ESL gateway reload.
+        // Credential changes must be made in .env.production and the container redeployed.
+        const rescan = await rescanGateway()
+        opsLog('info', 'telephony_connection_rescan_only', {
+            operation: 'settings',
+            userId: user.id,
+            rescanOk: rescan.ok,
+            rescanError: rescan.error,
+        })
+        const params = getParamsFromEnv()
+        if (params.password) params.password = MASKED
+        return NextResponse.json({
+            ok: true,
+            params,
+            rescan,
+            envMode: true,
+            warning: 'Настройки из переменных окружения. Для постоянного изменения обновите .env.production и задеплойте заново.',
+        })
+    }
+
     try {
-        const confPath = getConfPath()
         let xml = await fs.readFile(confPath, 'utf-8')
 
         for (const [k, v] of Object.entries(filtered)) {

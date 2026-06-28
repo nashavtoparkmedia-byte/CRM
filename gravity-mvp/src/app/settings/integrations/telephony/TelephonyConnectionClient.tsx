@@ -38,6 +38,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
     const [params, setParams] = useState<ParamMap>({})
     const [initialParams, setInitialParams] = useState<ParamMap>({})
     const [confPath, setConfPath] = useState<string>('')
+    const [envMode, setEnvMode] = useState(false)
 
     const [status, setStatus] = useState<StatusPayload | null>(null)
     const [statusLoading, setStatusLoading] = useState(false)
@@ -56,6 +57,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
             setParams(body.params ?? {})
             setInitialParams(body.params ?? {})
             setConfPath(body.path ?? '')
+            setEnvMode(body.envMode ?? false)
         } catch (err: any) {
             setError(err.message ?? 'не удалось загрузить настройки')
         } finally {
@@ -127,6 +129,17 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                 <div className="flex items-center gap-[2px] rounded-md border border-border bg-surface px-3 py-[2px] text-[13px] text-muted-foreground">
                     <AlertCircle className="h-3.5 w-3.5" />
                     Только Администратор или Руководитель может редактировать настройки.
+                </div>
+            )}
+
+            {envMode && (
+                <div className="flex items-start gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2.5 text-[13px] text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary" />
+                    <span>
+                        Настройки загружены из переменных окружения (<span className="font-mono text-foreground">.env.production</span>).
+                        Форма доступна только для просмотра — изменения credentials не сохраняются.
+                        Для изменения обновите <span className="font-mono text-foreground">.env.production</span> и задеплойте заново.
+                    </span>
                 </div>
             )}
 
@@ -211,7 +224,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                 value={params.username ?? ''}
                                 onChange={(v) => update('username', v)}
                                 placeholder="79221853150"
-                                disabled={!canEdit}
+                                disabled={!canEdit || envMode}
                             />
                             <FormField
                                 label="Пароль"
@@ -219,7 +232,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                 value={params.password ?? ''}
                                 onChange={(v) => update('password', v)}
                                 placeholder="••••••••"
-                                disabled={!canEdit}
+                                disabled={!canEdit || envMode}
                                 type={showPassword ? 'text' : 'password'}
                                 trailing={
                                     <button
@@ -244,7 +257,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                 value={params.realm ?? ''}
                                 onChange={(v) => update('realm', v)}
                                 placeholder="multifon.ru"
-                                disabled={!canEdit}
+                                disabled={!canEdit || envMode}
                             />
                             <FormField
                                 label="Proxy / SBC"
@@ -252,7 +265,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                 value={params.proxy ?? ''}
                                 onChange={(v) => update('proxy', v)}
                                 placeholder="sbc.megafon.ru"
-                                disabled={!canEdit}
+                                disabled={!canEdit || envMode}
                             />
                             <FormField
                                 label="From-user"
@@ -260,7 +273,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                 value={params['from-user'] ?? ''}
                                 onChange={(v) => update('from-user', v)}
                                 placeholder="79221853150"
-                                disabled={!canEdit}
+                                disabled={!canEdit || envMode}
                             />
                             <FormField
                                 label="From-domain"
@@ -268,7 +281,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                                 value={params['from-domain'] ?? ''}
                                 onChange={(v) => update('from-domain', v)}
                                 placeholder="multifon.ru"
-                                disabled={!canEdit}
+                                disabled={!canEdit || envMode}
                             />
                         </div>
 
@@ -320,7 +333,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                 <button
                     type="button"
                     onClick={handleSave}
-                    disabled={!canEdit || !dirty || saving || loading}
+                    disabled={!canEdit || !dirty || saving || loading || envMode}
                     className="inline-flex h-11 items-center gap-[2px] rounded-md bg-primary px-5 text-[15px] font-semibold text-white transition-colors hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     {saving ? <Loader2 className="h-[4px] w-[4px] animate-spin" /> : <Save className="h-[4px] w-[4px]" />}
