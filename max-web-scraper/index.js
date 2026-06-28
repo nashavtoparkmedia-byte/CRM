@@ -965,6 +965,10 @@ async function resolveViaPhoneLookupDialog(digits) {
       const convId = urlAfter.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
       if (convId) {
         console.log(`[ResolvePhone] URL-resolved: ${digits} → convId ${convId}`)
+        // Pre-mark WS as not connected before triggering reload, so waitForWsReady() will always wait.
+        // Reload drops the heavy chat DOM (CPU fix) and triggers WS reconnect.
+        transport._wsConnected = false
+        page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
         cleanup(); return convId
       }
     }
@@ -986,6 +990,8 @@ async function resolveViaPhoneLookupDialog(digits) {
         const convId = urlFinal.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
         if (convId) {
           console.log(`[ResolvePhone] URL after "Написать": ${digits} → convId ${convId}`)
+          transport._wsConnected = false
+          page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
           cleanup(); return convId
         }
         // Also check WS op:48 for new chat
@@ -995,6 +1001,8 @@ async function resolveViaPhoneLookupDialog(digits) {
             const cid = String(c.chatId || c.id || '')
             if (cid && /^\d{6,15}$/.test(cid) && !chatCache.has(cid)) {
               console.log(`[ResolvePhone] New chat from op:48 after write: ${digits} → ${cid}`)
+              transport._wsConnected = false
+              page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
               cleanup(); return cid
             }
           }
@@ -1013,11 +1021,15 @@ async function resolveViaPhoneLookupDialog(digits) {
         const userId = p.userId || p.id || p.user?.id || p.user?.userId
         if (userId && /^\d{5,15}$/.test(String(userId))) {
           console.log(`[ResolvePhone] op:46 phone lookup result: ${digits} → ${userId}`)
+          transport._wsConnected = false
+          page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
           cleanup(); return String(userId)
         }
         const convId = p.convId || p.chatId || p.conversationId
         if (convId && /^\d{5,15}$/.test(String(convId))) {
           console.log(`[ResolvePhone] op:46 convId: ${digits} → ${convId}`)
+          transport._wsConnected = false
+          page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
           cleanup(); return String(convId)
         }
         // Log the full payload for unknown structures
@@ -1029,6 +1041,8 @@ async function resolveViaPhoneLookupDialog(digits) {
         const id = r.id || r.userId || r.user_id
         if (id && /^\d{5,12}$/.test(String(id))) {
           console.log(`[ResolvePhone] op:${f.opcode} search result: ${digits} → ${id}`)
+          transport._wsConnected = false
+          page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {})
           cleanup(); return String(id)
         }
       }
@@ -2121,6 +2135,11 @@ app.post('/send-message', async (req, res) => {
         chatId = liveId
         // Cache for subsequent sends in this session
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
+        // Dialog navigated to a chat page; page.goto(MAX_URL) was fired from the dialog.
+        // Wait for WS to reconnect and re-authenticate before sending.
+        console.log('[Send] Waiting for WS reconnect after dialog...')
+        const wsReady = await transport.waitForWsReady(18_000)
+        console.log(`[Send] WS ready: ${wsReady}`)
       } else {
         console.warn(`[Send] Phone ${digits} not found — contactStore has ${contactStore?._map.size || 0} contacts`)
         return res.status(404).json({

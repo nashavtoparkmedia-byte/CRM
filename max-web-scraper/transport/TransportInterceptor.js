@@ -230,6 +230,8 @@ class TransportInterceptor {
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
+    this._wsConnected          = false     // true когда WS авторизован и готов к отправке
+    this._wsReadyCallbacks     = []
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -314,6 +316,7 @@ class TransportInterceptor {
 
     this._cdpClient.on('Network.webSocketClosed', () => {
       console.log('[Transport] WS закрыт')
+      this._wsConnected = false
     })
 
     // page.on('websocket') — fallback только если CDP не перехватывает
@@ -400,20 +403,25 @@ class TransportInterceptor {
       if (id) {
         this._myUserId = String(id)
         console.log('[Transport] My userId:', this._myUserId)
+        this._wsConnected = true
+        this._fireWsReady()
         for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
       }
     }
 
     // Fallback: для persistent sessions op:19 не содержит профиль,
     // но op:53 (push chats) содержит owner = наш userId.
+    // Payload бывает двух видов: {"chats":[...]} или напрямую массив [...].
     // Если auth ещё не прошла — определяем userId из первого же op:53.
     if (data.opcode === 53 && !this._myUserId) {
-      const chats = data.payload?.chats
+      const chats = data.payload?.chats ?? (Array.isArray(data.payload) ? data.payload : null)
       if (Array.isArray(chats)) {
         for (const chat of chats) {
           if (chat && typeof chat === 'object' && chat.owner) {
             this._myUserId = String(chat.owner)
             console.log('[Transport] Auth via op:53 owner:', this._myUserId)
+            this._wsConnected = true
+            this._fireWsReady()
             for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
             break
           }
@@ -613,6 +621,38 @@ class TransportInterceptor {
   /** Срабатывает когда WS-авторизация прошла (opcode 19) */
   onWsAuth(handler) {
     this._wsAuthHandlers.push(handler)
+  }
+
+  _fireWsReady() {
+    const cbs = this._wsReadyCallbacks.splice(0)
+    for (const cb of cbs) try { cb() } catch {}
+  }
+
+  /**
+   * Ждёт пока WS будет авторизован и готов к отправке.
+   * Если уже готов — резолвится немедленно.
+   * @param {number} timeoutMs
+   * @returns {Promise<boolean>} true = готов, false = timeout
+   */
+  waitForWsReady(timeoutMs = 15_000) {
+    if (this._wsConnected) return Promise.resolve(true)
+    return new Promise((resolve) => {
+      let done = false
+      const timer = setTimeout(() => {
+        if (done) return
+        done = true
+        const idx = this._wsReadyCallbacks.indexOf(cb)
+        if (idx > -1) this._wsReadyCallbacks.splice(idx, 1)
+        resolve(false)
+      }, timeoutMs)
+      const cb = () => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        resolve(true)
+      }
+      this._wsReadyCallbacks.push(cb)
+    })
   }
 
   isAuthenticated() {
