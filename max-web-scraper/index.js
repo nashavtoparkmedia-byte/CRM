@@ -427,7 +427,7 @@ async function getContactPhone(senderId, timeoutMs = 4000) {
 // MAX Contacts → "+" button → "Найти по номеру" dialog.
 // This is the correct server-side phone lookup that works even for private profiles.
 // Returns convId (from URL after navigation) or userId (from WS search frames).
-async function resolveViaPhoneLookupDialog(digits) {
+async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
   if (!page || !transport || !isReady) return null
   // Защита от параллельных вызовов: два одновременных диалога вешают браузер
   if (_dialogBusy) {
@@ -980,6 +980,69 @@ async function resolveViaPhoneLookupDialog(digits) {
           }))
         ).catch(() => [])
         console.log('[ResolvePhone] Profile page buttons:', JSON.stringify(profileBtns))
+
+        // User profile page: no prior conversation → must send first message via UI
+        // to discover the real 12-digit chatId (WS op:71/op:128 echo contains it).
+        if (messageToSend) {
+          const composeSelectors = [
+            'div[contenteditable][role="textbox"]',
+            'div[contenteditable="true"]:not([role="search"])',
+            'div[contenteditable]',
+          ]
+          let composeEl = null
+          for (const sel of composeSelectors) {
+            const el = page.locator(sel).last()
+            if (await el.isVisible({ timeout: 800 }).catch(() => false)) {
+              composeEl = el
+              console.log(`[ResolvePhone] Found compose input: ${sel}`)
+              break
+            }
+          }
+          if (composeEl) {
+            await composeEl.click()
+            await composeEl.fill(messageToSend)
+            console.log(`[ResolvePhone] Typed message in compose area`)
+            const sendBtn = page.locator('button[aria-label*="Send message" i]').first()
+            if (await sendBtn.isVisible({ timeout: 800 }).catch(() => false)) {
+              await sendBtn.click()
+              console.log(`[ResolvePhone] Clicked Send message via UI`)
+              // Poll for WS op:71 (new msg push) or URL change → gives real 12-digit chatId
+              for (let i = 0; i < 50; i++) {
+                await page.waitForTimeout(200)
+                const urlNow = page.url()
+                const urlCid = urlNow.match(/web\.max\.ru\/(\d{12,15})(?:[/?#]|$)/)?.[1]
+                if (urlCid) {
+                  console.log(`[ResolvePhone] URL changed after UI send: ${urlCid}`)
+                  await returnHome(); cleanup()
+                  return { chatId: urlCid, messageSent: true }
+                }
+                for (const f of capturedFrames) {
+                  if (f.opcode === 71 && f.payload?.chatId) {
+                    const cId = String(f.payload.chatId)
+                    if (/^\d{10,15}$/.test(cId)) {
+                      console.log(`[ResolvePhone] op:71 chatId after UI send: ${cId}`)
+                      await returnHome(); cleanup()
+                      return { chatId: cId, messageSent: true }
+                    }
+                  }
+                  if (f.opcode === 128 && f.payload?.chatId && f.payload?.message?.sender) {
+                    if (String(f.payload.message.sender) === String(transport._myUserId)) {
+                      const cId = String(f.payload.chatId)
+                      if (/^\d{10,15}$/.test(cId)) {
+                        console.log(`[ResolvePhone] op:128 echo chatId after UI send: ${cId}`)
+                        await returnHome(); cleanup()
+                        return { chatId: cId, messageSent: true }
+                      }
+                    }
+                  }
+                }
+              }
+              console.log(`[ResolvePhone] UI send timeout — no chatId in 10s`)
+            }
+          } else {
+            console.log(`[ResolvePhone] No compose input found on profile page`)
+          }
+        }
         // Fall through to 6b write-button logic below
       }
     }
@@ -1003,7 +1066,7 @@ async function resolveViaPhoneLookupDialog(digits) {
         await page.waitForTimeout(3000)
         const urlFinal = page.url()
         const convId = urlFinal.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
-        if (convId) {
+        if (convId && convId.length >= 12) {
           console.log(`[ResolvePhone] URL after "Написать": ${digits} → convId ${convId}`)
           await returnHome()
           cleanup(); return convId
@@ -1432,7 +1495,7 @@ async function resolveViaContactsPage(digits) {
 
 // ─── Live phone → MAX userId resolution ──────────────────────────────────────
 // Used when contactStore doesn't have the contact (e.g. brand-new outbound)
-async function resolvePhoneLive(digits) {
+async function resolvePhoneLive(digits, messageToSend = null) {
   // 1. Check chatCache — chats where name/title contains the phone number
   const tail10 = digits.slice(-10)
   for (const [chatIdStr, chatData] of chatCache.entries()) {
@@ -1475,7 +1538,7 @@ async function resolvePhoneLive(digits) {
 
   // 4. "Найти по номеру" dialog — MAX Contacts → + → phone lookup
   //    Works even for private profiles since MAX server knows the phone→userId mapping.
-  const dialogId = await resolveViaPhoneLookupDialog(digits)
+  const dialogId = await resolveViaPhoneLookupDialog(digits, messageToSend)
   if (dialogId) return dialogId
 
   return null
@@ -2141,12 +2204,18 @@ app.post('/send-message', async (req, res) => {
       console.log(`[Send] contactStore: ${digits} → chatId ${fromStore}`)
       chatId = fromStore
     } else {
-      const liveId = await resolvePhoneLive(digits)
+      const liveResult = await resolvePhoneLive(digits, message)
+      // liveResult is either a string chatId or { chatId, messageSent: true } when UI-sent
+      const messageSentViaUI = liveResult && typeof liveResult === 'object' && liveResult.messageSent
+      const liveId = messageSentViaUI ? liveResult.chatId : (typeof liveResult === 'string' ? liveResult : null)
       if (liveId) {
-        console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}`)
+        console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}${messageSentViaUI ? ' (sent via UI)' : ''}`)
         chatId = liveId
         // Cache for subsequent sends in this session
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
+        if (messageSentViaUI) {
+          return res.json({ success: true, chatId: liveId, externalId: null })
+        }
         // Dialog used returnHome() (SPA nav) — WS stays alive. waitForStableWs resolves
         // immediately if _wsConnected is already true. Acts as a safety net if WS dropped.
         if (!transport._wsConnected) {
