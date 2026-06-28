@@ -54,8 +54,9 @@ export function Sidebar() {
                 [domain.key]: pathname
             }));
             
-            // Save global CRM route so Messenger can return here
-            if (!pathname.startsWith('/messages')) {
+            // Save global CRM route so Messenger can return here.
+            // Exclude /messages (already there) and /settings (not useful to return to).
+            if (!pathname.startsWith('/messages') && !pathname.startsWith('/settings')) {
                 localStorage.setItem('last_crm_route', pathname);
             }
         }
