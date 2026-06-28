@@ -143,6 +143,54 @@ async function handleCheckLink(payload: any) {
                 }
             } else {
                 console.error('[check_link] v2 error:', v2Res.status, await v2Res.text())
+                // Fallback: search driver by phone in the active park (driver may have
+                // a different contractor_profile_id in this park vs the one stored in CRM).
+                if (v2Res.status === 404) {
+                    try {
+                        const fullDriver = await prisma.driver.findUnique({
+                            where: { id: mapping.driverId },
+                            select: { phone: true }
+                        })
+                        const phone = fullDriver?.phone
+                        if (phone) {
+                            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+                                method: 'POST',
+                                headers: {
+                                    'X-Client-ID': connection.clid,
+                                    'X-Api-Key': connection.apiKey,
+                                    'Accept-Language': 'ru',
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    query: { park: { id: connection.parkId }, text: phone },
+                                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: ['id', 'brand', 'model', 'license_plate'], account: [], current_status: [] },
+                                    limit: 5, offset: 0
+                                })
+                            })
+                            if (searchRes.ok) {
+                                const searchData = await searchRes.json()
+                                const matched = (searchData.driver_profiles || []).find((p: any) =>
+                                    (p.driver_profile.phones || []).some((ph: string) =>
+                                        ph.replace(/[\s+\-()]/g, '').includes(phone.replace(/[\s+\-()]/g, ''))
+                                    )
+                                )
+                                if (matched) {
+                                    const c = matched.car
+                                    if (c) {
+                                        carInfo = `${c.brand || ''} ${c.model || ''} ${c.license_plate || ''}`.trim()
+                                        console.log('[check_link] phone-search fallback car:', carInfo)
+                                        await prisma.driverTelegram.update({
+                                            where: { id: mapping.id },
+                                            data: { carLabel: carInfo }
+                                        }).catch(() => {})
+                                    }
+                                }
+                            }
+                        }
+                    } catch (fbErr: any) {
+                        console.error('[check_link] phone-search fallback failed:', fbErr.message)
+                    }
+                }
             }
         }
     } catch (err: any) {
