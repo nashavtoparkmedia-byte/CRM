@@ -1113,12 +1113,53 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                       }
                     }
                   }
+                  // op:72 = "conversation created/updated" push — arrives after first-ever message send
+                  if (f.opcode === 72 && f.payload) {
+                    const p = f.payload
+                    // Try direct fields first
+                    const directId = String(p.chatId || p.id || p.conversationId || p.chat_id || '')
+                    if (directId && /^\d{10,15}$/.test(directId)) {
+                      console.log(`[ResolvePhone] op:72 direct chatId: ${directId}`)
+                      await returnHome(); cleanup()
+                      return { chatId: directId, messageSent: true }
+                    }
+                    // Try chats/conversations array
+                    const arr = Array.isArray(p) ? p : (Array.isArray(p.chats) ? p.chats : (Array.isArray(p.conversations) ? p.conversations : []))
+                    for (const c of arr) {
+                      const cId = String((c && typeof c === 'object') ? (c.chatId || c.id || c.conversationId || '') : c || '')
+                      if (cId && /^\d{10,15}$/.test(cId)) {
+                        console.log(`[ResolvePhone] op:72 array chatId: ${cId}`)
+                        await returnHome(); cleanup()
+                        return { chatId: cId, messageSent: true }
+                      }
+                    }
+                    // Scan all numeric values in payload for a 10-15 digit ID
+                    const scan = (obj, depth = 0) => {
+                      if (depth > 4 || !obj || typeof obj !== 'object') return null
+                      for (const v of Object.values(obj)) {
+                        if (typeof v === 'number' || typeof v === 'string') {
+                          const s = String(v)
+                          if (/^\d{10,15}$/.test(s)) return s
+                        } else if (typeof v === 'object') {
+                          const found = scan(v, depth + 1)
+                          if (found) return found
+                        }
+                      }
+                      return null
+                    }
+                    const scanned = scan(p)
+                    if (scanned) {
+                      console.log(`[ResolvePhone] op:72 scanned chatId: ${scanned}`)
+                      await returnHome(); cleanup()
+                      return { chatId: scanned, messageSent: true }
+                    }
+                  }
                 }
               }
-              // Log diagnostic payloads on timeout — include op:61 which may carry chatId
-              const diagFrames = capturedFrames.filter(f => [48, 61, 64, 65, 71, 128, 198].includes(f.opcode))
+              // Log diagnostic payloads on timeout
+              const diagFrames = capturedFrames.filter(f => [48, 61, 64, 65, 71, 72, 128, 177, 180, 198].includes(f.opcode))
               console.log(`[ResolvePhone] UI send timeout — diag frames:`,
-                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 200)}`).join(' | '))
+                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 300)}`).join(' | '))
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }
@@ -1167,8 +1208,53 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
       }
     }
 
-    // 6c. Check WS frames: op:46 (phone lookup), op:60/68 (search results)
+    // 6c. Check WS frames: op:72 (chat created) + op:46 (phone lookup) + op:60/68 (search results)
     console.log(`[ResolvePhone] WS frames: ${capturedFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(',')}`)
+    // Log late-arriving ops for diagnosis
+    const lateOps = capturedFrames.filter(f => [72, 177, 180].includes(f.opcode))
+    if (lateOps.length) console.log(`[ResolvePhone] Late ops:`, lateOps.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 300)}`).join(' | '))
+
+    // op:72 = conversation created/updated — arrives after first-ever message to a new contact
+    for (const f of capturedFrames) {
+      if (f.opcode !== 72 || !f.payload) continue
+      const p = f.payload
+      const directId = String(p.chatId || p.id || p.conversationId || p.chat_id || '')
+      if (directId && /^\d{10,15}$/.test(directId)) {
+        console.log(`[ResolvePhone] 6c op:72 chatId: ${directId}`)
+        await returnHome(); cleanup()
+        return messageToSend ? { chatId: directId, messageSent: true } : directId
+      }
+      const arr = Array.isArray(p) ? p : (Array.isArray(p.chats) ? p.chats : (Array.isArray(p.conversations) ? p.conversations : []))
+      for (const c of arr) {
+        const cId = String((c && typeof c === 'object') ? (c.chatId || c.id || c.conversationId || '') : c || '')
+        if (cId && /^\d{10,15}$/.test(cId)) {
+          console.log(`[ResolvePhone] 6c op:72 array chatId: ${cId}`)
+          await returnHome(); cleanup()
+          return messageToSend ? { chatId: cId, messageSent: true } : cId
+        }
+      }
+      // Scan all numeric values in payload for a 10-15 digit ID
+      const scan72 = (obj, depth = 0) => {
+        if (depth > 4 || !obj || typeof obj !== 'object') return null
+        for (const v of Object.values(obj)) {
+          if (typeof v === 'number' || typeof v === 'string') {
+            const s = String(v)
+            if (/^\d{10,15}$/.test(s)) return s
+          } else if (typeof v === 'object') {
+            const found = scan72(v, depth + 1)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      const scanned72 = scan72(p)
+      if (scanned72) {
+        console.log(`[ResolvePhone] 6c op:72 scanned chatId: ${scanned72}`)
+        await returnHome(); cleanup()
+        return messageToSend ? { chatId: scanned72, messageSent: true } : scanned72
+      }
+    }
+
     for (const f of capturedFrames) {
       if (f.opcode === 46 && f.cmd === 1) {
         // op:46 cmd:1 — phone lookup success
