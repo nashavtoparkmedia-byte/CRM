@@ -175,14 +175,17 @@ async function handleCheckLink(payload: any) {
                                     )
                                 )
                                 if (matched) {
-                                    const c = matched.car
-                                    if (c) {
-                                        carInfo = `${c.brand || ''} ${c.model || ''} ${c.license_plate || ''}`.trim()
-                                        console.log('[check_link] phone-search fallback car:', carInfo)
-                                        await prisma.driverTelegram.update({
-                                            where: { id: mapping.id },
-                                            data: { carLabel: carInfo }
-                                        }).catch(() => {})
+                                    const carId = matched.car?.id
+                                    if (carId) {
+                                        const car = await findCarById(connection, carId)
+                                        if (car) {
+                                            carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
+                                            console.log('[check_link] phone-search fallback car:', carInfo)
+                                            await prisma.driverTelegram.update({
+                                                where: { id: mapping.id },
+                                                data: { carLabel: carInfo }
+                                            }).catch(() => {})
+                                        }
                                     }
                                 }
                             }
