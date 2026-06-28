@@ -324,7 +324,7 @@ async function sendText(transport, chatId, text, replyToMessageId) {
   const message = { text, cid, elements: [], attaches: [] }
   if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
   try {
-    const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId, message, notify: true }, { waitResponse: true })
+    const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId, message, notify: true }, { waitResponse: true, timeoutMs: 30_000 })
     // MAX responds with the created message; extract its server-assigned ID
     const maxMsgId = resp?.message?.id ? String(resp.message.id) : null
     if (maxMsgId) console.log(`[Send] MAX assigned msgId=${maxMsgId} for chatId=${chatId}`)
@@ -2135,10 +2135,12 @@ app.post('/send-message', async (req, res) => {
         // Cache for subsequent sends in this session
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
         // Dialog navigated to a chat page; page.goto(MAX_URL) was fired from the dialog.
-        // Wait for WS to reconnect and re-authenticate before sending.
-        console.log('[Send] Waiting for WS reconnect after dialog...')
-        const wsReady = await transport.waitForWsReady(18_000)
-        console.log(`[Send] WS ready: ${wsReady}`)
+        // MAX creates 3 WS connections (triple-WS pattern): WS#2 is a probe closed by MAX
+        // server right after op:19. waitForStableWs waits for WS#3 (stable session) that
+        // remains open for at least 400ms — safe to send op:64 on.
+        console.log('[Send] Waiting for stable WS after dialog...')
+        const wsReady = await transport.waitForStableWs(400, 18_000)
+        console.log(`[Send] WS stable: ${wsReady}`)
       } else {
         console.warn(`[Send] Phone ${digits} not found — contactStore has ${contactStore?._map.size || 0} contacts`)
         return res.status(404).json({

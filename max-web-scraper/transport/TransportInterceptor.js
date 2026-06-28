@@ -394,6 +394,10 @@ class TransportInterceptor {
       }
       return
     }
+    // Диагностика: cmd:1/3 без соответствующего pending req — помогает поймать seq-mismatch
+    if ((data.cmd === 1 || data.cmd === 3) && this._pendingReqs.size > 0) {
+      console.log(`[Transport] cmd:${data.cmd} op:${data.opcode} seq:${data.seq} — NO pending match (pending seqs: ${[...this._pendingReqs.keys()].join(',')})`)
+    }
 
     // op:6 HANDSHAKE — физическое WS-соединение установлено. НЕ достаточно для sends:
     // MAX может переподключиться (WS #2) и op:19 ещё не пришёл. Ждём op:19.
@@ -588,10 +592,10 @@ class TransportInterceptor {
   /**
    * @param {number} opcode
    * @param {object} payload
-   * @param {{ waitResponse?: boolean }} opts
+   * @param {{ waitResponse?: boolean, timeoutMs?: number }} opts
    * @returns {Promise<object|void>}
    */
-  async sendFrame(opcode, payload, { waitResponse = false } = {}) {
+  async sendFrame(opcode, payload, { waitResponse = false, timeoutMs = 10_000 } = {}) {
     const seq  = ++this._localSeq
     const data = JSON.stringify({ ver: 11, cmd: 0, seq, opcode, payload })
 
@@ -600,7 +604,7 @@ class TransportInterceptor {
         const timeout = setTimeout(() => {
           this._pendingReqs.delete(seq)
           reject(new Error(`Timeout: opcode ${opcode} seq ${seq}`))
-        }, 10_000)
+        }, timeoutMs)
 
         this._pendingReqs.set(seq, { resolve, reject, timeout })
 
@@ -661,6 +665,48 @@ class TransportInterceptor {
       }
       this._wsReadyCallbacks.push(cb)
     })
+  }
+
+  /**
+   * Ждёт WS-подключение которое остаётся активным не менее stabilizeMs.
+   * Пропускает кратковременные probe-соединения (WS #2 в тройном паттерне MAX).
+   * @param {number} stabilizeMs — минимальное время стабильности (мс)
+   * @param {number} timeoutMs   — общий timeout ожидания (мс)
+   * @returns {Promise<boolean>}
+   */
+  async waitForStableWs(stabilizeMs = 400, timeoutMs = 20_000) {
+    const deadline = Date.now() + timeoutMs
+
+    while (Date.now() < deadline) {
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) return false
+
+      if (!this._wsConnected) {
+        const ok = await this.waitForWsReady(Math.min(remaining, 15_000))
+        if (!ok) return false
+      }
+
+      // _wsConnected = true. Держим stabilizeMs, следим за обрывом.
+      const stable = await new Promise(resolve => {
+        let done = false
+        const finish = (value) => {
+          if (done) return
+          done = true
+          clearTimeout(stableTimer)
+          clearInterval(pollId)
+          resolve(value)
+        }
+        const stableTimer = setTimeout(() => finish(true), stabilizeMs)
+        const pollId = setInterval(() => {
+          if (!this._wsConnected) finish(false)
+        }, 30)
+      })
+
+      if (stable) return true
+      // WS оборвался во время стабилизации — ждём следующего op:19 (WS #3)
+    }
+
+    return false
   }
 
   isAuthenticated() {
