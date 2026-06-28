@@ -999,13 +999,36 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             }
           }
           if (composeEl) {
+            // Dismiss "Add to contacts" banner if present (it may overlay compose area)
+            const bannerDismiss = page.locator('button[aria-label*="Hide" i][aria-label*="contacts" i]').first()
+            if (await bannerDismiss.isVisible({ timeout: 500 }).catch(() => false)) {
+              await bannerDismiss.click()
+              await page.waitForTimeout(200)
+            }
             await composeEl.click()
-            await composeEl.fill(messageToSend)
-            console.log(`[ResolvePhone] Typed message in compose area`)
+            await page.waitForTimeout(200)
+            // Use keyboard.type() instead of fill() to trigger MAX's key-event listeners
+            await page.keyboard.type(messageToSend, { delay: 20 })
+            await page.waitForTimeout(400)
+            const composeText = await composeEl.textContent().catch(() => '')
+            console.log(`[ResolvePhone] Compose text after typing: "${(composeText || '').slice(0, 50)}"`)
+            // Try pressing Enter first (most messaging apps send on Enter)
+            await page.keyboard.press('Enter')
+            console.log(`[ResolvePhone] Pressed Enter to send`)
+            await page.waitForTimeout(1000)
             const sendBtn = page.locator('button[aria-label*="Send message" i]').first()
-            if (await sendBtn.isVisible({ timeout: 800 }).catch(() => false)) {
-              await sendBtn.click()
-              console.log(`[ResolvePhone] Clicked Send message via UI`)
+            const sendBtnVisible = await sendBtn.isVisible({ timeout: 500 }).catch(() => false)
+            if (sendBtnVisible) {
+              // If compose area still has text (Enter didn't send), click the send button
+              const afterEnterText = await composeEl.textContent().catch(() => '')
+              if ((afterEnterText || '').trim()) {
+                await sendBtn.click()
+                console.log(`[ResolvePhone] Clicked Send message button (Enter didn't send)`)
+              } else {
+                console.log(`[ResolvePhone] Enter sent the message (compose area empty)`)
+              }
+            }
+            console.log(`[ResolvePhone] Waiting for WS response...`)
               // Poll for WS op:71 (new msg push) or URL change → gives real 12-digit chatId
               for (let i = 0; i < 50; i++) {
                 await page.waitForTimeout(200)
@@ -1030,6 +1053,17 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                       const cId = String(f.payload.chatId)
                       if (/^\d{10,15}$/.test(cId)) {
                         console.log(`[ResolvePhone] op:128 echo chatId after UI send: ${cId}`)
+                        await returnHome(); cleanup()
+                        return { chatId: cId, messageSent: true }
+                      }
+                    }
+                  }
+                  if (f.opcode === 48 && f.payload) {
+                    const chats = Array.isArray(f.payload) ? f.payload : (f.payload.chats || [])
+                    for (const c of chats) {
+                      const cId = String(c.chatId || c.id || c.conversationId || '')
+                      if (cId && /^\d{10,15}$/.test(cId)) {
+                        console.log(`[ResolvePhone] op:48 chatId after UI send: ${cId}`)
                         await returnHome(); cleanup()
                         return { chatId: cId, messageSent: true }
                       }
