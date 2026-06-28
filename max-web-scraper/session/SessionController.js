@@ -29,20 +29,7 @@ class SessionController {
       console.error('[Session] Page error:', err.message)
     })
 
-    // При первом подключении после перезапуска MAX шлёт no-profile op:19
-    // (stale browser request seq). Profile op:19 приходит только после
-    // page reload. Ждём 8 сек, затем перезагружаем и ждём ещё 12 сек.
-    await this._waitForWsAuth(8000)
-
-    if (!this.isLoggedIn && this._transport && !this._transport.isAuthenticated()) {
-      console.log('[Session] WS auth timeout на первом подключении — перезагрузка страницы...')
-      try {
-        await this.page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 })
-      } catch (e) {
-        console.error('[Session] page.reload error:', e.message)
-      }
-      await this._waitForWsAuth(12000)
-    }
+    await this._waitForWsAuth(12_000)
 
     const loggedIn = await this._checkLoginState()
 

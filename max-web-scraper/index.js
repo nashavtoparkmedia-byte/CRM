@@ -31,6 +31,7 @@ const USER_DATA_DIR   = path.join(__dirname, 'user_data')
 // 'none' | 'from_connection_time' | 'available_history'
 let HISTORY_IMPORT_MODE = process.env.HISTORY_IMPORT_MODE || 'from_connection_time'
 let qrUpdatedAt         = null   // timestamp последней генерации QR
+const SESSION_START_MS  = Date.now()  // для подавления ложного QR при перезапуске
 
 // ─── Счётчик статистики импорта ──────────────────────────────────────────────
 
@@ -1824,15 +1825,23 @@ async function init() {
     // opcode 288 — QR link от MAX сервера
     if (data.opcode === 288 && data.payload?.qrLink) {
       try {
-        const qrLink  = data.payload.qrLink
-        const qrPath  = path.join(__dirname, 'last_qr.png')
-        await QRCode.toFile(qrPath, qrLink, {
-          width:  400,
-          margin: 2,
-          color: { dark: '#000000', light: '#FFFFFF' },
-        })
-        qrUpdatedAt = Date.now()
-        console.log('[QR] Сгенерирован из qrLink:', qrLink)
+        const qrLink    = data.payload.qrLink
+        const sinceStart = Date.now() - SESSION_START_MS
+        // Первые 90 сек после старта контейнера MAX нормально присылает QR,
+        // пока идёт фоновое обновление сессии. Подавляем, чтобы не пугать
+        // пользователей — _waitForQrLogin сделает reload и получит auth.
+        if (sinceStart < 90_000 && !isReady) {
+          console.log(`[QR] op:288 подавлён (${Math.round(sinceStart / 1000)}s с запуска, сессия ещё не готова)`)
+        } else {
+          const qrPath = path.join(__dirname, 'last_qr.png')
+          await QRCode.toFile(qrPath, qrLink, {
+            width:  400,
+            margin: 2,
+            color: { dark: '#000000', light: '#FFFFFF' },
+          })
+          qrUpdatedAt = Date.now()
+          console.log('[QR] Сгенерирован из qrLink:', qrLink)
+        }
       } catch (e) { console.error('[QR] Ошибка генерации:', e.message) }
     }
     // Opcode 155 — сервер пушит полный snapshot реакций на конкретное сообщение
