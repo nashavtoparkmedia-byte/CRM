@@ -1804,6 +1804,7 @@ async function init() {
       try {
         let added = 0
         for (const chat of data.payload.chats) {
+          if (chat == null || typeof chat !== 'object') continue
           const id = chat.id ?? chat.chatId
           if (id && id !== 0) { chatCache.set(String(id), chat); added++ }
         }
@@ -1814,6 +1815,7 @@ async function init() {
     if (data.opcode === 28 && data.payload?.animojis) {
       try {
         for (const a of data.payload.animojis) {
+          if (a == null || typeof a !== 'object') continue
           if (a.id && a.emoji) reactionEmojiById.set(Number(a.id), a.emoji)
         }
         console.log(`[App] reactionEmojiById: ${reactionEmojiById.size} записей`)
@@ -2072,11 +2074,12 @@ app.post('/send-message', async (req, res) => {
     return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
   }
 
-  // Detect if chatId looks like a phone number (10+ digits)
-  // MAX internal userIds are smaller numbers (typically 6-9 digits)
+  // Detect if chatId looks like a phone number (10-11 digits).
+  // MAX internal IDs are now 12 digits (9021XXXXXXXX), so anything 12+ is a MAX ID.
+  // Russian phones: 10 digits (without country code) or 11 digits (with country code 7).
   const chatIdStr = String(chatId || '')
   const digits = chatIdStr.replace(/\D/g, '')
-  const looksLikePhone = digits.length >= 10
+  const looksLikePhone = digits.length >= 10 && digits.length <= 11
 
   if (looksLikePhone) {
     // Must resolve phone → MAX internal userId before sending

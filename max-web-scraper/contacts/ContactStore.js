@@ -15,6 +15,7 @@ class ContactStore {
   ingest(payload) {
     const contacts = payload.contacts || []
     for (const c of contacts) {
+      if (c == null || typeof c !== 'object') continue
       const userId = c.id
       if (!userId) continue
       const nameObj = (c.names || [])[0] || {}
