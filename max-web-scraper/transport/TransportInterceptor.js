@@ -232,6 +232,7 @@ class TransportInterceptor {
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
     this._wsReadyCallbacks     = []
+    this._lastSeenMsgId        = new Map() // chatId → last seen msgId (dedup for op:53 push)
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -441,6 +442,28 @@ class TransportInterceptor {
       }
     }
 
+    // op:53 server push — extract new incoming messages via msgId dedup
+    if (data.opcode === 53) {
+      const chats = data.payload?.chats ?? (Array.isArray(data.payload) ? data.payload : null)
+      if (Array.isArray(chats)) {
+        for (const chat of chats) {
+          if (!chat || typeof chat !== 'object') continue
+          const chatId = String(chat.id || chat.chatId || '')
+          const lastMsg = chat.lastMessage
+          if (!chatId || !lastMsg || !lastMsg.id) continue
+          const msgId = String(lastMsg.id)
+          if (this._lastSeenMsgId.get(chatId) === msgId) continue
+          this._lastSeenMsgId.set(chatId, msgId)
+          const pseudo = { chatId, message: lastMsg }
+          const msg = this._normalizeMaxMsg(pseudo)
+          if (msg && !msg.isOutgoing && (msg.text || msg.attachments?.length > 0)) {
+            console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId} from:${msg.from}`)
+            this._emit(msg)
+          }
+        }
+      }
+    }
+
     // Raw-хэндлеры (contacts, chats, и т.д.)
     for (const h of this._rawHandlers) {
       try { h(data) } catch {}
@@ -505,7 +528,22 @@ class TransportInterceptor {
       } catch (e) {
         const hex = [...payloadBuf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
         console.log('[BIN] decode fail op:', opcode, 'hex:', hex, 'err:', e.message.slice(0, 80))
-        return
+        // Retry with increasing byte offsets to handle new preamble formats (e.g. 0xdd prefix)
+        let recovered = false
+        for (let skip = 1; skip <= 5; skip++) {
+          try {
+            const alt = maxMsgpackDecodeAll(payloadBuf.slice(skip))
+            if (!alt.length) continue
+            const last = alt[alt.length - 1]
+            if (last !== null && last !== undefined && typeof last === 'object' && !Array.isArray(last)) {
+              payload = last
+              console.log(`[BIN] op:${opcode} recovered with skip=${skip}`)
+              recovered = true
+              break
+            }
+          } catch {}
+        }
+        if (!recovered) return
       }
     }
 
