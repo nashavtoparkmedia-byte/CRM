@@ -29,8 +29,10 @@ class SessionController {
       console.error('[Session] Page error:', err.message)
     })
 
-    // Даём WS время на handshake и opcode 19 (до 3 секунд)
-    await this._waitForWsAuth(3000)
+    // Даём WS время на handshake и opcode 19. На первом соединении
+    // после перезапуска сервер шлёт сначала error-ответ (no-profile),
+    // а auth push с профилем приходит через 4-7 сек → ждём 12 сек.
+    await this._waitForWsAuth(12000)
 
     const loggedIn = await this._checkLoginState()
 
