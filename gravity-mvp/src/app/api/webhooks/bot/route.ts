@@ -705,7 +705,7 @@ async function handleSetActivePark(payload: any) {
     const park = await prisma.apiConnection.findFirst({ where: { parkId } })
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
 
-    await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId } })
+    await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId, carLabel: null, carId: null } })
     return NextResponse.json({ success: true, parkName: park.name || parkId })
 }
 
