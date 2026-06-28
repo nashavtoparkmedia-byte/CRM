@@ -2536,6 +2536,20 @@ app.get('/qr', (req, res) => {
   res.sendFile(qrPath, { dotfiles: 'allow' }, err => { if (err) res.status(404).json({ error: 'QR not found' }) })
 })
 
+app.post('/reload-page', async (req, res) => {
+  if (!page) return res.status(503).json({ error: 'Page not ready' })
+  try {
+    console.log('[Reload] Принудительная перезагрузка страницы MAX...')
+    isReady = false
+    await page.goto('https://web.max.ru', { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    console.log('[Reload] Страница перезагружена, ждём WS auth...')
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[Reload] Ошибка:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 app.post('/set-history-mode', (req, res) => {
   const { mode } = req.body
   const valid = ['none', 'from_connection_time', 'available_history']
