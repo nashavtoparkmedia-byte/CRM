@@ -26,12 +26,48 @@ const QRCode                       = require('qrcode')
 const PORT            = process.env.PORT            || 3005
 const CRM_WEBHOOK_URL = process.env.CRM_WEBHOOK_URL || 'http://localhost:3000/api/webhooks/max'
 const MAX_URL         = 'https://web.max.ru/'
-const USER_DATA_DIR   = path.join(__dirname, 'user_data')
+const USER_DATA_DIR        = path.join(__dirname, 'user_data')
+const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 
 // 'none' | 'from_connection_time' | 'available_history'
 let HISTORY_IMPORT_MODE = process.env.HISTORY_IMPORT_MODE || 'from_connection_time'
 let qrUpdatedAt         = null   // timestamp последней генерации QR
 const SESSION_START_MS  = Date.now()  // для подавления ложного QR при перезапуске
+
+// ─── Persistent phone → chatId cache (survives container restarts) ───────────
+// Stored in the Docker volume (user_data) so chatIds discovered via UI-send
+// are remembered across restarts. Key = E.164 digits, value = 12-digit chatId.
+
+function loadPhoneChatIdCache() {
+  if (!contactStore) return
+  try {
+    if (!fs.existsSync(PHONE_CHATID_CACHE)) return
+    const data = JSON.parse(fs.readFileSync(PHONE_CHATID_CACHE, 'utf8'))
+    let n = 0
+    for (const [phone, chatId] of Object.entries(data)) {
+      contactStore._map.set(String(chatId), { name: null, firstName: null, lastName: null, phone: String(phone) })
+      n++
+    }
+    if (n) console.log(`[PhoneCache] Loaded ${n} entries from volume`)
+  } catch (e) {
+    console.warn('[PhoneCache] Load failed:', e.message)
+  }
+}
+
+function savePhoneChatId(phone, chatId) {
+  try {
+    let data = {}
+    if (fs.existsSync(PHONE_CHATID_CACHE)) {
+      data = JSON.parse(fs.readFileSync(PHONE_CHATID_CACHE, 'utf8'))
+    }
+    const key = String(phone).replace(/\D/g, '')
+    data[key] = String(chatId)
+    fs.writeFileSync(PHONE_CHATID_CACHE, JSON.stringify(data, null, 2))
+    console.log(`[PhoneCache] Saved ${key} → ${chatId}`)
+  } catch (e) {
+    console.warn('[PhoneCache] Save failed:', e.message)
+  }
+}
 
 // ─── Счётчик статистики импорта ──────────────────────────────────────────────
 
@@ -2251,7 +2287,7 @@ async function init() {
 
     console.log('[App] WS auth OK, userId:', userId)
     isReady = true
-    if (_wsReadyAt === 0) _wsReadyAt = Date.now()  // фиксируем момент первого успешного auth
+    if (_wsReadyAt === 0) { _wsReadyAt = Date.now(); loadPhoneChatIdCache() }
     session.isLoggedIn = true  // сразу, до sync — чтобы _waitForQrLogin вышел немедленно
 
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
@@ -2412,6 +2448,7 @@ app.post('/send-message', async (req, res) => {
         // Cache for subsequent sends in this session
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
         if (messageSentViaUI) {
+          savePhoneChatId(digits, liveId)  // persist so container restart doesn't lose the mapping
           return res.json({ success: true, chatId: liveId, externalId: null })
         }
         // Dialog used returnHome() (SPA nav) — WS stays alive. waitForStableWs resolves
