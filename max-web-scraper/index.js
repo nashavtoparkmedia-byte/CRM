@@ -957,7 +957,6 @@ async function resolveViaPhoneLookupDialog(digits) {
     await searchBtn.click()
     console.log('[ResolvePhone] Clicked "Найти в МАХ"')
     await page.waitForTimeout(3500)
-    await page.screenshot({ path: '/tmp/max_phone_dialog_result.png' }).catch(() => {})
 
     // 6a. URL changed → extract convId
     const urlAfter = page.url()
