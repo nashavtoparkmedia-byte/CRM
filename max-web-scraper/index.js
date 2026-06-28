@@ -965,7 +965,7 @@ async function resolveViaPhoneLookupDialog(digits) {
       const convId = urlAfter.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
       if (convId) {
         console.log(`[ResolvePhone] URL-resolved: ${digits} → convId ${convId}`)
-        cleanup(); await returnHome(); return convId
+        cleanup(); return convId
       }
     }
 
@@ -986,7 +986,7 @@ async function resolveViaPhoneLookupDialog(digits) {
         const convId = urlFinal.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
         if (convId) {
           console.log(`[ResolvePhone] URL after "Написать": ${digits} → convId ${convId}`)
-          cleanup(); await returnHome(); return convId
+          cleanup(); return convId
         }
         // Also check WS op:48 for new chat
         for (const f of capturedFrames) {
@@ -995,7 +995,7 @@ async function resolveViaPhoneLookupDialog(digits) {
             const cid = String(c.chatId || c.id || '')
             if (cid && /^\d{6,15}$/.test(cid) && !chatCache.has(cid)) {
               console.log(`[ResolvePhone] New chat from op:48 after write: ${digits} → ${cid}`)
-              cleanup(); await returnHome(); return cid
+              cleanup(); return cid
             }
           }
         }
@@ -1013,12 +1013,12 @@ async function resolveViaPhoneLookupDialog(digits) {
         const userId = p.userId || p.id || p.user?.id || p.user?.userId
         if (userId && /^\d{5,15}$/.test(String(userId))) {
           console.log(`[ResolvePhone] op:46 phone lookup result: ${digits} → ${userId}`)
-          cleanup(); await returnHome(); return String(userId)
+          cleanup(); return String(userId)
         }
         const convId = p.convId || p.chatId || p.conversationId
         if (convId && /^\d{5,15}$/.test(String(convId))) {
           console.log(`[ResolvePhone] op:46 convId: ${digits} → ${convId}`)
-          cleanup(); await returnHome(); return String(convId)
+          cleanup(); return String(convId)
         }
         // Log the full payload for unknown structures
         console.log(`[ResolvePhone] op:46 cmd:1 payload:`, JSON.stringify(p).slice(0, 300))
@@ -1029,7 +1029,7 @@ async function resolveViaPhoneLookupDialog(digits) {
         const id = r.id || r.userId || r.user_id
         if (id && /^\d{5,12}$/.test(String(id))) {
           console.log(`[ResolvePhone] op:${f.opcode} search result: ${digits} → ${id}`)
-          cleanup(); await returnHome(); return String(id)
+          cleanup(); return String(id)
         }
       }
     }
