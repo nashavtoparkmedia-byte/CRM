@@ -632,7 +632,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                 onClick={() => {
                                     const lastRoute = localStorage.getItem('last_crm_route');
                                     const safe = lastRoute && !lastRoute.startsWith('/settings') && !lastRoute.startsWith('/messages')
-                                        ? lastRoute : '/dashboard';
+                                        ? lastRoute : '/';
                                     router.push(safe);
                                 }}
                                 className="w-[36px] h-[36px] rounded-[8px] flex items-center justify-center transition-colors text-gray-400 hover:bg-[#f3f4f6] hover:text-gray-700 active:bg-[#eef2ff] active:text-[#4f46e5]"
