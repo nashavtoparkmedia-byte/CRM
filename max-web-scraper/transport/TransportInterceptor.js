@@ -1,6 +1,39 @@
 'use strict'
 
-const { decode: msgpackDecode, decodeMulti: msgpackDecodeMulti } = require('@msgpack/msgpack')
+const { decodeMulti: msgpackDecodeMulti, ExtensionCodec } = require('@msgpack/msgpack')
+
+// MAX binary protocol uses EXT type=1 for variable-length big-endian integers (IDs, timestamps).
+// Without this codec, decoding fails when EXT values are used as map keys.
+const MAX_EXT_CODEC = (() => {
+  const codec = new ExtensionCodec()
+  codec.register({
+    type: 1,
+    decode(data) {
+      // Variable-length big-endian integer → Number
+      // data is Uint8Array; for 1-6 bytes stay in safe integer range
+      if (data.length <= 6) {
+        let n = 0
+        for (const b of data) n = n * 256 + b
+        return n
+      }
+      let v = 0n
+      for (const b of data) v = (v << 8n) | BigInt(b)
+      return Number(v)   // may lose precision above 2^53
+    },
+    encode() { return null },
+  })
+  // All other EXT types → hex string (safe as map key, preserves unknown data)
+  for (let t = 0; t < 128; t++) {
+    if (t === 1) continue
+    const _t = t
+    codec.register({
+      type: _t,
+      decode(data) { return 'ext' + _t + ':' + Buffer.from(data).toString('hex') },
+      encode() { return null },
+    })
+  }
+  return codec
+})()
 
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
@@ -331,7 +364,7 @@ class TransportInterceptor {
       try {
         // Payload may contain multiple sequential msgpack values (not a single top-level object).
         // Use decodeMulti to collect all values, then pick the map/object from them.
-        const values = [...msgpackDecodeMulti(payloadBuf)]
+        const values = [...msgpackDecodeMulti(payloadBuf, { extensionCodec: MAX_EXT_CODEC })]
         if (values.length === 1) {
           payload = values[0] ?? {}
         } else if (values.length > 1) {
