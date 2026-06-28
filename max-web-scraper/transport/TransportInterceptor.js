@@ -448,10 +448,23 @@ class TransportInterceptor {
     if (buf.length > 9) {
       const payloadBuf = buf.slice(9)
       try {
-        // Payload is a sequence of msgpack values (preamble fixints + payload object).
-        // Pick the first non-null object — that's the actual payload.
+        // Payload is a sequence of msgpack values: preamble fixints first, then the actual
+        // payload object/array last. Always take the LAST value; fall back to last object.
         const values = maxMsgpackDecodeAll(payloadBuf)
-        payload = values.find(v => v !== null && typeof v === 'object' && !Array.isArray(v)) ?? {}
+        if (values.length > 0) {
+          const last = values[values.length - 1]
+          if (last !== null && last !== undefined && typeof last === 'object') {
+            payload = last
+          } else {
+            // Last is a primitive — walk backwards for last non-null object
+            for (let i = values.length - 2; i >= 0; i--) {
+              if (values[i] !== null && typeof values[i] === 'object') {
+                payload = values[i]
+                break
+              }
+            }
+          }
+        }
       } catch (e) {
         const hex = [...payloadBuf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
         console.log('[BIN] decode fail op:', opcode, 'hex:', hex, 'err:', e.message.slice(0, 80))
