@@ -2193,6 +2193,30 @@ async function init() {
   // 5. Авторизация
   session.attach(page, context, transport)
 
+  // Auto-recovery: когда сервер возвращает has_profile=false после успешного старта
+  // — браузерная WS-сессия протухла. Перезагружаем страницу чтобы восстановить auth.
+  let _authFailReloadAt = 0
+  transport._rawHandlers.push((data) => {
+    if (data.opcode !== 19) return
+    const hasProfile = !!(data.payload?.profile?.contact?.id)
+    if (!hasProfile && isReady && !_dialogBusy) {
+      const now = Date.now()
+      if (now - _authFailReloadAt < 60_000) return  // не чаще раза в минуту
+      _authFailReloadAt = now
+      console.warn('[App] WS auth lost (has_profile=false after ready) — reloading page...')
+      isReady = false
+      setTimeout(async () => {
+        try {
+          await page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+          console.log('[App] Page reloaded after auth loss — waiting for re-auth...')
+        } catch (e) {
+          console.error('[App] Auth-loss reload failed:', e.message)
+          isReady = true  // вернуть чтобы не завис навсегда
+        }
+      }, 3000)  // небольшая задержка чтобы auth fail успел устояться (не флуктуация)
+    }
+  })
+
   // WS-авторизация (opcode 19) — первичный и надёжный триггер
   transport.onWsAuth(async (userId) => {
     if (isReady) {
