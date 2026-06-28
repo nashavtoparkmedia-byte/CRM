@@ -1098,12 +1098,27 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                       }
                     }
                   }
+                  // op:198 = common chats list with this user (arrives on profile open, contains chatId if convo exists)
+                  if (f.opcode === 198 && f.payload) {
+                    const commons = Array.isArray(f.payload.commonChats) ? f.payload.commonChats
+                      : Array.isArray(f.payload) ? f.payload : []
+                    for (const c of commons) {
+                      const cId = (c && typeof c === 'object')
+                        ? String(c.id || c.chatId || c.conversationId || '')
+                        : String(c || '')
+                      if (cId && /^\d{10,15}$/.test(cId)) {
+                        console.log(`[ResolvePhone] op:198 chatId after UI send: ${cId}`)
+                        await returnHome(); cleanup()
+                        return { chatId: cId, messageSent: true }
+                      }
+                    }
+                  }
                 }
               }
               // Log diagnostic payloads on timeout
-              const diagFrames = capturedFrames.filter(f => [48, 64, 65, 71, 128].includes(f.opcode))
+              const diagFrames = capturedFrames.filter(f => [48, 64, 65, 71, 128, 198].includes(f.opcode))
               console.log(`[ResolvePhone] UI send timeout — diag frames:`,
-                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 120)}`).join(' | '))
+                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 150)}`).join(' | '))
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }
