@@ -1,39 +1,128 @@
 'use strict'
 
-const { decodeMulti: msgpackDecodeMulti, ExtensionCodec } = require('@msgpack/msgpack')
+// ─── Custom msgpack decoder for MAX binary protocol ───────────────────────────
+// @msgpack/msgpack throws "key must be string or number" when Timestamp or
+// binary-type values are used as map keys (MAX does this for some internal maps).
+// This hand-rolled decoder is lenient about key types — it stringifies any key.
+function maxMsgpackDecodeAll(buf) {
+  const view  = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+  let   pos   = 0
 
-// MAX binary protocol uses EXT type=1 for variable-length big-endian integers (IDs, timestamps).
-// Without this codec, decoding fails when EXT values are used as map keys.
-const MAX_EXT_CODEC = (() => {
-  const codec = new ExtensionCodec()
-  codec.register({
-    type: 1,
-    decode(data) {
-      // Variable-length big-endian integer → Number
-      // data is Uint8Array; for 1-6 bytes stay in safe integer range
-      if (data.length <= 6) {
-        let n = 0
-        for (const b of data) n = n * 256 + b
-        return n
-      }
-      let v = 0n
-      for (const b of data) v = (v << 8n) | BigInt(b)
-      return Number(v)   // may lose precision above 2^53
-    },
-    encode() { return null },
-  })
-  // All other EXT types → hex string (safe as map key, preserves unknown data)
-  for (let t = 0; t < 128; t++) {
-    if (t === 1) continue
-    const _t = t
-    codec.register({
-      type: _t,
-      decode(data) { return 'ext' + _t + ':' + Buffer.from(data).toString('hex') },
-      encode() { return null },
-    })
+  function readByte()    { return buf[pos++] }
+  function readU8()      { const v = view.getUint8(pos);  pos += 1; return v }
+  function readU16()     { const v = view.getUint16(pos); pos += 2; return v }
+  function readU32()     { const v = view.getUint32(pos); pos += 4; return v }
+  function readI8()      { const v = view.getInt8(pos);   pos += 1; return v }
+  function readI16()     { const v = view.getInt16(pos);  pos += 2; return v }
+  function readI32()     { const v = view.getInt32(pos);  pos += 4; return v }
+  function readI64()     {
+    const hi = view.getInt32(pos); const lo = view.getUint32(pos+4); pos += 8
+    return hi * 0x100000000 + lo   // lose precision above 2^53, fine for our IDs
   }
-  return codec
-})()
+  function readF32()     { const v = view.getFloat32(pos); pos += 4; return v }
+  function readF64()     { const v = view.getFloat64(pos); pos += 8; return v }
+  function readStr(len)  {
+    const s = buf.slice(pos, pos + len)
+    pos += len
+    return Buffer.from(s).toString('utf8')
+  }
+  function readBin(len)  { const s = buf.slice(pos, pos + len); pos += len; return s }
+
+  function decodeExt(len, type) {
+    const data = buf.slice(pos, pos + len); pos += len
+    if (type === -1) {  // Timestamp
+      const sec  = (data[0]*0x1000000 + data[1]*0x10000 + data[2]*0x100 + data[3])
+      return sec * 1000   // ms
+    }
+    if (type === 1) {   // MAX variable-length big-endian int
+      let n = 0
+      for (const b of data) n = n * 256 + b
+      return n
+    }
+    return Buffer.from(data).toString('hex')
+  }
+
+  function decodeOne() {
+    if (pos >= buf.length) return undefined
+    const b = readByte()
+    // positive fixint
+    if (b <= 0x7f) return b
+    // fixmap
+    if ((b & 0xf0) === 0x80) {
+      const n = b & 0x0f; const obj = {}
+      for (let i = 0; i < n; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
+      return obj
+    }
+    // fixarray
+    if ((b & 0xf0) === 0x90) {
+      const n = b & 0x0f; const arr = []
+      for (let i = 0; i < n; i++) arr.push(decodeOne())
+      return arr
+    }
+    // fixstr
+    if ((b & 0xe0) === 0xa0) return readStr(b & 0x1f)
+    // negative fixint
+    if (b >= 0xe0) return b - 256
+
+    switch (b) {
+      case 0xc0: return null
+      case 0xc2: return false
+      case 0xc3: return true
+      case 0xc4: { const l = readU8();  return readBin(l) }
+      case 0xc5: { const l = readU16(); return readBin(l) }
+      case 0xc6: { const l = readU32(); return readBin(l) }
+      case 0xc7: { const l = readU8();  const t = readI8(); return decodeExt(l, t) }
+      case 0xc8: { const l = readU16(); const t = readI8(); return decodeExt(l, t) }
+      case 0xc9: { const l = readU32(); const t = readI8(); return decodeExt(l, t) }
+      case 0xca: return readF32()
+      case 0xcb: return readF64()
+      case 0xcc: return readU8()
+      case 0xcd: return readU16()
+      case 0xce: return readU32()
+      case 0xcf: { const v = readI64(); return v }
+      case 0xd0: return readI8()
+      case 0xd1: return readI16()
+      case 0xd2: return readI32()
+      case 0xd3: return readI64()
+      case 0xd4: return decodeExt(1, readI8())
+      case 0xd5: return decodeExt(2, readI8())
+      case 0xd6: return decodeExt(4, readI8())
+      case 0xd7: return decodeExt(8, readI8())
+      case 0xd8: return decodeExt(16, readI8())
+      case 0xd9: { const l = readU8();  return readStr(l) }
+      case 0xda: { const l = readU16(); return readStr(l) }
+      case 0xdb: { const l = readU32(); return readStr(l) }
+      case 0xdc: {
+        const n = readU16(); const arr = []
+        for (let i = 0; i < n; i++) arr.push(decodeOne())
+        return arr
+      }
+      case 0xdd: {
+        const n = readU32(); const arr = []
+        for (let i = 0; i < n; i++) arr.push(decodeOne())
+        return arr
+      }
+      case 0xde: {
+        const n = readU16(); const obj = {}
+        for (let i = 0; i < n; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
+        return obj
+      }
+      case 0xdf: {
+        const n = readU32(); const obj = {}
+        for (let i = 0; i < n; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
+        return obj
+      }
+      default: return undefined
+    }
+  }
+
+  const results = []
+  while (pos < buf.length) {
+    const v = decodeOne()
+    if (v !== undefined) results.push(v)
+  }
+  return results
+}
 
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
@@ -358,23 +447,14 @@ class TransportInterceptor {
     let payload = {}
     if (buf.length > 9) {
       const payloadBuf = buf.slice(9)
-      // Log first 20 bytes of payload as hex for format investigation
-      const payloadHex = [...payloadBuf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
-
       try {
-        // Payload may contain multiple sequential msgpack values (not a single top-level object).
-        // Use decodeMulti to collect all values, then pick the map/object from them.
-        const values = [...msgpackDecodeMulti(payloadBuf, { extensionCodec: MAX_EXT_CODEC })]
-        if (values.length === 1) {
-          payload = values[0] ?? {}
-        } else if (values.length > 1) {
-          // Find the first non-null object value — that's the actual payload
-          payload = values.find(v => v !== null && typeof v === 'object' && !Array.isArray(v)) ?? values[values.length - 1] ?? {}
-          console.log('[BIN] multi-value payload op:', opcode, 'count:', values.length,
-            'types:', values.map(v => v === null ? 'null' : typeof v).join(','))
-        }
+        // Payload is a sequence of msgpack values (preamble fixints + payload object).
+        // Pick the first non-null object — that's the actual payload.
+        const values = maxMsgpackDecodeAll(payloadBuf)
+        payload = values.find(v => v !== null && typeof v === 'object' && !Array.isArray(v)) ?? {}
       } catch (e) {
-        console.log('[BIN] MsgPack decode fail op:', opcode, 'hex:', payloadHex, 'err:', e.message.slice(0, 80))
+        const hex = [...payloadBuf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
+        console.log('[BIN] decode fail op:', opcode, 'hex:', hex, 'err:', e.message.slice(0, 80))
         return
       }
     }
