@@ -830,6 +830,8 @@ async function enrichOrderFromPage(page: Page, orderHref: string, parkId: string
 async function captureOrderMapScreenshot(page: Page, orderLongId: string, parkId: string): Promise<{ base64: string | null; distanceText: string | null }> {
     const url = `https://fleet.yandex.ru/orders/${orderLongId}/map?park_id=${parkId}`;
     try {
+        // Force a wide viewport so the map isn't cramped in headless Docker.
+        await page.setViewportSize({ width: 1920, height: 1080 });
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
         // The map tiles + route line need extra time after DOM is ready.
         await page.waitForTimeout(5500);
