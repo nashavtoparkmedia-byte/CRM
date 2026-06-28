@@ -963,11 +963,16 @@ async function resolveViaPhoneLookupDialog(digits) {
     if (urlAfter !== urlBefore) {
       const convId = urlAfter.match(/web\.max\.ru\/(\d{5,15})(?:[/?#]|$)/)?.[1]
       if (convId) {
-        console.log(`[ResolvePhone] URL-resolved: ${digits} → convId ${convId}`)
-        // SPA nav back to chats (keeps WS alive — page.goto would kill WS and trigger
-        // reconnect cycle where op:64 fails because new session hasn't loaded contacts).
-        await returnHome()
-        cleanup(); return convId
+        // MAX 12-digit IDs (902XXXXXXXXX) = existing conversation → return immediately.
+        // Short IDs (< 12 digits) = user profile page (no prior conversation) →
+        // need to click "Написать" to open/create the conversation and get a real convId.
+        if (convId.length >= 12) {
+          console.log(`[ResolvePhone] URL-resolved (existing conv): ${digits} → convId ${convId}`)
+          await returnHome()
+          cleanup(); return convId
+        }
+        console.log(`[ResolvePhone] URL-resolved to user profile (${convId}) — clicking "Написать" to get conversation ID`)
+        // Fall through to 6b write-button logic below
       }
     }
 
