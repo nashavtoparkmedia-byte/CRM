@@ -407,18 +407,25 @@ async function handleChangeLimit(payload: any) {
         return NextResponse.json({ error: 'NOT_LINKED', message: 'Driver not linked to this Telegram ID' }, { status: 404 })
     }
 
-    // 2. Fetch the active Yandex API connection
-    const connection = await prisma.apiConnection.findFirst({
-        orderBy: { createdAt: 'desc' }
-    })
+    // 2. Use the driver's active park connection
+    const connection = mapping.activeParkId
+        ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+        : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
 
     if (!connection) {
         return NextResponse.json({ error: 'No active Yandex API connection in CRM' }, { status: 500 })
     }
 
-    // 3. Fetch driver data from /v1/parks/driver-profiles/list (supported endpoint)
-    //    to build the person+account body required by PUT /v2/parks/contractors/driver-profile
-    const yandexUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${mapping.driverId}`
+    // 3. Resolve the correct contractor_profile_id for this park.
+    //    mapping.driverId is a CRM id — need the Yandex contractor id.
+    //    The stored yandexDriverId may belong to a different park, so fall back
+    //    to phone search when v2 returns 404.
+    const driver = await prisma.driver.findUnique({
+        where: { id: mapping.driverId },
+        select: { yandexDriverId: true, phone: true }
+    })
+    let contractorId = driver?.yandexDriverId
+
     const yandexAuthHeaders: Record<string, string> = {
         'X-Client-ID': connection.clid,
         'X-Api-Key': connection.apiKey,
@@ -429,15 +436,51 @@ async function handleChangeLimit(payload: any) {
 
     const safeJson = async (res: Response) => {
         const text = await res.text()
-        console.log(`[safeJson] status=${res.status} ok=${res.ok} body_length=${text.length} body_preview="${text.substring(0, 100)}"`)
+        console.log(`[safeJson] status=${res.status} ok=${res.ok} body_preview="${text.substring(0, 100)}"`)
         try {
             return { ok: res.ok, status: res.status, data: JSON.parse(text) }
         } catch { return { ok: res.ok, status: res.status, data: { raw: text.substring(0, 300) } } }
     }
 
+    // Quick probe — if 404, resolve contractor id via phone search in active park
+    if (contractorId) {
+        const probe = await fetch(`https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`, {
+            method: 'GET', headers: yandexAuthHeaders
+        })
+        if (probe.status === 404 && driver?.phone) {
+            console.log(`[changeLimit] yandexDriverId 404 in park ${connection.parkId}, searching by phone`)
+            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+                method: 'POST',
+                headers: yandexAuthHeaders,
+                body: JSON.stringify({
+                    query: { park: { id: connection.parkId }, text: driver.phone },
+                    fields: { driver_profile: ['id', 'phones'], car: [], account: [], current_status: [] },
+                    limit: 5, offset: 0
+                })
+            })
+            if (searchRes.ok) {
+                const searchData = await searchRes.json()
+                const normalizedPhone = driver.phone.replace(/[\s+\-()]/g, '')
+                const matched = (searchData.driver_profiles || []).find((p: any) =>
+                    (p.driver_profile.phones || []).some((ph: string) =>
+                        ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone)
+                    )
+                )
+                if (matched?.driver_profile?.id) {
+                    contractorId = matched.driver_profile.id
+                    console.log(`[changeLimit] resolved contractor id via phone: ${contractorId}`)
+                }
+            }
+        }
+    }
+
+    if (!contractorId) {
+        return NextResponse.json({ error: 'Не удалось найти водителя в Яндекс Флит для этого парка' }, { status: 404 })
+    }
+
     try {
         // Step 3a: GET current contractor profile (returns exact structure needed for PUT)
-        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${mapping.driverId}`
+        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
         console.log(`[changeLimit] GET contractor profile: ${contractorUrl}`)
         const { ok: getOk, status: getStatus, data: currentProfile } = await safeJson(await fetch(contractorUrl, {
             method: 'GET',
