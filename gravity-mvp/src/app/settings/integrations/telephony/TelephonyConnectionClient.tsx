@@ -70,7 +70,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
         try {
             const r = await fetch('/api/settings/telephony-status')
             const body = await r.json()
-            setStatus(body)
+            setStatus(r.ok ? body : null)
         } catch {
             setStatus(null)
         } finally {
@@ -164,7 +164,7 @@ export default function TelephonyConnectionClient({ canEdit }: { canEdit: boolea
                     {!status && statusLoading && (
                         <div className="col-span-full text-center text-[13px] text-muted-foreground py-3">Загружаем статус…</div>
                     )}
-                    {status && Object.entries(status.checks).map(([key, check]) => (
+                    {status?.checks && Object.entries(status.checks).map(([key, check]) => (
                         <div
                             key={key}
                             className={`flex items-center gap-3 rounded-md border px-3 py-2.5 ${
