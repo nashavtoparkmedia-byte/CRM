@@ -1069,24 +1069,33 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                       }
                     }
                   }
-                  // op:64 cmd:2 = server response to browser's message send (contains chatId)
+                  // op:64 cmd:2 = server response to browser's message send
+                  // payload may be array [-14, 38, {chatId:...}] — extract first object
                   if (f.opcode === 64 && f.payload) {
-                    const p = f.payload
-                    const cId = String(p.chatId || p.conversationId || p.id || '')
-                    if (cId && /^\d{10,15}$/.test(cId)) {
-                      console.log(`[ResolvePhone] op:64 chatId after UI send: ${cId}`)
-                      await returnHome(); cleanup()
-                      return { chatId: cId, messageSent: true }
+                    const p = Array.isArray(f.payload)
+                      ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x))
+                      : f.payload
+                    if (p) {
+                      const cId = String(p.chatId || p.conversationId || p.id || '')
+                      if (cId && /^\d{10,15}$/.test(cId)) {
+                        console.log(`[ResolvePhone] op:64 chatId after UI send: ${cId}`)
+                        await returnHome(); cleanup()
+                        return { chatId: cId, messageSent: true }
+                      }
                     }
                   }
-                  // op:65 cmd:0 = post-send notification, may contain chatId
+                  // op:65 cmd:0 = post-send notification, may also be array
                   if (f.opcode === 65 && f.payload) {
-                    const p = f.payload
-                    const cId = String(p.chatId || p.conversationId || p.id || '')
-                    if (cId && /^\d{10,15}$/.test(cId)) {
-                      console.log(`[ResolvePhone] op:65 chatId after UI send: ${cId}`)
-                      await returnHome(); cleanup()
-                      return { chatId: cId, messageSent: true }
+                    const p = Array.isArray(f.payload)
+                      ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x))
+                      : f.payload
+                    if (p) {
+                      const cId = String(p.chatId || p.conversationId || p.id || '')
+                      if (cId && /^\d{10,15}$/.test(cId)) {
+                        console.log(`[ResolvePhone] op:65 chatId after UI send: ${cId}`)
+                        await returnHome(); cleanup()
+                        return { chatId: cId, messageSent: true }
+                      }
                     }
                   }
                 }
