@@ -395,6 +395,15 @@ class TransportInterceptor {
       return
     }
 
+    // op:6 HANDSHAKE — WS физически подключён и готов к отправке сразу после грита сервера.
+    // Сессия авторизована через cookie, поэтому MAX принимает sends с op:6.
+    // Не ждём op:53 (чаты) — это занимает 30-60s при загрузке контактов.
+    if (data.opcode === OP.HANDSHAKE) {
+      console.log('[Transport] WS handshake received — marking connected')
+      this._wsConnected = true
+      this._fireWsReady()
+    }
+
     // Авторизация (opcode 19) — запоминаем свой userId
     // Проверяем opcode 19 независимо от cmd (MAX может слать как cmd:0, так и cmd:1)
     if (data.opcode === OP.AUTH) {
