@@ -404,6 +404,23 @@ class TransportInterceptor {
       }
     }
 
+    // Fallback: для persistent sessions op:19 не содержит профиль,
+    // но op:53 (push chats) содержит owner = наш userId.
+    // Если auth ещё не прошла — определяем userId из первого же op:53.
+    if (data.opcode === 53 && !this._myUserId) {
+      const chats = data.payload?.chats
+      if (Array.isArray(chats)) {
+        for (const chat of chats) {
+          if (chat && typeof chat === 'object' && chat.owner) {
+            this._myUserId = String(chat.owner)
+            console.log('[Transport] Auth via op:53 owner:', this._myUserId)
+            for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
+            break
+          }
+        }
+      }
+    }
+
     // Raw-хэндлеры (contacts, chats, и т.д.)
     for (const h of this._rawHandlers) {
       try { h(data) } catch {}
