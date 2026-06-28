@@ -1,6 +1,6 @@
 'use strict'
 
-const { decode: msgpackDecode } = require('@msgpack/msgpack')
+const { decode: msgpackDecode, decodeMulti: msgpackDecodeMulti } = require('@msgpack/msgpack')
 
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
@@ -324,15 +324,24 @@ class TransportInterceptor {
 
     let payload = {}
     if (buf.length > 9) {
+      const payloadBuf = buf.slice(9)
+      // Log first 20 bytes of payload as hex for format investigation
+      const payloadHex = [...payloadBuf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
+
       try {
-        payload = msgpackDecode(buf.slice(9))
+        // Payload may contain multiple sequential msgpack values (not a single top-level object).
+        // Use decodeMulti to collect all values, then pick the map/object from them.
+        const values = [...msgpackDecodeMulti(payloadBuf)]
+        if (values.length === 1) {
+          payload = values[0] ?? {}
+        } else if (values.length > 1) {
+          // Find the first non-null object value — that's the actual payload
+          payload = values.find(v => v !== null && typeof v === 'object' && !Array.isArray(v)) ?? values[values.length - 1] ?? {}
+          console.log('[BIN] multi-value payload op:', opcode, 'count:', values.length,
+            'types:', values.map(v => v === null ? 'null' : typeof v).join(','))
+        }
       } catch (e) {
-        console.log('[BIN] MsgPack decode fail op:', opcode, e.message.slice(0, 60))
-        // Try decoding the WHOLE buffer as msgpack (no fixed header)
-        try {
-          const full = msgpackDecode(buf)
-          console.log('[BIN] Full-frame MsgPack:', JSON.stringify(full).slice(0, 200))
-        } catch {}
+        console.log('[BIN] MsgPack decode fail op:', opcode, 'hex:', payloadHex, 'err:', e.message.slice(0, 80))
         return
       }
     }
