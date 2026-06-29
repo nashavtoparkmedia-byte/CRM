@@ -746,7 +746,8 @@ class TransportInterceptor {
 
   // ─── Бинарная отправка op:71 (GET_HISTORY) ──────────────────────────────────
   // JSON op:71 убивает WS. Браузер шлёт op:71 в бинарном формате — нам нужно то же самое.
-  // Формат: [0x0a, ver=0x01, flags=0x00, frameSeqHi, frameSeqLo, 0x47=71, cmd=0x01, reqSeqHi, reqSeqLo, msgpack({chatId})]
+  // Формат: [0x0a, ver=0x00, flags=0x00, frameSeqHi, frameSeqLo, 0x47=71, cmd=0x01, reqSeqHi, reqSeqLo, msgpack({chatId})]
+  // ver=0x00 подтверждён: браузерный op:71 hex: 0a 00 00 16 00 47 01 00 00 ... (byte1=0x00)
 
   async sendBinaryOp71(chatId) {
     if (!this._page) throw new Error('No page')
@@ -759,7 +760,7 @@ class TransportInterceptor {
 
     const header = Buffer.alloc(9)
     header[0] = 0x0a                     // magic
-    header[1] = 0x01                     // version 1 (как браузер)
+    header[1] = 0x00                     // byte1=0 (browser sends 0 for op:71 requests)
     header[2] = 0x00                     // flags
     header[3] = (frameSeq >> 8) & 0xff
     header[4] = frameSeq & 0xff
