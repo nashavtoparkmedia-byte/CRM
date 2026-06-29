@@ -2084,6 +2084,18 @@ async function init() {
     console.warn('[App] cleanupStaleMaxSession failed:', err.message)
   }
 
+  // Clear Cookies on every startup — stale Cookies cause auth-loop
+  // (MAX sees known browser but expired session → no QR, no auth frames).
+  // LocalStorage token (in leveldb) is unaffected and provides the real auth.
+  const cookiesPath = path.join(USER_DATA_DIR, 'Default', 'Cookies')
+  const cookiesJournalPath = path.join(USER_DATA_DIR, 'Default', 'Cookies-journal')
+  try {
+    if (fs.existsSync(cookiesPath)) { fs.unlinkSync(cookiesPath); console.log('[App] Cleared stale Cookies') }
+    if (fs.existsSync(cookiesJournalPath)) { fs.unlinkSync(cookiesJournalPath); console.log('[App] Cleared stale Cookies-journal') }
+  } catch (e) {
+    console.warn('[App] Cookie cleanup failed:', e.message)
+  }
+
   context = await chromium.launchPersistentContext(USER_DATA_DIR, {
     headless: true,
     viewport: { width: 1280, height: 720 },
