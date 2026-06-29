@@ -2212,7 +2212,7 @@ async function init() {
           try {
             const result = await transport.sendFrame(
               OP.GET_HISTORY,
-              { chatId, from: Date.now(), forward: 0, backward: 5, getMessages: true },
+              { chatId: Number(chatId), from: Date.now(), forward: 0, backward: 5, getMessages: true },
               { waitResponse: true, timeoutMs: 8000 }
             )
             const messages = result?.messages ?? []
