@@ -477,9 +477,15 @@ class TransportInterceptor {
     if (data.opcode === OP.PRESENCE) return
 
     // Входящее сообщение — server push, opcode 128
-    if (data.opcode === OP.INCOMING_MSG && data.payload?.message) {
-      const msg = this._normalizeMaxMsg(data.payload)
-      if (msg) this._emit(msg)
+    // payload может быть объектом {chatId, message} или массивом [-14, 38, {chatId, message}]
+    if (data.opcode === OP.INCOMING_MSG) {
+      const pl = Array.isArray(data.payload)
+        ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
+        : data.payload
+      if (pl?.message) {
+        const msg = this._normalizeMaxMsg(pl)
+        if (msg) this._emit(msg)
+      }
     }
   }
 
