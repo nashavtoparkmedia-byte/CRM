@@ -2224,34 +2224,15 @@ async function init() {
       }
     }
     // op:128 — входящее сообщение.
-    // В новом бинарном протоколе MAX (api.oneme.ru) op:128 приходит как push-уведомление
-    // без inline-контента сообщения (payload = [22, binary, N]).
-    // Реальный контент нужно запросить через op:71 {chatId: X}.
-    // TransportInterceptor обрабатывает op:71 ответы и эмитирует сообщения через onMessage.
+    // Если payload содержит данные — TransportInterceptor уже обработал через transport.onMessage.
+    // ВАЖНО: отправлять op:71 через JSON нельзя — MAX закрывает WS (то же поведение что op:49).
+    // op:71 обрабатывается пассивно когда браузер сам открывает чат и запрашивает историю.
     if (data.opcode === OP.INCOMING_MSG) {
       if (!isReady) return
-      // Запрашиваем op:71 для недавно активных чатов (по op:53 push)
-      setImmediate(async () => {
-        try {
-          let chatIds = transport.getRecentActiveChatIds(10_000)
-          if (chatIds.length === 0) {
-            // Fallback: chatCache + contactStore._map (phone_chatid_cache.json из Docker-тома)
-            // contactStore._map хранит 12-значные chatId как ключи (загружены из тома при старте)
-            const storeChatIds = contactStore
-              ? [...contactStore._map.keys()].filter(k => /^\d{10,15}$/.test(k))
-              : []
-            chatIds = [...new Set([...chatCache.keys(), ...storeChatIds])].slice(0, 15)
-          }
-          if (chatIds.length > 0) {
-            console.log(`[op128→op71] Запрашиваем ${chatIds.length} чатов: ${chatIds.slice(0, 5).join(',')}${chatIds.length > 5 ? '…' : ''}`)
-            for (const chatId of chatIds) {
-              await transport.sendFrame(71, { chatId: Number(chatId) }, { waitResponse: false })
-            }
-          }
-        } catch (e) {
-          console.warn('[op128→op71] error:', e.message)
-        }
-      })
+      const payloadIsEmpty = !data.payload || (Array.isArray(data.payload) && data.payload.length === 0)
+      if (payloadIsEmpty) {
+        console.log('[op128] Пустой payload — пропускаем (op:71 через JSON убивает WS, используем только пассивный перехват)')
+      }
     }
 
     // Логируем остальные неизвестные push-опкоды
