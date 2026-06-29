@@ -1084,13 +1084,18 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                       return { chatId: cId, messageSent: true }
                     }
                   }
-                  if (f.opcode === 128 && f.payload?.chatId && f.payload?.message?.sender) {
-                    if (String(f.payload.message.sender) === String(transport._myUserId)) {
-                      const cId = String(f.payload.chatId)
-                      if (/^\d{10,15}$/.test(cId)) {
-                        console.log(`[ResolvePhone] op:128 echo chatId after UI send: ${cId}`)
-                        await returnHome(); cleanup()
-                        return { chatId: cId, messageSent: true }
+                  if (f.opcode === 128) {
+                    const fp = Array.isArray(f.payload)
+                      ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
+                      : f.payload
+                    if (fp?.chatId && fp?.message?.sender) {
+                      if (String(fp.message.sender) === String(transport._myUserId)) {
+                        const cId = String(fp.chatId)
+                        if (/^\d{10,15}$/.test(cId)) {
+                          console.log(`[ResolvePhone] op:128 echo chatId after UI send: ${cId}`)
+                          await returnHome(); cleanup()
+                          return { chatId: cId, messageSent: true }
+                        }
                       }
                     }
                   }
@@ -1509,9 +1514,14 @@ async function resolveViaUiSearch(digits) {
           const other = parts.find(p => String(p) !== String(transport._myUserId))
           if (other) resolvedFromEcho = String(other)
         }
-        if (data.opcode === 128 && data.payload?.message) {
-          const sender = String(data.payload.message.sender || '')
-          if (sender && sender !== String(transport._myUserId)) resolvedFromEcho = sender
+        if (data.opcode === 128) {
+          const rp = Array.isArray(data.payload)
+            ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
+            : data.payload
+          if (rp?.message) {
+            const sender = String(rp.message.sender || '')
+            if (sender && sender !== String(transport._myUserId)) resolvedFromEcho = sender
+          }
         }
       }
       transport._rawHandlers.push(echoHandler)
@@ -2545,13 +2555,17 @@ app.post('/send-message', async (req, res) => {
     const echoPromise = new Promise((resolve) => {
       echoResolve = resolve
       echoRawHandler = function (data) {
-        if (data.opcode === 128 && data.payload?.message?.id && data.payload.chatId) {
-          const sender = String(data.payload.message.sender || '')
+        if (data.opcode !== 128) return
+        const ep = Array.isArray(data.payload)
+          ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
+          : data.payload
+        if (ep?.message?.id && ep.chatId) {
+          const sender = String(ep.message.sender || '')
           if (sender === transport._myUserId) {
             const idx = transport._rawHandlers.indexOf(echoRawHandler)
             if (idx > -1) transport._rawHandlers.splice(idx, 1)
             echoRawHandler = null
-            resolve(String(data.payload.chatId))
+            resolve(String(ep.chatId))
           }
         }
       }
