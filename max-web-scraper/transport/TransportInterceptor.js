@@ -245,6 +245,7 @@ class TransportInterceptor {
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
     this._wsReadyCallbacks     = []
     this._lastSeenMsgId        = new Map() // chatId → last seen msgId (dedup for op:53 push)
+    this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -500,6 +501,8 @@ class TransportInterceptor {
           }
 
           if (!chatId) continue
+          // Отмечаем чат как активный для запроса op:71 при следующем op:128
+          this._recentActiveChatIds.set(chatId, Date.now())
           if (!lastMsg) {
             // Диагностика: показываем ключи чата чтобы понять где спрятан lastMessage
             const keys = Object.keys(chat).slice(0, 10).join(',')
@@ -516,6 +519,24 @@ class TransportInterceptor {
             console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId} from:${msg.from}`)
             this._emit(msg)
           }
+        }
+      }
+    }
+
+    // op:71 — ответ сервера на запрос истории чата.
+    // Браузер шлёт op:71 cmd:1 {chatId} → MAX отвечает op:71 cmd:2/4 {chatId, messages:[]}.
+    // Мы шлём op:71 при op:128-уведомлении чтобы получить контент входящего сообщения.
+    // Обрабатываем ВНЕ зависимости от cmd — MAX использует cmd:2 и cmd:4 непоследовательно.
+    if (data.opcode === 71 && data.payload?.chatId != null) {
+      const messages = Array.isArray(data.payload.messages) ? data.payload.messages : []
+      const chatIdRaw = data.payload.chatId
+      console.log(`[op71] chatId:${chatIdRaw} msgs:${messages.length}`)
+      for (const m of messages) {
+        if (!m || typeof m !== 'object') continue
+        const msg = this._normalizeMaxMsg({ chatId: chatIdRaw, message: m })
+        if (msg && (msg.text || msg.attachments?.length > 0)) {
+          console.log(`[op71] emit msgId:${msg.id} from:${msg.from} text:"${String(msg.text || '').slice(0, 50)}" out:${msg.isOutgoing}`)
+          this._emit(msg)
         }
       }
     }
@@ -832,6 +853,19 @@ class TransportInterceptor {
   /** Срабатывает когда пользователь ставит/убирает реакцию через MAX веб-интерфейс */
   onSentReaction(handler) {
     this._sentReactionHandlers.push(handler)
+  }
+
+  /**
+   * Возвращает chatIds чатов, активных (по op:53 push) за последние maxAgeMs.
+   * Используется в op:128 хэндлере для точечного запроса op:71.
+   */
+  getRecentActiveChatIds(maxAgeMs = 10_000) {
+    const now = Date.now()
+    const result = []
+    for (const [chatId, ts] of this._recentActiveChatIds.entries()) {
+      if (now - ts <= maxAgeMs) result.push(chatId)
+    }
+    return result
   }
 
   detach() {

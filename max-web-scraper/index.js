@@ -2224,16 +2224,30 @@ async function init() {
       }
     }
     // op:128 — входящее сообщение.
-    // Если payload содержит данные — TransportInterceptor уже обработал через transport.onMessage.
-    // Если payload пустой [] — GET_HISTORY (op:49) не используем: MAX закрывает WS при каждом
-    // запросе op:49 независимо от параметров (предположительно несовместимость timestamp-формата).
-    // TODO: когда выясним корректный формат from-параметра op:49 — восстановить GET_HISTORY.
+    // В новом бинарном протоколе MAX (api.oneme.ru) op:128 приходит как push-уведомление
+    // без inline-контента сообщения (payload = [22, binary, N]).
+    // Реальный контент нужно запросить через op:71 {chatId: X}.
+    // TransportInterceptor обрабатывает op:71 ответы и эмитирует сообщения через onMessage.
     if (data.opcode === OP.INCOMING_MSG) {
       if (!isReady) return
-      const payloadIsEmpty = !data.payload || (Array.isArray(data.payload) && data.payload.length === 0)
-      if (payloadIsEmpty) {
-        console.log('[op128] Пустой payload — пропускаем (сообщение должно прийти через прямой op:128 с контентом)')
-      }
+      // Запрашиваем op:71 для недавно активных чатов (по op:53 push)
+      setImmediate(async () => {
+        try {
+          let chatIds = transport.getRecentActiveChatIds(10_000)
+          // Fallback: все чаты из chatCache (максимум 10, чтобы не перегружать)
+          if (chatIds.length === 0) {
+            chatIds = [...chatCache.keys()].slice(0, 10)
+          }
+          if (chatIds.length > 0) {
+            console.log(`[op128→op71] Запрашиваем ${chatIds.length} чатов: ${chatIds.slice(0, 5).join(',')}${chatIds.length > 5 ? '…' : ''}`)
+            for (const chatId of chatIds) {
+              await transport.sendFrame(71, { chatId: Number(chatId) }, { waitResponse: false })
+            }
+          }
+        } catch (e) {
+          console.warn('[op128→op71] error:', e.message)
+        }
+      })
     }
 
     // Логируем остальные неизвестные push-опкоды
