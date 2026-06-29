@@ -2234,9 +2234,13 @@ async function init() {
       setImmediate(async () => {
         try {
           let chatIds = transport.getRecentActiveChatIds(10_000)
-          // Fallback: все чаты из chatCache (максимум 10, чтобы не перегружать)
           if (chatIds.length === 0) {
-            chatIds = [...chatCache.keys()].slice(0, 10)
+            // Fallback: chatCache + contactStore._map (phone_chatid_cache.json из Docker-тома)
+            // contactStore._map хранит 12-значные chatId как ключи (загружены из тома при старте)
+            const storeChatIds = contactStore
+              ? [...contactStore._map.keys()].filter(k => /^\d{10,15}$/.test(k))
+              : []
+            chatIds = [...new Set([...chatCache.keys(), ...storeChatIds])].slice(0, 15)
           }
           if (chatIds.length > 0) {
             console.log(`[op128→op71] Запрашиваем ${chatIds.length} чатов: ${chatIds.slice(0, 5).join(',')}${chatIds.length > 5 ? '…' : ''}`)
