@@ -2135,10 +2135,10 @@ async function init() {
       try {
         const qrLink    = data.payload.qrLink
         const sinceStart = Date.now() - SESSION_START_MS
-        // Первые 90 сек после старта контейнера MAX нормально присылает QR,
-        // пока идёт фоновое обновление сессии. Подавляем, чтобы не пугать
-        // пользователей — _waitForQrLogin сделает reload и получит auth.
-        if (sinceStart < 90_000 && !isReady) {
+        // Первые 20 сек MAX нормально присылает QR как probe (до подтверждения сессии).
+        // Подавляем только в этот короткий window. Если к 20с auth не прошёл — сессия
+        // истекла и QR нужно показать пользователю для повторного входа.
+        if (sinceStart < 20_000 && !isReady) {
           console.log(`[QR] op:288 подавлён (${Math.round(sinceStart / 1000)}s с запуска, сессия ещё не готова)`)
         } else {
           const qrPath = path.join(__dirname, 'last_qr.png')
