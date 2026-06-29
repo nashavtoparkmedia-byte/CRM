@@ -996,12 +996,16 @@ async function processCompleteOrder(job: DriverActionJob) {
         }
         await completeBtn.click({ timeout: 3000 });
         await page.waitForTimeout(2500);
-        await takeStepScreenshot(page, taskId, 'complete_after_click');
 
-        // A confirmation modal may appear — try a generic confirm.
+        // Capture modal screenshot to send back to driver
+        const modalBuf = await page.screenshot({ type: 'jpeg', quality: 80 }).catch(() => null);
+        const modalBase64 = modalBuf ? modalBuf.toString('base64') : null;
+        await takeStepScreenshot(page, taskId, 'complete_modal');
+
+        // Confirm any modal that appears (informational OK / Завершить заказ / Подтвердить)
         try {
-            const confirm = page.getByRole('button', { name: /Завершить заказ|Подтвердить|Да/i }).first();
-            if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) {
+            const confirm = page.getByRole('button', { name: /Завершить заказ|Подтвердить|ОК|Да/i }).first();
+            if (await confirm.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await confirm.click({ timeout: 2000 });
                 await page.waitForTimeout(2000);
                 await takeStepScreenshot(page, taskId, 'complete_after_confirm');
@@ -1014,6 +1018,7 @@ async function processCompleteOrder(job: DriverActionJob) {
                 shortOrderId: active.shortOrderId,
                 orderLongId: active.orderLongId,
                 rowText: active.rowText.slice(0, 200),
+                modalImageBase64: modalBase64,
             },
         });
     });

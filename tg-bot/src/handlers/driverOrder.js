@@ -281,6 +281,15 @@ const driverOrderScene = new Scenes.WizardScene(
         } else if (state.status === 'DONE') {
             const verb = action === 'complete_order' ? 'завершён' : 'отменён';
             await ctx.reply(`✅ Заказ ${verb}.`);
+            // Send modal screenshot if scraper captured one
+            const b64 = state.result?.modalImageBase64;
+            if (b64 && b64.length > 100) {
+                try {
+                    await ctx.replyWithPhoto({ source: Buffer.from(b64, 'base64') }, { caption: '📸 Скриншот из системы' });
+                } catch (e) {
+                    logger.warn(`[DriverOrder] modal screenshot send failed: ${e?.message || e}`);
+                }
+            }
         } else {
             await reportFailure(ctx, state);
         }
