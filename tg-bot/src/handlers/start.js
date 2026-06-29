@@ -99,7 +99,7 @@ async function getMainMenu(ctx) {
         ['💳 Только безнал', '💵 Включить наличку'],
         ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
         ['🚗 Подключиться', surveyButtons[0]],
-        ['🚖 Yandex Taxi Fun', '📖 Новости'],
+        ['💬 Чат водителей', '🎁 Акция'],
         ['🔙 Меню', '🛠 Поддержка'],
     ];
 
@@ -240,20 +240,17 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
                 ])
             });
 
-        case '📖 Новости':
-            return await ctx.reply('📢 *Новости парка*\n\nАктуальные новости и советы для водителей публикуются в нашем канале.', {
+        case '💬 Чат водителей':
+            return await ctx.reply('💬 *Чат водителей*\n\nОбщайтесь с коллегами, делитесь опытом и следите за новостями парка.', {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
-                    [Markup.button.url('Открыть канал новостей', 'https://t.me/yandex_taxi_fun')]
+                    [Markup.button.url('Перейти в чат', 'https://t.me/yandex_taxi_fun')]
                 ])
             });
 
-        case '🚖 Yandex Taxi Fun':
-            return await ctx.reply('🚖 *Yandex Taxi Fun*\n\nЖивой канал водителей: мемы, истории и общение с коллегами.', {
-                parse_mode: 'Markdown',
-                ...Markup.inlineKeyboard([
-                    [Markup.button.url('Перейти в канал', 'https://t.me/yandex_taxi_fun')]
-                ])
+        case '🎁 Акция':
+            return await ctx.reply('🎁 *Акция — 14 дней без комиссии*\n\nПодключитесь к нашему парку и первые 14 дней работайте без комиссии. Отличный старт для новых водителей!\n\nПодробности — у менеджера парка.', {
+                parse_mode: 'Markdown'
             });
 
         case '🚗 Подключиться':
