@@ -2296,9 +2296,9 @@ async function init() {
     _authFailStreak++
     if (_authFailStreak < 3) return  // ждём 3 consecutive fails
     if (now - _authFailReloadAt < 120_000) return  // не чаще раза в 2 мин
-    _authFailStreak = 0
     _authFailReloadAt = now
     console.warn(`[App] WS auth lost (${_authFailStreak} consecutive has_profile=false) — reloading page...`)
+    _authFailStreak = 0
     isReady = false
     setTimeout(async () => {
       try {
