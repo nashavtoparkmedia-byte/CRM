@@ -476,14 +476,14 @@ class TransportInterceptor {
           if (!chat || typeof chat !== 'object') continue
           const chatId = String(chat.id || chat.chatId || '')
 
-          // MAX msgpack encodes lastMessage as { messageObject: "lastMessage" }
-          // where the message object itself is used as a MAP KEY.
-          // Standard JSON.stringify() loses this key (becomes "[object Object]").
-          // Our decoder preserves these via __complexEntries: [{key: msgObj, value: "lastMessage"}].
+          // MAX msgpack encodes lastMessage using the message object as a MAP KEY.
+          // Our decoder preserves these in __complexEntries: [{key: msgObj, value: ...}].
+          // We look for a key that has both .id and .sender (message shape).
           let lastMsg = chat.lastMessage
           if (!lastMsg && Array.isArray(chat.__complexEntries)) {
-            for (const { key, value } of chat.__complexEntries) {
-              if (value === 'lastMessage' && key && key.id != null) {
+            for (const { key } of chat.__complexEntries) {
+              if (key && typeof key === 'object' && !Array.isArray(key) &&
+                  key.id != null && key.sender != null) {
                 lastMsg = key; break
               }
             }
