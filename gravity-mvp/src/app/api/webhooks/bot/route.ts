@@ -799,6 +799,47 @@ async function handleSetActivePark(payload: any) {
     const park = await prisma.apiConnection.findFirst({ where: { parkId } })
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
 
+    // Verify driver exists in this park via Yandex Fleet
+    try {
+        const driver = await prisma.driver.findUnique({
+            where: { id: mapping.driverId },
+            select: { phone: true, yandexDriverId: true }
+        })
+        const phone = driver?.phone
+        if (phone) {
+            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+                method: 'POST',
+                headers: {
+                    'X-Client-ID': park.clid,
+                    'X-Api-Key': park.apiKey,
+                    'Accept-Language': 'ru',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: { park: { id: parkId }, text: phone },
+                    fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
+                    limit: 5, offset: 0
+                })
+            })
+            if (searchRes.ok) {
+                const searchData = await searchRes.json()
+                const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
+                const found = (searchData.driver_profiles || []).some((p: any) =>
+                    (p.driver_profile.phones || []).some((ph: string) =>
+                        ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone)
+                    )
+                )
+                if (!found) {
+                    console.log(`[setActivePark] driver phone ${phone} not found in park ${parkId}`)
+                    return NextResponse.json({ error: 'NOT_IN_PARK', parkName: park.name || parkId }, { status: 403 })
+                }
+            }
+        }
+    } catch (err: any) {
+        console.error('[setActivePark] park validation error:', err.message)
+        // Don't block if Yandex check fails — allow the switch
+    }
+
     await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId, carLabel: null, carId: null } })
     return NextResponse.json({ success: true, parkName: park.name || parkId })
 }
