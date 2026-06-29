@@ -13,15 +13,24 @@ export async function addApiConnection(formData: FormData) {
     const clid = formData.get('clid') as string
     const apiKey = formData.get('apiKey') as string
     const parkId = formData.get('parkId') as string
+    const name = (formData.get('name') as string) || ''
 
     if (!clid || !apiKey || !parkId) {
         throw new Error('Missing required fields')
     }
 
     await prisma.apiConnection.create({
-        data: { clid, apiKey, parkId },
+        data: { clid, apiKey, parkId, name: name || null },
     })
 
+    revalidatePath('/')
+}
+
+export async function updateApiConnectionName(id: string, name: string) {
+    await prisma.apiConnection.update({
+        where: { id },
+        data: { name: name || null },
+    })
     revalidatePath('/')
 }
 
