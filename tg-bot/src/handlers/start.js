@@ -110,13 +110,6 @@ async function getMainMenu(ctx) {
     }
 
     let adminButtons = [];
-    if (isUserAdmin) {
-        adminButtons = [
-            ['💼 CRM', '📈 Отчёты'],
-            ['📝 Создать опрос', '👥 Пользователи'],
-            ['📊 Аналитика', '⚙️ Настройки бота']
-        ];
-    }
 
     const keyboard = Markup.keyboard([
         ...userButtons,
