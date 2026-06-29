@@ -106,19 +106,40 @@ export async function POST(req: NextRequest) {
         const direction = isOutgoing ? 'outbound' : 'inbound'
         console.log(`[WEBHOOK-MAX] Received: externalChatId=${externalChatId} phone=${phoneDigits} chatId=${maxChatId || 'none'} direction=${direction} text="${text.substring(0, 50)}"`)
 
-        // Migrate old phone-based chats to new chatId-based format
+        // Migration pass 1: old phone-based chats ("max:phone") → new chatId format
         if (maxChatId && phoneDigits) {
             const oldExternalId = `max:${phoneDigits}`
             const oldChat = await (prisma.chat as any).findUnique({ where: { externalChatId: oldExternalId } })
             if (oldChat) {
                 const newChat = await (prisma.chat as any).findUnique({ where: { externalChatId: String(maxChatId) } })
                 if (!newChat) {
-                    // Migrate: rename old chat's externalChatId to new format
                     await (prisma.chat as any).update({
                         where: { id: oldChat.id },
                         data: { externalChatId: String(maxChatId) }
                     })
                     console.log(`[WEBHOOK-MAX] MIGRATED chat ${oldChat.id}: ${oldExternalId} → ${maxChatId}`)
+                }
+            }
+        }
+
+        // Migration pass 2: old numeric-format chatIds (e.g. "201482140") — stored without "max:" prefix.
+        // When op:128 delivers a NEW 12-digit chatId for a contact we already know by driverId,
+        // we update the stale chat rather than creating a duplicate.
+        if (maxChatId && phoneDigits && phoneDigits.length >= 10) {
+            const newExId = String(maxChatId)
+            const alreadyExists = await (prisma.chat as any).findUnique({ where: { externalChatId: newExId } })
+            if (!alreadyExists) {
+                const driver = await (prisma.driver as any).findFirst({
+                    where: { phone: { contains: phoneDigits.slice(-10) } }
+                })
+                if (driver) {
+                    const staleChat = await (prisma.chat as any).findFirst({
+                        where: { channel: 'max', driverId: driver.id, externalChatId: { not: newExId } }
+                    })
+                    if (staleChat) {
+                        await (prisma.chat as any).update({ where: { id: staleChat.id }, data: { externalChatId: newExId } })
+                        console.log(`[WEBHOOK-MAX] MIGRATED old-chatId ${staleChat.externalChatId} → ${newExId} (driver ${driver.id})`)
+                    }
                 }
             }
         }

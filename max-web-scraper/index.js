@@ -2223,39 +2223,17 @@ async function init() {
         console.log(`[App] opcode135 skip own-reaction echo: msgId=${externalMsgId}`)
       }
     }
-    // op:128 — входящее сообщение, payload пустой. Дебаунс → GET_HISTORY для всех известных чатов.
+    // op:128 — входящее сообщение.
+    // Если payload содержит данные — TransportInterceptor уже обработал через transport.onMessage.
+    // Если payload пустой [] — GET_HISTORY (op:49) не используем: MAX закрывает WS при каждом
+    // запросе op:49 независимо от параметров (предположительно несовместимость timestamp-формата).
+    // TODO: когда выясним корректный формат from-параметра op:49 — восстановить GET_HISTORY.
     if (data.opcode === OP.INCOMING_MSG) {
-      clearTimeout(_fetchIncomingTimer)
-      _fetchIncomingTimer = setTimeout(async () => {
-        const chatIds = new Set([...chatCache.keys()])
-        if (!chatIds.size) return
-        console.log(`[op128] Новое сообщение — запрашиваем историю ${chatIds.size} чат(ов)`)
-        for (const chatId of chatIds) {
-          try {
-            const result = await transport.sendFrame(
-              OP.GET_HISTORY,
-              { chatId: Number(chatId), from: Date.now(), forward: 0, backward: 5, getMessages: true },
-              { waitResponse: true, timeoutMs: 8000 }
-            )
-            const messages = result?.messages ?? []
-            const myId = transport._myUserId
-            for (const raw of messages) {
-              if (!raw.id) continue
-              if (myId && String(raw.sender ?? raw.from ?? '') === String(myId)) continue
-              const msg = MessageParser.normalizeHistoryMessage(raw)
-              msg.chatId = String(chatId)
-              msg.isOutgoing = false
-              handleIncoming(msg, mediaPipeline, sync, transport).catch(e =>
-                console.error('[op128] handleIncoming error:', e.message)
-              )
-            }
-          } catch (e) {
-            if (!String(e.message).includes('Timeout')) {
-              console.warn(`[op128] history chat=${chatId}:`, e.message)
-            }
-          }
-        }
-      }, 500)
+      if (!isReady) return
+      const payloadIsEmpty = !data.payload || (Array.isArray(data.payload) && data.payload.length === 0)
+      if (payloadIsEmpty) {
+        console.log('[op128] Пустой payload — пропускаем (сообщение должно прийти через прямой op:128 с контентом)')
+      }
     }
 
     // Логируем остальные неизвестные push-опкоды
