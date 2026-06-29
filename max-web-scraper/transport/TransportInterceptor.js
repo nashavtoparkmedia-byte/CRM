@@ -42,6 +42,22 @@ function maxMsgpackDecodeAll(buf) {
     return Buffer.from(data).toString('hex')
   }
 
+  function decodeMap(n) {
+    const obj = {}
+    const extras = []  // entries where the key itself is a complex object
+    for (let i = 0; i < n && pos < buf.length; i++) {
+      const rawKey = decodeOne()
+      const v = decodeOne()
+      if (rawKey !== null && rawKey !== undefined && typeof rawKey === 'object') {
+        extras.push({ key: rawKey, value: v })
+      } else {
+        obj[String(rawKey)] = v
+      }
+    }
+    if (extras.length > 0) obj['__complexEntries'] = extras
+    return obj
+  }
+
   function decodeOne() {
     if (pos >= buf.length) return undefined
     const b = readByte()
@@ -49,9 +65,7 @@ function maxMsgpackDecodeAll(buf) {
     if (b <= 0x7f) return b
     // fixmap
     if ((b & 0xf0) === 0x80) {
-      const n = b & 0x0f; const obj = {}
-      for (let i = 0; i < n; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
-      return obj
+      return decodeMap(b & 0x0f)
     }
     // fixarray
     if ((b & 0xf0) === 0x90) {
@@ -104,17 +118,11 @@ function maxMsgpackDecodeAll(buf) {
         for (let i = 0; i < n && pos < buf.length; i++) arr.push(decodeOne())
         return arr
       }
-      case 0xde: {
-        const n = readU16(); const obj = {}
-        for (let i = 0; i < n && pos < buf.length; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
-        return obj
-      }
+      case 0xde: return decodeMap(readU16())
       case 0xdf: {
-        const n = readU32(); const obj = {}
-        // guard: n > remaining bytes → garbage length from misaligned read
+        const n = readU32()
         if (n * 2 > buf.length - pos) return undefined
-        for (let i = 0; i < n && pos < buf.length; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
-        return obj
+        return decodeMap(n)
       }
       default: return undefined
     }
@@ -289,7 +297,21 @@ class TransportInterceptor {
           console.log('[WS→MAX] op:', data.opcode, 'seq:', data.seq,
             JSON.stringify(data.payload || {}).slice(0, 200))
         }
-      } catch {}
+      } catch {
+        // Binary frame: payloadData is base64-encoded binary (CDP spec for opcode=2 frames)
+        try {
+          const buf = Buffer.from(response.payloadData, 'base64')
+          if (buf.length >= 9 && buf[0] === 0x0a) {
+            const opcode = buf[5]
+            const cmd    = buf[6]
+            const hex    = [...buf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
+            console.log('[WS→MAX BIN] op:', opcode, 'cmd:', cmd, 'len:', buf.length, 'hex:', hex)
+          } else if (buf.length > 0) {
+            const hex = [...buf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
+            console.log('[WS→MAX BIN?] len:', buf.length, 'hex:', hex)
+          }
+        } catch {}
+      }
     })
 
     // Перехватываем ВСЕ HTTP-запросы к MAX/oneme API — ищем реальный delete endpoint
@@ -453,8 +475,38 @@ class TransportInterceptor {
         for (const chat of chats) {
           if (!chat || typeof chat !== 'object') continue
           const chatId = String(chat.id || chat.chatId || '')
-          const lastMsg = chat.lastMessage
-          if (!chatId || !lastMsg || !lastMsg.id) continue
+
+          // MAX msgpack encodes lastMessage as { messageObject: "lastMessage" }
+          // where the message object itself is used as a MAP KEY.
+          // Standard JSON.stringify() loses this key (becomes "[object Object]").
+          // Our decoder preserves these via __complexEntries: [{key: msgObj, value: "lastMessage"}].
+          let lastMsg = chat.lastMessage
+          if (!lastMsg && Array.isArray(chat.__complexEntries)) {
+            for (const { key, value } of chat.__complexEntries) {
+              if (value === 'lastMessage' && key && key.id != null) {
+                lastMsg = key; break
+              }
+            }
+          }
+          // Fallback: scan plain object values for message-shaped object
+          if (!lastMsg) {
+            for (const val of Object.values(chat)) {
+              if (val && typeof val === 'object' && !Array.isArray(val) &&
+                  val.__complexEntries === undefined &&
+                  val.id != null && val.sender != null) {
+                lastMsg = val; break
+              }
+            }
+          }
+
+          if (!chatId) continue
+          if (!lastMsg) {
+            // Диагностика: показываем ключи чата чтобы понять где спрятан lastMessage
+            const keys = Object.keys(chat).slice(0, 10).join(',')
+            console.log(`[op53 DIAG] chat:${chatId} no lastMsg. keys: ${keys}`)
+            continue
+          }
+          if (!lastMsg.id) continue
           const msgId = String(lastMsg.id)
           if (this._lastSeenMsgId.get(chatId) === msgId) continue
           this._lastSeenMsgId.set(chatId, msgId)
@@ -478,6 +530,7 @@ class TransportInterceptor {
 
     // Входящее сообщение — server push, opcode 128
     // payload может быть объектом {chatId, message} или массивом [-14, 38, {chatId, message}]
+    // Новый формат [22, X, 114] — push-уведомление об unread, контент не вложен.
     if (data.opcode === OP.INCOMING_MSG) {
       const pl = Array.isArray(data.payload)
         ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
@@ -485,6 +538,12 @@ class TransportInterceptor {
       if (pl?.message) {
         const msg = this._normalizeMaxMsg(pl)
         if (msg) this._emit(msg)
+      } else {
+        // Диагностика: логируем какой формат пришёл, чтобы понять где контент
+        const summary = Array.isArray(data.payload)
+          ? `array[${data.payload.length}] types=${data.payload.map(x => typeof x).join(',')}`
+          : typeof data.payload
+        console.log(`[op128] no-message payload: ${summary}`)
       }
     }
   }
