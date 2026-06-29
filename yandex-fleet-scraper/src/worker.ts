@@ -1019,13 +1019,31 @@ async function processCompleteOrder(job: DriverActionJob) {
     });
 }
 
+// 10 neutral cancellation reasons — one is picked at random each time.
+const CANCEL_REASONS = [
+    'Прокол колеса',
+    'Неисправность автомобиля',
+    'Заглох двигатель',
+    'Проблемы с тормозной системой',
+    'Не работает кондиционер (критическая жара)',
+    'Закончилось топливо',
+    'Плохое самочувствие водителя',
+    'Авария рядом, перекрыта дорога',
+    'Повреждена подвеска',
+    'Технический сбой навигации',
+];
+
+function randomCancelReason(): string {
+    return CANCEL_REASONS[Math.floor(Math.random() * CANCEL_REASONS.length)];
+}
+
 async function processCancelOrder(job: DriverActionJob) {
     const { taskId, driverYandexId, parkId, reason } = job;
     const liveEnabled = envFlag('CANCEL_ORDER_LIVE_ENABLED', false);
+    // Screenshot-probe mode: click cancel, capture the modal, then abort.
+    // Set CANCEL_ORDER_SCREENSHOT_PROBE=true to enable without actually confirming.
+    const screenshotProbe = envFlag('CANCEL_ORDER_SCREENSHOT_PROBE', false);
 
-    // Optimistic flow: assume no reason-modal (or a trivial confirm). If a
-    // live test reveals a dropdown of reasons, we'll extend this with the
-    // selectors discovered in that probe.
     await withDriverProfile(async (page) => {
         const active = await locateActiveOrder(page, driverYandexId, parkId);
         if (!active) {
@@ -1036,7 +1054,7 @@ async function processCancelOrder(job: DriverActionJob) {
             return;
         }
 
-        if (!liveEnabled) {
+        if (!liveEnabled && !screenshotProbe) {
             await patchDriverActionState(taskId, {
                 status: 'ESCALATED_TO_MANAGER',
                 result: { shortOrderId: active.shortOrderId, orderLongId: active.orderLongId },
@@ -1061,9 +1079,43 @@ async function processCancelOrder(job: DriverActionJob) {
         }
         await cancelBtn.click({ timeout: 3000 });
         await page.waitForTimeout(2500);
-        await takeStepScreenshot(page, taskId, 'cancel_after_click');
 
-        // Generic confirm modal — same shape as in processCompleteOrder.
+        // Capture whatever appeared after the click (modal, dropdown, confirm, etc.)
+        const modalBuf = await page.screenshot({ type: 'jpeg', quality: 80 }).catch(() => null);
+        const modalBase64 = modalBuf ? modalBuf.toString('base64') : null;
+        await takeStepScreenshot(page, taskId, 'cancel_modal');
+
+        // Screenshot-probe mode: abort without confirming — just for debugging the modal UI.
+        if (screenshotProbe) {
+            await page.keyboard.press('Escape').catch(() => {});
+            await page.waitForTimeout(1000);
+            await patchDriverActionState(taskId, {
+                status: 'DONE',
+                result: {
+                    shortOrderId: active.shortOrderId,
+                    screenshotProbe: true,
+                    modalImageBase64: modalBase64,
+                },
+                errorMessage: 'CANCEL_ORDER_SCREENSHOT_PROBE — modal captured, no action taken',
+            });
+            return;
+        }
+
+        // Live mode: select a random reason and confirm cancellation.
+        const selectedReason = reason || randomCancelReason();
+        console.log(`[Worker][${taskId}] cancel reason: "${selectedReason}"`);
+
+        // Try to fill a reason text field if present
+        try {
+            const reasonInput = page.locator('textarea, input[type="text"]').first();
+            if (await reasonInput.isVisible({ timeout: 1500 }).catch(() => false)) {
+                await reasonInput.fill(selectedReason);
+                await page.waitForTimeout(500);
+                await takeStepScreenshot(page, taskId, 'cancel_reason_filled');
+            }
+        } catch { /* no text input */ }
+
+        // Confirm cancellation
         try {
             const confirm = page.getByRole('button', { name: /Отменить заказ|Подтвердить|Да/i }).first();
             if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) {
@@ -1078,7 +1130,7 @@ async function processCancelOrder(job: DriverActionJob) {
             result: {
                 shortOrderId: active.shortOrderId,
                 orderLongId: active.orderLongId,
-                reason: reason || 'Отменено водителем',
+                reason: selectedReason,
                 rowText: active.rowText.slice(0, 200),
             },
         });

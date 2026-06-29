@@ -266,6 +266,18 @@ const driverOrderScene = new Scenes.WizardScene(
 
         if (state.status === 'DONE' && state.result?.noActiveOrder) {
             await ctx.reply('🚫 Заказа уже нет — наверное, его только что закрыли.');
+        } else if (state.status === 'DONE' && state.result?.screenshotProbe) {
+            // Screenshot-probe mode: send the modal screenshot for debugging
+            await ctx.reply('📸 Скриншот модалки отмены — смотри что появилось:');
+            const b64 = state.result?.modalImageBase64;
+            if (b64 && b64.length > 100) {
+                try {
+                    await ctx.replyWithPhoto({ source: Buffer.from(b64, 'base64') }, { caption: 'Модалка после нажатия «Отменить»' });
+                } catch (e) {
+                    logger.warn(`[DriverOrder] modal screenshot send failed: ${e?.message || e}`);
+                    await ctx.reply('(скриншот не удалось отправить)');
+                }
+            }
         } else if (state.status === 'DONE') {
             const verb = action === 'complete_order' ? 'завершён' : 'отменён';
             await ctx.reply(`✅ Заказ ${verb}.`);
