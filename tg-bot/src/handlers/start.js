@@ -99,7 +99,7 @@ async function getMainMenu(ctx) {
         ['💳 Только безнал', '💵 Включить наличку'],
         ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
         ['🚗 Подключиться', surveyButtons[0]],
-        ['💬 Чат водителей', '🎁 Акция'],
+        ['💬 Чат водителей'],
         ['🔙 Меню', '🛠 Поддержка'],
     ];
 
@@ -241,10 +241,6 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
                 ])
             });
 
-        case '🎁 Акция':
-            return await ctx.reply('🎁 *Акция — 14 дней без комиссии*\n\nПодключитесь к нашему парку и первые 14 дней работайте без комиссии. Отличный старт для новых водителей!\n\nПодробности — у менеджера парка.', {
-                parse_mode: 'Markdown'
-            });
 
         case '🚗 Подключиться':
             const connectionHandler = require('./connection');
