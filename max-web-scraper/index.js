@@ -2049,9 +2049,10 @@ const chatCache = new Map()  // chatId → chat object (собирается и�
 // CRM обновит externalChatId на реальный conversation ID.
 const capturedEchoIds = new Set()
 
-let page          = null
-let context       = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
-let mediaPipeline = null
+let page               = null
+let context            = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
+let mediaPipeline      = null
+let _fetchIncomingTimer = null  // debounce timer for op:128 → GET_HISTORY
 let initialSync   = null
 let nameSync      = null  // PR-П: NameSync — раз в час подтягивает имена placeholder-чатов из MAX UI
 let isReady       = false
@@ -2185,8 +2186,43 @@ async function init() {
         console.log(`[App] opcode135 skip own-reaction echo: msgId=${externalMsgId}`)
       }
     }
+    // op:128 — входящее сообщение, payload пустой. Дебаунс → GET_HISTORY для всех известных чатов.
+    if (data.opcode === OP.INCOMING_MSG) {
+      clearTimeout(_fetchIncomingTimer)
+      _fetchIncomingTimer = setTimeout(async () => {
+        const chatIds = new Set([...contactStore._map.keys(), ...chatCache.keys()].map(String))
+        if (!chatIds.size) return
+        console.log(`[op128] Новое сообщение — запрашиваем историю ${chatIds.size} чат(ов)`)
+        for (const chatId of chatIds) {
+          try {
+            const result = await transport.sendFrame(
+              OP.GET_HISTORY,
+              { chatId, from: Date.now(), forward: 0, backward: 5, getMessages: true },
+              { waitResponse: true, timeoutMs: 8000 }
+            )
+            const messages = result?.messages ?? []
+            const myId = transport._myUserId
+            for (const raw of messages) {
+              if (!raw.id) continue
+              if (myId && String(raw.sender ?? raw.from ?? '') === String(myId)) continue
+              const msg = MessageParser.normalizeHistoryMessage(raw)
+              msg.chatId = String(chatId)
+              msg.isOutgoing = false
+              handleIncoming(msg, mediaPipeline, sync, transport).catch(e =>
+                console.error('[op128] handleIncoming error:', e.message)
+              )
+            }
+          } catch (e) {
+            if (!String(e.message).includes('Timeout')) {
+              console.warn(`[op128] history chat=${chatId}:`, e.message)
+            }
+          }
+        }
+      }, 500)
+    }
+
     // Логируем остальные неизвестные push-опкоды
-    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 64, 65, 75, 80, 82, 83, 87, 88, 128, 130, 132, 135, 155, 178, 179, 180, 288])
+    const KNOWN_OPCODES = new Set([6, 19, 32, 48, 49, 53, 64, 65, 75, 80, 82, 83, 87, 88, 128, 130, 132, 135, 155, 178, 179, 180, 288])
     if (!KNOWN_OPCODES.has(data.opcode) && data.cmd === 0) {
       const ps = JSON.stringify(data.payload || {}).slice(0, 400)
       console.log(`[App] NEW opcode=${data.opcode} cmd=${data.cmd}: ${ps}`)
