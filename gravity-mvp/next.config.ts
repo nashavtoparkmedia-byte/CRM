@@ -56,6 +56,12 @@ const nextConfig: NextConfig = {
         destination: '/settings/integrations/avito',
         permanent: false,
       },
+      // /dashboard never existed — legacy links and stale localStorage values point here
+      {
+        source: '/dashboard',
+        destination: '/',
+        permanent: false,
+      },
     ];
   },
 };
