@@ -919,16 +919,23 @@ class TransportInterceptor {
   }
 
   /**
-   * Возвращает chatIds чатов, активных (по op:53 push) за последние maxAgeMs.
-   * Используется в op:128 хэндлере для точечного запроса op:71.
+   * Возвращает chatIds чатов из op:53 push.
+   * Сначала пробует "свежие" (в пределах maxAgeMs). Если таких нет — возвращает
+   * все известные, отсортированные по recency (fallback на случай если op:53
+   * был давно, а op:128 пришёл спустя минуты после старта скрапера).
    */
   getRecentActiveChatIds(maxAgeMs = 10_000) {
     const now = Date.now()
-    const result = []
+    const recent = []
     for (const [chatId, ts] of this._recentActiveChatIds.entries()) {
-      if (now - ts <= maxAgeMs) result.push(chatId)
+      if (now - ts <= maxAgeMs) recent.push(chatId)
     }
-    return result
+    if (recent.length > 0) return recent
+    // Fallback: op:53 был давно, но chatIds известны — возвращаем все по recency
+    return [...this._recentActiveChatIds.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([chatId]) => chatId)
   }
 
   detach() {
