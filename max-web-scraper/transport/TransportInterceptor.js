@@ -94,22 +94,26 @@ function maxMsgpackDecodeAll(buf) {
       case 0xdb: { const l = readU32(); return readStr(l) }
       case 0xdc: {
         const n = readU16(); const arr = []
-        for (let i = 0; i < n; i++) arr.push(decodeOne())
+        for (let i = 0; i < n && pos < buf.length; i++) arr.push(decodeOne())
         return arr
       }
       case 0xdd: {
         const n = readU32(); const arr = []
-        for (let i = 0; i < n; i++) arr.push(decodeOne())
+        // guard: n > remaining bytes → garbage length from misaligned read
+        if (n > buf.length - pos) return undefined
+        for (let i = 0; i < n && pos < buf.length; i++) arr.push(decodeOne())
         return arr
       }
       case 0xde: {
         const n = readU16(); const obj = {}
-        for (let i = 0; i < n; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
+        for (let i = 0; i < n && pos < buf.length; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
         return obj
       }
       case 0xdf: {
         const n = readU32(); const obj = {}
-        for (let i = 0; i < n; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
+        // guard: n > remaining bytes → garbage length from misaligned read
+        if (n * 2 > buf.length - pos) return undefined
+        for (let i = 0; i < n && pos < buf.length; i++) { const k = String(decodeOne()); obj[k] = decodeOne() }
         return obj
       }
       default: return undefined

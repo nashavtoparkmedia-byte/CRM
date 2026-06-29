@@ -2120,6 +2120,21 @@ async function init() {
         if (added > 0) console.log(`[ChatCache] +${added} чатов, всего: ${chatCache.size}`)
       } catch (e) { console.error('[App] onRawFrame GET_CHATS error:', e.message) }
     }
+    // opcode 53 — server push chat update; добавляем chatId в chatCache для op:128 GET_HISTORY
+    if (data.opcode === 53) {
+      try {
+        const chats = data.payload?.chats ?? (Array.isArray(data.payload) ? data.payload : null)
+        if (Array.isArray(chats)) {
+          let added = 0
+          for (const chat of chats) {
+            if (chat == null || typeof chat !== 'object') continue
+            const id = chat.id ?? chat.chatId
+            if (id && id !== 0 && !chatCache.has(String(id))) { chatCache.set(String(id), chat); added++ }
+          }
+          if (added > 0) console.log(`[ChatCache] op:53 +${added} чатов, всего: ${chatCache.size}`)
+        }
+      } catch (e) { console.error('[App] onRawFrame op53 chatCache error:', e.message) }
+    }
     // opcode 28 — animoji/реакции маппинг: id → emoji символ
     if (data.opcode === 28 && data.payload?.animojis) {
       try {
@@ -2190,7 +2205,7 @@ async function init() {
     if (data.opcode === OP.INCOMING_MSG) {
       clearTimeout(_fetchIncomingTimer)
       _fetchIncomingTimer = setTimeout(async () => {
-        const chatIds = new Set([...contactStore._map.keys(), ...chatCache.keys()].map(String))
+        const chatIds = new Set([...chatCache.keys()])
         if (!chatIds.size) return
         console.log(`[op128] Новое сообщение — запрашиваем историю ${chatIds.size} чат(ов)`)
         for (const chatId of chatIds) {
