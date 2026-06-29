@@ -202,6 +202,22 @@ const WS_INIT_SCRIPT = `(function () {
     ws.send(data);
     return { ok: true };
   };
+
+  window.__maxWsSendBinary = function (base64Data) {
+    var ws = window.__maxWs;
+    if (!ws || ws.readyState !== 1) {
+      return { ok: false, error: 'WS not ready (state ' + (ws ? ws.readyState : 'null') + ')' };
+    }
+    try {
+      var binStr = atob(base64Data);
+      var bytes = new Uint8Array(binStr.length);
+      for (var i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+      ws.send(bytes.buffer);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  };
 })();`
 
 // ─── Опкоды MAX протокола ────────────────────────────────────────────────────
@@ -240,6 +256,7 @@ class TransportInterceptor {
     this._cdpClient            = null
     this._pendingReqs          = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
+    this._outBinFrameSeq       = 0          // счётчик frameSeq для бинарных отправок
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
@@ -560,11 +577,23 @@ class TransportInterceptor {
         const msg = this._normalizeMaxMsg(pl)
         if (msg) this._emit(msg)
       } else {
-        // Диагностика: логируем какой формат пришёл, чтобы понять где контент
         const summary = Array.isArray(data.payload)
           ? `array[${data.payload.length}] types=${data.payload.map(x => typeof x).join(',')}`
           : typeof data.payload
-        console.log(`[op128] no-message payload: ${summary}`)
+        console.log(`[op128] no-message payload: ${summary} — requesting history via binary op:71`)
+
+        // op:128 новый формат не содержит тело сообщения.
+        // Запрашиваем историю бинарным op:71 для недавно-активных чатов (из op:53).
+        // Бинарный op:71 работает (как браузер), JSON op:71 убивает WS.
+        const recentIds = this.getRecentActiveChatIds(8_000)
+        if (recentIds.length > 0) {
+          console.log(`[op128] binary op:71 for ${recentIds.length} recent chats: ${recentIds.slice(0,3).join(',')}`)
+          for (const cid of recentIds.slice(0, 5)) {
+            this.sendBinaryOp71(cid).catch(e => console.warn(`[op128→op71bin] chatId:${cid}: ${e.message}`))
+          }
+        } else {
+          console.log('[op128] no recent chatIds from op:53 — cannot request history')
+        }
       }
     }
   }
@@ -715,7 +744,40 @@ class TransportInterceptor {
     }))
   }
 
-  // ─── Отправка WS фрейма ──────────────────────────────────────────────────
+  // ─── Бинарная отправка op:71 (GET_HISTORY) ──────────────────────────────────
+  // JSON op:71 убивает WS. Браузер шлёт op:71 в бинарном формате — нам нужно то же самое.
+  // Формат: [0x0a, ver=0x01, flags=0x00, frameSeqHi, frameSeqLo, 0x47=71, cmd=0x01, reqSeqHi, reqSeqLo, msgpack({chatId})]
+
+  async sendBinaryOp71(chatId) {
+    if (!this._page) throw new Error('No page')
+    const { encode } = require('@msgpack/msgpack')
+    const chatIdNum = Number(chatId)
+    const payloadBytes = encode({ chatId: chatIdNum })
+
+    const frameSeq = ++this._outBinFrameSeq
+    const reqSeq   = ++this._localSeq
+
+    const header = Buffer.alloc(9)
+    header[0] = 0x0a                     // magic
+    header[1] = 0x01                     // version 1 (как браузер)
+    header[2] = 0x00                     // flags
+    header[3] = (frameSeq >> 8) & 0xff
+    header[4] = frameSeq & 0xff
+    header[5] = 71                       // opcode
+    header[6] = 0x01                     // cmd=1 (request)
+    header[7] = (reqSeq >> 8) & 0xff
+    header[8] = reqSeq & 0xff
+
+    const frame = Buffer.concat([header, Buffer.from(payloadBytes)])
+    const b64   = frame.toString('base64')
+
+    const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), b64)
+    if (!result || !result.ok) throw new Error(`Binary op:71 send failed: ${result?.error}`)
+    console.log(`[op71bin] sent chatId:${chatIdNum} frameSeq:${frameSeq} reqSeq:${reqSeq}`)
+    return reqSeq
+  }
+
+  // ─── Отправка WS фрейма (JSON) ───────────────────────────────────────────
 
   /**
    * @param {number} opcode
