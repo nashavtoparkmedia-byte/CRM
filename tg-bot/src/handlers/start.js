@@ -101,6 +101,7 @@ async function getMainMenu(ctx) {
         ['🚗 Подключиться', surveyButtons[0]],
         ['💬 Чат водителей'],
         ['🔙 Меню', '🛠 Поддержка'],
+        ['© Yoko Park · Бот для водителей'],
     ];
 
     // Add any remaining survey buttons to new rows (2 per row)
@@ -225,6 +226,9 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
 
     // STATIC BUTTONS
     switch (text) {
+        case '© Yoko Park · Бот для водителей':
+            return await showMainMenu(ctx);
+
         case '🛠 Поддержка':
             return await ctx.reply('🧑‍💻 *Техподдержка*\n\nНажмите кнопку ниже, чтобы написать в поддержку парка или задать вопрос.', {
                 parse_mode: 'Markdown',
