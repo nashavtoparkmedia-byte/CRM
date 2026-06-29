@@ -540,6 +540,24 @@ class TransportInterceptor {
       }
     }
 
+    // op:48 — начальный список чатов при старте браузера.
+    // Заполняем _recentActiveChatIds чтобы op:128 → binary op:71 знал куда запрашивать историю.
+    // Без этого чаты из op:48 (не из op:53) навсегда теряются при op:128 с пустым payload.
+    if (data.opcode === 48) {
+      const chats = data.payload?.chats ?? (Array.isArray(data.payload) ? data.payload : null)
+      if (Array.isArray(chats)) {
+        for (const chat of chats) {
+          if (!chat || typeof chat !== 'object') continue
+          const chatId = String(chat.id || chat.chatId || '')
+          if (!chatId || chatId === '0') continue
+          this._recentActiveChatIds.set(chatId, Date.now())
+        }
+        if (chats.length > 0) {
+          console.log(`[op48] seeded _recentActiveChatIds: ${this._recentActiveChatIds.size} chats`)
+        }
+      }
+    }
+
     // op:71 — ответ сервера на запрос истории чата.
     // Браузер шлёт op:71 cmd:1 {chatId} → MAX отвечает op:71 cmd:2/4 {chatId, messages:[]}.
     // Мы шлём op:71 при op:128-уведомлении чтобы получить контент входящего сообщения.
