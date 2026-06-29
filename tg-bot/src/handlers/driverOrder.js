@@ -147,7 +147,7 @@ function renderOrderCard(state) {
     if (r.toAddress && r.toAddress !== 'мок' && r.toAddress.trim().length > 0) {
         lines.push(`🏁 Куда: ${r.toAddress}`);
     } else {
-        lines.push(`🏁 Куда: _данные пока отсутствуют_`);
+        lines.push(`🏁 Куда: _появится, когда нажмёте «На месте»_`);
     }
     if (typeof r.priceRub === 'number' && r.priceRub > 0) {
         const priceStr = Number.isInteger(r.priceRub)
@@ -155,7 +155,7 @@ function renderOrderCard(state) {
             : r.priceRub.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         lines.push(`💵 Цена: *${priceStr} ₽*`);
     } else {
-        lines.push(`💵 Цена: _уточняется_`);
+        lines.push(`💵 Цена: _появится, когда нажмёте «На месте»_`);
     }
     if (r.tariff) lines.push(`🚗 Тариф: ${r.tariff}`);
     if (r.paymentMethod) lines.push(`💳 Оплата: ${r.paymentMethod}`);
