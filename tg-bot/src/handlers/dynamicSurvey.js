@@ -103,8 +103,8 @@ async function askQuestion(ctx) {
 
     let keyboard = Markup.keyboard([['🔙 Меню']]).resize();
 
-    if (q.type === 'BUTTONS' && q.options && q.options.length > 0) {
-        // Create rows of 2 buttons
+    if (q.options && q.options.length > 0) {
+        // Create rows of 2 buttons (for both BUTTONS and TEXT with skip options)
         const buttonRows = [];
         for (let i = 0; i < q.options.length; i += 2) {
             buttonRows.push(q.options.slice(i, i + 2));
