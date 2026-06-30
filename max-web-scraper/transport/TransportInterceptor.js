@@ -686,11 +686,14 @@ class TransportInterceptor {
               console.log(`[op48] persisted ${this._lastMsgRawHex.size} msg ID(s) to disk`)
             } catch (e) { console.warn('[Transport] Failed to persist msg IDs:', e.message) }
           }
-          // Register all chats for catch-up. _fireWsReady() will retry on each reconnect
-          // until op:71 responds. This handles the common case where the first WS connection
-          // closes before the server can respond to our catch-up op:71.
+          // Register chats for catch-up only if we have a known lastMessage ID.
+          // Chats without a stored ID come from op:48 decoding false positives (non-chat
+          // objects that happen to have numeric IDs). Without a real msgId, op:71 with
+          // fallback ID=1 would fetch all history which the server may reject.
           for (const cid of chatIds) {
-            if (!this._catchUpChatIds.has(cid)) this._catchUpChatIds.set(cid, 0)
+            if (this._lastMsgRawHex.has(cid) && !this._catchUpChatIds.has(cid)) {
+              this._catchUpChatIds.set(cid, 0)
+            }
           }
           // Also attempt immediately on the first connection (bonus early try)
           setTimeout(() => {
