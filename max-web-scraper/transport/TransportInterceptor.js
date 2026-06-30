@@ -338,18 +338,33 @@ class TransportInterceptor {
             }
             // op:128 cmd:1 (browser mark-as-received) contains chatId in payload.
             // MAX doesn't send op:130 unless the user has the chat open, so this
-            // outgoing frame is the only reliable source of chatId after op:128 notification.
+            // outgoing frame is the only reliable source of chatId after op:128 empty notification.
             if (opcode === 0x80 && cmd === 0x01 && buf.length > 12) {
               try {
                 // Payload starts after 9-byte header + 3-byte prefix = byte 12
                 const decoded = maxMsgpackDecodeAll(buf.slice(12))
                 const rawChatId = decoded?.chatId ?? decoded?.[0]?.chatId
                 if (rawChatId != null && rawChatId !== 0) {
-                  const chatIdStr = String(rawChatId)
-                  console.log(`[op128mark→op71] browser marked chatId:${chatIdStr} → triggering op:71`)
-                  setTimeout(() => {
-                    this.sendBinaryOp71(chatIdStr).catch(e => console.warn(`[op128mark→op71] ${e.message}`))
-                  }, 200)
+                  // Browser encodes chatId as lower 32 bits only. Resolve full chatId
+                  // via _recentActiveChatIds (populated from op:48 with full chatIds).
+                  const shortId = Number(rawChatId) >>> 0
+                  let chatIdStr = String(rawChatId)
+                  for (const [cid] of this._recentActiveChatIds) {
+                    if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
+                  }
+                  console.log(`[op128mark→op71] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
+                  const tryOp71 = (retries = 0) => {
+                    if (!this._wsConnected) {
+                      if (retries < 10) setTimeout(() => tryOp71(retries + 1), 600)
+                      else console.warn(`[op128mark→op71] gave up after retries`)
+                      return
+                    }
+                    this.sendBinaryOp71(chatIdStr).catch(e => {
+                      if (retries < 5) setTimeout(() => tryOp71(retries + 1), 800)
+                      else console.warn(`[op128mark→op71] ${e.message}`)
+                    })
+                  }
+                  setTimeout(() => tryOp71(), 300)
                 }
               } catch (e) {
                 console.warn('[op128mark→op71] decode error:', e.message)
