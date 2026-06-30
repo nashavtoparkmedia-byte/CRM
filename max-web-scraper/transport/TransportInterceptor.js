@@ -269,7 +269,7 @@ class TransportInterceptor {
     this._cdpClient            = null
     this._pendingReqs          = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
-    this._outBinFrameSeq       = 200        // наши frameSeq начинаются с 200 (1-байт диапазон; браузер использует 0–~50)
+    this._browserLastBinFrameSeq = 0        // последний fseq из браузерных бинарных фреймов; наши op:71 используют +1
     this._op71Prefix           = null       // 3-байт префикс из браузерного op:71, захватывается динамически
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
@@ -279,6 +279,7 @@ class TransportInterceptor {
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
     this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
     this._catchUpChatIds       = new Map() // chatId → retryCount; populated from op:48, cleared when op:71 responds
+    this._pendingNewMsgId      = null      // msgId hex from op:128 bare notification, used as near-anchor for op:71
 
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
@@ -286,6 +287,7 @@ class TransportInterceptor {
       const saved = JSON.parse(fs.readFileSync(LAST_MSG_IDS_PATH, 'utf8'))
       for (const [cid, hex] of Object.entries(saved)) {
         this._lastMsgRawHex.set(cid, hex)
+        this._lastSeenMsgId.set(cid, hex)  // mark as already seen — op:71 won't re-emit on catch-up
         this._catchUpChatIds.set(cid, 0)
       }
       console.log(`[Transport] Loaded ${this._lastMsgRawHex.size} persisted msg IDs from disk → scheduled catch-up`)
@@ -352,8 +354,10 @@ class TransportInterceptor {
             const opcode  = buf[5]
             const cmd     = buf[6]
             const fseq    = (buf[2] << 8) | buf[3]
-            // Захватываем 3-байт префикс браузерного op:71 (fseq < 200 = браузер, не мы)
-            if (opcode === 71 && buf.length > 11 && fseq < 200 && !this._op71Prefix) {
+            // Отслеживаем последний fseq (browser + наши фреймы) — op:71 использует max+1
+            if (fseq > this._browserLastBinFrameSeq) this._browserLastBinFrameSeq = fseq
+            // Захватываем 3-байт префикс из первого op:71 (браузер шлёт его раньше нашего catch-up)
+            if (opcode === 71 && buf.length > 11 && !this._op71Prefix) {
               this._op71Prefix = [buf[9], buf[10], buf[11]]
               console.log(`[op71prefix] captured: ${this._op71Prefix.map(b => b.toString(16).padStart(2,'0')).join(' ')} fseq:${fseq}`)
             }
@@ -386,6 +390,14 @@ class TransportInterceptor {
                   if (!this._catchUpChatIds.has(chatIdStr)) {
                     this._catchUpChatIds.set(chatIdStr, 0)
                   }
+                  // If op:128 bare notification carried the new message ID, use it directly
+                  // as anchor. Op:71 will return this message (server includes anchor in results).
+                  // _lastSeenMsgId is NOT pre-populated here so op:71 response WILL emit it.
+                  if (this._pendingNewMsgId && !this._lastMsgRawHex.has(chatIdStr)) {
+                    this._lastMsgRawHex.set(chatIdStr, this._pendingNewMsgId)
+                    console.log(`[op128mark] anchor ${this._pendingNewMsgId.slice(0,16)} set for chatId:${chatIdStr}`)
+                  }
+                  this._pendingNewMsgId = null
                   const tryOp71 = (retries = 0) => {
                     if (!this._wsConnected) {
                       if (retries < 15) setTimeout(() => tryOp71(retries + 1), 600)
@@ -659,20 +671,33 @@ class TransportInterceptor {
             }
           }
           if (lastMsg?.id?.__maxId) {
-            this._lastMsgRawHex.set(chatId, lastMsg.id.hex)
-            console.log(`[op48] stored msgId from lastMsg for chatId:${chatId}: ${lastMsg.id.hex.slice(0,16)}`)
+            const newHex   = lastMsg.id.hex
+            const existing = this._lastMsgRawHex.get(chatId)
+            // Store the REAL lastMessage ID as anchor. Op:71 returns messages with ID >= anchor
+            // (inclusive). The dedup in op:71 response skips the anchor itself via _lastSeenMsgId.
+            const isNewer  = !existing || newHex.slice(2) > existing.slice(2)
+            if (isNewer) {
+              this._lastMsgRawHex.set(chatId, newHex)
+              this._lastSeenMsgId.set(chatId, newHex)
+              console.log(`[op48] chatId:${chatId} anchor ${newHex.slice(0,16)} (lastMsg)`)
+            }
           }
           // Also scan __complexEntries: MAX stores message IDs as MAP KEYs → {__maxId, hex} after decodeExt fix
           if (Array.isArray(chat.__complexEntries)) {
-            let bestHex = this._lastMsgRawHex.get(chatId) || null
+            let bestHex = null
             for (const { key } of chat.__complexEntries) {
               if (key?.__maxId) {
                 if (!bestHex || key.hex.slice(2) > bestHex.slice(2)) bestHex = key.hex
               }
             }
-            if (bestHex && bestHex !== this._lastMsgRawHex.get(chatId)) {
-              this._lastMsgRawHex.set(chatId, bestHex)
-              console.log(`[op48] stored msgId from MAP KEYs for chatId:${chatId}: ${bestHex.slice(0,16)}`)
+            if (bestHex) {
+              const existing = this._lastMsgRawHex.get(chatId)
+              const isNewer  = !existing || bestHex.slice(2) > existing.slice(2)
+              if (isNewer) {
+                this._lastMsgRawHex.set(chatId, bestHex)
+                this._lastSeenMsgId.set(chatId, bestHex)
+                console.log(`[op48] chatId:${chatId} MAP KEY anchor ${bestHex.slice(0,16)}`)
+              }
             }
           }
         }
@@ -715,10 +740,12 @@ class TransportInterceptor {
       const chatIdRaw = data.payload.chatId
       const chatIdStr = String(chatIdRaw)
       console.log(`[op71] chatId:${chatIdRaw} msgs:${messages.length}`)
-      // Server responded — remove from catch-up set (both fullId and shortId forms)
+      // Server responded — remove from catch-up set (both fullId and shortId forms).
       this._catchUpChatIds.delete(chatIdStr)
       const shortId32str = ((Number(chatIdRaw) >>> 0)).toString()
-      if (shortId32str !== chatIdStr) this._catchUpChatIds.delete(shortId32str)
+      if (shortId32str !== chatIdStr) {
+        this._catchUpChatIds.delete(shortId32str)
+      }
       let bestMsgHex = null
       for (const m of messages) {
         if (!m || typeof m !== 'object') continue
@@ -783,9 +810,14 @@ class TransportInterceptor {
         }
       } else {
         // op:128 новый формат: только уведомление об unread, без тела сообщения.
-        // Ждём op:130 который содержит chatId → он триггернёт точечный op:71.
-        const payloadSnap = JSON.stringify(data.payload).slice(0, 200)
-        console.log(`[op128] new msg notification — waiting for op:130 with chatId. payload:${payloadSnap}`)
+        // Если payload содержит ext8 ID нового сообщения — сохраняем как near-anchor для op:71.
+        if (data.payload?.__maxId) {
+          this._pendingNewMsgId = data.payload.hex
+          console.log(`[op128] new msg ID captured: ${data.payload.hex.slice(0,16)} — will use as op:71 anchor`)
+        } else {
+          const payloadSnap = JSON.stringify(data.payload).slice(0, 200)
+          console.log(`[op128] new msg notification — waiting for op:130 with chatId. payload:${payloadSnap}`)
+        }
       }
     }
 
@@ -1008,21 +1040,19 @@ class TransportInterceptor {
     const prefix       = this._op71Prefix ? Buffer.from(this._op71Prefix) : Buffer.alloc(0)
     const payloadBytes = Buffer.concat([prefix, map])
 
-    const frameSeq = ++this._outBinFrameSeq
-    const reqSeq   = ++this._localSeq
-
-    // Формат заголовка: [magic][byte1][frameSeqHi][frameSeqLo][flags=0x00][opcode][cmd][reqSeqHi][reqSeqLo]
-    // Предыдущий баг: frameSeq был в байтах[3-4], поэтому байт[4] = frameSeqLo ≠ 0 → сервер закрывал WS
+    // Используем следующий fseq после браузерного — избегаем скачка в последовательности
+    // Браузер использует reqSeq=0 для op:71; мы повторяем это поведение
+    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
     const header = Buffer.alloc(9)
-    header[0] = 0x0a                     // magic
-    header[1] = 0x00                     // byte1=0
-    header[2] = (frameSeq >> 8) & 0xff   // frameSeqHi (0x00 при frameSeq < 256)
-    header[3] = frameSeq & 0xff           // frameSeqLo
-    header[4] = 0x00                      // flags = ВСЕГДА 0x00
-    header[5] = 71                        // opcode
-    header[6] = 0x01                      // cmd=1 (request)
-    header[7] = (reqSeq >> 8) & 0xff
-    header[8] = reqSeq & 0xff
+    header[0] = 0x0a  // magic
+    header[1] = 0x00  // byte1=0
+    header[2] = (frameSeq >> 8) & 0xff
+    header[3] = frameSeq & 0xff
+    header[4] = 0x00  // flags
+    header[5] = 71    // opcode
+    header[6] = 0x01  // cmd=1 (request)
+    header[7] = 0x00  // reqSeq=0 (браузер всегда шлёт op:71 с reqSeq=0)
+    header[8] = 0x00
 
     const frame = Buffer.concat([header, payloadBytes])
     const b64   = frame.toString('base64')
@@ -1031,8 +1061,8 @@ class TransportInterceptor {
     if (!result || !result.ok) throw new Error(`Binary op:71 send failed: ${result?.error}`)
     const prefixHex  = (this._op71Prefix || []).map(b => b.toString(16).padStart(2,'0')).join(' ')
     const msgIdLabel = storedHex ? storedHex.slice(0,16) : 'anchor=1(fallback)'
-    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} msgId:${msgIdLabel} frameSeq:${frameSeq} prefix:[${prefixHex}]`)
-    return reqSeq
+    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} msgId:${msgIdLabel} fseq:${frameSeq} prefix:[${prefixHex}]`)
+    return 0
   }
 
   // ─── Отправка WS фрейма (JSON) ───────────────────────────────────────────
