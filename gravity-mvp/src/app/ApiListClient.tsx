@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ApiConnection } from "@prisma/client";
 import { addApiConnection, deleteApiConnection, testApiRequest, updateApiConnectionName } from "./actions";
 import { Trash2, Play, Plus, Server, CheckCircle2, XCircle, Pencil, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+
+type StatusMap = Record<string, 'checking' | 'ok' | 'error'>;
 
 export default function ApiListClient({
     initialConnections,
@@ -18,18 +20,38 @@ export default function ApiListClient({
     const [loadingTest, setLoadingTest] = useState<string | null>(null);
     const [editingName, setEditingName] = useState<string | null>(null);
     const [nameValue, setNameValue] = useState<string>("");
+    const [statusMap, setStatusMap] = useState<StatusMap>(() =>
+        Object.fromEntries(initialConnections.map(c => [c.id, 'checking']))
+    );
+
+    // Auto-check all connections on mount
+    useEffect(() => {
+        initialConnections.forEach(async (conn) => {
+            try {
+                const log = await testApiRequest(conn.id);
+                const parsed = JSON.parse(log.responseBody || "{}");
+                const ok = !parsed.error && !parsed.error_message;
+                setStatusMap(prev => ({ ...prev, [conn.id]: ok ? 'ok' : 'error' }));
+            } catch {
+                setStatusMap(prev => ({ ...prev, [conn.id]: 'error' }));
+            }
+        });
+    }, []);
 
     const handleTest = async (connectionId: string) => {
         setLoadingTest(connectionId);
         try {
             const log = await testApiRequest(connectionId);
             const parsed = JSON.parse(log.responseBody || "{}");
+            const ok = !parsed.error && !parsed.error_message;
+            setStatusMap(prev => ({ ...prev, [connectionId]: ok ? 'ok' : 'error' }));
             setTestResult({
                 id: connectionId,
                 result: JSON.stringify(parsed, null, 2),
-                success: !parsed.error && !parsed.error_message
+                success: ok,
             });
         } catch (err: any) {
+            setStatusMap(prev => ({ ...prev, [connectionId]: 'error' }));
             setTestResult({ id: connectionId, result: err.message, success: false });
         }
         setLoadingTest(null);
@@ -111,8 +133,10 @@ export default function ApiListClient({
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {initialConnections.map((conn) => {
-                    const isConnected = testResult?.id === conn.id && testResult.success;
-                    const isFailed = testResult?.id === conn.id && !testResult.success;
+                    const status = statusMap[conn.id];
+                    const isConnected = status === 'ok';
+                    const isFailed = status === 'error';
+                    const isChecking = status === 'checking';
 
                     return (
                         <div key={conn.id} className="flex flex-col justify-between gap-[4px] rounded-2xl border bg-card p-6 shadow-sm transition-all hover:shadow-md">
@@ -120,7 +144,7 @@ export default function ApiListClient({
                                 {/* Header: name + status dot + delete */}
                                 <div className="mb-4 flex items-start justify-between gap-2">
                                     <div className="flex flex-1 items-center gap-2 min-w-0">
-                                        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${isConnected ? 'bg-green-500' : isFailed ? 'bg-red-500' : 'bg-gray-300'}`} />
+                                        <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full transition-colors duration-500 ${isConnected ? 'bg-green-500' : isFailed ? 'bg-red-500' : 'bg-gray-300 animate-pulse'}`} />
                                         {editingName === conn.id ? (
                                             <div className="flex flex-1 items-center gap-1">
                                                 <Input
