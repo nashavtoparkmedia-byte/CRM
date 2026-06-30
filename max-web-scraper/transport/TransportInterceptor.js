@@ -367,17 +367,29 @@ class TransportInterceptor {
                 const rawChatId = decoded?.chatId ?? decoded?.[0]?.chatId
                 if (rawChatId != null && rawChatId !== 0) {
                   // Browser encodes chatId as lower 32 bits only. Resolve full chatId
-                  // via _recentActiveChatIds (populated from op:48 with full chatIds).
+                  // via _recentActiveChatIds (populated from op:48 with full chatIds),
+                  // then fall back to _lastMsgRawHex keys (populated from persistent storage).
                   const shortId = Number(rawChatId) >>> 0
                   let chatIdStr = String(rawChatId)
                   for (const [cid] of this._recentActiveChatIds) {
                     if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
                   }
+                  if (chatIdStr === String(rawChatId)) {
+                    // Not found in _recentActiveChatIds — try _lastMsgRawHex (persisted IDs)
+                    for (const cid of this._lastMsgRawHex.keys()) {
+                      if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
+                    }
+                  }
                   console.log(`[op128mark→op71] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
+                  // Add to catch-up set immediately so _fireWsReady() retries on reconnect
+                  // even if current retry loop gives up (WS was down too long)
+                  if (!this._catchUpChatIds.has(chatIdStr)) {
+                    this._catchUpChatIds.set(chatIdStr, 0)
+                  }
                   const tryOp71 = (retries = 0) => {
                     if (!this._wsConnected) {
-                      if (retries < 10) setTimeout(() => tryOp71(retries + 1), 600)
-                      else console.warn(`[op128mark→op71] gave up after retries`)
+                      if (retries < 15) setTimeout(() => tryOp71(retries + 1), 600)
+                      else console.warn(`[op128mark→op71] gave up inline retries — catch-up set will handle on reconnect`)
                       return
                     }
                     this.sendBinaryOp71(chatIdStr).catch(e => {
@@ -700,8 +712,10 @@ class TransportInterceptor {
       const chatIdRaw = data.payload.chatId
       const chatIdStr = String(chatIdRaw)
       console.log(`[op71] chatId:${chatIdRaw} msgs:${messages.length}`)
-      // Server responded — remove from catch-up set so we don't retry anymore
+      // Server responded — remove from catch-up set (both fullId and shortId forms)
       this._catchUpChatIds.delete(chatIdStr)
+      const shortId32str = ((Number(chatIdRaw) >>> 0)).toString()
+      if (shortId32str !== chatIdStr) this._catchUpChatIds.delete(shortId32str)
       let bestMsgHex = null
       for (const m of messages) {
         if (!m || typeof m !== 'object') continue
