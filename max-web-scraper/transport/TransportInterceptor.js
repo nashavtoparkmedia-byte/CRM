@@ -1,5 +1,12 @@
 'use strict'
 
+const fs   = require('fs')
+const path = require('path')
+
+// Persist last known message IDs across container restarts so catch-up op:71
+// works even when op:48 doesn't include all chats in its startup push.
+const LAST_MSG_IDS_PATH = path.join(__dirname, '..', 'user_data', 'last-msg-ids.json')
+
 // ─── Custom msgpack decoder for MAX binary protocol ───────────────────────────
 // @msgpack/msgpack throws "key must be string or number" when Timestamp or
 // binary-type values are used as map keys (MAX does this for some internal maps).
@@ -272,6 +279,19 @@ class TransportInterceptor {
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
     this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
     this._catchUpChatIds       = new Map() // chatId → retryCount; populated from op:48, cleared when op:71 responds
+
+    // Load persisted message IDs from previous sessions.
+    // This lets us catch up chats that op:48 doesn't include in its startup push.
+    try {
+      const saved = JSON.parse(fs.readFileSync(LAST_MSG_IDS_PATH, 'utf8'))
+      for (const [cid, hex] of Object.entries(saved)) {
+        this._lastMsgRawHex.set(cid, hex)
+        this._catchUpChatIds.set(cid, 0)
+      }
+      console.log(`[Transport] Loaded ${this._lastMsgRawHex.size} persisted msg IDs from disk → scheduled catch-up`)
+    } catch {
+      // File doesn't exist yet — first run
+    }
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -646,6 +666,14 @@ class TransportInterceptor {
         }
         if (chatIds.length > 0) {
           console.log(`[op48] seeded _recentActiveChatIds: ${this._recentActiveChatIds.size} chats; catch-up op:71 for ${chatIds.length} chats`)
+          // Persist any newly-learned msg IDs to disk right away
+          if (this._lastMsgRawHex.size > 0) {
+            try {
+              fs.mkdirSync(path.dirname(LAST_MSG_IDS_PATH), { recursive: true })
+              fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
+              console.log(`[op48] persisted ${this._lastMsgRawHex.size} msg ID(s) to disk`)
+            } catch (e) { console.warn('[Transport] Failed to persist msg IDs:', e.message) }
+          }
           // Register all chats for catch-up. _fireWsReady() will retry on each reconnect
           // until op:71 responds. This handles the common case where the first WS connection
           // closes before the server can respond to our catch-up op:71.
@@ -696,6 +724,13 @@ class TransportInterceptor {
       if (bestMsgHex) {
         this._lastMsgRawHex.set(chatIdStr, bestMsgHex)
         console.log(`[op71] advanced stored msgId for chatId:${chatIdStr}: ${bestMsgHex.slice(0,16)}`)
+        // Persist to disk so next restart can catch up this chat even if op:48 skips it
+        try {
+          fs.mkdirSync(path.dirname(LAST_MSG_IDS_PATH), { recursive: true })
+          fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
+        } catch (e) {
+          console.warn('[Transport] Failed to persist msg IDs:', e.message)
+        }
       }
     }
 
@@ -717,6 +752,18 @@ class TransportInterceptor {
       if (pl?.message) {
         const msg = this._normalizeMaxMsg(pl)
         if (msg) this._emit(msg)
+        // Advance stored pointer so next restart doesn't re-fetch this message via catch-up
+        if (pl.message?.id?.__maxId && pl.chatId != null) {
+          const cidStr = String(pl.chatId)
+          const hex = pl.message.id.hex
+          const stored = this._lastMsgRawHex.get(cidStr) || ''
+          if (!stored || hex.slice(2) > stored.slice(2)) {
+            this._lastMsgRawHex.set(cidStr, hex)
+            try {
+              fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
+            } catch {}
+          }
+        }
       } else {
         // op:128 новый формат: только уведомление об unread, без тела сообщения.
         // Ждём op:130 который содержит chatId → он триггернёт точечный op:71.
