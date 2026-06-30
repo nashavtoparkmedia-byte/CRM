@@ -256,7 +256,7 @@ class TransportInterceptor {
     this._cdpClient            = null
     this._pendingReqs          = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
-    this._outBinFrameSeq       = 0          // счётчик frameSeq для бинарных отправок
+    this._outBinFrameSeq       = 0x8000     // наши frameSeq начинаются с 32768 (браузер использует 0–~100)
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
