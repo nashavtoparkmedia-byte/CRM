@@ -256,7 +256,8 @@ class TransportInterceptor {
     this._cdpClient            = null
     this._pendingReqs          = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
-    this._outBinFrameSeq       = 0x8000     // наши frameSeq начинаются с 32768 (браузер использует 0–~100)
+    this._outBinFrameSeq       = 200        // наши frameSeq начинаются с 200 (1-байт диапазон; браузер использует 0–~50)
+    this._op71Prefix           = null       // 3-байт префикс из браузерного op:71, захватывается динамически
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
@@ -322,6 +323,12 @@ class TransportInterceptor {
           if (buf.length >= 9 && buf[0] === 0x0a) {
             const opcode  = buf[5]
             const cmd     = buf[6]
+            const fseq    = (buf[2] << 8) | buf[3]
+            // Захватываем 3-байт префикс браузерного op:71 (fseq < 200 = браузер, не мы)
+            if (opcode === 71 && buf.length > 11 && fseq < 200 && !this._op71Prefix) {
+              this._op71Prefix = [buf[9], buf[10], buf[11]]
+              console.log(`[op71prefix] captured: ${this._op71Prefix.map(b => b.toString(16).padStart(2,'0')).join(' ')} fseq:${fseq}`)
+            }
             const maxHex  = opcode === 71 ? buf.length : 20
             const hex     = [...buf.slice(0, maxHex)].map(b => b.toString(16).padStart(2,'0')).join(' ')
             console.log('[WS→MAX BIN] op:', opcode, 'cmd:', cmd, 'len:', buf.length, 'hex:', hex)
@@ -780,30 +787,53 @@ class TransportInterceptor {
 
   async sendBinaryOp71(chatId) {
     if (!this._page) throw new Error('No page')
-    const { encode } = require('@msgpack/msgpack')
+
     const chatIdNum = Number(chatId)
-    const payloadBytes = encode({ chatId: chatIdNum })
+
+    // MAX кодирует ID как ext8(type=1, uint64(нижние 32 бита chatId))
+    // Браузерный op:71 hex: c7 09 01 cf 00 00 00 00 [4 байта lower32]
+    const shortId = chatIdNum >>> 0  // unsigned lower 32 bits
+    const chatIdValue = Buffer.from([
+      0xc7, 0x09, 0x01,               // ext8, 9 data bytes, type=1
+      0xcf,                            // uint64 marker
+      0x00, 0x00, 0x00, 0x00,          // high 4 bytes = 0
+      (shortId >>> 24) & 0xff,
+      (shortId >>> 16) & 0xff,
+      (shortId >>> 8) & 0xff,
+      shortId & 0xff,
+    ])
+    // fixmap-1: {chatId: ext8}
+    // "chatId" = fixstr-6 (a6) + "chatId"
+    const chatIdKey = Buffer.from([0xa6, 0x63, 0x68, 0x61, 0x74, 0x49, 0x64])
+    const map       = Buffer.concat([Buffer.from([0x81]), chatIdKey, chatIdValue])
+
+    // Префикс 3 байта захватывается из браузерного op:71 при старте
+    const prefix       = this._op71Prefix ? Buffer.from(this._op71Prefix) : Buffer.alloc(0)
+    const payloadBytes = Buffer.concat([prefix, map])
 
     const frameSeq = ++this._outBinFrameSeq
     const reqSeq   = ++this._localSeq
 
+    // Формат заголовка: [magic][byte1][frameSeqHi][frameSeqLo][flags=0x00][opcode][cmd][reqSeqHi][reqSeqLo]
+    // Предыдущий баг: frameSeq был в байтах[3-4], поэтому байт[4] = frameSeqLo ≠ 0 → сервер закрывал WS
     const header = Buffer.alloc(9)
     header[0] = 0x0a                     // magic
-    header[1] = 0x00                     // byte1=0 (browser sends 0 for op:71 requests)
-    header[2] = 0x00                     // flags
-    header[3] = (frameSeq >> 8) & 0xff
-    header[4] = frameSeq & 0xff
-    header[5] = 71                       // opcode
-    header[6] = 0x01                     // cmd=1 (request)
+    header[1] = 0x00                     // byte1=0
+    header[2] = (frameSeq >> 8) & 0xff   // frameSeqHi (0x00 при frameSeq < 256)
+    header[3] = frameSeq & 0xff           // frameSeqLo
+    header[4] = 0x00                      // flags = ВСЕГДА 0x00
+    header[5] = 71                        // opcode
+    header[6] = 0x01                      // cmd=1 (request)
     header[7] = (reqSeq >> 8) & 0xff
     header[8] = reqSeq & 0xff
 
-    const frame = Buffer.concat([header, Buffer.from(payloadBytes)])
+    const frame = Buffer.concat([header, payloadBytes])
     const b64   = frame.toString('base64')
 
     const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), b64)
     if (!result || !result.ok) throw new Error(`Binary op:71 send failed: ${result?.error}`)
-    console.log(`[op71bin] sent chatId:${chatIdNum} frameSeq:${frameSeq} reqSeq:${reqSeq}`)
+    const prefixHex = (this._op71Prefix || []).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} frameSeq:${frameSeq} prefix:[${prefixHex}]`)
     return reqSeq
   }
 
