@@ -536,31 +536,14 @@ class TransportInterceptor {
           // Отмечаем чат как активный для запроса op:71 при следующем op:128
           this._recentActiveChatIds.set(chatId, Date.now())
 
-          // MAX encodes message IDs as MAP KEYs in the chat object.
-          // Our decodeExt now returns {__maxId, hex} for 9-byte ext8 IDs,
-          // so they appear in __complexEntries as {key: {__maxId, hex}, value: ...}.
-          // Scan for these and pick the largest as the "last message ID" for op:71.
-          if (Array.isArray(chat.__complexEntries)) {
-            let bestHex = this._lastMsgRawHex.get(chatId) || null
-            for (const { key } of chat.__complexEntries) {
-              if (key?.__maxId) {
-                // Compare value portion (hex[2:]) in big-endian — lexicographic comparison is correct
-                if (!bestHex || key.hex.slice(2) > bestHex.slice(2)) bestHex = key.hex
-              }
-            }
-            if (bestHex && bestHex !== this._lastMsgRawHex.get(chatId)) {
-              this._lastMsgRawHex.set(chatId, bestHex)
-              console.log(`[op53] stored msgId from MAP KEYs for chatId:${chatId}: ${bestHex.slice(0,16)}`)
-            }
-          }
-
           if (!lastMsg) {
             continue
           }
           if (!lastMsg.id) continue
-          // Large message IDs (> 2^53) are decoded as {__maxId:true, hex:'...'} to preserve exact bytes.
-          // Store raw hex so sendBinaryOp71 can reconstruct the exact ext8 for op:71 requests.
-          if (lastMsg.id.__maxId) this._lastMsgRawHex.set(chatId, lastMsg.id.hex)
+          // _lastMsgRawHex is intentionally NOT updated from op:53 to avoid a race condition:
+          // op:53 fires after a new message arrives (updating to the new msg's ID), but op:130
+          // fires shortly after and needs the PREVIOUS ID to request messages newer than it.
+          // _lastMsgRawHex is only updated from op:48 (startup) and op:71 responses (confirmed fetch).
           const msgId = lastMsg.id.__maxId ? lastMsg.id.hex : String(lastMsg.id)
           if (this._lastSeenMsgId.get(chatId) === msgId) continue
           this._lastSeenMsgId.set(chatId, msgId)
@@ -645,14 +628,30 @@ class TransportInterceptor {
     if (data.opcode === 71 && data.payload?.chatId != null) {
       const messages = Array.isArray(data.payload.messages) ? data.payload.messages : []
       const chatIdRaw = data.payload.chatId
+      const chatIdStr = String(chatIdRaw)
       console.log(`[op71] chatId:${chatIdRaw} msgs:${messages.length}`)
+      let bestMsgHex = null
       for (const m of messages) {
         if (!m || typeof m !== 'object') continue
         const msg = this._normalizeMaxMsg({ chatId: chatIdRaw, message: m })
-        if (msg && (msg.text || msg.attachments?.length > 0)) {
+        if (!msg) continue
+        // Dedup against op:53: if op:53 already emitted this message, skip
+        const msgIdStr = msg.id || null
+        if (msgIdStr && this._lastSeenMsgId.get(chatIdStr) === msgIdStr) continue
+        if (msgIdStr) this._lastSeenMsgId.set(chatIdStr, msgIdStr)
+        // Track max ID seen in this response to advance the stored pointer
+        if (m.id?.__maxId) {
+          if (!bestMsgHex || m.id.hex.slice(2) > bestMsgHex.slice(2)) bestMsgHex = m.id.hex
+        }
+        if (msg.text || msg.attachments?.length > 0) {
           console.log(`[op71] emit msgId:${msg.id} from:${msg.from} text:"${String(msg.text || '').slice(0, 50)}" out:${msg.isOutgoing}`)
           this._emit(msg)
         }
+      }
+      // Advance stored pointer so the next op:71 request doesn't re-fetch the same messages
+      if (bestMsgHex) {
+        this._lastMsgRawHex.set(chatIdStr, bestMsgHex)
+        console.log(`[op71] advanced stored msgId for chatId:${chatIdStr}: ${bestMsgHex.slice(0,16)}`)
       }
     }
 
@@ -886,6 +885,9 @@ class TransportInterceptor {
     if (storedHex) {
       // Reconstruct ext8(type=1, data=rawBytes): c7 [len] 01 [rawBytes]
       const rawBytes = Buffer.from(storedHex, 'hex')
+      // MAX server stores IDs with int64 marker (0xd3) but expects uint64 (0xcf) in op:71 requests.
+      // Browser always re-encodes as uint64 when building op:71. Normalize to match browser behavior.
+      if (rawBytes[0] === 0xd3) rawBytes[0] = 0xcf
       msgIdEncoded = Buffer.concat([Buffer.from([0xc7, rawBytes.length, 0x01]), rawBytes])
     } else {
       // Fallback: ext8(type=1, uint64(1)) — anchor ID for chats with no stored msgId
