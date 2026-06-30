@@ -541,8 +541,9 @@ class TransportInterceptor {
     }
 
     // op:48 — начальный список чатов при старте браузера.
-    // Заполняем _recentActiveChatIds чтобы op:128 → binary op:71 знал куда запрашивать историю.
-    // Без этого чаты из op:48 (не из op:53) навсегда теряются при op:128 с пустым payload.
+    // 1) Заполняем _recentActiveChatIds чтобы op:128 → binary op:71 знал куда запрашивать историю.
+    // 2) Эмитим lastMessage если он есть — это сообщение было отправлено пока скрапер был выключен
+    //    и op:128 для него уже никогда не придёт (MAX не ретранслирует старые push-уведомления).
     if (data.opcode === 48) {
       const chats = data.payload?.chats ?? (Array.isArray(data.payload) ? data.payload : null)
       if (Array.isArray(chats)) {
@@ -551,6 +552,36 @@ class TransportInterceptor {
           const chatId = String(chat.id || chat.chatId || '')
           if (!chatId || chatId === '0') continue
           this._recentActiveChatIds.set(chatId, Date.now())
+
+          // Извлекаем lastMessage той же логикой что и в op:53
+          let lastMsg = chat.lastMessage
+          if (!lastMsg && Array.isArray(chat.__complexEntries)) {
+            for (const { key } of chat.__complexEntries) {
+              if (key && typeof key === 'object' && !Array.isArray(key) &&
+                  key.id != null && key.sender != null) {
+                lastMsg = key; break
+              }
+            }
+          }
+          if (!lastMsg) {
+            for (const val of Object.values(chat)) {
+              if (val && typeof val === 'object' && !Array.isArray(val) &&
+                  val.__complexEntries === undefined &&
+                  val.id != null && val.sender != null) {
+                lastMsg = val; break
+              }
+            }
+          }
+          if (!lastMsg?.id) continue
+          const msgId = String(lastMsg.id)
+          if (this._lastSeenMsgId.get(chatId) === msgId) continue
+          this._lastSeenMsgId.set(chatId, msgId)
+          const pseudo = { chatId, message: lastMsg }
+          const msg = this._normalizeMaxMsg(pseudo)
+          if (msg && !msg.isOutgoing && (msg.text || msg.attachments?.length > 0)) {
+            console.log(`[op48] catch-up msg chat:${chatId} id:${msgId} from:${msg.from}`)
+            this._emit(msg)
+          }
         }
         if (chats.length > 0) {
           console.log(`[op48] seeded _recentActiveChatIds: ${this._recentActiveChatIds.size} chats`)
