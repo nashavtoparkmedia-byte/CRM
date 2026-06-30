@@ -271,6 +271,7 @@ class TransportInterceptor {
     this._lastSeenMsgId        = new Map() // chatId → last seen msgId (dedup for op:53 push)
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
     this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
+    this._catchUpChatIds       = new Map() // chatId → retryCount; populated from op:48, cleared when op:71 responds
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -645,9 +646,16 @@ class TransportInterceptor {
         }
         if (chatIds.length > 0) {
           console.log(`[op48] seeded _recentActiveChatIds: ${this._recentActiveChatIds.size} chats; catch-up op:71 for ${chatIds.length} chats`)
-          // Небольшая задержка чтобы WS полностью инициализировался перед нашими запросами
+          // Register all chats for catch-up. _fireWsReady() will retry on each reconnect
+          // until op:71 responds. This handles the common case where the first WS connection
+          // closes before the server can respond to our catch-up op:71.
+          for (const cid of chatIds) {
+            if (!this._catchUpChatIds.has(cid)) this._catchUpChatIds.set(cid, 0)
+          }
+          // Also attempt immediately on the first connection (bonus early try)
           setTimeout(() => {
             for (const cid of chatIds) {
+              if (!this._catchUpChatIds.has(cid)) continue  // already resolved
               this.sendBinaryOp71(cid).catch(e => console.warn(`[op48→op71] chatId:${cid}: ${e.message}`))
             }
           }, 3000)
@@ -664,6 +672,8 @@ class TransportInterceptor {
       const chatIdRaw = data.payload.chatId
       const chatIdStr = String(chatIdRaw)
       console.log(`[op71] chatId:${chatIdRaw} msgs:${messages.length}`)
+      // Server responded — remove from catch-up set so we don't retry anymore
+      this._catchUpChatIds.delete(chatIdStr)
       let bestMsgHex = null
       for (const m of messages) {
         if (!m || typeof m !== 'object') continue
@@ -1012,6 +1022,30 @@ class TransportInterceptor {
   _fireWsReady() {
     const cbs = this._wsReadyCallbacks.splice(0)
     for (const cb of cbs) try { cb() } catch {}
+    // On every WS ready (including reconnects), retry catch-up op:71 for chats
+    // that haven't gotten a response yet. The first attempt (from op:48 setTimeout)
+    // often races with the browser's early reconnect (~3s into startup). The second
+    // connection is stable and the server actually responds.
+    if (this._catchUpChatIds?.size > 0) {
+      const snapshot = [...this._catchUpChatIds.keys()]
+      console.log(`[catchup] WS ready — scheduling retry for ${snapshot.length} chat(s) in 5s`)
+      setTimeout(() => {
+        for (const cid of snapshot) {
+          if (!this._catchUpChatIds.has(cid)) continue  // already resolved by op:71 response
+          const retries = this._catchUpChatIds.get(cid) || 0
+          if (retries >= 5) {
+            console.warn(`[catchup] gave up on chatId:${cid} after ${retries} retries`)
+            this._catchUpChatIds.delete(cid)
+            continue
+          }
+          this._catchUpChatIds.set(cid, retries + 1)
+          console.log(`[catchup] retry #${retries + 1} for chatId:${cid}`)
+          this.sendBinaryOp71(cid).catch(e => {
+            console.warn(`[catchup] retry #${retries + 1} failed chatId:${cid}: ${e.message}`)
+          })
+        }
+      }, 5000)
+    }
   }
 
   /**
