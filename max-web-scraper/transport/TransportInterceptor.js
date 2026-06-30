@@ -35,6 +35,12 @@ function maxMsgpackDecodeAll(buf) {
       return sec * 1000   // ms
     }
     if (type === 1) {   // MAX variable-length big-endian int
+      // 9-byte form: data[0] is a nested msgpack numeric type marker (0xcf=uint64, 0xd3=int64).
+      // These are large message IDs (> 2^53) that lose precision as float64.
+      // Return raw bytes so callers can reconstruct the exact ext8 for op:71 requests.
+      if (data.length === 9 && (data[0] === 0xcf || data[0] === 0xd3)) {
+        return { __maxId: true, hex: Buffer.from(data).toString('hex') }
+      }
       let n = 0
       for (const b of data) n = n * 256 + b
       return n
@@ -264,6 +270,7 @@ class TransportInterceptor {
     this._wsReadyCallbacks     = []
     this._lastSeenMsgId        = new Map() // chatId → last seen msgId (dedup for op:53 push)
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
+    this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
   }
 
   // ─── Шаг 1: Инжектируем хук ДО навигации ────────────────────────────────
@@ -535,13 +542,16 @@ class TransportInterceptor {
             continue
           }
           if (!lastMsg.id) continue
-          const msgId = String(lastMsg.id)
+          // Large message IDs (> 2^53) are decoded as {__maxId:true, hex:'...'} to preserve exact bytes.
+          // Store raw hex so sendBinaryOp71 can reconstruct the exact ext8 for op:71 requests.
+          if (lastMsg.id.__maxId) this._lastMsgRawHex.set(chatId, lastMsg.id.hex)
+          const msgId = lastMsg.id.__maxId ? lastMsg.id.hex : String(lastMsg.id)
           if (this._lastSeenMsgId.get(chatId) === msgId) continue
           this._lastSeenMsgId.set(chatId, msgId)
           const pseudo = { chatId, message: lastMsg }
           const msg = this._normalizeMaxMsg(pseudo)
           if (msg && !msg.isOutgoing && (msg.text || msg.attachments?.length > 0)) {
-            console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId} from:${msg.from}`)
+            console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from}`)
             this._emit(msg)
           }
         }
@@ -563,6 +573,29 @@ class TransportInterceptor {
           if (!chatId || chatId === '0') continue
           this._recentActiveChatIds.set(chatId, Date.now())
           chatIds.push(chatId)
+          // Extract lastMessage ID raw bytes so sendBinaryOp71 can use the real message ID
+          let lastMsg = chat.lastMessage
+          if (!lastMsg && Array.isArray(chat.__complexEntries)) {
+            for (const { key } of chat.__complexEntries) {
+              if (key && typeof key === 'object' && !Array.isArray(key) &&
+                  key.id != null && key.sender != null) {
+                lastMsg = key; break
+              }
+            }
+          }
+          if (!lastMsg && typeof chat === 'object') {
+            for (const val of Object.values(chat)) {
+              if (val && typeof val === 'object' && !Array.isArray(val) &&
+                  val.__complexEntries === undefined &&
+                  val.id != null && val.sender != null) {
+                lastMsg = val; break
+              }
+            }
+          }
+          if (lastMsg?.id?.__maxId) {
+            this._lastMsgRawHex.set(chatId, lastMsg.id.hex)
+            console.log(`[op48] stored msgId hex for chatId:${chatId}: ${lastMsg.id.hex.slice(0,16)}`)
+          }
         }
         if (chatIds.length > 0) {
           console.log(`[op48] seeded _recentActiveChatIds: ${this._recentActiveChatIds.size} chats; catch-up op:71 for ${chatIds.length} chats`)
@@ -613,25 +646,33 @@ class TransportInterceptor {
         const msg = this._normalizeMaxMsg(pl)
         if (msg) this._emit(msg)
       } else {
-        const summary = Array.isArray(data.payload)
-          ? `array[${data.payload.length}] types=${data.payload.map(x => typeof x).join(',')}`
-          : typeof data.payload
-        const payloadSnap = JSON.stringify(data.payload).slice(0, 500)
-        console.log(`[op128] no-message payload: ${summary} — json:${payloadSnap}`)
-        console.log(`[op128] requesting history via binary op:71`)
+        // op:128 новый формат: только уведомление об unread, без тела сообщения.
+        // Ждём op:130 который содержит chatId → он триггернёт точечный op:71.
+        const payloadSnap = JSON.stringify(data.payload).slice(0, 200)
+        console.log(`[op128] new msg notification — waiting for op:130 with chatId. payload:${payloadSnap}`)
+      }
+    }
 
-        // op:128 новый формат не содержит тело сообщения.
-        // Запрашиваем историю бинарным op:71 для недавно-активных чатов (из op:53).
-        // Бинарный op:71 работает (как браузер), JSON op:71 убивает WS.
-        const recentIds = this.getRecentActiveChatIds(8_000)
-        if (recentIds.length > 0) {
-          console.log(`[op128] binary op:71 for ${recentIds.length} recent chats: ${recentIds.slice(0,3).join(',')}`)
-          for (const cid of recentIds.slice(0, 5)) {
-            this.sendBinaryOp71(cid).catch(e => console.warn(`[op128→op71bin] chatId:${cid}: ${e.message}`))
+    // op:130 — сервер подтверждает mark-as-read; payload содержит chatId чата с новым сообщением.
+    // Браузер автоматически шлёт op:128 (mark) → сервер отвечает op:130 с chatId.
+    // Мы используем chatId для точечного binary op:71, который вернёт контент нового сообщения.
+    if (data.opcode === 130) {
+      const chatId = data.payload?.chatId != null ? String(data.payload.chatId) : null
+      if (chatId && chatId !== '0') {
+        console.log(`[op130] mark confirm chatId:${chatId}`)
+        const tryOp71 = (retries = 0) => {
+          const hex = this._lastMsgRawHex.get(chatId)
+          if (hex) {
+            console.log(`[op130→op71] triggering for chatId:${chatId} msgId:${hex.slice(0,16)}`)
+            this.sendBinaryOp71(chatId).catch(e => console.warn(`[op130→op71] ${e.message}`))
+          } else if (retries < 8) {
+            // IDs not loaded yet (early reconnect) — retry after op:48/53 have time to fire
+            setTimeout(() => tryOp71(retries + 1), 800)
+          } else {
+            console.log(`[op130] no stored msgId for chatId:${chatId} after retries`)
           }
-        } else {
-          console.log('[op128] no recent chatIds from op:53 — cannot request history')
         }
+        tryOp71()
       }
     }
   }
@@ -741,7 +782,7 @@ class TransportInterceptor {
     const hasAttaches = Array.isArray(attaches) && attaches.length > 0
 
     return {
-      id:                m.id    || null,
+      id:                m.id?.__maxId ? m.id.hex : (m.id || null),
       chatId:            payload.chatId || null,
       from:              String(m.sender || ''),
       text,
@@ -804,14 +845,24 @@ class TransportInterceptor {
       (shortId >>> 8) & 0xff,
       shortId & 0xff,
     ])
-    // fixmap-2: {chatId: ext8, messageIds: []}
+    // fixmap-2: {chatId: ext8, messageIds: [lastMsgId]}
     // "chatId" = fixstr-6 (a6) + "chatId"
     const chatIdKey    = Buffer.from([0xa6, 0x63, 0x68, 0x61, 0x74, 0x49, 0x64])
-    // "messageIds" = fixstr-10 (aa) + "messageIds", value = fixarray-1 (91) с одним якорным ID
-    // Якорь: ext8(type=1, uint64(1)) — очень старый ID, сервер вернёт все сообщения новее него
-    const msgIdsKey    = Buffer.from([0xaa, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x64, 0x73])
-    const msgIdAnchor  = Buffer.from([0xc7, 0x09, 0x01, 0xcf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
-    const msgIdsValue  = Buffer.concat([Buffer.from([0x91]), msgIdAnchor])  // fixarray-1
+    // "messageIds" = fixstr-10 (aa) + "messageIds", value = fixarray-1 (91) with last known msg ID
+    // Browser sends the real last message ID so server returns messages newer than that.
+    // We store the raw ext8 data hex from op:48/op:53 and reconstruct it exactly here.
+    const msgIdsKey  = Buffer.from([0xaa, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x64, 0x73])
+    const storedHex  = this._lastMsgRawHex.get(String(chatId))
+    let msgIdEncoded
+    if (storedHex) {
+      // Reconstruct ext8(type=1, data=rawBytes): c7 [len] 01 [rawBytes]
+      const rawBytes = Buffer.from(storedHex, 'hex')
+      msgIdEncoded = Buffer.concat([Buffer.from([0xc7, rawBytes.length, 0x01]), rawBytes])
+    } else {
+      // Fallback: ext8(type=1, uint64(1)) — anchor ID for chats with no stored msgId
+      msgIdEncoded = Buffer.from([0xc7, 0x09, 0x01, 0xcf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
+    }
+    const msgIdsValue  = Buffer.concat([Buffer.from([0x91]), msgIdEncoded])  // fixarray-1
     const map          = Buffer.concat([Buffer.from([0x82]), chatIdKey, chatIdValue, msgIdsKey, msgIdsValue])
 
     // Префикс 3 байта захватывается из браузерного op:71 при старте
@@ -839,8 +890,9 @@ class TransportInterceptor {
 
     const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), b64)
     if (!result || !result.ok) throw new Error(`Binary op:71 send failed: ${result?.error}`)
-    const prefixHex = (this._op71Prefix || []).map(b => b.toString(16).padStart(2,'0')).join(' ')
-    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} frameSeq:${frameSeq} prefix:[${prefixHex}]`)
+    const prefixHex  = (this._op71Prefix || []).map(b => b.toString(16).padStart(2,'0')).join(' ')
+    const msgIdLabel = storedHex ? storedHex.slice(0,16) : 'anchor=1(fallback)'
+    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} msgId:${msgIdLabel} frameSeq:${frameSeq} prefix:[${prefixHex}]`)
     return reqSeq
   }
 
