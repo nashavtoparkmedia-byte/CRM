@@ -336,6 +336,25 @@ class TransportInterceptor {
               this._op71Prefix = [buf[9], buf[10], buf[11]]
               console.log(`[op71prefix] captured: ${this._op71Prefix.map(b => b.toString(16).padStart(2,'0')).join(' ')} fseq:${fseq}`)
             }
+            // op:128 cmd:1 (browser mark-as-received) contains chatId in payload.
+            // MAX doesn't send op:130 unless the user has the chat open, so this
+            // outgoing frame is the only reliable source of chatId after op:128 notification.
+            if (opcode === 0x80 && cmd === 0x01 && buf.length > 12) {
+              try {
+                // Payload starts after 9-byte header + 3-byte prefix = byte 12
+                const decoded = maxMsgpackDecodeAll(buf.slice(12))
+                const rawChatId = decoded?.chatId ?? decoded?.[0]?.chatId
+                if (rawChatId != null && rawChatId !== 0) {
+                  const chatIdStr = String(rawChatId)
+                  console.log(`[op128mark→op71] browser marked chatId:${chatIdStr} → triggering op:71`)
+                  setTimeout(() => {
+                    this.sendBinaryOp71(chatIdStr).catch(e => console.warn(`[op128mark→op71] ${e.message}`))
+                  }, 200)
+                }
+              } catch (e) {
+                console.warn('[op128mark→op71] decode error:', e.message)
+              }
+            }
             const maxHex  = opcode === 71 ? buf.length : 20
             const hex     = [...buf.slice(0, maxHex)].map(b => b.toString(16).padStart(2,'0')).join(' ')
             console.log('[WS→MAX BIN] op:', opcode, 'cmd:', cmd, 'len:', buf.length, 'hex:', hex)
