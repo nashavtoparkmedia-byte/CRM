@@ -802,10 +802,13 @@ class TransportInterceptor {
       (shortId >>> 8) & 0xff,
       shortId & 0xff,
     ])
-    // fixmap-1: {chatId: ext8}
+    // fixmap-2: {chatId: ext8, messageIds: []}
     // "chatId" = fixstr-6 (a6) + "chatId"
-    const chatIdKey = Buffer.from([0xa6, 0x63, 0x68, 0x61, 0x74, 0x49, 0x64])
-    const map       = Buffer.concat([Buffer.from([0x81]), chatIdKey, chatIdValue])
+    const chatIdKey    = Buffer.from([0xa6, 0x63, 0x68, 0x61, 0x74, 0x49, 0x64])
+    // "messageIds" = fixstr-10 (aa) + "messageIds", value = fixarray-0 (90) = []
+    const msgIdsKey    = Buffer.from([0xaa, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x64, 0x73])
+    const msgIdsValue  = Buffer.from([0x90])  // fixarray-0 (empty array)
+    const map          = Buffer.concat([Buffer.from([0x82]), chatIdKey, chatIdValue, msgIdsKey, msgIdsValue])
 
     // Префикс 3 байта захватывается из браузерного op:71 при старте
     const prefix       = this._op71Prefix ? Buffer.from(this._op71Prefix) : Buffer.alloc(0)
