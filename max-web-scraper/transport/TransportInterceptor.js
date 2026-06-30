@@ -616,7 +616,9 @@ class TransportInterceptor {
         const summary = Array.isArray(data.payload)
           ? `array[${data.payload.length}] types=${data.payload.map(x => typeof x).join(',')}`
           : typeof data.payload
-        console.log(`[op128] no-message payload: ${summary} — requesting history via binary op:71`)
+        const payloadSnap = JSON.stringify(data.payload).slice(0, 500)
+        console.log(`[op128] no-message payload: ${summary} — json:${payloadSnap}`)
+        console.log(`[op128] requesting history via binary op:71`)
 
         // op:128 новый формат не содержит тело сообщения.
         // Запрашиваем историю бинарным op:71 для недавно-активных чатов (из op:53).
@@ -805,9 +807,11 @@ class TransportInterceptor {
     // fixmap-2: {chatId: ext8, messageIds: []}
     // "chatId" = fixstr-6 (a6) + "chatId"
     const chatIdKey    = Buffer.from([0xa6, 0x63, 0x68, 0x61, 0x74, 0x49, 0x64])
-    // "messageIds" = fixstr-10 (aa) + "messageIds", value = fixarray-0 (90) = []
+    // "messageIds" = fixstr-10 (aa) + "messageIds", value = fixarray-1 (91) с одним якорным ID
+    // Якорь: ext8(type=1, uint64(1)) — очень старый ID, сервер вернёт все сообщения новее него
     const msgIdsKey    = Buffer.from([0xaa, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x64, 0x73])
-    const msgIdsValue  = Buffer.from([0x90])  // fixarray-0 (empty array)
+    const msgIdAnchor  = Buffer.from([0xc7, 0x09, 0x01, 0xcf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
+    const msgIdsValue  = Buffer.concat([Buffer.from([0x91]), msgIdAnchor])  // fixarray-1
     const map          = Buffer.concat([Buffer.from([0x82]), chatIdKey, chatIdValue, msgIdsKey, msgIdsValue])
 
     // Префикс 3 байта захватывается из браузерного op:71 при старте
