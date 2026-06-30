@@ -320,9 +320,10 @@ class TransportInterceptor {
         try {
           const buf = Buffer.from(response.payloadData, 'base64')
           if (buf.length >= 9 && buf[0] === 0x0a) {
-            const opcode = buf[5]
-            const cmd    = buf[6]
-            const hex    = [...buf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
+            const opcode  = buf[5]
+            const cmd     = buf[6]
+            const maxHex  = opcode === 71 ? buf.length : 20
+            const hex     = [...buf.slice(0, maxHex)].map(b => b.toString(16).padStart(2,'0')).join(' ')
             console.log('[WS→MAX BIN] op:', opcode, 'cmd:', cmd, 'len:', buf.length, 'hex:', hex)
           } else if (buf.length > 0) {
             const hex = [...buf.slice(0, 20)].map(b => b.toString(16).padStart(2,'0')).join(' ')
