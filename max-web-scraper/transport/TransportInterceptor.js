@@ -535,10 +535,26 @@ class TransportInterceptor {
           if (!chatId) continue
           // Отмечаем чат как активный для запроса op:71 при следующем op:128
           this._recentActiveChatIds.set(chatId, Date.now())
+
+          // MAX encodes message IDs as MAP KEYs in the chat object.
+          // Our decodeExt now returns {__maxId, hex} for 9-byte ext8 IDs,
+          // so they appear in __complexEntries as {key: {__maxId, hex}, value: ...}.
+          // Scan for these and pick the largest as the "last message ID" for op:71.
+          if (Array.isArray(chat.__complexEntries)) {
+            let bestHex = this._lastMsgRawHex.get(chatId) || null
+            for (const { key } of chat.__complexEntries) {
+              if (key?.__maxId) {
+                // Compare value portion (hex[2:]) in big-endian — lexicographic comparison is correct
+                if (!bestHex || key.hex.slice(2) > bestHex.slice(2)) bestHex = key.hex
+              }
+            }
+            if (bestHex && bestHex !== this._lastMsgRawHex.get(chatId)) {
+              this._lastMsgRawHex.set(chatId, bestHex)
+              console.log(`[op53] stored msgId from MAP KEYs for chatId:${chatId}: ${bestHex.slice(0,16)}`)
+            }
+          }
+
           if (!lastMsg) {
-            // Диагностика: показываем ключи чата чтобы понять где спрятан lastMessage
-            const keys = Object.keys(chat).slice(0, 10).join(',')
-            console.log(`[op53 DIAG] chat:${chatId} no lastMsg. keys: ${keys}`)
             continue
           }
           if (!lastMsg.id) continue
@@ -594,7 +610,20 @@ class TransportInterceptor {
           }
           if (lastMsg?.id?.__maxId) {
             this._lastMsgRawHex.set(chatId, lastMsg.id.hex)
-            console.log(`[op48] stored msgId hex for chatId:${chatId}: ${lastMsg.id.hex.slice(0,16)}`)
+            console.log(`[op48] stored msgId from lastMsg for chatId:${chatId}: ${lastMsg.id.hex.slice(0,16)}`)
+          }
+          // Also scan __complexEntries: MAX stores message IDs as MAP KEYs → {__maxId, hex} after decodeExt fix
+          if (Array.isArray(chat.__complexEntries)) {
+            let bestHex = this._lastMsgRawHex.get(chatId) || null
+            for (const { key } of chat.__complexEntries) {
+              if (key?.__maxId) {
+                if (!bestHex || key.hex.slice(2) > bestHex.slice(2)) bestHex = key.hex
+              }
+            }
+            if (bestHex && bestHex !== this._lastMsgRawHex.get(chatId)) {
+              this._lastMsgRawHex.set(chatId, bestHex)
+              console.log(`[op48] stored msgId from MAP KEYs for chatId:${chatId}: ${bestHex.slice(0,16)}`)
+            }
           }
         }
         if (chatIds.length > 0) {
