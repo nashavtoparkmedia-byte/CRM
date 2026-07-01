@@ -14,7 +14,7 @@ function isPlaceholderName(name?: string | null): boolean {
     if (!name) return true
     const t = name.trim()
     if (!t) return true
-    if (/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+\d+$/i.test(t)) return true
+    if (/^(TG|MAX|WA|Telegram|Max|WhatsApp)[\s:]+\d+$/i.test(t)) return true
     if (/^\d+$/.test(t)) return true
     if (/^[.\s\-]+$/.test(t)) return true
     return false
