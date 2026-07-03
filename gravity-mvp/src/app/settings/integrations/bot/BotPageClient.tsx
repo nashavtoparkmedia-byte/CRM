@@ -29,6 +29,7 @@ interface DriverSearchResult {
     id: string
     fullName: string
     phone: string | null
+    dismissed: boolean
 }
 
 function formatDate(iso: string) {
@@ -199,7 +200,12 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                             {results.map(d => (
                                 <div key={d.id} className="flex items-center justify-between py-1 px-1 hover:bg-white rounded">
                                     <div>
-                                        <div className="text-[12px] font-medium text-[#0F172A]">{d.fullName}</div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-[12px] font-medium text-[#0F172A]">{d.fullName}</span>
+                                            {d.dismissed && (
+                                                <span className="text-[10px] font-medium text-[#DC2626] bg-red-50 px-1.5 py-0.5 rounded">Уволен</span>
+                                            )}
+                                        </div>
                                         {d.phone && <div className="text-[10px] text-[#64748B] font-mono">{d.phone}</div>}
                                     </div>
                                     <button

@@ -47,11 +47,14 @@ export async function POST(req: NextRequest) {
           { fullName: { contains: query, mode: 'insensitive' as const } },
         ],
       },
-      select: { id: true, fullName: true, phone: true },
+      select: { id: true, fullName: true, phone: true, dismissedAt: true },
+      orderBy: [{ dismissedAt: { sort: 'asc', nulls: 'first' } }],
       take: 10,
     })
 
-    return NextResponse.json({ drivers })
+    return NextResponse.json({
+      drivers: drivers.map(d => ({ id: d.id, fullName: d.fullName, phone: d.phone, dismissed: d.dismissedAt !== null })),
+    })
   }
 
   if (body.action === 'link') {

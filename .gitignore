@@ -70,3 +70,10 @@ max-web-scraper/known_chats.json
 max-web-scraper/last_activity.json
 max-web-scraper/last_seen_dedupe.json
 max-web-scraper/last_qr*.png
+
+# Codex local MCP config (may contain local DB credentials)
+.codex/config.toml
+!.codex/config.example.toml
+
+# Local one-off diagnostics/smoke scripts
+**/scripts/_local/
