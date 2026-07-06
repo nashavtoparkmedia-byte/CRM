@@ -1691,6 +1691,13 @@ function stableDomMediaMessageId(chatId, text, attachments = []) {
   return stableDomMessageId(chatId, `${text || ''}:${sig}`)
 }
 
+function stableDomMediaTimeKey(candidate = {}) {
+  const day = Math.floor(Date.now() / 86_400_000)
+  if (Number.isFinite(candidate.displayMinute)) return `${day}:${candidate.displayMinute}`
+  if (candidate.displayTime) return `${day}:${candidate.displayTime}`
+  return ''
+}
+
 function latestRecentOp128ChatId() {
   if (!transport?._recentOp128ChatIds) return transport?._activeUiChatId || null
   const entries = Array.from(transport._recentOp128ChatIds.entries())
@@ -2080,9 +2087,11 @@ async function scrapeLatestDomMessage(uiRouteId) {
 
 function stableDomCandidateMessageId(chatId, text, attachments = [], candidate = {}) {
   if (!attachments.length) return candidate._domRecoveryExternalId || stableDomTextMessageId(chatId, text || '', candidate)
+  const timeKey = stableDomMediaTimeKey(candidate)
+  if (timeKey) return stableDomMediaMessageId(chatId, `${text || ''}:time=${timeKey}`, attachments)
   const y = Number.isFinite(candidate.bottom) ? Math.round(candidate.bottom) : 0
   const x = Number.isFinite(candidate.x) ? Math.round(candidate.x) : 0
-  return stableDomMediaMessageId(chatId, `${text || ''}:${x}:${y}`, attachments)
+  return stableDomMediaMessageId(chatId, `${text || ''}:pos=${x}:${y}`, attachments)
 }
 
 async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual', options = {}) {
@@ -4753,12 +4762,14 @@ app.post('/debug/op71', async (req, res) => {
 })
 
 // POST /debug/dom-fallback
-// Body: { chatId: string|number }
+// Body: { chatId: string|number, recent?: boolean }
 app.post('/debug/dom-fallback', async (req, res) => {
   try {
-    const { chatId } = req.body || {}
+    const { chatId, recent } = req.body || {}
     if (!chatId) return res.status(400).json({ error: 'chatId is required' })
-    const result = await forwardLatestDomMessage(String(chatId), 'manual_debug')
+    const result = recent
+      ? await forwardRecentDomMessages(String(chatId), 'manual_debug')
+      : await forwardLatestDomMessage(String(chatId), 'manual_debug')
     res.json(result)
   } catch (e) {
     res.status(500).json({ error: e.message })

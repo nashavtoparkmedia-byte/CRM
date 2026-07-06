@@ -28,6 +28,24 @@ import sharp from 'sharp'
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
+function asciiFileNameFallback(fileName: string): string {
+    const fallback = fileName
+        .replace(/["\\]/g, '')
+        .replace(/[^\x20-\x7E]/g, '_')
+        .trim()
+    return fallback || 'file'
+}
+
+function encodeRFC5987Value(value: string): string {
+    return encodeURIComponent(value)
+        .replace(/['()*]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
+}
+
+function inlineContentDisposition(fileName: string): string {
+    const fallback = asciiFileNameFallback(fileName)
+    return `inline; filename="${fallback}"; filename*=UTF-8''${encodeRFC5987Value(fileName)}`
+}
+
 export async function GET(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> },
@@ -93,7 +111,7 @@ export async function GET(
                     'Content-Length': String(bytes.length),
                     'Accept-Ranges': 'bytes',
                     'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
-                    'Content-Disposition': `inline; filename="${outputFileName!.replace(/"/g, '')}"`,
+                    'Content-Disposition': inlineContentDisposition(outputFileName!),
                 },
             })
         } catch {
@@ -146,7 +164,7 @@ export async function GET(
                     'Content-Length': String(chunk.length),
                     'Cache-Control':  `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
                 }
-                if (outputFileName) rangeHeaders['Content-Disposition'] = `inline; filename="${outputFileName.replace(/"/g, '')}"`
+                if (outputFileName) rangeHeaders['Content-Disposition'] = inlineContentDisposition(outputFileName)
                 return new NextResponse(new Uint8Array(chunk), { status: 206, headers: rangeHeaders })
             }
         }
@@ -160,7 +178,7 @@ export async function GET(
             'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
         }
         if (outputFileName) {
-            headers['Content-Disposition'] = `inline; filename="${outputFileName.replace(/"/g, '')}"`
+            headers['Content-Disposition'] = inlineContentDisposition(outputFileName)
         }
         return new NextResponse(new Uint8Array(outputBytes), { status: 200, headers })
     }
