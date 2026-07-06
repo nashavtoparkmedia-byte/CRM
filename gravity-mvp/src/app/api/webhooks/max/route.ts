@@ -1,7 +1,7 @@
 'use server'
 
 import { NextResponse } from 'next/server'
-import type { MessageType } from '@prisma/client'
+import type { Message, MessageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -35,14 +35,95 @@ const MAX_CHAT_ID_ALIASES: Record<string, string> = {
   '201482140': '902144614300',
 }
 
+type AttachmentLike = {
+  name?: string | null
+  fileName?: string | null
+  mimeType?: string | null
+  contentType?: string | null
+  size?: number | string | null
+  fileSize?: number | string | null
+  type?: string | null
+  url?: string | null
+}
+
+type MaxWebhookBody = {
+  externalId?: string | number | null
+  chatId?: string | number | null
+  rawChatId?: string | number | null
+  senderId?: string | number | null
+  senderName?: string | null
+  senderPhone?: string | number | null
+  phone?: string | number | null
+  text?: string | null
+  timestamp?: string | number | null
+  messageType?: string | null
+  attachments?: AttachmentLike[] | null
+  isOutgoing?: boolean | null
+  deleted?: boolean | null
+  forwardedFrom?: unknown
+}
+
 function normalizeMaxChatId(chatId: unknown): string {
   const raw = String(chatId)
   return MAX_CHAT_ID_ALIASES[raw] || raw
 }
 
+function attachmentName(att: AttachmentLike): string {
+  const value = att.name ?? att.fileName ?? ''
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function attachmentDisplayName(att: AttachmentLike): string | null {
+  const value = att.name ?? att.fileName ?? ''
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function attachmentMime(att: AttachmentLike): string {
+  const value = att.mimeType ?? att.contentType ?? ''
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function attachmentSize(att: AttachmentLike): number | null {
+  const raw = att.size ?? att.fileSize
+  const value = typeof raw === 'number' ? raw : Number(raw)
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : null
+}
+
+function attachmentType(att: AttachmentLike): string {
+  const value = att.type ?? ''
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function sameMaxAttachment(incoming: AttachmentLike, existing: AttachmentLike): boolean {
+  const incomingName = attachmentName(incoming)
+  const existingName = attachmentName(existing)
+  const incomingMime = attachmentMime(incoming)
+  const existingMime = attachmentMime(existing)
+  const incomingSize = attachmentSize(incoming)
+  const existingSize = attachmentSize(existing)
+
+  if (incomingName && existingName && incomingName === existingName) {
+    return !incomingSize || !existingSize || incomingSize === existingSize
+  }
+
+  if (incomingSize && existingSize && incomingSize === existingSize) {
+    if (incomingMime && existingMime && incomingMime === existingMime) return true
+    return attachmentType(incoming) !== '' && attachmentType(incoming) === attachmentType(existing)
+  }
+
+  return false
+}
+
+function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAttachments: AttachmentLike[]): boolean {
+  if (!incomingAttachments.length || !existingAttachments.length) return false
+  return incomingAttachments.every(incoming =>
+    existingAttachments.some(existing => sameMaxAttachment(incoming, existing))
+  )
+}
+
 export async function POST(request: Request) {
   try {
-    const body = sanitizeMaxValue(await request.json()) as Record<string, any>
+    const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
     const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom } = body
 
     // MAX server confirmed a message was deleted — remove from CRM DB
@@ -70,7 +151,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: 'empty_text' })
     }
     const usableAttachments = Array.isArray(attachments)
-      ? attachments.filter((att: any) => att && typeof att.url === 'string' && att.url.length > 0)
+      ? attachments.filter((att): att is AttachmentLike & { url: string } => att && typeof att.url === 'string' && att.url.length > 0)
       : []
     if (!isOutgoing && messageType === 'image' && usableAttachments.length === 0) {
       console.warn(`[MAX Webhook] skipped image without attachment chatId=${chatId} externalId=${externalId || 'n/a'}`)
@@ -214,13 +295,6 @@ export async function POST(request: Request) {
       })
     }
 
-    // Workflow: update status/unread/requiresResponse via centralized service
-    if (!isOutgoing) {
-      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
-    } else {
-      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
-    }
-
     // Map messageType to Prisma MessageType enum.
     // Defensive: if the scraper classified as 'document' but the first
     // attachment is actually a sticker, override. MAX ships stickers
@@ -252,7 +326,7 @@ export async function POST(request: Request) {
     }
     const content = text || contentFallbacks[messageType] || ''
 
-    let message = null as any
+    let message: Message | null = null
     const externalIdString = externalId ? String(externalId) : null
     const shouldUpgradeDomMessage =
       msgType !== 'text' &&
@@ -290,6 +364,63 @@ export async function POST(request: Request) {
       }
     } else if (msgType === 'text' && externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
       console.log(`[MAX Webhook] skipped text DOM externalId upgrade for ${externalIdString}`)
+    }
+
+    const isDomFallbackMedia =
+      !isOutgoing &&
+      msgType !== 'text' &&
+      externalIdString &&
+      (externalIdString.startsWith('max-dom-') || externalIdString.startsWith('max-recovered-')) &&
+      usableAttachments.length > 0
+
+    if (!message && isDomFallbackMedia) {
+      const nearbyMessages = await prisma.message.findMany({
+        where: {
+          chatId: chat.id,
+          channel: 'max',
+          direction: 'inbound',
+          type: msgType,
+          content,
+          externalId: { not: externalIdString },
+          sentAt: {
+            gte: new Date(sentAt.getTime() - 10 * 60 * 1000),
+            lte: new Date(sentAt.getTime() + 10 * 60 * 1000),
+          },
+        },
+        include: { attachments: true },
+        orderBy: { sentAt: 'desc' },
+        take: 25,
+      })
+
+      const duplicate = nearbyMessages.find(candidate =>
+        sameMaxAttachmentSet(usableAttachments, candidate.attachments as unknown as AttachmentLike[])
+      )
+
+      if (duplicate) {
+        console.log(`[MAX Webhook] deduped DOM media externalId ${externalIdString} -> ${duplicate.id}`)
+        opsLog('info', 'max_dom_media_deduped', {
+          channel: 'max',
+          chatId: chat.id,
+          externalChatId,
+          externalId: externalIdString,
+          duplicateMessageId: duplicate.id,
+          type: msgType,
+          attachmentCount: usableAttachments.length,
+        })
+        return NextResponse.json({
+          success: true,
+          chatInternalId: chat.id,
+          messageId: duplicate.id,
+          deduped: true,
+        })
+      }
+    }
+
+    // Workflow: update status/unread/requiresResponse via centralized service
+    if (!isOutgoing) {
+      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
+    } else {
+      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
 
     // Create Message (skip if already seen)
@@ -333,8 +464,8 @@ export async function POST(request: Request) {
             messageId: message.id,
             type:      att.type || 'file',
             url:       att.url,
-            fileName:  att.name || null,
-            fileSize:  att.size || null,
+            fileName:  attachmentDisplayName(att),
+            fileSize:  attachmentSize(att),
             mimeType:  att.mimeType || null,
           },
         })
