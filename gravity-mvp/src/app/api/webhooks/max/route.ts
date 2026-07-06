@@ -1,6 +1,7 @@
 'use server'
 
 import { NextResponse } from 'next/server'
+import type { MessageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -10,10 +11,39 @@ import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
 
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {}
+}
+
+function sanitizeMaxValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.replace(/\u0000/g, '').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+  }
+  if (Array.isArray(value)) return value.map(sanitizeMaxValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, sanitizeMaxValue(entry)])
+    )
+  }
+  return value
+}
+
+const MAX_CHAT_ID_ALIASES: Record<string, string> = {
+  '511708938': '902454841098',
+  '201482140': '902144614300',
+}
+
+function normalizeMaxChatId(chatId: unknown): string {
+  const raw = String(chatId)
+  return MAX_CHAT_ID_ALIASES[raw] || raw
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom } = body
+    const body = sanitizeMaxValue(await request.json()) as Record<string, any>
+    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom } = body
 
     // MAX server confirmed a message was deleted — remove from CRM DB
     if (deleted && externalId) {
@@ -39,6 +69,19 @@ export async function POST(request: Request) {
     if (isTextType && !trimmedText && (!attachments || attachments.length === 0)) {
       return NextResponse.json({ ok: true, skipped: 'empty_text' })
     }
+    const usableAttachments = Array.isArray(attachments)
+      ? attachments.filter((att: any) => att && typeof att.url === 'string' && att.url.length > 0)
+      : []
+    if (!isOutgoing && messageType === 'image' && usableAttachments.length === 0) {
+      console.warn(`[MAX Webhook] skipped image without attachment chatId=${chatId} externalId=${externalId || 'n/a'}`)
+      opsLog('warn', 'max_image_without_attachment_skipped', {
+        channel: 'max',
+        chatId: String(chatId),
+        externalId: externalId ? String(externalId) : null,
+        attachmentCount: Array.isArray(attachments) ? attachments.length : 0,
+      })
+      return NextResponse.json({ ok: true, skipped: 'image_without_attachment' })
+    }
 
     // Validate timestamp — same pattern as WA/TG. MAX timestamps are
     // ms since epoch (JS Date constructor input). Accept only values
@@ -58,12 +101,80 @@ export async function POST(request: Request) {
       sentAt = new Date()
     }
 
-    const externalChatId = String(chatId)
+    const rawExternalChatId = String(rawChatId || chatId)
+    const externalChatId = normalizeMaxChatId(chatId)
+    const senderIdString = senderId ? String(senderId) : null
+    const normalizedSenderPhone = senderPhone || phone ? normalizePhoneE164(String(senderPhone || phone)) : null
+    const effectiveSenderPhone = normalizedSenderPhone || null
 
     // Find or create Chat
     let chat = await prisma.chat.findUnique({
       where: { externalChatId },
     })
+
+    if (!chat && !isOutgoing && senderIdString) {
+      const existingBySender = await prisma.chat.findFirst({
+        where: {
+          channel: 'max',
+          metadata: { path: ['senderId'], equals: senderIdString },
+        },
+        orderBy: { lastMessageAt: 'desc' },
+      })
+
+      if (existingBySender) {
+        const existingMetadata = metadataRecord(existingBySender.metadata)
+        chat = await prisma.chat.update({
+          where: { id: existingBySender.id },
+          data: {
+            externalChatId,
+            lastMessageAt: sentAt,
+            ...(senderName && existingBySender.name?.startsWith('MAX:') ? { name: senderName } : {}),
+            metadata: {
+              ...existingMetadata,
+              previousExternalChatId: existingBySender.externalChatId,
+              rawExternalChatId,
+              senderId: senderIdString,
+              ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              connectionId: existingMetadata.connectionId || 'max_scraper',
+            },
+          },
+        })
+      }
+    }
+
+    if (!chat && !isOutgoing && effectiveSenderPhone) {
+      const last10 = effectiveSenderPhone.slice(-10)
+      const existingByPhone = await prisma.chat.findFirst({
+        where: {
+          channel: 'max',
+          OR: [
+            { metadata: { path: ['phone'], equals: effectiveSenderPhone } },
+            { driver: { phone: { contains: last10 } } },
+          ],
+        },
+        orderBy: { lastMessageAt: 'desc' },
+      })
+
+      if (existingByPhone) {
+        const existingMetadata = metadataRecord(existingByPhone.metadata)
+        chat = await prisma.chat.update({
+          where: { id: existingByPhone.id },
+          data: {
+            externalChatId,
+            lastMessageAt: sentAt,
+            ...(senderName && existingByPhone.name?.startsWith('MAX:') ? { name: senderName } : {}),
+            metadata: {
+              ...existingMetadata,
+              previousExternalChatId: existingByPhone.externalChatId,
+              rawExternalChatId,
+              ...(senderIdString ? { senderId: senderIdString } : {}),
+              phone: effectiveSenderPhone,
+              connectionId: existingMetadata.connectionId || 'max_scraper',
+            },
+          },
+        })
+      }
+    }
 
     if (!chat) {
       chat = await prisma.chat.create({
@@ -74,13 +185,15 @@ export async function POST(request: Request) {
           lastMessageAt: sentAt,
           status:        'new',
           metadata: {
-            ...(senderId    ? { senderId: String(senderId) } : {}),
-            ...(senderPhone ? { phone: senderPhone }         : {}),
+            ...(senderIdString       ? { senderId: senderIdString }       : {}),
+            ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+            rawExternalChatId,
             connectionId: 'max_scraper',
           },
         },
       })
     } else {
+      const existingMetadata = metadataRecord(chat.metadata)
       await prisma.chat.update({
         where: { id: chat.id },
         data: {
@@ -88,12 +201,13 @@ export async function POST(request: Request) {
           // Обновляем имя если раньше было только MAX:ID
           ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),
           // Обновляем senderId / phone в metadata
-          ...((senderId || senderPhone) ? {
+          ...((senderIdString || effectiveSenderPhone) ? {
             metadata: {
-              ...((chat.metadata as any) || {}),
-              ...(senderId    ? { senderId: String(senderId) } : {}),
-              ...(senderPhone ? { phone: senderPhone }         : {}),
-              connectionId: (chat.metadata as any)?.connectionId || 'max_scraper',
+              ...existingMetadata,
+              ...(senderIdString       ? { senderId: senderIdString }       : {}),
+              ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              rawExternalChatId,
+              connectionId: existingMetadata.connectionId || 'max_scraper',
             }
           } : {}),
         },
@@ -113,7 +227,7 @@ export async function POST(request: Request) {
     // with _type='STICKER' which older scraper versions bucketed as
     // document — the new MessageParser branch already emits 'sticker',
     // but this guard catches any in-flight or legacy frames.
-    const typeMap: Record<string, string> = {
+    const typeMap: Record<string, MessageType> = {
       text:     'text',
       image:    'image',
       video:    'video',
@@ -138,22 +252,56 @@ export async function POST(request: Request) {
     }
     const content = text || contentFallbacks[messageType] || ''
 
+    let message = null as any
+    const externalIdString = externalId ? String(externalId) : null
+    if (externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
+      const nearbyDomMessage = await prisma.message.findFirst({
+        where: {
+          chatId: chat.id,
+          channel: 'max',
+          direction: isOutgoing ? 'outbound' : 'inbound',
+          content,
+          externalId: { startsWith: 'max-dom-' },
+          sentAt: {
+            gte: new Date(sentAt.getTime() - 10 * 60 * 1000),
+            lte: new Date(sentAt.getTime() + 10 * 60 * 1000),
+          },
+        },
+        orderBy: { sentAt: 'desc' },
+      })
+      if (nearbyDomMessage) {
+        message = await prisma.message.update({
+          where: { id: nearbyDomMessage.id },
+          data: {
+            externalId: externalIdString,
+            type: msgType,
+            content,
+            sentAt,
+            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(forwardedFrom ? { forwardedFrom } : {}) },
+          },
+        })
+        console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
+      }
+    }
+
     // Create Message (skip if already seen)
-    const message = await prisma.message.upsert({
-      where:  { externalId: externalId || `max-${chatId}-${Date.now()}` },
-      update: {},
-      create: {
-        chatId:    chat.id,
-        direction: isOutgoing ? 'outbound' : 'inbound',
-        type:      msgType as any,
-        content,
-        channel:   'max',
-        externalId: externalId || null,
-        status:    'delivered',
-        sentAt,   // validated above
-        metadata:  { senderId, maxChatId: chatId, attachments: attachments || [], ...(forwardedFrom ? { forwardedFrom } : {}) },
-      },
-    })
+    if (!message) {
+      message = await prisma.message.upsert({
+        where:  { externalId: externalId || `max-${chatId}-${Date.now()}` },
+        update: {},
+        create: {
+          chatId:    chat.id,
+          direction: isOutgoing ? 'outbound' : 'inbound',
+          type:      msgType,
+          content,
+          channel:   'max',
+          externalId: externalId || null,
+          status:    'delivered',
+          sentAt,   // validated above
+          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(forwardedFrom ? { forwardedFrom } : {}) },
+        },
+      })
+    }
 
     // Save attachments. Dedup by url first — MAX scraper sometimes sends
     // the same sticker/image twice (preview + full, or two frames of a
@@ -161,6 +309,13 @@ export async function POST(request: Request) {
     // copies of the same frog.
     if (attachments && attachments.length > 0) {
       const seenUrls = new Set<string>()
+      const existingAttachments = await prisma.messageAttachment.findMany({
+        where: { messageId: message.id },
+        select: { url: true },
+      })
+      for (const existing of existingAttachments) {
+        if (existing.url) seenUrls.add(existing.url)
+      }
       for (const att of attachments) {
         if (!att.url) continue
         if (seenUrls.has(att.url)) continue
@@ -181,8 +336,8 @@ export async function POST(request: Request) {
     console.log(`[MAX Webhook] chatId=${chatId} direction=${isOutgoing ? 'out' : 'in'} text="${(text || '').slice(0, 50)}"`)
 
     // Привязываем чат к водителю (по телефону/имени из MAX)
-    if (!isOutgoing && !chat.driverId && (senderPhone || senderName)) {
-      DriverMatchService.linkChatToDriver(chat.id, { phone: senderPhone, name: senderName }).catch(e =>
+    if (!isOutgoing && !chat.driverId && (effectiveSenderPhone || senderName)) {
+      DriverMatchService.linkChatToDriver(chat.id, { phone: effectiveSenderPhone || undefined, name: senderName }).catch(e =>
         console.error('[MAX Webhook] linkChatToDriver error:', e.message)
       )
     }
@@ -191,8 +346,8 @@ export async function POST(request: Request) {
     if (!isOutgoing) {
       try {
         // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
-        const maxExternalId = senderId ? String(senderId) : externalChatId
-        const maxPhone = senderPhone ? normalizePhoneE164(senderPhone) : null
+        const maxExternalId = senderIdString || externalChatId
+        const maxPhone = effectiveSenderPhone
 
         const contactResult = await ContactService.resolveContact(
           'max',
@@ -205,8 +360,9 @@ export async function POST(request: Request) {
           contactResult.contact.id,
           contactResult.identity.id,
         )
-      } catch (contactErr: any) {
-        console.error(`[MAX Webhook] ContactService error (non-blocking): ${contactErr.message}`)
+      } catch (contactErr: unknown) {
+        const message = contactErr instanceof Error ? contactErr.message : String(contactErr)
+        console.error(`[MAX Webhook] ContactService error (non-blocking): ${message}`)
       }
     }
     // ──────────────────────────────────────────────────────────
@@ -219,8 +375,9 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, chatInternalId: chat.id, messageId: message.id })
-  } catch (err: any) {
-    opsLog('error', 'webhook_max_error', { channel: 'max', error: err.message })
-    return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    opsLog('error', 'webhook_max_error', { channel: 'max', error: message })
+    return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 })
   }
 }

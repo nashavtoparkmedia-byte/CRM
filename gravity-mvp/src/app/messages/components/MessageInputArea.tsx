@@ -103,6 +103,7 @@ export default function MessageInputArea({
     const audioChunksRef = useRef<Blob[]>([])
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const [imagePreview, setImagePreview] = useState<{ dataUrl: string; file: File } | null>(null)
+    const [mediaCaption, setMediaCaption] = useState("")
     const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 
     // Restore draft on chat/channel change
@@ -353,6 +354,7 @@ export default function MessageInputArea({
     const handlePasteFile = (file: File) => {
         const reader = new FileReader()
         reader.onload = () => {
+            setMediaCaption("")
             setImagePreview({ dataUrl: reader.result as string, file })
         }
         reader.readAsDataURL(file)
@@ -386,6 +388,7 @@ export default function MessageInputArea({
 
         const reader = new FileReader()
         reader.onload = () => {
+            setMediaCaption("")
             setImagePreview({ dataUrl: reader.result as string, file })
         }
         reader.readAsDataURL(file)
@@ -394,10 +397,9 @@ export default function MessageInputArea({
     const handleSendImage = async () => {
         if (!imagePreview) return
         const { dataUrl, file } = imagePreview
-        const captionText = text.trim()
+        const captionText = mediaCaption.trim()
         setImagePreview(null)
-        setText('')
-        draftCache.delete(cacheKey)
+        setMediaCaption("")
         setIsSendingImage(true)
         setSendingFile({ name: file.name, mimeType: file.type || 'application/octet-stream' })
         try {
@@ -443,6 +445,7 @@ export default function MessageInputArea({
             } else if (e.key === 'Escape') {
                 e.preventDefault()
                 setImagePreview(null)
+                setMediaCaption("")
             }
         }
         document.addEventListener('keydown', handleModalKeyDown)
@@ -493,11 +496,11 @@ export default function MessageInputArea({
             const title = isImage ? 'Отправить фото' : isVideo ? 'Отправить видео' : isAudio ? 'Отправить аудио' : 'Отправить файл'
             const fileSizeKb = Math.round(imagePreview.file.size / 1024)
             return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setImagePreview(null)}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setImagePreview(null); setMediaCaption("") }}>
                 <div className="bg-white rounded-2xl shadow-2xl p-[4px] max-w-sm w-full mx-[4px] flex flex-col gap-3" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-between">
                         <span className="font-semibold text-[15px] text-gray-800">{title}</span>
-                        <button onClick={() => setImagePreview(null)} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
+                        <button onClick={() => { setImagePreview(null); setMediaCaption("") }} className="w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-700">
                             <X size={16} />
                         </button>
                     </div>
@@ -521,15 +524,15 @@ export default function MessageInputArea({
                     {!isAudio && (
                         <input
                             type="text"
-                            value={text}
-                            onChange={(e) => handleTextChange(e.target.value)}
+                            value={mediaCaption}
+                            onChange={(e) => setMediaCaption(e.target.value)}
                             placeholder="Добавить подпись..."
                             autoFocus
                             className="w-full h-10 px-3 rounded-lg border border-gray-200 text-[14px] outline-none focus:border-[#3390EC] placeholder-gray-400"
                         />
                     )}
                     <div className="flex gap-[2px]">
-                        <button onClick={() => setImagePreview(null)} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
+                        <button onClick={() => { setImagePreview(null); setMediaCaption("") }} className="flex-1 h-10 rounded-xl border border-gray-200 text-gray-600 text-[14px] hover:bg-gray-50 transition-colors">
                             Отмена
                         </button>
                         <button onClick={handleSendImage} className="flex-1 h-10 rounded-xl bg-[#3390EC] text-white text-[14px] font-medium hover:bg-[#2B7FD4] transition-colors">

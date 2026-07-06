@@ -4,6 +4,54 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 
 const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
 
+type MaxDeliveryStatus =
+    | 'queued'
+    | 'upload_started'
+    | 'uploaded'
+    | 'send_requested'
+    | 'max_echo_received'
+    | 'delivered'
+    | 'failed'
+
+function sanitizeForMaxDeliveryLog(value: unknown): unknown {
+    if (value == null) return value
+    if (typeof value === 'string') {
+        if (/^data:.*;base64,/i.test(value)) return '[data-url-redacted]'
+        if (/^[A-Za-z0-9+/=_-]{400,}$/.test(value)) return '[base64-or-token-redacted]'
+        return value.length > 300 ? `${value.slice(0, 120)}...[${value.length}]` : value
+    }
+    if (Array.isArray(value)) return value.map(sanitizeForMaxDeliveryLog)
+    if (typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+                key,
+                /token|cookie|secret|authorization|base64|password/i.test(key)
+                    ? '[redacted]'
+                    : sanitizeForMaxDeliveryLog(entry),
+            ])
+        )
+    }
+    return value
+}
+
+function maxDeliveryLog(event: Record<string, unknown>) {
+    console.log('[MAX_DELIVERY]', JSON.stringify(sanitizeForMaxDeliveryLog({
+        ts: new Date().toISOString(),
+        ...event,
+    })))
+}
+
+function isRealMaxMessageId(id: unknown): boolean {
+    return /^d301/i.test(String(id || ''))
+}
+
+function isValidMaxMediaDelivery(resData: Record<string, any>): boolean {
+    const source = String(resData?.source || '')
+    const candidateId = resData?.maxMessageId || resData?.externalId
+    if (source === 'op180' || source === 'op180_compact') return false
+    return Boolean(resData?.deliveryConfirmed && isRealMaxMessageId(candidateId))
+}
+
 /**
  * Detect media type from MIME.
  * Returns one of: image | video | voice | audio | document
@@ -43,7 +91,7 @@ export async function POST(req: NextRequest) {
         // raw query чтобы достать его одним запросом без рисков сломать schema.
         const chat = await prisma.chat.findUnique({
             where: { id: chatId },
-            select: { channel: true, externalChatId: true, driver: { select: { phone: true, id: true } } }
+            select: { channel: true, name: true, externalChatId: true, metadata: true, driver: { select: { phone: true, id: true } } }
         }) as any
         // Подтягиваем telegramId опционально через raw query (избегаем падения если relation отсутствует)
         if (chat?.driver?.id) {
@@ -70,25 +118,73 @@ export async function POST(req: NextRequest) {
 
         let externalId: string | null = null
         let sendError: string | null = null
+        let maxDeliveryStatus: MaxDeliveryStatus | null = channel === 'max' ? 'queued' : null
+        let maxDeliveryConfirmed = false
+        let maxDeliveryResponse: Record<string, any> | null = null
+        let maxProtocolChatId: string | null = null
+        let maxWebRouteId: string | null = null
 
         // Route to appropriate channel backend
         if (channel === 'max') {
+            const maxMetadata = (chat.metadata || {}) as any
+            const rawMaxTarget = String(chat.externalChatId || '').includes(':')
+                ? String(chat.externalChatId || '').split(':').slice(1).join(':')
+                : String(chat.externalChatId || '')
+            const cleanMaxTarget = rawMaxTarget.replace(/\D/g, '')
+            maxProtocolChatId = cleanMaxTarget || null
+            maxWebRouteId = maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null
+            if (!cleanMaxTarget) {
+                sendError = `Invalid MAX target: ${chat.externalChatId || ''}`
+            }
+            maxDeliveryLog({
+                operation: 'send',
+                status: 'queued',
+                clientMessageId,
+                conversationId: cleanMaxTarget || null,
+                protocolChatId: maxProtocolChatId,
+                webRouteId: maxWebRouteId,
+                uploadId: filename,
+            })
+            if (!sendError) {
             const res = await fetch(`${MAX_SCRAPER_URL}/send-media`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    chatId: Number(chat.externalChatId),
+                    chatId: cleanMaxTarget,
                     base64, filename, mimeType, caption: caption || '',
                     mediaType,
+                    phone: chat.driver?.phone || chat.name || '',
+                    uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
                 }),
             })
             const resData = await res.json().catch(() => ({ error: res.statusText }))
+            maxDeliveryResponse = resData
             if (!res.ok) {
                 sendError = resData.error || res.statusText
+                maxDeliveryStatus = 'failed'
                 console.error('[send-media] MAX error (saving as failed):', sendError)
                 // Don't return — save to DB so operator sees the attempt in chat
             } else {
-                externalId = resData.externalId || null
+                const candidateExternalId = resData.externalId || resData.maxMessageId || null
+                maxDeliveryConfirmed = isValidMaxMediaDelivery(resData)
+                externalId = maxDeliveryConfirmed ? candidateExternalId : null
+                maxDeliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'send_requested'
+            }
+            maxDeliveryLog({
+                operation: maxDeliveryConfirmed ? 'echo' : 'send',
+                status: maxDeliveryStatus,
+                clientMessageId,
+                conversationId: cleanMaxTarget,
+                protocolChatId: maxProtocolChatId,
+                webRouteId: maxWebRouteId,
+                uploadId: filename,
+                maxMessageId: maxDeliveryConfirmed ? (resData.maxMessageId || externalId || null) : null,
+                externalId,
+                error: sendError,
+                scraperDeliveryStatus: resData.deliveryStatus || null,
+                scraperSource: resData.source || null,
+                scraperCandidateMessageId: maxDeliveryConfirmed ? null : (resData.maxMessageId || resData.externalId || null),
+            })
             }
         } else if (channel === 'whatsapp') {
             const { sendMedia } = await import('@/lib/whatsapp/WhatsAppService')
@@ -131,6 +227,23 @@ export async function POST(req: NextRequest) {
         // оператор не пересылал. UI просто не покажет attachment, но клиент
         // его уже получил.
         let message: any = null
+        const dbMessageStatus = sendError ? 'failed' : (channel === 'max' ? (maxDeliveryConfirmed ? 'delivered' : 'sent') : 'delivered')
+        const maxDeliveryMetadata = channel === 'max' ? {
+            status: maxDeliveryStatus,
+            deliveryConfirmed: maxDeliveryConfirmed,
+            clientMessageId: clientMessageId ? String(clientMessageId) : null,
+            conversationId: maxProtocolChatId,
+            protocolChatId: maxProtocolChatId,
+            webRouteId: maxWebRouteId,
+            uploadId: filename,
+            maxMessageId: maxDeliveryConfirmed ? (maxDeliveryResponse?.maxMessageId || externalId || null) : null,
+            externalId,
+            operation: maxDeliveryConfirmed ? 'echo' : 'send',
+            error: sendError,
+            scraperDeliveryStatus: maxDeliveryResponse?.deliveryStatus || null,
+            scraperSource: maxDeliveryResponse?.source || null,
+            scraperCandidateMessageId: maxDeliveryConfirmed ? null : (maxDeliveryResponse?.maxMessageId || maxDeliveryResponse?.externalId || null),
+        } : undefined
         try {
             message = await prisma.message.create({
                 data: {
@@ -141,19 +254,28 @@ export async function POST(req: NextRequest) {
                     channel: channel as any,
                     externalId,
                     ...(clientMessageId ? { clientMessageId: String(clientMessageId) } : {}),
-                    status: sendError ? 'failed' : 'delivered',
+                    status: dbMessageStatus,
                     sentAt: new Date(),
                     metadata: {
                         origin: 'operator', filename, mimeType,
+                        ...(maxDeliveryMetadata ? { maxDelivery: maxDeliveryMetadata } : {}),
                         ...(sendError ? { sendError } : {}),
                     },
                 },
             })
+            if (channel === 'max') {
+                maxDeliveryLog({
+                    ...(maxDeliveryMetadata || {}),
+                    crmMessageId: message.id,
+                    status: maxDeliveryStatus,
+                })
+            }
         } catch (dbErr: any) {
             console.error('[send-media] DB message.create failed (channel уже доставил):', dbErr?.message)
             return NextResponse.json({
                 success: true,
-                delivered: true,
+                delivered: channel === 'max' ? maxDeliveryConfirmed : true,
+                status: maxDeliveryStatus,
                 warning: `Сообщение доставлено клиенту, но не сохранилось в БД: ${dbErr?.message}`,
             })
         }
@@ -197,11 +319,19 @@ export async function POST(req: NextRequest) {
         if (sendError) {
             return NextResponse.json({
                 success: false, messageId: message.id,
+                delivered: false,
+                status: maxDeliveryStatus,
                 error: sendError,
                 warning: 'Файл не отправлен получателю, попытка сохранена в переписке',
             })
         }
-        return NextResponse.json({ success: true, messageId: message.id, externalId })
+        return NextResponse.json({
+            success: true,
+            messageId: message.id,
+            externalId,
+            delivered: channel === 'max' ? maxDeliveryConfirmed : true,
+            status: channel === 'max' ? maxDeliveryStatus : 'delivered',
+        })
     } catch (err: any) {
         console.error('[send-media] Error:', err)
         return NextResponse.json({ error: err.message }, { status: 500 })
