@@ -1719,8 +1719,11 @@ function scheduleDomFallbackForRecentMedia(reason, delayMs = 2200) {
   setTimeout(() => {
     const chatId = latestRecentOp128ChatId()
     if (!chatId) return
-    forwardLatestDomMessage(String(chatId), reason)
-      .then(result => console.log(`[domFallback] result ${JSON.stringify(result).slice(0, 300)}`))
+    const runner = reason === 'loose_op128_media'
+      ? forwardRecentDomMessages(String(chatId), reason)
+      : forwardLatestDomMessage(String(chatId), reason)
+    runner
+      .then(result => console.log(`[domFallback] result ${JSON.stringify(result).slice(0, 500)}`))
       .catch(e => console.error('[domFallback] failed:', e.message))
   }, delayMs)
 }
