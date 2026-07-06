@@ -254,7 +254,13 @@ export async function POST(request: Request) {
 
     let message = null as any
     const externalIdString = externalId ? String(externalId) : null
-    if (externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
+    const shouldUpgradeDomMessage =
+      msgType !== 'text' &&
+      externalIdString &&
+      !externalIdString.startsWith('max-dom-') &&
+      !externalIdString.startsWith('max-recovered-')
+
+    if (shouldUpgradeDomMessage) {
       const nearbyDomMessage = await prisma.message.findFirst({
         where: {
           chatId: chat.id,
@@ -282,6 +288,8 @@ export async function POST(request: Request) {
         })
         console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
       }
+    } else if (msgType === 'text' && externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
+      console.log(`[MAX Webhook] skipped text DOM externalId upgrade for ${externalIdString}`)
     }
 
     // Create Message (skip if already seen)
