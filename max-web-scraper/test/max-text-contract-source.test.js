@@ -138,6 +138,27 @@ test('MAX empty op71 DOM recovery uses single fresh op128 chat when decoded chat
   )
 })
 
+test('MAX DOM recovery resolves browser route separately from protocol chat id', () => {
+  const scraper = read('max-web-scraper/index.js')
+
+  assert.match(scraper, /function dialogParticipantUiRouteId\(chatId\)/)
+  assert.match(scraper, /function resolveUiRouteIdForChat\(chatId\)/)
+  assert.match(scraper, /const staticRouteId = UI_CHAT_ID_OVERRIDES\[chatIdStr\]/)
+  assert.match(scraper, /chatCache\.get\(chatIdStr\)/)
+  assert.match(scraper, /String\(chat\.type\)\.toUpperCase\(\) !== 'DIALOG'/)
+  assert.match(scraper, /const otherParticipants = participants/)
+  assert.match(scraper, /return \{ uiRouteId: participantRouteId, source: 'dialog_participant' \}/)
+  assert.match(scraper, /return \{ uiRouteId: chatIdStr, source: 'protocol_chat_id' \}/)
+  assert.match(scraper, /'901943199056': '66896'/)
+  assertBeforeAfter(
+    scraper,
+    'async function forwardRecentDomMessages(chatId, reason = \'manual\')',
+    'const route = resolveUiRouteIdForChat(chatId)',
+    'const candidates = await scrapeRecentDomMessages(uiRouteId)',
+    'DOM recovery must resolve the browser route before scraping visible bubbles',
+  )
+})
+
 test('MAX guarded DOM text recovery filters unanchored trailing text', () => {
   const scraper = read('max-web-scraper/index.js')
 

@@ -36,6 +36,8 @@ const UI_CHAT_ID_OVERRIDES = {
   '902144614300': '201482140',
   // +79126787532: protocol dialog id differs from browser profile/dialog route.
   '902454841098': '511708938',
+  // Live inbound fallback observed in prod: protocol dialog id differs from browser route.
+  '901943199056': '66896',
 }
 
 function protocolChatIdForUiRoute(routeId) {
@@ -48,6 +50,42 @@ function protocolChatIdForUiRoute(routeId) {
 
 function normalizeMaxChatId(chatId) {
   return protocolChatIdForUiRoute(chatId)
+}
+
+function dialogParticipantUiRouteId(chatId) {
+  const chatIdStr = String(chatId || '')
+  if (!chatIdStr || typeof chatCache === 'undefined' || !chatCache?.get) return null
+
+  const chat = chatCache.get(chatIdStr)
+  if (!chat || typeof chat !== 'object') return null
+  if (chat.type && String(chat.type).toUpperCase() !== 'DIALOG') return null
+
+  const participants = chat.participants && typeof chat.participants === 'object'
+    ? Object.keys(chat.participants)
+    : []
+  if (!participants.length) return null
+
+  const myId = String(transport?._myUserId || '')
+  if (myId && !participants.includes(myId)) return null
+
+  const otherParticipants = participants
+    .filter(id => id && String(id) !== myId)
+    .filter(id => /^\d{5,15}$/.test(String(id)))
+
+  if (otherParticipants.length !== 1) return null
+  const routeId = String(otherParticipants[0])
+  return routeId && routeId !== chatIdStr ? routeId : null
+}
+
+function resolveUiRouteIdForChat(chatId) {
+  const chatIdStr = String(chatId || '')
+  const staticRouteId = UI_CHAT_ID_OVERRIDES[chatIdStr]
+  if (staticRouteId) return { uiRouteId: String(staticRouteId), source: 'static_override' }
+
+  const participantRouteId = dialogParticipantUiRouteId(chatIdStr)
+  if (participantRouteId) return { uiRouteId: participantRouteId, source: 'dialog_participant' }
+
+  return { uiRouteId: chatIdStr, source: 'protocol_chat_id' }
 }
 
 const MAX_DELIVERY_STATUSES = new Set([
@@ -2332,7 +2370,11 @@ async function forwardLatestDomMessage(chatId, reason = 'manual') {
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
   try {
-    const uiRouteId = UI_CHAT_ID_OVERRIDES[String(chatId)] || String(chatId)
+    const route = resolveUiRouteIdForChat(chatId)
+    const uiRouteId = route.uiRouteId
+    if (route.source !== 'protocol_chat_id') {
+      console.log(`[domFallback] resolved UI route chatId=${chatId} route=${uiRouteId} source=${route.source}`)
+    }
     if (transport) transport._activeUiChatId = String(chatId)
     const latest = await scrapeLatestDomMessage(uiRouteId)
     return await forwardDomCandidate(chatId, uiRouteId, latest, reason)
@@ -2345,7 +2387,11 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
   try {
-    const uiRouteId = UI_CHAT_ID_OVERRIDES[String(chatId)] || String(chatId)
+    const route = resolveUiRouteIdForChat(chatId)
+    const uiRouteId = route.uiRouteId
+    if (route.source !== 'protocol_chat_id') {
+      console.log(`[domFallback] resolved UI route chatId=${chatId} route=${uiRouteId} source=${route.source}`)
+    }
     if (transport) transport._activeUiChatId = String(chatId)
     const candidates = await scrapeRecentDomMessages(uiRouteId)
     let recoverable = (reason === 'empty_op71_after_op128'
