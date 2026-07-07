@@ -211,6 +211,8 @@ test('MAX DOM text recovery ids are stable across overlapping scans in one live 
   assert.match(scraper, /const liveWindowDetails = recentLiveDomWindowDetails\(chatId, recoverable\.length\)/)
   assert.match(scraper, /preSkipped\.dom_live_window_filtered = beforeLiveWindowFilter - recoverable\.length/)
   assert.match(scraper, /function shouldKeepNumericDomRecoveryCandidate\(candidate, candidates\)/)
+  assert.match(scraper, /candidate\?\._liveDomSeriesCandidate/)
+  assert.match(scraper, /candidate\._liveDomSeriesCandidate = true/)
   assert.match(scraper, /function applyDomTextRecoveryLimits\(chatId, candidates\)/)
   assert.match(scraper, /group\.items\.length - group\.directCount - alreadyRecovered/)
   assert.match(scraper, /candidate\._skipDomTextAlreadyRecovered = true/)
@@ -241,6 +243,12 @@ test('MAX DOM text recovery ids are stable across overlapping scans in one live 
     'preSkipped.dom_numeric_future_filtered = beforeNumericFutureFilter - recoverable.length',
     'assignDomTextRecoveryBudgets(chatId, recoverable)',
     'future numeric DOM candidates must be filtered before assigning recovered ids',
+  )
+  assertBefore(
+    scraper,
+    'candidate._liveDomSeriesCandidate = true',
+    'recoverable = recoverable.filter((candidate, index, list) =>',
+    'fresh live op128 series DOM candidates must be marked before guarded text filters',
   )
 })
 //M1_REBUILD_TRIGGER_AFTER_DOM_RECOVERY

@@ -1654,6 +1654,7 @@ function hasNearbyDirectNumericDomCandidate(candidates, index) {
 
 function shouldKeepDomTextRecoveryCandidate(chatId, candidate, candidates, index) {
   if (candidate?._directHit) return true
+  if (candidate?._liveDomSeriesCandidate) return true
   if (candidate?._liveDomContextBeforeDirect) return true
   if (!candidate?.text || candidate.attachments?.length) return true
   if (recentDirectInboundTextHits(chatId, candidate.text).length > 0) return true
@@ -1679,6 +1680,7 @@ function limitRecoverableToRecentLiveDomWindow(chatId, recoverable) {
 
 function shouldKeepNumericDomRecoveryCandidate(candidate, candidates) {
   if (candidate?._directHit) return true
+  if (candidate?._liveDomSeriesCandidate) return true
   const currentNumber = parsePlainIntegerText(candidate?.text)
   if (currentNumber == null) return true
   const directNumbers = candidates
@@ -2424,6 +2426,13 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
         directDisplayMinutes.some(minute => displayMinuteDistance(candidate.displayMinute, minute) <= 1)
       )
       preSkipped.dom_time_window_filtered = beforeTimeFilter - recoverable.length
+      if (liveWindowDetails.recentOp128Count > 0) {
+        for (const candidate of recoverable) {
+          if (candidate?.text && !candidate.attachments?.length && !candidate._directHit) {
+            candidate._liveDomSeriesCandidate = true
+          }
+        }
+      }
       const firstDirectIndex = recoverable.findIndex(candidate => candidate._directHit)
       if (firstDirectIndex > 0) {
         let keepFrom = firstDirectIndex
