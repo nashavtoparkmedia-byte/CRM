@@ -413,46 +413,22 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 )}
             </div>
 
-            {/* Channel selection. Green means provider account is confirmed,
-                not just that CRM has an identity/chat row. Unknown identities
-                stay gray so they cannot be mistaken for reachability. */}
+            {/* Channel selection shows CRM channel presence only, not provider account reachability. */}
             {(() => {
                 const focusedContact =
                     results.find(c => c.id === hoveredContactId) ||
                     (results.length === 1 ? results[0] : null)
-                const confirmedChannels = new Set<string>(
-                    focusedContact?.identities
-                        .filter(i => i.reachabilityStatus === 'confirmed')
-                        .map(i => i.channel) || []
-                )
-                const unreachableChannels = new Set<string>(
-                    focusedContact?.identities
-                        .filter(i => i.reachabilityStatus === 'unreachable')
-                        .map(i => i.channel) || []
-                )
                 const knownChannels = new Set<string>(focusedContact?.channels || [])
                 return (
                     <div className="px-3.5 pb-2.5">
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                             <span>Канал</span>
                             {focusedContact && (
-                                <span className="flex items-center gap-[2px] text-[9px] font-medium normal-case">
-                                    <span className="flex items-center gap-1 text-emerald-600">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />подтверждён
-                                    </span>
-                                    <span className="flex items-center gap-1 text-gray-500">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />проверяется
-                                    </span>
-                                    <span className="flex items-center gap-1 text-red-500">
-                                        ⊘ нет
-                                    </span>
-                                </span>
+                                <span className="text-[9px] font-medium normal-case text-gray-400">наличие канала в CRM</span>
                             )}
                         </div>
                         <div className="flex gap-1.5">
                             {CHANNELS.map(ch => {
-                                const isConfirmed = !!focusedContact && confirmedChannels.has(ch.dbChannel)
-                                const isUnreachable = !!focusedContact && unreachableChannels.has(ch.dbChannel)
                                 const isKnown = !!focusedContact && knownChannels.has(ch.dbChannel)
                                 return (
                                     <button
@@ -480,13 +456,9 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                         title={
                                             !focusedContact
                                                 ? ch.label
-                                                : isConfirmed
-                                                    ? `${ch.label}: аккаунт подтверждён`
-                                                    : isUnreachable
-                                                        ? `${ch.label}: аккаунт не найден`
-                                                        : isKnown
-                                                            ? `${ch.label}: есть запись в CRM, аккаунт проверяется`
-                                                            : `${ch.label}: аккаунт ещё не проверялся`
+                                                : isKnown
+                                                    ? `${ch.label}: канал есть в CRM. Это не проверка аккаунта у провайдера`
+                                                    : `${ch.label}: канала пока нет в CRM — будет создан новый, доставка не гарантирована`
                                         }
                                         className={`flex-1 h-[34px] text-[11px] font-bold rounded-lg transition-all relative flex items-center justify-center gap-1 ${
                                             selectedChannel === ch.id
@@ -496,11 +468,9 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                     >
                                         <span>{ch.label}</span>
                                         {focusedContact && (
-                                            isConfirmed
-                                                ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="аккаунт подтверждён" />
-                                                : isUnreachable
-                                                    ? <span className="text-red-500 text-[12px] leading-none" title="аккаунт не найден">⊘</span>
-                                                    : <span className="w-1.5 h-1.5 rounded-full bg-gray-300" title="аккаунт проверяется" />
+                                            isKnown
+                                                ? <span className="rounded bg-gray-100 px-1 text-[8px] font-semibold text-gray-500" title="Канал есть в CRM">CRM</span>
+                                                : <span className="rounded bg-amber-50 px-1 text-[8px] font-semibold text-amber-700" title="Канала пока нет в CRM">новый</span>
                                         )}
                                     </button>
                                 )
@@ -514,16 +484,23 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
             {reachability?.status === 'confirmed' && (
                 <div className="px-3.5 pb-1.5">
                     <div className="flex items-start gap-1.5 bg-emerald-50 text-emerald-700 rounded-lg px-2.5 py-1.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0 mt-[5px]" />
-                        <span className="text-[11px] leading-tight">Аккаунт найден</span>
+                        <span className="text-[11px] leading-tight">есть: аккаунт найден</span>
                     </div>
                 </div>
             )}
-            {reachability?.status === 'checking' && (
+            {reachability?.status === 'checking' && reachability.retryable !== false && (
                 <div className="px-3.5 pb-1.5">
-                    <div className="flex items-start gap-1.5 bg-gray-50 text-gray-600 rounded-lg px-2.5 py-1.5">
+                    <div className="flex items-start gap-1.5 bg-blue-50 text-blue-700 rounded-lg px-2.5 py-1.5">
                         <Loader2 size={12} className="shrink-0 mt-0.5 animate-spin" />
-                        <span className="text-[11px] leading-tight">Проверяем наличие аккаунта...</span>
+                        <span className="text-[11px] leading-tight">проверяем: проверка аккаунта еще идет</span>
+                    </div>
+                </div>
+            )}
+            {reachability?.status === 'checking' && reachability.retryable === false && (
+                <div className="px-3.5 pb-1.5">
+                    <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
+                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                        <span className="text-[11px] leading-tight">нет связи: CRM сейчас не может проверить канал. Это не значит, что аккаунта нет</span>
                     </div>
                 </div>
             )}
@@ -531,7 +508,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 <div className="px-3.5 pb-1.5">
                     <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
                         <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                        <span className="text-[11px] leading-tight">{reachability.error || 'Аккаунт не найден'}</span>
+                        <span className="text-[11px] leading-tight">нет: {reachability.error || 'канал проверен, аккаунт не найден'}</span>
                     </div>
                 </div>
             )}

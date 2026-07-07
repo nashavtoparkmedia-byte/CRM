@@ -209,8 +209,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         error: data.error,
                     }
                     setLiveReachability(prev => ({ ...prev, [channel]: nextEntry }))
-                    if (nextStatus === 'checking' && data.retryable !== false) {
-                        retryTimers.push(setTimeout(() => { if (!cancelled) runCheck(channel) }, 5_000))
+                    if (nextStatus === 'checking') {
+                        const retryDelayMs = data.retryable === false ? 30_000 : 5_000
+                        retryTimers.push(setTimeout(() => { if (!cancelled) runCheck(channel) }, retryDelayMs))
                     }
                 })
                 .catch(() => {
@@ -284,12 +285,20 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     }
 
     const reachabilityBadge = (reachable: boolean | null, live?: LiveReachabilityEntry) => {
-        if (reachable === true) return { label: 'есть', cls: 'text-emerald-600 bg-emerald-50', title: 'Аккаунт найден' }
-        if (reachable === false) return { label: 'нет', cls: 'text-red-600 bg-red-50', title: 'Аккаунт не найден' }
-        if (live?.status === 'checking' && live.retryable === false) {
-            return { label: 'нет связи', cls: 'text-amber-700 bg-amber-50', title: live.error || 'Канал сейчас не готов к проверке' }
+        if (reachable === true) {
+            return { label: 'есть', cls: 'text-emerald-700 bg-emerald-50', title: 'Аккаунт найден у провайдера' }
         }
-        return { label: 'проверяем', cls: 'text-gray-500 bg-gray-50', title: 'CRM проверяет аккаунт' }
+        if (reachable === false) {
+            return { label: 'нет', cls: 'text-gray-600 bg-gray-100', title: 'Канал проверен: аккаунт у провайдера не найден' }
+        }
+        if (live?.status === 'checking' && live.retryable === false) {
+            return {
+                label: 'нет связи',
+                cls: 'text-amber-700 bg-amber-50',
+                title: live.error || 'CRM сейчас не может проверить канал. Это не ответ провайдера и не означает, что аккаунта нет',
+            }
+        }
+        return { label: 'проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
     }
 
     if (!chat) return null
@@ -384,7 +393,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
     // Каналы, в которых у contact есть ХОТЯ БЫ ОДИН confirmed identity (включая orphan).
     // Используется в missing-channels блоке: для MAX live-check phone-reachability не делается,
-    // но если orphan MAX identity confirmed (auto-link через scraper) — точка должна быть зелёной.
+    // но если orphan MAX identity confirmed (auto-link через scraper) — статус должен быть "есть".
     const confirmedChannelsAny = contact
         ? new Set(contact.identities.filter(i => i.reachabilityStatus === 'confirmed').map(i => i.channel))
         : new Set<string>()
@@ -724,8 +733,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const liveEntry = liveReachability[identity.channel]
                                             const reachBadge = reachabilityBadge(reachable, liveEntry)
                                             const isOperationallyBlocked = isCheckable && reachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
-                                            // Bug fix: getReachability возвращает null для 'unknown'. Прежнее условие `!== undefined`
-                                            // отправляло null в красную ветку (null ? emerald : red → red). Теперь null → серый.
+                                            // null значит "проверяем" или "нет связи", но не provider-level "нет".
                                             return (
                                                 <div key={identity.id}>
                                                     <div className="flex items-center justify-between h-[26px]">
@@ -796,7 +804,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             return (
                                                 <div key={`missing-${ch}`} className="flex items-center justify-between h-[26px]">
                                                     <div className="flex items-center gap-1.5">
-                                                        {/* Bug fix: same null-vs-undefined trap as above */}
+                                                        {/* null means "проверяем" or "нет связи", not provider-level "нет". */}
                                                         {isOperationallyBlocked ? (
                                                             <span className="inline-block w-[7px] h-[7px] rounded-full bg-amber-400" title={reachBadge.title} />
                                                         ) : isMissingCheckable && missingReachable !== null && missingReachable !== undefined ? (

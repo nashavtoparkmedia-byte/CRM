@@ -2286,6 +2286,18 @@ function waReachabilityChecking(error: string, reason: string, retryable = true)
     return { reachable: null, confirmed: false, retryable, error, reason }
 }
 
+function getLiveReachabilityConnectionId(): string | null {
+    const entries = registry.getAllEntries()
+        .filter(e => e.channel === 'whatsapp' && e.state === 'ready')
+        .sort((a, b) => (b.readyAt?.getTime() ?? 0) - (a.readyAt?.getTime() ?? 0))
+
+    for (const entry of entries) {
+        const client = clients.get(entry.connectionId)
+        if (client?.info) return entry.connectionId
+    }
+    return null
+}
+
 export async function checkReachability(
     phone: string,
     connectionId?: string
@@ -2296,17 +2308,22 @@ export async function checkReachability(
     const TIMEOUT_MS = 8_000
 
     try {
-        // Find a ready connection
+        // Prefer the same runtime truth used by the WhatsApp settings screen:
+        // registry ready + live client.info. DB status can lag behind runtime
+        // (for example remain "qr" while the in-memory session is ready).
         let connId = connectionId
+        if (!connId) {
+            connId = getLiveReachabilityConnectionId()
+        }
         if (!connId) {
             const conn = await prisma.whatsAppConnection.findFirst({
                 where: { status: { in: ['ready', 'authenticated'] } },
                 select: { id: true },
             })
-            if (!conn) {
-                return waReachabilityChecking('WhatsApp не подключён в CRM', 'no_ready_connection', false)
-            }
-            connId = conn.id
+            connId = conn?.id ?? null
+        }
+        if (!connId) {
+            return waReachabilityChecking('WhatsApp не подключён в CRM', 'no_ready_connection', false)
         }
 
         const client = clients.get(connId)
