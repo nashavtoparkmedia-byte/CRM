@@ -184,7 +184,7 @@ class InitialHistorySync {
           // Override isOutgoing from sender check (more reliable than protocol flags)
           if (isOutgoing) msg.isOutgoing = true
           if (!this._sync.isDuplicate(msg)) {
-            const payload = this._enrichPayload(MessageParser.toCrmPayload(msg, chatId))
+            const payload = { ...this._enrichPayload(MessageParser.toCrmPayload(msg, chatId)), source: 'history' }
             await this._forward(payload)
             this._sync.markSeen(msg)
             total++
@@ -288,7 +288,7 @@ class InitialHistorySync {
             const msg = MessageParser.normalizeHistoryMessage(raw)
             if (isOutgoing) msg.isOutgoing = true
             if (!this._sync.isDuplicate(msg)) {
-              let payload = this._enrichPayload(MessageParser.toCrmPayload(msg, chatId))
+              let payload = { ...this._enrichPayload(MessageParser.toCrmPayload(msg, chatId)), source: 'catchup' }
 
               // Скачиваем вложения (фото, голосовые) если есть mediaPipeline
               if (this._mediaPipeline && msg.attachments && msg.attachments.length > 0) {
