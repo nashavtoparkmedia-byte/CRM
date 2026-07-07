@@ -214,15 +214,10 @@ test('MAX DOM text recovery ids are stable across overlapping scans in one live 
   assert.match(scraper, /candidate\?\._liveDomSeriesCandidate/)
   assert.match(scraper, /candidate\._liveDomSeriesCandidate = true/)
   assert.match(scraper, /function applyDomTextRecoveryLimits\(chatId, candidates\)/)
+  assert.match(scraper, /domFallbackSeen\.has\(candidate\._domRecoveryExternalId\)/)
   assert.match(scraper, /group\.items\.length - group\.directCount - alreadyRecovered/)
   assert.match(scraper, /candidate\._skipDomTextAlreadyRecovered = true/)
   assert.match(scraper, /preSkipped\.dom_numeric_future_filtered = beforeNumericFutureFilter - recoverable\.length/)
-  assertBefore(
-    scraper,
-    'applyDomTextRecoveryLimits(chatId, recoverable)',
-    'assignDomTextRecoveryBudgets(chatId, recoverable)',
-    'DOM recovery per-text limits must run before assigning recovered ids',
-  )
   assert.match(scraper, /const directAnchorKey = domRecoveryDirectAnchorKey\(candidates, i\)/)
   assert.match(scraper, /const anchorKey = directAnchorKey !== 'start:end' \? directAnchorKey : \(liveSeriesKey \|\| directAnchorKey\)/)
   assert.match(scraper, /const key = `\$\{dayKey\}:\$\{candidate\.displayMinute\}:\$\{text\}:\$\{anchorKey\}`/)
@@ -243,6 +238,12 @@ test('MAX DOM text recovery ids are stable across overlapping scans in one live 
     'preSkipped.dom_numeric_future_filtered = beforeNumericFutureFilter - recoverable.length',
     'assignDomTextRecoveryBudgets(chatId, recoverable)',
     'future numeric DOM candidates must be filtered before assigning recovered ids',
+  )
+  assertBefore(
+    scraper,
+    'assignDomRecoveryExternalIds(chatId, recoverable)',
+    'applyDomTextRecoveryLimits(chatId, recoverable)',
+    'DOM recovered ids must be assigned before per-text limits so overlapping scans do not spend quota on already-seen bubbles',
   )
   assertBefore(
     scraper,

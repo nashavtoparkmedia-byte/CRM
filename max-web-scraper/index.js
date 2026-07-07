@@ -1708,6 +1708,7 @@ function applyDomTextRecoveryLimits(chatId, candidates) {
     let remaining = Math.max(0, group.items.length - group.directCount - alreadyRecovered)
     for (const candidate of group.items) {
       if (candidate._directHit) continue
+      if (candidate._domRecoveryExternalId && domFallbackSeen.has(candidate._domRecoveryExternalId)) continue
       if (remaining > 0) {
         remaining -= 1
       } else {
@@ -2465,7 +2466,6 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
         shouldKeepNumericDomRecoveryCandidate(candidate, list, index)
       )
       preSkipped.dom_numeric_future_filtered = beforeNumericFutureFilter - recoverable.length
-      applyDomTextRecoveryLimits(chatId, recoverable)
       for (let i = 0; i < recoverable.length; i++) {
         if (!recoverable[i]._directHit) {
           recoverable[i]._recoveryTimestamp = new Date(estimateDomRecoveryTimestampMs(recoverable, i)).toISOString()
@@ -2473,6 +2473,7 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
       }
       assignDomTextRecoveryBudgets(chatId, recoverable)
       assignDomRecoveryExternalIds(chatId, recoverable)
+      applyDomTextRecoveryLimits(chatId, recoverable)
     }
     const results = []
     const skipped = { ...preSkipped }
