@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
         },
         identities: {
           where: { isActive: true },
-          select: { id: true, channel: true, externalId: true },
+          select: { id: true, channel: true, externalId: true, reachabilityStatus: true },
         },
         chats: {
           select: { id: true, channel: true, lastMessageAt: true },

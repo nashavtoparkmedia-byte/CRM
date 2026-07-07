@@ -4922,6 +4922,84 @@ app.get('/resolve-phone', (req, res) => {
   }
 })
 
+// Live reachability pre-check for CRM. This is a dry-run phone -> MAX chat
+// resolver: it may open/search MAX Web, but it must never send a message.
+app.post('/check-reachability', async (req, res) => {
+  const { phone } = req.body || {}
+  const digits = String(phone || '').replace(/\D/g, '')
+
+  if (digits.length < 10 || digits.length > 11) {
+    return res.status(400).json({
+      status: 'unreachable',
+      reachable: false,
+      confirmed: false,
+      retryable: false,
+      error: 'Invalid phone number',
+    })
+  }
+
+  if (!isReady) {
+    return res.status(503).json({
+      status: 'checking',
+      reachable: null,
+      confirmed: false,
+      retryable: true,
+      error: 'MAX scraper is not ready',
+    })
+  }
+
+  try {
+    const fromStore = contactStore ? contactStore.findByPhone(digits) : null
+    if (fromStore) {
+      return res.json({
+        status: 'confirmed',
+        reachable: true,
+        confirmed: true,
+        retryable: false,
+        chatId: String(fromStore),
+        source: 'contactStore',
+      })
+    }
+
+    const liveResult = await Promise.race([
+      resolvePhoneLive(digits),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('max_reachability_timeout')), 30_000)),
+    ])
+    const liveId = liveResult && typeof liveResult === 'object'
+      ? liveResult.chatId
+      : (typeof liveResult === 'string' ? liveResult : null)
+
+    if (liveId) {
+      if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
+      savePhoneChatId(digits, liveId)
+      return res.json({
+        status: 'confirmed',
+        reachable: true,
+        confirmed: true,
+        retryable: false,
+        chatId: String(liveId),
+        source: 'live_lookup',
+      })
+    }
+
+    return res.status(404).json({
+      status: 'unreachable',
+      reachable: false,
+      confirmed: false,
+      retryable: false,
+      error: 'MAX account not found',
+    })
+  } catch (e) {
+    return res.status(503).json({
+      status: 'checking',
+      reachable: null,
+      confirmed: false,
+      retryable: true,
+      error: e.message,
+    })
+  }
+})
+
 // Debug: показывает состояние contactStore + живой resolve для диагностики
 // GET /debug/resolve?phone=79126787532
 app.get('/debug/resolve', async (req, res) => {

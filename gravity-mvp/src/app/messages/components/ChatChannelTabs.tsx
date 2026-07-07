@@ -93,10 +93,9 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
         return accs.find(a => a.id === selectedAccounts[chId]) || accs[0]
     }
 
-    // Channels where this contact actually has an identity / chat. We
-    // dim tabs for the others so the operator instantly sees "TG yes, WA
-    // no" — they can still click (the system will route by phone) but
-    // visual cue prevents the "messages aren't going through" surprise.
+    // Channels where this contact has an identity/chat in CRM. This is not a
+    // provider-account confirmation, so it must not be rendered as a green
+    // reachability indicator.
     const availableChannels = new Set<string>(chat.allChannels || [])
     // 'all' is always available. 'phone' is technically always available
     // (any phone can be called) — keep it neutral.
@@ -108,29 +107,25 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
                 const isActive = activeChannelTab === ch.id
                 const unread = getChannelUnread(ch.channelKey)
                 const hasFailed = ch.id !== 'all' && failedChannels?.has(ch.channelKey)
-                const isReachable = channelAlwaysAvailable(ch.channelKey) || availableChannels.has(ch.channelKey)
+                const hasCrmChannel = channelAlwaysAvailable(ch.channelKey) || availableChannels.has(ch.channelKey)
 
-                // Visual indicator priority: failed > unreachable > reachable
-                //   reachable+not-active   → green dot ("есть chat в этом канале")
-                //   unreachable+not-active → red ⊘   ("канал не активен у контакта")
-                //   active                 → no extra mark (full color speaks for itself)
-                const showGreenDot = !isActive && isReachable && !channelAlwaysAvailable(ch.channelKey)
-                const showRedBlocked = !isActive && !isReachable
+                // Visual indicator priority: failed > CRM channel.
+                // Green is reserved for real reachability elsewhere; here gray
+                // only means "CRM already has this channel/chat row".
+                const showKnownChannelDot = !isActive && hasCrmChannel && !channelAlwaysAvailable(ch.channelKey)
                 return (
                     <div key={ch.id} className="relative flex items-center">
                         <button
                             onClick={() => handleChannelClick(ch.id)}
                             title={
-                                isReachable
-                                    ? `${ch.label}${channelAlwaysAvailable(ch.channelKey) ? '' : ': канал активен у контакта'}`
-                                    : `${ch.label}: контакт НЕ найден в этом канале — сообщение может не дойти`
+                                hasCrmChannel
+                                    ? `${ch.label}${channelAlwaysAvailable(ch.channelKey) ? '' : ': канал есть в CRM, аккаунт не подтверждён этой точкой'}`
+                                    : `${ch.label}: канал ещё не создан в CRM`
                             }
                             className={`h-[32px] px-3 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap flex items-center gap-1.5 ${
                                 isActive
                                 ? 'bg-[#3390EC] text-white'
-                                : showRedBlocked
-                                    ? 'text-red-400 hover:bg-red-50'
-                                    : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
+                                : 'text-[#8A9099] hover:bg-[#F0F2F5] hover:text-[#474B50]'
                             }`}
                         >
                             {ch.short}
@@ -146,11 +141,8 @@ export default function ChatChannelTabs({ activeChannelTab, chat, failedChannels
                             {hasFailed && !unread && (
                                 <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="последняя отправка не удалась" />
                             )}
-                            {showGreenDot && !unread && !hasFailed && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="канал активен" />
-                            )}
-                            {showRedBlocked && !unread && !hasFailed && (
-                                <span className="text-red-400 text-[12px] leading-none" title="нет в этом канале">⊘</span>
+                            {showKnownChannelDot && !unread && !hasFailed && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" title="канал есть в CRM" />
                             )}
                         </button>
 

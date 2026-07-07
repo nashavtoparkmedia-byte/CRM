@@ -757,7 +757,7 @@ export class MessageService {
             const { updateReachabilityByChatId } = await import('@/lib/ReachabilityService')
             if (deliveryStatus === 'failed') {
                 await updateReachabilityByChatId(currentChatId, 'unreachable')
-            } else if (deliveryStatus === 'delivered' || deliveryStatus === 'sent') {
+            } else if (deliveryStatus === 'delivered') {
                 await updateReachabilityByChatId(currentChatId, 'confirmed')
             }
         } catch (reachErr: any) {

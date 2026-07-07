@@ -13,6 +13,7 @@ export interface ContactSearchIdentity {
   id: string
   channel: string
   externalId: string
+  reachabilityStatus?: 'confirmed' | 'unreachable' | 'unknown'
 }
 
 export interface ContactSearchResult {
