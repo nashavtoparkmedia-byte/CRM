@@ -21,10 +21,14 @@ export default function TopBar() {
         <header className="fixed top-0 left-0 lg:left-[72px] right-0 h-[64px] z-40 bg-background border-b flex items-center justify-between px-6 transition-all duration-300">
             <div className="flex items-center gap-[4px]">
                 <div className="flex items-center justify-center lg:hidden mr-[2px]">
-                    {/* Mobile Logo Placeholder */}
-                    <div className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground font-bold">
+                    <button
+                        type="button"
+                        aria-label="Открыть меню"
+                        onClick={() => window.dispatchEvent(new Event('crm:toggle-mobile-sidebar'))}
+                        className="flex h-8 w-8 items-center justify-center rounded bg-primary text-primary-foreground font-bold border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
                         Y
-                    </div>
+                    </button>
                 </div>
                 <span className="text-lg font-semibold max-lg:hidden">
                     Yoko CRM
