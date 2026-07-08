@@ -253,3 +253,19 @@ test('MAX DOM text recovery ids are stable across overlapping scans in one live 
   )
 })
 //M1_REBUILD_TRIGGER_AFTER_DOM_RECOVERY
+
+
+test('MAX UI text fallback does not depend on browser clipboard permission', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const start = scraper.indexOf('async function sendTextViaUi')
+  assert.notEqual(start, -1, 'missing sendTextViaUi')
+  const end = scraper.indexOf('function waitForUiSendAck', start)
+  assert.notEqual(end, -1, 'missing waitForUiSendAck anchor')
+  const block = scraper.slice(start, end)
+
+  assert.doesNotMatch(block, /navigator\.clipboard\.writeText/)
+  assert.match(scraper, /async function fillEditableText\(locator, value\)/)
+  assert.match(block, /fillEditableText\(composeEl, text\)/)
+  assert.match(scraper, /page\.keyboard\.insertText\(text\)/)
+  assert.match(block, /page\.keyboard\.press\('Enter'\)/)
+})

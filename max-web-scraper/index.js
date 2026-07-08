@@ -962,81 +962,110 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
   }
 }
 
+async function fillEditableText(locator, value) {
+  const text = String(value || '')
+  await locator.click({ timeout: 1_000 })
+  await locator.fill(text, { timeout: 1_500 }).catch(async () => {
+    const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
+    await page.keyboard.press(`${modifier}+A`).catch(() => {})
+    await page.keyboard.press('Backspace').catch(() => {})
+    await page.keyboard.insertText(text).catch(async () => {
+      await locator.evaluate((el, nextValue) => {
+        if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+          el.value = nextValue
+        } else {
+          el.textContent = nextValue
+        }
+        const inputEvent = typeof InputEvent === 'function'
+          ? new InputEvent('input', { inputType: 'insertText', data: nextValue, bubbles: true })
+          : new Event('input', { bubbles: true })
+        el.dispatchEvent(inputEvent)
+        el.dispatchEvent(new Event('change', { bubbles: true }))
+      }, text)
+    })
+  })
+  await page.waitForTimeout(150)
+  return locator.evaluate(el =>
+    (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement)
+      ? el.value
+      : (el.textContent || '')
+  ).catch(() => '')
+}
+
 async function sendTextViaUi(chatId, text, protocolChatId = null) {
   if (!page || !isReady) return false
 
-  const targetUrl = `https://web.max.ru/${chatId}`
-  if (transport) transport._activeUiChatId = protocolChatId ? String(protocolChatId) : protocolChatIdForUiRoute(chatId)
-  console.log(`[sendTextUi] opening ${targetUrl}`)
-  await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
-  await page.waitForTimeout(1800)
+  uiSendInProgress = true
+  try {
+    const targetUrl = `https://web.max.ru/${chatId}`
+    if (transport) transport._activeUiChatId = protocolChatId ? String(protocolChatId) : protocolChatIdForUiRoute(chatId)
+    console.log(`[sendTextUi] opening ${targetUrl}`)
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+    await page.waitForTimeout(1800)
 
-  const composeSelectors = [
-    'div[contenteditable][role="textbox"]',
-    'div[contenteditable="true"]:not([role="search"])',
-    'div[contenteditable]',
-    'textarea',
-  ]
-
-  let composeEl = null
-  for (const sel of composeSelectors) {
-    const candidates = page.locator(sel)
-    const count = await candidates.count().catch(() => 0)
-    for (let i = count - 1; i >= 0; i--) {
-      const el = candidates.nth(i)
-      if (await el.isVisible({ timeout: 400 }).catch(() => false)) {
-        composeEl = el
-        console.log(`[sendTextUi] compose input: ${sel} #${i}`)
-        break
-      }
-    }
-    if (composeEl) break
-  }
-
-  if (!composeEl) {
-    await page.screenshot({ path: '/tmp/max_send_ui_no_compose.png', fullPage: false }).catch(() => {})
-    return false
-  }
-
-  await composeEl.click()
-  await page.waitForTimeout(150)
-  await page.keyboard.type(text, { delay: 15 })
-  await page.waitForTimeout(300)
-
-  const beforeText = await composeEl.textContent().catch(() => '')
-  console.log(`[sendTextUi] typed text: "${String(beforeText || '').slice(0, 60)}"`)
-
-  await page.keyboard.press('Enter')
-  await page.waitForTimeout(700)
-
-  let afterText = await composeEl.textContent().catch(() => '')
-  if (String(afterText || '').trim()) {
-    const sendSelectors = [
-      'button[aria-label*="Send message" i]',
-      'button[title*="Send" i]',
-      'button:has-text("Send")',
-      'button[aria-label*="Отправ" i]',
-      'button[title*="Отправ" i]',
+    const composeSelectors = [
+      'div[contenteditable][role="textbox"]',
+      'div[contenteditable="true"]:not([role="search"])',
+      'div[contenteditable]',
+      'textarea',
     ]
-    for (const sel of sendSelectors) {
-      const btn = page.locator(sel).first()
-      if (await btn.isVisible({ timeout: 350 }).catch(() => false)) {
-        await btn.click()
-        console.log(`[sendTextUi] clicked send button: ${sel}`)
-        break
+
+    let composeEl = null
+    for (const sel of composeSelectors) {
+      const candidates = page.locator(sel)
+      const count = await candidates.count().catch(() => 0)
+      for (let i = count - 1; i >= 0; i--) {
+        const el = candidates.nth(i)
+        if (await el.isVisible({ timeout: 400 }).catch(() => false)) {
+          composeEl = el
+          console.log(`[sendTextUi] compose input: ${sel} #${i}`)
+          break
+        }
       }
+      if (composeEl) break
     }
+
+    if (!composeEl) {
+      await page.screenshot({ path: '/tmp/max_send_ui_no_compose.png', fullPage: false }).catch(() => {})
+      return false
+    }
+
+    const beforeText = await fillEditableText(composeEl, text)
+    console.log(`[sendTextUi] filled text: "${String(beforeText || '').slice(0, 60)}"`)
+
+    await page.keyboard.press('Enter')
     await page.waitForTimeout(700)
-    afterText = await composeEl.textContent().catch(() => '')
-  }
 
-  const sent = !String(afterText || '').trim()
-  if (!sent) {
-    await page.screenshot({ path: '/tmp/max_send_ui_not_sent.png', fullPage: false }).catch(() => {})
+    let afterText = await composeEl.textContent().catch(() => '')
+    if (String(afterText || '').trim()) {
+      const sendSelectors = [
+        'button[aria-label*="Send message" i]',
+        'button[title*="Send" i]',
+        'button:has-text("Send")',
+        'button[aria-label*="Отправ" i]',
+        'button[title*="Отправ" i]',
+      ]
+      for (const sel of sendSelectors) {
+        const btn = page.locator(sel).first()
+        if (await btn.isVisible({ timeout: 350 }).catch(() => false)) {
+          await btn.click()
+          console.log(`[sendTextUi] clicked send button: ${sel}`)
+          break
+        }
+      }
+      await page.waitForTimeout(700)
+      afterText = await composeEl.textContent().catch(() => '')
+    }
+
+    const sent = !String(afterText || '').trim()
+    if (!sent) {
+      await page.screenshot({ path: '/tmp/max_send_ui_not_sent.png', fullPage: false }).catch(() => {})
+    }
+    return sent
+  } finally {
+    uiSendInProgress = false
   }
-  return sent
 }
-
 function waitForUiSendAck(transport, timeoutMs = 60_000) {
   if (!transport?._rawHandlers) return Promise.resolve(null)
   return new Promise(resolve => {
@@ -1108,6 +1137,102 @@ function waitForUiSendAck(transport, timeoutMs = 60_000) {
     const timer = setTimeout(() => finish(null), timeoutMs)
     transport._rawHandlers.push(handler)
   })
+}
+
+async function fillMaxMediaCaption(caption) {
+  const text = String(caption || '').trim()
+  if (!text) return { ok: true, skipped: 'empty_caption' }
+  if (!page) return { ok: false, error: 'page_not_ready' }
+
+  const editableInput = 'input:not([type="file"]):not([type="search"]):not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])'
+  const selectors = [
+    '[role="dialog"] textarea',
+    `[role="dialog"] ${editableInput}`,
+    '[role="dialog"] div[contenteditable="true"]',
+    '[role="dialog"] div[contenteditable]',
+    '[aria-modal="true"] textarea',
+    `[aria-modal="true"] ${editableInput}`,
+    '[aria-modal="true"] div[contenteditable="true"]',
+    '[aria-modal="true"] div[contenteditable]',
+    'textarea[placeholder*="Caption" i]',
+    'textarea[placeholder*="\u041f\u043e\u0434\u043f\u0438\u0441" i]',
+    `${editableInput}[placeholder*="Caption" i]`,
+    `${editableInput}[placeholder*="\u041f\u043e\u0434\u043f\u0438\u0441" i]`,
+    `${editableInput}[placeholder*="Message" i]`,
+    `${editableInput}[placeholder*="\u0421\u043e\u043e\u0431\u0449" i]`,
+    `${editableInput}[aria-label*="Caption" i]`,
+    `${editableInput}[aria-label*="\u041f\u043e\u0434\u043f\u0438\u0441" i]`,
+    `${editableInput}[aria-label*="Message" i]`,
+    `${editableInput}[aria-label*="\u0421\u043e\u043e\u0431\u0449" i]`,
+    `${editableInput}[data-placeholder*="Caption" i]`,
+    `${editableInput}[data-placeholder*="\u041f\u043e\u0434\u043f\u0438\u0441" i]`,
+    `${editableInput}[data-placeholder*="Message" i]`,
+    `${editableInput}[data-placeholder*="\u0421\u043e\u043e\u0431\u0449" i]`,
+    'div[contenteditable="true"][aria-label*="Caption" i]',
+    'div[contenteditable="true"][aria-label*="\u041f\u043e\u0434\u043f\u0438\u0441" i]',
+    'div[contenteditable="true"][aria-label*="Message" i]',
+    'div[contenteditable="true"][aria-label*="\u0421\u043e\u043e\u0431\u0449" i]',
+    'div[contenteditable="true"][data-placeholder*="Caption" i]',
+    'div[contenteditable="true"][data-placeholder*="\u041f\u043e\u0434\u043f\u0438\u0441" i]',
+    'div[contenteditable="true"][data-placeholder*="Message" i]',
+    'div[contenteditable="true"][data-placeholder*="\u0421\u043e\u043e\u0431\u0449" i]',
+    'textarea',
+    editableInput,
+    'div[contenteditable][role="textbox"]',
+    'div[contenteditable="true"]:not([role="search"])',
+    'div[contenteditable]:not([role="search"])',
+  ]
+
+  for (const sel of selectors) {
+    const matches = await page.locator(sel).count().catch(() => 0)
+    for (let index = matches - 1; index >= 0; index--) {
+      const locator = page.locator(sel).nth(index)
+      if (!await locator.isVisible({ timeout: 700 }).catch(() => false)) continue
+      const candidate = await locator.evaluate(el => {
+        const tag = el.tagName.toUpperCase()
+        const attr = (name) => el.getAttribute(name) || ''
+        const type = String(attr('type') || '').toLowerCase()
+        const role = String(attr('role') || '').toLowerCase()
+        const placeholder = attr('placeholder')
+        const ariaLabel = attr('aria-label')
+        const dataPlaceholder = attr('data-placeholder')
+        const name = attr('name')
+        const id = attr('id')
+        const className = typeof el.className === 'string' ? el.className : ''
+        const container = el.closest('[role="dialog"], [aria-modal="true"], [class*="modal"], [class*="dialog"], [class*="popup"], [class*="preview"], [class*="attach"], [class*="media"], [class*="upload"], [class*="composer"], [class*="compose"]')
+        const haystack = `${type} ${role} ${placeholder} ${ariaLabel} ${dataPlaceholder} ${name} ${id} ${className}`.toLowerCase()
+        const blockedHints = ['search', '\u043f\u043e\u0438\u0441\u043a', 'find', '\u043d\u0430\u0439\u0442\u0438', 'contact', '\u043a\u043e\u043d\u0442\u0430\u043a\u0442', 'phone', '\u0442\u0435\u043b\u0435\u0444\u043e\u043d', 'name', '\u0438\u043c\u044f', '\u043a\u043e\u043c\u0443']
+        if (tag === 'INPUT' && ['file', 'search', 'hidden', 'checkbox', 'radio', 'button', 'submit'].includes(type)) {
+          return { ok: false, reason: `blocked_input_type:${type || 'empty'}`, tag, type, placeholder, role }
+        }
+        const blockedHint = blockedHints.find(hint => haystack.includes(hint))
+        if (blockedHint) return { ok: false, reason: `blocked_hint:${blockedHint}`, tag, type, placeholder, role }
+        const positiveHints = ['caption', '\u041f\u043e\u0434\u043f\u0438\u0441', 'message', '\u0421\u043e\u043e\u0431\u0449']
+        const hasPositiveHint = positiveHints.some(hint => haystack.includes(hint))
+        const hasMediaContainer = Boolean(container)
+        if (tag === 'INPUT' && !hasPositiveHint && !hasMediaContainer) {
+          return { ok: false, reason: 'generic_input_without_media_context', tag, type, placeholder, role }
+        }
+        return { ok: true, tag, type, placeholder, role, hasPositiveHint, hasMediaContainer }
+      }).catch(e => ({ ok: false, reason: `candidate_eval_failed:${e.message}` }))
+      if (!candidate.ok) {
+        console.log(`[sendMediaUi] caption candidate rejected selector=${sel} reason=${candidate.reason || 'unknown'} tag=${candidate.tag || ''} placeholder=${candidate.placeholder || ''}`)
+        continue
+      }
+      try {
+        const actual = await fillEditableText(locator, text)
+        if (String(actual || '').includes(text)) {
+          console.log(`[sendMediaUi] caption filled via selector: ${sel}`)
+          return { ok: true, selector: sel }
+        }
+      } catch (e) {
+        console.warn(`[sendMediaUi] caption selector failed ${sel}: ${e.message}`)
+      }
+    }
+  }
+
+  console.warn('[sendMediaUi] caption was not filled before send')
+  return { ok: false, error: 'caption_input_not_found_or_not_updated' }
 }
 
 function collectMessageCandidates(value, out = [], contextChatId = null, seen = new Set(), depth = 0) {
@@ -1431,10 +1556,19 @@ async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, t
     })
 
     if (caption) {
-      const compose = page.locator('div[contenteditable][role="textbox"], div[contenteditable="true"]:not([role="search"]), textarea').last()
-      if (await compose.isVisible({ timeout: 800 }).catch(() => false)) {
-        await compose.click().catch(() => {})
-        await page.keyboard.type(caption, { delay: 10 }).catch(() => {})
+      const captionResult = await fillMaxMediaCaption(caption)
+      if (!captionResult.ok) {
+        maxDeliveryLog({
+          operation: 'send',
+          status: 'failed',
+          conversationId: protocolChatIdForUiRoute(chatId),
+          protocolChatId: protocolChatIdForUiRoute(chatId),
+          webRouteId: uiRouteId,
+          uploadId: safeName,
+          error: captionResult.error || 'caption_not_filled',
+        })
+        await page.screenshot({ path: '/tmp/max_send_media_caption_failed.png', fullPage: false }).catch(() => {})
+        return false
       }
     }
 
@@ -1510,6 +1644,7 @@ const domFallbackSeen = new Set()
 const domRecoveredTextCounts = new Map()
 let domFallbackRunning = false
 let domFallbackScheduledAt = 0
+let uiSendInProgress = false
 const recentDirectInboundTexts = new Map()
 const RECENT_DIRECT_TEXT_TTL_MS = 2 * 60 * 1000
 
@@ -1928,6 +2063,7 @@ function scheduleDomFallbackForRecentMedia(reason, delayMs = 2200) {
   if (now - domFallbackScheduledAt < 1000) return
   domFallbackScheduledAt = now
   setTimeout(() => {
+    if (uiSendInProgress) return
     const chatId = latestRecentOp128ChatId()
     if (!chatId) return
     const runner = reason === 'loose_op128_media'
@@ -2370,6 +2506,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
 }
 
 async function forwardLatestDomMessage(chatId, reason = 'manual') {
+  if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
   try {
@@ -2387,6 +2524,7 @@ async function forwardLatestDomMessage(chatId, reason = 'manual') {
 }
 
 async function forwardRecentDomMessages(chatId, reason = 'manual') {
+  if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
   try {
@@ -2532,6 +2670,7 @@ async function syncContacts(timeoutMs = 8000) {
   if (fresh) {
     _lastContactSync = Date.now()
     console.log(`[syncContacts] Refreshed: ${contactStore._map.size} contacts`)
+    loadPhoneChatIdCache()
   } else {
     console.warn('[syncContacts] Timeout — opcode 32 not returned by MAX')
   }
@@ -4594,6 +4733,7 @@ async function init() {
           domFallbackScheduledAt = now
           console.warn(`[domFallback] empty op71 after op128 for chatId=${chatIdStr}; decodedChatId=${decodedChatId || 'none'} reason=${recoveryTarget.reason}; scheduling guarded text DOM recovery`)
           setTimeout(() => {
+            if (uiSendInProgress) return
             forwardRecentDomMessages(chatIdStr, 'empty_op71_after_op128')
               .then(result => console.log(`[domFallback] guarded result ${JSON.stringify(result).slice(0, 400)}`))
               .catch(e => console.error('[domFallback] failed:', e.message))
@@ -5385,13 +5525,16 @@ app.post('/send-media', async (req, res) => {
     const cid = Number(chatId)
 
     const externalId = await enqueueSend(async () => {
-      if ((mediaType === 'image' || mimeType.startsWith('image/')) && (phone || uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)])) {
+      const hasCaption = String(caption || '').trim().length > 0
+      const shouldPreferUiMedia = (mediaType === 'image' || mimeType.startsWith('image/')) && (hasCaption || phone || uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)])
+      if (shouldPreferUiMedia) {
         try {
           let uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
           if (!uiRouteId && phone) {
             uiRouteId = await resolvePhoneLive(String(phone).replace(/\D/g, ''))
             if (uiRouteId) console.log(`[send-media] phone resolved for UI-first media: ${phone} -> ${uiRouteId}`)
           }
+          if (!uiRouteId && hasCaption) uiRouteId = cid
           if (uiRouteId) {
             const uiSent = await sendMediaViaUi(uiRouteId, fileBuffer, filename, mimeType, caption, transport)
             if (isConfirmedMediaSendResult(uiSent)) return uiSent
@@ -5399,10 +5542,15 @@ app.post('/send-media', async (req, res) => {
               console.warn(`[send-media] UI-first returned ${uiSent.deliveryStatus || uiSent.status || 'unconfirmed'}; returning without native retry`)
               return uiSent
             }
+            if (hasCaption) throw new Error('caption_ui_media_send_failed')
           }
         } catch (uiFirstErr) {
+          if (hasCaption) throw uiFirstErr
           console.warn(`[send-media] UI-first failed, trying native: ${uiFirstErr.message}`)
         }
+      }
+      if (hasCaption && (mediaType === 'image' || mimeType.startsWith('image/'))) {
+        throw new Error('caption_ui_media_send_unavailable')
       }
       try {
         if (mediaType === 'image' || mimeType.startsWith('image/')) {
