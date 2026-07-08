@@ -167,6 +167,38 @@ function normalizeMediaSendResult(result) {
   }
 }
 
+function uiTextDeliveredResult(source = 'ui_text_no_provider_id') {
+  return {
+    externalId: null,
+    maxMessageId: null,
+    deliveryConfirmed: true,
+    deliveryStatus: 'delivered',
+    source,
+  }
+}
+
+function normalizeTextSendResult(result) {
+  if (result && typeof result === 'object' && !Buffer.isBuffer(result)) {
+    const externalId = result.externalId || result.maxMessageId || null
+    const deliveryStatus = result.deliveryStatus || result.status || (result.deliveryConfirmed ? 'delivered' : 'send_requested')
+    return {
+      ...result,
+      externalId,
+      maxMessageId: result.maxMessageId || externalId,
+      deliveryConfirmed: Boolean(result.deliveryConfirmed || deliveryStatus === 'delivered'),
+      deliveryStatus,
+    }
+  }
+  const externalId = result ? String(result) : null
+  const deliveryConfirmed = isRealMaxMessageId(externalId)
+  return {
+    externalId,
+    maxMessageId: externalId,
+    deliveryConfirmed,
+    deliveryStatus: deliveryConfirmed ? 'delivered' : 'send_requested',
+  }
+}
+
 function isConfirmedMediaSendResult(result) {
   return Boolean(result?.deliveryConfirmed && isRealMaxMessageId(result.maxMessageId || result.externalId))
 }
@@ -918,7 +950,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
         return ackId
       }
       console.log(`[sendText] Direct UI sent chatId=${chatId} route=${directUiRouteId} without provider id`)
-      return null
+      return uiTextDeliveredResult('direct_ui_no_provider_id')
     }
   }
 
@@ -955,7 +987,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
           return ackId
         }
         console.log(`[sendText] UI fallback sent chatId=${chatId} without provider id`)
-        return null
+        return uiTextDeliveredResult('ui_fallback_no_provider_id')
       }
     }
     throw e
@@ -5351,7 +5383,8 @@ app.post('/send-message', async (req, res) => {
     })
 
     try {
-      const maxMsgId = await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId))
+      const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId)))
+      const maxMsgId = sendResult.externalId || sendResult.maxMessageId || null
 
       if (maxMsgId) {
         capturedEchoIds.add(String(maxMsgId))
@@ -5372,7 +5405,7 @@ app.post('/send-message', async (req, res) => {
       if (echoConvId && echoConvId !== String(chatId)) {
         console.log(`[Send] Conversation ID from echo: ${chatId} → ${echoConvId}`)
       }
-      res.json({ success: true, chatId: returnChatId, externalId: maxMsgId || null, deliveryConfirmed: isRealMaxMessageId(maxMsgId), deliveryStatus: isRealMaxMessageId(maxMsgId) ? 'delivered' : 'send_requested' })
+      res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
     } catch (e) {
       if (echoRawHandler) {
         const idx = transport._rawHandlers.indexOf(echoRawHandler)
