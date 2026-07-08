@@ -316,7 +316,7 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
 test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {
   const scraper = read('max-web-scraper/index.js')
 
-  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId\)\)\)/)
+  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId, clientMessageId\)\)\)/)
   assert.match(scraper, /externalId: sendResult\.externalId \|\| null/)
   assert.match(scraper, /maxMessageId: sendResult\.maxMessageId \|\| null/)
   assert.doesNotMatch(scraper, /externalId: maxMsgId \|\| null, deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
@@ -332,4 +332,45 @@ test('CRM MAX delivery path never writes non-string send-result object as messag
   assert.match(messageService, /const rawMaxExternalId = \(retryMaxRes as any\)\?\.externalId/)
   assert.doesNotMatch(messageService, /const maxExternalId = \(maxRes as any\)\?\.externalId \|\| null/)
   assert.doesNotMatch(messageService, /const maxExternalId = \(retryMaxRes as any\)\?\.externalId \|\| null/)
+})
+
+
+test('MAX outbound text passes stable clientMessageId through CRM and scraper retry path', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const maxActions = read('gravity-mvp/src/app/max-actions.ts')
+  const messageService = read('gravity-mvp/src/lib/MessageService.ts')
+
+  assert.match(scraper, /function stableTextCid\(seed\)/)
+  assert.match(scraper, /crypto\.createHash\('sha1'\)\.update\(String\(seed\)\)\.digest\(\)/)
+  assert.match(scraper, /async function sendText\(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId\)/)
+  assert.match(scraper, /const cid = stableTextCid\(clientMessageId\)/)
+  assert.match(scraper, /let \{ chatId, message, phone, quotedMsgId, uiChatId, clientMessageId \} = req\.body/)
+  assert.match(scraper, /sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId, clientMessageId\)/)
+
+  assert.match(maxActions, /clientMessageId\?: string/)
+  assert.match(maxActions, /JSON\.stringify\(\{ chatId: cleanTarget, message, quotedMsgId, uiChatId, clientMessageId \}\)/)
+  assert.match(messageService, /clientMessageId: clientMessageId \|\| messageId/)
+  assert.match(messageService, /clientMessageId: message\.clientMessageId \|\| message\.id/)
+})
+
+test('MAX reply timeout does one quick retry on stable WS before falling back to background retry', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const start = scraper.indexOf('async function sendText')
+  assert.notEqual(start, -1, 'missing sendText')
+  const end = scraper.indexOf('async function fillEditableText', start)
+  assert.notEqual(end, -1, 'missing fillEditableText anchor')
+  const block = scraper.slice(start, end)
+
+  assert.match(block, /const sendProtocolText = async \(timeoutMs\) =>/)
+  assert.match(block, /return await sendProtocolText\(30_000\)/)
+  assert.match(block, /const isOpcode64Timeout = \/Timeout: opcode 64\/i\.test\(String\(e\.message \|\| ''\)\)/)
+  assert.match(block, /reply send timed out; waiting for stable WS and retrying once with same cid/)
+  assert.match(block, /await transport\.waitForStableWs\(800, 8_000\)/)
+  assert.match(block, /return await sendProtocolText\(15_000\)/)
+  assertBefore(
+    block,
+    'return await sendProtocolText(15_000)',
+    'reply send failed without MAX confirmation; not downgrading to plain UI text',
+    'reply quick retry must happen before handing the failed message to the background retry worker',
+  )
 })

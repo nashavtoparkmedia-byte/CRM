@@ -141,6 +141,13 @@ function isRealMaxMessageId(id) {
   return /^d301/i.test(String(id || ''))
 }
 
+function stableTextCid(seed) {
+  if (!seed) return -Date.now()
+  const digest = crypto.createHash('sha1').update(String(seed)).digest()
+  const value = digest.readUInt32BE(0) & 0x7fffffff
+  return -Math.max(1, value)
+}
+
 function normalizeMediaSendResult(result) {
   if (result && typeof result === 'object' && !Buffer.isBuffer(result)) {
     const externalId = result.externalId || result.maxMessageId || null
@@ -957,8 +964,8 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
 
 // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
 
-async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
-  const cid = -Date.now()
+async function sendText(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId) {
+  const cid = stableTextCid(clientMessageId)
   const message = { text, cid, elements: [], attaches: [] }
   if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
 
@@ -981,16 +988,20 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
     }
   }
 
-  try {
+  const sendProtocolText = async (timeoutMs) => {
     const wsChatId = chatId
     if (replyToMessageId && directUiRouteId) {
       console.log(`[sendText] reply via WS protocol chatId=${chatId} uiRoute=${directUiRouteId}`)
     }
-    const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId: wsChatId, message, notify: true }, { waitResponse: true, timeoutMs: 30_000 })
+    const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId: wsChatId, message, notify: true }, { waitResponse: true, timeoutMs })
     // MAX responds with the created message; extract its server-assigned ID
     const maxMsgId = resp?.message?.id ? String(resp.message.id) : null
     if (maxMsgId) console.log(`[Send] MAX assigned msgId=${maxMsgId} for chatId=${chatId}`)
     return maxMsgId
+  }
+
+  try {
+    return await sendProtocolText(30_000)
   } catch (e) {
     // Re-throw MAX protocol errors (not.found, etc.) — these are real failures, not timeouts
     if (e.maxError) throw e
@@ -1002,6 +1013,18 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
     }
     if (!e.maxError) {
       if (replyToMessageId) {
+        const isOpcode64Timeout = /Timeout: opcode 64/i.test(String(e.message || ''))
+        if (isOpcode64Timeout && typeof transport?.waitForStableWs === 'function') {
+          console.warn('[sendText] reply send timed out; waiting for stable WS and retrying once with same cid')
+          const stable = await transport.waitForStableWs(800, 8_000).catch(() => false)
+          if (stable) {
+            try {
+              return await sendProtocolText(15_000)
+            } catch (retryErr) {
+              console.warn(`[sendText] reply quick retry failed: ${retryErr.message}`)
+            }
+          }
+        }
         console.warn('[sendText] reply send failed without MAX confirmation; not downgrading to plain UI text')
         throw e
       }
@@ -5342,7 +5365,7 @@ app.post('/debug/dom-fallback', async (req, res) => {
 })
 
 app.post('/send-message', async (req, res) => {
-  let { chatId, message, phone, quotedMsgId, uiChatId } = req.body
+  let { chatId, message, phone, quotedMsgId, uiChatId, clientMessageId } = req.body
   if (!message) {
     return res.status(400).json({ error: 'message is required' })
   }
@@ -5443,7 +5466,7 @@ app.post('/send-message', async (req, res) => {
     })
 
     try {
-      const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId)))
+      const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId, clientMessageId)))
       const maxMsgId = sendResult.externalId || sendResult.maxMessageId || null
 
       if (maxMsgId) {
@@ -5481,7 +5504,7 @@ app.post('/send-message', async (req, res) => {
   }
 
   try {
-    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId)))
+    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId, clientMessageId)))
     res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
   } catch (e) {
     const isMaxErr = e.maxError

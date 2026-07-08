@@ -586,7 +586,8 @@ export class MessageService {
                         connectionId: isPersonal ? undefined : profileId,
                         name: chat.driver?.fullName,
                         quotedMsgId: providerQuotedMsgId,
-                        uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId
+                        uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                        clientMessageId: clientMessageId || messageId
                     })
                     const rawMaxExternalId = (maxRes as any)?.externalId
                     const rawMaxMessageId = (maxRes as any)?.maxMessageId
@@ -858,7 +859,8 @@ export class MessageService {
                         isPersonal: true,
                         name: chat.driver?.fullName,
                         quotedMsgId: retryQuotedMsgId,
-                        uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId
+                        uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                        clientMessageId: message.clientMessageId || message.id
                     })
                     const rawMaxExternalId = (retryMaxRes as any)?.externalId
                     const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
