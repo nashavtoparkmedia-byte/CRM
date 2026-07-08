@@ -177,6 +177,21 @@ function uiTextDeliveredResult(source = 'ui_text_no_provider_id') {
   }
 }
 
+function rememberKnownChatId(chatId) {
+  const normalized = chatId != null ? String(chatId) : ''
+  if (!normalized || normalized === '0') return
+  try {
+    const knownPath = path.join(__dirname, 'known_chats.json')
+    let known = []
+    try { known = JSON.parse(fs.readFileSync(knownPath, 'utf8')) } catch {}
+    if (!Array.isArray(known)) known = []
+    if (!known.map(String).includes(normalized)) {
+      known.push(normalized)
+      fs.writeFileSync(knownPath, JSON.stringify(known))
+    }
+  } catch {}
+}
+
 function normalizeTextSendResult(result) {
   if (result && typeof result === 'object' && !Buffer.isBuffer(result)) {
     const externalId = result.externalId || result.maxMessageId || null
@@ -915,17 +930,7 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   } catch {}
 
   // Запоминаем chatId для catch-up при рестарте
-  if (payload.chatId) {
-    try {
-      const knownPath = path.join(__dirname, 'known_chats.json')
-      let known = []
-      try { known = JSON.parse(fs.readFileSync(knownPath, 'utf8')) } catch {}
-      if (!known.includes(payload.chatId)) {
-        known.push(payload.chatId)
-        fs.writeFileSync(knownPath, JSON.stringify(known))
-      }
-    } catch {}
-  }
+  rememberKnownChatId(payload.chatId)
 }
 
 // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
@@ -2534,6 +2539,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
 
   const messageType = attachments[0]?.type || 'text'
   console.log(`[domFallback] ${reason} chatId=${chatId} text="${String(text || '').slice(0, 80)}" attachments=${attachments.length}`)
+  rememberKnownChatId(chatId)
   const result = await forwardToWebhook({
     externalId,
     chatId: String(chatId),
@@ -5437,6 +5443,8 @@ app.post('/send-message', async (req, res) => {
       if (echoConvId && echoConvId !== String(chatId)) {
         console.log(`[Send] Conversation ID from echo: ${chatId} → ${echoConvId}`)
       }
+      rememberKnownChatId(returnChatId)
+      if (uiChatId) rememberKnownChatId(uiChatId)
       res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
     } catch (e) {
       if (echoRawHandler) {
