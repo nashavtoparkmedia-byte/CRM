@@ -588,9 +588,14 @@ export class MessageService {
                         quotedMsgId: providerQuotedMsgId,
                         uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId
                     })
-                    const maxExternalId = (maxRes as any)?.externalId || null
-                    const maxDeliveryStatus = (maxRes as any)?.deliveryStatus || null
-                    const maxDeliveryConfirmed = Boolean((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const rawMaxExternalId = (maxRes as any)?.externalId
+                    const rawMaxMessageId = (maxRes as any)?.maxMessageId
+                    const maxExternalId = typeof rawMaxExternalId === 'string'
+                        ? rawMaxExternalId
+                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
+                    const rawMaxDeliveryStatus = (maxRes as any)?.deliveryStatus || (maxRes as any)?.status
+                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
+                    const maxDeliveryConfirmed = Boolean(((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId)) || maxDeliveryStatus === 'delivered')
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     maxDeliveryMetadata = {
@@ -855,9 +860,14 @@ export class MessageService {
                         quotedMsgId: retryQuotedMsgId,
                         uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId
                     })
-                    const maxExternalId = (retryMaxRes as any)?.externalId || null
-                    const maxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || null
-                    const maxDeliveryConfirmed = Boolean((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const rawMaxExternalId = (retryMaxRes as any)?.externalId
+                    const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
+                    const maxExternalId = typeof rawMaxExternalId === 'string'
+                        ? rawMaxExternalId
+                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
+                    const rawMaxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || (retryMaxRes as any)?.status
+                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
+                    const maxDeliveryConfirmed = Boolean(((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId)) || maxDeliveryStatus === 'delivered')
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     retryMaxDeliveryMetadata = {

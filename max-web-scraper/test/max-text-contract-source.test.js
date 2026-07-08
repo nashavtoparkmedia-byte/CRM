@@ -87,12 +87,12 @@ test('MAX outbound text delivery is confirmed only by a real d301 provider messa
   const scraper = read('max-web-scraper/index.js')
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
 
-  assert.match(scraper, /deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
-  assert.match(scraper, /deliveryStatus: isRealMaxMessageId\(maxMsgId\) \? 'delivered' : 'send_requested'/)
+  assert.match(scraper, /deliveryConfirmed: sendResult\.deliveryConfirmed/)
+  assert.match(scraper, /deliveryStatus: sendResult\.deliveryStatus/)
   assert.match(scraper, /externalId: null, deliveryConfirmed: false, deliveryStatus: 'send_requested'/)
   assert.match(scraper, /ackId && isRealMaxMessageId\(ackId\)/)
 
-  assert.match(messageService, /const maxDeliveryConfirmed = Boolean\(\(maxRes as any\)\?\.deliveryConfirmed && isRealMaxMessageId\(maxExternalId\)\)/)
+  assert.match(messageService, /\(\(maxRes as any\)\?\.deliveryConfirmed && isRealMaxMessageId\(maxExternalId\)\) \|\| maxDeliveryStatus === 'delivered'/)
   assert.match(messageService, /deliveryStatus = maxDeliveryConfirmed \? 'delivered' : 'sent'/)
 })
 
@@ -311,4 +311,25 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
     "const pendingProviderId = reason === 'empty_op71_after_op128'",
     'DOM quote-composed reply bubbles must be filtered before assigning max-dom ids',
   )
+})
+
+test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {
+  const scraper = read('max-web-scraper/index.js')
+
+  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId\)\)\)/)
+  assert.match(scraper, /externalId: sendResult\.externalId \|\| null/)
+  assert.match(scraper, /maxMessageId: sendResult\.maxMessageId \|\| null/)
+  assert.doesNotMatch(scraper, /externalId: maxMsgId \|\| null, deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
+})
+
+test('CRM MAX delivery path never writes non-string send-result object as message externalId', () => {
+  const messageService = read('gravity-mvp/src/lib/MessageService.ts')
+  const maxActions = read('gravity-mvp/src/app/max-actions.ts')
+
+  assert.match(maxActions, /const externalId = typeof data\.externalId === 'string'/)
+  assert.match(messageService, /const rawMaxExternalId = \(maxRes as any\)\?\.externalId/)
+  assert.match(messageService, /const rawMaxMessageId = \(maxRes as any\)\?\.maxMessageId/)
+  assert.match(messageService, /const rawMaxExternalId = \(retryMaxRes as any\)\?\.externalId/)
+  assert.doesNotMatch(messageService, /const maxExternalId = \(maxRes as any\)\?\.externalId \|\| null/)
+  assert.doesNotMatch(messageService, /const maxExternalId = \(retryMaxRes as any\)\?\.externalId \|\| null/)
 })

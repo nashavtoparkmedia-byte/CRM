@@ -194,12 +194,15 @@ function rememberKnownChatId(chatId) {
 
 function normalizeTextSendResult(result) {
   if (result && typeof result === 'object' && !Buffer.isBuffer(result)) {
-    const externalId = result.externalId || result.maxMessageId || null
+    const externalId = typeof result.externalId === 'string'
+      ? result.externalId
+      : (typeof result.maxMessageId === 'string' ? result.maxMessageId : null)
+    const maxMessageId = typeof result.maxMessageId === 'string' ? result.maxMessageId : externalId
     const deliveryStatus = result.deliveryStatus || result.status || (result.deliveryConfirmed ? 'delivered' : 'send_requested')
     return {
       ...result,
       externalId,
-      maxMessageId: result.maxMessageId || externalId,
+      maxMessageId,
       deliveryConfirmed: Boolean(result.deliveryConfirmed || deliveryStatus === 'delivered'),
       deliveryStatus,
     }
@@ -5459,8 +5462,8 @@ app.post('/send-message', async (req, res) => {
   }
 
   try {
-    const maxMsgId = await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId))
-    res.json({ success: true, chatId: String(chatId), externalId: maxMsgId || null, deliveryConfirmed: isRealMaxMessageId(maxMsgId), deliveryStatus: isRealMaxMessageId(maxMsgId) ? 'delivered' : 'send_requested' })
+    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId)))
+    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
   } catch (e) {
     const isMaxErr = e.maxError
     console.error(`[Send] sendText failed: ${e.message}`)

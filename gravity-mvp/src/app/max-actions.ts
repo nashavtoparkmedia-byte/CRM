@@ -216,10 +216,14 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             throw new Error(data.error || "Failed to send message via Scraper")
         }
 
+        const externalId = typeof data.externalId === 'string'
+            ? data.externalId
+            : (typeof data.maxMessageId === 'string' ? data.maxMessageId : null)
+
         return {
             success: true,
-            externalId: data.externalId || null,
-            resolvedChatId: data.chatId || null,
+            externalId,
+            resolvedChatId: data.chatId ? String(data.chatId) : null,
             deliveryConfirmed: Boolean(data.deliveryConfirmed),
             deliveryStatus: data.deliveryStatus || data.status || null,
         }
