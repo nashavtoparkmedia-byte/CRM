@@ -238,10 +238,22 @@ class InitialHistorySync {
 
     let total = 0
     try {
-      // Используем сохранённые chatId из реальных входящих сообщений
-      const KNOWN_CHATS_PATH = path.join(__dirname, '..', 'known_chats.json')
+      // Используем сохранённые chatId из persistent user_data, с миграцией legacy-файла.
+      const USER_DATA_DIR = path.join(__dirname, '..', 'user_data')
+      const KNOWN_CHATS_PATH = path.join(USER_DATA_DIR, 'known_chats.json')
+      const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, '..', 'known_chats.json')
       let chatIds = []
       try { chatIds = JSON.parse(fs.readFileSync(KNOWN_CHATS_PATH, 'utf8')) } catch {}
+      if (!Array.isArray(chatIds)) chatIds = []
+      try {
+        const legacy = JSON.parse(fs.readFileSync(LEGACY_KNOWN_CHATS_PATH, 'utf8'))
+        if (Array.isArray(legacy) && legacy.length > 0) {
+          chatIds = [...new Set([...chatIds.map(String), ...legacy.map(String)])]
+          fs.mkdirSync(USER_DATA_DIR, { recursive: true })
+          fs.writeFileSync(KNOWN_CHATS_PATH, JSON.stringify(chatIds))
+          fs.unlinkSync(LEGACY_KNOWN_CHATS_PATH)
+        }
+      } catch {}
       console.log(`[InitialSync] Catch-up: scanning ${chatIds.length} known chats: ${chatIds.join(', ')}`)
       for (const chatId of chatIds) {
         if (!chatId || chatId === 0) continue

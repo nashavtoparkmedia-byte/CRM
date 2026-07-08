@@ -29,6 +29,8 @@ const CRM_WEBHOOK_URL = process.env.CRM_WEBHOOK_URL || 'http://localhost:3000/ap
 const MAX_URL         = 'https://web.max.ru/'
 const USER_DATA_DIR        = path.join(__dirname, 'user_data')
 const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
+const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
+const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
   // MAX exposes different IDs for websocket history and the web.max.ru route.
@@ -177,17 +179,34 @@ function uiTextDeliveredResult(source = 'ui_text_no_provider_id') {
   }
 }
 
+function readKnownChatIds() {
+  let known = []
+  try { known = JSON.parse(fs.readFileSync(KNOWN_CHATS_PATH, 'utf8')) } catch {}
+  if (!Array.isArray(known)) known = []
+
+  let legacy = []
+  try { legacy = JSON.parse(fs.readFileSync(LEGACY_KNOWN_CHATS_PATH, 'utf8')) } catch {}
+  if (Array.isArray(legacy) && legacy.length > 0) {
+    known = [...new Set([...known.map(String), ...legacy.map(String)])]
+    try {
+      fs.mkdirSync(USER_DATA_DIR, { recursive: true })
+      fs.writeFileSync(KNOWN_CHATS_PATH, JSON.stringify(known))
+      fs.unlinkSync(LEGACY_KNOWN_CHATS_PATH)
+    } catch {}
+  }
+
+  return known.map(String)
+}
+
 function rememberKnownChatId(chatId) {
   const normalized = chatId != null ? String(chatId) : ''
   if (!normalized || normalized === '0') return
   try {
-    const knownPath = path.join(__dirname, 'known_chats.json')
-    let known = []
-    try { known = JSON.parse(fs.readFileSync(knownPath, 'utf8')) } catch {}
-    if (!Array.isArray(known)) known = []
-    if (!known.map(String).includes(normalized)) {
+    fs.mkdirSync(USER_DATA_DIR, { recursive: true })
+    const known = readKnownChatIds()
+    if (!known.includes(normalized)) {
       known.push(normalized)
-      fs.writeFileSync(knownPath, JSON.stringify(known))
+      fs.writeFileSync(KNOWN_CHATS_PATH, JSON.stringify(known))
     }
   } catch {}
 }
