@@ -955,9 +955,9 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
   }
 
   try {
-    const wsChatId = replyToMessageId && directUiRouteId ? Number(directUiRouteId) : chatId
-    if (replyToMessageId && wsChatId !== chatId) {
-      console.log(`[sendText] reply via WS route chatId=${wsChatId} original=${chatId}`)
+    const wsChatId = chatId
+    if (replyToMessageId && directUiRouteId) {
+      console.log(`[sendText] reply via WS protocol chatId=${chatId} uiRoute=${directUiRouteId}`)
     }
     const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId: wsChatId, message, notify: true }, { waitResponse: true, timeoutMs: 30_000 })
     // MAX responds with the created message; extract its server-assigned ID
@@ -974,6 +974,10 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId) {
       console.warn(`[sendText] No ack from MAX (timeout) — treating delivery as failed`)
     }
     if (!e.maxError) {
+      if (replyToMessageId) {
+        console.warn('[sendText] reply send failed without MAX confirmation; not downgrading to plain UI text')
+        throw e
+      }
       const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId
       const ackPromise = waitForUiSendAck(transport, 15_000)
       const uiSent = await sendTextViaUi(uiRouteId, text, chatId).catch(uiErr => {
@@ -2127,6 +2131,18 @@ function isDomNoiseText(text) {
   return false
 }
 
+function domReplyQuoteLeafText(text) {
+  const lines = cleanDomMessageText(text).split('\n').map(line => line.trim()).filter(Boolean)
+  return lines.length >= 3 ? lines[lines.length - 1] : null
+}
+
+function looksLikeDomReplyQuoteText(chatId, candidate) {
+  if (!candidate?.text || candidate.attachments?.length) return false
+  if (candidate.hasReplyQuote) return true
+  const leafText = domReplyQuoteLeafText(candidate.text)
+  return !!leafText && recentDirectInboundTextHits(chatId, leafText).length > 0
+}
+
 function decodeBase64Payload(base64) {
   const raw = String(base64 || '')
   return Buffer.from(raw.includes(',') ? raw.split(',').pop() : raw, 'base64')
@@ -2388,6 +2404,18 @@ async function scrapeRecentDomMessages(uiRouteId) {
         attachments.push({ type, name, mimeType, downloadable: true, sourceKind: 'dom_download' })
       }
 
+      const quoteSelectors = [
+        'use[href*="icon_quote"]',
+        'use[xlink\\:href*="icon_quote"]',
+        '[class*="quote"]',
+        '[class*="Quote"]',
+        '[class*="quoted"]',
+        '[class*="Quoted"]',
+      ]
+      const hasReplyQuote = quoteSelectors.some(selector => {
+        try { return !!message.querySelector(selector) } catch { return false }
+      }) || /icon_quote|quoted|quote/i.test(String(message.innerHTML || '').slice(0, 5000))
+
       candidates.push({
         text,
         attachments,
@@ -2399,6 +2427,7 @@ async function scrapeRecentDomMessages(uiRouteId) {
         viewportW,
         displayTime: timeInfo.label,
         displayMinute: timeInfo.minute,
+        hasReplyQuote,
         isOutgoing: /messageWrapper--isOut|message--isOut/.test(`${message.className || ''} ${message.querySelector('[class*="message--isOut"]')?.className || ''}`),
       })
     }
@@ -2474,6 +2503,9 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   }
   if (latest.isOutgoing || (latest.viewportW && latest.x > latest.viewportW * 0.55)) {
     return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW }
+  }
+  if (reason === 'empty_op71_after_op128' && looksLikeDomReplyQuoteText(chatId, latest)) {
+    return { skipped: 'dom_reply_quote_text', text: latest.text }
   }
   if (latest._skipDomTextAlreadyRecovered) {
     return { skipped: 'dom_text_already_recovered', text: latest.text }

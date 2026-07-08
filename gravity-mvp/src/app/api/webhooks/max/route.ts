@@ -62,6 +62,7 @@ type MaxWebhookBody = {
   deleted?: boolean | null
   forwardedFrom?: unknown
   source?: string | null
+  replyToExternalId?: string | number | null
 }
 
 function normalizeMaxChatId(chatId: unknown): string {
@@ -125,7 +126,7 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 export async function POST(request: Request) {
   try {
     const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
-    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source } = body
+    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId } = body
 
     // MAX server confirmed a message was deleted — remove from CRM DB
     if (deleted && externalId) {
@@ -184,6 +185,7 @@ export async function POST(request: Request) {
     }
 
     const externalIdString = externalId ? String(externalId) : null
+    const replyToExternalIdString = replyToExternalId ? String(replyToExternalId) : null
     const isTextProviderEvent = isTextType && usableAttachments.length === 0
     const isPlaceholderTextId = !!externalIdString && (
       externalIdString.startsWith('max-dom-') ||
@@ -396,7 +398,7 @@ export async function POST(request: Request) {
             type: msgType,
             content,
             sentAt,
-            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(forwardedFrom ? { forwardedFrom } : {}) },
+            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
           },
         })
         console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
@@ -476,7 +478,7 @@ export async function POST(request: Request) {
           externalId: externalIdString,
           status:    'delivered',
           sentAt,   // validated above
-          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
         },
       })
     }

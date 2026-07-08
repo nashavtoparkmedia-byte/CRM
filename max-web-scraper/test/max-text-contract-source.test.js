@@ -269,3 +269,46 @@ test('MAX UI text fallback does not depend on browser clipboard permission', () 
   assert.match(scraper, /page\.keyboard\.insertText\(text\)/)
   assert.match(block, /page\.keyboard\.press\('Enter'\)/)
 })
+
+
+test('MAX reply text is sent through protocol chat id and is not downgraded to plain UI text', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const start = scraper.indexOf('async function sendText')
+  assert.notEqual(start, -1, 'missing sendText')
+  const end = scraper.indexOf('async function fillEditableText', start)
+  assert.notEqual(end, -1, 'missing fillEditableText anchor')
+  const block = scraper.slice(start, end)
+
+  assert.match(block, /const wsChatId = chatId/)
+  assert.doesNotMatch(block, /replyToMessageId && directUiRouteId \? Number\(directUiRouteId\) : chatId/)
+  assert.match(block, /reply via WS protocol chatId=\$\{chatId\} uiRoute=\$\{directUiRouteId\}/)
+  assert.match(block, /reply send failed without MAX confirmation; not downgrading to plain UI text/)
+  assertBefore(
+    block,
+    'if (replyToMessageId) {',
+    'const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId',
+    'reply failures must stop before plain UI fallback can send an unquoted message',
+  )
+})
+
+test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-composed bubbles', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const parser = read('max-web-scraper/parser/MessageParser.js')
+  const route = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
+
+  assert.match(parser, /replyToExternalId: msg\.replyToMessageId \|\| null/)
+  assert.match(route, /replyToExternalId\?: string \| number \| null/)
+  assert.match(route, /const replyToExternalIdString = replyToExternalId \? String\(replyToExternalId\) : null/)
+  assert.match(route, /replyToExternalId: replyToExternalIdString/)
+
+  assert.match(scraper, /function looksLikeDomReplyQuoteText\(chatId, candidate\)/)
+  assert.match(scraper, /candidate\.hasReplyQuote/)
+  assert.match(scraper, /dom_reply_quote_text/)
+  assert.match(scraper, /recentDirectInboundTextHits\(chatId, leafText\)\.length > 0/)
+  assertBefore(
+    scraper,
+    "return { skipped: 'dom_reply_quote_text', text: latest.text }",
+    "const pendingProviderId = reason === 'empty_op71_after_op128'",
+    'DOM quote-composed reply bubbles must be filtered before assigning max-dom ids',
+  )
+})
