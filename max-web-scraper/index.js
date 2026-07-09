@@ -276,6 +276,14 @@ function loadPhoneChatIdCache() {
   }
 }
 
+function normalizePhoneForCrmPayload(phone) {
+  const digits = String(phone || '').replace(/\D/g, '')
+  if (digits.length === 10) return `+7${digits}`
+  if (digits.length === 11 && digits.startsWith('8')) return `+7${digits.slice(1)}`
+  if (digits.length === 11 && digits.startsWith('7')) return `+${digits}`
+  return digits || null
+}
+
 function savePhoneChatId(phone, chatId) {
   try {
     let data = {}
@@ -283,12 +291,26 @@ function savePhoneChatId(phone, chatId) {
       data = JSON.parse(fs.readFileSync(PHONE_CHATID_CACHE, 'utf8'))
     }
     const key = String(phone).replace(/\D/g, '')
-    data[key] = String(chatId)
+    const chatIdStr = String(chatId)
+    data[key] = chatIdStr
+    fs.mkdirSync(USER_DATA_DIR, { recursive: true })
     fs.writeFileSync(PHONE_CHATID_CACHE, JSON.stringify(data, null, 2))
-    console.log(`[PhoneCache] Saved ${key} → ${chatId}`)
+    if (contactStore && key) {
+      contactStore._map.set(chatIdStr, { name: null, firstName: null, lastName: null, phone: key })
+    }
+    console.log(`[PhoneCache] Saved ${key} → ${chatIdStr}`)
   } catch (e) {
     console.warn('[PhoneCache] Save failed:', e.message)
   }
+}
+
+function cachedPhoneForChatId(...chatIds) {
+  for (const chatId of chatIds) {
+    if (chatId == null) continue
+    const phone = contactStore?.getPhone?.(String(chatId))
+    if (phone) return phone
+  }
+  return null
 }
 
 // ─── Счётчик статистики импорта ──────────────────────────────────────────────
@@ -2583,8 +2605,12 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   domFallbackSeen.add(externalId)
 
   const messageType = attachments[0]?.type || 'text'
+  const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
+  const crmPhone = normalizePhoneForCrmPayload(options.phone || cachedPhone)
+  const crmSenderName = options.senderName || options.name || null
   console.log(`[domFallback] ${reason} chatId=${chatId} text="${String(text || '').slice(0, 80)}" attachments=${attachments.length}`)
   rememberKnownChatId(chatId)
+  if (crmPhone) savePhoneChatId(crmPhone, chatId)
   const result = await forwardToWebhook({
     externalId,
     chatId: String(chatId),
@@ -2594,6 +2620,8 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     attachments,
     isOutgoing: false,
     source: pendingProviderId ? 'live_dom_recovery' : 'dom_fallback',
+    ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
+    ...(crmSenderName ? { senderName: crmSenderName } : {}),
   })
   if (pendingProviderId && result.status >= 200 && result.status < 300 && !result.skipped) {
     transport?.confirmPendingLiveTextIdForDomRecovery?.(chatId, pendingProviderId)
@@ -2620,7 +2648,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   }
 }
 
-async function forwardLatestDomMessage(chatId, reason = 'manual') {
+async function forwardLatestDomMessage(chatId, reason = 'manual', options = {}) {
   if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
@@ -2632,13 +2660,13 @@ async function forwardLatestDomMessage(chatId, reason = 'manual') {
     }
     if (transport) transport._activeUiChatId = String(chatId)
     const latest = await scrapeLatestDomMessage(uiRouteId)
-    return await forwardDomCandidate(chatId, uiRouteId, latest, reason)
+    return await forwardDomCandidate(chatId, uiRouteId, latest, reason, options)
   } finally {
     domFallbackRunning = false
   }
 }
 
-async function forwardRecentDomMessages(chatId, reason = 'manual') {
+async function forwardRecentDomMessages(chatId, reason = 'manual', options = {}) {
   if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
@@ -2733,6 +2761,7 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
     for (const candidate of recoverable) {
       const result = await forwardDomCandidate(chatId, uiRouteId, candidate, reason, {
         timestamp: candidate._recoveryTimestamp,
+        ...options,
       })
       if (result?.success) results.push(result)
       else if (result?.skipped) skipped[result.skipped] = (skipped[result.skipped] || 0) + 1
@@ -4102,6 +4131,7 @@ async function resolvePhoneLive(digits, messageToSend = null) {
     const titleDigits = title.replace(/\D/g, '')
     if (titleDigits.length >= 10 && titleDigits.slice(-10) === tail10) {
       console.log(`[ResolvePhone] chatCache hit: ${digits} → chatId ${chatIdStr}`)
+      savePhoneChatId(digits, chatIdStr)
       return chatIdStr
     }
   }
@@ -4115,6 +4145,7 @@ async function resolvePhoneLive(digits, messageToSend = null) {
       const fromStore = contactStore.findByPhone(digits)
       if (fromStore) {
         console.log(`[ResolvePhone] Found after sync: ${digits} → ${fromStore}`)
+        savePhoneChatId(digits, fromStore)
         return fromStore
       }
     }
@@ -4130,6 +4161,7 @@ async function resolvePhoneLive(digits, messageToSend = null) {
       if (!pPhone) continue
       if (pPhone.replace(/\D/g, '').slice(-10) === tail10) {
         console.log(`[ResolvePhone] chatCache participant match: ${digits} → convId ${chatIdStr} (userId ${pId})`)
+        savePhoneChatId(digits, chatIdStr)
         return chatIdStr  // return convId — looksLikePhone=false so will be sent directly
       }
     }
@@ -4138,7 +4170,10 @@ async function resolvePhoneLive(digits, messageToSend = null) {
   // 4. "Найти по номеру" dialog — MAX Contacts → + → phone lookup
   //    Works even for private profiles since MAX server knows the phone→userId mapping.
   const dialogId = await resolveViaPhoneLookupDialog(digits, messageToSend)
-  if (dialogId) return dialogId
+  if (dialogId) {
+    savePhoneChatId(digits, dialogId)
+    return dialogId
+  }
 
   return null
 }
@@ -5353,11 +5388,16 @@ app.post('/debug/op71', async (req, res) => {
 // Body: { chatId: string|number, recent?: boolean }
 app.post('/debug/dom-fallback', async (req, res) => {
   try {
-    const { chatId, recent } = req.body || {}
+    const { chatId, recent, phone, senderName, name } = req.body || {}
     if (!chatId) return res.status(400).json({ error: 'chatId is required' })
+    if (phone) savePhoneChatId(phone, chatId)
+    const options = {
+      ...(phone ? { phone } : {}),
+      ...((senderName || name) ? { senderName: senderName || name } : {}),
+    }
     const result = recent
-      ? await forwardRecentDomMessages(String(chatId), 'manual_debug')
-      : await forwardLatestDomMessage(String(chatId), 'manual_debug')
+      ? await forwardRecentDomMessages(String(chatId), 'manual_debug', options)
+      : await forwardLatestDomMessage(String(chatId), 'manual_debug', options)
     res.json(result)
   } catch (e) {
     res.status(500).json({ error: e.message })
