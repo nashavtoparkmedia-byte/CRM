@@ -1,5 +1,45 @@
 import { prisma } from '@/lib/prisma'
 
+type DriverCandidate = {
+    id: string
+    fullName?: string | null
+    phone?: string | null
+    dismissedAt?: Date | null
+    lastOrderAt?: Date | null
+}
+
+export type DriverMatchResult =
+    | { status: 'not_found'; candidates: [] }
+    | { status: 'matched'; driver: DriverCandidate }
+    | { status: 'ambiguous'; candidates: DriverCandidate[] }
+
+function sortCandidatesForDiagnostics(candidates: DriverCandidate[]): DriverCandidate[] {
+    return [...candidates].sort((a, b) => {
+        const aActive = a.dismissedAt == null ? 0 : 1
+        const bActive = b.dismissedAt == null ? 0 : 1
+        if (aActive !== bActive) return aActive - bActive
+        const aOrder = a.lastOrderAt ? new Date(a.lastOrderAt).getTime() : 0
+        const bOrder = b.lastOrderAt ? new Date(b.lastOrderAt).getTime() : 0
+        return bOrder - aOrder
+    })
+}
+
+function logDriverMatchAmbiguous(reason: string, candidates: DriverCandidate[], context: Record<string, unknown>) {
+    console.warn(JSON.stringify({
+        level: 'warn',
+        event: 'driver_match_ambiguous',
+        reason,
+        candidateCount: candidates.length,
+        candidates: candidates.map(candidate => ({
+            id: candidate.id,
+            yandexDriverId: (candidate as any).yandexDriverId ?? null,
+            dismissedAt: candidate.dismissedAt ?? null,
+            lastOrderAt: candidate.lastOrderAt ?? null,
+        })),
+        ...context,
+    }))
+}
+
 export class DriverMatchService {
     /**
      * Normalizes any phone number to a canonical 11-digit format: 79XXXXXXXXX
@@ -21,7 +61,7 @@ export class DriverMatchService {
     }
 
     /**
-     * Normalizes a phone number to exactly 10 digits (without country code) 
+     * Normalizes a phone number to exactly 10 digits (without country code)
      * for fuzzy matching against driver records.
      */
     static normalizeForSearch(phone: string): string {
@@ -33,17 +73,33 @@ export class DriverMatchService {
     }
 
     /**
-     * Attempts to find a driver by their Telegram ID or Phone number or Name.
-     * Returns the driver ID if found, otherwise null.
+     * Attempts to match a driver by strict identifiers only.
+     *
+     * Telegram ID is a verified mapping. Phone is accepted only when it produces
+     * exactly one driver candidate. Name is diagnostic-only and never links.
      */
-    static async findDriverId(params: { telegramId?: string | bigint, phone?: string, name?: string }): Promise<string | null> {
+    static async matchDriver(params: { telegramId?: string | bigint | null, phone?: string | null, name?: string | null }): Promise<DriverMatchResult> {
         // 1. Try by Telegram ID first (most precise)
         if (params.telegramId) {
             try {
-                const driverTgList = await prisma.$queryRaw<{driverId: string}[]>`SELECT "driverId" FROM "DriverTelegram" WHERE "telegramId" = ${BigInt(params.telegramId)} LIMIT 1`
-                if (driverTgList.length > 0 && driverTgList[0].driverId) {
-                    console.log(`[DriverMatch] FOUND by telegramId=${params.telegramId} -> driver=${driverTgList[0].driverId}`)
-                    return driverTgList[0].driverId
+                const driverTgList = await prisma.$queryRaw<{driverId: string}[]>`SELECT "driverId" FROM "DriverTelegram" WHERE "telegramId" = ${BigInt(params.telegramId)}`
+                const uniqueDriverIds = [...new Set(driverTgList.map(row => row.driverId).filter(Boolean))]
+                if (uniqueDriverIds.length === 1) {
+                    const driver = await prisma.driver.findUnique({
+                        where: { id: uniqueDriverIds[0] },
+                        select: { id: true, fullName: true, phone: true, dismissedAt: true, lastOrderAt: true },
+                    })
+                    if (driver) {
+                        console.log(`[DriverMatch] MATCHED by telegramId=${params.telegramId} -> driver=${driver.id}`)
+                        return { status: 'matched', driver }
+                    }
+                } else if (uniqueDriverIds.length > 1) {
+                    const candidates = sortCandidatesForDiagnostics(await prisma.driver.findMany({
+                        where: { id: { in: uniqueDriverIds } },
+                        select: { id: true, fullName: true, phone: true, dismissedAt: true, lastOrderAt: true },
+                    }))
+                    logDriverMatchAmbiguous('telegram_id_multiple_mappings', candidates, { telegramId: String(params.telegramId) })
+                    return { status: 'ambiguous', candidates }
                 }
             } catch (e: any) {
                 console.log(`[DriverMatch] telegramId lookup failed: ${e.message}`)
@@ -56,7 +112,7 @@ export class DriverMatchService {
             if (phoneDigits.length >= 10) {
                 const searchSuffix = this.normalizeForSearch(params.phone)
                 const normalized = this.normalizePhone(params.phone)
-                
+
                 // Build multiple format variants for matching
                 const formatted = `+7 ${searchSuffix.slice(0, 3)} ${searchSuffix.slice(3, 6)}-${searchSuffix.slice(6, 8)}-${searchSuffix.slice(8, 10)}`
                 const withPlus7 = `+${normalized}`
@@ -66,92 +122,108 @@ export class DriverMatchService {
 
                 console.log(`[DriverMatch] Phone search: formatted="${formatted}", +7="${withPlus7}", raw11="${raw11}", suffix="${raw10}"`)
 
-                const drivers = await prisma.$queryRaw<{id: string}[]>`
-                    SELECT id FROM "Driver" 
-                    WHERE phone = ${formatted} 
+                const drivers = await prisma.$queryRaw<DriverCandidate[]>`
+                    SELECT id, "fullName", phone, "dismissedAt", "lastOrderAt" FROM "Driver"
+                    WHERE phone = ${formatted}
                        OR phone = ${withPlus7}
                        OR phone = ${raw11}
                        OR phone = ${with8}
                        OR phone LIKE ${'%' + searchSuffix}
-                    LIMIT 1
                 `;
-                if (drivers.length > 0 && drivers[0].id) {
-                    console.log(`[DriverMatch] FOUND by phone -> driver=${drivers[0].id}`)
-                    return drivers[0].id
+                const uniqueById = Array.from(new Map(drivers.filter(d => d.id).map(d => [d.id, d])).values())
+                if (uniqueById.length === 1) {
+                    console.log(`[DriverMatch] MATCHED by phone -> driver=${uniqueById[0].id}`)
+                    return { status: 'matched', driver: uniqueById[0] }
+                } else if (uniqueById.length > 1) {
+                    const candidates = sortCandidatesForDiagnostics(uniqueById)
+                    logDriverMatchAmbiguous('phone_multiple_drivers', candidates, { phoneSuffix: searchSuffix })
+                    return { status: 'ambiguous', candidates }
                 } else {
                     console.log(`[DriverMatch] No driver found by phone variants`)
                 }
             }
         }
 
-        // 3. Try by Name (fuzzy) - fallback for MAX/other scrapers
+        // 3. Name is diagnostic-only. It is not proof of identity and must not
+        // auto-link a chat/contact to a driver.
         if (params.name) {
             const searchName = params.name.trim();
-            console.log(`[DriverMatch] Name search: "${searchName}"`)
-            
-            if (searchName.length < 3) {
-                console.log(`[DriverMatch] Name too short (${searchName.length}). Requirements exact match only.`);
-                const exactDrivers = await (prisma.driver as any).findMany({
+            console.log(`[DriverMatch] Name search diagnostic only: "${searchName}"`)
+
+            if (searchName.length >= 2) {
+                const candidates = await (prisma.driver as any).findMany({
                     where: {
                         OR: [
                             { fullName: { equals: searchName, mode: 'insensitive' } },
-                            { fullName: { startsWith: searchName + ' ', mode: 'insensitive' } } // e.g. "Н" matches "Н ..."
+                            { fullName: { startsWith: searchName + ' ', mode: 'insensitive' } },
+                            ...(searchName.length >= 3 ? [{ fullName: { contains: searchName, mode: 'insensitive' } }] : []),
                         ]
                     },
-                    take: 10
+                    select: { id: true, fullName: true, phone: true, dismissedAt: true, lastOrderAt: true },
+                    take: 10,
                 });
-                
-                if (exactDrivers.length === 1) {
-                    console.log(`[DriverMatch] FOUND short name exact: ${exactDrivers[0].fullName} -> driver=${exactDrivers[0].id}`);
-                    return exactDrivers[0].id;
+                if (candidates.length > 0) {
+                    console.log(JSON.stringify({
+                        level: 'info',
+                        event: 'driver_match_name_candidates_diagnostic',
+                        queryLength: searchName.length,
+                        candidateCount: candidates.length,
+                        candidates: candidates.map((candidate: DriverCandidate) => ({
+                            id: candidate.id,
+                            dismissedAt: candidate.dismissedAt ?? null,
+                            lastOrderAt: candidate.lastOrderAt ?? null,
+                        })),
+                    }))
                 }
-                return null;
-            }
-
-            const drivers = await (prisma.driver as any).findMany({
-                where: { 
-                    fullName: { contains: searchName, mode: 'insensitive' }
-                },
-                take: 10
-            })
-            
-            console.log(`[DriverMatch] Found ${drivers.length} candidates for name "${searchName}"`)
-            
-            if (drivers.length === 1) {
-                console.log(`[DriverMatch] FOUND by name (single match): ${drivers[0].fullName} -> driver=${drivers[0].id}`)
-                return drivers[0].id
-            } else if (drivers.length > 1) {
-                const exactMatch = drivers.find((d: any) => 
-                    d.fullName.toLowerCase() === searchName.toLowerCase() || 
-                    d.name?.toLowerCase() === searchName.toLowerCase()
-                );
-                
-                if (exactMatch) {
-                    console.log(`[DriverMatch] FOUND by name (exact among ${drivers.length}): ${exactMatch.fullName} -> driver=${exactMatch.id}`)
-                    return exactMatch.id;
-                }
-                
-                console.log(`[DriverMatch] Ambiguous name match for "${searchName}" (${drivers.length} candidates), skipping auto-link.`)
             }
         }
 
         console.log(`[DriverMatch] NO MATCH for telegramId=${params.telegramId || 'none'}, phone=${params.phone || 'none'}, name=${params.name || 'none'}`)
-        return null
+        return { status: 'not_found', candidates: [] }
+    }
+
+    /**
+     * Backward-compatible helper for existing call sites. Only a strict
+     * `matched` result is returned as a driver id; ambiguous/name-only matches
+     * remain non-links.
+     */
+    static async findDriverId(params: { telegramId?: string | bigint | null, phone?: string | null, name?: string | null }): Promise<string | null> {
+        const result = await this.matchDriver(params)
+        return result.status === 'matched' ? result.driver.id : null
     }
 
     /**
      * Links a Chat to a driver if not already linked.
      * Returns true if successfully linked.
      */
-    static async linkChatToDriver(chatId: string, params: { telegramId?: string | bigint, phone?: string, name?: string }): Promise<boolean> {
-        const driverId = await this.findDriverId(params)
-        if (driverId) {
-            await (prisma.chat as any).update({
+    static async linkChatToDriver(chatId: string, params: { telegramId?: string | bigint | null, phone?: string | null, name?: string | null }): Promise<boolean> {
+        const result = await this.matchDriver(params)
+        if (result.status === 'matched') {
+            const chat = await (prisma.chat as any).findUnique({
                 where: { id: chatId },
-                data: { driverId }
+                select: { driverId: true },
             })
-            console.log(`[DriverMatch] LINKED chat=${chatId} -> driver=${driverId}`)
+            if (chat?.driverId && chat.driverId !== result.driver.id) {
+                console.warn(JSON.stringify({
+                    level: 'warn',
+                    event: 'driver_match_existing_chat_link_conflict',
+                    chatId,
+                    existingDriverId: chat.driverId,
+                    matchedDriverId: result.driver.id,
+                }))
+                return false
+            }
+            if (!chat?.driverId) {
+                await (prisma.chat as any).update({
+                    where: { id: chatId },
+                    data: { driverId: result.driver.id }
+                })
+            }
+            console.log(`[DriverMatch] LINKED chat=${chatId} -> driver=${result.driver.id}`)
             return true
+        }
+        if (result.status === 'ambiguous') {
+            logDriverMatchAmbiguous('link_chat_to_driver_blocked', result.candidates, { chatId })
         }
         return false
     }
