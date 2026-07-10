@@ -43,6 +43,8 @@ export const fetchBots = async () => (await api.get('/bots')).data;
 export const fetchBot = async (id) => (await api.get(`/bots/${id}`)).data;
 export const createBot = async (data) => (await api.post('/bots', data)).data;
 export const updateBot = async (id, data) => (await api.put(`/bots/${id}`, data)).data;
+export const fetchBotHealth = async (id) => (await api.get(`/bots/${id}/health`)).data;
+export const repairBotWebhook = async (id) => (await api.post(`/bots/${id}/restart`)).data;
 
 // --- SURVEYS & QUESTIONS ---
 export const fetchSurvey = async (surveyId) => (await api.get(`/surveys/${surveyId}`)).data;

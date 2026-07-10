@@ -4,6 +4,7 @@ const config = require('./config');
 const db = require('./database');
 const logger = require('./utils/logger');
 const sheetsService = require('./services/sheets');
+const botRuntime = require('./services/botRuntime');
 
 // Import handlers
 const startHandler = require('./handlers/start');
@@ -37,6 +38,7 @@ if (socksUrl) {
 
 // Create bot instance
 const bot = new Telegraf(config.botToken, telegrafOptions);
+botRuntime.attach(bot);
 
 // 1. Session middleware (Must be first)
 bot.use(session());
@@ -360,75 +362,12 @@ bot.catch((err, ctx) => {
     logger.error(`[bot.catch] update=${ctx?.update?.update_id}: ${err?.message || err}`);
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Heartbeat watchdog
-//
-// Telegraf long-poll over SOCKS5 sometimes silently dies after a long idle
-// period (the proxy connection drops but getUpdates keeps waiting). The bot
-// looks alive (process is up, port 3001 listens) but new Telegram updates
-// never arrive. We probe with getMe every N minutes — if it fails or times
-// out, we stop the bot and relaunch polling. Same process, no Windows service.
-// ─────────────────────────────────────────────────────────────────────────────
-const HEARTBEAT_INTERVAL_MS = parseInt(process.env.BOT_HEARTBEAT_INTERVAL_MS || '300000', 10); // 5 min
-const HEALTHCHECK_TIMEOUT_MS = 30000;
-let lastActivityAt = Date.now();
-let relaunching = false;
-
-bot.use(async (ctx, next) => {
-    lastActivityAt = Date.now();
-    return next();
-});
-
-async function isPollingHealthy() {
-    try {
-        await Promise.race([
-            bot.telegram.getMe(),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('healthcheck timeout')), HEALTHCHECK_TIMEOUT_MS))
-        ]);
-        return true;
-    } catch (e) {
-        logger.warn(`[Heartbeat] getMe failed: ${e?.message || e}`);
-        return false;
-    }
-}
-
-async function relaunchPolling(reason) {
-    if (relaunching) return;
-    relaunching = true;
-    logger.warn(`[Heartbeat] relaunch (reason: ${reason})`);
-    try {
-        bot.stop('heartbeat_relaunch');
-    } catch (e) {
-        logger.warn(`[Heartbeat] bot.stop threw: ${e?.message || e}`);
-    }
-    // Give Telegram a moment to release the previous getUpdates lock,
-    // otherwise the new launch will get 409 Conflict.
-    await new Promise(r => setTimeout(r, 3000));
-    bot.launch()
-        .then(() => logger.info('[Heartbeat] relaunched OK'))
-        .catch((err) => logger.error(`[Heartbeat] relaunch failed: ${err?.message || err}`));
-    // bot.launch() in polling mode never resolves; release the lock
-    // immediately so future heartbeats can fire again.
-    relaunching = false;
-}
-
 // Start sequence
 Promise.all([
     sheetsService.initializeSheet().then(() => logger.info('Google Sheets initialization completed')),
     initializeBotInDb().then(() => logger.info('Database bot mapping verified'))
 ]).then(() => {
-    // bot.launch() returns a Promise that never resolves in polling mode —
-    // we intentionally don't .then() it. We just need it kicked off.
-    bot.launch().catch((err) => logger.error(`Bot launch error: ${err?.message || err}`));
-    logger.info('Bot launching, heartbeat armed every ' + (HEARTBEAT_INTERVAL_MS / 1000) + 's');
-
-    setInterval(async () => {
-        const idleSec = Math.floor((Date.now() - lastActivityAt) / 1000);
-        logger.info(`[Heartbeat] tick — idle ${idleSec}s, last activity ${new Date(lastActivityAt).toISOString()}`);
-        if (!await isPollingHealthy()) {
-            await relaunchPolling('getMe failed');
-        }
-    }, HEARTBEAT_INTERVAL_MS);
+    return botRuntime.start();
 }).catch((err) => {
     logger.error('Startup error:', err);
 });
@@ -436,13 +375,13 @@ Promise.all([
 // Graceful shutdown
 process.once('SIGINT', () => {
     logger.info('SIGINT received, stopping bot...');
-    bot.stop('SIGINT');
+    botRuntime.stop();
     db.close().then(() => process.exit(0));
 });
 
 process.once('SIGTERM', () => {
     logger.info('SIGTERM received, stopping bot...');
-    bot.stop('SIGTERM');
+    botRuntime.stop();
     db.close().then(() => process.exit(0));
 });
 

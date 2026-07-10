@@ -8,6 +8,10 @@ const nextConfig = {
         source: '/api/admin/:path*',
         destination: `${botApiUrl}/api/admin/:path*`,
       },
+      {
+        source: '/api/telegram/:path*',
+        destination: `${botApiUrl}/api/telegram/:path*`,
+      },
     ]
   },
 };

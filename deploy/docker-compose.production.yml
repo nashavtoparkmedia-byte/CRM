@@ -374,7 +374,7 @@ services:
         max-size: "20m"
         max-file: "5"
 
-  # ─── tg-bot: Telegram бот водителей (polling) ───────────────────────────
+  # ─── tg-bot: Telegram бот водителей (webhook + self-healing) ────────────
   tg-bot:
     build:
       context: ../tg-bot
@@ -387,6 +387,12 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       NODE_ENV: production
+      BOT_UPDATE_MODE: webhook
+      TELEGRAM_WEBHOOK_URL: https://${BOT_ADMIN_DOMAIN}/api/telegram/webhook
+      BOT_WEBHOOK_CHECK_INTERVAL_MS: "60000"
+      # Прямой доступ к Telegram с VPS работает. Хостовый Xray слушает только
+      # loopback и недоступен из bridge-контейнера, поэтому proxy отключён.
+      TELEGRAM_SOCKS_PROXY: ""
       # gravity-mvp callbacks — через внутреннюю сеть
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
     networks:

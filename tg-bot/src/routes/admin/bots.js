@@ -1,5 +1,38 @@
 const express = require('express');
 const router = express.Router();
+const botRuntime = require('../../services/botRuntime');
+
+async function findRuntimeBot(req, res) {
+    const bot = await req.prisma.bot.findUnique({ where: { id: req.params.id } });
+    if (!bot) {
+        res.status(404).json({ error: 'Bot not found' });
+        return null;
+    }
+    if (!botRuntime.matchesToken(bot.token)) {
+        res.status(409).json({ error: 'This bot is not attached to the running Telegram worker' });
+        return null;
+    }
+    return bot;
+}
+
+router.get('/:id/health', async (req, res, next) => {
+    try {
+        if (!await findRuntimeBot(req, res)) return;
+        res.json(await botRuntime.getStatus());
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.post('/:id/restart', async (req, res, next) => {
+    try {
+        if (!await findRuntimeBot(req, res)) return;
+        await botRuntime.ensureWebhook('admin_manual_repair');
+        res.json(await botRuntime.getStatus());
+    } catch (error) {
+        next(error);
+    }
+});
 
 // GET all bots
 router.get('/', async (req, res, next) => {

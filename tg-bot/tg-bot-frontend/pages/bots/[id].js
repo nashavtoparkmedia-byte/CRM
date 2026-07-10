@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { fetchBot, updateSurvey, updateBot } from '../../lib/api';
+import { fetchBot, fetchBotHealth, repairBotWebhook, updateSurvey } from '../../lib/api';
 import Link from 'next/link';
 import CustomSelect from '../../components/CustomSelect';
 
@@ -14,6 +14,10 @@ export default function BotDetail() {
     const [saving, setSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState('');
     const [isSheetsOpen, setIsSheetsOpen] = useState(false);
+    const [health, setHealth] = useState(null);
+    const [healthLoading, setHealthLoading] = useState(false);
+    const [repairing, setRepairing] = useState(false);
+    const [healthError, setHealthError] = useState('');
 
     useEffect(() => {
         if (id) loadData();
@@ -23,6 +27,7 @@ export default function BotDetail() {
         try {
             const bData = await fetchBot(id);
             setBot(bData);
+            await loadHealth();
 
             // Temporary measure to support the existing page state which configures the FIRST survey associated with a bot
             if (bData.surveys && bData.surveys.length > 0) {
@@ -32,6 +37,31 @@ export default function BotDetail() {
             console.error(error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadHealth = async () => {
+        if (!id) return;
+        setHealthLoading(true);
+        setHealthError('');
+        try {
+            setHealth(await fetchBotHealth(id));
+        } catch (error) {
+            setHealthError(error.response?.data?.error || 'Не удалось проверить Telegram');
+        } finally {
+            setHealthLoading(false);
+        }
+    };
+
+    const handleRepairWebhook = async () => {
+        setRepairing(true);
+        setHealthError('');
+        try {
+            setHealth(await repairBotWebhook(id));
+        } catch (error) {
+            setHealthError(error.response?.data?.error || 'Не удалось восстановить webhook');
+        } finally {
+            setRepairing(false);
         }
     };
 
@@ -93,6 +123,52 @@ export default function BotDetail() {
                         </Link>
                     )}
                 </div>
+            </div>
+
+            <div className="neu-panel p-6 sm:p-8">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <div className={`w-3 h-3 rounded-full ${health?.healthy ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.7)]' : 'bg-red-400 shadow-[0_0_12px_rgba(248,113,113,.6)]'}`}></div>
+                            <h2 className="text-xl font-bold text-white">Подключение Telegram</h2>
+                            <span className={`px-2.5 py-1 text-[10px] uppercase font-bold tracking-wider rounded-md border ${health?.healthy ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' : 'text-red-400 border-red-500/20 bg-red-500/10'}`}>
+                                {healthLoading ? 'Проверка' : health?.healthy ? 'Работает' : 'Требует внимания'}
+                            </span>
+                        </div>
+                        <p className="text-sm text-slate-400 mt-2">
+                            {health?.username ? `@${health.username}` : 'Telegram-бот'} · режим {health?.mode || '—'}
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                        <button type="button" onClick={loadHealth} disabled={healthLoading || repairing} className="neu-button !py-2.5 disabled:opacity-50">
+                            {healthLoading ? 'Проверяю…' : 'Проверить'}
+                        </button>
+                        <button type="button" onClick={handleRepairWebhook} disabled={repairing || healthLoading} className="neu-button-primary !py-2.5 disabled:opacity-50">
+                            {repairing ? 'Восстанавливаю…' : 'Восстановить webhook'}
+                        </button>
+                    </div>
+                </div>
+
+                {healthError && (
+                    <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{healthError}</div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+                    <div className="neu-panel-inner p-4">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Очередь Telegram</div>
+                        <div className="text-2xl font-bold text-white mt-1">{health?.pendingUpdateCount ?? '—'}</div>
+                    </div>
+                    <div className="neu-panel-inner p-4 sm:col-span-2">
+                        <div className="text-xs uppercase tracking-wider text-slate-500">Webhook</div>
+                        <div className="font-mono text-xs text-slate-300 mt-2 break-all">{health?.webhookUrl || 'Не зарегистрирован'}</div>
+                    </div>
+                </div>
+
+                {(health?.lastTelegramError || health?.runtimeError) && (
+                    <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                        {health.lastTelegramError || health.runtimeError}
+                    </div>
+                )}
             </div>
 
             {survey ? (
