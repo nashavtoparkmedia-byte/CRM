@@ -222,7 +222,10 @@ export class ContactResolutionService {
     // Message.externalId is global in the current schema. The planner does
     // not receive a message id, but every plan is still subject to this
     // unscoped provider limitation.
-    const warnings: ResolutionWarning[] = ['global_message_key']
+    const warnings: ResolutionWarning[] = [
+      'provider_account_scope_not_persisted',
+      'global_message_key',
+    ]
     if (nonEmptyString(input.providerAccountId)) appendWarning(warnings, 'provider_account_scope_not_persisted')
     if (nonEmptyString(input.externalUserId)) appendWarning(warnings, 'global_identity_key')
     if (nonEmptyString(input.externalChatId)) appendWarning(warnings, 'global_chat_key')

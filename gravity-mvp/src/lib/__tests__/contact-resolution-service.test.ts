@@ -243,6 +243,14 @@ describe('ContactResolutionService read-only planner', () => {
     expect(result.warnings).toContain('provider_account_scope_not_persisted')
   })
 
+  test('warns about provider account scope when the provider account is unavailable', async () => {
+    const { resolver } = service()
+
+    const result = await resolver.resolve({ channel: 'max', providerAccountId: null })
+
+    expect(result.warnings).toContain('provider_account_scope_not_persisted')
+  })
+
   test('invalid or empty values do not trigger arbitrary lookups', async () => {
     const { repo, resolver } = service()
 

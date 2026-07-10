@@ -8,6 +8,8 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-resolution-shadow'
+import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
 
@@ -99,6 +101,7 @@ type MaxWebhookBody = {
   forwardedFrom?: unknown
   source?: string | null
   replyToExternalId?: string | number | null
+  chatKind?: 'private' | 'group' | 'unknown' | null
 }
 
 function normalizeMaxChatId(chatId: unknown): string {
@@ -162,7 +165,7 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 export async function POST(request: Request) {
   try {
     const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
-    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId } = body
+    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId, chatKind } = body
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
       chatId: chatId ? String(chatId) : null,
@@ -288,6 +291,35 @@ export async function POST(request: Request) {
     const senderIdString = senderId ? String(senderId) : null
     const normalizedSenderPhone = senderPhone || phone ? normalizePhoneE164(String(senderPhone || phone)) : null
     const effectiveSenderPhone = normalizedSenderPhone || null
+    const maxChatKind = chatKind === 'private' || chatKind === 'group' ? chatKind : 'unknown'
+    const shadowEventSource = source === 'history'
+      ? 'history'
+      : source === 'catchup'
+        ? 'replay'
+        : source
+          ? 'unknown'
+          : 'live'
+
+    // Stage 3B shadow starts before the first Chat/Contact/Identity/Phone
+    // mutation. Its result is diagnostic only and never feeds legacy flow.
+    // MAX currently does not prove phone provenance in this payload, so a
+    // provider phone remains untrusted for automatic planner matching.
+    const maxContactResolutionShadow = await startMaxContactResolutionShadow({
+      resolutionInput: {
+        channel: 'max',
+        externalUserId: senderIdString,
+        externalChatId,
+        providerAccountId: null,
+        channelDisplayName: senderName || null,
+        normalizedPhone: effectiveSenderPhone,
+        phoneEvidence: effectiveSenderPhone
+          ? { source: 'unknown', trustedForAutomaticResolution: false }
+          : null,
+        chatKind: maxChatKind,
+      },
+      isOutgoing: isOutgoing ?? null,
+      eventSource: shadowEventSource,
+    })
 
     // Find or create Chat
     let chat = await prisma.chat.findUnique({
@@ -418,14 +450,15 @@ export async function POST(request: Request) {
         effectiveMessageType = 'sticker'
       }
     }
-    const msgType = typeMap[effectiveMessageType] || 'text'
+    const effectiveMessageTypeKey = typeof effectiveMessageType === 'string' ? effectiveMessageType : 'text'
+    const msgType = typeMap[effectiveMessageTypeKey] || 'text'
 
     // For non-text messages without text, use a readable placeholder
     const contentFallbacks: Record<string, string> = {
       image: '[Фото]', video: '[Видео]', voice: '[Голосовое]',
       audio: '[Аудио]', document: '[Документ]',
     }
-    const content = text || contentFallbacks[messageType] || ''
+    const content = text || contentFallbacks[effectiveMessageTypeKey] || ''
 
     let message: Message | null = null
     const shouldUpgradeDomMessage =
@@ -506,6 +539,10 @@ export async function POST(request: Request) {
           duplicateMessageId: duplicate.id,
           type: msgType,
           attachmentCount: usableAttachments.length,
+        })
+        await maxContactResolutionShadow.session?.complete({
+          status: 'no_contact',
+          reason: 'legacy_contact_resolution_not_reached',
         })
         return NextResponse.json({
           success: true,
@@ -591,6 +628,10 @@ export async function POST(request: Request) {
     }
 
     // ── Contact Model dual write ──────────────────────────────
+    let legacyContactResolution: LegacyContactResolutionOutcome = {
+      status: 'no_contact',
+      reason: 'outgoing_or_not_attempted',
+    }
     if (!isOutgoing) {
       try {
         // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
@@ -608,11 +649,19 @@ export async function POST(request: Request) {
           contactResult.contact.id,
           contactResult.identity.id,
         )
+        legacyContactResolution = contactResult.isNew
+          ? { status: 'contact_created', contactId: contactResult.contact.id }
+          : { status: 'contact_reused', contactId: contactResult.contact.id, source: 'unknown' }
       } catch (contactErr: unknown) {
         const message = contactErr instanceof Error ? contactErr.message : String(contactErr)
         console.error(`[MAX Webhook] ContactService error (non-blocking): ${message}`)
+        legacyContactResolution = {
+          status: 'legacy_error',
+          errorCode: contactErr instanceof Error ? contactErr.name : 'unknown_legacy_error',
+        }
       }
     }
+    await maxContactResolutionShadow.session?.complete(legacyContactResolution)
     // ──────────────────────────────────────────────────────────
 
     // Запускаем AI pipeline для входящих сообщений (не дожидаемся)
