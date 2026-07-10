@@ -1753,8 +1753,57 @@ const domRecoveredTextCounts = new Map()
 let domFallbackRunning = false
 let domFallbackScheduledAt = 0
 let uiSendInProgress = false
+const automaticDomRecoveryTimers = new Map()
+const recentCrmOutboundTexts = []
+const RECENT_CRM_OUTBOUND_TTL_MS = 10 * 60 * 1000
 const recentDirectInboundTexts = new Map()
 const RECENT_DIRECT_TEXT_TTL_MS = 2 * 60 * 1000
+
+function comparableDomText(text) {
+  return cleanDomMessageText(text).replace(/\s+/g, ' ').trim()
+}
+
+function relatedDomRouteIds(...values) {
+  const ids = new Set()
+  for (const value of values) {
+    const digits = String(value || '').replace(/\D/g, '')
+    if (!digits) continue
+    ids.add(digits)
+    if (digits.length >= 12) {
+      try { ids.add(String(Number(BigInt(digits) & 0xffffffffn))) } catch {}
+    }
+  }
+  return ids
+}
+
+function rememberCrmOutboundText(text, ...chatIds) {
+  const comparableText = comparableDomText(text)
+  if (!comparableText) return null
+  const now = Date.now()
+  while (recentCrmOutboundTexts.length && now - recentCrmOutboundTexts[0].ts > RECENT_CRM_OUTBOUND_TTL_MS) {
+    recentCrmOutboundTexts.shift()
+  }
+  const entry = { text: comparableText, chatIds: relatedDomRouteIds(...chatIds), ts: now }
+  recentCrmOutboundTexts.push(entry)
+  if (recentCrmOutboundTexts.length > 200) recentCrmOutboundTexts.splice(0, recentCrmOutboundTexts.length - 200)
+  return entry
+}
+
+function extendCrmOutboundTextGuard(entry, ...chatIds) {
+  if (!entry) return
+  for (const id of relatedDomRouteIds(...chatIds)) entry.chatIds.add(id)
+}
+
+function matchesRecentCrmOutboundText(chatId, uiRouteId, text) {
+  const comparableText = comparableDomText(text)
+  if (!comparableText) return false
+  const now = Date.now()
+  const candidateIds = relatedDomRouteIds(chatId, uiRouteId)
+  return recentCrmOutboundTexts.some(entry => {
+    if (now - entry.ts > RECENT_CRM_OUTBOUND_TTL_MS || entry.text !== comparableText) return false
+    return [...candidateIds].some(id => entry.chatIds.has(id))
+  })
+}
 
 function directInboundTextKey(chatId, text) {
   const cleaned = cleanDomMessageText(text)
@@ -2183,6 +2232,35 @@ function scheduleDomFallbackForRecentMedia(reason, delayMs = 2200) {
   }, delayMs)
 }
 
+function scheduleAutomaticDomMirrorRecovery(chatId, reason = 'missing_protocol_anchor', attempt = 0) {
+  if (!isReady || !page || !chatId) return
+  const chatIdStr = String(chatId)
+  const existingTimer = automaticDomRecoveryTimers.get(chatIdStr)
+  if (existingTimer) clearTimeout(existingTimer)
+
+  const timer = setTimeout(async () => {
+    automaticDomRecoveryTimers.delete(chatIdStr)
+    if (uiSendInProgress || domFallbackRunning) {
+      if (attempt < 6) scheduleAutomaticDomMirrorRecovery(chatIdStr, reason, attempt + 1)
+      return
+    }
+
+    try {
+      const result = await forwardRecentDomMessages(chatIdStr, reason, {
+        includeOutgoing: true,
+        freshOnly: true,
+        enrichPeer: true,
+      })
+      console.log(`[domMirror] ${reason} chatId=${chatIdStr} result=${JSON.stringify(result).slice(0, 600)}`)
+    } catch (e) {
+      console.error(`[domMirror] ${reason} failed chatId=${chatIdStr}: ${e.message}`)
+      if (attempt < 3) scheduleAutomaticDomMirrorRecovery(chatIdStr, reason, attempt + 1)
+    }
+  }, attempt > 0 ? 1800 : 1200)
+
+  automaticDomRecoveryTimers.set(chatIdStr, timer)
+}
+
 function cleanDomMessageText(text) {
   return String(text || '')
     .split('\n')
@@ -2558,6 +2636,84 @@ async function scrapeLatestDomMessage(uiRouteId) {
   return candidates[candidates.length - 1] || null
 }
 
+async function scrapeDomPeerIdentity(uiRouteId, { forcePhone = false } = {}) {
+  if (!page || !isReady) return {}
+  const targetUrl = `https://web.max.ru/${uiRouteId}`
+  if (!page.url().includes(`/${uiRouteId}`)) {
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+    await page.waitForTimeout(1200)
+  }
+
+  const header = await page.evaluate(() => {
+    const viewportW = window.innerWidth || 1280
+    const blocked = /^(MAX|Чаты|Chats|Инфо|Info|В сети|Online|Был\(-а\)|Last seen|Сегодня|Today)$/i
+    return [...document.querySelectorAll('h1, h2, h3, button, [role="button"], a, div, span')]
+      .map(el => {
+        const text = (el.innerText || el.textContent || '').trim()
+        const rect = el.getBoundingClientRect()
+        const style = getComputedStyle(el)
+        return {
+          text,
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          fontSize: Number.parseFloat(style.fontSize) || 0,
+          fontWeight: Number.parseInt(style.fontWeight, 10) || 400,
+        }
+      })
+      .filter(item =>
+        item.text && !item.text.includes('\n') && item.text.length >= 2 && item.text.length <= 80 &&
+        item.left > viewportW * 0.25 && item.top >= 0 && item.top < 105 &&
+        item.width > 20 && item.width < 520 && item.height > 10 && item.height < 90 &&
+        !blocked.test(item.text) && !/^\d{1,2}:\d{2}$/.test(item.text) &&
+        !/^(был|last seen|online|в сети|недавно|мин|час)/i.test(item.text)
+      )
+      .sort((a, b) => ((b.fontWeight + b.fontSize * 10) - (a.fontWeight + a.fontSize * 10)) || a.top - b.top)[0] || null
+  }).catch(() => null)
+
+  if (!header?.text) return {}
+  const identity = { senderName: header.text }
+  if (!forcePhone) return identity
+
+  let opened = false
+  try {
+    await page.mouse.click(header.x, header.y)
+    opened = true
+    await page.waitForTimeout(900)
+    const profile = await page.evaluate(() => {
+      const labels = [...document.querySelectorAll('div, span, p, label')]
+        .filter(el => {
+          if (el.offsetParent === null) return false
+          const text = (el.innerText || el.textContent || '').trim()
+          return /^(Номер телефона|Phone number)$/i.test(text)
+        })
+      if (!labels.length) return null
+
+      const phonePattern = /(?:\+?7|8)(?:[\s().-]*\d){10}/
+      for (const label of labels) {
+        let current = label.parentElement
+        for (let depth = 0; current && depth < 6; depth++, current = current.parentElement) {
+          const text = (current.innerText || current.textContent || '').trim()
+          const match = text.match(phonePattern)
+          if (match) return { phone: match[0] }
+        }
+      }
+      return null
+    }).catch(() => null)
+    if (profile?.phone) identity.phone = normalizePhoneForCrmPayload(profile.phone)
+  } finally {
+    if (opened || !page.url().includes(`/${uiRouteId}`)) {
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
+      await page.waitForTimeout(900)
+    }
+  }
+
+  return identity
+}
+
 function stableDomCandidateMessageId(chatId, text, attachments = [], candidate = {}) {
   if (!attachments.length) return candidate._domRecoveryExternalId || stableDomTextMessageId(chatId, text || '', candidate)
   const timeKey = stableDomMediaTimeKey(candidate)
@@ -2567,14 +2723,32 @@ function stableDomCandidateMessageId(chatId, text, attachments = [], candidate =
   return stableDomMediaMessageId(chatId, `${text || ''}:pos=${x}:${y}`, attachments)
 }
 
+function stableDomMirrorMessageId(chatId, text, attachments = [], candidate = {}) {
+  const day = Math.floor(Date.now() / 86_400_000)
+  const minute = Number.isFinite(candidate.displayMinute) ? candidate.displayMinute : candidate.displayTime || 'unknown'
+  const attachmentSignature = attachments
+    .map(att => `${att.type || ''}:${att.name || ''}:${att.size || ''}`)
+    .join('|')
+  const signature = `${chatId}:${day}:${minute}:${comparableDomText(text)}:${attachmentSignature}`
+  const hash = crypto.createHash('sha1').update(signature).digest('hex').slice(0, 16)
+  return `max-mirror-${chatId}-${hash}`
+}
+
 async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual', options = {}) {
   if (!latest?.text && !latest?.attachments?.length) return { skipped: 'no_content' }
   if (latest.text && !latest.attachments?.length && isDomNoiseText(latest.text)) return { skipped: 'noise_text', text: latest.text }
   if (!latest.attachments?.length && reason === 'loose_op128_media') {
     return { skipped: 'text_only_auto_fallback', text: latest.text }
   }
-  if (latest.isOutgoing || (latest.viewportW && latest.x > latest.viewportW * 0.55)) {
+  const isOutgoingCandidate = Boolean(latest.isOutgoing || (latest.viewportW && latest.x > latest.viewportW * 0.55))
+  if (isOutgoingCandidate && !options.includeOutgoing) {
     return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW }
+  }
+  if (isOutgoingCandidate && matchesRecentCrmOutboundText(chatId, uiRouteId, latest.text)) {
+    return { skipped: 'crm_outbound_already_recorded', text: latest.text }
+  }
+  if (isOutgoingCandidate && latest.attachments?.length && !options.includeOutgoingMedia) {
+    return { skipped: 'outgoing_media_mirror_deferred', text: latest.text }
   }
   if (reason === 'empty_op71_after_op128' && looksLikeDomReplyQuoteText(chatId, latest)) {
     return { skipped: 'dom_reply_quote_text', text: latest.text }
@@ -2597,10 +2771,12 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const text = attachments.length > 0 ? cleanDomMediaCaption(latest.text, attachments) : latest.text
   if (!text && !attachments.length) return { skipped: 'no_download_source', rawAttachments: latest.attachments?.length || 0 }
 
-  const pendingProviderId = reason === 'empty_op71_after_op128' && text && attachments.length === 0
+  const pendingProviderId = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && text && attachments.length === 0
     ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
     : null
-  const externalId = pendingProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest)
+  const externalId = isOutgoingCandidate
+    ? stableDomMirrorMessageId(chatId, text, attachments, latest)
+    : (pendingProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
   domFallbackSeen.add(externalId)
 
@@ -2618,15 +2794,15 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     timestamp: options.timestamp || Date.now(),
     messageType,
     attachments,
-    isOutgoing: false,
-    source: pendingProviderId ? 'live_dom_recovery' : 'dom_fallback',
+    isOutgoing: isOutgoingCandidate,
+    source: isOutgoingCandidate ? 'max_web_mirror' : (pendingProviderId ? 'live_dom_recovery' : 'dom_fallback'),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),
   })
   if (pendingProviderId && result.status >= 200 && result.status < 300 && !result.skipped) {
     transport?.confirmPendingLiveTextIdForDomRecovery?.(chatId, pendingProviderId)
   }
-  if (reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
+  if (!isOutgoingCandidate && reason === 'empty_op71_after_op128' && text && !attachments.length && latest._allowDomDuplicateRecovery && !latest._directHit) {
     rememberDomRecoveredText(chatId, text)
   }
   if (result.status >= 200 && result.status < 300 && result.skipped) {
@@ -2666,7 +2842,8 @@ async function forwardLatestDomMessage(chatId, reason = 'manual', options = {}) 
   }
 }
 
-async function forwardRecentDomMessages(chatId, reason = 'manual', options = {}) {
+async function forwardRecentDomMessages(chatId, reason = 'manual') {
+  const options = arguments[2] || {}
   if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
@@ -2677,6 +2854,21 @@ async function forwardRecentDomMessages(chatId, reason = 'manual', options = {})
       console.log(`[domFallback] resolved UI route chatId=${chatId} route=${uiRouteId} source=${route.source}`)
     }
     if (transport) transport._activeUiChatId = String(chatId)
+    let effectiveOptions = { ...options }
+    if (options.enrichPeer) {
+      const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
+      const peerIdentity = await scrapeDomPeerIdentity(uiRouteId, {
+        forcePhone: Boolean(options.forcePeerIdentity || !cachedPhone),
+      }).catch(e => {
+        console.warn(`[domIdentity] failed chatId=${chatId}: ${e.message}`)
+        return {}
+      })
+      effectiveOptions = { ...peerIdentity, ...effectiveOptions }
+      if (peerIdentity.phone) {
+        savePhoneChatId(peerIdentity.phone, chatId)
+        console.log(`[domIdentity] chatId=${chatId} phone=${peerIdentity.phone} name=${peerIdentity.senderName || 'unknown'}`)
+      }
+    }
     const candidates = await scrapeRecentDomMessages(uiRouteId)
     let recoverable = (reason === 'empty_op71_after_op128'
       ? candidates
@@ -2684,6 +2876,19 @@ async function forwardRecentDomMessages(chatId, reason = 'manual', options = {})
       : candidates)
       .map(candidate => ({ ...candidate, _chatId: String(chatId) }))
     const preSkipped = {}
+    if (options.freshOnly) {
+      const latestDisplayMinute = [...recoverable]
+        .reverse()
+        .find(candidate => Number.isFinite(candidate.displayMinute))?.displayMinute
+      const beforeFreshFilter = recoverable.length
+      recoverable = Number.isFinite(latestDisplayMinute)
+        ? recoverable.filter(candidate =>
+          Number.isFinite(candidate.displayMinute) &&
+          displayMinuteDistance(candidate.displayMinute, latestDisplayMinute) <= 2
+        )
+        : recoverable.slice(-1)
+      preSkipped.dom_stale_event_filtered = beforeFreshFilter - recoverable.length
+    }
     if (reason === 'empty_op71_after_op128') {
       const beforeLiveWindowFilter = recoverable.length
       const liveWindowDetails = recentLiveDomWindowDetails(chatId, recoverable.length)
@@ -2761,7 +2966,7 @@ async function forwardRecentDomMessages(chatId, reason = 'manual', options = {})
     for (const candidate of recoverable) {
       const result = await forwardDomCandidate(chatId, uiRouteId, candidate, reason, {
         timestamp: candidate._recoveryTimestamp,
-        ...options,
+        ...effectiveOptions,
       })
       if (result?.success) results.push(result)
       else if (result?.skipped) skipped[result.skipped] = (skipped[result.skipped] || 0) + 1
@@ -5057,6 +5262,15 @@ async function init() {
       if (payloadIsEmpty) {
         console.log('[op128] Пустой payload — пропускаем (op:71 через JSON убивает WS, используем только пассивный перехват)')
       }
+      setTimeout(() => {
+        const chatId = latestRecentOp128ChatId()
+        if (!chatId) return
+        const anchorHex = transport?._op71AnchorForLiveNotification?.(String(chatId)) || null
+        const hasPendingLive = (transport?._pendingLiveMessageIds?.get(String(chatId)) || []).length > 0
+        if (!anchorHex && !hasPendingLive) {
+          scheduleAutomaticDomMirrorRecovery(String(chatId), 'missing_protocol_anchor')
+        }
+      }, 700)
     }
 
     // Логируем остальные неизвестные push-опкоды
@@ -5389,16 +5603,33 @@ app.post('/debug/op71', async (req, res) => {
 app.post('/debug/dom-fallback', async (req, res) => {
   try {
     const { chatId, recent, phone, senderName, name } = req.body || {}
+    const { mirrorOutgoing, enrichPeer, forcePeerIdentity } = req.body || {}
     if (!chatId) return res.status(400).json({ error: 'chatId is required' })
     if (phone) savePhoneChatId(phone, chatId)
     const options = {
       ...(phone ? { phone } : {}),
       ...((senderName || name) ? { senderName: senderName || name } : {}),
+      ...(mirrorOutgoing ? { includeOutgoing: true } : {}),
+      ...(enrichPeer ? { enrichPeer: true } : {}),
+      ...(forcePeerIdentity ? { forcePeerIdentity: true, enrichPeer: true } : {}),
     }
     const result = recent
       ? await forwardRecentDomMessages(String(chatId), 'manual_debug', options)
       : await forwardLatestDomMessage(String(chatId), 'manual_debug', options)
     res.json(result)
+  } catch (e) {
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.post('/debug/dom-identity', async (req, res) => {
+  try {
+    const { chatId } = req.body || {}
+    if (!chatId) return res.status(400).json({ error: 'chatId is required' })
+    const route = resolveUiRouteIdForChat(String(chatId))
+    const identity = await scrapeDomPeerIdentity(route.uiRouteId, { forcePhone: true })
+    if (identity.phone) savePhoneChatId(identity.phone, String(chatId))
+    res.json({ chatId: String(chatId), uiRouteId: route.uiRouteId, ...identity })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }
@@ -5417,6 +5648,7 @@ app.post('/send-message', async (req, res) => {
   if (!isReady) {
     return res.status(503).json({ error: 'Not ready — ожидайте авторизации' })
   }
+  const crmOutboundDomGuard = rememberCrmOutboundText(message, chatId, uiChatId, phone)
 
   // Detect if chatId looks like a phone number (10-11 digits).
   // MAX internal IDs are now 12 digits (9021XXXXXXXX), so anything 12+ is a MAX ID.
@@ -5431,6 +5663,7 @@ app.post('/send-message', async (req, res) => {
     if (fromStore) {
       console.log(`[Send] contactStore: ${digits} → chatId ${fromStore}`)
       chatId = fromStore
+      extendCrmOutboundTextGuard(crmOutboundDomGuard, chatId)
     } else {
       const liveResult = await resolvePhoneLive(digits, message)
       // liveResult is either a string chatId or { chatId, messageSent: true } when UI-sent
@@ -5439,6 +5672,7 @@ app.post('/send-message', async (req, res) => {
       if (liveId) {
         console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}${messageSentViaUI ? ' (sent via UI)' : ''}`)
         chatId = liveId
+        extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
         // Cache for subsequent sends in this session
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
         if (messageSentViaUI) {
@@ -5474,6 +5708,7 @@ app.post('/send-message', async (req, res) => {
   if (!chatId) {
     return res.status(400).json({ error: 'chatId required' })
   }
+  extendCrmOutboundTextGuard(crmOutboundDomGuard, chatId, uiChatId)
 
   // Для первой отправки по номеру телефона ждём эхо от MAX чтобы узнать
   // реальный conversation ID (chatId в opcode 128 ≠ userId контакта).
@@ -5525,6 +5760,7 @@ app.post('/send-message', async (req, res) => {
       }
 
       const returnChatId = echoConvId || String(chatId)
+      extendCrmOutboundTextGuard(crmOutboundDomGuard, returnChatId)
       if (echoConvId && echoConvId !== String(chatId)) {
         console.log(`[Send] Conversation ID from echo: ${chatId} → ${echoConvId}`)
       }
