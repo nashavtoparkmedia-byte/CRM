@@ -26,6 +26,12 @@ export interface LinkResult {
     dismissedAt: Date | null
     lastOrderAt: Date | null
   }>
+  contactCandidates?: Array<{
+    contactId: string
+    contactPhoneId: string
+    yandexDriverId: string | null
+    isArchived: boolean
+  }>
   reason?: string
 }
 
@@ -56,6 +62,20 @@ function logAmbiguousYandexLink(
   }))
 }
 
+function logAmbiguousContactPhoneOwners(
+  normalizedPhone: string,
+  contactCandidates: NonNullable<LinkResult['contactCandidates']>,
+) {
+  console.warn(JSON.stringify({
+    level: 'warn',
+    event: 'contact_phone_owner_ambiguous',
+    source: 'yandex-link',
+    phoneSuffix: normalizedPhone.slice(-4),
+    candidateCount: contactCandidates.length,
+    contactCandidates,
+  }))
+}
+
 /**
  * Найти Contact с этим телефоном и связать с лучшим Driver.
  * Если Contact не найден — ничего не делаем (создание Contact'а — это
@@ -83,15 +103,41 @@ export async function linkContactToBestDriver(
     return { action: 'no_driver', reason: `no Driver with phone ${normalized}` }
   }
 
-  // 2. Найти Contact с этим телефоном (через ContactPhone).
-  const contactPhone = await prisma.contactPhone.findFirst({
+  // 2. Find all active phone owners. DB order, isArchived, primary phone,
+  // and activity are not identity proof and must not pick a winner.
+  const contactPhones = await prisma.contactPhone.findMany({
     where: { phone: normalized, isActive: true },
     include: { contact: true },
   })
+  const contactPhonesByContactId = new Map<string, typeof contactPhones[number]>()
+  for (const record of contactPhones) {
+    if (!contactPhonesByContactId.has(record.contactId)) {
+      contactPhonesByContactId.set(record.contactId, record)
+    }
+  }
+
+  if (contactPhonesByContactId.size === 0) {
+    // Contact does not exist yet; this sync does not create it.
+    return { action: 'no_contact', reason: `no Contact with phone ${normalized}` }
+  }
+
+  if (contactPhonesByContactId.size > 1) {
+    const contactCandidates = Array.from(contactPhonesByContactId.values()).map(record => ({
+      contactId: record.contactId,
+      contactPhoneId: record.id,
+      yandexDriverId: record.contact.yandexDriverId,
+      isArchived: record.contact.isArchived,
+    }))
+    logAmbiguousContactPhoneOwners(normalized, contactCandidates)
+    return {
+      action: 'ambiguous',
+      contactCandidates,
+      reason: `multiple Contacts with phone ${normalized}`,
+    }
+  }
+
+  const contactPhone = contactPhonesByContactId.values().next().value
   if (!contactPhone) {
-    // Contact ещё не существует — sync ничего не создаёт. Когда
-    // придёт лид с этим номером (Avito и т.п.), LeadIntake создаст
-    // Contact, и следующий тик cron'а свяжет.
     return { action: 'no_contact', reason: `no Contact with phone ${normalized}` }
   }
   const contact = contactPhone.contact
