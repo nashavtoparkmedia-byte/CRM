@@ -20,6 +20,7 @@ function isPlaceholderName(name?: string | null): boolean {
 
 export async function POST(req: NextRequest) {
     try {
+        console.warn('[WEBHOOK-MAX][legacy] Deprecated route /api/webhook/max received a request; scraper runtime should use /api/webhooks/max')
         const body = await req.json()
         const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing, replyToExternalId, externalId: maxExternalId } = body
 
@@ -33,60 +34,16 @@ export async function POST(req: NextRequest) {
         // Normalize phone. MAX might send just a name (e.g. "Все 2" -> "2" or "Александр" -> "")
         let phoneDigits = (phone || '').replace(/\D/g, '')
 
-        // If we didn't get a valid 10+ digit phone number, try to fuzzy-match by name
+        // If we didn't get a valid 10+ digit phone number, do not derive one
+        // from names or recent chats. Name is not identity proof.
         if (phoneDigits.length < 10) {
-            console.log(`[WEBHOOK-MAX] Phone digits too short (${phoneDigits}) for name "${driverName || phone}". Attempting fuzzy match...`)
-            
-            // 1. First priority: Try to find a Driver matching this name (fuzzy)
-            // This is crucial for linking anonymous scraper messages to existing driver profiles
-            const matchedDriverId = await DriverMatchService.findDriverId({ name: driverName || phone })
-            
-            if (matchedDriverId) {
-                const driver = await (prisma.driver as any).findUnique({ where: { id: matchedDriverId } })
-                if (driver && driver.phone) {
-                    phoneDigits = driver.phone.replace(/\D/g, '')
-                    console.log(`[WEBHOOK-MAX] fuzzy matched to Driver "${driver.fullName}". Bound to phone: ${phoneDigits}`)
-                }
-            } else {
-                // 1.5. Check if there is an active max chat for a driver whose name contains this word
-                // This handles cases where "Александр" is ambiguous (many drivers), but only one "Александр Ремезов" has an active MAX chat
-                const searchName = (driverName || phone).trim();
-                const recentDriverChats = await (prisma.chat as any).findMany({
-                    where: { 
-                        channel: 'max', 
-                        driverId: { not: null } 
-                    },
-                    include: { driver: true },
-                    orderBy: { lastMessageAt: 'desc' },
-                    take: 20
-                });
-
-                const matchedActiveChat = recentDriverChats.find((c: any) => {
-                    if (!c.driver) return false;
-                    const fullName = c.driver.fullName.toLowerCase();
-                    const search = searchName.toLowerCase();
-                    // Require at least 3 chars for fully fuzzy contains() match
-                    if (search.length < 3) {
-                        return fullName === search || fullName.split(/\s+/).includes(search);
-                    }
-                    return fullName.includes(search);
-                });
-                
-                if (matchedActiveChat && matchedActiveChat.driver.phone) {
-                    phoneDigits = matchedActiveChat.driver.phone.replace(/\D/g, '');
-                    console.log(`[WEBHOOK-MAX] Ambiguous name "${searchName}", but linked to active driver "${matchedActiveChat.driver.fullName}" from recent chats. Bound to phone: ${phoneDigits}`);
-                } else {
-                    // 2. Second priority: Check if we already have a MAX chat exactly matching this name (Ghost Chat)
-                    const existingChatByName = await (prisma.chat as any).findFirst({
-                        where: { channel: 'max', name: driverName || phone }
-                    })
-
-                    if (existingChatByName && existingChatByName.externalChatId) {
-                        phoneDigits = existingChatByName.externalChatId.replace('max:', '')
-                        console.log(`[WEBHOOK-MAX] Driver not found, reusing existing Chat name ID: ${phoneDigits}`)
-                    }
-                }
-            }
+            console.warn(JSON.stringify({
+                level: 'warn',
+                event: 'legacy_max_name_phone_resolution_blocked',
+                hasChatId: Boolean(maxChatId),
+                nameLength: String(driverName || phone || '').trim().length,
+            }))
+            phoneDigits = ''
         }
 
         // Use MAX internal chatId as primary identifier (most reliable)
@@ -129,10 +86,11 @@ export async function POST(req: NextRequest) {
             const newExId = String(maxChatId)
             const alreadyExists = await (prisma.chat as any).findUnique({ where: { externalChatId: newExId } })
             if (!alreadyExists) {
-                const driver = await (prisma.driver as any).findFirst({
+                const driverCandidates = await (prisma.driver as any).findMany({
                     where: { phone: { contains: phoneDigits.slice(-10) } }
                 })
-                if (driver) {
+                if (driverCandidates.length === 1) {
+                    const driver = driverCandidates[0]
                     const staleChat = await (prisma.chat as any).findFirst({
                         where: { channel: 'max', driverId: driver.id, externalChatId: { not: newExId } }
                     })
@@ -140,6 +98,14 @@ export async function POST(req: NextRequest) {
                         await (prisma.chat as any).update({ where: { id: staleChat.id }, data: { externalChatId: newExId } })
                         console.log(`[WEBHOOK-MAX] MIGRATED old-chatId ${staleChat.externalChatId} → ${newExId} (driver ${driver.id})`)
                     }
+                } else if (driverCandidates.length > 1) {
+                    console.warn(JSON.stringify({
+                        level: 'warn',
+                        event: 'legacy_max_old_chat_migration_ambiguous_driver_phone',
+                        phoneSuffix: phoneDigits.slice(-4),
+                        candidateCount: driverCandidates.length,
+                        candidateIds: driverCandidates.map((driver: any) => driver.id),
+                    }))
                 }
             }
         }

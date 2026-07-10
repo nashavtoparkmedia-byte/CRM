@@ -44,11 +44,11 @@ function normalizePhone(phone: string | null | undefined): string | null {
  *
  * Returns counters delta for the caller to aggregate.
  */
-async function syncContactForDriver(
+export async function syncContactForDriver(
     yandexDriverId: string,
     fullName: string,
     phone: string | null,
-): Promise<{ action: 'created' | 'linked' | 'updated' | 'noop'; phonesDeactivated: number; phonesCreated: number }> {
+): Promise<{ action: 'created' | 'linked' | 'updated' | 'noop' | 'ambiguous'; phonesDeactivated: number; phonesCreated: number }> {
     const normalizedE164 = phone ? normalizePhoneE164(phone) : null;
 
     // ── Scenario 1: Contact already linked to this yandexDriverId ─────
@@ -119,12 +119,36 @@ async function syncContactForDriver(
 
     // ── Scenario 2: No Contact by yandexDriverId, but phone matches ───
     if (normalizedE164) {
-        const phoneRecord = await prisma.contactPhone.findFirst({
+        const phoneRecords = await prisma.contactPhone.findMany({
             where: { phone: normalizedE164, isActive: true },
             include: { contact: true },
         });
 
-        if (phoneRecord && !phoneRecord.contact.yandexDriverId) {
+        if (phoneRecords.length > 1) {
+            console.warn(JSON.stringify({
+                level: 'warn',
+                event: 'monitoring_sync_contact_phone_ambiguous',
+                yandexDriverId,
+                phoneSuffix: normalizedE164.slice(-4),
+                candidateContactIds: phoneRecords.map((record) => record.contactId),
+            }));
+            return { action: 'ambiguous', phonesDeactivated: 0, phonesCreated: 0 };
+        }
+
+        if (phoneRecords.length === 1 && phoneRecords[0].contact.yandexDriverId && phoneRecords[0].contact.yandexDriverId !== yandexDriverId) {
+            console.warn(JSON.stringify({
+                level: 'warn',
+                event: 'monitoring_sync_contact_driver_existing_link_conflict',
+                yandexDriverId,
+                existingYandexDriverId: phoneRecords[0].contact.yandexDriverId,
+                contactId: phoneRecords[0].contactId,
+                phoneSuffix: normalizedE164.slice(-4),
+            }));
+            return { action: 'noop', phonesDeactivated: 0, phonesCreated: 0 };
+        }
+
+        if (phoneRecords.length === 1 && !phoneRecords[0].contact.yandexDriverId) {
+            const phoneRecord = phoneRecords[0]
             // Link existing Contact to Yandex
             const nameUpdate = phoneRecord.contact.displayNameSource !== 'manual'
                 ? { displayName: fullName, displayNameSource: 'yandex' as const }
@@ -145,43 +169,71 @@ async function syncContactForDriver(
     }
 
     // ── Scenario 3: No match → create new Contact ─────────────────────
-    const contact = await prisma.contact.create({
-        data: {
-            displayName: fullName,
-            displayNameSource: 'yandex',
-            masterSource: 'yandex',
+    let contact
+    try {
+        contact = await prisma.contact.create({
+            data: {
+                displayName: fullName,
+                displayNameSource: 'yandex',
+                masterSource: 'yandex',
+                yandexDriverId,
+            },
+        });
+    } catch (err: any) {
+        // Concurrent sync can race on Contact.yandexDriverId. The unique
+        // constraint is the final guard; reuse the row created by the winner.
+        if (err?.code !== 'P2002') throw err;
+        const existingAfterRace = await prisma.contact.findUnique({
+            where: { yandexDriverId },
+        });
+        if (!existingAfterRace) throw err;
+        contact = existingAfterRace;
+        console.warn(JSON.stringify({
+            level: 'warn',
+            event: 'monitoring_sync_contact_create_race_reused',
             yandexDriverId,
-        },
-    });
+        }));
+    }
 
     let newPhoneId: string | null = null;
     if (normalizedE164) {
         // Check if phone already belongs to another contact (edge case: phone conflict)
-        const existingPhone = await prisma.contactPhone.findFirst({
+        const existingPhones = await prisma.contactPhone.findMany({
             where: { phone: normalizedE164, isActive: true },
         });
 
-        if (!existingPhone) {
-            const newPhone = await prisma.contactPhone.create({
-                data: {
-                    contactId: contact.id,
-                    phone: normalizedE164,
-                    source: 'yandex',
-                    isPrimary: true,
-                },
-            });
-            newPhoneId = newPhone.id;
+        if (existingPhones.length === 0) {
+            try {
+                const newPhone = await prisma.contactPhone.create({
+                    data: {
+                        contactId: contact.id,
+                        phone: normalizedE164,
+                        source: 'yandex',
+                        isPrimary: true,
+                    },
+                });
+                newPhoneId = newPhone.id;
 
-            await prisma.contact.update({
-                where: { id: contact.id },
-                data: { primaryPhoneId: newPhone.id },
-            });
+                await prisma.contact.update({
+                    where: { id: contact.id },
+                    data: { primaryPhoneId: newPhone.id },
+                });
+            } catch (err: any) {
+                if (err?.code !== 'P2002') throw err;
+                console.warn(JSON.stringify({
+                    level: 'warn',
+                    event: 'monitoring_sync_contact_phone_create_race_reused',
+                    yandexDriverId,
+                    contactId: contact.id,
+                    phoneSuffix: normalizedE164.slice(-4),
+                }));
+            }
         } else {
-            console.log(`[sync] Phone ${normalizedE164} already belongs to contact ${existingPhone.contactId}, skipping phone creation for new contact ${contact.id}`);
+            console.log(`[sync] Phone ${normalizedE164} already belongs to ${existingPhones.length} contact(s), skipping phone creation for new contact ${contact.id}`);
         }
     }
 
-    return { action: 'created', phonesDeactivated: 0, phonesCreated: normalizedE164 ? 1 : 0 };
+    return { action: 'created', phonesDeactivated: 0, phonesCreated: newPhoneId ? 1 : 0 };
 }
 
 export async function POST(req: NextRequest) {
