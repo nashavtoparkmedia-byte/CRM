@@ -14,13 +14,37 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'externalMsgId required' }, { status: 400 })
         }
 
-        // Find message by externalId
-        const message = await (prisma.message as any).findFirst({
+        // Find message by externalId. MAX sometimes sends reaction ids in a
+        // different packed form than the send ack, but the meaningful suffix
+        // overlaps, so keep a bounded suffix fallback.
+        let message = await (prisma.message as any).findFirst({
             where: { externalId: String(externalMsgId) },
         })
 
         if (!message) {
+            const compactId = String(externalMsgId).replace(/[^a-fA-F0-9]/g, '')
+            const suffix = compactId.slice(-10)
+            if (suffix.length >= 8) {
+                message = await (prisma.message as any).findFirst({
+                    where: {
+                        channel: 'max',
+                        externalId: { contains: suffix },
+                    },
+                    orderBy: { sentAt: 'desc' },
+                })
+            }
+        }
+
+        if (!message) {
             console.warn(`[WEBHOOK-MAX/reaction] Message not found: externalMsgId=${externalMsgId}`)
+            console.log('[MAX_DELIVERY]', JSON.stringify({
+                ts: new Date().toISOString(),
+                operation: 'reaction',
+                status: 'failed',
+                maxMessageId: String(externalMsgId),
+                externalId: String(externalMsgId),
+                error: 'message not found',
+            }))
             return NextResponse.json({ ok: false, reason: 'message not found' })
         }
 
@@ -39,7 +63,7 @@ export async function POST(req: NextRequest) {
             if (isRemove || !emoji) {
                 if (emoji) delete reactions[emoji]
             } else {
-                reactions[emoji] = (reactions[emoji] || 0) + 1
+                reactions[emoji] = 1
             }
         }
 
@@ -51,6 +75,18 @@ export async function POST(req: NextRequest) {
         // Broadcast via SSE so open chat tabs refresh instantly
         try { broadcastChatMessage(updated.chatId, updated) } catch {}
 
+        console.log('[MAX_DELIVERY]', JSON.stringify({
+            ts: new Date().toISOString(),
+            operation: 'reaction',
+            status: 'max_echo_received',
+            crmMessageId: message.id,
+            maxMessageId: String(externalMsgId),
+            externalId: String(externalMsgId),
+            conversationId: message.chatId,
+            reaction: emoji || null,
+            counters: Array.isArray(counters) ? counters : null,
+            error: null,
+        }))
         console.log(`[WEBHOOK-MAX/reaction] msgId=${message.id} emoji=${emoji} remove=${isRemove} reactions=${JSON.stringify(reactions)}`)
         return NextResponse.json({ ok: true, reactions })
 

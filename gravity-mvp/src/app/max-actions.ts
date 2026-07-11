@@ -194,7 +194,15 @@ export async function updateMaxConnectionSettings(id: string, name: string, isDe
 
 // Send a message via MAX Personal Account (Web Scraper)
 // target can be a MAX internal chatId (e.g. "201482140") or a phone number (e.g. "79222155750")
-export async function sendMaxPersonalMessage(target: string, message: string, name?: string, quotedMsgId?: string) {
+export async function sendMaxPersonalMessage(
+    target: string,
+    message: string,
+    name?: string,
+    quotedMsgId?: string,
+    uiChatId?: string,
+    clientMessageId?: string,
+    quotedContext?: { text?: string; sentAt?: string; direction?: string }
+) {
     if (!target || !message) {
         throw new Error("Target (chatId or phone) and message are required")
     }
@@ -208,7 +216,16 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
         const response = await fetch(`${maxScraperUrl}/send-message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chatId: cleanTarget, message, quotedMsgId })
+            body: JSON.stringify({
+                chatId: cleanTarget,
+                message,
+                quotedMsgId,
+                quotedText: quotedContext?.text,
+                quotedSentAt: quotedContext?.sentAt,
+                quotedDirection: quotedContext?.direction,
+                uiChatId,
+                clientMessageId
+            })
         })
 
         const data = await response.json().catch(() => ({}))
@@ -216,7 +233,17 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             throw new Error(data.error || "Failed to send message via Scraper")
         }
 
-        return { success: true, externalId: data.externalId || null, resolvedChatId: data.chatId || null }
+        const externalId = typeof data.externalId === 'string'
+            ? data.externalId
+            : (typeof data.maxMessageId === 'string' ? data.maxMessageId : null)
+
+        return {
+            success: true,
+            externalId,
+            resolvedChatId: data.chatId ? String(data.chatId) : null,
+            deliveryConfirmed: Boolean(data.deliveryConfirmed),
+            deliveryStatus: data.deliveryStatus || data.status || null,
+        }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)
         throw new Error(error.message || "Failed to call scraper API")
@@ -224,13 +251,35 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
 }
 
 // Send a message via MAX (Bot or Personal)
-export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string }) {
+export async function sendMaxMessage(phone: string, message: string, options?: {
+    name?: string
+    connectionId?: string
+    isPersonal?: boolean
+    quotedMsgId?: string
+    quotedText?: string
+    quotedSentAt?: string
+    quotedDirection?: string
+    uiChatId?: string
+    clientMessageId?: string
+}) {
     if (!phone || !message) {
         throw new Error("Phone and message are required")
     }
 
     if (options?.isPersonal) {
-        return await sendMaxPersonalMessage(phone, message, options.name, options.quotedMsgId)
+        return await sendMaxPersonalMessage(
+            phone,
+            message,
+            options.name,
+            options.quotedMsgId,
+            options.uiChatId,
+            options.clientMessageId,
+            {
+                text: options.quotedText,
+                sentAt: options.quotedSentAt,
+                direction: options.quotedDirection,
+            }
+        )
     }
 
     try {

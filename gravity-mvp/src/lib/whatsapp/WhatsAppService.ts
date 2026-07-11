@@ -2270,40 +2270,82 @@ async function updateImportJob(jobId: string, data: {
  * Check if a phone number is registered on WhatsApp.
  * Uses client.isRegisteredUser() from whatsapp-web.js.
  *
- * On timeout, missing client, or internal error returns { reachable: true } as a soft fallback —
- * this means "don't show a warning", NOT "confirmed reachable".
+ * Only client.isRegisteredUser() is allowed to produce definitive true/false.
+ * Runtime failures return reachable:null so the UI can show an operational
+ * state without lying that the account exists or does not exist.
  */
+type WhatsAppReachabilityCheck = {
+    reachable: boolean | null
+    confirmed?: boolean
+    retryable?: boolean
+    error?: string
+    reason?: string
+}
+
+function waReachabilityChecking(error: string, reason: string, retryable = true): WhatsAppReachabilityCheck {
+    return { reachable: null, confirmed: false, retryable, error, reason }
+}
+
+function getLiveReachabilityConnectionId(): string | null {
+    const entries = registry.getAllEntries()
+        .filter(e => e.channel === 'whatsapp' && e.state === 'ready')
+        .sort((a, b) => (b.readyAt?.getTime() ?? 0) - (a.readyAt?.getTime() ?? 0))
+
+    for (const entry of entries) {
+        const client = clients.get(entry.connectionId)
+        if (client?.info) return entry.connectionId
+    }
+    return null
+}
+
 export async function checkReachability(
     phone: string,
     connectionId?: string
-): Promise<{ reachable: boolean; confirmed?: boolean; error?: string }> {
-    // `confirmed: true` помечает РЕАЛЬНЫЙ positive answer от WhatsApp client.isRegisteredUser().
-    // Soft fallback'и (no connection / stale client / short phone / timeout / exception) возвращают reachable:true
-    // БЕЗ confirmed — чтобы route /api/channels/check-reachability не персистил status='confirmed' ложно.
+): Promise<WhatsAppReachabilityCheck> {
+    // `confirmed: true` means a REAL positive answer from WhatsApp client.isRegisteredUser().
+    // Operational states must never return reachable:true as a soft fallback:
+    // the reachability UI has to distinguish "account exists" from "CRM cannot check yet".
     const TIMEOUT_MS = 8_000
 
     try {
-        // Find a ready connection
+        // Prefer the same runtime truth used by the WhatsApp settings screen:
+        // registry ready + live client.info. DB status can lag behind runtime
+        // (for example remain "qr" while the in-memory session is ready).
         let connId = connectionId
         if (!connId) {
+            connId = getLiveReachabilityConnectionId()
+        }
+        if (!connId) {
             const conn = await prisma.whatsAppConnection.findFirst({
-                where: { status: 'ready' },
+                where: { status: { in: ['ready', 'authenticated'] } },
                 select: { id: true },
             })
-            if (!conn) return { reachable: true } // No ready connection — soft fallback
-            connId = conn.id
+            connId = conn?.id ?? null
+        }
+        if (!connId) {
+            return waReachabilityChecking('WhatsApp не подключён в CRM', 'no_ready_connection', false)
         }
 
         const client = clients.get(connId)
         if (!client || !client.info) {
-            // Client not initialized or stale — soft fallback, don't warn
-            return { reachable: true }
+            // Client not initialized or stale. Kick recovery once, then let UI retry.
+            opsLog('warn', 'wa_reachability_client_not_ready', {
+                connectionId: connId,
+                reason: !client ? 'client_missing' : 'client_info_null',
+            })
+            initializeClient(connId).catch((err: any) => {
+                opsLog('error', 'wa_reachability_reinit_failed', {
+                    connectionId: connId,
+                    error: err?.message ?? String(err),
+                })
+            })
+            return waReachabilityChecking('WhatsApp подключение восстанавливается', 'client_not_ready', true)
         }
 
         // Normalize: strip '+' and non-digits
         const digits = phone.replace(/\D/g, '')
         if (digits.length < 10) {
-            return { reachable: true } // Too short to check — soft fallback
+            return waReachabilityChecking('Некорректный номер WhatsApp', 'invalid_phone', false)
         }
 
         const result = await Promise.race([
@@ -2312,7 +2354,9 @@ export async function checkReachability(
         ])
 
         // Timeout → soft fallback
-        if (result === null) return { reachable: true }
+        if (result === null) {
+            return waReachabilityChecking('WhatsApp не ответил за 8 секунд', 'timeout', true)
+        }
 
         if (result) {
             return { reachable: true, confirmed: true }  // ← реально найден в WA
@@ -2320,9 +2364,8 @@ export async function checkReachability(
             return { reachable: false, error: 'Номер не зарегистрирован в WhatsApp' }
         }
     } catch (err: any) {
-        // Any error — soft fallback
         console.error(`[WA-CHECK] Error checking ${phone}: ${err.message}`)
-        return { reachable: true }
+        return waReachabilityChecking('Ошибка проверки WhatsApp', 'exception', true)
     }
 }
 

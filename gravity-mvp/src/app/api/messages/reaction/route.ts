@@ -51,6 +51,36 @@ export async function POST(req: NextRequest) {
 
         const updatedMetadata = { ...metadata, reactions }
 
+        // MAX must confirm first. Otherwise the UI shows a reaction that never
+        // reached web.max.ru, especially for legacy max-dom-* placeholder IDs.
+        if (msg.channel === 'max') {
+            try {
+                const maxResult = await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
+                if (!maxResult?.reactionConfirmed) {
+                    console.log('[MAX_DELIVERY]', JSON.stringify({
+                        ts: new Date().toISOString(),
+                        operation: 'reaction',
+                        status: 'send_requested',
+                        crmMessageId: msg.id,
+                        maxMessageId: msg.externalId,
+                        externalId: msg.externalId,
+                        conversationId: msg.chat?.externalChatId || '',
+                        protocolChatId: msg.chat?.externalChatId || '',
+                        error: null,
+                    }))
+                    return NextResponse.json({
+                        success: false,
+                        pending: true,
+                        status: 'send_requested',
+                        message: 'MAX reaction frame sent; waiting for MAX confirmation',
+                    }, { status: 202 })
+                }
+            } catch (err: any) {
+                console.warn(`[API/reaction] MAX delivery failed:`, err.message)
+                return NextResponse.json({ error: err.message || 'MAX reaction failed' }, { status: 502 })
+            }
+        }
+
         const updated = await prisma.message.update({
             where: { id: messageId },
             data: { metadata: updatedMetadata }
@@ -60,10 +90,12 @@ export async function POST(req: NextRequest) {
         try { broadcastChatMessage(updated.chatId, updated) } catch {}
 
         // Send reaction to messenger channel (best-effort, don't fail on error)
-        try {
-            await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
-        } catch (err: any) {
-            console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
+        if (msg.channel !== 'max') {
+            try {
+                await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
+            } catch (err: any) {
+                console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
+            }
         }
 
         return NextResponse.json({ reactions })
@@ -83,7 +115,7 @@ async function sendReactionToChannel(
     emoji: string,
     isRemoving: boolean,
     chatMetadata: any
-) {
+): Promise<any> {
     if (!externalMsgId) {
         console.log(`[reaction] No externalId for message, skipping channel delivery`)
         return
@@ -92,15 +124,15 @@ async function sendReactionToChannel(
     switch (channel) {
         case 'whatsapp':
             await sendWhatsAppReaction(externalMsgId, externalChatId, emoji, isRemoving, chatMetadata)
-            break
+            return { reactionConfirmed: true }
         case 'telegram':
             await sendTelegramReaction(externalMsgId, externalChatId, emoji, isRemoving, chatMetadata)
-            break
+            return { reactionConfirmed: true }
         case 'max':
-            await sendMaxReaction(externalMsgId, externalChatId, emoji, isRemoving)
-            break
+            return await sendMaxReaction(externalMsgId, externalChatId, emoji, isRemoving)
         default:
             console.log(`[reaction] Channel ${channel} not supported for reactions`)
+            return { reactionConfirmed: false }
     }
 }
 
@@ -213,14 +245,18 @@ async function sendMaxReaction(
 ) {
     const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
     const chatId = externalChatId.replace(/^max:/, '')
+    if (!/^d301/i.test(String(externalMsgId))) {
+        throw new Error('MAX reaction requires a real MAX message id, not CRM/upload/placeholder id')
+    }
     const res = await fetch(`${maxScraperUrl}/send-reaction`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatId, messageId: externalMsgId, emoji, remove: isRemoving }),
     })
+    const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || `MAX reaction failed: ${res.status}`)
+        throw new Error(data.error || `MAX reaction failed: ${res.status}`)
     }
-    console.log(`[reaction/MAX] ${isRemoving ? 'Removed' : 'Sent'} ${emoji} on msg ${externalMsgId} in chat ${chatId}`)
+    console.log(`[reaction/MAX] frame sent ${isRemoving ? 'remove' : 'set'} ${emoji} on msg ${externalMsgId} in chat ${chatId}; confirmed=${!!data.reactionConfirmed}`)
+    return data
 }

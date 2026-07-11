@@ -1,6 +1,7 @@
 'use server'
 
 import { NextResponse } from 'next/server'
+import type { Message, MessageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -10,10 +11,169 @@ import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
 
+const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
+let maxRuntimeTraceSeq = 0
+
+function maxRuntimeTraceText(value: unknown): string | null {
+  if (value == null) return null
+  const raw = String(value).replace(/[\u0000-\u001F\u007F]/g, '').trim()
+  if (!raw) return ''
+  return raw.length > 80 ? `${raw.slice(0, 80)}...[${raw.length}]` : raw
+}
+
+function maxRuntimeTrace(stage: string, fields: Record<string, unknown> = {}): void {
+  try {
+    const providerMessageId = fields.providerMessageId || fields.externalId
+    const chatId = fields.chatId
+    const entry: Record<string, unknown> = {
+      ts: new Date().toISOString(),
+      eventId: `webhook:${++maxRuntimeTraceSeq}`,
+      traceId: fields.traceId || (providerMessageId ? `max:${providerMessageId}` : (chatId ? `max-chat:${chatId}` : 'max-webhook')),
+      stage,
+    }
+    for (const [key, value] of Object.entries(fields)) {
+      if (/phone|token|cookie|secret|authorization|password|base64|url/i.test(key)) {
+        entry[key] = '[redacted]'
+      } else if (key === 'text') {
+        entry.textPreview = maxRuntimeTraceText(value)
+        entry.textLength = value == null ? 0 : String(value).length
+      } else {
+        entry[key] = value
+      }
+    }
+    process.stdout.write(`${MAX_RUNTIME_TRACE_PREFIX} ${JSON.stringify(entry)}\n`)
+  } catch {
+    // Instrumentation must never affect webhook behavior.
+  }
+}
+
+function metadataRecord(metadata: unknown): Record<string, unknown> {
+  return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : {}
+}
+
+function sanitizeMaxValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return value.replace(/\u0000/g, '').replace(/[\u0001-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+  }
+  if (Array.isArray(value)) return value.map(sanitizeMaxValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, sanitizeMaxValue(entry)])
+    )
+  }
+  return value
+}
+
+const MAX_CHAT_ID_ALIASES: Record<string, string> = {
+  '511708938': '902454841098',
+  '201482140': '902144614300',
+}
+
+type AttachmentLike = {
+  name?: string | null
+  fileName?: string | null
+  mimeType?: string | null
+  contentType?: string | null
+  size?: number | string | null
+  fileSize?: number | string | null
+  type?: string | null
+  url?: string | null
+}
+
+type MaxWebhookBody = {
+  externalId?: string | number | null
+  chatId?: string | number | null
+  rawChatId?: string | number | null
+  senderId?: string | number | null
+  senderName?: string | null
+  senderPhone?: string | number | null
+  phone?: string | number | null
+  text?: string | null
+  timestamp?: string | number | null
+  messageType?: string | null
+  attachments?: AttachmentLike[] | null
+  isOutgoing?: boolean | null
+  deleted?: boolean | null
+  forwardedFrom?: unknown
+  source?: string | null
+  replyToExternalId?: string | number | null
+}
+
+function normalizeMaxChatId(chatId: unknown): string {
+  const raw = String(chatId)
+  return MAX_CHAT_ID_ALIASES[raw] || raw
+}
+
+function attachmentName(att: AttachmentLike): string {
+  const value = att.name ?? att.fileName ?? ''
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function attachmentDisplayName(att: AttachmentLike): string | null {
+  const value = att.name ?? att.fileName ?? ''
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function attachmentMime(att: AttachmentLike): string {
+  const value = att.mimeType ?? att.contentType ?? ''
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function attachmentSize(att: AttachmentLike): number | null {
+  const raw = att.size ?? att.fileSize
+  const value = typeof raw === 'number' ? raw : Number(raw)
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : null
+}
+
+function attachmentType(att: AttachmentLike): string {
+  const value = att.type ?? ''
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function sameMaxAttachment(incoming: AttachmentLike, existing: AttachmentLike): boolean {
+  const incomingName = attachmentName(incoming)
+  const existingName = attachmentName(existing)
+  const incomingMime = attachmentMime(incoming)
+  const existingMime = attachmentMime(existing)
+  const incomingSize = attachmentSize(incoming)
+  const existingSize = attachmentSize(existing)
+
+  if (incomingName && existingName && incomingName === existingName) {
+    return !incomingSize || !existingSize || incomingSize === existingSize
+  }
+
+  if (incomingSize && existingSize && incomingSize === existingSize) {
+    if (incomingMime && existingMime && incomingMime === existingMime) return true
+    return attachmentType(incoming) !== '' && attachmentType(incoming) === attachmentType(existing)
+  }
+
+  return false
+}
+
+function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAttachments: AttachmentLike[]): boolean {
+  if (!incomingAttachments.length || !existingAttachments.length) return false
+  return incomingAttachments.every(incoming =>
+    existingAttachments.some(existing => sameMaxAttachment(incoming, existing))
+  )
+}
+
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { externalId, chatId, senderId, senderName, senderPhone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom } = body
+    const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
+    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId } = body
+    maxRuntimeTrace('webhook.received', {
+      providerMessageId: externalId ? String(externalId) : null,
+      chatId: chatId ? String(chatId) : null,
+      rawChatId: rawChatId ? String(rawChatId) : null,
+      text,
+      messageType: messageType || 'text',
+      source: source || null,
+      isOutgoing: Boolean(isOutgoing),
+      attachmentCount: Array.isArray(attachments) ? attachments.length : 0,
+      deleted: Boolean(deleted),
+    })
 
     // MAX server confirmed a message was deleted — remove from CRM DB
     if (deleted && externalId) {
@@ -29,6 +189,7 @@ export async function POST(request: Request) {
     }
 
     if (!chatId) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, reason: 'missing_chat_id' })
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
     }
 
@@ -37,7 +198,22 @@ export async function POST(request: Request) {
     const trimmedText = typeof text === 'string' ? text.trim() : ''
     const isTextType = !messageType || messageType === 'text'
     if (isTextType && !trimmedText && (!attachments || attachments.length === 0)) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'empty_text' })
       return NextResponse.json({ ok: true, skipped: 'empty_text' })
+    }
+    const usableAttachments = Array.isArray(attachments)
+      ? attachments.filter((att): att is AttachmentLike & { url: string } => att && typeof att.url === 'string' && att.url.length > 0)
+      : []
+    if (!isOutgoing && messageType === 'image' && usableAttachments.length === 0) {
+      console.warn(`[MAX Webhook] skipped image without attachment chatId=${chatId} externalId=${externalId || 'n/a'}`)
+      opsLog('warn', 'max_image_without_attachment_skipped', {
+        channel: 'max',
+        chatId: String(chatId),
+        externalId: externalId ? String(externalId) : null,
+        attachmentCount: Array.isArray(attachments) ? attachments.length : 0,
+      })
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'image_without_attachment' })
+      return NextResponse.json({ ok: true, skipped: 'image_without_attachment' })
     }
 
     // Validate timestamp — same pattern as WA/TG. MAX timestamps are
@@ -51,6 +227,7 @@ export async function POST(request: Request) {
       const ts = typeof timestamp === 'number' ? timestamp : Date.parse(String(timestamp))
       if (!Number.isFinite(ts) || ts < MIN_TS_MS || ts > nowMs + FUTURE_TOLERANCE_MS) {
         // Corrupted timestamp — skip rather than file under wrong date.
+        maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'bad_timestamp' })
         return NextResponse.json({ ok: true, skipped: 'bad_timestamp', value: timestamp })
       }
       sentAt = new Date(ts)
@@ -58,12 +235,128 @@ export async function POST(request: Request) {
       sentAt = new Date()
     }
 
-    const externalChatId = String(chatId)
+    const externalIdString = externalId ? String(externalId) : null
+    const replyToExternalIdString = replyToExternalId ? String(replyToExternalId) : null
+    const isTextProviderEvent = isTextType && usableAttachments.length === 0
+    const isPlaceholderTextId = !!externalIdString && (
+      externalIdString.startsWith('max-dom-') ||
+      externalIdString.startsWith('max-recovered-')
+    )
+    const isHistoryReplay = source === 'history' || source === 'catchup'
+    const allowLiveDomTextRecovery = Boolean(
+      isTextProviderEvent &&
+      isPlaceholderTextId &&
+      source === 'dom_fallback' &&
+      !isHistoryReplay &&
+      !isOutgoing &&
+      trimmedText.length > 0
+    )
+
+    if (isTextProviderEvent && (!externalIdString || isPlaceholderTextId) && !allowLiveDomTextRecovery) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalIdString, chatId: String(chatId), text, reason: 'text_without_provider_identity' })
+      return NextResponse.json({
+        ok: true,
+        skipped: 'text_without_provider_identity',
+        externalId: externalIdString,
+      })
+    }
+
+    if (isTextProviderEvent && externalIdString) {
+      const existingText = await prisma.message.findUnique({
+        where: { externalId: externalIdString },
+        select: { id: true, chatId: true },
+      })
+      if (existingText) {
+        maxRuntimeTrace('webhook.duplicate', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          text,
+          chatInternalId: existingText.chatId,
+          messageId: existingText.id,
+        })
+        return NextResponse.json({
+          success: true,
+          chatInternalId: existingText.chatId,
+          messageId: existingText.id,
+          deduped: true,
+        })
+      }
+    }
+
+    const rawExternalChatId = String(rawChatId || chatId)
+    const externalChatId = normalizeMaxChatId(chatId)
+    const senderIdString = senderId ? String(senderId) : null
+    const normalizedSenderPhone = senderPhone || phone ? normalizePhoneE164(String(senderPhone || phone)) : null
+    const effectiveSenderPhone = normalizedSenderPhone || null
 
     // Find or create Chat
     let chat = await prisma.chat.findUnique({
       where: { externalChatId },
     })
+
+    if (!chat && !isOutgoing && senderIdString) {
+      const existingBySender = await prisma.chat.findFirst({
+        where: {
+          channel: 'max',
+          metadata: { path: ['senderId'], equals: senderIdString },
+        },
+        orderBy: { lastMessageAt: 'desc' },
+      })
+
+      if (existingBySender) {
+        const existingMetadata = metadataRecord(existingBySender.metadata)
+        chat = await prisma.chat.update({
+          where: { id: existingBySender.id },
+          data: {
+            externalChatId,
+            ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
+            ...(senderName && existingBySender.name?.startsWith('MAX:') ? { name: senderName } : {}),
+            metadata: {
+              ...existingMetadata,
+              previousExternalChatId: existingBySender.externalChatId,
+              rawExternalChatId,
+              senderId: senderIdString,
+              ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              connectionId: existingMetadata.connectionId || 'max_scraper',
+            },
+          },
+        })
+      }
+    }
+
+    if (!chat && !isOutgoing && effectiveSenderPhone) {
+      const last10 = effectiveSenderPhone.slice(-10)
+      const existingByPhone = await prisma.chat.findFirst({
+        where: {
+          channel: 'max',
+          OR: [
+            { metadata: { path: ['phone'], equals: effectiveSenderPhone } },
+            { driver: { phone: { contains: last10 } } },
+          ],
+        },
+        orderBy: { lastMessageAt: 'desc' },
+      })
+
+      if (existingByPhone) {
+        const existingMetadata = metadataRecord(existingByPhone.metadata)
+        chat = await prisma.chat.update({
+          where: { id: existingByPhone.id },
+          data: {
+            externalChatId,
+            ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
+            ...(senderName && existingByPhone.name?.startsWith('MAX:') ? { name: senderName } : {}),
+            metadata: {
+              ...existingMetadata,
+              previousExternalChatId: existingByPhone.externalChatId,
+              rawExternalChatId,
+              ...(senderIdString ? { senderId: senderIdString } : {}),
+              phone: effectiveSenderPhone,
+              connectionId: existingMetadata.connectionId || 'max_scraper',
+            },
+          },
+        })
+      }
+    }
 
     if (!chat) {
       chat = await prisma.chat.create({
@@ -74,37 +367,33 @@ export async function POST(request: Request) {
           lastMessageAt: sentAt,
           status:        'new',
           metadata: {
-            ...(senderId    ? { senderId: String(senderId) } : {}),
-            ...(senderPhone ? { phone: senderPhone }         : {}),
+            ...(senderIdString       ? { senderId: senderIdString }       : {}),
+            ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+            rawExternalChatId,
             connectionId: 'max_scraper',
           },
         },
       })
     } else {
+      const existingMetadata = metadataRecord(chat.metadata)
       await prisma.chat.update({
         where: { id: chat.id },
         data: {
-          lastMessageAt: sentAt,
+          ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
           // Обновляем имя если раньше было только MAX:ID
           ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),
           // Обновляем senderId / phone в metadata
-          ...((senderId || senderPhone) ? {
+          ...((senderIdString || effectiveSenderPhone) ? {
             metadata: {
-              ...((chat.metadata as any) || {}),
-              ...(senderId    ? { senderId: String(senderId) } : {}),
-              ...(senderPhone ? { phone: senderPhone }         : {}),
-              connectionId: (chat.metadata as any)?.connectionId || 'max_scraper',
+              ...existingMetadata,
+              ...(senderIdString       ? { senderId: senderIdString }       : {}),
+              ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              rawExternalChatId,
+              connectionId: existingMetadata.connectionId || 'max_scraper',
             }
           } : {}),
         },
       })
-    }
-
-    // Workflow: update status/unread/requiresResponse via centralized service
-    if (!isOutgoing) {
-      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
-    } else {
-      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
 
     // Map messageType to Prisma MessageType enum.
@@ -113,7 +402,7 @@ export async function POST(request: Request) {
     // with _type='STICKER' which older scraper versions bucketed as
     // document — the new MessageParser branch already emits 'sticker',
     // but this guard catches any in-flight or legacy frames.
-    const typeMap: Record<string, string> = {
+    const typeMap: Record<string, MessageType> = {
       text:     'text',
       image:    'image',
       video:    'video',
@@ -138,21 +427,128 @@ export async function POST(request: Request) {
     }
     const content = text || contentFallbacks[messageType] || ''
 
+    let message: Message | null = null
+    const shouldUpgradeDomMessage =
+      msgType !== 'text' &&
+      externalIdString &&
+      !externalIdString.startsWith('max-dom-') &&
+      !externalIdString.startsWith('max-recovered-')
+
+    if (shouldUpgradeDomMessage) {
+      const nearbyDomMessage = await prisma.message.findFirst({
+        where: {
+          chatId: chat.id,
+          channel: 'max',
+          direction: isOutgoing ? 'outbound' : 'inbound',
+          content,
+          externalId: { startsWith: 'max-dom-' },
+          sentAt: {
+            gte: new Date(sentAt.getTime() - 10 * 60 * 1000),
+            lte: new Date(sentAt.getTime() + 10 * 60 * 1000),
+          },
+        },
+        orderBy: { sentAt: 'desc' },
+      })
+      if (nearbyDomMessage) {
+        message = await prisma.message.update({
+          where: { id: nearbyDomMessage.id },
+          data: {
+            externalId: externalIdString,
+            type: msgType,
+            content,
+            sentAt,
+            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+          },
+        })
+        console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
+      }
+    } else if (msgType === 'text' && externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
+      console.log(`[MAX Webhook] skipped text DOM externalId upgrade for ${externalIdString}`)
+    }
+
+    const isDomFallbackMedia =
+      !isOutgoing &&
+      msgType !== 'text' &&
+      externalIdString &&
+      (externalIdString.startsWith('max-dom-') || externalIdString.startsWith('max-recovered-')) &&
+      usableAttachments.length > 0
+
+    if (!message && isDomFallbackMedia) {
+      const nearbyMessages = await prisma.message.findMany({
+        where: {
+          chatId: chat.id,
+          channel: 'max',
+          direction: 'inbound',
+          type: msgType,
+          content,
+          externalId: { not: externalIdString },
+          sentAt: {
+            gte: new Date(sentAt.getTime() - 10 * 60 * 1000),
+            lte: new Date(sentAt.getTime() + 10 * 60 * 1000),
+          },
+        },
+        include: { attachments: true },
+        orderBy: { sentAt: 'desc' },
+        take: 25,
+      })
+
+      const duplicate = nearbyMessages.find(candidate =>
+        sameMaxAttachmentSet(usableAttachments, candidate.attachments as unknown as AttachmentLike[])
+      )
+
+      if (duplicate) {
+        console.log(`[MAX Webhook] deduped DOM media externalId ${externalIdString} -> ${duplicate.id}`)
+        opsLog('info', 'max_dom_media_deduped', {
+          channel: 'max',
+          chatId: chat.id,
+          externalChatId,
+          externalId: externalIdString,
+          duplicateMessageId: duplicate.id,
+          type: msgType,
+          attachmentCount: usableAttachments.length,
+        })
+        return NextResponse.json({
+          success: true,
+          chatInternalId: chat.id,
+          messageId: duplicate.id,
+          deduped: true,
+        })
+      }
+    }
+
+    // Workflow: update status/unread/requiresResponse via centralized service
+    if (!isOutgoing && !isHistoryReplay) {
+      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
+    } else if (isOutgoing) {
+      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
+    }
+
     // Create Message (skip if already seen)
-    const message = await prisma.message.upsert({
-      where:  { externalId: externalId || `max-${chatId}-${Date.now()}` },
-      update: {},
-      create: {
-        chatId:    chat.id,
-        direction: isOutgoing ? 'outbound' : 'inbound',
-        type:      msgType as any,
-        content,
-        channel:   'max',
-        externalId: externalId || null,
-        status:    'delivered',
-        sentAt,   // validated above
-        metadata:  { senderId, maxChatId: chatId, attachments: attachments || [], ...(forwardedFrom ? { forwardedFrom } : {}) },
-      },
+    if (!message) {
+      message = await prisma.message.upsert({
+        where:  { externalId: externalIdString || `max-${chatId}-${Date.now()}` },
+        update: {},
+        create: {
+          chatId:    chat.id,
+          direction: isOutgoing ? 'outbound' : 'inbound',
+          type:      msgType,
+          content,
+          channel:   'max',
+          externalId: externalIdString,
+          status:    'delivered',
+          sentAt,   // validated above
+          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+        },
+      })
+    }
+    maxRuntimeTrace('webhook.stored', {
+      providerMessageId: externalIdString,
+      chatId: String(chatId),
+      text,
+      chatInternalId: chat.id,
+      messageId: message.id,
+      source: source || null,
+      isOutgoing: Boolean(isOutgoing),
     })
 
     // Save attachments. Dedup by url first — MAX scraper sometimes sends
@@ -161,6 +557,13 @@ export async function POST(request: Request) {
     // copies of the same frog.
     if (attachments && attachments.length > 0) {
       const seenUrls = new Set<string>()
+      const existingAttachments = await prisma.messageAttachment.findMany({
+        where: { messageId: message.id },
+        select: { url: true },
+      })
+      for (const existing of existingAttachments) {
+        if (existing.url) seenUrls.add(existing.url)
+      }
       for (const att of attachments) {
         if (!att.url) continue
         if (seenUrls.has(att.url)) continue
@@ -170,8 +573,8 @@ export async function POST(request: Request) {
             messageId: message.id,
             type:      att.type || 'file',
             url:       att.url,
-            fileName:  att.name || null,
-            fileSize:  att.size || null,
+            fileName:  attachmentDisplayName(att),
+            fileSize:  attachmentSize(att),
             mimeType:  att.mimeType || null,
           },
         })
@@ -181,8 +584,8 @@ export async function POST(request: Request) {
     console.log(`[MAX Webhook] chatId=${chatId} direction=${isOutgoing ? 'out' : 'in'} text="${(text || '').slice(0, 50)}"`)
 
     // Привязываем чат к водителю (по телефону/имени из MAX)
-    if (!isOutgoing && !chat.driverId && (senderPhone || senderName)) {
-      DriverMatchService.linkChatToDriver(chat.id, { phone: senderPhone, name: senderName }).catch(e =>
+    if (!isOutgoing && !chat.driverId && (effectiveSenderPhone || senderName)) {
+      DriverMatchService.linkChatToDriver(chat.id, { phone: effectiveSenderPhone || undefined, name: senderName }).catch(e =>
         console.error('[MAX Webhook] linkChatToDriver error:', e.message)
       )
     }
@@ -191,8 +594,8 @@ export async function POST(request: Request) {
     if (!isOutgoing) {
       try {
         // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
-        const maxExternalId = senderId ? String(senderId) : externalChatId
-        const maxPhone = senderPhone ? normalizePhoneE164(senderPhone) : null
+        const maxExternalId = senderIdString || externalChatId
+        const maxPhone = effectiveSenderPhone
 
         const contactResult = await ContactService.resolveContact(
           'max',
@@ -205,8 +608,9 @@ export async function POST(request: Request) {
           contactResult.contact.id,
           contactResult.identity.id,
         )
-      } catch (contactErr: any) {
-        console.error(`[MAX Webhook] ContactService error (non-blocking): ${contactErr.message}`)
+      } catch (contactErr: unknown) {
+        const message = contactErr instanceof Error ? contactErr.message : String(contactErr)
+        console.error(`[MAX Webhook] ContactService error (non-blocking): ${message}`)
       }
     }
     // ──────────────────────────────────────────────────────────
@@ -218,9 +622,18 @@ export async function POST(request: Request) {
       )
     }
 
+    maxRuntimeTrace('webhook.accepted', {
+      providerMessageId: externalIdString,
+      chatId: String(chatId),
+      text,
+      chatInternalId: chat.id,
+      messageId: message.id,
+    })
     return NextResponse.json({ success: true, chatInternalId: chat.id, messageId: message.id })
-  } catch (err: any) {
-    opsLog('error', 'webhook_max_error', { channel: 'max', error: err.message })
-    return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    maxRuntimeTrace('webhook.error', { error: message })
+    opsLog('error', 'webhook_max_error', { channel: 'max', error: message })
+    return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 })
   }
 }

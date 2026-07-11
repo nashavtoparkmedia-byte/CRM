@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         // raw query чтобы достать его одним запросом без рисков сломать schema.
         const chat = await prisma.chat.findUnique({
             where: { id: chatId },
-            select: { channel: true, externalChatId: true, driver: { select: { phone: true, id: true } } }
+            select: { channel: true, externalChatId: true, metadata: true, driver: { select: { phone: true, id: true } } }
         }) as any
         // Подтягиваем telegramId опционально через raw query (избегаем падения если relation отсутствует)
         if (chat?.driver?.id) {
@@ -66,13 +66,16 @@ export async function POST(req: NextRequest) {
         const unifiedType = mediaType === 'voice' ? 'voice' : mediaType === 'audio' ? 'audio' :
                            mediaType === 'video' ? 'video' : mediaType === 'image' ? 'image' : 'document'
 
-        console.log(`[send-media] channel=${channel} mediaType=${mediaType} filename=${filename} mime=${mimeType}`)
+        console.log(`[send-media] channel=${channel} mediaType=${mediaType} filename=${filename} mime=${mimeType} captionLength=${String(caption || '').trim().length}`)
 
         let externalId: string | null = null
         let sendError: string | null = null
 
         // Route to appropriate channel backend
         if (channel === 'max') {
+            const maxMetadata = (chat.metadata || {}) as any
+            const maxUiChatId = maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null
+            const maxPhone = chat.driver?.phone || maxMetadata.phone || null
             const res = await fetch(`${MAX_SCRAPER_URL}/send-media`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -80,6 +83,8 @@ export async function POST(req: NextRequest) {
                     chatId: Number(chat.externalChatId),
                     base64, filename, mimeType, caption: caption || '',
                     mediaType,
+                    uiChatId: maxUiChatId ? String(maxUiChatId) : undefined,
+                    phone: maxPhone ? String(maxPhone) : undefined,
                 }),
             })
             const resData = await res.json().catch(() => ({ error: res.statusText }))
