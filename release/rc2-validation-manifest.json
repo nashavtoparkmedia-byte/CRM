@@ -1,0 +1,9 @@
+{
+  "release": "contact-resolution-rc2",
+  "baselineDecision": "qualified C2",
+  "shadowDefault": "off",
+  "prismaSchemaChanged": false,
+  "productionDeployPerformed": false,
+  "productionEnvChanged": false,
+  "notes": "Final image metadata is recorded in external audit build logs and OCI labels. This manifest is source-controlled handover metadata."
+}
