@@ -52,32 +52,14 @@ async function pingPostgres(): Promise<Check> {
 
 // ─── Redis ────────────────────────────────────────────────────────────
 async function pingRedis(): Promise<Check> {
-    return new Promise<Check>((resolve) => {
-        const start = Date.now()
-        const host = process.env.REDIS_HOST ?? '127.0.0.1'
-        const port = Number(process.env.REDIS_PORT ?? 6379)
-        const sock = net.createConnection({ host, port })
-        let settled = false
-        const finish = (ok: boolean, error?: string) => {
-            if (settled) return
-            settled = true
-            try { sock.destroy() } catch { /* ignore */ }
-            resolve({ name: 'redis', ok, ms: Date.now() - start, ...(error ? { error } : {}) })
-        }
-        sock.once('connect', () => {
-            // RESP inline command. A healthy redis replies `+PONG\r\n`.
-            // We don't bother to parse RESP — substring match is enough
-            // to differentiate «port is open and redis answers» from
-            // «port is open but it's some other TCP service».
-            sock.write('PING\r\n')
-        })
-        sock.once('data', (buf) => {
-            const text = buf.toString('utf8')
-            if (text.includes('PONG')) finish(true)
-            else finish(false, `unexpected_response: ${text.slice(0, 60).replace(/\s+/g, ' ')}`)
-        })
-        sock.once('error', (err) => finish(false, err.message))
-    })
+    // Uses the same runtime configuration style as BullMQ (`REDIS_URL`),
+    // including password support. The helper intentionally reports only
+    // classified failure reasons, never the URL or password.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { pingRedis: probeRedis } = require('./redis-health-probe') as {
+        pingRedis: () => Promise<Check>
+    }
+    return probeRedis()
 }
 
 // ─── MinIO / S3 ───────────────────────────────────────────────────────
