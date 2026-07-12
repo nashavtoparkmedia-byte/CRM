@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/driver-profiles/park-identity.ts",
+    "src/lib/driver-profiles/park-inventory.ts",
+    "src/lib/driver-profiles/multi-park.ts",
+    "src/lib/__tests__/park-identity.test.ts",
+    "src/lib/__tests__/multi-park-driver-profiles.test.ts",
+    "src/lib/__tests__/multi-park-source-contract.test.ts"
+  ],
+  "exclude": []
+}

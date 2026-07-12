@@ -15,6 +15,41 @@ model ApiConnection {
   name      String?
   createdAt DateTime @default(now())
   logs      ApiLog[]
+  parkConnections ParkConnection[]
+  sourcedDriverProfiles Driver[] @relation("DriverProfileSourceConnection")
+}
+
+model Park {
+  id             String           @id @default(cuid())
+  parkCode       String           @unique
+  parkName       String
+  externalParkId String           @unique
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  connections    ParkConnection[]
+  driverProfiles Driver[]
+}
+
+model ParkConnection {
+  id                   String        @id @default(cuid())
+  parkId               String
+  apiConnectionId      String
+  externalParkId       String
+  enabled              Boolean       @default(true)
+  validFrom            DateTime      @default(now())
+  archivedAt           DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastFailedSyncAt     DateTime?
+  lastErrorSummary     String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  park                 Park          @relation(fields: [parkId], references: [id], onDelete: Cascade)
+  apiConnection        ApiConnection @relation(fields: [apiConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([apiConnectionId, archivedAt])
+  @@index([parkId, enabled])
+  @@index([externalParkId])
 }
 
 model ApiLog {
@@ -292,6 +327,10 @@ model BroadcastStat {
 model Driver {
   id                   String               @id @default(cuid())
   yandexDriverId       String               @unique
+  externalDriverProfileId String?
+  externalParkId       String?
+  parkId               String?
+  sourceConnectionId   String?
   fullName             String
   phone                String?
   licenseNumber        String?
@@ -315,6 +354,8 @@ model Driver {
   communicationEvents  CommunicationEvent[]
   contactId            String?
   contact              Contact?             @relation("ContactDriverProfiles", fields: [contactId], references: [id], onDelete: SetNull)
+  park                 Park?                @relation(fields: [parkId], references: [id], onDelete: SetNull)
+  sourceConnection     ApiConnection?       @relation("DriverProfileSourceConnection", fields: [sourceConnectionId], references: [id], onDelete: SetNull)
   contactProfile       Contact?             @relation("ContactLegacyYandexDriver")
   mainForContact       Contact?             @relation("ContactMainDriverProfile")
   attentions           DriverAttention[]
@@ -329,6 +370,10 @@ model Driver {
   @@index([segment])
   @@index([primaryYandexId])
   @@index([contactId])
+  @@unique([externalParkId, externalDriverProfileId])
+  @@index([parkId])
+  @@index([sourceConnectionId])
+  @@index([externalParkId])
 }
 
 /// Driver-initiated actions on their active Yandex order, executed via the
