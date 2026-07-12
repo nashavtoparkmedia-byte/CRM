@@ -313,7 +313,10 @@ model Driver {
   calls                Call[]
   chats                Chat[]
   communicationEvents  CommunicationEvent[]
-  contactProfile       Contact?
+  contactId            String?
+  contact              Contact?             @relation("ContactDriverProfiles", fields: [contactId], references: [id], onDelete: SetNull)
+  contactProfile       Contact?             @relation("ContactLegacyYandexDriver")
+  mainForContact       Contact?             @relation("ContactMainDriverProfile")
   attentions           DriverAttention[]
   daySummaries         DriverDaySummary[]
   events               DriverEvent[]
@@ -325,6 +328,7 @@ model Driver {
   @@index([fullName])
   @@index([segment])
   @@index([primaryYandexId])
+  @@index([contactId])
 }
 
 /// Driver-initiated actions on their active Yandex order, executed via the
@@ -594,8 +598,12 @@ model Contact {
   displayName       String
   displayNameSource ContactNameSource @default(channel)
   masterSource      ContactSource     @default(chat)
-  yandexDriverId    String?           @unique
-  primaryPhoneId    String?
+  yandexDriverId          String?           @unique
+  mainDriverId            String?           @unique
+  mainDriverSelection     String            @default("auto")
+  mainDriverSelectedBy    String?
+  mainDriverSelectedAt    DateTime?
+  primaryPhoneId          String?
   notes             String?
   customFields      Json?             @default("{}")
   tags              String[]          @default([])
@@ -604,7 +612,10 @@ model Contact {
   updatedAt         DateTime          @updatedAt
   calls             Call[]
   chats             Chat[]
-  driver            Driver?           @relation(fields: [yandexDriverId], references: [yandexDriverId])
+  driver            Driver?           @relation("ContactLegacyYandexDriver", fields: [yandexDriverId], references: [yandexDriverId])
+  driverProfiles    Driver[]          @relation("ContactDriverProfiles")
+  mainDriver        Driver?           @relation("ContactMainDriverProfile", fields: [mainDriverId], references: [id], onDelete: SetNull)
+  mainDriverAudits  ContactDriverProfileAudit[]
   identities        ContactIdentity[]
   mergesAsMerged    ContactMerge[]    @relation("MergeMerged")
   mergesAsSurvivor  ContactMerge[]    @relation("MergeSurvivor")
@@ -684,6 +695,23 @@ model ContactMerge {
 
   @@index([survivorId])
   @@index([mergedId])
+}
+
+
+model ContactDriverProfileAudit {
+  id                   String   @id @default(cuid())
+  contactId            String
+  driverId             String?
+  previousMainDriverId String?
+  action               String
+  selectedBy           String   @default("system")
+  reason               String?
+  metadata             Json?    @default("{}")
+  createdAt            DateTime @default(now())
+  contact              Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId, createdAt])
+  @@index([driverId])
 }
 
 model Task {

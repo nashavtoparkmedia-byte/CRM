@@ -1,9 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, prefer-const */
 'use server'
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { getThresholds, Thresholds, recalculateAllSegments, getSharedSegmentationStats, calculateDriverStatus, calculateSegment } from '@/lib/scoring'
-import { linkContactToBestDriver } from '@/lib/contacts/yandex-link'
+import { attachDriverProfilesToContactByPhone } from '@/lib/driver-profiles/multi-park'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -616,17 +617,16 @@ export async function getDriverCards(
 async function syncDriversByStatuses(
     statuses: string[],
     label: string
-): Promise<{ success: boolean; count: number }> {
-    const connection = await prisma.apiConnection.findFirst({
-        orderBy: { createdAt: 'desc' },
+): Promise<{ success: boolean; count: number; parksProcessed: number; parkResults: Array<{ parkId: string; parkName: string; count: number; error?: string }> }> {
+    const connections = await prisma.apiConnection.findMany({
+        orderBy: { createdAt: 'asc' },
     })
 
-    if (!connection) {
+    if (connections.length === 0) {
         throw new Error('No API connection configured')
     }
 
-    // Local fetch wrapper with retry on 429 (matches YandexFleetService.yandexFetch).
-    async function yandexFetch(url: string, init: RequestInit): Promise<Response> {
+    async function yandexFetch(url: string, init: RequestInit, parkLabel: string): Promise<Response> {
         const MAX_ATTEMPTS = 5
         let attempt = 0
         while (true) {
@@ -638,133 +638,144 @@ async function syncDriversByStatuses(
             const backoffMs = retryAfter
                 ? Math.min(60_000, parseInt(retryAfter, 10) * 1000 || 2000)
                 : Math.min(32_000, 2_000 * Math.pow(2, attempt - 1))
-            console.warn(`[${label}] 429 rate limit, retry ${attempt}/${MAX_ATTEMPTS} in ${backoffMs}ms`)
+            console.warn(`[${label}] ${parkLabel}: 429 rate limit, retry ${attempt}/${MAX_ATTEMPTS} in ${backoffMs}ms`)
             await new Promise(r => setTimeout(r, backoffMs))
         }
     }
 
     const yandexEndpoint = `https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list`
-    let offset = 0
     const limit = 1000
     let totalCount = 0
-    let totalInPark = 0
+    const parkResults: Array<{ parkId: string; parkName: string; count: number; error?: string }> = []
 
-    try {
-        do {
-            const payload: any = {
-                query: {
-                    park: { id: connection.parkId },
-                    driver: { status: statuses }
-                },
-                fields: {
-                    driver_profile: [
-                        "id",
-                        "first_name",
-                        "last_name",
-                        "phones",
-                        "work_status",
-                        "created_date",
-                        "driver_license"
-                    ],
-                    current_status: [
-                        "status",
-                        "status_updated_at"
-                    ]
-                },
-                limit,
-                offset
-            }
+    for (const connection of connections) {
+        const parkName = connection.name || connection.parkId
+        let offset = 0
+        let totalInPark = 0
+        let parkCount = 0
 
-            const res = await yandexFetch(yandexEndpoint, {
-                method: 'POST',
-                headers: {
-                    'X-Client-ID': connection.clid,
-                    'X-Api-Key': connection.apiKey,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            })
-
-            if (!res.ok) {
-                const errorText = await res.text()
-                throw new Error(`Yandex API Error: ${res.status} ${errorText}`)
-            }
-
-            const data = await res.json()
-            const profiles = data.driver_profiles || []
-            totalInPark = data.total || 0
-
-            console.log(`[${label}] Fetched ${profiles.length} profiles (offset: ${offset}, total in park: ${totalInPark}).`)
-
-            for (const p of profiles) {
-                const profile = p.driver_profile
-                const currentStatus = p.current_status
-                const fullName = `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || 'No Name'
-                const phone = profile.phones?.[0] || null
-
-                const isDismissed = profile.work_status === 'fired' || currentStatus?.status === 'fired'
-                const dismissedAt = isDismissed && currentStatus?.status_updated_at
-                    ? new Date(currentStatus.status_updated_at)
-                    : null
-
-                const hiredAt = profile.created_date ? new Date(profile.created_date) : null
-
-                const licenseData = profile.driver_license
-                const licenseNumber = typeof licenseData === 'string'
-                    ? licenseData
-                    : (licenseData?.number || null)
-
-                const updateData: any = {
-                    fullName,
-                    phone,
-                    dismissedAt,
+        try {
+            do {
+                const payload: any = {
+                    query: {
+                        park: { id: connection.parkId },
+                        driver: { status: statuses }
+                    },
+                    fields: {
+                        driver_profile: [
+                            "id",
+                            "first_name",
+                            "last_name",
+                            "phones",
+                            "work_status",
+                            "created_date",
+                            "driver_license"
+                        ],
+                        current_status: [
+                            "status",
+                            "status_updated_at"
+                        ]
+                    },
+                    limit,
+                    offset
                 }
 
-                if (hiredAt) updateData.hiredAt = hiredAt
-                if (licenseNumber) updateData.licenseNumber = licenseNumber
+                const res = await yandexFetch(yandexEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'X-Client-ID': connection.clid,
+                        'X-Api-Key': connection.apiKey,
+                        'Accept-Language': 'ru',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                }, parkName)
 
-                await prisma.driver.upsert({
-                    where: { yandexDriverId: profile.id },
-                    update: updateData,
-                    create: {
-                        ...updateData,
-                        yandexDriverId: profile.id,
-                        segment: 'unknown',
+                if (!res.ok) {
+                    const errorText = await res.text()
+                    throw new Error(`Yandex API Error: ${res.status} ${errorText}`)
+                }
+
+                const data = await res.json()
+                const profiles = data.driver_profiles || []
+                totalInPark = data.total || 0
+
+                console.log(`[${label}] ${parkName}: fetched ${profiles.length} profiles (offset: ${offset}, total in park: ${totalInPark}).`)
+
+                for (const p of profiles) {
+                    const profile = p.driver_profile
+                    const currentStatus = p.current_status
+                    if (!profile?.id) continue
+                    const fullName = `${profile.last_name || ''} ${profile.first_name || ''}`.trim() || 'No Name'
+                    const phone = profile.phones?.[0] || null
+
+                    const isDismissed = profile.work_status === 'fired' || currentStatus?.status === 'fired'
+                    const dismissedAt = isDismissed && currentStatus?.status_updated_at
+                        ? new Date(currentStatus.status_updated_at)
+                        : null
+
+                    const hiredAt = profile.created_date ? new Date(profile.created_date) : null
+
+                    const licenseData = profile.driver_license
+                    const licenseNumber = typeof licenseData === 'string'
+                        ? licenseData
+                        : (licenseData?.number || null)
+
+                    const updateData: any = {
+                        fullName,
+                        phone,
+                        dismissedAt,
+                        statusOverride: isDismissed ? 'dismissed' : 'working',
+                        lastExternalPark: parkName,
                     }
-                })
 
-                // Сразу после upsert — попытаться связать Contact с
-                // этим телефоном с лучшим из существующих Driver
-                // (активный приоритет). Идемпотентно. Не валим весь
-                // sync если matcher ошибся на одной строке.
-                if (phone) {
-                    try {
-                        await linkContactToBestDriver(phone)
-                    } catch (e: any) {
-                        console.warn(
-                            `[${label}] linkContactToBestDriver failed for phone=${phone} driver=${profile.id}:`,
-                            e?.message ?? e,
-                        )
+                    if (hiredAt) updateData.hiredAt = hiredAt
+                    if (licenseNumber) updateData.licenseNumber = licenseNumber
+
+                    await prisma.driver.upsert({
+                        where: { yandexDriverId: profile.id },
+                        update: updateData,
+                        create: {
+                            ...updateData,
+                            yandexDriverId: profile.id,
+                            segment: 'unknown',
+                        }
+                    })
+
+                    if (phone) {
+                        try {
+                            await attachDriverProfilesToContactByPhone(phone, `${label}:${parkName}`)
+                        } catch (e: any) {
+                            console.warn(
+                                `[${label}] ${parkName}: safe profile link failed for phone=${phone} driver=${profile.id}:`,
+                                e?.message ?? e,
+                            )
+                        }
                     }
                 }
-            }
 
-            totalCount += profiles.length
-            offset += limit
+                parkCount += profiles.length
+                totalCount += profiles.length
+                offset += limit
 
-            if (offset >= totalInPark || profiles.length === 0) break
+                if (offset >= totalInPark || profiles.length === 0) break
+                await new Promise(r => setTimeout(r, 400))
+            } while (true)
 
-            // Polite pause between paginated calls
-            await new Promise(r => setTimeout(r, 400))
-
-        } while (true)
-
-        return { success: true, count: totalCount }
-    } catch (err: any) {
-        console.error(`${label} error:`, err)
-        throw err
+            parkResults.push({ parkId: connection.parkId, parkName, count: parkCount })
+        } catch (err: any) {
+            const message = err?.message || String(err)
+            console.error(`[${label}] ${parkName} error:`, err)
+            parkResults.push({ parkId: connection.parkId, parkName, count: parkCount, error: message })
+        }
     }
+
+    const failed = parkResults.filter(result => result.error)
+    if (failed.length === connections.length) {
+        throw new Error(`Yandex API failed for all parks: ${failed.map(item => `${item.parkName}: ${item.error}`).join('; ')}`)
+    }
+
+    return { success: true, count: totalCount, parksProcessed: connections.length, parkResults }
 }
 
 /**

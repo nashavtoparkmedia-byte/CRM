@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { chooseMainDriverProfile, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
 
 /**
  * GET /api/contacts/:id
@@ -96,23 +97,44 @@ export async function GET(
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
     }
 
-    // Fetch Driver if linked
-    let driver = null
-    if (contact.yandexDriverId) {
-      driver = await prisma.driver.findUnique({
-        where: { yandexDriverId: contact.yandexDriverId },
-        select: {
-          id: true,
-          fullName: true,
-          phone: true,
-          segment: true,
-          score: true,
-          lastOrderAt: true,
-          hiredAt: true,
-          dismissedAt: true,
-        },
-      })
+    const profileSelect = {
+      id: true,
+      yandexDriverId: true,
+      fullName: true,
+      phone: true,
+      licenseNumber: true,
+      lastExternalPark: true,
+      segment: true,
+      score: true,
+      lastOrderAt: true,
+      hiredAt: true,
+      dismissedAt: true,
+      statusOverride: true,
+      contactId: true,
+      updatedAt: true,
     }
+
+    const profileCandidates = await prisma.driver.findMany({
+      where: {
+        OR: [
+          { contactId: contact.id },
+          ...(contact.yandexDriverId ? [{ yandexDriverId: contact.yandexDriverId }] : []),
+        ],
+      },
+      select: profileSelect,
+      orderBy: [{ dismissedAt: 'asc' }, { lastExternalPark: 'asc' }, { fullName: 'asc' }],
+    })
+    const profileMap = new Map(profileCandidates.map(profile => [profile.id, profile]))
+    const driverProfiles = Array.from(profileMap.values()).map(profile => ({
+      ...profile,
+      parkName: normalizeParkName(profile.lastExternalPark),
+      status: getDriverProfileStatus(profile),
+      isMain: contact.mainDriverId === profile.id,
+    }))
+    const mainDecision = chooseMainDriverProfile(driverProfiles, contact.mainDriverSelection === 'manual' ? contact.mainDriverId : null)
+    const mainDriverId = contact.mainDriverId || mainDecision.main?.id || null
+    const mainDriver = driverProfiles.find(profile => profile.id === mainDriverId) || driverProfiles.find(profile => profile.id === mainDecision.main?.id) || null
+    const driver = mainDriver
 
     const mergeHistory = [
       ...contact.mergesAsSurvivor.map(m => ({ ...m, role: 'survivor' as const })),
@@ -125,6 +147,8 @@ export async function GET(
       displayNameSource: contact.displayNameSource,
       masterSource: contact.masterSource,
       yandexDriverId: contact.yandexDriverId,
+      mainDriverId: contact.mainDriverId,
+      mainDriverSelection: contact.mainDriverSelection,
       primaryPhoneId: contact.primaryPhoneId,
       notes: contact.notes,
       tags: contact.tags,
@@ -136,6 +160,9 @@ export async function GET(
       identities: contact.identities,
       chats: contact.chats,
       driver,
+      mainDriver,
+      driverProfiles,
+      profileAnomalies: mainDecision.anomalies,
       mergeHistory,
     })
   } catch (err: any) {

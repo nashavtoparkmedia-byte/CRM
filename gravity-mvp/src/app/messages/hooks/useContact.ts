@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 export interface ContactPhone {
@@ -37,13 +38,25 @@ export interface ContactChat {
 
 export interface ContactDriver {
     id: string
+    yandexDriverId?: string
     fullName: string
     phone: string | null
     segment: string
     score: number | null
+    lastExternalPark?: string | null
+    parkName?: string | null
+    status?: 'working' | 'dismissed' | 'unknown'
+    isMain?: boolean
+    licenseNumber?: string | null
     lastOrderAt: string | null
     hiredAt: string | null
     dismissedAt: string | null
+}
+
+export interface ContactProfileAnomaly {
+    park: string
+    activeCount: number
+    driverIds: string[]
 }
 
 export interface Contact {
@@ -52,6 +65,8 @@ export interface Contact {
     displayNameSource: string
     masterSource: string
     yandexDriverId: string | null
+    mainDriverId?: string | null
+    mainDriverSelection?: string
     primaryPhoneId: string | null
     notes: string | null
     tags: string[]
@@ -63,6 +78,9 @@ export interface Contact {
     identities: ContactIdentity[]
     chats: ContactChat[]
     driver: ContactDriver | null
+    mainDriver?: ContactDriver | null
+    driverProfiles?: ContactDriver[]
+    profileAnomalies?: ContactProfileAnomaly[]
     mergeHistory: any[]
 }
 
@@ -75,6 +93,9 @@ export function useContact(contactId: string | null | undefined) {
     const [contact, setContact] = useState<Contact | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [profileSyncState, setProfileSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle')
+    const [profileSyncError, setProfileSyncError] = useState<string | null>(null)
+    const [profileSyncedAt, setProfileSyncedAt] = useState<string | null>(null)
     const abortRef = useRef<AbortController | null>(null)
 
     useEffect(() => {
@@ -82,6 +103,9 @@ export function useContact(contactId: string | null | undefined) {
             setContact(null)
             setIsLoading(false)
             setError(null)
+            setProfileSyncState('idle')
+            setProfileSyncError(null)
+            setProfileSyncedAt(null)
             return
         }
 
@@ -101,9 +125,28 @@ export function useContact(contactId: string | null | undefined) {
                 if (!res.ok) throw new Error(`HTTP ${res.status}`)
                 return res.json()
             })
-            .then(data => {
+            .then(async data => {
                 if (!controller.signal.aborted && data) {
                     setContact(data)
+                    setProfileSyncState('syncing')
+                    setProfileSyncError(null)
+                    try {
+                        const refreshRes = await fetch(`/api/contacts/${contactId}/driver-profiles/refresh`, { method: 'POST' })
+                        if (!refreshRes.ok) throw new Error(`HTTP ${refreshRes.status}`)
+                        const refreshed = await fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
+                        if (!refreshed.ok) throw new Error(`HTTP ${refreshed.status}`)
+                        const refreshedData = await refreshed.json()
+                        if (!controller.signal.aborted) {
+                            setContact(refreshedData)
+                            setProfileSyncState('success')
+                            setProfileSyncedAt(new Date().toISOString())
+                        }
+                    } catch (syncErr: any) {
+                        if (!controller.signal.aborted) {
+                            setProfileSyncState('error')
+                            setProfileSyncError(syncErr?.message || 'sync_failed')
+                        }
+                    }
                 }
             })
             .catch(err => {
@@ -151,5 +194,5 @@ export function useContact(contactId: string | null | undefined) {
             })
     }, [contactId])
 
-    return { contact, isLoading, error, refetch }
+    return { contact, isLoading, error, refetch, profileSyncState, profileSyncError, profileSyncedAt }
 }

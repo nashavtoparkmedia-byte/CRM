@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * linkContactToBestDriver — безопасная связка Contact ↔ Driver по
  * подтверждённому телефону.
@@ -14,6 +15,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { refreshContactMainDriver } from '@/lib/driver-profiles/multi-park'
 
 export interface LinkResult {
   action: 'noop' | 'linked' | 'no_contact' | 'no_driver' | 'ambiguous'
@@ -202,6 +204,8 @@ export async function linkContactToBestDriver(
     where: { id: contact.id },
     data: update,
   })
+  await prisma.driver.updateMany({ where: { id: matched.id }, data: { contactId: contact.id } })
+  await refreshContactMainDriver(contact.id, 'yandex-link')
 
   console.log(
     `[yandex-link] linked contact=${contact.id} ` +

@@ -8,6 +8,8 @@ const { prismaMock } = vi.hoisted(() => ({
     driver: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      updateMany: vi.fn(),
     },
     chat: {
       findUnique: vi.fn(),
@@ -23,6 +25,9 @@ const { prismaMock } = vi.hoisted(() => ({
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+    },
+    contactDriverProfileAudit: {
+      create: vi.fn(),
     },
   },
 }))
@@ -318,6 +323,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
 
   test('repeated sync for same Driver reuses Contact.yandexDriverId and does not create duplicate Contact', async () => {
     prismaMock.contact.findUnique
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: 'contact-1',

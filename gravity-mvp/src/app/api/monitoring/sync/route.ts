@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { normalizePhoneE164 } from '@/lib/phoneUtils';
+import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { attachDriverProfilesToContactByPhone, refreshContactMainDriver } from '@/lib/driver-profiles/multi-park';
 
 // In-memory mutex to prevent parallel sync runs
 let syncRunning = false;
@@ -240,6 +242,8 @@ export async function syncContactForDriver(
         if (Object.keys(updates).length > 0) {
             await prisma.contact.update({ where: { id: existing.id }, data: updates });
         }
+        await prisma.driver.updateMany({ where: { yandexDriverId }, data: { contactId: existing.id } });
+        await refreshContactMainDriver(existing.id, 'monitoring-sync');
 
         return { action: (Object.keys(updates).length > 0 || deactivated > 0 || created > 0) ? 'updated' : 'noop', phonesDeactivated: deactivated, phonesCreated: created };
     }
@@ -289,6 +293,8 @@ export async function syncContactForDriver(
                     ...nameUpdate,
                 },
             });
+            await prisma.driver.updateMany({ where: { yandexDriverId }, data: { contactId: phoneRecord.contactId } });
+            await attachDriverProfilesToContactByPhone(normalizedE164, 'monitoring-sync');
 
             console.log(`[sync] Linked Contact ${phoneRecord.contactId} to Yandex ${yandexDriverId} via phone ${normalizedE164}`);
             return { action: 'linked', phonesDeactivated: 0, phonesCreated: 0 };
@@ -382,130 +388,152 @@ export async function syncContactForDriver(
         }
     }
 
+    await prisma.driver.updateMany({ where: { yandexDriverId }, data: { contactId: contact.id } });
+    await refreshContactMainDriver(contact.id, 'monitoring-sync');
+
     return { action: 'created', phonesDeactivated: 0, phonesCreated: newPhoneId ? 1 : 0 };
 }
 
 export async function POST(req: NextRequest) {
-    // Auth: validate X-CRON-KEY
-    const cronKey = req.headers.get('x-cron-key');
     const expectedKey = process.env.CRON_SECRET;
+    const cronKey = req.headers.get('x-cron-key') || req.nextUrl.searchParams.get('key');
+
     if (expectedKey && cronKey !== expectedKey) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Mutex: prevent parallel runs
     if (syncRunning) {
         return NextResponse.json({ error: 'Sync already running' }, { status: 409 });
     }
 
     syncRunning = true;
     try {
-        // Get API connection
-        const connection = await prisma.apiConnection.findFirst({
-            orderBy: { createdAt: 'desc' },
-        });
-
-        if (!connection) {
+        const connections = await prisma.apiConnection.findMany({ orderBy: { createdAt: 'asc' } });
+        if (connections.length === 0) {
             return NextResponse.json({ error: 'No API connection configured' }, { status: 500 });
         }
 
         const PAGE_SIZE = 500;
-        let offset = 0;
         let totalFetched = 0;
         let upsertedCount = 0;
-
-        // Contact sync counters
         let contactsCreated = 0;
         let contactsLinkedByPhone = 0;
         let contactsUpdated = 0;
         let phonesDeactivated = 0;
         let phonesCreated = 0;
         let contactSyncErrors = 0;
+        const parkResults: Array<{ parkId: string; parkName: string; fetched: number; upserted: number; error?: string }> = [];
 
-        while (true) {
-            const res = await fetch(`https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list`, {
-                method: 'POST',
-                cache: 'no-store',
-                headers: {
-                    'X-Client-ID': connection.clid,
-                    'X-Api-Key': connection.apiKey,
-                    'X-Park-Id': connection.parkId,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    query: { park: { id: connection.parkId } },
-                    limit: PAGE_SIZE,
-                    offset: offset,
-                }),
-            });
+        for (const connection of connections) {
+            const parkName = connection.name || connection.parkId;
+            let offset = 0;
+            let parkFetched = 0;
+            let parkUpserted = 0;
 
-            if (!res.ok) {
-                const errText = await res.text();
-                throw new Error(`Yandex API error (${res.status}): ${errText}`);
-            }
+            try {
+                while (true) {
+                    const res = await fetch(`https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list`, {
+                        method: 'POST',
+                        cache: 'no-store',
+                        headers: {
+                            'X-Client-ID': connection.clid,
+                            'X-Api-Key': connection.apiKey,
+                            'X-Park-Id': connection.parkId,
+                            'Accept-Language': 'ru',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            query: { park: { id: connection.parkId } },
+                            limit: PAGE_SIZE,
+                            offset,
+                        }),
+                    });
 
-            const data = await res.json() as any;
-            const profiles = data.driver_profiles || [];
-            const totalInApi = data.total || 0;
+                    if (!res.ok) {
+                        const errText = await res.text();
+                        throw new Error(`Yandex API error (${res.status}): ${errText}`);
+                    }
 
-            if (profiles.length === 0) break;
+                    const data = await res.json() as any;
+                    const profiles = data.driver_profiles || [];
+                    const totalInApi = data.total || 0;
+                    if (profiles.length === 0) break;
 
-            for (const p of profiles) {
-                const dp = p.driver_profile || {};
-                const id = dp.id;
-                if (!id) continue;
+                    for (const p of profiles) {
+                        const dp = p.driver_profile || {};
+                        const id = dp.id;
+                        if (!id) continue;
 
-                // Activity mapping: prioritize last_order_at -> last_ride_at
-                // EXCLUDE last_transaction_date/accounts because it reflects balance changes without trips
-                const lastOrderAtRaw = dp.last_order_at || p.last_order_at || p.last_ride_at;
-                const lastOrderAt = lastOrderAtRaw ? new Date(lastOrderAtRaw) : null;
+                        const lastOrderAtRaw = dp.last_order_at || p.last_order_at || p.last_ride_at;
+                        const lastOrderAt = lastOrderAtRaw ? new Date(lastOrderAtRaw) : null;
+                        const phone = normalizePhone(dp.phones?.[0]);
+                        const fullName = `${dp.last_name || ''} ${dp.first_name || ''}`.trim() || 'No Name';
+                        const status = dp.work_status || p.current_status?.status || null;
+                        const dismissedAt = status === 'fired' && p.current_status?.status_updated_at
+                            ? new Date(p.current_status.status_updated_at)
+                            : null;
 
-                const phone = normalizePhone(dp.phones?.[0]);
-                const fullName = `${dp.last_name || ''} ${dp.first_name || ''}`.trim() || 'No Name';
+                        await prisma.driver.upsert({
+                            where: { yandexDriverId: id },
+                            create: {
+                                yandexDriverId: id,
+                                fullName,
+                                phone,
+                                lastOrderAt,
+                                dismissedAt,
+                                statusOverride: dismissedAt ? 'dismissed' : 'working',
+                                lastExternalPark: parkName,
+                                segment: 'unknown',
+                            },
+                            update: {
+                                fullName,
+                                phone,
+                                lastOrderAt,
+                                dismissedAt,
+                                statusOverride: dismissedAt ? 'dismissed' : 'working',
+                                lastExternalPark: parkName,
+                            },
+                        });
+                        upsertedCount++;
+                        parkUpserted++;
 
-                await prisma.driver.upsert({
-                    where: { yandexDriverId: id },
-                    create: {
-                        yandexDriverId: id,
-                        fullName,
-                        phone,
-                        lastOrderAt,
-                        segment: 'unknown',
-                    },
-                    update: {
-                        fullName,
-                        phone,
-                        lastOrderAt,
-                    },
-                });
-                upsertedCount++;
+                        try {
+                            const result = await syncContactForDriver(id, fullName, phone);
+                            if (result.action === 'created') contactsCreated++;
+                            else if (result.action === 'linked') contactsLinkedByPhone++;
+                            else if (result.action === 'updated') contactsUpdated++;
+                            phonesDeactivated += result.phonesDeactivated;
+                            phonesCreated += result.phonesCreated;
+                            if (phone) await attachDriverProfilesToContactByPhone(phone, `monitoring-sync:${parkName}`);
+                        } catch (contactErr: any) {
+                            contactSyncErrors++;
+                            console.error(`[sync] Contact sync error for park=${parkName} yandexDriverId=${id}: ${contactErr.message}`);
+                        }
+                    }
 
-                // ── Contact Model sync ────────────────────────────
-                try {
-                    const result = await syncContactForDriver(id, fullName, phone);
-                    if (result.action === 'created') contactsCreated++;
-                    else if (result.action === 'linked') contactsLinkedByPhone++;
-                    else if (result.action === 'updated') contactsUpdated++;
-                    phonesDeactivated += result.phonesDeactivated;
-                    phonesCreated += result.phonesCreated;
-                } catch (contactErr: any) {
-                    contactSyncErrors++;
-                    console.error(`[sync] Contact sync error for yandexDriverId=${id}: ${contactErr.message}`);
+                    parkFetched += profiles.length;
+                    totalFetched += profiles.length;
+                    offset += PAGE_SIZE;
+                    if (offset >= totalInApi) break;
                 }
-                // ──────────────────────────────────────────────────
+                parkResults.push({ parkId: connection.parkId, parkName, fetched: parkFetched, upserted: parkUpserted });
+            } catch (err: any) {
+                parkResults.push({ parkId: connection.parkId, parkName, fetched: parkFetched, upserted: parkUpserted, error: err?.message || String(err) });
+                console.error(`[sync] Park sync error park=${parkName}:`, err?.message || err);
             }
+        }
 
-            totalFetched += profiles.length;
-            offset += PAGE_SIZE;
-
-            if (totalFetched >= totalInApi) break;
+        const failed = parkResults.filter(result => result.error);
+        if (failed.length === connections.length) {
+            return NextResponse.json({ error: 'All Yandex park syncs failed', parkResults }, { status: 500 });
         }
 
         return NextResponse.json({
             ok: true,
             totalFetched,
             upsertedCount,
+            parksProcessed: connections.length,
+            parkResults,
             contactSync: {
                 created: contactsCreated,
                 linkedByPhone: contactsLinkedByPhone,
