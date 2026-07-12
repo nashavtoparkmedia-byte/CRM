@@ -547,6 +547,33 @@ interface DriverActionJob {
     reason: string | null;
 }
 
+interface DriverActionDiagnostic {
+    step: string;
+    capturedAt: string;
+    contentType: 'image/jpeg';
+    imageBase64: string;
+}
+
+async function captureDriverActionDiagnostic(
+    page: Page,
+    taskId: string,
+    step: string,
+    diagnostics: DriverActionDiagnostic[],
+): Promise<void> {
+    try {
+        const image = await page.screenshot({ type: 'jpeg', quality: 70, fullPage: true });
+        diagnostics.push({
+            step,
+            capturedAt: new Date().toISOString(),
+            contentType: 'image/jpeg',
+            imageBase64: image.toString('base64'),
+        });
+        await takeStepScreenshot(page, taskId, step);
+    } catch (e: any) {
+        console.warn(`[Worker][${taskId}] diagnostic screenshot failed (${step}): ${e?.message || e}`);
+    }
+}
+
 async function withDriverProfile<T>(fn: (page: Page) => Promise<T>): Promise<T> {
     const userDataDir = path.join(process.cwd(), '.bot_profile');
     const context = await chromium.launchPersistentContext(userDataDir, {
@@ -1039,22 +1066,24 @@ const CANCEL_REASONS = [
 ];
 
 function randomCancelReason(): string {
-    return CANCEL_REASONS[Math.floor(Math.random() * CANCEL_REASONS.length)];
+    return CANCEL_REASONS[Math.floor(Math.random() * CANCEL_REASONS.length)]!;
 }
 
 async function processCancelOrder(job: DriverActionJob) {
     const { taskId, driverYandexId, parkId, reason } = job;
-    const liveEnabled = envFlag('CANCEL_ORDER_LIVE_ENABLED', false);
+    const liveEnabled = envFlag('CANCEL_ORDER_LIVE_ENABLED', true);
     // Screenshot-probe mode: click cancel, capture the modal, then abort.
     // Set CANCEL_ORDER_SCREENSHOT_PROBE=true to enable without actually confirming.
-    const screenshotProbe = envFlag('CANCEL_ORDER_SCREENSHOT_PROBE', false);
+    const screenshotProbe = !liveEnabled && envFlag('CANCEL_ORDER_SCREENSHOT_PROBE', false);
+    const diagnostics: DriverActionDiagnostic[] = [];
 
     await withDriverProfile(async (page) => {
         const active = await locateActiveOrder(page, driverYandexId, parkId);
         if (!active) {
+            await captureDriverActionDiagnostic(page, taskId, 'cancel_no_active_order', diagnostics);
             await patchDriverActionState(taskId, {
                 status: 'DONE',
-                result: { noActiveOrder: true },
+                result: { noActiveOrder: true, diagnostics },
             });
             return;
         }
@@ -1071,13 +1100,14 @@ async function processCancelOrder(job: DriverActionJob) {
         await page.goto(active.orderHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
         await page.waitForTimeout(4000);
         await dismissOverlays(page);
-        await takeStepScreenshot(page, taskId, 'cancel_before');
+        await captureDriverActionDiagnostic(page, taskId, 'cancel_before', diagnostics);
 
         const cancelBtn = page.getByRole('button', { name: /^Отменить$/i }).first();
         if (!await cancelBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
-            await takeStepScreenshot(page, taskId, 'cancel_no_button');
+            await captureDriverActionDiagnostic(page, taskId, 'cancel_no_button', diagnostics);
             await patchDriverActionState(taskId, {
                 status: 'FAILED',
+                result: { shortOrderId: active.shortOrderId, orderLongId: active.orderLongId, diagnostics },
                 errorMessage: 'Отменить button not visible',
             });
             return;
@@ -1086,9 +1116,7 @@ async function processCancelOrder(job: DriverActionJob) {
         await page.waitForTimeout(2500);
 
         // Capture whatever appeared after the click (modal, dropdown, confirm, etc.)
-        const modalBuf = await page.screenshot({ type: 'jpeg', quality: 80 }).catch(() => null);
-        const modalBase64 = modalBuf ? modalBuf.toString('base64') : null;
-        await takeStepScreenshot(page, taskId, 'cancel_modal');
+        await captureDriverActionDiagnostic(page, taskId, 'cancel_modal', diagnostics);
 
         // Screenshot-probe mode: abort without confirming — just for debugging the modal UI.
         if (screenshotProbe) {
@@ -1098,8 +1126,9 @@ async function processCancelOrder(job: DriverActionJob) {
                 status: 'DONE',
                 result: {
                     shortOrderId: active.shortOrderId,
+                    orderLongId: active.orderLongId,
                     screenshotProbe: true,
-                    modalImageBase64: modalBase64,
+                    diagnostics,
                 },
                 errorMessage: 'CANCEL_ORDER_SCREENSHOT_PROBE — modal captured, no action taken',
             });
@@ -1107,28 +1136,57 @@ async function processCancelOrder(job: DriverActionJob) {
         }
 
         // Live mode: select a random reason and confirm cancellation.
-        const selectedReason = reason || randomCancelReason();
+        const selectedReason = reason?.trim() || randomCancelReason();
         console.log(`[Worker][${taskId}] cancel reason: "${selectedReason}"`);
 
-        // Try to fill a reason text field if present
+        // The current Yandex dialog expects a free-text reason. Do not pretend
+        // success if its shape changes: retain screenshots and fail explicitly.
+        let reasonFilled = false;
         try {
             const reasonInput = page.locator('textarea, input[type="text"]').first();
             if (await reasonInput.isVisible({ timeout: 1500 }).catch(() => false)) {
                 await reasonInput.fill(selectedReason);
+                reasonFilled = (await reasonInput.inputValue()).trim() === selectedReason;
                 await page.waitForTimeout(500);
-                await takeStepScreenshot(page, taskId, 'cancel_reason_filled');
+                await captureDriverActionDiagnostic(page, taskId, 'cancel_reason_filled', diagnostics);
             }
-        } catch { /* no text input */ }
+        } catch (e: any) {
+            console.warn(`[Worker][${taskId}] reason fill failed: ${e?.message || e}`);
+        }
+
+        if (!reasonFilled) {
+            await captureDriverActionDiagnostic(page, taskId, 'cancel_reason_not_filled', diagnostics);
+            await patchDriverActionState(taskId, {
+                status: 'FAILED',
+                result: { shortOrderId: active.shortOrderId, orderLongId: active.orderLongId, reason: selectedReason, diagnostics },
+                errorMessage: 'Cancel reason field was not found or did not retain the selected reason',
+            });
+            return;
+        }
 
         // Confirm cancellation
+        let confirmationClicked = false;
         try {
             const confirm = page.getByRole('button', { name: /Отменить заказ|Подтвердить|Да/i }).first();
             if (await confirm.isVisible({ timeout: 1500 }).catch(() => false)) {
                 await confirm.click({ timeout: 2000 });
+                confirmationClicked = true;
                 await page.waitForTimeout(2000);
-                await takeStepScreenshot(page, taskId, 'cancel_after_confirm');
+                await captureDriverActionDiagnostic(page, taskId, 'cancel_after_confirm', diagnostics);
             }
-        } catch { /* no modal — single-click flow */ }
+        } catch (e: any) {
+            console.warn(`[Worker][${taskId}] cancel confirmation failed: ${e?.message || e}`);
+        }
+
+        if (!confirmationClicked) {
+            await captureDriverActionDiagnostic(page, taskId, 'cancel_confirm_not_clicked', diagnostics);
+            await patchDriverActionState(taskId, {
+                status: 'FAILED',
+                result: { shortOrderId: active.shortOrderId, orderLongId: active.orderLongId, reason: selectedReason, diagnostics },
+                errorMessage: 'Cancel confirmation button was not found or could not be clicked',
+            });
+            return;
+        }
 
         await patchDriverActionState(taskId, {
             status: 'DONE',
@@ -1136,7 +1194,9 @@ async function processCancelOrder(job: DriverActionJob) {
                 shortOrderId: active.shortOrderId,
                 orderLongId: active.orderLongId,
                 reason: selectedReason,
+                confirmationClicked: true,
                 rowText: active.rowText.slice(0, 200),
+                diagnostics,
             },
         });
     });

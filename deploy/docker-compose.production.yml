@@ -479,6 +479,10 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
       PLAYWRIGHT_HEADLESS: "true"
+      # Driver explicitly confirms cancellation in Telegram. The worker still
+      # captures every diagnostic step and fails closed if Yandex UI changes.
+      CANCEL_ORDER_LIVE_ENABLED: "true"
+      CANCEL_ORDER_SCREENSHOT_PROBE: "false"
     command: ["npm", "run", "start:worker"]
     volumes:
       # SQLite БД — общий с api

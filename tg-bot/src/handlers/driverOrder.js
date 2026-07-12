@@ -94,7 +94,10 @@ async function actionAndPoll(telegramId, action, extraPayload = {}) {
     let state = initial.data;
     if (!state.taskId) return { ok: true, ...state };
 
-    const TIMEOUT_MS = 30000;
+    // Live cancellation includes several Yandex page transitions and forensic
+    // screenshots. Keep polling long enough for CRM to persist the terminal
+    // result instead of abandoning it after 30 seconds.
+    const TIMEOUT_MS = action === 'cancel_order' ? 120000 : 30000;
     const POLL_INTERVAL_MS = 2000;
     const started = Date.now();
     while (state.status === 'PENDING' && Date.now() - started < TIMEOUT_MS) {
@@ -279,8 +282,11 @@ const driverOrderScene = new Scenes.WizardScene(
                 }
             }
         } else if (state.status === 'DONE') {
-            const verb = action === 'complete_order' ? 'завершён' : 'отменён';
-            await ctx.reply(`✅ Заказ ${verb}.`);
+            if (action === 'cancel_order') {
+                await ctx.reply('✅ Запрос на отмену отправлен в Яндекс.');
+            } else {
+                await ctx.reply('✅ Заказ завершён.');
+            }
             // Send modal screenshot if scraper captured one
             const b64 = state.result?.modalImageBase64;
             if (b64 && b64.length > 100) {

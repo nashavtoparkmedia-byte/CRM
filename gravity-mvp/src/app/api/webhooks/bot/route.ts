@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { uploadBuffer } from '@/lib/storage/minio'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -734,7 +735,9 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                 kind,
                 driverYandexId: effectiveYandexId,
                 parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
-                reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
+                // For cancellation, an omitted reason is intentional: the scraper
+                // must pick one of the approved random diagnostic reasons.
+                reason: reason || null,
             }),
         })
         const json = await res.json()
@@ -872,13 +875,17 @@ async function handlePollDriverAction(payload: any) {
         return NextResponse.json({ ok: false, error: `scraper unreachable: ${e.message}` })
     }
 
-    // Mirror state into DriverAction row (best-effort — race with parallel polls is fine).
+    // Mirror state into DriverAction row. Cancellation screenshots arrive as
+    // base64 because the scraper and CRM are separate containers. Persist them
+    // in S3/MinIO before Redis expires, then keep only durable object keys in
+    // DriverAction.result.
     if (scraperState.status && scraperState.status !== 'PENDING') {
+        const storedResult = await persistDriverActionArtifacts(taskId, scraperState.result)
         await prisma.driverAction.updateMany({
             where: { scraperTaskId: taskId, status: 'PENDING' },
             data: {
                 status: scraperState.status,
-                result: scraperState.result ?? undefined,
+                result: storedResult ?? undefined,
                 errorMessage: scraperState.errorMessage ?? null,
                 shortOrderId: scraperState.result?.shortOrderId ?? undefined,
                 orderId: scraperState.result?.orderLongId ?? undefined,
@@ -887,11 +894,72 @@ async function handlePollDriverAction(payload: any) {
         }).catch(() => {})
     }
 
+    const publicResult = stripInlineArtifactImages(scraperState.result)
+
     return NextResponse.json({
         ok: true,
         taskId,
         status: scraperState.status,
-        result: scraperState.result || null,
+        result: publicResult || null,
         errorMessage: scraperState.errorMessage || null,
     })
+}
+
+
+type InlineDiagnosticArtifact = {
+    step?: string
+    capturedAt?: string
+    contentType?: string
+    imageBase64?: string
+}
+
+function stripInlineArtifactImages(result: any) {
+    if (!result || typeof result !== 'object') return result
+    const diagnostics = Array.isArray(result.diagnostics)
+        ? result.diagnostics.map((artifact: InlineDiagnosticArtifact) => {
+            const copy = { ...artifact }
+            delete copy.imageBase64
+            return copy
+        })
+        : result.diagnostics
+    const rest = { ...result }
+    delete rest.modalImageBase64
+    return { ...rest, diagnostics }
+}
+
+async function persistDriverActionArtifacts(taskId: string, result: any) {
+    if (!result || typeof result !== 'object' || !Array.isArray(result.diagnostics)) return result
+
+    const diagnostics: any[] = []
+    for (let index = 0; index < result.diagnostics.length; index += 1) {
+        const artifact = result.diagnostics[index] as InlineDiagnosticArtifact
+        const safeStep = String(artifact.step || `step-${index + 1}`).replace(/[^a-z0-9_-]/gi, '_')
+        const contentType = artifact.contentType || 'image/jpeg'
+        const extension = contentType === 'image/png' ? 'png' : 'jpg'
+        const objectKey = `driver-actions/${taskId}/${String(index + 1).padStart(2, '0')}-${safeStep}.${extension}`
+
+        if (!artifact.imageBase64) {
+            diagnostics.push({ ...artifact, imageBase64: undefined, storageError: 'empty screenshot' })
+            continue
+        }
+
+        try {
+            await uploadBuffer(Buffer.from(artifact.imageBase64, 'base64'), objectKey, contentType)
+            diagnostics.push({
+                step: artifact.step,
+                capturedAt: artifact.capturedAt,
+                contentType,
+                objectKey,
+            })
+        } catch (error: any) {
+            console.error(`[DriverAction][${taskId}] screenshot upload failed (${safeStep}):`, error?.message || error)
+            // Database fallback is deliberate: losing a forensic screenshot is
+            // worse than temporarily storing a larger JSON value.
+            diagnostics.push({ ...artifact, storageError: error?.message || String(error) })
+        }
+    }
+
+    const rest = { ...result }
+    delete rest.modalImageBase64
+    return { ...rest, diagnostics }
 }
