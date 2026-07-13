@@ -2,6 +2,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { chooseMainDriverProfile, findSuggestedDriverProfilesForContact, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
+import { deriveDriverProfileState, type ContactProfileAnomalyPayload } from '@/lib/contact-profile-contract'
+
+const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function dateOrNull(value: unknown): Date | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(String(value))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function latestDate(values: Array<Date | null | undefined>): Date | null {
+  return values.reduce<Date | null>((latest, value) => {
+    if (!value) return latest
+    return !latest || value.getTime() > latest.getTime() ? value : latest
+  }, null)
+}
+
+function normalizedName(value: string): string {
+  return value.trim().toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ')
+}
 
 /**
  * GET /api/contacts/:id
@@ -100,10 +128,14 @@ export async function GET(
     const profileSelect = {
       id: true,
       yandexDriverId: true,
+      externalDriverProfileId: true,
+      externalParkId: true,
       fullName: true,
       phone: true,
       licenseNumber: true,
       lastExternalPark: true,
+      lastFleetCheckAt: true,
+      lastFleetCheckStatus: true,
       segment: true,
       score: true,
       lastOrderAt: true,
@@ -111,6 +143,13 @@ export async function GET(
       dismissedAt: true,
       statusOverride: true,
       contactId: true,
+      personResolutionStatus: true,
+      personResolutionBasis: true,
+      externalPersonKey: true,
+      parkId: true,
+      park: { select: { parkCode: true, parkName: true } },
+      sourceConnectionId: true,
+      customFields: true,
       updatedAt: true,
     }
 
@@ -125,17 +164,172 @@ export async function GET(
       orderBy: [{ dismissedAt: 'asc' }, { lastExternalPark: 'asc' }, { fullName: 'asc' }],
     })
     const profileMap = new Map(profileCandidates.map(profile => [profile.id, profile]))
-    const driverProfiles = Array.from(profileMap.values()).map(profile => ({
-      ...profile,
-      parkName: normalizeParkName(profile.lastExternalPark),
-      status: getDriverProfileStatus(profile),
-      isMain: contact.mainDriverId === profile.id,
-    }))
-    const mainDecision = chooseMainDriverProfile(driverProfiles, contact.mainDriverSelection === 'manual' ? contact.mainDriverId : null)
+    const uniqueProfileCandidates = Array.from(profileMap.values())
+    const mainDecision = chooseMainDriverProfile(uniqueProfileCandidates, contact.mainDriverSelection === 'manual' ? contact.mainDriverId : null)
     const suggestedDriverProfiles = await findSuggestedDriverProfilesForContact(contact.id)
     const mainDriverId = contact.mainDriverId || mainDecision.main?.id || null
-    const mainDriver = driverProfiles.find(profile => profile.id === mainDriverId) || driverProfiles.find(profile => profile.id === mainDecision.main?.id) || null
-    const driver = mainDriver
+
+    const parkConnections = await prisma.parkConnection.findMany({
+      where: { enabled: true, archivedAt: null },
+      select: {
+        parkId: true,
+        apiConnectionId: true,
+        externalParkId: true,
+        lastSuccessfulSyncAt: true,
+        lastFailedSyncAt: true,
+        lastErrorSummary: true,
+        park: { select: { parkCode: true, parkName: true } },
+      },
+      orderBy: { park: { parkName: 'asc' } },
+    })
+    const syncForProfile = (profile: any) => parkConnections.find(connection =>
+      (profile.sourceConnectionId && connection.apiConnectionId === profile.sourceConnectionId && connection.externalParkId === profile.externalParkId)
+      || (profile.parkId && connection.parkId === profile.parkId)
+      || (profile.externalParkId && connection.externalParkId === profile.externalParkId)
+    ) || null
+
+    const conflictContactIds = Array.from(new Set(suggestedDriverProfiles.map(profile => profile.conflictContactId).filter((value): value is string => Boolean(value))))
+    const conflictContacts = conflictContactIds.length > 0
+      ? await prisma.contact.findMany({
+          where: { id: { in: conflictContactIds }, isArchived: false },
+          select: {
+            id: true,
+            displayName: true,
+            chats: { orderBy: { lastMessageAt: 'desc' }, take: 1, select: { id: true } },
+          },
+        })
+      : []
+    const conflictsById = new Map(conflictContacts.map(item => [item.id, {
+      id: item.id,
+      displayName: item.displayName,
+      chatId: item.chats[0]?.id ?? null,
+    }]))
+
+    const toProfilePayload = (profile: any, isMain: boolean) => {
+      const customFields = asRecord(profile.customFields)
+      const yandexProfile = asRecord(customFields.yandexProfile)
+      const connection = syncForProfile(profile)
+      const conflictContactId = profile.conflictContactId || (profile.contactId && profile.contactId !== contact.id ? profile.contactId : null)
+      const sourceUpdatedAt = dateOrNull(yandexProfile.sourceUpdatedAt) || profile.lastFleetCheckAt || profile.updatedAt || null
+      return {
+        id: profile.id,
+        yandexDriverId: profile.yandexDriverId,
+        externalDriverProfileId: profile.externalDriverProfileId ?? null,
+        externalParkId: profile.externalParkId ?? null,
+        fullName: profile.fullName,
+        phone: profile.phone ?? null,
+        licenseNumber: profile.licenseNumber ?? null,
+        lastExternalPark: profile.lastExternalPark ?? null,
+        parkCode: profile.parkCode ?? profile.park?.parkCode ?? connection?.park.parkCode ?? null,
+        parkName: normalizeParkName(profile.parkName || profile.park?.parkName || connection?.park.parkName || profile.lastExternalPark),
+        employmentType: stringOrNull(yandexProfile.employmentType),
+        workStatus: stringOrNull(yandexProfile.workStatus),
+        currentStatus: profile.lastFleetCheckStatus ?? stringOrNull(yandexProfile.currentStatus),
+        segment: profile.segment || 'unknown',
+        score: profile.score ?? null,
+        status: profile.status || getDriverProfileStatus(profile),
+        isMain,
+        contactId: profile.contactId ?? null,
+        conflictContactId,
+        conflictContact: conflictContactId ? conflictsById.get(conflictContactId) ?? null : null,
+        matchedSignals: profile.matchedSignals || [],
+        personResolutionStatus: profile.personResolutionStatus || 'unlinked',
+        personResolutionBasis: profile.personResolutionBasis ?? null,
+        externalPersonKey: profile.externalPersonKey ?? null,
+        lastOrderAt: profile.lastOrderAt ?? null,
+        hiredAt: profile.hiredAt ?? null,
+        dismissedAt: profile.dismissedAt ?? null,
+        sourceUpdatedAt,
+        lastSuccessfulSyncAt: connection?.lastSuccessfulSyncAt ?? null,
+        lastFailedSyncAt: connection?.lastFailedSyncAt ?? null,
+      }
+    }
+
+    const attachedProfiles = uniqueProfileCandidates.map(profile => toProfilePayload(profile, profile.id === mainDriverId))
+    const suggestedProfiles = suggestedDriverProfiles.map(profile => toProfilePayload(profile, false))
+    const mainDriverProfile = attachedProfiles.find(profile => profile.id === mainDriverId)
+      || attachedProfiles.find(profile => profile.id === mainDecision.main?.id)
+      || null
+
+    const currentSyncFailures = parkConnections.filter(connection =>
+      Boolean(connection.lastErrorSummary)
+      && Boolean(connection.lastFailedSyncAt)
+      && (!connection.lastSuccessfulSyncAt || connection.lastFailedSyncAt!.getTime() > connection.lastSuccessfulSyncAt.getTime())
+    )
+    const latestSuccessfulSyncAt = latestDate(parkConnections.map(connection => connection.lastSuccessfulSyncAt))
+    const latestFailedSyncAt = latestDate(parkConnections.map(connection => connection.lastFailedSyncAt))
+    const syncState = {
+      status: currentSyncFailures.length > 0 ? 'error' as const : latestSuccessfulSyncAt ? 'ok' as const : 'never' as const,
+      lastSuccessfulAt: latestSuccessfulSyncAt,
+      lastFailedAt: latestFailedSyncAt,
+      error: currentSyncFailures.map(connection => `${connection.park.parkName}: ${connection.lastErrorSummary}`).join('; ') || null,
+      parks: parkConnections.map(connection => ({
+        parkCode: connection.park.parkCode,
+        parkName: connection.park.parkName,
+        lastSuccessfulAt: connection.lastSuccessfulSyncAt,
+        lastFailedAt: connection.lastFailedSyncAt,
+        error: connection.lastErrorSummary,
+      })),
+    }
+
+    const anomalies: ContactProfileAnomalyPayload[] = mainDecision.anomalies.map(anomaly => ({
+      type: 'multiple_active_profiles_same_park',
+      severity: 'warning',
+      message: `В парке ${anomaly.park} найдено несколько активных профилей`,
+      parkName: anomaly.park,
+      profileIds: anomaly.driverIds,
+    }))
+    for (const profile of suggestedProfiles.filter(profile => profile.conflictContactId)) {
+      anomalies.push({
+        type: 'profile_belongs_to_other_contact',
+        severity: 'error',
+        message: `${profile.fullName}: профиль уже принадлежит другому Contact`,
+        parkName: profile.parkName,
+        profileIds: [profile.id],
+        contactId: profile.conflictContactId || undefined,
+      })
+    }
+    const candidateNames = Array.from(new Set([...attachedProfiles, ...suggestedProfiles].map(profile => normalizedName(profile.fullName))))
+    if (candidateNames.length > 1) {
+      anomalies.push({
+        type: 'different_names',
+        severity: 'warning',
+        message: 'В профилях отличаются ФИО. Проверьте принадлежность одному человеку',
+        profileIds: [...attachedProfiles, ...suggestedProfiles].map(profile => profile.id),
+      })
+    }
+    const personKeys = new Set(suggestedProfiles.map(profile => profile.externalPersonKey).filter(Boolean))
+    if (suggestedProfiles.length > 1 && (personKeys.size !== 1 || suggestedProfiles.some(profile => !profile.externalPersonKey))) {
+      anomalies.push({
+        type: 'person_ownership_ambiguous',
+        severity: 'warning',
+        message: 'Телефон совпал, но владение профилями требует ручного подтверждения',
+        profileIds: suggestedProfiles.map(profile => profile.id),
+      })
+    }
+    for (const connection of currentSyncFailures) {
+      anomalies.push({
+        type: 'sync_error',
+        severity: 'error',
+        message: `${connection.park.parkName}: ${connection.lastErrorSummary}`,
+        parkName: connection.park.parkName,
+        profileIds: [...attachedProfiles, ...suggestedProfiles].filter(profile => profile.parkCode === connection.park.parkCode).map(profile => profile.id),
+      })
+    }
+    const driverProfileState = deriveDriverProfileState(attachedProfiles.length, suggestedProfiles.length, anomalies.length)
+    const primaryPhone = contact.phones.find(phone => phone.id === contact.primaryPhoneId) || contact.phones.find(phone => phone.isPrimary) || contact.phones[0] || null
+    const channels = PROFILE_CHANNELS.map(channel => {
+      const identity = contact.identities.find(item => item.channel === channel)
+      return {
+        channel,
+        identityId: identity?.id ?? null,
+        externalId: identity?.externalId ?? null,
+        displayName: identity?.displayName ?? null,
+        state: identity ? 'linked' as const : 'available_by_phone' as const,
+      }
+    })
+
+    const driver = mainDriverProfile
 
     const mergeHistory = [
       ...contact.mergesAsSurvivor.map(m => ({ ...m, role: 'survivor' as const })),
@@ -151,6 +345,7 @@ export async function GET(
       mainDriverId: contact.mainDriverId,
       mainDriverSelection: contact.mainDriverSelection,
       primaryPhoneId: contact.primaryPhoneId,
+      primaryPhone,
       notes: contact.notes,
       tags: contact.tags,
       customFields: contact.customFields,
@@ -160,11 +355,27 @@ export async function GET(
       phones: contact.phones,
       identities: contact.identities,
       chats: contact.chats,
+      channels,
+      driverProfileState,
+      suggestedProfiles,
+      attachedProfiles,
+      mainDriverProfile,
+      syncState,
+      anomalies,
+      technicalData: {
+        contactId: contact.id,
+        providerIds: contact.identities.map(identity => ({ channel: identity.channel, externalId: identity.externalId })),
+        driverProfileIds: attachedProfiles.map(profile => profile.id),
+        suggestedProfileIds: suggestedProfiles.map(profile => profile.id),
+        resolutionState: driverProfileState,
+        lastSuccessfulSyncAt: latestSuccessfulSyncAt,
+        lastFailedSyncAt: latestFailedSyncAt,
+      },
       driver,
-      mainDriver,
-      driverProfiles,
+      mainDriver: mainDriverProfile,
+      driverProfiles: attachedProfiles,
       profileAnomalies: mainDecision.anomalies,
-      suggestedDriverProfiles,
+      suggestedDriverProfiles: suggestedProfiles,
       mergeHistory,
     })
   } catch (err: any) {

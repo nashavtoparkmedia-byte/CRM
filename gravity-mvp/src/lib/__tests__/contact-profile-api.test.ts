@@ -1,0 +1,150 @@
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { deriveDriverProfileState } from '@/lib/contact-profile-contract'
+
+const prismaMock = vi.hoisted(() => ({
+  contact: {
+    findUnique: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+  },
+  driver: {
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
+  parkConnection: {
+    findMany: vi.fn(),
+  },
+}))
+
+vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+
+import { GET } from '@/app/api/contacts/[id]/route'
+
+const parks = ['Наш Автопарк', 'YOKO', 'YOKO-2', 'YOKO-3', 'YOKO-4', 'YOKO.Доставка']
+
+function suggestedProfile(index: number) {
+  const parkName = parks[index]
+  return {
+    id: `driver-${index + 1}`,
+    yandexDriverId: `legacy-${index + 1}`,
+    externalDriverProfileId: `external-${index + 1}`,
+    externalParkId: `park-external-${index + 1}`,
+    fullName: index < 2 ? 'Ремезов Александр' : 'Ремезов Александр Юрьевич',
+    phone: '+79222155750',
+    lastExternalPark: parkName,
+    parkId: `park-${index + 1}`,
+    park: { parkCode: `PARK_${index + 1}`, parkName },
+    sourceConnectionId: `connection-${index + 1}`,
+    segment: 'self_employed',
+    statusOverride: null,
+    dismissedAt: null,
+    contactId: null,
+    externalPersonKey: null,
+    personResolutionStatus: 'unlinked',
+    personResolutionBasis: index < 2 ? null : 'source_only_backfill',
+    lastFleetCheckStatus: 'working',
+    lastFleetCheckAt: null,
+    updatedAt: new Date('2026-07-13T12:00:00.000Z'),
+    customFields: {},
+  }
+}
+
+describe('canonical Contact profile API', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    const contact = {
+      id: 'contact-1',
+      displayName: '+79222155750',
+      displayNameSource: 'channel',
+      masterSource: 'chat',
+      yandexDriverId: null,
+      mainDriverId: null,
+      mainDriverSelection: 'auto',
+      primaryPhoneId: 'phone-1',
+      notes: null,
+      tags: [],
+      customFields: {},
+      isArchived: false,
+      createdAt: new Date('2026-07-13T12:00:00.000Z'),
+      updatedAt: new Date('2026-07-13T12:00:00.000Z'),
+      phones: [{
+        id: 'phone-1',
+        phone: '+79222155750',
+        label: null,
+        isPrimary: true,
+        source: 'max',
+        isActive: true,
+        verifiedAt: null,
+        isTemporary: false,
+        expiresAt: null,
+        createdAt: new Date('2026-07-13T12:00:00.000Z'),
+      }],
+      identities: [{
+        id: 'identity-1',
+        channel: 'max',
+        externalId: '902144614300',
+        phoneId: 'phone-1',
+        displayName: null,
+        source: 'auto',
+        confidence: 1,
+        isActive: true,
+        createdAt: new Date('2026-07-13T12:00:00.000Z'),
+        reachabilityStatus: 'confirmed',
+        reachabilityCheckedAt: new Date('2026-07-13T12:00:00.000Z'),
+        metadata: {},
+      }],
+      chats: [{
+        id: 'chat-1',
+        channel: 'max',
+        externalChatId: '902144614300',
+        contactIdentityId: 'identity-1',
+        lastMessageAt: new Date('2026-07-13T12:00:00.000Z'),
+        unreadCount: 0,
+        status: 'new',
+        name: 'MAX:902144614300',
+      }],
+      mergesAsSurvivor: [],
+      mergesAsMerged: [],
+    }
+    prismaMock.contact.findUnique
+      .mockResolvedValueOnce(contact)
+      .mockResolvedValueOnce({ id: contact.id, phones: [{ phone: '+79222155750' }] })
+    prismaMock.driver.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(parks.map((_, index) => suggestedProfile(index)))
+    prismaMock.parkConnection.findMany.mockResolvedValue(parks.map((parkName, index) => ({
+      parkId: `park-${index + 1}`,
+      apiConnectionId: `connection-${index + 1}`,
+      externalParkId: `park-external-${index + 1}`,
+      lastSuccessfulSyncAt: null,
+      lastFailedSyncAt: null,
+      lastErrorSummary: null,
+      park: { parkCode: `PARK_${index + 1}`, parkName },
+    })))
+  })
+
+  test('returns six phone-only suggestions without attaching or selecting a main profile', async () => {
+    const response = await GET({} as never, { params: Promise.resolve({ id: 'contact-1' }) })
+    expect(response.status).toBe(200)
+    const body = await response.json()
+
+    expect(body.driverProfileState).toBe('UNLINKED_WITH_SUGGESTIONS')
+    expect(body.primaryPhone.phone).toBe('+79222155750')
+    expect(body.channels.map((item: { channel: string }) => item.channel)).toEqual(['max', 'whatsapp', 'telegram'])
+    expect(body.suggestedProfiles).toHaveLength(6)
+    expect(body.attachedProfiles).toEqual([])
+    expect(body.mainDriverProfile).toBeNull()
+    expect(body.driver).toBeNull()
+    expect(body.technicalData.resolutionState).toBe('UNLINKED_WITH_SUGGESTIONS')
+    expect(body.suggestedProfiles.every((profile: { matchedSignals: string[] }) => profile.matchedSignals.includes('phone'))).toBe(true)
+    expect(prismaMock.driver.updateMany).not.toHaveBeenCalled()
+    expect(prismaMock.contact.update).not.toHaveBeenCalled()
+  })
+
+  test('derives stable profile states without using fake legacy defaults', () => {
+    expect(deriveDriverProfileState(0, 0, 0)).toBe('UNLINKED')
+    expect(deriveDriverProfileState(0, 6, 2)).toBe('UNLINKED_WITH_SUGGESTIONS')
+    expect(deriveDriverProfileState(6, 0, 0)).toBe('LINKED')
+    expect(deriveDriverProfileState(6, 0, 1)).toBe('LINKED_WITH_ANOMALIES')
+  })
+})

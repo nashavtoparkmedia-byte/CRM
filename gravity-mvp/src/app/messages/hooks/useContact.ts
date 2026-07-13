@@ -1,106 +1,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback, useRef } from 'react'
+import type {
+    ContactChatPayload,
+    ContactDriverProfilePayload,
+    ContactIdentityPayload,
+    ContactPhonePayload,
+    ContactProfilePayload,
+} from '@/lib/contact-profile-contract'
 
-export interface ContactPhone {
-    id: string
-    phone: string
-    label: string | null
-    isPrimary: boolean
-    source: string
-    isTemporary?: boolean
-    expiresAt?: string | null
-    isActive?: boolean
-}
-
-export interface ContactIdentity {
-    id: string
-    channel: string
-    externalId: string
-    phoneId: string | null
-    displayName: string | null
-    source: string
-    confidence: number
-    reachabilityStatus: 'confirmed' | 'unreachable' | 'unknown'
-    reachabilityCheckedAt: string | null
-    metadata?: Record<string, string | null> | null
-}
-
-export interface ContactChat {
-    id: string
-    channel: string
-    externalChatId: string
-    contactIdentityId: string | null
-    lastMessageAt: string | null
-    unreadCount: number
-    status: string
-    name: string | null
-}
-
-export interface ContactDriver {
-    id: string
-    yandexDriverId?: string
-    fullName: string
-    phone: string | null
-    segment: string
-    score: number | null
-    lastExternalPark?: string | null
-    parkName?: string | null
-    status?: 'working' | 'dismissed' | 'unknown'
-    isMain?: boolean
-    licenseNumber?: string | null
-    lastOrderAt: string | null
-    hiredAt: string | null
-    dismissedAt: string | null
-}
-
-export interface SuggestedDriverProfile {
-    id: string
-    yandexDriverId: string
-    fullName: string
-    phone: string | null
-    lastExternalPark: string | null
-    parkName: string
-    segment: string
-    status: 'working' | 'dismissed' | 'unknown'
-    contactId: string | null
-    conflictContactId: string | null
-    matchedSignals: string[]
-    personResolutionStatus: string
-    personResolutionBasis: string | null
-    externalPersonKey: string | null
-}
-
-export interface ContactProfileAnomaly {
-    park: string
-    activeCount: number
-    driverIds: string[]
-}
-
-export interface Contact {
-    id: string
-    displayName: string
-    displayNameSource: string
-    masterSource: string
-    yandexDriverId: string | null
-    mainDriverId?: string | null
-    mainDriverSelection?: string
-    primaryPhoneId: string | null
-    notes: string | null
-    tags: string[]
-    customFields: Record<string, any>
-    isArchived: boolean
-    createdAt: string
-    updatedAt: string
-    phones: ContactPhone[]
-    identities: ContactIdentity[]
-    chats: ContactChat[]
-    driver: ContactDriver | null
-    mainDriver?: ContactDriver | null
-    driverProfiles?: ContactDriver[]
-    profileAnomalies?: ContactProfileAnomaly[]
-    suggestedDriverProfiles?: SuggestedDriverProfile[]
-    mergeHistory: any[]
-}
+export type ContactPhone = ContactPhonePayload
+export type ContactIdentity = ContactIdentityPayload
+export type ContactChat = ContactChatPayload
+export type ContactDriver = ContactDriverProfilePayload
+export type SuggestedDriverProfile = ContactDriverProfilePayload
+export type Contact = ContactProfilePayload
 
 /**
  * Hook to fetch full Contact data from /api/contacts/:id.
@@ -115,9 +28,49 @@ export function useContact(contactId: string | null | undefined) {
     const [profileSyncError, setProfileSyncError] = useState<string | null>(null)
     const [profileSyncedAt, setProfileSyncedAt] = useState<string | null>(null)
     const abortRef = useRef<AbortController | null>(null)
+    const activeContactIdRef = useRef<string | null>(null)
+    const refreshPromiseRef = useRef<{ contactId: string; promise: Promise<void> } | null>(null)
+
+    const fetchContact = useCallback(async (id: string, signal?: AbortSignal): Promise<Contact | null> => {
+        const response = await fetch(`/api/contacts/${id}`, { signal })
+        if (response.status === 404) return null
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json()
+    }, [])
+
+    const refreshProfiles = useCallback((id: string, signal?: AbortSignal): Promise<void> => {
+        const current = refreshPromiseRef.current
+        if (current?.contactId === id) return current.promise
+
+        setProfileSyncState('syncing')
+        setProfileSyncError(null)
+        const promise = (async () => {
+            try {
+                const refreshResponse = await fetch(`/api/contacts/${id}/driver-profiles/refresh`, { method: 'POST', signal })
+                if (!refreshResponse.ok) throw new Error(`HTTP ${refreshResponse.status}`)
+                const refreshResult = await refreshResponse.json().catch(() => ({}))
+                const refreshedContact = await fetchContact(id, signal)
+                if (!signal?.aborted && activeContactIdRef.current === id && refreshedContact) {
+                    setContact(refreshedContact)
+                    setProfileSyncState('success')
+                    setProfileSyncedAt(refreshResult.refreshedAt || new Date().toISOString())
+                }
+            } catch (refreshError: any) {
+                if (refreshError?.name !== 'AbortError' && activeContactIdRef.current === id) {
+                    setProfileSyncState('error')
+                    setProfileSyncError(refreshError?.message || 'sync_failed')
+                }
+            } finally {
+                if (refreshPromiseRef.current?.contactId === id) refreshPromiseRef.current = null
+            }
+        })()
+        refreshPromiseRef.current = { contactId: id, promise }
+        return promise
+    }, [fetchContact])
 
     useEffect(() => {
         if (!contactId) {
+            activeContactIdRef.current = null
             setContact(null)
             setIsLoading(false)
             setError(null)
@@ -127,6 +80,7 @@ export function useContact(contactId: string | null | undefined) {
             return
         }
 
+        activeContactIdRef.current = contactId
         abortRef.current?.abort()
         const controller = new AbortController()
         abortRef.current = controller
@@ -134,37 +88,14 @@ export function useContact(contactId: string | null | undefined) {
         setIsLoading(true)
         setError(null)
 
-        fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
-            .then(res => {
-                if (res.status === 404) {
-                    setContact(null)
-                    return null
-                }
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                return res.json()
-            })
+        fetchContact(contactId, controller.signal)
             .then(async data => {
                 if (!controller.signal.aborted && data) {
                     setContact(data)
-                    setProfileSyncState('syncing')
-                    setProfileSyncError(null)
-                    try {
-                        const refreshRes = await fetch(`/api/contacts/${contactId}/driver-profiles/refresh`, { method: 'POST' })
-                        if (!refreshRes.ok) throw new Error(`HTTP ${refreshRes.status}`)
-                        const refreshed = await fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
-                        if (!refreshed.ok) throw new Error(`HTTP ${refreshed.status}`)
-                        const refreshedData = await refreshed.json()
-                        if (!controller.signal.aborted) {
-                            setContact(refreshedData)
-                            setProfileSyncState('success')
-                            setProfileSyncedAt(new Date().toISOString())
-                        }
-                    } catch (syncErr: any) {
-                        if (!controller.signal.aborted) {
-                            setProfileSyncState('error')
-                            setProfileSyncError(syncErr?.message || 'sync_failed')
-                        }
-                    }
+                    setProfileSyncedAt(data.syncState?.lastSuccessfulAt || null)
+                    await refreshProfiles(contactId, controller.signal)
+                } else if (!controller.signal.aborted) {
+                    setContact(null)
                 }
             })
             .catch(err => {
@@ -181,36 +112,28 @@ export function useContact(contactId: string | null | undefined) {
             })
 
         return () => { controller.abort() }
-    }, [contactId])
+    }, [contactId, fetchContact, refreshProfiles])
 
-    const refetch = useCallback(() => {
-        if (!contactId) return
-        // Trigger re-fetch by toggling a state — simplest approach
-        // Actually, just re-run the effect by using a workaround
-        abortRef.current?.abort()
-        const controller = new AbortController()
-        abortRef.current = controller
-
+    const refetch = useCallback(async () => {
+        if (!contactId) return null
         setIsLoading(true)
         setError(null)
+        try {
+            const data = await fetchContact(contactId)
+            if (activeContactIdRef.current === contactId) setContact(data)
+            return data
+        } catch (refetchError: any) {
+            setError(refetchError?.message || 'fetch_failed')
+            return null
+        } finally {
+            if (activeContactIdRef.current === contactId) setIsLoading(false)
+        }
+    }, [contactId, fetchContact])
 
-        fetch(`/api/contacts/${contactId}`, { signal: controller.signal })
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`)
-                return res.json()
-            })
-            .then(data => {
-                if (!controller.signal.aborted) setContact(data)
-            })
-            .catch(err => {
-                if (err.name !== 'AbortError') {
-                    setError(err.message)
-                }
-            })
-            .finally(() => {
-                if (!controller.signal.aborted) setIsLoading(false)
-            })
-    }, [contactId])
+    const retryProfileSync = useCallback(async () => {
+        if (!contactId) return
+        await refreshProfiles(contactId)
+    }, [contactId, refreshProfiles])
 
-    return { contact, isLoading, error, refetch, profileSyncState, profileSyncError, profileSyncedAt }
+    return { contact, isLoading, error, refetch, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt }
 }

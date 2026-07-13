@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "src/lib/contact-profile-contract.ts",
+    "src/lib/driver-profiles/multi-park.ts",
+    "src/app/api/contacts/[id]/route.ts",
+    "src/app/messages/hooks/useContact.ts",
+    "src/app/messages/hooks/useContact.test.tsx",
+    "src/app/messages/components/ContactDriverProfilesPanel.tsx",
+    "src/app/messages/components/ContactDriverProfilesPanel.test.tsx",
+    "src/lib/__tests__/contact-profile-api.test.ts",
+    "src/lib/__tests__/multi-park-source-contract.test.ts",
+    "src/lib/__tests__/final-multi-park-integration-source.test.ts"
+  ],
+  "exclude": []
+}

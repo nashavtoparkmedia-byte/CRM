@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Calendar, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search, Copy } from "lucide-react"
+import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search, Copy } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useContactSearch } from "../hooks/useContactSearch"
@@ -12,6 +12,7 @@ import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
+import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
 
 // Custom field types
 interface CustomField {
@@ -126,7 +127,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const { toggleProfileDrawer, updateQuery } = useChatNavigation()
     const { conversations } = useConversations()
     const chat = conversations.find(c => c.id === chatId || c.allChatIds?.includes(chatId))
-    const { contact, isLoading: contactLoading, refetch: refetchContact, profileSyncState, profileSyncError, profileSyncedAt } = useContact(chat?.contactId)
+    const { contact, isLoading: contactLoading, refetch: refetchContact, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt } = useContact(chat?.contactId)
     const { channelStatus } = useChannelStatus(contact?.id)
 
     const [tags, setTags] = useState<string[]>([])
@@ -150,10 +151,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [aiStatus, setAiStatus] = useState<'active' | 'paused' | 'inactive'>('inactive')
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
-    const [showHistoricalProfiles, setShowHistoricalProfiles] = useState(false)
-    const [selectedSuggestedProfileIds, setSelectedSuggestedProfileIds] = useState<string[]>([])
-    const [attachingProfiles, setAttachingProfiles] = useState(false)
-    const [attachProfilesError, setAttachProfilesError] = useState<string | null>(null)
     const [showMessagesHelp, setShowMessagesHelp] = useState(false)
 
     // TG Bot link state
@@ -233,7 +230,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             cancelled = true
             retryTimers.forEach(clearTimeout)
         }
-    }, [contact?.id])
+    }, [contact])
 
     // Load bot link status when a TG identity is present
     const tgIdentity = contact?.identities.find(i => i.channel === 'telegram') ?? null
@@ -323,7 +320,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             if (m.firstName) return [m.firstName, m.lastName].filter(Boolean).join(' ')
             if (tgId.displayName?.startsWith('@')) return tgId.displayName
         }
-        return _rawDisplayName
+        const phoneLike = /^\+?\d[\d\s()-]{9,}$/.test(_rawDisplayName)
+        return phoneLike ? formatPhone(contact?.primaryPhone?.phone || _rawDisplayName.replace(/\s/g, '')) : _rawDisplayName
     })()
     const masterSource = contact?.masterSource || (chat.driver ? 'yandex' : 'chat')
     const sourceInfo = SOURCE_LABELS[masterSource] || SOURCE_LABELS.chat
@@ -554,6 +552,18 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         )}
                     </div>
                 </div>
+
+                {contact && (
+                    <ContactDriverProfilesPanel
+                        contact={contact}
+                        profileSyncState={profileSyncState}
+                        profileSyncError={profileSyncError}
+                        profileSyncedAt={profileSyncedAt}
+                        onRetry={retryProfileSync}
+                        onRefetch={refetchContact}
+                        onOpenHelp={() => setShowMessagesHelp(true)}
+                    />
+                )}
 
                 <div className="h-px bg-[#E8E8E8] mx-3" />
 
@@ -997,213 +1007,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     </>
                 )}
 
-
-                {/* Suggested Driver Profiles */}
-                {contact?.suggestedDriverProfiles && contact.suggestedDriverProfiles.length > 0 && (() => {
-                    const selectableProfiles = contact.suggestedDriverProfiles.filter(profile => !profile.conflictContactId && profile.status === 'working')
-                    const selectedCount = selectedSuggestedProfileIds.length
-                    const toggleSuggestedProfile = (profileId: string) => {
-                        setAttachProfilesError(null)
-                        setSelectedSuggestedProfileIds(current => current.includes(profileId) ? current.filter(id => id !== profileId) : [...current, profileId])
-                    }
-                    const selectAllSuggested = () => {
-                        setAttachProfilesError(null)
-                        setSelectedSuggestedProfileIds(selectableProfiles.map(profile => profile.id))
-                    }
-                    const attachSelectedProfiles = async () => {
-                        if (!contact || selectedSuggestedProfileIds.length === 0) return
-                        const ok = window.confirm(`Вы собираетесь привязать ${selectedSuggestedProfileIds.length} профилей к контакту. Проверьте, что это один человек.`)
-                        if (!ok) return
-                        setAttachingProfiles(true)
-                        setAttachProfilesError(null)
-                        try {
-                            const res = await fetch(`/api/contacts/${contact.id}/driver-profiles/attach`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ driverIds: selectedSuggestedProfileIds, selectedBy: 'operator' }),
-                            })
-                            const body = await res.json().catch(() => ({}))
-                            if (!res.ok || body.ok === false) {
-                                setAttachProfilesError(body.error || `Ошибка ${res.status}`)
-                                return
-                            }
-                            setSelectedSuggestedProfileIds([])
-                            await refetchContact()
-                        } catch (err: any) {
-                            setAttachProfilesError(err.message || 'Ошибка сети')
-                        } finally {
-                            setAttachingProfiles(false)
-                        }
-                    }
-                    return (
-                        <>
-                            <div className="h-px bg-[#E8E8E8] mx-3" />
-                            <div className="px-[4px] py-2.5" data-testid="suggested-driver-profiles">
-                                <div className="flex items-center justify-between gap-2 mb-1.5">
-                                    <div>
-                                        <h4 className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Возможные профили водителя</h4>
-                                        <div className="text-[10px] text-gray-500 mt-0.5">Проверьте, принадлежат ли эти профили одному человеку</div>
-                                    </div>
-                                    {selectableProfiles.length > 1 && (
-                                        <button onClick={selectAllSuggested} className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4] whitespace-nowrap">
-                                            Выбрать все
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="space-y-1">
-                                    {contact.suggestedDriverProfiles.map(profile => {
-                                        const disabled = Boolean(profile.conflictContactId) || profile.status !== 'working'
-                                        const checked = selectedSuggestedProfileIds.includes(profile.id)
-                                        return (
-                                            <label key={profile.id} className={`flex gap-2 rounded border px-2 py-1.5 ${disabled ? 'border-gray-100 bg-gray-50 opacity-70' : checked ? 'border-[#3390EC] bg-blue-50' : 'border-amber-100 bg-amber-50/60'}`} title={profile.conflictContactId ? 'Профиль уже принадлежит другому Contact' : profile.status !== 'working' ? 'Уволенный профиль требует отдельной проверки' : 'Можно выбрать для ручной привязки'}>
-                                                <input
-                                                    type="checkbox"
-                                                    className="mt-0.5"
-                                                    checked={checked}
-                                                    disabled={disabled}
-                                                    onChange={() => toggleSuggestedProfile(profile.id)}
-                                                />
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <span className="text-[11px] font-semibold text-[#111] truncate">{profile.fullName}</span>
-                                                        <span className={`text-[9px] px-1 py-px rounded ${profile.status === 'working' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 bg-gray-100'}`}>{profile.status === 'working' ? 'работает' : profile.status === 'dismissed' ? 'уволен' : 'неизвестно'}</span>
-                                                    </div>
-                                                    <div className="text-[10px] text-gray-500 truncate">{profile.parkName || profile.lastExternalPark || 'Парк не указан'} · {profile.segment || 'тип не указан'}</div>
-                                                    <div className="text-[10px] text-gray-400 font-mono truncate">{profile.phone || 'телефон не указан'} · совпало: телефон</div>
-                                                    {profile.conflictContactId && <div className="text-[10px] text-red-600 mt-0.5">Уже привязан к другому Contact</div>}
-                                                </div>
-                                            </label>
-                                        )
-                                    })}
-                                </div>
-                                {attachProfilesError && <div className="mt-1.5 text-[10px] text-red-600">{attachProfilesError}</div>}
-                                <div className="mt-2 flex items-center gap-1.5">
-                                    <button
-                                        disabled={attachingProfiles || selectedCount === 0}
-                                        onClick={attachSelectedProfiles}
-                                        className="h-[26px] px-2.5 rounded bg-[#3390EC] text-white text-[10px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                    >
-                                        {attachingProfiles ? <Loader2 size={10} className="animate-spin" /> : <UserCheck size={10} />}
-                                        Привязать выбранные
-                                    </button>
-                                    <button
-                                        onClick={() => { setSelectedSuggestedProfileIds([]); setAttachProfilesError(null) }}
-                                        className="h-[26px] px-2 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold hover:bg-gray-200"
-                                    >
-                                        Не принадлежат этому контакту
-                                    </button>
-                                </div>
-                            </div>
-                        </>
-                    )
-                })()}
-
-                {/* Yandex Driver Profiles */}
-                {contact?.driverProfiles && contact.driverProfiles.length > 0 && (() => {
-                    const activeProfiles = contact.driverProfiles.filter(profile => profile.status === 'working')
-                    const historicalProfiles = contact.driverProfiles.filter(profile => profile.status !== 'working')
-                    const mainProfile = contact.mainDriver || contact.driverProfiles.find(profile => profile.isMain) || activeProfiles[0]
-                    return (
-                        <>
-                            <div className="h-px bg-[#E8E8E8] mx-3" />
-                            <div className="px-[4px] py-2.5">
-                                <div className="flex items-center justify-between mb-1.5">
-                                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Яндекс профили</h4>
-                                    {contact.mainDriverSelection === 'manual' && (
-                                        <span className="text-[9px] text-blue-600 bg-blue-50 px-1 py-px rounded">главный вручную</span>
-                                    )}
-                                </div>
-
-                                <div className="mb-1.5 text-[10px] text-gray-500">
-                                    {profileSyncState === 'syncing' && 'Обновляем данные...'}
-                                    {profileSyncState === 'success' && profileSyncedAt && `Обновлено ${new Date(profileSyncedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`}
-                                    {profileSyncState === 'error' && `Не удалось обновить данные${profileSyncError ? `: ${profileSyncError}` : ''}`}
-                                </div>
-
-                                {contact.profileAnomalies && contact.profileAnomalies.length > 0 && (
-                                    <div className="mb-1.5 rounded bg-amber-50 px-2 py-1 text-[10px] text-amber-700" title="В одном парке найдено несколько активных профилей. CRM не выбирает этот парк главным автоматически.">
-                                        Проверить активные профили: {contact.profileAnomalies.map(item => item.park).join(', ')}
-                                    </div>
-                                )}
-
-                                {mainProfile && (
-                                    <div className="rounded border border-emerald-100 bg-emerald-50/60 px-2 py-1.5 mb-1.5">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <div className="text-[12px] font-semibold text-[#111] truncate">{mainProfile.fullName}</div>
-                                                <div className="text-[10px] text-gray-500 truncate">{mainProfile.parkName || mainProfile.lastExternalPark || 'Парк не указан'} - работает</div>
-                                            </div>
-                                            <span className="text-[9px] font-semibold text-emerald-700 bg-white px-1.5 py-0.5 rounded">Главный</span>
-                                        </div>
-                                        {mainProfile.phone && <div className="text-[10px] text-gray-500 font-mono mt-0.5">{mainProfile.phone}</div>}
-                                    </div>
-                                )}
-
-                                {activeProfiles.filter(profile => profile.id !== mainProfile?.id).map(profile => (
-                                    <div key={profile.id} className="flex items-center justify-between gap-2 min-h-[24px]">
-                                        <div className="min-w-0">
-                                            <div className="text-[11px] font-medium text-[#111] truncate">{profile.parkName || profile.lastExternalPark || 'Парк не указан'}</div>
-                                            <div className="text-[10px] text-gray-400 truncate">{profile.phone || 'телефон не указан'}</div>
-                                        </div>
-                                        <button
-                                            title="Сделать этот активный профиль главным для карточки Contact"
-                                            onClick={async () => {
-                                                await fetch(`/api/contacts/${contact.id}/main-driver`, {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ driverId: profile.id, selectedBy: 'operator' }),
-                                                })
-                                                refetchContact()
-                                            }}
-                                            className="shrink-0 text-[10px] text-[#3390EC] font-semibold px-1.5 py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15"
-                                        >
-                                            Сделать главным
-                                        </button>
-                                    </div>
-                                ))}
-
-                                {historicalProfiles.length > 0 && (
-                                    <div className="mt-1.5">
-                                        <button onClick={() => setShowHistoricalProfiles(!showHistoricalProfiles)} className="text-[10px] text-gray-500 hover:text-[#3390EC] flex items-center gap-1" title="Уволенные и неизвестные профили хранятся как история и не выбираются автоматически">
-                                            <ChevronDown size={10} className={showHistoricalProfiles ? 'rotate-180 transition-transform' : 'transition-transform'} />
-                                            Уволенные профили: {historicalProfiles.length}
-                                        </button>
-                                        {showHistoricalProfiles && (
-                                            <div className="mt-1 space-y-1">
-                                                {historicalProfiles.map(profile => (
-                                                    <div key={profile.id} className="rounded bg-gray-50 px-2 py-1">
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-[11px] text-[#111] truncate">{profile.parkName || profile.lastExternalPark || 'Парк не указан'}</span>
-                                                            <span className="text-[9px] text-gray-500">{profile.status === 'dismissed' ? 'Уволен' : 'Неизвестно'}</span>
-                                                        </div>
-                                                        <div className="text-[9px] text-gray-400 truncate" title={`Yandex profile ${profile.yandexDriverId || profile.id}`}>{profile.phone || 'телефон не указан'}</div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </>
-                    )
-                })()}
-
-
-                {contact && (!contact.driverProfiles || contact.driverProfiles.length === 0) && (
-                    <>
-                        <div className="h-px bg-[#E8E8E8] mx-3" />
-                        <div className="px-[4px] py-2.5">
-                            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Профиль водителя</h4>
-                            <div className="rounded border border-dashed border-gray-200 bg-gray-50 px-2 py-1.5">
-                                <div className="text-[12px] font-medium text-[#111]">Профиль водителя не привязан</div>
-                                <div className="text-[10px] text-gray-500 mt-0.5">CRM не выбирает водителя по имени или активности. Нужна однозначная связь по телефону или ручная привязка.</div>
-                                {profileSyncState === 'syncing' && <div className="text-[10px] text-blue-600 mt-1">Обновляем данные...</div>}
-                                {profileSyncState === 'error' && <div className="text-[10px] text-amber-700 mt-1">Не удалось обновить данные</div>}
-                            </div>
-                        </div>
-                    </>
-                )}
-
                 {/* Custom Fields */}
                 <div className="px-[4px] py-2.5">
                     <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-[2px]">Поля</h4>
@@ -1383,11 +1186,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             <button onClick={() => setShowMessagesHelp(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
                         </div>
                         <div className="space-y-2 text-[12px] text-gray-700 leading-snug">
-                            <p>MAX, Telegram и WhatsApp создают Contact, Identity, Chat и Message. Contact — человек в CRM.</p>
-                            <p>Если в сообщении есть телефон, CRM ищет профили водителя в шести парках. Телефон и ФИО дают только подсказки, но не привязывают профили автоматически.</p>
-                            <p>Блок «Возможные профили водителя» требует ручного подтверждения менеджером. Привязка профиля водителя и объединение Contact — разные операции.</p>
-                            <p>Главный профиль выбирается только среди привязанных активных профилей. Сначала ручной выбор, затем приоритет парков: Наш Автопарк, YOKO, YOKO-2, YOKO-3, YOKO-4, YOKO.Доставка.</p>
-                            <p>При ошибке обновления старые данные остаются на экране, можно повторить открытием карточки или обновлением страницы.</p>
+                            <p><strong>Contact.</strong> Первое сообщение MAX, Telegram или WhatsApp создаёт человека в CRM, Identity канала, Chat и Message. Если провайдер не передал телефон, карточка остаётся с provider identity до ручного уточнения.</p>
+                            <p><strong>Подсказки.</strong> По подтверждённому телефону CRM ищет профили в шести парках. Совпадение телефона или ФИО — только предложение, а не доказательство принадлежности.</p>
+                            <p><strong>Проверка.</strong> Откройте «Возможные профили водителя», сравните ФИО, парк, телефон и статус, затем вручную отметьте нужные профили. Ambiguous и уже занятые профили автоматически не переносятся.</p>
+                            <p><strong>Attachment и merge.</strong> Attachment добавляет DriverProfile к текущему Contact. Merge объединяет два Contact вместе с их CRM-историей. Это разные операции.</p>
+                            <p><strong>Главный профиль.</strong> Он выбирается только среди привязанных активных профилей: ручной выбор, затем Наш Автопарк, YOKO, YOKO-2, YOKO-3, YOKO-4, YOKO.Доставка. Уволенный профиль главным быть не может.</p>
+                            <p><strong>История.</strong> Активные профили показаны по паркам, уволенные свёрнуты. Несколько активных профилей в одном парке отображаются как anomaly и не выбираются случайно.</p>
+                            <p><strong>Обновление.</strong> Ночной sync обновляет данные всех парков. При открытии карточки сохранённые данные показываются сразу, затем выполняется background refresh. При ошибке данные остаются на экране; нажмите «Повторить».</p>
                         </div>
                     </div>
                 </div>

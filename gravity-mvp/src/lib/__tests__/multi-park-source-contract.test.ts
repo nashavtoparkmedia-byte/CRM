@@ -33,11 +33,14 @@ describe('multi-park source contracts', () => {
 
   test('Contact drawer does not display fake driver park or role when no DriverProfile exists', () => {
     const drawer = read('src/app/messages/components/ContactProfileDrawer.tsx')
+    const profilePanel = read('src/app/messages/components/ContactDriverProfilesPanel.tsx')
     expect(drawer).not.toContain("value: 'Яндекс'")
     expect(drawer).not.toContain("value: 'Водитель'")
-    expect(drawer).toContain('Профиль водителя не привязан')
-    expect(drawer).toContain('Обновляем данные')
-    expect(drawer).toContain('Сделать главным')
+    expect(profilePanel).toContain('Профиль водителя не привязан')
+    expect(profilePanel).toContain('Обновляем данные')
+    expect(profilePanel).toContain('Сделать главным')
+    expect(profilePanel).toContain('Возможные профили водителя: {suggestions.length}')
+    expect(profilePanel).toContain('Технические данные')
   })
 
   test('Contact opening triggers background DriverProfile refresh endpoint', () => {

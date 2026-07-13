@@ -29,12 +29,14 @@ describe('final multi-park integration source contracts', () => {
 
   test('right panel contains suggested profile review flow and inline help', () => {
     const drawer = read('src/app/messages/components/ContactProfileDrawer.tsx')
-    expect(drawer).toContain('Возможные профили водителя')
-    expect(drawer).toContain('Привязать выбранные')
-    expect(drawer).toContain('Не принадлежат этому контакту')
-    expect(drawer).toContain('Как работает раздел')
-    expect(drawer).toContain('/driver-profiles/attach')
-    expect(drawer).toContain('window.confirm')
+    const profilePanel = read('src/app/messages/components/ContactDriverProfilesPanel.tsx')
+    expect(drawer).toContain('ContactDriverProfilesPanel')
+    expect(profilePanel).toContain('Возможные профили водителя')
+    expect(profilePanel).toContain('Проверить профили')
+    expect(profilePanel).toContain('Привязать выбранные')
+    expect(profilePanel).toContain('Как работает раздел')
+    expect(profilePanel).toContain('/driver-profiles/attach')
+    expect(profilePanel).toContain('window.confirm')
   })
 
   test('backfill stays dry-run by default and write requires explicit protections', () => {

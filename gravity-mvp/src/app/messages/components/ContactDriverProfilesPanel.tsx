@@ -1,0 +1,384 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { AlertTriangle, Check, ChevronDown, HelpCircle, Loader2, RefreshCw, ShieldCheck, UserCheck, X } from "lucide-react"
+import {
+    CONTACT_PROFILE_PARK_ORDER,
+    type ContactDriverProfilePayload,
+    type ContactProfilePayload,
+} from "@/lib/contact-profile-contract"
+
+type ProfileSyncViewState = 'idle' | 'syncing' | 'success' | 'error'
+
+interface ContactDriverProfilesPanelProps {
+    contact: ContactProfilePayload
+    profileSyncState: ProfileSyncViewState
+    profileSyncError: string | null
+    profileSyncedAt: string | null
+    onRetry: () => Promise<void> | void
+    onRefetch: () => Promise<unknown> | void
+    onOpenHelp: () => void
+}
+
+function formatPhone(phone: string | null): string {
+    if (!phone) return 'Телефон не указан'
+    const digits = phone.replace(/\D/g, '')
+    if (digits.length === 11 && digits.startsWith('7')) {
+        return `+7 ${digits.slice(1, 4)} ${digits.slice(4, 7)}-${digits.slice(7, 9)}-${digits.slice(9)}`
+    }
+    return phone
+}
+
+function formatDateTime(value: string | null): string {
+    if (!value) return 'Нет данных'
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return 'Нет данных'
+    return date.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    })
+}
+
+function statusLabel(profile: ContactDriverProfilePayload): string {
+    if (profile.status === 'working') return 'Работает'
+    if (profile.status === 'dismissed') return 'Уволен'
+    return 'Статус неизвестен'
+}
+
+function employmentLabel(profile: ContactDriverProfilePayload): string {
+    return profile.employmentType || profile.segment || 'Тип оформления не указан'
+}
+
+function parkRank(parkName: string): number {
+    const index = CONTACT_PROFILE_PARK_ORDER.indexOf(parkName as typeof CONTACT_PROFILE_PARK_ORDER[number])
+    return index === -1 ? CONTACT_PROFILE_PARK_ORDER.length : index
+}
+
+export default function ContactDriverProfilesPanel({
+    contact,
+    profileSyncState,
+    profileSyncError,
+    profileSyncedAt,
+    onRetry,
+    onRefetch,
+    onOpenHelp,
+}: ContactDriverProfilesPanelProps) {
+    const [showReview, setShowReview] = useState(false)
+    const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([])
+    const [attaching, setAttaching] = useState(false)
+    const [attachError, setAttachError] = useState<string | null>(null)
+    const [mainError, setMainError] = useState<string | null>(null)
+    const [savingMainId, setSavingMainId] = useState<string | null>(null)
+    const [dismissedOpen, setDismissedOpen] = useState<Record<string, boolean>>({})
+
+    useEffect(() => {
+        setShowReview(false)
+        setSelectedProfileIds([])
+        setAttachError(null)
+        setMainError(null)
+        setDismissedOpen({})
+    }, [contact.id])
+
+    const suggestions = contact.suggestedProfiles || contact.suggestedDriverProfiles || []
+    const attachedProfiles = useMemo(
+        () => contact.attachedProfiles || contact.driverProfiles || [],
+        [contact.attachedProfiles, contact.driverProfiles],
+    )
+    const mainProfile = contact.mainDriverProfile || contact.mainDriver || null
+    const selectableSuggestions = suggestions.filter(profile => !profile.conflictContactId && profile.status === 'working')
+
+    const profilesByPark = useMemo(() => {
+        const groups = new Map<string, ContactDriverProfilePayload[]>()
+        for (const profile of attachedProfiles) {
+            const parkName = profile.parkName || 'Парк не указан'
+            groups.set(parkName, [...(groups.get(parkName) || []), profile])
+        }
+        return Array.from(groups.entries()).sort(([left], [right]) => {
+            const rank = parkRank(left) - parkRank(right)
+            return rank || left.localeCompare(right, 'ru')
+        })
+    }, [attachedProfiles])
+
+    const toggleProfile = (profileId: string) => {
+        setAttachError(null)
+        setSelectedProfileIds(current => current.includes(profileId)
+            ? current.filter(id => id !== profileId)
+            : [...current, profileId])
+    }
+
+    const attachSelected = async () => {
+        if (selectedProfileIds.length === 0) return
+        setAttaching(true)
+        setAttachError(null)
+        try {
+            const response = await fetch(`/api/contacts/${contact.id}/driver-profiles/attach`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ driverIds: selectedProfileIds, selectedBy: 'operator' }),
+            })
+            const body = await response.json().catch(() => ({}))
+            if (!response.ok || body.ok === false) {
+                setAttachError(body.error || `Ошибка ${response.status}`)
+                return
+            }
+            setShowReview(false)
+            setSelectedProfileIds([])
+            await onRefetch()
+        } catch (error: unknown) {
+            setAttachError(error instanceof Error ? error.message : 'Ошибка сети')
+        } finally {
+            setAttaching(false)
+        }
+    }
+
+    const setMainProfile = async (profile: ContactDriverProfilePayload) => {
+        if (!window.confirm(`Сделать профиль «${profile.parkName}» главным для этого контакта?`)) return
+        setSavingMainId(profile.id)
+        setMainError(null)
+        try {
+            const response = await fetch(`/api/contacts/${contact.id}/main-driver`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ driverId: profile.id, selectedBy: 'operator' }),
+            })
+            const body = await response.json().catch(() => ({}))
+            if (!response.ok) {
+                setMainError(body.error || `Ошибка ${response.status}`)
+                return
+            }
+            await onRefetch()
+        } catch (error: unknown) {
+            setMainError(error instanceof Error ? error.message : 'Ошибка сети')
+        } finally {
+            setSavingMainId(null)
+        }
+    }
+
+    const effectiveSyncTime = profileSyncedAt || contact.syncState?.lastSuccessfulAt || null
+
+    return (
+        <>
+            <section className="border-b border-[#E8E8E8] px-3 py-3" data-testid="contact-driver-profile-panel">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                    <h4 className="text-[10px] font-bold uppercase text-gray-500">Профили водителя</h4>
+                    <button
+                        type="button"
+                        onClick={onOpenHelp}
+                        className="inline-flex h-6 items-center gap-1 rounded bg-gray-100 px-2 text-[10px] font-semibold text-gray-600 hover:bg-gray-200"
+                    >
+                        <HelpCircle size={11} />
+                        Как работает раздел
+                    </button>
+                </div>
+
+                <div className="mb-2 flex items-start justify-between gap-2 rounded border border-gray-200 bg-gray-50 px-2 py-2">
+                    <div className="min-w-0">
+                        <div className="text-[12px] font-semibold text-[#111]">
+                            {attachedProfiles.length === 0 ? 'Профиль водителя не привязан' : `Привязано профилей: ${attachedProfiles.length}`}
+                        </div>
+                        <div className="mt-0.5 text-[10px] text-gray-500">
+                            {profileSyncState === 'syncing' && 'Обновляем данные…'}
+                            {profileSyncState === 'success' && `Обновлено: ${formatDateTime(effectiveSyncTime)}`}
+                            {profileSyncState === 'error' && 'Не удалось обновить данные'}
+                            {profileSyncState === 'idle' && `Последнее обновление: ${formatDateTime(effectiveSyncTime)}`}
+                        </div>
+                        {profileSyncState === 'error' && profileSyncError && (
+                            <div className="mt-0.5 text-[9px] text-amber-700">{profileSyncError}</div>
+                        )}
+                    </div>
+                    {profileSyncState === 'syncing' ? (
+                        <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin text-[#3390EC]" />
+                    ) : profileSyncState === 'error' ? (
+                        <button type="button" onClick={() => void onRetry()} className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-amber-100 px-2 text-[10px] font-semibold text-amber-800 hover:bg-amber-200">
+                            <RefreshCw size={10} /> Повторить
+                        </button>
+                    ) : (
+                        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+                    )}
+                </div>
+
+                {contact.anomalies?.length > 0 && (
+                    <div className="mb-2 space-y-1" data-testid="profile-anomalies">
+                        {contact.anomalies.map((anomaly, index) => (
+                            <div key={`${anomaly.type}-${index}`} className={`flex gap-1.5 rounded border px-2 py-1.5 text-[10px] ${anomaly.severity === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                                <AlertTriangle size={11} className="mt-px shrink-0" />
+                                <span>{anomaly.message}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {attachedProfiles.length === 0 && suggestions.length > 0 && (
+                    <div className="border-l-2 border-amber-400 bg-amber-50 px-2.5 py-2" data-testid="suggested-driver-profiles">
+                        <div className="text-[12px] font-bold text-[#111]">Возможные профили водителя: {suggestions.length}</div>
+                        <div className="mt-0.5 text-[10px] leading-snug text-gray-600">Проверьте, принадлежат ли эти профили одному человеку.</div>
+                        <button
+                            type="button"
+                            onClick={() => { setShowReview(true); setAttachError(null) }}
+                            className="mt-2 inline-flex h-7 items-center gap-1 rounded bg-[#3390EC] px-2.5 text-[10px] font-semibold text-white hover:bg-[#2B7FD4]"
+                        >
+                            <UserCheck size={11} /> Проверить профили
+                        </button>
+                    </div>
+                )}
+
+                {mainProfile && (
+                    <div className="mb-2 border-l-2 border-emerald-500 bg-emerald-50 px-2.5 py-2" data-testid="main-driver-profile">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase text-emerald-700">Главный профиль</span>
+                            <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">Главный</span>
+                        </div>
+                        <div className="text-[12px] font-semibold text-[#111]">{mainProfile.fullName}</div>
+                        <div className="mt-0.5 text-[10px] text-gray-600">{mainProfile.parkName} · {employmentLabel(mainProfile)}</div>
+                        <div className="text-[10px] text-gray-600">{formatPhone(mainProfile.phone)} · {statusLabel(mainProfile)}</div>
+                        <div className="mt-1 text-[9px] text-gray-500">Синхронизация: {formatDateTime(mainProfile.lastSuccessfulSyncAt || mainProfile.sourceUpdatedAt)}</div>
+                    </div>
+                )}
+
+                {profilesByPark.length > 0 && (
+                    <div className="space-y-2" data-testid="profiles-by-park">
+                        <div className="text-[10px] font-bold uppercase text-gray-500">Профили водителя</div>
+                        {profilesByPark.map(([parkName, profiles]) => {
+                            const active = profiles.filter(profile => profile.status === 'working')
+                            const dismissed = profiles.filter(profile => profile.status !== 'working')
+                            return (
+                                <div key={parkName} className="border-t border-gray-100 pt-1.5" data-park={parkName}>
+                                    <div className="mb-1 text-[11px] font-bold text-[#111]">{parkName}</div>
+                                    <div className="space-y-1">
+                                        {active.map(profile => (
+                                            <div key={profile.id} className="flex items-start justify-between gap-2 py-1">
+                                                <div className="min-w-0">
+                                                    <div className="truncate text-[11px] font-medium text-[#111]">{profile.fullName}</div>
+                                                    <div className="truncate text-[10px] text-gray-500">{employmentLabel(profile)} · {formatPhone(profile.phone)}</div>
+                                                    <div className="text-[9px] font-semibold text-emerald-700">Работает</div>
+                                                </div>
+                                                {profile.id === mainProfile?.id ? (
+                                                    <span className="shrink-0 rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-semibold text-emerald-700">Главный</span>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        disabled={savingMainId !== null}
+                                                        onClick={() => void setMainProfile(profile)}
+                                                        className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-[#3390EC] hover:bg-blue-100 disabled:opacity-50"
+                                                    >
+                                                        {savingMainId === profile.id ? 'Сохраняем…' : 'Сделать главным'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {dismissed.length > 0 && (
+                                        <div className="mt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => setDismissedOpen(current => ({ ...current, [parkName]: !current[parkName] }))}
+                                                className="flex items-center gap-1 text-[10px] font-medium text-gray-500 hover:text-[#3390EC]"
+                                            >
+                                                <ChevronDown size={10} className={dismissedOpen[parkName] ? 'rotate-180' : ''} />
+                                                Уволенные профили: {dismissed.length} · {dismissedOpen[parkName] ? 'Скрыть' : 'Показать'}
+                                            </button>
+                                            {dismissedOpen[parkName] && (
+                                                <div className="mt-1 space-y-1">
+                                                    {dismissed.map(profile => (
+                                                        <div key={profile.id} className="bg-gray-50 px-2 py-1">
+                                                            <div className="text-[10px] font-medium text-gray-700">{profile.fullName}</div>
+                                                            <div className="text-[9px] text-gray-500">{employmentLabel(profile)} · {formatPhone(profile.phone)} · {statusLabel(profile)}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                        {mainError && <div className="text-[10px] text-red-600">{mainError}</div>}
+                    </div>
+                )}
+
+                <details className="mt-2 border-t border-gray-100 pt-2" data-testid="technical-data">
+                    <summary className="cursor-pointer text-[10px] font-semibold text-gray-500">Технические данные</summary>
+                    <div className="mt-1 space-y-0.5 break-all font-mono text-[9px] text-gray-500">
+                        <div>Contact: {contact.technicalData.contactId}</div>
+                        <div>Resolution: {contact.technicalData.resolutionState}</div>
+                        <div>Provider IDs: {contact.technicalData.providerIds.map(item => `${item.channel}:${item.externalId}`).join(', ') || 'нет'}</div>
+                        <div>DriverProfile IDs: {contact.technicalData.driverProfileIds.join(', ') || 'нет'}</div>
+                        <div>Suggested IDs: {contact.technicalData.suggestedProfileIds.join(', ') || 'нет'}</div>
+                        <div>Last success: {formatDateTime(contact.technicalData.lastSuccessfulSyncAt)}</div>
+                    </div>
+                </details>
+            </section>
+
+            {showReview && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 p-4" onClick={() => !attaching && setShowReview(false)} data-testid="suggested-profile-review">
+                    <div className="flex max-h-[82vh] w-[560px] max-w-full flex-col overflow-hidden rounded-lg bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-4 py-3">
+                            <div>
+                                <h3 className="text-[15px] font-bold text-[#111]">Проверить профили</h3>
+                                <p className="mt-0.5 text-[11px] text-gray-500">Проверьте, принадлежат ли профили одному человеку.</p>
+                            </div>
+                            <button type="button" disabled={attaching} onClick={() => setShowReview(false)} className="text-gray-400 hover:text-gray-700 disabled:opacity-50" title="Закрыть без изменений">
+                                <X size={17} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto px-4 py-3">
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                                <span className="text-[11px] font-semibold text-gray-700">Найдено профилей: {suggestions.length}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedProfileIds(selectableSuggestions.map(profile => profile.id))}
+                                    className="text-[11px] font-semibold text-[#3390EC] hover:text-[#2B7FD4]"
+                                >
+                                    Выбрать все
+                                </button>
+                            </div>
+                            <div className="space-y-1.5">
+                                {suggestions.map(profile => {
+                                    const disabled = Boolean(profile.conflictContactId) || profile.status !== 'working'
+                                    const checked = selectedProfileIds.includes(profile.id)
+                                    return (
+                                        <label key={profile.id} className={`flex gap-2 rounded border px-3 py-2 ${disabled ? 'border-gray-200 bg-gray-50' : checked ? 'border-[#3390EC] bg-blue-50' : 'border-gray-200 bg-white'}`}>
+                                            <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleProfile(profile.id)} aria-label={`Выбрать ${profile.parkName}`} />
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="truncate text-[12px] font-semibold text-[#111]">{profile.fullName}</span>
+                                                    <span className={`shrink-0 text-[10px] font-semibold ${profile.status === 'working' ? 'text-emerald-700' : 'text-gray-500'}`}>{statusLabel(profile)}</span>
+                                                </div>
+                                                <div className="mt-0.5 text-[11px] text-gray-600">{profile.parkName} · {employmentLabel(profile)}</div>
+                                                <div className="text-[10px] text-gray-500">{formatPhone(profile.phone)} · основание: совпал телефон</div>
+                                                {profile.conflictContactId && (
+                                                    <div className="mt-1 text-[10px] font-medium text-red-600">
+                                                        Профиль принадлежит контакту «{profile.conflictContact?.displayName || profile.conflictContactId}».
+                                                        {profile.conflictContact?.chatId && (
+                                                            <a className="ml-1 underline" href={`/messages?id=${encodeURIComponent(profile.conflictContact.chatId)}&profile=1`}>Открыть контакт</a>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </label>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        <div className="border-t border-gray-200 px-4 py-3">
+                            <div className="mb-2 rounded bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                                Вы собираетесь привязать {selectedProfileIds.length} профилей из {new Set(suggestions.map(profile => profile.parkName)).size} парков к контакту. Проверьте, что это один человек.
+                            </div>
+                            {attachError && <div className="mb-2 text-[11px] text-red-600">{attachError}</div>}
+                            <div className="flex justify-end gap-2">
+                                <button type="button" disabled={attaching} onClick={() => setShowReview(false)} className="h-8 rounded bg-gray-100 px-3 text-[11px] font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50">Закрыть без изменений</button>
+                                <button type="button" disabled={attaching || selectedProfileIds.length === 0} onClick={() => void attachSelected()} className="inline-flex h-8 items-center gap-1 rounded bg-[#3390EC] px-3 text-[11px] font-semibold text-white hover:bg-[#2B7FD4] disabled:opacity-50">
+                                    {attaching ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                    Привязать выбранные
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
+    )
+}

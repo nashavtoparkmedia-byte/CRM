@@ -200,10 +200,15 @@ export async function setManualMainDriverProfile(contactId: string, driverId: st
 export type SuggestedDriverProfile = {
   id: string
   yandexDriverId: string
+  externalDriverProfileId: string | null
+  externalParkId: string | null
   fullName: string
   phone: string | null
   lastExternalPark: string | null
+  parkId: string | null
+  parkCode: string | null
   parkName: string
+  sourceConnectionId: string | null
   segment: string
   status: DriverProfileStatus
   contactId: string | null
@@ -212,6 +217,10 @@ export type SuggestedDriverProfile = {
   personResolutionStatus: string
   personResolutionBasis: string | null
   externalPersonKey: string | null
+  lastFleetCheckStatus: string | null
+  lastFleetCheckAt: Date | null
+  updatedAt: Date
+  customFields: unknown
 }
 
 function phoneVariants(phone: string): string[] {
@@ -243,9 +252,14 @@ export async function findSuggestedDriverProfilesForContact(contactId: string): 
     select: {
       id: true,
       yandexDriverId: true,
+      externalDriverProfileId: true,
+      externalParkId: true,
       fullName: true,
       phone: true,
       lastExternalPark: true,
+      parkId: true,
+      park: { select: { parkCode: true, parkName: true } },
+      sourceConnectionId: true,
       segment: true,
       statusOverride: true,
       dismissedAt: true,
@@ -253,6 +267,10 @@ export async function findSuggestedDriverProfilesForContact(contactId: string): 
       externalPersonKey: true,
       personResolutionStatus: true,
       personResolutionBasis: true,
+      lastFleetCheckStatus: true,
+      lastFleetCheckAt: true,
+      updatedAt: true,
+      customFields: true,
     },
     orderBy: [{ lastExternalPark: 'asc' }, { fullName: 'asc' }],
   })
@@ -262,10 +280,15 @@ export async function findSuggestedDriverProfilesForContact(contactId: string): 
     byId.set(profile.id, {
       id: profile.id,
       yandexDriverId: profile.yandexDriverId,
+      externalDriverProfileId: profile.externalDriverProfileId,
+      externalParkId: profile.externalParkId,
       fullName: profile.fullName,
       phone: profile.phone,
       lastExternalPark: profile.lastExternalPark,
-      parkName: normalizeParkName(profile.lastExternalPark),
+      parkId: profile.parkId,
+      parkCode: profile.park?.parkCode ?? null,
+      parkName: normalizeParkName(profile.park?.parkName || profile.lastExternalPark),
+      sourceConnectionId: profile.sourceConnectionId,
       segment: profile.segment,
       status: getDriverProfileStatus(profile),
       contactId: profile.contactId,
@@ -274,6 +297,10 @@ export async function findSuggestedDriverProfilesForContact(contactId: string): 
       personResolutionStatus: profile.personResolutionStatus,
       personResolutionBasis: profile.personResolutionBasis,
       externalPersonKey: profile.externalPersonKey,
+      lastFleetCheckStatus: profile.lastFleetCheckStatus,
+      lastFleetCheckAt: profile.lastFleetCheckAt,
+      updatedAt: profile.updatedAt,
+      customFields: profile.customFields,
     })
   }
   return Array.from(byId.values()).sort((a, b) => {
