@@ -1,59 +1,29 @@
 import { NextResponse } from 'next/server'
-import { runYandexSync } from '@/lib/yandexSync'
-import { logCronHealth } from '@/lib/cron-health'
+import {
+    NIGHTLY_DRIVER_PROFILE_SYNC_CRON,
+    NIGHTLY_DRIVER_PROFILE_SYNC_JOB_ID,
+    NIGHTLY_DRIVER_PROFILE_SYNC_TIMEZONE,
+} from '@/lib/driver-profiles/nightly-sync'
 
 /**
- * Nightly Yandex Fleet sync (drivers + trips + segment recalculation).
- * Call via CRON: GET /api/cron/sync-trips
+ * Legacy external cron entry point.
  *
- * Performs:
- *   1. Sync active drivers (creates new, updates existing)
- *   2. Sync dismissed drivers (marks dismissedAt)
- *   3. Pull trips for the analysis period (DriverDaySummary)
- *   4. Recalculate segments
- *
- * Updates SyncStatus row so the /drivers UI shows "last sync at HH:MM".
+ * Production scheduling is owned exclusively by the startup-registered
+ * multi-park job. Keeping this route non-executable prevents an old external
+ * cron configuration or an unauthenticated request from starting a second
+ * DriverProfile sync path.
  */
 export async function GET() {
-    const start = Date.now()
-    try {
-        const result = await runYandexSync({ bypassCooldown: true })
-        const durationMs = Date.now() - start
-
-        if (!result.ok) {
-            logCronHealth({
-                cronName: 'sync-trips',
-                status: 'error',
-                durationMs,
-                errorMessage: result.errorMessage || result.reason || 'unknown',
-            }).catch(() => {})
-            return NextResponse.json(
-                { ok: false, reason: result.reason, error: result.errorMessage },
-                { status: result.reason === 'error' ? 500 : 409 }
-            )
-        }
-
-        logCronHealth({
-            cronName: 'sync-trips',
-            status: 'ok',
-            durationMs,
-            metadata: {
-                driversUpdated: result.driversUpdated,
-                ordersProcessed: result.ordersProcessed,
-                recalculatedCount: result.recalculatedCount,
+    return NextResponse.json(
+        {
+            ok: false,
+            reason: 'legacy_scheduler_disabled',
+            scheduler: {
+                jobId: NIGHTLY_DRIVER_PROFILE_SYNC_JOB_ID,
+                cron: NIGHTLY_DRIVER_PROFILE_SYNC_CRON,
+                timezone: NIGHTLY_DRIVER_PROFILE_SYNC_TIMEZONE,
             },
-        }).catch(() => {})
-
-        return NextResponse.json(result)
-    } catch (error: any) {
-        const durationMs = Date.now() - start
-        console.error('[sync-trips] Unexpected error:', error?.message)
-        logCronHealth({
-            cronName: 'sync-trips',
-            status: 'error',
-            durationMs,
-            errorMessage: error?.message,
-        }).catch(() => {})
-        return NextResponse.json({ error: error?.message }, { status: 500 })
-    }
+        },
+        { status: 410 },
+    )
 }

@@ -269,31 +269,18 @@ export async function register() {
             opsLog('error', 'call_workers_start_failed', { operation: 'startup', error: err.message })
         }
 
-        // Yandex Fleet sync: target time 03:00 server time, daily.
-        // Strategy: tick every hour; only run if (current hour == 03) AND no
-        // successful run today. Cheap, robust to server restarts during the
-        // night, and idempotent if Next.js spins up multiple workers (the
-        // SyncStatus 'running' lock prevents concurrent runs).
-        const YANDEX_SYNC_HOUR = 3
-        let lastYandexSyncDay: string | null = null
-        const yandexSyncInterval = setInterval(async () => {
-            const now = new Date()
-            const today = now.toISOString().slice(0, 10)
-            if (now.getHours() !== YANDEX_SYNC_HOUR) return
-            if (lastYandexSyncDay === today) return  // already ran today
+        // The multi-park scheduler owns the only production registration for
+        // Yandex DriverProfile sync. Registration schedules the next run; it
+        // never performs a full sync during startup.
+        try {
+            const { registerMultiParkProductionScheduler } = await import('@/lib/driver-profiles/production-scheduler')
+            registerMultiParkProductionScheduler()
+        } catch (err: unknown) {
+            const error = err instanceof Error ? err.message : String(err)
+            opsLog('error', 'multi_park_scheduler_startup_failed', { operation: 'startup', error })
+        }
 
-            await OperationalJobs.run('yandex_fleet_sync', async () => {
-                const { runYandexSync } = await import('@/lib/yandexSync')
-                const result = await runYandexSync({ bypassCooldown: true })
-                if (result.ok) {
-                    lastYandexSyncDay = today
-                }
-                return result
-            })
-        }, 60 * 60 * 1000)  // every hour
-        OperationalJobs.registerInterval(yandexSyncInterval)
-
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'multi-park-driver-profiles-nightly:0 3 * * *@Asia/Yekaterinburg'] })
 
     }, 5000) // 5 second delay after server start
 
@@ -319,6 +306,8 @@ export async function register() {
             // 1. Stop intervals / background jobs
             const { OperationalJobs: ops } = await import('@/lib/OperationalJobs')
             ops.clearAllIntervals()
+            const { stopMultiParkProductionScheduler } = await import('@/lib/driver-profiles/production-scheduler')
+            stopMultiParkProductionScheduler()
             log('info', 'shutdown_intervals_cleared')
 
             // 2. Close WA clients

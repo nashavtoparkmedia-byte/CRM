@@ -12,7 +12,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { YandexFleetService } from '@/lib/YandexFleetService'
-import { syncActiveDrivers, syncArchivedDrivers } from '@/app/drivers/actions'
+import { runProductionDriverProfileSync } from '@/lib/driver-profiles/production-sync'
 import { getThresholds, recalculateAllSegments } from '@/lib/scoring'
 
 export const YANDEX_SYNC_SERVICE = 'yandex_fleet'
@@ -162,23 +162,21 @@ export async function runYandexSync(
     try {
         const thresholds = await getThresholds()
 
-        // 1. Active drivers
-        const active = await syncActiveDrivers()
-        driversUpdated += active.count
-
-        // 2. Archived (dismissed) drivers — non-fatal if it fails
-        try {
-            const archived = await syncArchivedDrivers()
-            driversUpdated += archived.count
-        } catch (e) {
-            console.error('[runYandexSync] archived drivers sync failed (non-fatal):', e)
+        // 1. Driver profiles use the same composite-key runner and persistent
+        // lock as the production scheduler. Manual runs cannot bypass either.
+        const profiles = await runProductionDriverProfileSync('manual')
+        if (profiles.status === 'skipped_locked') {
+            await setStatus('error', { errorMessage: 'multi-park DriverProfile sync lock is held' })
+            return { ok: false, reason: 'already_running' }
         }
+        if (profiles.status === 'failed') throw new Error('multi-park DriverProfile sync failed for all enabled parks')
+        driversUpdated = profiles.results.reduce((sum, park) => sum + park.inserts + park.updates, 0)
 
-        // 3. Trips for the analysis period
+        // 2. Trips for the analysis period
         const trips = await YandexFleetService.syncTrips(thresholds.analysis_period)
         ordersProcessed = trips.ordersProcessed
 
-        // 4. Recalculate segments
+        // 3. Recalculate segments
         const recalc = await recalculateAllSegments()
 
         await setStatus('success', { driversUpdated, ordersProcessed })

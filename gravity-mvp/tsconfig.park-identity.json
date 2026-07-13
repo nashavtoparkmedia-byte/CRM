@@ -17,9 +17,15 @@
     "src/lib/__tests__/cross-park-source-contract.test.ts",
     "src/lib/__tests__/multi-park-driver-profiles.test.ts",
     "src/lib/driver-profiles/nightly-sync.ts",
+    "src/lib/driver-profiles/production-sync.ts",
+    "src/lib/driver-profiles/production-scheduler.ts",
     "src/lib/__tests__/nightly-sync.test.ts",
+    "src/lib/__tests__/production-sync.test.ts",
+    "src/lib/__tests__/production-scheduler.test.ts",
     "src/lib/__tests__/multi-park-source-contract.test.ts",
-    "src/lib/__tests__/final-multi-park-integration-source.test.ts"
+    "src/lib/__tests__/final-multi-park-integration-source.test.ts",
+    "src/lib/yandexSync.ts",
+    "src/app/api/cron/sync-trips/route.ts"
   ],
   "exclude": []
 }

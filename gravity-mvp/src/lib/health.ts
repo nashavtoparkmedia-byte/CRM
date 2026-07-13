@@ -26,6 +26,7 @@
 
 import net from 'node:net'
 import { prisma } from '@/lib/prisma'
+import { getMultiParkSchedulerHealthCheck } from '@/lib/driver-profiles/production-scheduler'
 import { composeHealthResponse, withCheckTimeout } from './health-helpers'
 
 type Check = { name: string; ok: boolean; ms: number; error?: string }
@@ -127,8 +128,9 @@ export async function runHealthChecks(opts?: { timeoutMs?: number }): Promise<Ch
         withCheckTimeout('redis',    pingRedis,    t) as Promise<Check>,
         withCheckTimeout('minio',    pingMinio,    t) as Promise<Check>,
         withCheckTimeout('fs_esl',   pingFsEsl,    t) as Promise<Check>,
+        Promise.resolve(getMultiParkSchedulerHealthCheck()),
     ])
-    const names = ['postgres', 'redis', 'minio', 'fs_esl']
+    const names = ['postgres', 'redis', 'minio', 'fs_esl', 'multi_park_scheduler']
     // Belt-and-suspenders: `withCheckTimeout` already catches anything
     // throwable in the wrapped fn, so .rejected should never happen.
     // We still guard it so the endpoint never crashes 500.
