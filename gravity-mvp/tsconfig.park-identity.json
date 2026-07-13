@@ -2,7 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "allowJs": false,
-    "types": ["node", "vitest/globals"]
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
   },
   "include": [
     "src/lib/driver-profiles/park-identity.ts",
@@ -13,7 +16,10 @@
     "src/lib/__tests__/person-resolution.test.ts",
     "src/lib/__tests__/cross-park-source-contract.test.ts",
     "src/lib/__tests__/multi-park-driver-profiles.test.ts",
-    "src/lib/__tests__/multi-park-source-contract.test.ts"
+    "src/lib/driver-profiles/nightly-sync.ts",
+    "src/lib/__tests__/nightly-sync.test.ts",
+    "src/lib/__tests__/multi-park-source-contract.test.ts",
+    "src/lib/__tests__/final-multi-park-integration-source.test.ts"
   ],
   "exclude": []
 }

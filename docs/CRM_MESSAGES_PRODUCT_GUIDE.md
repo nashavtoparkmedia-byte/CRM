@@ -87,3 +87,55 @@ Operators can write through channels, inspect identities, review anomalies, manu
 - Contact Resolution safety tests pass.
 
 Project rule: any Messages change must update code, tests, inline help, and this guide.
+
+## Multi-Park Driver Profiles RC
+
+Version: multi-park final dev RC
+Date: 2026-07-13
+Commits included: stable park identity, manual-safe cross-park person resolution, final integration.
+
+### Lifecycle
+
+MAX, Telegram and WhatsApp messages enter CRM as channel events. CRM creates or reuses:
+
+1. Contact: the CRM person and source of truth.
+2. ContactIdentity: provider identity such as MAX, Telegram, or WhatsApp.
+3. Chat: conversation inside the channel.
+4. Message: inbound/outbound message history.
+5. Phone resolution: normalized active ContactPhone when the channel provides a phone.
+6. Suggested DriverProfile: Yandex park profiles found by phone/name as candidates only.
+7. Manual/proven attachment: manager confirms profiles, or a future stable externalPersonKey proves them.
+8. Main DriverProfile: active attached profile selected manually or by park priority.
+9. Synchronization: nightly full sync and card-open refresh keep park profiles current.
+10. Merge/manual review: Contact merge is separate from DriverProfile attachment.
+
+### Normal Behavior
+
+- One Contact may have many DriverProfiles across six parks.
+- Several active profiles in different parks is normal.
+- One active and several dismissed profiles in one park is normal.
+- Two or more active profiles in the same park for one Contact is an anomaly.
+- Phone and FIO are candidate signals only; they are not automatic person proof.
+- Suggested profiles must be reviewed by a manager before attachment.
+
+### Bug Signals
+
+- A phone-only match attaches profiles automatically.
+- A provider display id becomes the main Contact title when better data exists.
+- A DriverProfile already linked to another Contact is silently moved.
+- A dismissed profile becomes main automatically.
+- Contact merge moves chats/messages without explicit merge review.
+
+### Operator Actions
+
+- Review suggested profiles in the right panel.
+- Select only profiles that belong to the same person.
+- Use "Привязать выбранные" for DriverProfile attachment.
+- Use Contact merge only when duplicate CRM Contacts must be merged.
+- Use "Сделать главным" only for active attached profiles.
+
+### Troubleshooting
+
+- If refresh fails, old data remains visible; retry by reopening the card or refreshing the page.
+- If a profile belongs to another Contact, open that Contact or review merge; do not force attach.
+- If profiles are suggested but not attached, this is expected until manager confirmation.

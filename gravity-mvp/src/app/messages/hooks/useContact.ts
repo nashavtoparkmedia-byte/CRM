@@ -53,6 +53,23 @@ export interface ContactDriver {
     dismissedAt: string | null
 }
 
+export interface SuggestedDriverProfile {
+    id: string
+    yandexDriverId: string
+    fullName: string
+    phone: string | null
+    lastExternalPark: string | null
+    parkName: string
+    segment: string
+    status: 'working' | 'dismissed' | 'unknown'
+    contactId: string | null
+    conflictContactId: string | null
+    matchedSignals: string[]
+    personResolutionStatus: string
+    personResolutionBasis: string | null
+    externalPersonKey: string | null
+}
+
 export interface ContactProfileAnomaly {
     park: string
     activeCount: number
@@ -81,6 +98,7 @@ export interface Contact {
     mainDriver?: ContactDriver | null
     driverProfiles?: ContactDriver[]
     profileAnomalies?: ContactProfileAnomaly[]
+    suggestedDriverProfiles?: SuggestedDriverProfile[]
     mergeHistory: any[]
 }
 

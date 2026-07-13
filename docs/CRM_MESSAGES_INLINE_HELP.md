@@ -1,11 +1,13 @@
-# Как работает раздел Сообщения
+# CRM Messages Inline Help
 
-Сообщения приходят из MAX, Telegram и WhatsApp. CRM создает или находит Contact и хранит канальную identity рядом с ним. Если телефона нет, Contact может существовать без DriverProfile.
+This text is mirrored in the `/messages` right panel help modal.
 
-DriverProfile появляется из Яндекса. У одного человека может быть несколько профилей, потому что он работает в разных парках или менял тип оформления. Активный профиль работает сейчас; уволенный хранится как история.
-
-Главный профиль нужен для имени, основного телефона, парка и статуса в карточке. Его можно выбрать вручную только среди активных профилей. Если главный стал уволенным, CRM выбирает другой активный профиль детерминированно по приоритету парков.
-
-Ambiguous означает, что CRM не может доказать владельца телефона или профиля. В этом случае автоматическая связь запрещена. Merge Contact объединяет карточки людей, а привязка DriverProfile связывает профиль Яндекса с уже известным Contact.
-
-При открытии карточки CRM показывает сохраненные данные и фоном обновляет профили. Если обновление не удалось, старые данные остаются, а оператор видит ошибку и может повторить позже.
+- MAX, Telegram and WhatsApp create Contact, Identity, Chat and Message records.
+- Contact is the CRM person.
+- DriverProfile is a park-specific Yandex profile.
+- Phone and FIO are suggestions only; they do not attach cross-park profiles automatically.
+- Suggested profiles require manager confirmation.
+- DriverProfile attachment and Contact merge are different operations.
+- Main profile is selected only from attached active profiles.
+- Nightly sync and card-open refresh update saved profiles without blocking the UI.
+- Ambiguous ownership blocks automatic attachment and requires manual review.

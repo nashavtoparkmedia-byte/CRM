@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { chooseMainDriverProfile, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
+import { chooseMainDriverProfile, findSuggestedDriverProfilesForContact, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
 
 /**
  * GET /api/contacts/:id
@@ -132,6 +132,7 @@ export async function GET(
       isMain: contact.mainDriverId === profile.id,
     }))
     const mainDecision = chooseMainDriverProfile(driverProfiles, contact.mainDriverSelection === 'manual' ? contact.mainDriverId : null)
+    const suggestedDriverProfiles = await findSuggestedDriverProfilesForContact(contact.id)
     const mainDriverId = contact.mainDriverId || mainDecision.main?.id || null
     const mainDriver = driverProfiles.find(profile => profile.id === mainDriverId) || driverProfiles.find(profile => profile.id === mainDecision.main?.id) || null
     const driver = mainDriver
@@ -163,6 +164,7 @@ export async function GET(
       mainDriver,
       driverProfiles,
       profileAnomalies: mainDecision.anomalies,
+      suggestedDriverProfiles,
       mergeHistory,
     })
   } catch (err: any) {

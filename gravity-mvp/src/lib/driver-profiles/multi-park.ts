@@ -195,6 +195,133 @@ export async function setManualMainDriverProfile(contactId: string, driverId: st
   return { ok: true as const }
 }
 
+
+
+export type SuggestedDriverProfile = {
+  id: string
+  yandexDriverId: string
+  fullName: string
+  phone: string | null
+  lastExternalPark: string | null
+  parkName: string
+  segment: string
+  status: DriverProfileStatus
+  contactId: string | null
+  conflictContactId: string | null
+  matchedSignals: string[]
+  personResolutionStatus: string
+  personResolutionBasis: string | null
+  externalPersonKey: string | null
+}
+
+function phoneVariants(phone: string): string[] {
+  const normalized = normalizePhoneE164(phone)
+  if (!normalized) return []
+  const suffix = normalized.slice(-10)
+  return Array.from(new Set([normalized, normalized.replace(/^\+/, ''), `8${suffix}`, suffix]))
+}
+
+export async function findSuggestedDriverProfilesForContact(contactId: string): Promise<SuggestedDriverProfile[]> {
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: {
+      id: true,
+      phones: { where: { isActive: true }, select: { phone: true } },
+    },
+  })
+  if (!contact) return []
+  const variants = Array.from(new Set(contact.phones.flatMap(phone => phoneVariants(phone.phone))))
+  if (variants.length === 0) return []
+  const suffixes = variants.filter(value => /^\d{10}$/.test(value))
+  const profiles = await prisma.driver.findMany({
+    where: {
+      OR: [
+        { phone: { in: variants } },
+        ...suffixes.map(suffix => ({ phone: { endsWith: suffix } })),
+      ],
+    },
+    select: {
+      id: true,
+      yandexDriverId: true,
+      fullName: true,
+      phone: true,
+      lastExternalPark: true,
+      segment: true,
+      statusOverride: true,
+      dismissedAt: true,
+      contactId: true,
+      externalPersonKey: true,
+      personResolutionStatus: true,
+      personResolutionBasis: true,
+    },
+    orderBy: [{ lastExternalPark: 'asc' }, { fullName: 'asc' }],
+  })
+  const byId = new Map<string, SuggestedDriverProfile>()
+  for (const profile of profiles) {
+    if (profile.contactId === contactId) continue
+    byId.set(profile.id, {
+      id: profile.id,
+      yandexDriverId: profile.yandexDriverId,
+      fullName: profile.fullName,
+      phone: profile.phone,
+      lastExternalPark: profile.lastExternalPark,
+      parkName: normalizeParkName(profile.lastExternalPark),
+      segment: profile.segment,
+      status: getDriverProfileStatus(profile),
+      contactId: profile.contactId,
+      conflictContactId: profile.contactId && profile.contactId !== contactId ? profile.contactId : null,
+      matchedSignals: ['phone'],
+      personResolutionStatus: profile.personResolutionStatus,
+      personResolutionBasis: profile.personResolutionBasis,
+      externalPersonKey: profile.externalPersonKey,
+    })
+  }
+  return Array.from(byId.values()).sort((a, b) => {
+    const rankDiff = parkRank(a.lastExternalPark) - parkRank(b.lastExternalPark)
+    if (rankDiff !== 0) return rankDiff
+    return a.fullName.localeCompare(b.fullName)
+  })
+}
+
+export async function attachDriverProfilesToContactManually(contactId: string, driverIds: string[], selectedBy = 'operator') {
+  const ids = Array.from(new Set(driverIds.filter(Boolean)))
+  if (ids.length === 0) return { ok: false as const, error: 'driverIds_required' }
+  const contact = await prisma.contact.findUnique({ where: { id: contactId }, select: { id: true, isArchived: true } })
+  if (!contact || contact.isArchived) return { ok: false as const, error: 'contact_not_found' }
+  const drivers = await prisma.driver.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, contactId: true, dismissedAt: true, statusOverride: true },
+  })
+  if (drivers.length !== ids.length) return { ok: false as const, error: 'driver_profile_not_found' }
+  const conflicting = drivers.filter(driver => driver.contactId && driver.contactId !== contactId)
+  if (conflicting.length > 0) return { ok: false as const, error: 'profile_belongs_to_other_contact', driverIds: conflicting.map(driver => driver.id).sort() }
+  const dismissed = drivers.filter(driver => getDriverProfileStatus(driver) !== 'working')
+  if (dismissed.length > 0) return { ok: false as const, error: 'dismissed_profile_requires_review', driverIds: dismissed.map(driver => driver.id).sort() }
+
+  await prisma.driver.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      contactId,
+      personResolutionStatus: 'proven',
+      personResolutionBasis: 'PROVEN_MANUAL',
+      personResolutionAt: new Date(),
+      personResolvedBy: selectedBy,
+    },
+  })
+  await Promise.all(ids.map(driverId => prisma.contactDriverProfileAudit.create({
+    data: {
+      contactId,
+      driverId,
+      action: 'driver_profile_manual_attach',
+      selectedBy,
+      reason: 'operator_confirmed_cross_park_profile',
+      metadata: { basis: 'PROVEN_MANUAL', source: 'suggested_profiles' },
+    },
+  })))
+  const decision = await refreshContactMainDriver(contactId, selectedBy)
+  return { ok: true as const, attachedCount: ids.length, driverIds: ids, mainDriverId: decision?.main?.id ?? null }
+}
+
 export async function attachDriverProfilesToContactByPhone(phone: string | null | undefined, selectedBy = 'system') {
   const normalized = phone ? normalizePhoneE164(phone) : null
   if (!normalized) return { action: 'noop' as const, reason: 'phone could not be normalized' }

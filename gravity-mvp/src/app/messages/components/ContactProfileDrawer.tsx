@@ -151,6 +151,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
     const [showHistoricalProfiles, setShowHistoricalProfiles] = useState(false)
+    const [selectedSuggestedProfileIds, setSelectedSuggestedProfileIds] = useState<string[]>([])
+    const [attachingProfiles, setAttachingProfiles] = useState(false)
+    const [attachProfilesError, setAttachProfilesError] = useState<string | null>(null)
+    const [showMessagesHelp, setShowMessagesHelp] = useState(false)
 
     // TG Bot link state
     const [tgIdCopied, setTgIdCopied] = useState(false)
@@ -522,6 +526,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         title="Объединить контакт"
                     >
                         <GitMerge size={11} /> Объединить
+                    </button>
+                    <button
+                        onClick={() => setShowMessagesHelp(true)}
+                        className="h-[30px] w-[30px] bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center"
+                        title="Как работает раздел"
+                    >
+                        <MessageSquare size={13} />
                     </button>
                     <div className="relative">
                         <button onClick={() => setShowMoreMenu(!showMoreMenu)} className="h-[30px] w-[30px] bg-gray-100 text-gray-500 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center">
@@ -987,6 +998,106 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                 )}
 
 
+                {/* Suggested Driver Profiles */}
+                {contact?.suggestedDriverProfiles && contact.suggestedDriverProfiles.length > 0 && (() => {
+                    const selectableProfiles = contact.suggestedDriverProfiles.filter(profile => !profile.conflictContactId && profile.status === 'working')
+                    const selectedCount = selectedSuggestedProfileIds.length
+                    const toggleSuggestedProfile = (profileId: string) => {
+                        setAttachProfilesError(null)
+                        setSelectedSuggestedProfileIds(current => current.includes(profileId) ? current.filter(id => id !== profileId) : [...current, profileId])
+                    }
+                    const selectAllSuggested = () => {
+                        setAttachProfilesError(null)
+                        setSelectedSuggestedProfileIds(selectableProfiles.map(profile => profile.id))
+                    }
+                    const attachSelectedProfiles = async () => {
+                        if (!contact || selectedSuggestedProfileIds.length === 0) return
+                        const ok = window.confirm(`Вы собираетесь привязать ${selectedSuggestedProfileIds.length} профилей к контакту. Проверьте, что это один человек.`)
+                        if (!ok) return
+                        setAttachingProfiles(true)
+                        setAttachProfilesError(null)
+                        try {
+                            const res = await fetch(`/api/contacts/${contact.id}/driver-profiles/attach`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ driverIds: selectedSuggestedProfileIds, selectedBy: 'operator' }),
+                            })
+                            const body = await res.json().catch(() => ({}))
+                            if (!res.ok || body.ok === false) {
+                                setAttachProfilesError(body.error || `Ошибка ${res.status}`)
+                                return
+                            }
+                            setSelectedSuggestedProfileIds([])
+                            await refetchContact()
+                        } catch (err: any) {
+                            setAttachProfilesError(err.message || 'Ошибка сети')
+                        } finally {
+                            setAttachingProfiles(false)
+                        }
+                    }
+                    return (
+                        <>
+                            <div className="h-px bg-[#E8E8E8] mx-3" />
+                            <div className="px-[4px] py-2.5" data-testid="suggested-driver-profiles">
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                    <div>
+                                        <h4 className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Возможные профили водителя</h4>
+                                        <div className="text-[10px] text-gray-500 mt-0.5">Проверьте, принадлежат ли эти профили одному человеку</div>
+                                    </div>
+                                    {selectableProfiles.length > 1 && (
+                                        <button onClick={selectAllSuggested} className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4] whitespace-nowrap">
+                                            Выбрать все
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="space-y-1">
+                                    {contact.suggestedDriverProfiles.map(profile => {
+                                        const disabled = Boolean(profile.conflictContactId) || profile.status !== 'working'
+                                        const checked = selectedSuggestedProfileIds.includes(profile.id)
+                                        return (
+                                            <label key={profile.id} className={`flex gap-2 rounded border px-2 py-1.5 ${disabled ? 'border-gray-100 bg-gray-50 opacity-70' : checked ? 'border-[#3390EC] bg-blue-50' : 'border-amber-100 bg-amber-50/60'}`} title={profile.conflictContactId ? 'Профиль уже принадлежит другому Contact' : profile.status !== 'working' ? 'Уволенный профиль требует отдельной проверки' : 'Можно выбрать для ручной привязки'}>
+                                                <input
+                                                    type="checkbox"
+                                                    className="mt-0.5"
+                                                    checked={checked}
+                                                    disabled={disabled}
+                                                    onChange={() => toggleSuggestedProfile(profile.id)}
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-[11px] font-semibold text-[#111] truncate">{profile.fullName}</span>
+                                                        <span className={`text-[9px] px-1 py-px rounded ${profile.status === 'working' ? 'text-emerald-700 bg-emerald-50' : 'text-gray-600 bg-gray-100'}`}>{profile.status === 'working' ? 'работает' : profile.status === 'dismissed' ? 'уволен' : 'неизвестно'}</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-gray-500 truncate">{profile.parkName || profile.lastExternalPark || 'Парк не указан'} · {profile.segment || 'тип не указан'}</div>
+                                                    <div className="text-[10px] text-gray-400 font-mono truncate">{profile.phone || 'телефон не указан'} · совпало: телефон</div>
+                                                    {profile.conflictContactId && <div className="text-[10px] text-red-600 mt-0.5">Уже привязан к другому Contact</div>}
+                                                </div>
+                                            </label>
+                                        )
+                                    })}
+                                </div>
+                                {attachProfilesError && <div className="mt-1.5 text-[10px] text-red-600">{attachProfilesError}</div>}
+                                <div className="mt-2 flex items-center gap-1.5">
+                                    <button
+                                        disabled={attachingProfiles || selectedCount === 0}
+                                        onClick={attachSelectedProfiles}
+                                        className="h-[26px] px-2.5 rounded bg-[#3390EC] text-white text-[10px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                                    >
+                                        {attachingProfiles ? <Loader2 size={10} className="animate-spin" /> : <UserCheck size={10} />}
+                                        Привязать выбранные
+                                    </button>
+                                    <button
+                                        onClick={() => { setSelectedSuggestedProfileIds([]); setAttachProfilesError(null) }}
+                                        className="h-[26px] px-2 rounded bg-gray-100 text-gray-600 text-[10px] font-semibold hover:bg-gray-200"
+                                    >
+                                        Не принадлежат этому контакту
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    )
+                })()}
+
                 {/* Yandex Driver Profiles */}
                 {contact?.driverProfiles && contact.driverProfiles.length > 0 && (() => {
                     const activeProfiles = contact.driverProfiles.filter(profile => profile.status === 'working')
@@ -1263,6 +1374,24 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     </div>
                 </div>
             </div>
+
+            {showMessagesHelp && (
+                <div className="fixed inset-0 bg-black/30 z-[100] flex items-center justify-center" onClick={() => setShowMessagesHelp(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl w-[420px] max-h-[560px] overflow-y-auto p-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-[15px] font-bold text-[#111]">Как работает раздел</h3>
+                            <button onClick={() => setShowMessagesHelp(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+                        </div>
+                        <div className="space-y-2 text-[12px] text-gray-700 leading-snug">
+                            <p>MAX, Telegram и WhatsApp создают Contact, Identity, Chat и Message. Contact — человек в CRM.</p>
+                            <p>Если в сообщении есть телефон, CRM ищет профили водителя в шести парках. Телефон и ФИО дают только подсказки, но не привязывают профили автоматически.</p>
+                            <p>Блок «Возможные профили водителя» требует ручного подтверждения менеджером. Привязка профиля водителя и объединение Contact — разные операции.</p>
+                            <p>Главный профиль выбирается только среди привязанных активных профилей. Сначала ручной выбор, затем приоритет парков: Наш Автопарк, YOKO, YOKO-2, YOKO-3, YOKO-4, YOKO.Доставка.</p>
+                            <p>При ошибке обновления старые данные остаются на экране, можно повторить открытием карточки или обновлением страницы.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Task Create Modal */}
             {isTaskModalOpen && contactOrDriverId && (
