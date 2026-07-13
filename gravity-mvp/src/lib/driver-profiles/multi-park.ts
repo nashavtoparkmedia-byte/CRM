@@ -218,16 +218,36 @@ export async function attachDriverProfilesToContactByPhone(phone: string | null 
         { phone: { endsWith: suffix } },
       ],
     },
-    select: { id: true, contactId: true },
+    select: { id: true, contactId: true, externalPersonKey: true },
   })
   if (!drivers || drivers.length === 0) return { action: 'no_driver' as const, contactId }
 
   const conflicting = drivers.filter(driver => driver.contactId && driver.contactId !== contactId)
   if (conflicting.length > 0) return { action: 'ambiguous_driver_contact' as const, contactId, driverIds: conflicting.map(driver => driver.id) }
 
+  const personKeys = Array.from(new Set(drivers.map(driver => driver.externalPersonKey).filter((key): key is string => Boolean(key))))
+  if (personKeys.length !== 1 || drivers.some(driver => !driver.externalPersonKey)) {
+    return {
+      action: 'suggested_profiles' as const,
+      contactId,
+      profileCount: drivers.length,
+      driverIds: drivers.map(driver => driver.id),
+      reason: 'phone is not proof of cross-park person ownership',
+    }
+  }
+
   const unlinkedIds = drivers.filter(driver => driver.contactId !== contactId).map(driver => driver.id)
   if (unlinkedIds.length > 0) {
-    await prisma.driver.updateMany({ where: { id: { in: unlinkedIds } }, data: { contactId } })
+    await prisma.driver.updateMany({
+      where: { id: { in: unlinkedIds }, externalPersonKey: personKeys[0] },
+      data: {
+        contactId,
+        personResolutionStatus: 'proven',
+        personResolutionBasis: 'STABLE_PROVIDER_PERSON_KEY',
+        personResolutionAt: new Date(),
+        personResolvedBy: selectedBy,
+      },
+    })
   }
   await refreshContactMainDriver(contactId, selectedBy)
   return { action: unlinkedIds.length > 0 ? 'linked_profiles' as const : 'noop' as const, contactId, linkedCount: unlinkedIds.length, profileCount: drivers.length }

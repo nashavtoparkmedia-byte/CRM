@@ -329,6 +329,12 @@ model Driver {
   yandexDriverId       String               @unique
   externalDriverProfileId String?
   externalParkId       String?
+  externalPersonKey    String?
+  personKeyType        String?
+  personResolutionStatus String            @default("unlinked")
+  personResolutionBasis  String?
+  personResolutionAt     DateTime?
+  personResolvedBy       String?
   parkId               String?
   sourceConnectionId   String?
   fullName             String
@@ -374,6 +380,8 @@ model Driver {
   @@index([parkId])
   @@index([sourceConnectionId])
   @@index([externalParkId])
+  @@index([externalPersonKey])
+  @@index([personResolutionStatus])
 }
 
 /// Driver-initiated actions on their active Yandex order, executed via the
