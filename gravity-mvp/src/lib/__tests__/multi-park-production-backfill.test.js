@@ -27,6 +27,7 @@ describe('multi-park production backfill safety', () => {
   it('defaults to dry-run and requires bounded batch size', () => {
     expect(backfill.parseArgs(['node', 'script'])).toMatchObject({ dryRun: true, write: false })
     expect(() => backfill.parseArgs(['node', 'script', '--batch-size', '0'])).toThrow(/batch-size/)
+    expect(() => backfill.parseArgs(['node', 'script', '--rollback'])).toThrow(/rollback-manifest/)
   })
 
   it('blocks write without a backup marker and derived confirmation token', () => {
@@ -37,10 +38,11 @@ describe('multi-park production backfill safety', () => {
     const marker = path.join(dir, 'backup-marker.json')
     fs.writeFileSync(marker, JSON.stringify({ timestamp: '2026-07-13T00:00:00Z', dbIdentity: 'db:5432/crm', dumpPath: '/tmp/dump.sql', sha256: 'dump-sha' }))
     const bad = backfill.parseArgs(['node', 'script', '--write', '--release-id', 'rel-1', '--backup-marker', marker, '--confirmation-token', 'yes'])
-    expect(() => backfill.assertWriteSafety(bad, { commit: 'abc', snapshotSha256: 'snap' })).toThrow(/confirmation token/)
+    expect(() => backfill.assertWriteSafety(bad, { commit: 'abc', dbIdentity: 'db:5432/crm', snapshotSha256: 'snap' })).toThrow(/confirmation token/)
     const token = backfill.generateConfirmationToken({ releaseId: 'rel-1', dbIdentity: 'db:5432/crm', expectedCommit: 'abc', snapshotSha256: 'snap' })
     const good = backfill.parseArgs(['node', 'script', '--write', '--release-id', 'rel-1', '--backup-marker', marker, '--confirmation-token', token, '--expected-commit', 'abc'])
-    expect(backfill.assertWriteSafety(good, { commit: 'abc', snapshotSha256: 'snap' })).toMatchObject({ dbIdentity: 'db:5432/crm' })
+    expect(() => backfill.assertWriteSafety(good, { commit: 'abc', dbIdentity: 'other:5432/crm', snapshotSha256: 'snap' })).toThrow(/DB identity mismatch/)
+    expect(backfill.assertWriteSafety(good, { commit: 'abc', dbIdentity: 'db:5432/crm', snapshotSha256: 'snap' })).toMatchObject({ dbIdentity: 'db:5432/crm' })
   })
 })
 
@@ -73,6 +75,8 @@ describe('multi-park production backfill planning', () => {
   it('creates source-only profile with composite-safe yandexDriverId and no contact link', () => {
     const plan = backfill.planBackfill({ apiConnections, sourceProfiles: sixParkSnapshot(), existingParks: [], existingParkConnections: [], legacyDrivers: [] })
     expect(plan.summary.sourceOnlyProfiles).toBe(6)
+    expect(plan.summary.parkUpdates).toBe(0)
+    expect(plan.summary.parkConnectionUpdates).toBe(0)
     expect(plan.operations.sourceOnlyInserts[0].data.yandexDriverId).toMatch(/^park:/)
     expect(plan.operations.sourceOnlyInserts[0].data).not.toHaveProperty('contactId')
     expect(plan.operations.sourceOnlyInserts[0].data.personResolutionStatus).toBe('unlinked')
