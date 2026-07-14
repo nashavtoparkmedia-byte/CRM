@@ -40,7 +40,9 @@ describe('multi-park source contracts', () => {
     expect(profilePanel).toContain('Обновляем данные')
     expect(profilePanel).toContain('Сделать главным')
     expect(profilePanel).toContain('Возможные профили водителя: {suggestions.length}')
-    expect(profilePanel).toContain('Технические данные')
+    expect(profilePanel).not.toContain('data-testid="technical-data"')
+    expect(drawer).toContain('data-testid="technical-data"')
+    expect(drawer.indexOf('data-testid="technical-data"')).toBeGreaterThan(drawer.indexOf('{/* Context Info */}'))
   })
 
   test('Contact opening triggers background DriverProfile refresh endpoint', () => {

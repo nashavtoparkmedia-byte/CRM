@@ -76,17 +76,26 @@ export interface ContactDriverProfilePayload {
   lastExternalPark: string | null
   parkCode: string | null
   parkName: string
+  employmentTypeCode: string | null
+  employmentTypeLabel: string
+  /** @deprecated Use employmentTypeCode and employmentTypeLabel. */
   employmentType: string | null
   workStatus: string | null
   currentStatus: string | null
   segment: string
   score?: number | null
   status: DriverProfileStatus
+  normalizedStatus: DriverProfileStatus
+  statusLabel: string
   isMain: boolean
   contactId: string | null
   conflictContactId: string | null
   conflictContact: ConflictContactPayload | null
+  linkedContactConflict: boolean
+  linkedContactSummary: ConflictContactPayload | null
   matchedSignals: string[]
+  suggestionBasis: string
+  suggestionBasisLabel: string
   personResolutionStatus: string
   personResolutionBasis: string | null
   externalPersonKey: string | null
@@ -134,6 +143,12 @@ export interface ContactTechnicalDataPayload {
   resolutionState: ContactDriverProfileState
   lastSuccessfulSyncAt: string | null
   lastFailedSyncAt: string | null
+  profileSourceValues: Array<{
+    id: string
+    employmentTypeCode: string | null
+    workStatusCode: string | null
+    currentStatusCode: string | null
+  }>
 }
 
 export interface ContactProfilePayload {

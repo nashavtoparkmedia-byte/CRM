@@ -13,6 +13,7 @@ import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
 import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
+import { countUniqueProviderChannels, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
 
 // Custom field types
 interface CustomField {
@@ -54,6 +55,12 @@ function formatPhone(phone: string): string {
         return `+7 ${phone.slice(2, 5)} ${phone.slice(5, 8)}-${phone.slice(8, 10)}-${phone.slice(10)}`
     }
     return phone
+}
+
+function formatTechnicalDate(value: string | null): string {
+    if (!value) return 'нет'
+    const date = new Date(value)
+    return Number.isNaN(date.getTime()) ? 'нет' : date.toLocaleString('ru-RU')
 }
 
 function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
@@ -103,10 +110,10 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
                     </button>
                 )}
                 {identity.source === 'auto' && contact && contact.identities.length > 1 && (
-                    <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded">авто</span>
+                    <span className="text-[8px] text-gray-500 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">{getIdentitySourceLabel(identity.source)}</span>
                 )}
                 {identity.source === 'manual' && (
-                    <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded">ручной</span>
+                    <span className="text-[8px] text-violet-600 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">{getIdentitySourceLabel(identity.source)}</span>
                 )}
             </div>
             <div className="ml-[4px]">
@@ -287,19 +294,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
     const reachabilityBadge = (reachable: boolean | null, live?: LiveReachabilityEntry) => {
         if (reachable === true) {
-            return { label: 'есть', cls: 'text-emerald-700 bg-emerald-50', title: 'Аккаунт найден у провайдера' }
+            return { label: 'Найден', cls: 'text-emerald-700 bg-emerald-50', title: 'Аккаунт найден у провайдера' }
         }
         if (reachable === false) {
-            return { label: 'нет', cls: 'text-gray-600 bg-gray-100', title: 'Канал проверен: аккаунт у провайдера не найден' }
+            return { label: 'Не найден', cls: 'text-gray-600 bg-gray-100', title: 'Канал проверен: аккаунт у провайдера не найден' }
         }
         if (live?.status === 'checking' && live.retryable === false) {
             return {
-                label: 'нет связи',
+                label: 'Нет связи',
                 cls: 'text-amber-700 bg-amber-50',
                 title: live.error || 'CRM сейчас не может проверить канал. Это не ответ провайдера и не означает, что аккаунта нет',
             }
         }
-        return { label: 'проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
+        return { label: 'Проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
     }
 
     if (!chat) return null
@@ -777,10 +784,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                                 </span>
                                                             )}
                                                             {identity.source === 'auto' && contact && contact.identities.length > 1 && (
-                                                                <span className="text-[8px] text-gray-400 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">авто</span>
+                                                                <span className="text-[8px] text-gray-500 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">{getIdentitySourceLabel(identity.source)}</span>
                                                             )}
                                                             {identity.source === 'manual' && (
-                                                                <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">ручной</span>
+                                                                <span className="text-[8px] text-violet-600 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">{getIdentitySourceLabel(identity.source)}</span>
                                                             )}
                                                             {hasFailed && <AlertCircle size={10} className="text-red-500" />}
                                                         </div>
@@ -1170,12 +1177,34 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">Каналов</span>
-                                    <span className="text-[#111] font-medium">{contact.identities.length}</span>
+                                    <span className="text-[#111] font-medium">{countUniqueProviderChannels(contact.channels)}</span>
                                 </div>
                             </>
                         )}
                     </div>
                 </div>
+
+                {contact && (
+                    <>
+                        <div className="h-px bg-[#E8E8E8] mx-3" />
+                        <details className="px-[4px] py-2.5" data-testid="technical-data">
+                            <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-gray-400">Технические данные</summary>
+                            <div className="mt-2 space-y-0.5 break-all font-mono text-[9px] text-gray-500">
+                                <div>Contact: {contact.technicalData.contactId}</div>
+                                <div>Resolution: {contact.technicalData.resolutionState}</div>
+                                <div>Provider IDs: {contact.technicalData.providerIds.map(item => `${item.channel}:${item.externalId}`).join(', ') || 'нет'}</div>
+                                <div>DriverProfile IDs: {contact.technicalData.driverProfileIds.join(', ') || 'нет'}</div>
+                                <div>Suggested IDs: {contact.technicalData.suggestedProfileIds.join(', ') || 'нет'}</div>
+                                <div>Last success: {formatTechnicalDate(contact.technicalData.lastSuccessfulSyncAt)}</div>
+                                {contact.technicalData.profileSourceValues.map(profile => (
+                                    <div key={profile.id}>
+                                        {profile.id}: employment={profile.employmentTypeCode || 'unknown'}, work={profile.workStatusCode || 'unknown'}, current={profile.currentStatusCode || 'unknown'}
+                                    </div>
+                                ))}
+                            </div>
+                        </details>
+                    </>
+                )}
             </div>
 
             {showMessagesHelp && (

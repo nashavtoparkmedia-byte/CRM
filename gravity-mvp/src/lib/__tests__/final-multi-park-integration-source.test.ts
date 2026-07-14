@@ -30,10 +30,12 @@ describe('final multi-park integration source contracts', () => {
   test('right panel contains suggested profile review flow and inline help', () => {
     const drawer = read('src/app/messages/components/ContactProfileDrawer.tsx')
     const profilePanel = read('src/app/messages/components/ContactDriverProfilesPanel.tsx')
+    const profileUi = read('src/lib/contact-profile-ui.ts')
     expect(drawer).toContain('ContactDriverProfilesPanel')
     expect(profilePanel).toContain('Возможные профили водителя')
     expect(profilePanel).toContain('Проверить профили')
-    expect(profilePanel).toContain('Привязать выбранные')
+    expect(profilePanel).toContain('formatAttachButton(selectedProfiles.length)')
+    expect(profileUi).toContain('Привязать выбранные')
     expect(profilePanel).toContain('Как работает раздел')
     expect(profilePanel).toContain('/driver-profiles/attach')
     expect(profilePanel).toContain('window.confirm')

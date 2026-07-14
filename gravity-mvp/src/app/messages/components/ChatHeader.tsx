@@ -15,6 +15,7 @@ import type { TaskDTO } from '@/lib/tasks/types'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import Link from 'next/link'
 import CallButton from '@/components/sip/CallButton'
+import { countUniqueProviderChannels } from '@/lib/contact-profile-ui'
 
 interface ChatHeaderProps {
     chat: Conversation
@@ -139,7 +140,7 @@ export default function ChatHeader({
     const handleCopyPhone = async () => {
         const raw =
             chat.driver?.phone ||
-            contact?.phones?.find?.((p: any) => p.isPrimary)?.phone ||
+            contact?.phones?.find(p => p.isPrimary)?.phone ||
             contact?.phones?.[0]?.phone ||
             (chat.externalChatId?.startsWith('+') ? chat.externalChatId.split(':')[0] : null) ||
             chat.name
@@ -177,7 +178,9 @@ export default function ChatHeader({
     // Build 2nd line metadata
     const segment = contact?.driver?.segment || chat.driver?.segment
     const masterSource = contact?.masterSource
-    const channelCount = contact?.identities?.length ?? chat.allChannels?.length ?? 0
+    const channelCount = contact
+        ? countUniqueProviderChannels(contact.channels)
+        : countUniqueProviderChannels(chat.allChannels)
 
     const SOURCE_LABEL: Record<string, string> = {
         yandex: 'Яндекс',
@@ -415,7 +418,7 @@ export default function ChatHeader({
                             {(() => {
                                 const phone =
                                     chat.driver?.phone ||
-                                    contact?.phones?.find?.((p: any) => p.isPrimary)?.phone ||
+                                    contact?.phones?.find(p => p.isPrimary)?.phone ||
                                     contact?.phones?.[0]?.phone ||
                                     (chat.externalChatId?.startsWith('+') ? chat.externalChatId.split(':')[0] : null)
                                 if (!phone) return null

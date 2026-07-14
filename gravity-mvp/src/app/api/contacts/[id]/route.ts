@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { chooseMainDriverProfile, findSuggestedDriverProfilesForContact, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
 import { deriveDriverProfileState, type ContactProfileAnomalyPayload } from '@/lib/contact-profile-contract'
+import {
+  getDriverProfileStatusLabel,
+  getEmploymentTypeLabel,
+  getSuggestionBasis,
+  groupDriverProfilesByPark,
+} from '@/lib/contact-profile-ui'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -18,6 +24,10 @@ function dateOrNull(value: unknown): Date | null {
   if (!value) return null
   const date = value instanceof Date ? value : new Date(String(value))
   return Number.isNaN(date.getTime()) ? null : date
+}
+
+function dateIsoOrNull(value: unknown): string | null {
+  return dateOrNull(value)?.toISOString() ?? null
 }
 
 function latestDate(values: Array<Date | null | undefined>): Date | null {
@@ -211,6 +221,11 @@ export async function GET(
       const connection = syncForProfile(profile)
       const conflictContactId = profile.conflictContactId || (profile.contactId && profile.contactId !== contact.id ? profile.contactId : null)
       const sourceUpdatedAt = dateOrNull(yandexProfile.sourceUpdatedAt) || profile.lastFleetCheckAt || profile.updatedAt || null
+      const employmentTypeCode = stringOrNull(yandexProfile.employmentType)
+      const normalizedStatus = profile.status || getDriverProfileStatus(profile)
+      const matchedSignals = profile.matchedSignals || []
+      const suggestionBasis = getSuggestionBasis(matchedSignals)
+      const linkedContactSummary = conflictContactId ? conflictsById.get(conflictContactId) ?? null : null
       return {
         id: profile.id,
         yandexDriverId: profile.yandexDriverId,
@@ -222,26 +237,34 @@ export async function GET(
         lastExternalPark: profile.lastExternalPark ?? null,
         parkCode: profile.parkCode ?? profile.park?.parkCode ?? connection?.park.parkCode ?? null,
         parkName: normalizeParkName(profile.parkName || profile.park?.parkName || connection?.park.parkName || profile.lastExternalPark),
-        employmentType: stringOrNull(yandexProfile.employmentType),
-        workStatus: stringOrNull(yandexProfile.workStatus),
-        currentStatus: profile.lastFleetCheckStatus ?? stringOrNull(yandexProfile.currentStatus),
+        employmentTypeCode,
+        employmentTypeLabel: getEmploymentTypeLabel(employmentTypeCode),
+        employmentType: employmentTypeCode,
+        workStatus: stringOrNull(yandexProfile.sourceWorkStatus) || stringOrNull(yandexProfile.workStatus),
+        currentStatus: profile.lastFleetCheckStatus ?? stringOrNull(yandexProfile.sourceCurrentStatus) ?? stringOrNull(yandexProfile.currentStatus),
         segment: profile.segment || 'unknown',
         score: profile.score ?? null,
-        status: profile.status || getDriverProfileStatus(profile),
+        status: normalizedStatus,
+        normalizedStatus,
+        statusLabel: getDriverProfileStatusLabel(normalizedStatus),
         isMain,
         contactId: profile.contactId ?? null,
         conflictContactId,
-        conflictContact: conflictContactId ? conflictsById.get(conflictContactId) ?? null : null,
-        matchedSignals: profile.matchedSignals || [],
+        conflictContact: linkedContactSummary,
+        linkedContactConflict: Boolean(conflictContactId),
+        linkedContactSummary,
+        matchedSignals,
+        suggestionBasis: suggestionBasis.code,
+        suggestionBasisLabel: suggestionBasis.label,
         personResolutionStatus: profile.personResolutionStatus || 'unlinked',
         personResolutionBasis: profile.personResolutionBasis ?? null,
         externalPersonKey: profile.externalPersonKey ?? null,
-        lastOrderAt: profile.lastOrderAt ?? null,
-        hiredAt: profile.hiredAt ?? null,
-        dismissedAt: profile.dismissedAt ?? null,
-        sourceUpdatedAt,
-        lastSuccessfulSyncAt: connection?.lastSuccessfulSyncAt ?? null,
-        lastFailedSyncAt: connection?.lastFailedSyncAt ?? null,
+        lastOrderAt: dateIsoOrNull(profile.lastOrderAt),
+        hiredAt: dateIsoOrNull(profile.hiredAt),
+        dismissedAt: dateIsoOrNull(profile.dismissedAt),
+        sourceUpdatedAt: dateIsoOrNull(sourceUpdatedAt),
+        lastSuccessfulSyncAt: dateIsoOrNull(connection?.lastSuccessfulSyncAt),
+        lastFailedSyncAt: dateIsoOrNull(connection?.lastFailedSyncAt),
       }
     }
 
@@ -279,6 +302,17 @@ export async function GET(
       parkName: anomaly.park,
       profileIds: anomaly.driverIds,
     }))
+    for (const group of groupDriverProfilesByPark([...attachedProfiles, ...suggestedProfiles])) {
+      if (group.activeCount < 2) continue
+      if (anomalies.some(anomaly => anomaly.type === 'multiple_active_profiles_same_park' && anomaly.parkName === group.parkName)) continue
+      anomalies.push({
+        type: 'multiple_active_profiles_same_park',
+        severity: 'warning',
+        message: `В парке ${group.parkName} найдено несколько активных профилей`,
+        parkName: group.parkName,
+        profileIds: group.active.filter(profile => profile.normalizedStatus === 'working').map(profile => profile.id),
+      })
+    }
     for (const profile of suggestedProfiles.filter(profile => profile.conflictContactId)) {
       anomalies.push({
         type: 'profile_belongs_to_other_contact',
@@ -370,6 +404,12 @@ export async function GET(
         resolutionState: driverProfileState,
         lastSuccessfulSyncAt: latestSuccessfulSyncAt,
         lastFailedSyncAt: latestFailedSyncAt,
+        profileSourceValues: [...attachedProfiles, ...suggestedProfiles].map(profile => ({
+          id: profile.id,
+          employmentTypeCode: profile.employmentTypeCode,
+          workStatusCode: profile.workStatus,
+          currentStatusCode: profile.currentStatus,
+        })),
       },
       driver,
       mainDriver: mainDriverProfile,

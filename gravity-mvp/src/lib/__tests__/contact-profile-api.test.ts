@@ -24,6 +24,7 @@ const parks = ['Наш Автопарк', 'YOKO', 'YOKO-2', 'YOKO-3', 'YOKO-4', 
 
 function suggestedProfile(index: number) {
   const parkName = parks[index]
+  const employmentTypes = ['park_employee', 'selfemployed', 'individual_entrepreneur']
   return {
     id: `driver-${index + 1}`,
     yandexDriverId: `legacy-${index + 1}`,
@@ -45,7 +46,14 @@ function suggestedProfile(index: number) {
     lastFleetCheckStatus: 'working',
     lastFleetCheckAt: null,
     updatedAt: new Date('2026-07-13T12:00:00.000Z'),
-    customFields: {},
+    customFields: {
+      yandexProfile: {
+        employmentType: employmentTypes[index % employmentTypes.length],
+        sourceWorkStatus: 'working',
+        sourceCurrentStatus: 'offline',
+        sourceUpdatedAt: '2026-07-13T12:00:00.000Z',
+      },
+    },
   }
 }
 
@@ -137,6 +145,30 @@ describe('canonical Contact profile API', () => {
     expect(body.driver).toBeNull()
     expect(body.technicalData.resolutionState).toBe('UNLINKED_WITH_SUGGESTIONS')
     expect(body.suggestedProfiles.every((profile: { matchedSignals: string[] }) => profile.matchedSignals.includes('phone'))).toBe(true)
+    expect(body.suggestedProfiles.map((profile: { employmentTypeLabel: string }) => profile.employmentTypeLabel)).toEqual([
+      'Физлицо',
+      'Парковый СМЗ',
+      'Парковый ИП',
+      'Физлицо',
+      'Парковый СМЗ',
+      'Парковый ИП',
+    ])
+    expect(body.suggestedProfiles.every((profile: {
+      employmentTypeCode: string
+      normalizedStatus: string
+      statusLabel: string
+      suggestionBasis: string
+      suggestionBasisLabel: string
+      linkedContactConflict: boolean
+    }) => profile.employmentTypeCode
+      && profile.normalizedStatus === 'working'
+      && profile.statusLabel === 'Работает'
+      && profile.suggestionBasis === 'phone'
+      && profile.suggestionBasisLabel === 'Совпадение номера телефона'
+      && profile.linkedContactConflict === false)).toBe(true)
+    expect(body.suggestedProfiles.every((profile: { workStatus: string }) => profile.workStatus === 'working')).toBe(true)
+    expect(body.technicalData.profileSourceValues).toHaveLength(6)
+    expect(body.technicalData.profileSourceValues[0].employmentTypeCode).toBe('park_employee')
     expect(prismaMock.driver.updateMany).not.toHaveBeenCalled()
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
   })
