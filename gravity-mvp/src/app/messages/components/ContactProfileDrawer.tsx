@@ -13,6 +13,7 @@ import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
 import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
+import AddPhoneResolutionDialog from "./AddPhoneResolutionDialog"
 import { countUniqueProviderChannels, formatProviderChannelCount, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
 
 // Custom field types
@@ -177,10 +178,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
     // Add-phone inline form state
     const [showAddPhone, setShowAddPhone] = useState(false)
-    const [newPhoneInput, setNewPhoneInput] = useState('')
-    const [addingPhone, setAddingPhone] = useState(false)
-    const [addPhoneError, setAddPhoneError] = useState<string | null>(null)
-    const [phoneConflict, setPhoneConflict] = useState<{ contactId: string; displayName: string; phone: string } | null>(null)
 
     // Reachability: merge persisted status from DB with optional live-check override.
     // "checking" is an operational state, not a green confirmation.
@@ -590,93 +587,15 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Телефоны и каналы</h4>
                             {!showAddPhone && (
                                 <button
-                                    onClick={() => { setShowAddPhone(true); setAddPhoneError(null); setPhoneConflict(null) }}
+                                    onClick={() => setShowAddPhone(true)}
                                     className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4] flex items-center gap-0.5"
+                                    title="Проверить владельца номера перед добавлением"
                                 >
                                     <Plus size={10} />
                                     Добавить номер
                                 </button>
                             )}
                         </div>
-
-                        {/* Inline form for adding a new phone manually. POST hits
-                            /api/contacts/:id/phones — if the phone already
-                            belongs to ANOTHER contact, the API returns a
-                            "PHONE_BELONGS_TO_OTHER" warning with suggestMerge,
-                            which we surface as a "Объединить?" prompt. */}
-                        {showAddPhone && (
-                            <div className="mb-3 p-[2px] rounded-lg border border-gray-200 bg-gray-50">
-                                <div className="flex items-center gap-1.5">
-                                    <input
-                                        autoFocus
-                                        type="tel"
-                                        inputMode="tel"
-                                        value={newPhoneInput}
-                                        onChange={(e) => setNewPhoneInput(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Escape') { setShowAddPhone(false); setNewPhoneInput('') }
-                                            if (e.key === 'Enter') (document.getElementById('add-phone-submit') as HTMLButtonElement)?.click()
-                                        }}
-                                        placeholder="+7 922 555-44-33"
-                                        className="flex-1 h-[28px] rounded-md bg-white border border-gray-200 px-[2px] text-[12px] font-mono outline-none focus:border-[#3390EC]"
-                                    />
-                                    <button
-                                        id="add-phone-submit"
-                                        disabled={addingPhone || !newPhoneInput.trim()}
-                                        onClick={async () => {
-                                            setAddingPhone(true); setAddPhoneError(null); setPhoneConflict(null)
-                                            try {
-                                                const res = await fetch(`/api/contacts/${contact.id}/phones`, {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify({ phone: newPhoneInput.trim(), isPrimary: contact.phones.length === 0 }),
-                                                })
-                                                const body = await res.json().catch(() => ({}))
-                                                if (body.warning === 'PHONE_BELONGS_TO_OTHER' && body.existingContact) {
-                                                    setPhoneConflict({
-                                                        contactId: body.existingContact.id,
-                                                        displayName: body.existingContact.displayName,
-                                                        phone: body.phone,
-                                                    })
-                                                    return
-                                                }
-                                                if (!res.ok) {
-                                                    setAddPhoneError(body.message ?? body.error ?? `Ошибка ${res.status}`)
-                                                    return
-                                                }
-                                                setShowAddPhone(false); setNewPhoneInput('')
-                                                refetchContact()
-                                            } catch (err: any) {
-                                                setAddPhoneError(err.message ?? 'Ошибка сети')
-                                            } finally {
-                                                setAddingPhone(false)
-                                            }
-                                        }}
-                                        className="h-[28px] px-2.5 rounded-md bg-[#3390EC] text-white text-[11px] font-semibold hover:bg-[#2B7FD4] disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {addingPhone ? <Loader2 size={11} className="animate-spin" /> : 'Сохранить'}
-                                    </button>
-                                    <button
-                                        onClick={() => { setShowAddPhone(false); setNewPhoneInput(''); setAddPhoneError(null); setPhoneConflict(null) }}
-                                        className="h-[28px] px-1.5 rounded-md text-gray-400 hover:text-gray-700 text-[11px]"
-                                    >
-                                        <X size={12} />
-                                    </button>
-                                </div>
-                                {addPhoneError && (
-                                    <div className="mt-1.5 text-[10px] text-red-500">{addPhoneError}</div>
-                                )}
-                                {phoneConflict && (
-                                    <div className="mt-1.5 p-1.5 rounded bg-amber-50 border border-amber-200 text-[10px]">
-                                        <div className="font-semibold text-amber-700">Этот номер уже у другого контакта</div>
-                                        <div className="text-amber-700 mt-0.5">«{phoneConflict.displayName}»</div>
-                                        <div className="text-amber-600 mt-1">
-                                            Чтобы добавить — сначала объедините контакты на «…» → Объединить.
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
 
                         {phonesWithIdentities.length === 0 && orphanIdentities.length === 0 && !showAddPhone && (
                             <div className="text-[12px] text-gray-400 italic">Нет активных каналов связи</div>
@@ -942,7 +861,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     <span className="font-medium">{botLinkInfo.driverName}</span>
                                 </div>
                             ) : (
-                                <div className="text-[11px] text-gray-400 italic">Не привязан к водителю</div>
+                                <div className="text-[11px] text-gray-400 italic">Профиль для Telegram-бота не выбран</div>
                             )}
 
                             {/* Driver search/link UI */}
@@ -1024,7 +943,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         <div className="space-y-1.5 mb-[2px]">
                             <div className="flex items-center justify-between min-h-[28px]">
                                 <span className="text-[12px] text-gray-500 w-[80px]">Сегмент</span>
-                                <span className="text-[12px] font-medium text-[#111]">{contact.driver.segment || '—'}</span>
+                                <span className="text-[12px] font-medium text-[#111]">
+                                    {!contact.driver.segment || contact.driver.segment.toLowerCase() === 'unknown' ? 'Не определён' : contact.driver.segment}
+                                </span>
                             </div>
                             {contact.driver.score != null && (
                                 <div className="flex items-center justify-between min-h-[28px]">
@@ -1217,6 +1138,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         </div>
                         <div className="space-y-2 text-[12px] text-gray-700 leading-snug">
                             <p><strong>Contact.</strong> Первое сообщение MAX, Telegram или WhatsApp создаёт человека в CRM, Identity канала, Chat и Message. Если провайдер не передал телефон, карточка остаётся с provider identity до ручного уточнения.</p>
+                            <p><strong>Добавление номера.</strong> CRM сначала проверяет владельцев. Свободный номер добавляется только после подтверждения; повтор своего номера безопасен; чужой или неоднозначный номер не записывается и открывает ручную проверку. После этого совпадения DriverProfile остаются только предложениями.</p>
                             <p><strong>Подсказки.</strong> По подтверждённому телефону CRM ищет профили в шести парках. Совпадение телефона или ФИО — только предложение, а не доказательство принадлежности.</p>
                             <p><strong>Проверка.</strong> Откройте «Возможные профили водителя», сравните ФИО, парк, телефон и статус, затем вручную отметьте нужные профили. Ambiguous и уже занятые профили автоматически не переносятся.</p>
                             <p><strong>Attachment и merge.</strong> Attachment добавляет DriverProfile к текущему Contact. Merge объединяет два Contact вместе с их CRM-историей. Это разные операции.</p>
@@ -1226,6 +1148,35 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {showAddPhone && contact && (
+                <AddPhoneResolutionDialog
+                    contactId={contact.id}
+                    onClose={() => setShowAddPhone(false)}
+                    onResolved={async () => {
+                        await refetchContact()
+                        refreshConversations()
+                    }}
+                    onOpenContact={owner => {
+                        if (!owner.chatId) return
+                        setShowAddPhone(false)
+                        updateQuery({ id: owner.chatId, profile: '1' })
+                    }}
+                    onReviewMerge={owner => {
+                        setShowAddPhone(false)
+                        setMergeMode('contact')
+                        setMergeTarget({
+                            id: owner.id,
+                            displayName: owner.displayName,
+                            phones: [{ phone: owner.phone }],
+                            channels: owner.channels,
+                        })
+                        setMergeError(null)
+                        setMergeSuccess(false)
+                        setShowMergeDialog(true)
+                    }}
+                />
             )}
 
             {/* Task Create Modal */}

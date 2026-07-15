@@ -35,6 +35,28 @@ export function normalizePhoneE164(raw: string | null | undefined): string | nul
 }
 
 /**
+ * Strict Russian phone normalization for operator-entered CRM numbers.
+ * Unlike the legacy generic helper, this never trims an arbitrary long
+ * digit sequence down to its last ten digits.
+ */
+export function normalizeRussianPhoneE164(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== 'string') return null
+
+  const digits = raw.replace(/\D/g, '')
+  let normalized: string
+
+  if (digits.length === 10) {
+    normalized = `7${digits}`
+  } else if (digits.length === 11 && (digits.startsWith('7') || digits.startsWith('8'))) {
+    normalized = `7${digits.slice(1)}`
+  } else {
+    return null
+  }
+
+  return /^7\d{10}$/.test(normalized) ? `+${normalized}` : null
+}
+
+/**
  * Parse externalChatId into channel and externalId.
  * Format: "channel:externalId" (e.g. "whatsapp:79221234567")
  */

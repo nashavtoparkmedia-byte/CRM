@@ -230,16 +230,11 @@ function phoneVariants(phone: string): string[] {
   return Array.from(new Set([normalized, normalized.replace(/^\+/, ''), `8${suffix}`, suffix]))
 }
 
-export async function findSuggestedDriverProfilesForContact(contactId: string): Promise<SuggestedDriverProfile[]> {
-  const contact = await prisma.contact.findUnique({
-    where: { id: contactId },
-    select: {
-      id: true,
-      phones: { where: { isActive: true }, select: { phone: true } },
-    },
-  })
-  if (!contact) return []
-  const variants = Array.from(new Set(contact.phones.flatMap(phone => phoneVariants(phone.phone))))
+async function findSuggestedDriverProfilesByPhones(
+  phones: string[],
+  contactId: string,
+): Promise<SuggestedDriverProfile[]> {
+  const variants = Array.from(new Set(phones.flatMap(phoneVariants)))
   if (variants.length === 0) return []
   const suffixes = variants.filter(value => /^\d{10}$/.test(value))
   const profiles = await prisma.driver.findMany({
@@ -308,6 +303,24 @@ export async function findSuggestedDriverProfilesForContact(contactId: string): 
     if (rankDiff !== 0) return rankDiff
     return a.fullName.localeCompare(b.fullName)
   })
+}
+
+export async function findSuggestedDriverProfilesByPhone(
+  phone: string,
+  contactId: string,
+): Promise<SuggestedDriverProfile[]> {
+  return findSuggestedDriverProfilesByPhones([phone], contactId)
+}
+
+export async function findSuggestedDriverProfilesForContact(contactId: string): Promise<SuggestedDriverProfile[]> {
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: {
+      phones: { where: { isActive: true }, select: { phone: true } },
+    },
+  })
+  if (!contact) return []
+  return findSuggestedDriverProfilesByPhones(contact.phones.map(phone => phone.phone), contactId)
 }
 
 export async function attachDriverProfilesToContactManually(contactId: string, driverIds: string[], selectedBy = 'operator') {

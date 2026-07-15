@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "src/lib/phoneUtils.ts",
+    "src/lib/driver-profiles/multi-park.ts",
+    "src/lib/contacts/contact-phone-resolution.ts",
+    "src/lib/__tests__/contact-phone-resolution.test.ts",
+    "src/lib/__tests__/contact-phone-resolution-db.test.ts",
+    "src/app/api/contacts/[id]/phones/route.ts",
+    "src/app/api/contacts/[id]/phones/resolve/route.ts",
+    "src/app/messages/components/AddPhoneResolutionDialog.tsx",
+    "src/app/messages/components/AddPhoneResolutionDialog.test.tsx"
+  ],
+  "exclude": []
+}

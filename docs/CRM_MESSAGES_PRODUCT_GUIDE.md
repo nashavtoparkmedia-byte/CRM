@@ -149,3 +149,16 @@ MAX, Telegram and WhatsApp messages enter CRM as channel events. CRM creates or 
 - Changing the main profile requires an explicit CRM confirmation dialog; cancel and Escape do not write data.
 - The right-panel channel badge counts unique providers, so MAX + Telegram + WhatsApp is shown as `3 канала`.
 - Contact source is labelled explicitly as `Источник: ...`; it is not a park or DriverProfile badge.
+
+## Что происходит, когда оператор добавляет номер
+
+Кнопка «Добавить номер» не выполняет немедленную запись. CRM нормализует российский номер в `+7XXXXXXXXXX`, проверяет всех активных владельцев и учитывает canonical merge-chain.
+
+- `FREE`: номер свободен. После отдельного подтверждения создаётся или активируется ContactPhone, затем CRM показывает совпадения DriverProfile во всех шести парках как предложения.
+- `SAME_CONTACT`: номер уже принадлежит текущему Contact. Дубликат не создаётся; предложения DriverProfile обновляются повторно.
+- `OTHER_CONTACT`: номер принадлежит другому canonical Contact. Запись блокируется; оператор может открыть существующую карточку или перейти к ручной проверке объединения.
+- `AMBIGUOUS`: найдено несколько canonical владельцев либо небезопасная archived/merge-chain. Запись блокируется со статусом `PHONE_OWNERSHIP_AMBIGUOUS`; каждый Contact проверяется вручную.
+
+Добавление номера, привязка DriverProfile и объединение Contact — три разные операции. Телефон является сигналом для предложений, но не доказательством принадлежности профиля. Номер не прикрепляет DriverProfile, не выбирает главный профиль и не объединяет Contact автоматически.
+
+`Telegram Bot` использует отдельную связь `DriverTelegram` с одним конкретным DriverProfile. Поэтому при отсутствии этой связи интерфейс показывает «Профиль для Telegram-бота не выбран», даже если у Contact уже есть несколько прикреплённых профилей.
