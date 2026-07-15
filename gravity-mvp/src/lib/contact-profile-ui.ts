@@ -44,6 +44,10 @@ export function countUniqueProviderChannels(
     .filter(Boolean)).size
 }
 
+export function formatProviderChannelCount(count: number): string {
+  return `${count} ${russianForm(count, 'канал', 'канала', 'каналов')}`
+}
+
 export function getIdentitySourceLabel(source: string | null | undefined): string {
   if (source === 'auto') return 'Автоматически'
   if (source === 'manual') return 'Вручную'
@@ -65,6 +69,10 @@ export function profileWord(count: number): string {
 
 export function parkWord(count: number): string {
   return russianForm(count, 'парк', 'парка', 'парков')
+}
+
+export function formatAttachedProfilesHeader(profileCount: number, parkCount: number): string {
+  return `Профили водителя: ${profileCount} в ${parkCount} ${parkCount === 1 ? 'парке' : 'парках'}`
 }
 
 export function formatFoundProfilesSummary(profileCount: number, parkCount: number): string {

@@ -139,3 +139,13 @@ MAX, Telegram and WhatsApp messages enter CRM as channel events. CRM creates or 
 - If refresh fails, old data remains visible; retry by reopening the card or refreshing the page.
 - If a profile belongs to another Contact, open that Contact or review merge; do not force attach.
 - If profiles are suggested but not attached, this is expected until manager confirmation.
+
+## Contact Profile Final UX
+
+- The main DriverProfile is always visible.
+- The full attached-profile list is collapsed by default and remembers the operator's local preference per Contact.
+- Expanding the profile list does not change Contact data and is preserved during background refresh.
+- Dismissed profiles have a second independent collapsed level inside each park.
+- Changing the main profile requires an explicit CRM confirmation dialog; cancel and Escape do not write data.
+- The right-panel channel badge counts unique providers, so MAX + Telegram + WhatsApp is shown as `3 канала`.
+- Contact source is labelled explicitly as `Источник: ...`; it is not a park or DriverProfile badge.

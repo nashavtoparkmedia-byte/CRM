@@ -13,7 +13,7 @@ import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
 import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
-import { countUniqueProviderChannels, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
+import { countUniqueProviderChannels, formatProviderChannelCount, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
 
 // Custom field types
 interface CustomField {
@@ -332,6 +332,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     })()
     const masterSource = contact?.masterSource || (chat.driver ? 'yandex' : 'chat')
     const sourceInfo = SOURCE_LABELS[masterSource] || SOURCE_LABELS.chat
+    const drawerChannelCount = countUniqueProviderChannels(contact?.channels)
     const contactOrDriverId = contact?.id || chat.driver?.id
 
     const handleAddTag = () => {
@@ -488,7 +489,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     )}
                     <div className="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${sourceInfo.color}`}>
-                            {sourceInfo.label}
+                            Источник: {sourceInfo.label}
                         </span>
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
                             chat.status === 'open' || chat.status === 'waiting_customer' ? 'bg-green-50 text-green-700' :
@@ -498,9 +499,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         }`}>
                             {chat.status === 'open' ? 'В работе' : chat.status === 'new' ? 'Новый' : chat.status === 'waiting_customer' ? 'Ожидаем клиента' : chat.status === 'waiting_internal' ? 'Внутренний' : chat.status === 'resolved' ? 'Завершён' : chat.status}
                         </span>
-                        {contact && contact.identities.length > 1 && (
+                        {contact && drawerChannelCount > 0 && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
-                                {contact.identities.length} канала
+                                {formatProviderChannelCount(drawerChannelCount)}
                             </span>
                         )}
                         {contact && contact.mergeHistory && contact.mergeHistory.length > 0 && (

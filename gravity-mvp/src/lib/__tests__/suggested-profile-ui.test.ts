@@ -5,7 +5,9 @@ import type { ContactDriverProfilePayload } from '@/lib/contact-profile-contract
 import {
   countUniqueProviderChannels,
   formatAttachButton,
+  formatAttachedProfilesHeader,
   formatFoundProfilesSummary,
+  formatProviderChannelCount,
   formatSelectedProfilesSummary,
   getEmploymentTypeLabel,
   getIdentitySourceLabel,
@@ -99,6 +101,13 @@ describe('suggested profile UI mapping', () => {
       { channel: 'telegram' },
     ])).toBe(3)
     expect(countUniqueProviderChannels(['max', 'MAX', 'telegram'])).toBe(2)
+    expect(formatProviderChannelCount(1)).toBe('1 канал')
+    expect(formatProviderChannelCount(2)).toBe('2 канала')
+    expect(formatProviderChannelCount(3)).toBe('3 канала')
+    expect(formatProviderChannelCount(5)).toBe('5 каналов')
+    expect(formatProviderChannelCount(21)).toBe('21 канал')
+    expect(formatAttachedProfilesHeader(6, 6)).toBe('Профили водителя: 6 в 6 парках')
+    expect(formatAttachedProfilesHeader(1, 1)).toBe('Профили водителя: 1 в 1 парке')
   })
 
   test('humanizes identity source and excludes linked conflicts from selection', () => {
@@ -130,5 +139,15 @@ describe('suggested profile source contracts', () => {
   test('both channel counters use unique canonical provider channels', () => {
     expect(header).toContain('countUniqueProviderChannels(contact.channels)')
     expect(drawer).toContain('countUniqueProviderChannels(contact.channels)')
+    expect(header).toContain('formatProviderChannelCount(channelCount)')
+    expect(drawer).toContain('formatProviderChannelCount(drawerChannelCount)')
+    expect(drawer).not.toContain('contact.identities.length} канала')
+  })
+
+  test('main selection uses a CRM dialog and source badge is explicit', () => {
+    expect(panel).not.toContain('window.confirm')
+    expect(panel).toContain('data-testid="main-profile-confirmation"')
+    expect(panel).toContain('Сделать профиль главным?')
+    expect(drawer).toContain('Источник: {sourceInfo.label}')
   })
 })

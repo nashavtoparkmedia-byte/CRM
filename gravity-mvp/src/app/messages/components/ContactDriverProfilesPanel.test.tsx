@@ -107,6 +107,22 @@ function contact(overrides: Partial<ContactProfilePayload> = {}): ContactProfile
     }
 }
 
+function linkedContact(extraProfiles: ContactDriverProfilePayload[] = []): ContactProfilePayload {
+    const attached = parks.map((_, index) => profile(index, { contactId: 'contact-1', isMain: index === 0 }))
+    attached.push(...extraProfiles)
+    return contact({
+        driverProfileState: 'LINKED',
+        suggestedProfiles: [],
+        suggestedDriverProfiles: [],
+        attachedProfiles: attached,
+        driverProfiles: attached,
+        mainDriverId: attached[0].id,
+        mainDriverProfile: attached[0],
+        mainDriver: attached[0],
+        driver: attached[0],
+    })
+}
+
 function renderPanel(payload: ContactProfilePayload, options: { sync?: 'idle' | 'syncing' | 'success' | 'error' } = {}) {
     const onRetry = vi.fn()
     const onRefetch = vi.fn().mockResolvedValue(null)
@@ -122,7 +138,18 @@ function renderPanel(payload: ContactProfilePayload, options: { sync?: 'idle' | 
             onOpenHelp={onOpenHelp}
         />,
     )
-    return { onRetry, onRefetch, onOpenHelp, unmount: rendered.unmount }
+    const rerenderPanel = (nextPayload: ContactProfilePayload) => rendered.rerender(
+        <ContactDriverProfilesPanel
+            contact={nextPayload}
+            profileSyncState={options.sync || 'success'}
+            profileSyncError={options.sync === 'error' ? 'network_error' : null}
+            profileSyncedAt="2026-07-13T12:00:00.000Z"
+            onRetry={onRetry}
+            onRefetch={onRefetch}
+            onOpenHelp={onOpenHelp}
+        />,
+    )
+    return { onRetry, onRefetch, onOpenHelp, rerenderPanel, unmount: rendered.unmount }
 }
 
 function checkboxFor(profileValue: ContactDriverProfilePayload): HTMLInputElement {
@@ -135,7 +162,7 @@ describe('ContactDriverProfilesPanel', () => {
     beforeEach(() => {
         vi.restoreAllMocks()
         vi.stubGlobal('fetch', vi.fn())
-        vi.spyOn(window, 'confirm').mockReturnValue(true)
+        window.localStorage.clear()
     })
 
     test('shows the production-like unlinked state without fake Park/Role or technical data in the driver section', () => {
@@ -255,9 +282,8 @@ describe('ContactDriverProfilesPanel', () => {
         expect(screen.queryByText('unsupported_source_value')).toBeNull()
     })
 
-    test('renders attached profiles by park, collapses history, and supports manual main selection', async () => {
-        const attached = parks.map((_, index) => profile(index, { contactId: 'contact-1', isMain: index === 0 }))
-        attached.push(profile(1, {
+    test('keeps main visible while the park list is collapsed by default and preserves nested history', () => {
+        const dismissed = profile(1, {
             id: 'dismissed-yoko',
             contactId: 'contact-1',
             status: 'dismissed',
@@ -265,30 +291,92 @@ describe('ContactDriverProfilesPanel', () => {
             statusLabel: 'Уволен',
             dismissedAt: '2026-07-01T00:00:00.000Z',
             fullName: 'Исторический профиль',
-        }))
-        const payload = contact({
-            driverProfileState: 'LINKED',
-            suggestedProfiles: [],
-            suggestedDriverProfiles: [],
-            attachedProfiles: attached,
-            driverProfiles: attached,
-            mainDriverId: attached[0].id,
-            mainDriverProfile: attached[0],
-            mainDriver: attached[0],
-            driver: attached[0],
         })
-        const fetchMock = vi.mocked(fetch)
-        fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({ ok: true }) } as Response)
-        renderPanel(payload)
+        renderPanel(linkedContact([dismissed]))
 
         expect(screen.getByTestId('main-driver-profile').textContent).toContain('Наш Автопарк')
+        expect(screen.getByText('Профили водителя: 7 в 6 парках')).toBeTruthy()
+        expect(screen.getByText('Активных: 6 · Уволенных: 1')).toBeTruthy()
+        expect(screen.queryByTestId('profiles-by-park')).toBeNull()
+        expect(screen.queryByText('Исторический профиль')).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Показать профили водителя' }))
+        expect(screen.getByTestId('profiles-by-park')).toBeTruthy()
         expect(screen.queryByText('Исторический профиль')).toBeNull()
         fireEvent.click(screen.getByText(/Уволенные профили: 1/))
         expect(screen.getByText('Исторический профиль')).toBeTruthy()
         expect(screen.getAllByText('Сделать главным')).toHaveLength(5)
+    })
+
+    test('preserves the expanded state across background refresh and remount', () => {
+        const payload = linkedContact()
+        const first = renderPanel(payload)
+        fireEvent.click(screen.getByRole('button', { name: 'Показать профили водителя' }))
+        expect(screen.getByTestId('profiles-by-park')).toBeTruthy()
+
+        first.rerenderPanel({ ...payload, updatedAt: '2026-07-13T13:00:00.000Z' })
+        expect(screen.getByTestId('profiles-by-park')).toBeTruthy()
+        first.unmount()
+
+        renderPanel(payload)
+        expect(screen.getByTestId('profiles-by-park')).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Скрыть профили водителя' })).toBeTruthy()
+    })
+
+    test('opens a CRM main-profile modal and cancel or Escape makes no request', () => {
+        renderPanel(linkedContact())
+        fireEvent.click(screen.getByRole('button', { name: 'Показать профили водителя' }))
         fireEvent.click(screen.getAllByText('Сделать главным')[0])
-        await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+
+        const dialog = screen.getByRole('dialog', { name: 'Сделать профиль главным?' })
+        expect(within(dialog).getByText('Главным профилем контакта станет YOKO / Парковый СМЗ.')).toBeTruthy()
+        expect(within(dialog).getByText('Ремезов Александр Юрьевич')).toBeTruthy()
+        expect(within(dialog).getByText('+7 922 215-57-50')).toBeTruthy()
+        expect(fetch).not.toHaveBeenCalled()
+
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }))
+        expect(screen.queryByTestId('main-profile-confirmation')).toBeNull()
+        expect(fetch).not.toHaveBeenCalled()
+
+        fireEvent.click(screen.getAllByText('Сделать главным')[0])
+        fireEvent.keyDown(document, { key: 'Escape' })
+        expect(screen.queryByTestId('main-profile-confirmation')).toBeNull()
+        expect(fetch).not.toHaveBeenCalled()
+    })
+
+    test('confirms one main-profile request, shows progress, and keeps the expanded list open', async () => {
+        const fetchMock = vi.mocked(fetch)
+        let resolveFetch!: (response: Response) => void
+        fetchMock.mockImplementation(() => new Promise<Response>(resolve => { resolveFetch = resolve }))
+        const { onRefetch } = renderPanel(linkedContact())
+        fireEvent.click(screen.getByRole('button', { name: 'Показать профили водителя' }))
+        fireEvent.click(screen.getAllByText('Сделать главным')[0])
+        const dialog = screen.getByTestId('main-profile-confirmation')
+        const confirm = within(dialog).getByRole('button', { name: 'Сделать главным' })
+
+        fireEvent.click(confirm)
+        fireEvent.click(confirm)
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+        expect((within(dialog).getByRole('button', { name: 'Сохраняем…' }) as HTMLButtonElement).disabled).toBe(true)
         expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).driverId).toBe('driver-2')
+
+        resolveFetch({ ok: true, status: 200, json: async () => ({ ok: true }) } as Response)
+        await waitFor(() => expect(onRefetch).toHaveBeenCalled())
+        await waitFor(() => expect(screen.queryByTestId('main-profile-confirmation')).toBeNull())
+        expect(screen.getByTestId('profiles-by-park')).toBeTruthy()
+    })
+
+    test('keeps the main-profile modal open and displays an API error', async () => {
+        const fetchMock = vi.mocked(fetch)
+        fetchMock.mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: 'Профиль уже изменён' }) } as Response)
+        renderPanel(linkedContact())
+        fireEvent.click(screen.getByRole('button', { name: 'Показать профили водителя' }))
+        fireEvent.click(screen.getAllByText('Сделать главным')[0])
+        fireEvent.click(within(screen.getByTestId('main-profile-confirmation')).getByRole('button', { name: 'Сделать главным' }))
+
+        await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Профиль уже изменён'))
+        expect(screen.getByTestId('main-profile-confirmation')).toBeTruthy()
+        expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
     test('preserves refresh, retry, and inline-help behavior', () => {

@@ -39,6 +39,8 @@ describe('multi-park source contracts', () => {
     expect(profilePanel).toContain('Профиль водителя не привязан')
     expect(profilePanel).toContain('Обновляем данные')
     expect(profilePanel).toContain('Сделать главным')
+    expect(profilePanel).not.toContain('window.confirm')
+    expect(profilePanel).toContain('formatAttachedProfilesHeader(attachedProfiles.length, profilesByPark.length)')
     expect(profilePanel).toContain('Возможные профили водителя: {suggestions.length}')
     expect(profilePanel).not.toContain('data-testid="technical-data"')
     expect(drawer).toContain('data-testid="technical-data"')

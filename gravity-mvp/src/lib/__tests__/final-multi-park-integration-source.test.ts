@@ -38,7 +38,9 @@ describe('final multi-park integration source contracts', () => {
     expect(profileUi).toContain('Привязать выбранные')
     expect(profilePanel).toContain('Как работает раздел')
     expect(profilePanel).toContain('/driver-profiles/attach')
-    expect(profilePanel).toContain('window.confirm')
+    expect(profilePanel).not.toContain('window.confirm')
+    expect(profilePanel).toContain('main-profile-confirmation')
+    expect(profilePanel).toContain('crm:contact-profiles:')
   })
 
   test('backfill stays dry-run by default and write requires explicit protections', () => {

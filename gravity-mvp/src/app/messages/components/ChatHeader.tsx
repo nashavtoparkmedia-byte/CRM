@@ -15,7 +15,7 @@ import type { TaskDTO } from '@/lib/tasks/types'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import Link from 'next/link'
 import CallButton from '@/components/sip/CallButton'
-import { countUniqueProviderChannels } from '@/lib/contact-profile-ui'
+import { countUniqueProviderChannels, formatProviderChannelCount } from '@/lib/contact-profile-ui'
 
 interface ChatHeaderProps {
     chat: Conversation
@@ -558,7 +558,7 @@ export default function ChatHeader({
                                     <span className="hidden lg:inline-flex items-center gap-[2px]">
                                         <span className="text-[10px] text-gray-300">·</span>
                                         <span className="text-[10px] text-gray-400">
-                                            {channelCount} {channelCount === 1 ? 'канал' : channelCount < 5 ? 'канала' : 'каналов'}
+                                            {formatProviderChannelCount(channelCount)}
                                         </span>
                                     </span>
                                 )}

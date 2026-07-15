@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, Check, ChevronDown, HelpCircle, Loader2, RefreshCw, ShieldCheck, UserCheck, X } from "lucide-react"
 import type { ContactDriverProfilePayload, ContactProfilePayload } from "@/lib/contact-profile-contract"
 import {
     formatAttachButton,
+    formatAttachedProfilesHeader,
     formatFoundProfilesSummary,
     formatSelectedProfilesSummary,
     getDriverProfileStatusLabel,
@@ -76,8 +77,11 @@ export default function ContactDriverProfilesPanel({
     const [attachError, setAttachError] = useState<string | null>(null)
     const [mainError, setMainError] = useState<string | null>(null)
     const [savingMainId, setSavingMainId] = useState<string | null>(null)
+    const [pendingMainProfile, setPendingMainProfile] = useState<ContactDriverProfilePayload | null>(null)
+    const [profilesOpen, setProfilesOpen] = useState(false)
     const [dismissedOpen, setDismissedOpen] = useState<Record<string, boolean>>({})
     const [reviewDismissedOpen, setReviewDismissedOpen] = useState<Record<string, boolean>>({})
+    const mainRequestInFlight = useRef(false)
 
     useEffect(() => {
         setShowReview(false)
@@ -85,6 +89,13 @@ export default function ContactDriverProfilesPanel({
         setSelectedProfileIds([])
         setAttachError(null)
         setMainError(null)
+        setPendingMainProfile(null)
+        mainRequestInFlight.current = false
+        try {
+            setProfilesOpen(window.localStorage.getItem(`crm:contact-profiles:${contact.id}`) === 'open')
+        } catch {
+            setProfilesOpen(false)
+        }
         setDismissedOpen({})
         setReviewDismissedOpen({})
     }, [contact.id])
@@ -111,6 +122,19 @@ export default function ContactDriverProfilesPanel({
     const selectedParkCount = getUniqueSelectedParkCount(selectedProfiles)
     const allSelectableSelected = selectableSuggestions.length > 0
         && selectableSuggestions.every(profile => selectedProfileIds.includes(profile.id))
+    const activeProfileCount = profilesByPark.reduce((sum, group) => sum + group.active.length, 0)
+    const dismissedProfileCount = profilesByPark.reduce((sum, group) => sum + group.dismissed.length, 0)
+
+    useEffect(() => {
+        if (!pendingMainProfile) return
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape' || mainRequestInFlight.current) return
+            setPendingMainProfile(null)
+            setMainError(null)
+        }
+        document.addEventListener('keydown', handleEscape)
+        return () => document.removeEventListener('keydown', handleEscape)
+    }, [pendingMainProfile])
 
     const toggleProfile = (profile: ContactDriverProfilePayload) => {
         if (!isSuggestedProfileSelectable(profile)) return
@@ -166,9 +190,35 @@ export default function ContactDriverProfilesPanel({
         }
     }
 
-    const setMainProfile = async (profile: ContactDriverProfilePayload) => {
+    const toggleProfiles = () => {
+        setProfilesOpen(current => {
+            const next = !current
+            try {
+                window.localStorage.setItem(`crm:contact-profiles:${contact.id}`, next ? 'open' : 'closed')
+            } catch {
+                // The UI state still works when storage is unavailable.
+            }
+            return next
+        })
+    }
+
+    const requestMainProfileChange = (profile: ContactDriverProfilePayload) => {
         if ((profile.normalizedStatus || profile.status) !== 'working') return
-        if (!window.confirm(`Сделать профиль «${profile.parkName}» главным для этого контакта?`)) return
+        if (mainRequestInFlight.current || savingMainId !== null) return
+        setMainError(null)
+        setPendingMainProfile(profile)
+    }
+
+    const closeMainProfileConfirmation = () => {
+        if (mainRequestInFlight.current) return
+        setPendingMainProfile(null)
+        setMainError(null)
+    }
+
+    const confirmMainProfileChange = async () => {
+        const profile = pendingMainProfile
+        if (!profile || mainRequestInFlight.current) return
+        mainRequestInFlight.current = true
         setSavingMainId(profile.id)
         setMainError(null)
         try {
@@ -183,9 +233,11 @@ export default function ContactDriverProfilesPanel({
                 return
             }
             await onRefetch()
+            setPendingMainProfile(null)
         } catch (error: unknown) {
             setMainError(error instanceof Error ? error.message : 'Ошибка сети')
         } finally {
+            mainRequestInFlight.current = false
             setSavingMainId(null)
         }
     }
@@ -298,9 +350,28 @@ export default function ContactDriverProfilesPanel({
                 )}
 
                 {profilesByPark.length > 0 && (
-                    <div className="space-y-2" data-testid="profiles-by-park">
-                        <div className="text-[10px] font-bold uppercase text-gray-500">Профили водителя</div>
-                        {profilesByPark.map(group => (
+                    <div data-testid="attached-profiles-section">
+                        <button
+                            type="button"
+                            onClick={toggleProfiles}
+                            aria-expanded={profilesOpen}
+                            aria-controls={`contact-profiles-${contact.id}`}
+                            aria-label={`${profilesOpen ? 'Скрыть' : 'Показать'} профили водителя`}
+                            className="flex w-full min-w-0 items-center justify-between gap-2 border-t border-gray-100 py-2 text-left"
+                            data-testid="profiles-collapse-toggle"
+                        >
+                            <span className="min-w-0">
+                                <span className="block truncate text-[11px] font-bold text-[#111]">{formatAttachedProfilesHeader(attachedProfiles.length, profilesByPark.length)}</span>
+                                <span className="block text-[9px] text-gray-500">Активных: {activeProfileCount} · Уволенных: {dismissedProfileCount}</span>
+                            </span>
+                            <span className="inline-flex shrink-0 items-center gap-1 text-[10px] font-semibold text-[#3390EC]">
+                                {profilesOpen ? 'Скрыть' : 'Показать'}
+                                <ChevronDown size={12} className={`transition-transform ${profilesOpen ? 'rotate-180' : ''}`} />
+                            </span>
+                        </button>
+                        {profilesOpen && (
+                            <div id={`contact-profiles-${contact.id}`} className="mt-1 space-y-2" data-testid="profiles-by-park">
+                            {profilesByPark.map(group => (
                             <div key={group.key} className="border-t border-gray-100 pt-1.5" data-park={group.parkName}>
                                 <div className="mb-1 text-[11px] font-bold text-[#111]">{group.parkName}</div>
                                 {group.activeCount > 1 && <div className="mb-1 flex gap-1 rounded bg-amber-50 px-2 py-1 text-[9px] text-amber-800"><AlertTriangle size={10} /> Несколько активных профилей</div>}
@@ -315,7 +386,7 @@ export default function ContactDriverProfilesPanel({
                                             {profile.id === mainProfile?.id ? (
                                                 <span className="shrink-0 rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-semibold text-emerald-700">Главный</span>
                                             ) : (profile.normalizedStatus || profile.status) === 'working' ? (
-                                                <button type="button" disabled={savingMainId !== null} onClick={() => void setMainProfile(profile)} className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-[#3390EC] hover:bg-blue-100 disabled:opacity-50">
+                                                <button type="button" disabled={savingMainId !== null} onClick={() => requestMainProfileChange(profile)} className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-semibold text-[#3390EC] hover:bg-blue-100 disabled:opacity-50">
                                                     {savingMainId === profile.id ? 'Сохраняем…' : 'Сделать главным'}
                                                 </button>
                                             ) : null}
@@ -341,11 +412,65 @@ export default function ContactDriverProfilesPanel({
                                     </div>
                                 )}
                             </div>
-                        ))}
-                        {mainError && <div className="text-[10px] text-red-600">{mainError}</div>}
+                            ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </section>
+
+            {pendingMainProfile && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="main-profile-confirmation-title"
+                    data-testid="main-profile-confirmation"
+                    onClick={closeMainProfileConfirmation}
+                >
+                    <div className="w-[420px] max-w-full overflow-hidden rounded-lg bg-white shadow-2xl" onClick={event => event.stopPropagation()}>
+                        <div className="border-b border-gray-200 px-4 py-3">
+                            <h3 id="main-profile-confirmation-title" className="text-[15px] font-bold text-[#111]">Сделать профиль главным?</h3>
+                            <p className="mt-1 text-[11px] leading-snug text-gray-600">
+                                Главным профилем контакта станет {pendingMainProfile.parkName} / {employmentLabel(pendingMainProfile)}.
+                            </p>
+                        </div>
+                        <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-3 gap-y-1.5 px-4 py-3 text-[11px]">
+                            <dt className="text-gray-500">ФИО</dt>
+                            <dd className="min-w-0 break-words font-semibold text-[#111]">{pendingMainProfile.fullName}</dd>
+                            <dt className="text-gray-500">Парк</dt>
+                            <dd className="min-w-0 break-words text-[#111]">{pendingMainProfile.parkName}</dd>
+                            <dt className="text-gray-500">Тип оформления</dt>
+                            <dd className="min-w-0 break-words text-[#111]">{employmentLabel(pendingMainProfile)}</dd>
+                            <dt className="text-gray-500">Телефон</dt>
+                            <dd className="min-w-0 break-words text-[#111]">{formatPhone(pendingMainProfile.phone)}</dd>
+                            <dt className="text-gray-500">Статус</dt>
+                            <dd className="min-w-0 break-words font-semibold text-emerald-700">{statusLabel(pendingMainProfile)}</dd>
+                        </dl>
+                        {mainError && <div role="alert" className="mx-4 mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">{mainError}</div>}
+                        <div className="grid grid-cols-2 gap-2 border-t border-gray-200 px-4 py-3">
+                            <button
+                                type="button"
+                                autoFocus
+                                disabled={savingMainId !== null}
+                                onClick={closeMainProfileConfirmation}
+                                className="h-9 rounded bg-gray-100 px-3 text-[11px] font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+                            >
+                                Отмена
+                            </button>
+                            <button
+                                type="button"
+                                disabled={savingMainId !== null}
+                                onClick={() => void confirmMainProfileChange()}
+                                className="inline-flex h-9 items-center justify-center gap-1.5 rounded bg-[#3390EC] px-3 text-[11px] font-semibold text-white hover:bg-[#2B7FD4] disabled:opacity-50"
+                            >
+                                {savingMainId !== null && <Loader2 size={12} className="animate-spin" />}
+                                {savingMainId !== null ? 'Сохраняем…' : 'Сделать главным'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {showReview && (
                 <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/35 p-4" onClick={closeReview} data-testid="suggested-profile-review">
