@@ -11,6 +11,7 @@ import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
+import { getSegmentLabel } from "@/lib/contactDisplay"
 
 // Custom field types
 interface CustomField {
@@ -265,6 +266,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
     /** Get effective reachability for a channel: live > persisted > chat-presence > null */
     const getReachability = (identity: ContactIdentity): boolean | null => {
+        const hasChat = contact?.chats?.some(c => c.contactIdentityId === identity.id)
+        if (hasChat) return true
         // Live check result takes priority (if definitive)
         const live = liveReachability[identity.channel]
         if (live !== undefined) {
@@ -277,7 +280,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         if (identity.reachabilityStatus === 'unreachable') {
             // An existing chat proves channel was reachable — overrides stale 'unreachable'
             // from an unreliable isRegisteredUser result.
-            const hasChat = contact?.chats?.some(c => c.contactIdentityId === identity.id)
             if (hasChat) return true
             return false
         }
@@ -301,6 +303,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         return { label: 'проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
     }
 
+    const identityHasChat = (identity: ContactIdentity): boolean =>
+        !!contact?.chats?.some(c => c.contactIdentityId === identity.id)
+
     if (!chat) return null
 
     // Determine display data: Contact > Driver > Chat fallback
@@ -308,7 +313,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const _rawDisplayName = contact?.displayName || chat.driver?.fullName || chat.name || 'Водитель'
     const _isPlaceholder = /^(TG|WA|MAX|AV|Telegram|WhatsApp|Max)\s+\d+/i.test(_rawDisplayName)
     const _src = contact?.displayNameSource
-    const displayName = (() => {
+    const displayName = contact?.canonicalSummary?.displayName || (() => {
         if (_src === 'yandex') return _rawDisplayName
         if (_src === 'manual' && !_isPlaceholder) return _rawDisplayName
         // Auto-generated placeholder or channel-sourced — try real TG identity
@@ -375,6 +380,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             if (res.ok && data.chat) {
                 updateQuery({ id: data.chat.id, channel: CHANNEL_SHORT[channel] || null })
                 refetchContact()
+                refreshConversations()
             } else {
                 console.error('[ContactProfile] Create chat error:', data.error)
             }
@@ -489,9 +495,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         }`}>
                             {chat.status === 'open' ? 'В работе' : chat.status === 'new' ? 'Новый' : chat.status === 'waiting_customer' ? 'Ожидаем клиента' : chat.status === 'waiting_internal' ? 'Внутренний' : chat.status === 'resolved' ? 'Завершён' : chat.status}
                         </span>
-                        {contact && contact.identities.length > 1 && (
+                        {contact && (contact.canonicalSummary?.channelCount ?? new Set(contact.identities.map(i => i.channel)).size) > 1 && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
-                                {contact.identities.length} канала
+                                {contact.canonicalSummary?.channelCount ?? new Set(contact.identities.map(i => i.channel)).size} канала
                             </span>
                         )}
                         {contact && contact.mergeHistory && contact.mergeHistory.length > 0 && (
@@ -617,6 +623,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                 }
                                                 setShowAddPhone(false); setNewPhoneInput('')
                                                 refetchContact()
+                                                refreshConversations()
                                             } catch (err: any) {
                                                 setAddPhoneError(err.message ?? 'Ошибка сети')
                                             } finally {
@@ -656,7 +663,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {/* Phones with their identities + available channels */}
                         {phonesWithIdentities.map(({ phone, identities }) => {
                             // Channels that have identity for this phone
-                            const existingChannels = new Set(identities.map(i => i.channel))
+                            const allContactChannels = new Set(contact.identities.map(i => i.channel))
+                            const existingChannels = new Set([...identities.map(i => i.channel), ...allContactChannels])
                             // Channels available via phone but without identity yet
                             const phoneChannels: string[] = ['whatsapp', 'telegram', 'max']
                             const missingChannels = phoneChannels.filter(ch => !existingChannels.has(ch))
@@ -670,7 +678,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                 const what = phone.isTemporary ? 'временный номер' : 'номер'
                                 if (!confirm(`Удалить ${what} ${formatPhone(phone.phone)}? История звонков на него останется.`)) return
                                 const res = await fetch(`/api/contacts/${contact!.id}/phones/${phone.id}`, { method: 'DELETE' })
-                                if (res.ok) refetchContact()
+                                if (res.ok) {
+                                    refetchContact()
+                                    refreshConversations()
+                                }
                             }
 
                             const handleMakePrimary = async () => {
@@ -679,7 +690,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ isPrimary: true }),
                                 })
-                                if (res.ok) refetchContact()
+                                if (res.ok) {
+                                    refetchContact()
+                                    refreshConversations()
+                                }
                             }
 
                             return (
@@ -731,7 +745,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp' || identity.channel === 'max'
                                             const reachable = getReachability(identity)
                                             const liveEntry = liveReachability[identity.channel]
-                                            const reachBadge = reachabilityBadge(reachable, liveEntry)
+                                            const linkedToCurrentContact = identityHasChat(identity)
+                                            const reachBadge = linkedToCurrentContact
+                                                ? { label: 'связан', cls: 'text-emerald-700 bg-emerald-50', title: 'Identity текущего чата уже принадлежит этому контакту' }
+                                                : reachabilityBadge(reachable, liveEntry)
                                             const isOperationallyBlocked = isCheckable && reachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
                                             // null значит "проверяем" или "нет связи", но не provider-level "нет".
                                             return (
@@ -740,8 +757,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                         <div className="flex items-center gap-1.5">
                                                             {isOperationallyBlocked ? (
                                                                 <span className="inline-block w-[7px] h-[7px] rounded-full bg-amber-400" title={reachBadge.title} />
-                                                            ) : isCheckable && reachable !== null && reachable !== undefined ? (
-                                                                <span className={`inline-block w-[7px] h-[7px] rounded-full ${reachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={reachable ? 'Номер найден' : 'Номер не найден'} />
+                                                            ) : isCheckable && (reachable !== null && reachable !== undefined || linkedToCurrentContact) ? (
+                                                                <span className={`inline-block w-[7px] h-[7px] rounded-full ${reachable || linkedToCurrentContact ? 'bg-emerald-500' : 'bg-red-500'}`} title={linkedToCurrentContact ? 'Канал связан с текущим контактом' : reachable ? 'Номер найден' : 'Номер не найден'} />
                                                             ) : (
                                                                 <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверяется" />
                                                             )}
@@ -995,7 +1012,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         <div className="space-y-1.5 mb-[2px]">
                             <div className="flex items-center justify-between min-h-[28px]">
                                 <span className="text-[12px] text-gray-500 w-[80px]">Сегмент</span>
-                                <span className="text-[12px] font-medium text-[#111]">{contact.driver.segment || '—'}</span>
+                                <span className="text-[12px] font-medium text-[#111]">{getSegmentLabel(contact.driver.segment)}</span>
                             </div>
                             {contact.driver.score != null && (
                                 <div className="flex items-center justify-between min-h-[28px]">
@@ -1149,7 +1166,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                 </div>
                                 <div className="flex justify-between">
                                     <span className="text-gray-500">Каналов</span>
-                                    <span className="text-[#111] font-medium">{contact.identities.length}</span>
+                                    <span className="text-[#111] font-medium">{contact.canonicalSummary?.channelCount ?? new Set(contact.identities.map(i => i.channel)).size}</span>
                                 </div>
                             </>
                         )}

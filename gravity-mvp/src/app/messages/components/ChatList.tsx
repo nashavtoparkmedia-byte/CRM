@@ -501,7 +501,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                         }`}>
                             {isGroupChat
                                 ? <Users size={20} />
-                                : ((chat.driver?.fullName || chat.contact?.displayName || chat.name)?.substring(0, 1).toUpperCase() || "D")}
+                            : ((chat.contact?.canonicalSummary?.displayName || chat.driver?.fullName || chat.contact?.displayName || chat.name)?.substring(0, 1).toUpperCase() || "D")}
                         </div>
                         {/* On "Все" tab: badge = channel of last inbound message (who wrote last and where).
                             On specific channel tab: badge = that channel. */}
@@ -535,6 +535,17 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
                                         return (
                                             <span className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}>
                                                 {chat.name || 'Группа'}
+                                            </span>
+                                        )
+                                    }
+                                    const summary = chat.contact?.canonicalSummary
+                                    if (summary?.displayName) {
+                                        return (
+                                            <span
+                                                className={`font-bold text-[14px] truncate leading-tight ${isSelected ? 'text-white' : 'text-[#111]'}`}
+                                                title={summary.primaryPhone ? `${summary.displayName} · ${summary.primaryPhone}` : summary.displayName}
+                                            >
+                                                {summary.displayName}
                                             </span>
                                         )
                                     }

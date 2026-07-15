@@ -25,6 +25,18 @@ export interface Conversation {
         id: string
         displayName: string | null
         displayNameSource?: string | null
+        canonicalSummary?: {
+            displayName: string
+            primaryPhone: string | null
+            displayTitle: string
+            channelCount: number
+            currentMainDriverProfile?: {
+                id: string
+                fullName: string
+                phone: string | null
+                segment: string | null
+            } | null
+        }
         // Только telegram-identity (см. MessageService.listConversations select) —
         // используется ChatList для "Имя (@username)" формата на вкладке TG.
         identities?: { metadata: Record<string, string | null> | null }[]
