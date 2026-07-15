@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { uploadBuffer } from '@/lib/storage/minio'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -32,6 +33,8 @@ export async function POST(request: Request) {
                 return await handleDriverAction(payload, 'CANCEL_ORDER')
             case 'poll_driver_action':
                 return await handlePollDriverAction(payload)
+            case 'report_diagnostic_delivery':
+                return await handleDiagnosticDelivery(payload)
             case 'list_parks':
                 return await handleListParks()
             case 'set_active_park':
@@ -613,8 +616,54 @@ async function handleUpdateDriverCar(payload: any) {
     }
 
     try {
-        const contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${mapping.driverId}`
-        const { ok: getOk, data: profile } = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
+        let driver = await prisma.driver.findUnique({
+            where: { id: mapping.driverId },
+            select: { yandexDriverId: true, phone: true }
+        })
+        if (!driver) {
+            driver = await prisma.driver.findFirst({
+                where: { yandexDriverId: mapping.driverId },
+                select: { yandexDriverId: true, phone: true }
+            })
+        }
+
+        let contractorId = driver?.yandexDriverId || mapping.driverId
+        let contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
+        let profileResponse = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
+
+        // A person has a different contractor_profile_id in each park. Resolve
+        // the selected park's profile by phone when the stored profile is absent.
+        if (profileResponse.status === 404 && driver?.phone) {
+            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    query: { park: { id: connection.parkId }, text: driver.phone },
+                    fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
+                    limit: 10,
+                    offset: 0
+                })
+            })
+            if (searchRes.ok) {
+                const searchData = await searchRes.json()
+                const normalizedPhone = driver.phone.replace(/\D/g, '')
+                const matched = (searchData.driver_profiles || []).find((item: any) =>
+                    item.driver_profile.work_status !== 'fired' &&
+                    (item.driver_profile.phones || []).some((phone: string) => {
+                        const candidate = phone.replace(/\D/g, '')
+                        return candidate === normalizedPhone || candidate.endsWith(normalizedPhone) || normalizedPhone.endsWith(candidate)
+                    })
+                )
+                if (matched?.driver_profile?.id) {
+                    contractorId = matched.driver_profile.id
+                    console.log(`[update_driver_car] resolved selected-park profile=${contractorId} park=${connection.parkId}`)
+                    contractorUrl = `https://fleet-api.taxi.yandex.net/v2/parks/contractors/driver-profile?contractor_profile_id=${contractorId}`
+                    profileResponse = await safeJson(await fetch(contractorUrl, { method: 'GET', headers }))
+                }
+            }
+        }
+
+        const { ok: getOk, data: profile } = profileResponse
         if (!getOk) return NextResponse.json({ error: 'Failed to fetch driver profile', details: profile }, { status: 502 })
 
         const putBody = { ...profile, car_id: carId }
@@ -624,6 +673,10 @@ async function handleUpdateDriverCar(payload: any) {
         console.log(`[update_driver_car] PUT ${putStatus}:`, JSON.stringify(putData).substring(0, 200))
 
         if (!putOk) return NextResponse.json({ error: `Yandex error ${putStatus}`, details: putData }, { status: 502 })
+        await prisma.driverTelegram.update({
+            where: { id: mapping.id },
+            data: { carId, carLabel: null }
+        })
         return NextResponse.json({ success: true, newCarId: carId })
     } catch (err: any) {
         console.error('[update_driver_car] Error:', err.message)
@@ -663,12 +716,12 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
     let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { id: true, fullName: true, yandexDriverId: true },
+        select: { id: true, fullName: true, phone: true, yandexDriverId: true },
     })
     if (!driver) {
         driver = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { id: true, fullName: true, yandexDriverId: true },
+            select: { id: true, fullName: true, phone: true, yandexDriverId: true },
         })
     }
     if (!driver?.yandexDriverId) {
@@ -688,19 +741,21 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
 
-    // 2a. Profile-swap guard: if linked profile is fired, find the working twin in same park
+    // 2a. Resolve the driver's profile inside the selected park. Yandex assigns a
+    // different driver_profile.id to the same person in every park, while the
+    // Telegram link stores only the profile that was used during initial linking.
     let effectiveYandexId = driver.yandexDriverId!
     try {
         const conn = mapping.activeParkId
             ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
             : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
-        if (conn && driver.fullName) {
+        if (conn && (driver.phone || driver.fullName)) {
             const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
                 headers: { 'X-Client-ID': conn.clid, 'X-Api-Key': conn.apiKey, 'Accept-Language': 'ru', 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    query: { park: { id: conn.parkId }, text: driver.fullName },
-                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'work_status'], car: [], account: [], current_status: [] },
+                    query: { park: { id: conn.parkId }, text: driver.phone || driver.fullName },
+                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: [] },
                     limit: 10, offset: 0
                 })
             })
@@ -708,15 +763,20 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                 const checkData = await checkRes.json()
                 const profiles: any[] = checkData.driver_profiles || []
                 const linked = profiles.find((p: any) => p.driver_profile.id === effectiveYandexId)
-                if (linked?.driver_profile.work_status === 'fired') {
-                    const twin = profiles.find((p: any) =>
-                        p.driver_profile.id !== effectiveYandexId &&
-                        p.driver_profile.work_status !== 'fired'
-                    )
-                    if (twin) {
-                        console.log(`[handleDriverAction] profile swap detected: ${effectiveYandexId} fired → using twin ${twin.driver_profile.id}`)
-                        effectiveYandexId = twin.driver_profile.id
-                    }
+                const normalizedPhone = driver.phone?.replace(/\D/g, '') || ''
+                const activeProfile = profiles.find((p: any) => {
+                    if (p.driver_profile.work_status === 'fired') return false
+                    if (!normalizedPhone) return true
+                    return (p.driver_profile.phones || []).some((phone: string) => {
+                        const candidate = phone.replace(/\D/g, '')
+                        return candidate === normalizedPhone || candidate.endsWith(normalizedPhone) || normalizedPhone.endsWith(candidate)
+                    })
+                })
+                if ((!linked || linked.driver_profile.work_status === 'fired') && activeProfile) {
+                    console.log(`[handleDriverAction] selected-park profile: ${effectiveYandexId} → ${activeProfile.driver_profile.id} park=${conn.parkId}`)
+                    effectiveYandexId = activeProfile.driver_profile.id
+                } else if (!linked && !activeProfile) {
+                    console.warn(`[handleDriverAction] no matching profile in selected park=${conn.parkId} driver=${driver.id}`)
                 }
             }
         }
@@ -734,7 +794,9 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
                 kind,
                 driverYandexId: effectiveYandexId,
                 parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
-                reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
+                // For cancellation, an omitted reason is intentional: the scraper
+                // must pick one of the approved random diagnostic reasons.
+                reason: reason || null,
             }),
         })
         const json = await res.json()
@@ -872,13 +934,24 @@ async function handlePollDriverAction(payload: any) {
         return NextResponse.json({ ok: false, error: `scraper unreachable: ${e.message}` })
     }
 
-    // Mirror state into DriverAction row (best-effort — race with parallel polls is fine).
+    const reverseDiagnostics = [...(scraperState.result?.diagnostics || [])].reverse()
+    const preferredDiagnostic = scraperState.status === 'FAILED'
+        ? reverseDiagnostics.find((artifact: any) => artifact?.imageBase64 && /after_confirm|final/.test(artifact.step || ''))
+            || reverseDiagnostics.find((artifact: any) => artifact?.imageBase64)
+        : null
+    const failureDiagnosticImageBase64 = preferredDiagnostic?.imageBase64 || null
+
+    // Mirror state into DriverAction row. Cancellation screenshots arrive as
+    // base64 because the scraper and CRM are separate containers. Persist them
+    // in S3/MinIO before Redis expires, then keep only durable object keys in
+    // DriverAction.result.
     if (scraperState.status && scraperState.status !== 'PENDING') {
+        const storedResult = await persistDriverActionArtifacts(taskId, scraperState.result)
         await prisma.driverAction.updateMany({
             where: { scraperTaskId: taskId, status: 'PENDING' },
             data: {
                 status: scraperState.status,
-                result: scraperState.result ?? undefined,
+                result: storedResult ?? undefined,
                 errorMessage: scraperState.errorMessage ?? null,
                 shortOrderId: scraperState.result?.shortOrderId ?? undefined,
                 orderId: scraperState.result?.orderLongId ?? undefined,
@@ -887,11 +960,87 @@ async function handlePollDriverAction(payload: any) {
         }).catch(() => {})
     }
 
+    const publicResult = stripInlineArtifactImages(scraperState.result)
+
     return NextResponse.json({
         ok: true,
         taskId,
         status: scraperState.status,
-        result: scraperState.result || null,
+        diagnosticImageBase64: failureDiagnosticImageBase64,
+        diagnosticStep: preferredDiagnostic?.step || null,
+        result: publicResult || null,
         errorMessage: scraperState.errorMessage || null,
     })
+}
+
+
+type InlineDiagnosticArtifact = {
+    step?: string
+    capturedAt?: string
+    contentType?: string
+    imageBase64?: string
+}
+
+function stripInlineArtifactImages(result: any) {
+    if (!result || typeof result !== 'object') return result
+    const diagnostics = Array.isArray(result.diagnostics)
+        ? result.diagnostics.map((artifact: InlineDiagnosticArtifact) => {
+            const copy = { ...artifact }
+            delete copy.imageBase64
+            return copy
+        })
+        : result.diagnostics
+    const rest = { ...result }
+    delete rest.modalImageBase64
+    return { ...rest, diagnostics }
+}
+
+async function persistDriverActionArtifacts(taskId: string, result: any) {
+    if (!result || typeof result !== 'object' || !Array.isArray(result.diagnostics)) return result
+
+    const diagnostics: any[] = []
+    for (let index = 0; index < result.diagnostics.length; index += 1) {
+        const artifact = result.diagnostics[index] as InlineDiagnosticArtifact
+        const safeStep = String(artifact.step || `step-${index + 1}`).replace(/[^a-z0-9_-]/gi, '_')
+        const contentType = artifact.contentType || 'image/jpeg'
+        const extension = contentType === 'image/png' ? 'png' : 'jpg'
+        const objectKey = `driver-actions/${taskId}/${String(index + 1).padStart(2, '0')}-${safeStep}.${extension}`
+
+        if (!artifact.imageBase64) {
+            diagnostics.push({ ...artifact, imageBase64: undefined, storageError: 'empty screenshot' })
+            continue
+        }
+
+        try {
+            await uploadBuffer(Buffer.from(artifact.imageBase64, 'base64'), objectKey, contentType)
+            diagnostics.push({
+                step: artifact.step,
+                capturedAt: artifact.capturedAt,
+                contentType,
+                objectKey,
+            })
+        } catch (error: any) {
+            console.error(`[DriverAction][${taskId}] screenshot upload failed (${safeStep}):`, error?.message || error)
+            // Database fallback is deliberate: losing a forensic screenshot is
+            // worse than temporarily storing a larger JSON value.
+            diagnostics.push({ ...artifact, storageError: error?.message || String(error) })
+        }
+    }
+
+    const rest = { ...result }
+    delete rest.modalImageBase64
+    return { ...rest, diagnostics }
+}
+
+async function handleDiagnosticDelivery(payload: any) {
+    const { actionId, deliveries } = payload || {}
+    if (!actionId || !Array.isArray(deliveries)) return NextResponse.json({ ok: false, error: 'Missing params' }, { status: 400 })
+    const action = await prisma.driverAction.findUnique({ where: { id: actionId }, select: { result: true } })
+    if (!action) return NextResponse.json({ ok: false, error: 'NOT_FOUND' }, { status: 404 })
+    const result = action.result && typeof action.result === 'object' ? action.result as Record<string, any> : {}
+    await prisma.driverAction.update({
+        where: { id: actionId },
+        data: { result: { ...result, diagnosticDelivery: { attemptedAt: new Date().toISOString(), deliveries } } },
+    })
+    return NextResponse.json({ ok: true })
 }

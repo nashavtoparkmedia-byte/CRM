@@ -13,6 +13,7 @@ import { getDriverById, getCarById } from '@/app/actions'
 import { getDriverTimeline } from './timeline-actions'
 import { getMaxConnections } from '@/app/max-actions'
 import { getTelegramConnections } from '@/app/tg-actions'
+import { DriverActionDiagnostics } from './DriverActionDiagnostics'
 
 export const dynamic = 'force-dynamic'
 
@@ -140,6 +141,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
                                 </div>
                             </div>
                         </div>
+                        {prismaDriver && <DriverActionDiagnostics driverId={prismaDriver.id} />}
                     </TabsContent>
 
                     <TabsContent value="timeline" className="animate-in fade-in zoom-in-95 duration-300">

@@ -44,6 +44,16 @@ export async function uploadFile(localPath: string, objectKey: string, contentTy
     }))
 }
 
+/** Upload an in-memory artifact to S3 and return its object key. */
+export async function uploadBuffer(body: Buffer, objectKey: string, contentType: string): Promise<void> {
+    await getClient().send(new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: objectKey,
+        Body: body,
+        ContentType: contentType,
+    }))
+}
+
 /**
  * Generate a short-lived presigned URL for downloading a recording.
  * Default 1 hour — enough for one playback session, prevents URL sharing.
