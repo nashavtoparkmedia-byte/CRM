@@ -59,6 +59,25 @@ export interface ContactChannelPayload {
   state: 'linked' | 'available_by_phone'
 }
 
+export interface CanonicalContactSummaryPayload {
+  displayName: string
+  primaryPhone: string | null
+  displayTitle: string
+  currentMainDriverProfile: {
+    id: string
+    fullName: string
+    phone: string | null
+    segment: string | null
+  } | null
+  currentChannel: string | null
+  providerIdentities: Array<{
+    channel: string
+    externalId: string
+    displayName: string | null
+  }>
+  channelCount: number
+}
+
 export interface ConflictContactPayload {
   id: string
   displayName: string
@@ -171,6 +190,7 @@ export interface ContactProfilePayload {
   identities: ContactIdentityPayload[]
   chats: ContactChatPayload[]
   channels: ContactChannelPayload[]
+  canonicalSummary?: CanonicalContactSummaryPayload
   driverProfileState: ContactDriverProfileState
   suggestedProfiles: ContactDriverProfilePayload[]
   attachedProfiles: ContactDriverProfilePayload[]

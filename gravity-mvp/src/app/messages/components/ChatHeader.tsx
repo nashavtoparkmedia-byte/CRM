@@ -8,6 +8,7 @@ import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
+import { getSegmentLabel } from '@/lib/contact-display'
 import LinkContactModal from "./LinkContactModal"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'
@@ -60,6 +61,7 @@ export default function ChatHeader({
 
     // Contact metadata for 2nd line
     const { contact } = useContact(chat.contactId)
+    const canonicalSummary = contact?.canonicalSummary ?? chat.contact?.canonicalSummary
 
     // Real tasks state
     const [tasks, setTasks] = useState<TaskDTO[]>([])
@@ -139,6 +141,7 @@ export default function ChatHeader({
 
     const handleCopyPhone = async () => {
         const raw =
+            canonicalSummary?.primaryPhone ||
             chat.driver?.phone ||
             contact?.phones?.find(p => p.isPrimary)?.phone ||
             contact?.phones?.[0]?.phone ||
@@ -176,11 +179,11 @@ export default function ChatHeader({
     const isProfileOpenFromUrl = searchParams.get('profile') === '1'
 
     // Build 2nd line metadata
-    const segment = contact?.driver?.segment || chat.driver?.segment
+    const segment = canonicalSummary?.currentMainDriverProfile?.segment || contact?.driver?.segment || chat.driver?.segment
     const masterSource = contact?.masterSource
-    const channelCount = contact
+    const channelCount = canonicalSummary?.channelCount ?? (contact
         ? countUniqueProviderChannels(contact.channels)
-        : countUniqueProviderChannels(chat.allChannels)
+        : countUniqueProviderChannels(chat.allChannels))
 
     const SOURCE_LABEL: Record<string, string> = {
         yandex: 'Яндекс',
@@ -238,17 +241,21 @@ export default function ChatHeader({
                                         tgUsername:           tgMeta.username,
                                         tgPhone:              chat.driver?.phone,
                                     })
-                                    const driverPhone = chat.driver?.phone
+                                    const title = canonicalSummary?.displayName || detailed.title
+                                    const isUnlinked = canonicalSummary
+                                        ? !canonicalSummary.currentMainDriverProfile
+                                        : detailed.isUnlinked
+                                    const driverPhone = canonicalSummary?.primaryPhone || chat.driver?.phone
                                     // Показываем номер из linked Driver если он не дубль title
-                                    const subtitle = driverPhone && driverPhone !== detailed.title ? driverPhone : null
+                                    const subtitle = driverPhone && driverPhone !== title ? driverPhone : null
                                     return (
                                         <>
                                             <button
                                                 onClick={handleCopyPhone}
-                                                className={`font-semibold text-[15px] leading-none truncate min-w-0 lg:shrink-0 lg:overflow-visible text-left active:opacity-70 transition-opacity ${detailed.isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}
+                                                className={`font-semibold text-[15px] leading-none truncate min-w-0 lg:shrink-0 lg:overflow-visible text-left active:opacity-70 transition-opacity ${isUnlinked ? 'text-gray-400 italic' : 'text-[#111]'}`}
                                                 title="Нажмите чтобы скопировать"
                                             >
-                                                {detailed.title}
+                                                {title}
                                             </button>
                                             {copiedPhone && (
                                                 <span className="shrink-0 text-[11px] text-emerald-500 flex items-center gap-0.5">
@@ -256,7 +263,7 @@ export default function ChatHeader({
                                                     Скопировано
                                                 </span>
                                             )}
-                                            {detailed.isUnlinked && !copiedPhone && (
+                                            {isUnlinked && !copiedPhone && (
                                                 <button
                                                     onClick={() => setShowLinkModal(true)}
                                                     className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 shrink-0 hover:bg-amber-100 transition-colors cursor-pointer"
@@ -541,7 +548,7 @@ export default function ChatHeader({
                                 />
                                 {segment && (
                                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${SEGMENT_STYLE[segment] || 'bg-gray-100 text-gray-500'}`}>
-                                        {segment === 'vip' ? 'VIP' : segment === 'active' ? 'Активный' : segment === 'new' ? 'Новый' : segment === 'inactive' ? 'Неактивный' : segment === 'churned' ? 'Ушёл' : segment}
+                                        {getSegmentLabel(segment)}
                                     </span>
                                 )}
                                 {/* «Источник» и счётчик каналов — служебная инфа, на мобиле

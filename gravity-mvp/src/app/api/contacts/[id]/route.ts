@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { chooseMainDriverProfile, findSuggestedDriverProfilesForContact, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
+import { buildCanonicalContactSummary } from '@/lib/contact-display'
 import { deriveDriverProfileState, type ContactProfileAnomalyPayload } from '@/lib/contact-profile-contract'
 import {
   getDriverProfileStatusLabel,
@@ -365,6 +366,13 @@ export async function GET(
 
     const driver = mainDriverProfile
 
+    const canonicalSummary = buildCanonicalContactSummary({
+      contact,
+      profiles: attachedProfiles,
+      currentChannel: contact.chats[0]?.channel || null,
+      providerChannels: channels.map(channel => channel.channel),
+    })
+
     const mergeHistory = [
       ...contact.mergesAsSurvivor.map(m => ({ ...m, role: 'survivor' as const })),
       ...contact.mergesAsMerged.map(m => ({ ...m, role: 'merged' as const })),
@@ -390,6 +398,7 @@ export async function GET(
       identities: contact.identities,
       chats: contact.chats,
       channels,
+      canonicalSummary,
       driverProfileState,
       suggestedProfiles,
       attachedProfiles,

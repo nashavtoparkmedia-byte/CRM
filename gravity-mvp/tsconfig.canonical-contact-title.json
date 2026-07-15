@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/contact-profile-contract.ts",
+    "src/lib/contact-display.ts",
+    "src/lib/__tests__/canonical-contact-display.test.ts"
+  ],
+  "exclude": ["node_modules"]
+}

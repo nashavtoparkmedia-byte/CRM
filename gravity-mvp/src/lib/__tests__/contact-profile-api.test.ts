@@ -139,6 +139,14 @@ describe('canonical Contact profile API', () => {
     expect(body.driverProfileState).toBe('UNLINKED_WITH_SUGGESTIONS')
     expect(body.primaryPhone.phone).toBe('+79222155750')
     expect(body.channels.map((item: { channel: string }) => item.channel)).toEqual(['max', 'whatsapp', 'telegram'])
+    expect(body.canonicalSummary.displayName).toBe('+7 922 215-57-50')
+    expect(body.canonicalSummary.primaryPhone).toBe('+7 922 215-57-50')
+    expect(body.canonicalSummary.channelCount).toBe(3)
+    expect(body.canonicalSummary.providerIdentities).toEqual([{
+      channel: 'max',
+      externalId: '902144614300',
+      displayName: null,
+    }])
     expect(body.suggestedProfiles).toHaveLength(6)
     expect(body.attachedProfiles).toEqual([])
     expect(body.mainDriverProfile).toBeNull()

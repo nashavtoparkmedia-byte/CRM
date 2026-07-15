@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
+import type { CanonicalContactSummaryPayload } from '@/lib/contact-profile-contract'
 
 export interface Conversation {
     id: string
@@ -25,6 +26,7 @@ export interface Conversation {
         id: string
         displayName: string | null
         displayNameSource?: string | null
+        canonicalSummary?: CanonicalContactSummaryPayload
         // Только telegram-identity (см. MessageService.listConversations select) —
         // используется ChatList для "Имя (@username)" формата на вкладке TG.
         identities?: { metadata: Record<string, string | null> | null }[]
