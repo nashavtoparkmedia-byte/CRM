@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { ArrowLeft, User, CreditCard, Car, AlertTriangle, Clock, Phone as PhoneIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'

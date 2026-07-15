@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from '@/lib/prisma'
 
 export async function DriverActionDiagnostics({ driverId }: { driverId: string }) {
