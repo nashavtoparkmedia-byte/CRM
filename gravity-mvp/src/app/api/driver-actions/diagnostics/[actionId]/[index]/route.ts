@@ -14,7 +14,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ act
             ? await getObject(diagnostic.objectKey)
             : Buffer.from(diagnostic.imageBase64 || '', 'base64')
         if (!body.length) throw new Error('empty diagnostic')
-        return new NextResponse(body, { headers: { 'Content-Type': diagnostic.contentType || 'image/jpeg', 'Cache-Control': 'private, max-age=300' } })
+        return new NextResponse(Uint8Array.from(body), { headers: { 'Content-Type': diagnostic.contentType || 'image/jpeg', 'Cache-Control': 'private, max-age=300' } })
     } catch {
         return NextResponse.json({ error: 'Artifact unavailable' }, { status: 404 })
     }
