@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import type { CanonicalContactSummaryPayload } from '@/lib/contact-profile-contract'
+import { CONTACT_SEARCH_INVALIDATE_EVENT } from '@/lib/contact-search'
 
 export interface Conversation {
     id: string
@@ -252,6 +253,9 @@ export async function refreshConversations() {
         if (Array.isArray(data)) {
             globalConversations = sortConversations(applyLocalReadOverlay(data))
             globalListeners.forEach(l => l([...globalConversations]))
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new Event(CONTACT_SEARCH_INVALIDATE_EVENT))
+            }
         }
     } catch (err) {
         console.error('[refreshConversations] Failed:', err)

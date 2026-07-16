@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/contact-profile-contract.ts",
+    "src/lib/contact-display.ts",
+    "src/lib/contact-search.ts",
+    "src/app/api/contacts/search/route.ts",
+    "src/app/messages/hooks/useContactSearch.ts",
+    "src/lib/__tests__/contact-search.test.ts",
+    "src/lib/__tests__/contact-search-api.test.ts",
+    "src/app/messages/hooks/useContactSearch.test.tsx"
+  ],
+  "exclude": []
+}

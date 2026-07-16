@@ -14,6 +14,7 @@ import { useStartConversation } from "../hooks/useStartConversation"
 import NewChatPopover from "./NewChatPopover"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
+import { conversationMatchesContactSearch } from "@/lib/contact-search"
 import AiInternToggle from "./AiInternToggle"
 import CallToolbar from "@/components/sip/CallToolbar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -112,6 +113,12 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
     // FC-10: Contact Search API for broader results
     const { results: contactResults, loading: contactSearchLoading } = useContactSearch(searchQuery)
 
+    const apiMatchedContacts = useMemo(() => {
+        const contactIds = new Set(contactResults.map(contact => contact.id))
+        const chatIds = new Set(contactResults.flatMap(contact => Object.values(contact.hasChat)))
+        return { contactIds, chatIds }
+    }, [contactResults])
+
     // Filter Logic
     const filteredConversations = useMemo(() => {
         let list = conversations
@@ -135,12 +142,17 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
 
         // 1. Text Search
         if (debouncedSearch) {
-            const query = debouncedSearch.toLowerCase()
-            list = list.filter(c => 
-                c.name?.toLowerCase().includes(query) || 
-                c.driver?.phone?.includes(query) ||
-                c.externalChatId?.toLowerCase().includes(query)
+            const matchesApiContact = (c: Conversation) => (
+                (!!c.contact?.id && apiMatchedContacts.contactIds.has(c.contact.id))
+                || apiMatchedContacts.chatIds.has(c.id)
+                || !!c.allChatIds?.some(chatId => apiMatchedContacts.chatIds.has(chatId))
             )
+
+            if (contactResults.length > 0) {
+                list = list.filter(matchesApiContact)
+            } else {
+                list = list.filter(c => conversationMatchesContactSearch(c, debouncedSearch))
+            }
         }
 
         // 2. Channel Filter (multi-select).
@@ -231,7 +243,7 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
         // 4. List is already sorted by useConversations (unread-first, with sticky-unread for
         //    the just-read selected chat keeping its position). No additional sort needed here.
         return list
-    }, [conversations, debouncedSearch, activeListTab, selectedChannels, viewMode, hiddenGroupIds, selectedAccountIds, selectedChatId])
+    }, [conversations, debouncedSearch, activeListTab, selectedChannels, viewMode, hiddenGroupIds, selectedAccountIds, selectedChatId, apiMatchedContacts])
 
     // Conversations filtered only by account (for badge counts on channel tabs)
     const accountFilteredConversations = useMemo(() => {
@@ -255,11 +267,17 @@ export default function ChatList({ selectedChatId, activeListTab, activeChannelT
 
         // Filter out contacts whose chats are already visible
         return contactResults.filter(contact => {
+            if (selectedChannels.size > 0) {
+                const selected = new Set(Array.from(selectedChannels).map(channel =>
+                    channel === 'wa' ? 'whatsapp' : channel === 'tg' ? 'telegram' : channel
+                ))
+                if (!contact.channels.some(channel => selected.has(channel))) return false
+            }
             const chatIds = Object.values(contact.hasChat)
             if (chatIds.length === 0) return true // no chat at all — show
             return !chatIds.some(id => visibleChatIds.has(id))
         })
-    }, [debouncedSearch, contactResults, filteredConversations])
+    }, [debouncedSearch, contactResults, filteredConversations, selectedChannels])
 
     // Keyboard Navigation
     useEffect(() => {

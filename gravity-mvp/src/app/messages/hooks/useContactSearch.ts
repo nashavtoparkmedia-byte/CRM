@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { CONTACT_SEARCH_INVALIDATE_EVENT } from "@/lib/contact-search"
 
 export interface ContactSearchPhone {
   id: string
@@ -53,8 +54,8 @@ export function useContactSearch(query: string, debounceMs = 300) {
       if (!controller.signal.aborted) {
         setState({ results: data.contacts || [], total: data.total || 0, loading: false })
       }
-    } catch (err: any) {
-      if (err.name !== "AbortError") {
+    } catch (err: unknown) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
         setState(s => ({ ...s, loading: false }))
       }
     }
@@ -84,6 +85,15 @@ export function useContactSearch(query: string, debounceMs = 300) {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    const refreshCurrentSearch = () => {
+      const trimmed = query.trim()
+      if (trimmed.length >= 2) search(trimmed)
+    }
+    window.addEventListener(CONTACT_SEARCH_INVALIDATE_EVENT, refreshCurrentSearch)
+    return () => window.removeEventListener(CONTACT_SEARCH_INVALIDATE_EVENT, refreshCurrentSearch)
+  }, [query, search])
 
   return state
 }

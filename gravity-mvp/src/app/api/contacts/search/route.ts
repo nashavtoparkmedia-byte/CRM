@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { stripToDigits } from '@/lib/phoneUtils'
+import { buildCanonicalContactSummary } from '@/lib/contact-display'
+import {
+  expandContactSearchTextVariants,
+  isPhoneLikeContactSearch,
+  MIN_CONTACT_PHONE_SEARCH_DIGITS,
+  normalizeContactPhoneDigits,
+  normalizeContactSearchText,
+} from '@/lib/contact-search'
 
 /**
  * GET /api/contacts/search?q=...&limit=10
@@ -23,57 +31,98 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ contacts: [], total: 0 })
     }
 
-    const isPhoneQuery = /^[\d\s\+\-\(\)]+$/.test(q)
-    const digits = stripToDigits(q)
+    const isPhoneQuery = isPhoneLikeContactSearch(q)
+    const digits = normalizeContactPhoneDigits(q)
+    const nameTokens = isPhoneQuery ? [] : normalizeContactSearchText(q).split(' ').filter(Boolean)
+    const candidateLimit = isPhoneQuery ? limit : Math.min(Math.max(limit * 8, 50), 200)
 
     const contactIds = new Set<string>()
-    const results: any[] = []
+    const results: string[] = []
 
     // ── Phone search ──────────────────────────────────────────
-    if (isPhoneQuery && digits.length >= 3) {
-      const phoneMatches = await prisma.contactPhone.findMany({
-        where: {
-          phone: { contains: digits },
-          isActive: true,
-          contact: { isArchived: false },
-        },
-        include: {
-          contact: {
-            select: { id: true, displayName: true, masterSource: true, yandexDriverId: true, isArchived: true },
-          },
-        },
-        take: limit,
-      })
+    if (isPhoneQuery && digits.length >= MIN_CONTACT_PHONE_SEARCH_DIGITS) {
+      const phoneMatches = await prisma.$queryRaw<Array<{ contactId: string }>>(Prisma.sql`
+        WITH source_phones AS (
+          SELECT phone."contactId", regexp_replace(COALESCE(phone.phone, ''), '[^0-9]', '', 'g') AS "phoneDigits"
+          FROM "ContactPhone" phone
+          WHERE phone."isActive" = true
+          UNION ALL
+          SELECT driver."contactId", regexp_replace(COALESCE(driver.phone, ''), '[^0-9]', '', 'g') AS "phoneDigits"
+          FROM "Driver" driver
+          WHERE driver."contactId" IS NOT NULL AND driver.phone IS NOT NULL
+        ), normalized_phones AS (
+          SELECT "contactId",
+            CASE
+              WHEN "phoneDigits" ~ '^8[0-9]{10}$' THEN '7' || substring("phoneDigits" FROM 2)
+              WHEN "phoneDigits" ~ '^[0-9]{10}$' THEN '7' || "phoneDigits"
+              ELSE "phoneDigits"
+            END AS "normalizedPhone"
+          FROM source_phones
+        )
+        SELECT DISTINCT normalized."contactId"
+        FROM normalized_phones normalized
+        JOIN "Contact" contact ON contact.id = normalized."contactId"
+        WHERE contact."isArchived" = false
+          AND normalized."normalizedPhone" LIKE ${`%${digits}%`}
+        LIMIT ${limit}
+      `)
 
       for (const pm of phoneMatches) {
-        if (!contactIds.has(pm.contact.id)) {
-          contactIds.add(pm.contact.id)
-          results.push(pm.contact.id)
+        if (!contactIds.has(pm.contactId)) {
+          contactIds.add(pm.contactId)
+          results.push(pm.contactId)
         }
       }
     }
 
     // ── Name search ───────────────────────────────────────────
     if (!isPhoneQuery && q.length >= 2) {
-      const nameMatches = await prisma.contact.findMany({
-        where: {
-          displayName: { contains: q, mode: 'insensitive' },
-          isArchived: false,
-        },
-        select: { id: true },
-        take: limit,
+      const tokenFilters = nameTokens.map(token => {
+        const variants = expandContactSearchTextVariants(token)
+        return Prisma.sql`(${Prisma.join(
+          variants.map(variant => Prisma.sql`searchable."searchText" LIKE ${`%${variant}%`}`),
+          ' OR ',
+        )})`
       })
 
+      const nameMatches = tokenFilters.length > 0
+        ? await prisma.$queryRaw<Array<{ contactId: string }>>(Prisma.sql`
+          WITH searchable AS (
+            SELECT contact.id AS "contactId",
+              replace(lower(concat_ws(' ',
+                contact."displayName",
+                string_agg(DISTINCT identity."displayName", ' '),
+                string_agg(DISTINCT driver."fullName", ' '),
+                max(main_driver."fullName")
+              )), 'ё', 'е') AS "searchText"
+            FROM "Contact" contact
+            LEFT JOIN "ContactIdentity" identity
+              ON identity."contactId" = contact.id AND identity."isActive" = true
+            LEFT JOIN "Driver" driver
+              ON driver."contactId" = contact.id
+            LEFT JOIN "Driver" main_driver
+              ON main_driver.id = contact."mainDriverId"
+            WHERE contact."isArchived" = false
+            GROUP BY contact.id
+          )
+          SELECT searchable."contactId"
+          FROM searchable
+          WHERE ${Prisma.join(tokenFilters, ' AND ')}
+          LIMIT ${candidateLimit}
+        `)
+        : []
+
       for (const nm of nameMatches) {
-        if (!contactIds.has(nm.id)) {
-          contactIds.add(nm.id)
-          results.push(nm.id)
+        if (!contactIds.has(nm.contactId)) {
+          contactIds.add(nm.contactId)
+          results.push(nm.contactId)
         }
       }
     }
 
     // ── ExternalId search (parallel, both query types) ────────
-    if (q.length >= 3) {
+    if ((!isPhoneQuery && q.length >= 3)
+      || (isPhoneQuery && digits.length >= MIN_CONTACT_PHONE_SEARCH_DIGITS)) {
       const identityMatches = await prisma.contactIdentity.findMany({
         where: {
           externalId: { startsWith: q },
@@ -93,7 +142,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Hydrate contacts ──────────────────────────────────────
-    const uniqueIds = results.slice(0, limit)
+    const uniqueIds = results.slice(0, candidateLimit)
 
     if (uniqueIds.length === 0) {
       return NextResponse.json({ contacts: [], total: 0 })
@@ -106,6 +155,8 @@ export async function GET(req: NextRequest) {
         displayName: true,
         masterSource: true,
         yandexDriverId: true,
+        primaryPhoneId: true,
+        mainDriverId: true,
         phones: {
           where: { isActive: true },
           select: { id: true, phone: true, isPrimary: true, source: true },
@@ -113,12 +164,29 @@ export async function GET(req: NextRequest) {
         },
         identities: {
           where: { isActive: true },
-          select: { id: true, channel: true, externalId: true, reachabilityStatus: true },
+          select: {
+            id: true,
+            channel: true,
+            externalId: true,
+            displayName: true,
+            metadata: true,
+            reachabilityStatus: true,
+          },
         },
         chats: {
           select: { id: true, channel: true, lastMessageAt: true },
           orderBy: { lastMessageAt: 'desc' },
           take: 5,
+        },
+        driverProfiles: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            segment: true,
+            dismissedAt: true,
+            lastExternalPark: true,
+          },
         },
       },
     })
@@ -128,7 +196,7 @@ export async function GET(req: NextRequest) {
     // but TG/other chats may be linked via driverId (same phone → same Driver)
     const contactPhones = new Map<string, string[]>() // contactId → phones
     for (const c of contacts) {
-      const phones = c.phones.map(p => p.phone.replace(/\D/g, ''))
+      const phones = c.phones.map(p => normalizeContactPhoneDigits(p.phone))
       if (phones.length > 0) contactPhones.set(c.id, phones)
     }
 
@@ -137,7 +205,7 @@ export async function GET(req: NextRequest) {
     const driverChats = allPhones.length > 0
       ? await prisma.chat.findMany({
           where: {
-            driver: { phone: { in: allPhones.map(p => p.startsWith('7') ? `+${p}` : `+7${p}`) } },
+            driver: { phone: { in: allPhones.map(phone => `+${phone}`) } },
             chatType: 'private',
           },
           select: { id: true, channel: true, driverId: true, driver: { select: { phone: true } } },
@@ -147,7 +215,7 @@ export async function GET(req: NextRequest) {
     // Map driver chats to contacts by phone
     const driverChatsByPhone = new Map<string, typeof driverChats>()
     for (const dc of driverChats) {
-      const normPhone = dc.driver?.phone?.replace(/\D/g, '') || ''
+      const normPhone = normalizeContactPhoneDigits(dc.driver?.phone)
       if (!driverChatsByPhone.has(normPhone)) driverChatsByPhone.set(normPhone, [])
       driverChatsByPhone.get(normPhone)!.push(dc)
     }
@@ -169,27 +237,109 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const providerChannels = [...new Set([
+        ...c.identities.map(identity => identity.channel),
+        ...Object.keys(hasChat),
+      ])]
+      const canonicalSummary = buildCanonicalContactSummary({
+        contact: c,
+        profiles: c.driverProfiles,
+        currentChannel: c.chats[0]?.channel || null,
+        providerChannels,
+      })
+
       return {
         id: c.id,
-        displayName: c.displayName,
+        displayName: canonicalSummary.displayName,
         masterSource: c.masterSource,
         phones: c.phones,
         identities: c.identities,
         hasChat,
-        channels: [...new Set([
-          ...c.identities.map(i => i.channel),
-          ...Object.keys(hasChat),
-        ])],
+        channels: providerChannels,
+        canonicalSummary,
       }
     })
 
-    // Preserve search result order
+    // Preserve search result order, but rank canonical CRM contacts above provider-only rows.
     const orderMap = new Map(uniqueIds.map((id, i) => [id, i]))
-    formatted.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99))
+    formatted.sort((a, b) => {
+      if (!isPhoneQuery) {
+        const strengthDiff = canonicalContactStrength(b) - canonicalContactStrength(a)
+        if (strengthDiff !== 0) return strengthDiff
+      }
 
-    return NextResponse.json({ contacts: formatted, total: formatted.length })
-  } catch (err: any) {
-    console.error('[contacts/search] Error:', err.message)
+      return (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99)
+    })
+
+    const visibleFormatted = isPhoneQuery
+      ? formatted
+      : preferCanonicalContactRows(formatted, nameTokens)
+
+    const limitedFormatted = visibleFormatted.slice(0, limit)
+
+    return NextResponse.json({ contacts: limitedFormatted, total: limitedFormatted.length })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[contacts/search] Error:', message)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
+}
+
+interface SearchResultForDedupe {
+  id: string
+  displayName?: string | null
+  phones?: unknown[]
+  canonicalSummary?: {
+    displayName?: string | null
+    displayTitle?: string | null
+    primaryPhone?: string | null
+    currentMainDriverProfile?: { id?: string | null } | null
+  } | null
+}
+
+function preferCanonicalContactRows<T extends SearchResultForDedupe>(rows: T[], tokens: string[]): T[] {
+  const strongBySurname = new Map<string, T>()
+
+  for (const row of rows) {
+    const surname = getSearchSurname(row)
+    if (!surname || !tokens.some(token => token.length >= 3 && surname.startsWith(token))) continue
+    if (!hasCanonicalContactStrength(row)) continue
+
+    const current = strongBySurname.get(surname)
+    if (!current || canonicalContactStrength(row) > canonicalContactStrength(current)) {
+      strongBySurname.set(surname, row)
+    }
+  }
+
+  if (strongBySurname.size === 0) return rows
+
+  return rows.filter(row => {
+    const surname = getSearchSurname(row)
+    if (!surname || !tokens.some(token => token.length >= 3 && surname.startsWith(token))) return true
+
+    const strong = strongBySurname.get(surname)
+    if (!strong || row.id === strong.id || hasCanonicalContactStrength(row)) return true
+
+    return false
+  })
+}
+
+function getSearchSurname(row: SearchResultForDedupe): string {
+  return normalizeContactSearchText(
+    row.canonicalSummary?.currentMainDriverProfile?.id
+      ? row.canonicalSummary.displayName
+      : row.canonicalSummary?.displayName || row.displayName,
+  ).split(' ')[0] || ''
+}
+
+function hasCanonicalContactStrength(row: SearchResultForDedupe): boolean {
+  return canonicalContactStrength(row) > 0
+}
+
+function canonicalContactStrength(row: SearchResultForDedupe): number {
+  let score = 0
+  if ((row.phones || []).length > 0) score += 2
+  if (row.canonicalSummary?.primaryPhone) score += 2
+  if (row.canonicalSummary?.currentMainDriverProfile?.id) score += 3
+  return score
 }
