@@ -2,18 +2,18 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Pencil, Trash2, Check, Star, MessageSquare, Send, Loader2, GitMerge, Search, Copy } from "lucide-react"
+import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus, Archive, Ban, ChevronDown, Pencil, Trash2, Check, Star, MessageSquare, Loader2, GitMerge, Search, Copy } from "lucide-react"
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useContactSearch } from "../hooks/useContactSearch"
-import { useContact, type Contact, type ContactIdentity } from "../hooks/useContact"
+import { useContact, type ContactIdentity } from "../hooks/useContact"
 import { useChannelStatus } from "../hooks/useChannelStatus"
-import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
 import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
 import AddPhoneResolutionDialog from "./AddPhoneResolutionDialog"
+import ContactChannelRow, { type ContactChannelBadge } from "./ContactChannelRow"
 import { countUniqueProviderChannels, formatProviderChannelCount, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
 import { getSegmentLabel } from '@/lib/contact-display'
 
@@ -51,6 +51,35 @@ const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
     manual: { label: 'Ручной', color: 'bg-gray-100 text-gray-600' },
 }
 
+function getIdentitySourceBadges(identity: ContactIdentity, identityCount: number): ContactChannelBadge[] {
+    if (identity.source === 'auto' && identityCount > 1) {
+        return [{
+            label: getIdentitySourceLabel(identity.source),
+            className: 'bg-gray-50 text-gray-500',
+            title: 'Канал привязан автоматически по номеру телефона',
+        }]
+    }
+    if (identity.source === 'manual') {
+        return [{
+            label: getIdentitySourceLabel(identity.source),
+            className: 'bg-violet-50 text-violet-600',
+            title: 'Канал добавлен вручную',
+        }]
+    }
+    return []
+}
+
+function getChannelStatusDot(
+    reachable: boolean | null,
+    isOperationallyBlocked: boolean,
+    fallbackTitle: string,
+): { className: string; title: string } {
+    if (isOperationallyBlocked) return { className: 'bg-amber-400', title: fallbackTitle }
+    if (reachable === true) return { className: 'bg-emerald-500', title: 'Аккаунт найден у провайдера' }
+    if (reachable === false) return { className: 'bg-red-500', title: 'Аккаунт у провайдера не найден' }
+    return { className: 'bg-gray-300', title: fallbackTitle }
+}
+
 function formatPhone(phone: string): string {
     // +79221234567 → +7 922 215-57-50
     if (phone.length === 12 && phone.startsWith('+7')) {
@@ -65,15 +94,17 @@ function formatTechnicalDate(value: string | null): string {
     return Number.isNaN(date.getTime()) ? 'нет' : date.toLocaleString('ru-RU')
 }
 
-function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
+function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, badges, dotClassName, dotTitle, error }: {
     identity: ContactIdentity
     cfg: { label: string; icon: string; color: string; dotColor: string } | undefined
     isWriting: boolean
     onWrite: () => void
-    contact: Contact | null
+    badges: ContactChannelBadge[]
+    dotClassName: string
+    dotTitle: string
+    error?: string | null
 }) {
     const [copiedId, setCopiedId] = useState(false)
-    const linkedToCurrentContact = !!contact?.chats?.some(chat => chat.contactIdentityId === identity.id)
     // metadata may contain { username, firstName, lastName } saved by TG webhook
     const meta = (identity.metadata as Record<string, string | null> | null) ?? {}
     // Only use metadata (populated on each incoming TG message).
@@ -97,47 +128,27 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
         }).catch(() => {})
     }
     return (
-        <div className="mb-2.5">
-            <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-[11px]">{cfg?.icon || '?'}</span>
-                <span className="text-[12px] font-medium text-[#111]">
-                    {cfg?.label || identity.channel}
-                </span>
-                {linkedToCurrentContact && (
-                    <span
-                        className="rounded bg-emerald-50 px-1 py-px text-[9px] font-semibold text-emerald-700"
-                        title="Identity текущего чата уже принадлежит этому контакту"
-                    >
-                        Связан
-                    </span>
-                )}
-                {identifierLabel && (
-                    <button
-                        onClick={handleCopyId}
-                        title="Нажмите чтобы скопировать"
-                        className="text-[11px] text-gray-400 hover:text-[#3390EC] transition-colors"
-                    >
-                        {copiedId ? <span className="text-emerald-500 text-[10px]">✓ скопировано</span> : identifierLabel}
-                    </button>
-                )}
-                {identity.source === 'auto' && contact && contact.identities.length > 1 && (
-                    <span className="text-[8px] text-gray-500 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">{getIdentitySourceLabel(identity.source)}</span>
-                )}
-                {identity.source === 'manual' && (
-                    <span className="text-[8px] text-violet-600 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">{getIdentitySourceLabel(identity.source)}</span>
-                )}
-            </div>
-            <div className="ml-[4px]">
+        <ContactChannelRow
+            provider={identity.channel}
+            providerLabel={cfg?.label || identity.channel}
+            icon={cfg?.icon || '?'}
+            dotClassName={dotClassName}
+            dotTitle={dotTitle}
+            badges={badges}
+            detail={identifierLabel ? (
                 <button
-                    onClick={onWrite}
-                    disabled={isWriting}
-                    className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
+                    type="button"
+                    onClick={handleCopyId}
+                    title="Нажмите, чтобы скопировать"
+                    className="min-w-0 truncate text-[10px] text-gray-400 transition-colors hover:text-[#3390EC]"
                 >
-                    {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
-                    Написать
+                    {copiedId ? '✓ скопировано' : identifierLabel}
                 </button>
-            </div>
-        </div>
+            ) : undefined}
+            isWriting={isWriting}
+            onWrite={onWrite}
+            error={error}
+        />
     )
 }
 
@@ -714,58 +725,29 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                 }
                                                 : reachabilityBadge(reachable, liveEntry)
                                             const isOperationallyBlocked = isCheckable && reachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
+                                            const statusDot = getChannelStatusDot(reachable, isOperationallyBlocked, reachBadge.title)
+                                            const badges: ContactChannelBadge[] = [
+                                                ...(isCheckable ? [{
+                                                    label: reachBadge.label,
+                                                    className: reachBadge.cls,
+                                                    title: reachBadge.title,
+                                                }] : []),
+                                                ...getIdentitySourceBadges(identity, contact.identities.length),
+                                            ]
                                             // null значит "проверяем" или "нет связи", но не provider-level "нет".
                                             return (
-                                                <div key={identity.id}>
-                                                    <div className="flex items-center justify-between h-[26px]">
-                                                        <div className="flex items-center gap-1.5">
-                                                            {isOperationallyBlocked ? (
-                                                                <span className="inline-block w-[7px] h-[7px] rounded-full bg-amber-400" title={reachBadge.title} />
-                                                            ) : isCheckable && reachable !== null && reachable !== undefined ? (
-                                                                <span className={`inline-block w-[7px] h-[7px] rounded-full ${reachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={reachable ? 'Номер найден' : 'Номер не найден'} />
-                                                            ) : (
-                                                                <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверяется" />
-                                                            )}
-                                                            <span className="text-[11px]">{cfg?.icon || '?'}</span>
-                                                            <span className="text-[11px] text-gray-600">{cfg?.label || identity.channel}</span>
-                                                            {isCheckable && (
-                                                                <span
-                                                                    className={`text-[9px] font-semibold px-1 py-px rounded ${reachBadge.cls}`}
-                                                                    title={reachBadge.title}
-                                                                >
-                                                                    {reachBadge.label}
-                                                                </span>
-                                                            )}
-                                                            {identity.source === 'auto' && contact && contact.identities.length > 1 && (
-                                                                <span className="text-[8px] text-gray-500 bg-gray-50 px-1 py-px rounded" title="Канал привязан автоматически по номеру телефона">{getIdentitySourceLabel(identity.source)}</span>
-                                                            )}
-                                                            {identity.source === 'manual' && (
-                                                                <span className="text-[8px] text-violet-600 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">{getIdentitySourceLabel(identity.source)}</span>
-                                                            )}
-                                                            {hasFailed && <AlertCircle size={10} className="text-red-500" />}
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleWrite(identity.channel, identity.id)}
-                                                            disabled={isWriting}
-                                                            className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                                        >
-                                                            {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
-                                                            Написать
-                                                        </button>
-                                                    </div>
-                                                    {hasFailed && (
-                                                        <div className="ml-5 mb-0.5 group/err relative inline-block">
-                                                            <span className="text-[10px] text-red-500 leading-tight cursor-default">Ошибка доставки</span>
-                                                            {chStatus.error && (
-                                                                <div className="absolute left-0 bottom-full mb-1 hidden group-hover/err:block z-50 pointer-events-none">
-                                                                    <div className="bg-[#333] text-white text-[10px] leading-tight rounded-lg px-2.5 py-1.5 max-w-[220px] whitespace-pre-wrap shadow-lg">
-                                                                        {chStatus.error.length > 120 ? chStatus.error.substring(0, 120) + '…' : chStatus.error}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
+                                                <ContactChannelRow
+                                                    key={identity.id}
+                                                    provider={identity.channel}
+                                                    providerLabel={cfg?.label || identity.channel}
+                                                    icon={cfg?.icon || '?'}
+                                                    dotClassName={statusDot.className}
+                                                    dotTitle={statusDot.title}
+                                                    badges={badges}
+                                                    isWriting={isWriting}
+                                                    onWrite={() => handleWrite(identity.channel, identity.id)}
+                                                    error={hasFailed ? (chStatus.error || 'Неизвестная ошибка доставки') : null}
+                                                />
                                             )
                                         })}
                                         {/* Available channels without identity (can write via phone) */}
@@ -782,37 +764,24 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                         : (confirmedChannelsAny.has(ch) ? true : null)
                                             const reachBadge = reachabilityBadge(missingReachable, liveEntry)
                                             const isOperationallyBlocked = isMissingCheckable && missingReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
+                                            const statusDot = getChannelStatusDot(missingReachable, isOperationallyBlocked, reachBadge.title)
                                             return (
-                                                <div key={`missing-${ch}`} className="flex items-center justify-between h-[26px]">
-                                                    <div className="flex items-center gap-1.5">
-                                                        {/* null means "проверяем" or "нет связи", not provider-level "нет". */}
-                                                        {isOperationallyBlocked ? (
-                                                            <span className="inline-block w-[7px] h-[7px] rounded-full bg-amber-400" title={reachBadge.title} />
-                                                        ) : isMissingCheckable && missingReachable !== null && missingReachable !== undefined ? (
-                                                            <span className={`inline-block w-[7px] h-[7px] rounded-full ${missingReachable ? 'bg-emerald-500' : 'bg-red-500'}`} title={missingReachable ? 'Номер найден' : 'Номер не найден'} />
-                                                        ) : (
-                                                            <span className="inline-block w-[7px] h-[7px] rounded-full bg-gray-300" title="Проверяется" />
-                                                        )}
-                                                        <span className="text-[11px] opacity-50">{cfg?.icon || '?'}</span>
-                                                        <span className="text-[11px] text-gray-400">{cfg?.label || ch}</span>
-                                                        {isMissingCheckable && (
-                                                            <span
-                                                                className={`text-[9px] font-semibold px-1 py-px rounded ${reachBadge.cls}`}
-                                                                title={reachBadge.title}
-                                                            >
-                                                                {reachBadge.label}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <button
-                                                        onClick={() => handleWrite(ch)}
-                                                        disabled={isWriting}
-                                                        className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
-                                                    >
-                                                        {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
-                                                        Написать
-                                                    </button>
-                                                </div>
+                                                <ContactChannelRow
+                                                    key={`missing-${ch}`}
+                                                    provider={ch}
+                                                    providerLabel={cfg?.label || ch}
+                                                    icon={cfg?.icon || '?'}
+                                                    dotClassName={statusDot.className}
+                                                    dotTitle={statusDot.title}
+                                                    badges={isMissingCheckable ? [{
+                                                        label: reachBadge.label,
+                                                        className: reachBadge.cls,
+                                                        title: reachBadge.title,
+                                                    }] : []}
+                                                    isWriting={isWriting}
+                                                    onWrite={() => handleWrite(ch)}
+                                                    muted
+                                                />
                                             )
                                         })}
                                     </div>
@@ -824,6 +793,28 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {orphanIdentities.map(identity => {
                             const cfg = CHANNEL_CONFIG[identity.channel]
                             const isWriting = writingIdentityId === identity.id
+                            const chStatus = channelStatus[identity.channel]
+                            const hasFailed = chStatus?.status === 'failed'
+                            const reachable = getReachability(identity)
+                            const liveEntry = liveReachability[identity.channel]
+                            const linkedToCurrentContact = contact.chats.some(c => c.contactIdentityId === identity.id)
+                            const reachBadge = linkedToCurrentContact
+                                ? {
+                                    label: 'Связан',
+                                    cls: 'text-emerald-700 bg-emerald-50',
+                                    title: 'Identity текущего чата уже принадлежит этому контакту',
+                                }
+                                : reachabilityBadge(reachable, liveEntry)
+                            const isOperationallyBlocked = reachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
+                            const statusDot = getChannelStatusDot(reachable, isOperationallyBlocked, reachBadge.title)
+                            const badges: ContactChannelBadge[] = [
+                                {
+                                    label: reachBadge.label,
+                                    className: reachBadge.cls,
+                                    title: reachBadge.title,
+                                },
+                                ...getIdentitySourceBadges(identity, contact.identities.length),
+                            ]
                             return (
                                 <OrphanIdentityRow
                                     key={identity.id}
@@ -831,7 +822,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     cfg={cfg}
                                     isWriting={isWriting}
                                     onWrite={() => handleWrite(identity.channel, identity.id)}
-                                    contact={contact}
+                                    badges={badges}
+                                    dotClassName={statusDot.className}
+                                    dotTitle={statusDot.title}
+                                    error={hasFailed ? (chStatus.error || 'Неизвестная ошибка доставки') : null}
                                 />
                             )
                         })}

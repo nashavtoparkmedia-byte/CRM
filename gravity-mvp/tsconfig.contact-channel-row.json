@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["vitest/globals", "node"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/app/messages/components/ContactChannelRow.tsx",
+    "src/app/messages/components/ContactChannelRow.test.tsx"
+  ]
+}
