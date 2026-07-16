@@ -275,6 +275,51 @@ export async function GET(
       || attachedProfiles.find(profile => profile.id === mainDecision.main?.id)
       || null
 
+    const contactTelegramIdentity = contact.identities.find(identity => identity.channel === 'telegram') || null
+    const contactTelegramMetadata = asRecord(contactTelegramIdentity?.metadata)
+    const telegramBotLinks = attachedProfiles.length > 0
+      ? await prisma.driverTelegram.findMany({
+          where: { driverId: { in: attachedProfiles.map(profile => profile.id) } },
+          orderBy: { createdAt: 'desc' },
+        })
+      : []
+    const telegramBotLink = telegramBotLinks[0] || null
+    const telegramBotProfile = telegramBotLink
+      ? attachedProfiles.find(profile => telegramBotLink.activeParkId && profile.externalParkId === telegramBotLink.activeParkId)
+        || attachedProfiles.find(profile => profile.id === telegramBotLink.driverId)
+        || null
+      : null
+    const telegramUserId = telegramBotLink?.telegramId.toString() || contactTelegramIdentity?.externalId || null
+    const telegramUsername = telegramBotLink?.username || stringOrNull(contactTelegramMetadata.username)
+    const telegramIdentity = telegramUserId
+      ? {
+          telegramUserId,
+          username: telegramUsername,
+          displayName: contactTelegramIdentity?.displayName || null,
+          source: telegramBotLink ? 'driver_telegram' as const : 'contact_identity' as const,
+          lastVerifiedAt: dateIsoOrNull(telegramBotLink?.createdAt || contactTelegramIdentity?.reachabilityCheckedAt),
+        }
+      : null
+    const telegramBotStatus = telegramBotLinks.length > 1
+      ? 'CONFLICT' as const
+      : telegramBotLink
+        ? 'BOT_BOUND' as const
+        : contactTelegramIdentity
+          ? 'TELEGRAM_IDENTITY_AVAILABLE_BOT_UNBOUND' as const
+          : 'NO_TELEGRAM_IDENTITY' as const
+    const telegramBotState = {
+      status: telegramBotStatus,
+      linked: telegramBotStatus === 'BOT_BOUND',
+      telegramUserId,
+      username: telegramUsername,
+      driverProfile: telegramBotStatus === 'CONFLICT' ? null : telegramBotProfile,
+      activeParkId: telegramBotLink?.activeParkId || null,
+      parkName: telegramBotProfile?.parkName || null,
+      boundAt: dateIsoOrNull(telegramBotLink?.createdAt),
+      source: telegramBotLink ? 'driver_telegram' as const : contactTelegramIdentity ? 'contact_identity' as const : 'none' as const,
+      conflictCount: telegramBotLinks.length,
+    }
+
     const currentSyncFailures = parkConnections.filter(connection =>
       Boolean(connection.lastErrorSummary)
       && Boolean(connection.lastFailedSyncAt)
@@ -405,6 +450,8 @@ export async function GET(
       mainDriverProfile,
       syncState,
       anomalies,
+      telegramIdentity,
+      telegramBotState,
       technicalData: {
         contactId: contact.id,
         providerIds: contact.identities.map(identity => ({ channel: identity.channel, externalId: identity.externalId })),

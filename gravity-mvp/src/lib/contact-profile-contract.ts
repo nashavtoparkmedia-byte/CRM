@@ -170,6 +170,34 @@ export interface ContactTechnicalDataPayload {
   }>
 }
 
+export type TelegramBotStateCode =
+  | 'BOT_BOUND'
+  | 'TELEGRAM_IDENTITY_AVAILABLE_BOT_UNBOUND'
+  | 'TELEGRAM_DISCOVERED_BY_PHONE'
+  | 'NO_TELEGRAM_IDENTITY'
+  | 'CONFLICT'
+
+export interface TelegramIdentityPayload {
+  telegramUserId: string | null
+  username: string | null
+  displayName: string | null
+  source: 'driver_telegram' | 'contact_identity'
+  lastVerifiedAt: string | null
+}
+
+export interface TelegramBotStatePayload {
+  status: TelegramBotStateCode
+  linked: boolean
+  telegramUserId: string | null
+  username: string | null
+  driverProfile: ContactDriverProfilePayload | null
+  activeParkId: string | null
+  parkName: string | null
+  boundAt: string | null
+  source: 'driver_telegram' | 'contact_identity' | 'none'
+  conflictCount: number
+}
+
 export interface ContactProfilePayload {
   id: string
   displayName: string
@@ -198,6 +226,8 @@ export interface ContactProfilePayload {
   syncState: ContactProfileSyncStatePayload
   anomalies: ContactProfileAnomalyPayload[]
   technicalData: ContactTechnicalDataPayload
+  telegramIdentity?: TelegramIdentityPayload | null
+  telegramBotState?: TelegramBotStatePayload
 
   // Backward-compatible aliases used by older Messages components.
   driver: ContactDriverProfilePayload | null

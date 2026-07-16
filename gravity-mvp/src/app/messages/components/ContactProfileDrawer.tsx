@@ -73,9 +73,10 @@ function getChannelStatusDot(
     reachable: boolean | null,
     isOperationallyBlocked: boolean,
     fallbackTitle: string,
+    confirmedTitle = 'Аккаунт найден у провайдера',
 ): { className: string; title: string } {
     if (isOperationallyBlocked) return { className: 'bg-amber-400', title: fallbackTitle }
-    if (reachable === true) return { className: 'bg-emerald-500', title: 'Аккаунт найден у провайдера' }
+    if (reachable === true) return { className: 'bg-emerald-500', title: confirmedTitle }
     if (reachable === false) return { className: 'bg-red-500', title: 'Аккаунт у провайдера не найден' }
     return { className: 'bg-gray-300', title: fallbackTitle }
 }
@@ -184,8 +185,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
     // TG Bot link state
     const [tgIdCopied, setTgIdCopied] = useState(false)
-    const [botLinkInfo, setBotLinkInfo] = useState<{ linked: boolean; driverName?: string; driverId?: string } | null>(null)
-    const [botLinkLoading, setBotLinkLoading] = useState(false)
     const [showBotLinkSearch, setShowBotLinkSearch] = useState(false)
     const [botLinkQuery, setBotLinkQuery] = useState('')
     const [botLinkResults, setBotLinkResults] = useState<{ id: string; fullName: string; phone: string | null }[]>([])
@@ -257,17 +256,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         }
     }, [contact])
 
-    // Load bot link status when a TG identity is present
-    const tgIdentity = contact?.identities.find(i => i.channel === 'telegram') ?? null
-    useEffect(() => {
-        if (!tgIdentity?.externalId) { setBotLinkInfo(null); return }
-        setBotLinkLoading(true)
-        fetch(`/api/bot-link?telegramId=${encodeURIComponent(tgIdentity.externalId)}`)
-            .then(r => r.json())
-            .then(d => setBotLinkInfo(d))
-            .catch(() => setBotLinkInfo(null))
-            .finally(() => setBotLinkLoading(false))
-    }, [tgIdentity?.externalId])
+    // Contact API resolves the canonical bot binding from DriverTelegram and
+    // attached profiles. ContactIdentity.externalId can be a phone placeholder,
+    // so it must not be used as the bot-link source of truth.
+    const telegramBotState = contact?.telegramBotState ?? null
+    const botTelegramId = telegramBotState?.telegramUserId || null
+    const canManageBotLink = Boolean(botTelegramId && !/^[78]\d{10}$/.test(botTelegramId))
+    const telegramBotDisplayStatus = telegramBotState?.status === 'NO_TELEGRAM_IDENTITY'
+        && liveReachability.telegram?.status === 'confirmed'
+        ? 'TELEGRAM_DISCOVERED_BY_PHONE'
+        : telegramBotState?.status || 'NO_TELEGRAM_IDENTITY'
 
     // Debounced driver search for bot link
     useEffect(() => {
@@ -716,16 +714,32 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp' || identity.channel === 'max'
                                             const reachable = getReachability(identity)
                                             const liveEntry = liveReachability[identity.channel]
-                                            const linkedToCurrentContact = contact.chats.some(c => c.contactIdentityId === identity.id)
-                                            const reachBadge = linkedToCurrentContact
+                                            const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
+                                            const linkedToCurrentContact = Boolean(linkedChat)
+                                            const hasOperationalMaxChat = identity.channel === 'max' && Boolean(linkedChat?.externalChatId) && !hasFailed
+                                            const effectiveReachable = hasFailed ? false : hasOperationalMaxChat ? true : reachable
+                                            const reachBadge = hasFailed
+                                                ? {
+                                                    label: 'Ошибка',
+                                                    cls: 'text-red-700 bg-red-50',
+                                                    title: chStatus.error || 'Последняя отправка завершилась ошибкой',
+                                                }
+                                                : linkedToCurrentContact
                                                 ? {
                                                     label: 'Связан',
                                                     cls: 'text-emerald-700 bg-emerald-50',
-                                                    title: 'Identity текущего чата уже принадлежит этому контакту',
+                                                    title: hasOperationalMaxChat
+                                                        ? 'Существующий MAX Chat связан с Contact и доступен для ответа'
+                                                        : 'Identity текущего чата уже принадлежит этому контакту',
                                                 }
                                                 : reachabilityBadge(reachable, liveEntry)
-                                            const isOperationallyBlocked = isCheckable && reachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
-                                            const statusDot = getChannelStatusDot(reachable, isOperationallyBlocked, reachBadge.title)
+                                            const isOperationallyBlocked = !hasFailed && isCheckable && effectiveReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
+                                            const statusDot = getChannelStatusDot(
+                                                effectiveReachable,
+                                                isOperationallyBlocked,
+                                                reachBadge.title,
+                                                hasOperationalMaxChat ? reachBadge.title : undefined,
+                                            )
                                             const badges: ContactChannelBadge[] = [
                                                 ...(isCheckable ? [{
                                                     label: reachBadge.label,
@@ -797,16 +811,32 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             const hasFailed = chStatus?.status === 'failed'
                             const reachable = getReachability(identity)
                             const liveEntry = liveReachability[identity.channel]
-                            const linkedToCurrentContact = contact.chats.some(c => c.contactIdentityId === identity.id)
-                            const reachBadge = linkedToCurrentContact
+                            const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
+                            const linkedToCurrentContact = Boolean(linkedChat)
+                            const hasOperationalMaxChat = identity.channel === 'max' && Boolean(linkedChat?.externalChatId) && !hasFailed
+                            const effectiveReachable = hasFailed ? false : hasOperationalMaxChat ? true : reachable
+                            const reachBadge = hasFailed
+                                ? {
+                                    label: 'Ошибка',
+                                    cls: 'text-red-700 bg-red-50',
+                                    title: chStatus.error || 'Последняя отправка завершилась ошибкой',
+                                }
+                                : linkedToCurrentContact
                                 ? {
                                     label: 'Связан',
                                     cls: 'text-emerald-700 bg-emerald-50',
-                                    title: 'Identity текущего чата уже принадлежит этому контакту',
+                                    title: hasOperationalMaxChat
+                                        ? 'Существующий MAX Chat связан с Contact и доступен для ответа'
+                                        : 'Identity текущего чата уже принадлежит этому контакту',
                                 }
                                 : reachabilityBadge(reachable, liveEntry)
-                            const isOperationallyBlocked = reachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
-                            const statusDot = getChannelStatusDot(reachable, isOperationallyBlocked, reachBadge.title)
+                            const isOperationallyBlocked = !hasFailed && effectiveReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
+                            const statusDot = getChannelStatusDot(
+                                effectiveReachable,
+                                isOperationallyBlocked,
+                                reachBadge.title,
+                                hasOperationalMaxChat ? reachBadge.title : undefined,
+                            )
                             const badges: ContactChannelBadge[] = [
                                 {
                                     label: reachBadge.label,
@@ -847,48 +877,73 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
                 <div className="h-px bg-[#E8E8E8] mx-3" />
 
-                {/* TG Bot link section */}
-                {contact && tgIdentity && (
+                {/* Telegram Bot state is present for every canonical Contact. */}
+                {contact && (
                     <>
-                        <div className="px-[4px] py-2.5">
+                        <div
+                            className="px-[4px] py-2.5"
+                            data-telegram-bot-block
+                            data-telegram-bot-state={telegramBotDisplayStatus}
+                        >
                             <div className="flex items-center justify-between mb-[6px]">
-                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Telegram Bot</h4>
-                                {!botLinkLoading && !showBotLinkSearch && (
+                                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Telegram-бот водителя</h4>
+                                {canManageBotLink && telegramBotDisplayStatus !== 'CONFLICT' && !showBotLinkSearch && (
                                     <button
                                         onClick={() => { setShowBotLinkSearch(true); setBotLinkQuery(''); setBotLinkResults([]) }}
                                         className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4]"
                                     >
-                                        {botLinkInfo?.linked ? 'Сменить' : '+ Привязать'}
+                                        {telegramBotState?.linked ? 'Сменить' : '+ Привязать'}
                                     </button>
                                 )}
                             </div>
 
-                            {/* TG numeric ID row */}
-                            <div className="flex items-center gap-1 mb-1.5">
-                                <span className="text-[11px] text-gray-400 font-mono">ID {tgIdentity.externalId}</span>
-                                <button
-                                    onClick={() => {
-                                        navigator.clipboard.writeText(tgIdentity.externalId).catch(() => {})
-                                        setTgIdCopied(true)
-                                        setTimeout(() => setTgIdCopied(false), 2000)
-                                    }}
-                                    className="text-gray-300 hover:text-[#3390EC] transition-colors"
-                                    title="Скопировать TG ID"
-                                >
-                                    {tgIdCopied ? <span className="text-[9px] text-emerald-500">✓</span> : <Copy size={9} />}
-                                </button>
-                            </div>
-
-                            {/* Bot link status */}
-                            {botLinkLoading ? (
-                                <div className="animate-pulse h-3 bg-gray-100 rounded w-28" />
-                            ) : botLinkInfo?.linked ? (
-                                <div className="text-[12px] text-[#111]">
-                                    <span className="text-gray-400 mr-1">Водитель:</span>
-                                    <span className="font-medium">{botLinkInfo.driverName}</span>
+                            {botTelegramId && (
+                                <div className="flex items-center gap-1 mb-1.5">
+                                    {contact.telegramIdentity?.username && (
+                                        <span className="text-[11px] text-[#3390EC]">@{contact.telegramIdentity.username}</span>
+                                    )}
+                                    <span className="text-[11px] text-gray-400 font-mono">ID {botTelegramId}</span>
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(botTelegramId).catch(() => {})
+                                            setTgIdCopied(true)
+                                            setTimeout(() => setTgIdCopied(false), 2000)
+                                        }}
+                                        className="text-gray-300 hover:text-[#3390EC] transition-colors"
+                                        title="Скопировать TG ID"
+                                    >
+                                        {tgIdCopied ? <span className="text-[9px] text-emerald-500">✓</span> : <Copy size={9} />}
+                                    </button>
                                 </div>
+                            )}
+
+                            {telegramBotDisplayStatus === 'BOT_BOUND' && telegramBotState?.driverProfile ? (
+                                <div className="space-y-0.5 text-[11px] text-[#111]">
+                                    <div className="flex items-center gap-1">
+                                        <span className="rounded bg-emerald-50 px-1 py-px text-[9px] font-semibold text-emerald-700">Связан</span>
+                                        <span className="font-medium">{telegramBotState.driverProfile.fullName}</span>
+                                    </div>
+                                    <div className="text-gray-500">
+                                        {telegramBotState.parkName || telegramBotState.driverProfile.parkName}
+                                        {' · '}{telegramBotState.driverProfile.employmentTypeLabel}
+                                        {' · '}{telegramBotState.driverProfile.statusLabel}
+                                    </div>
+                                    {telegramBotState.boundAt && (
+                                        <div className="text-[10px] text-gray-400">
+                                            Привязано {new Date(telegramBotState.boundAt).toLocaleDateString('ru-RU')}
+                                        </div>
+                                    )}
+                                </div>
+                            ) : telegramBotDisplayStatus === 'CONFLICT' ? (
+                                <div className="text-[11px] text-red-600">Обнаружена конфликтующая привязка. Требуется проверка.</div>
+                            ) : telegramBotDisplayStatus === 'TELEGRAM_DISCOVERED_BY_PHONE' ? (
+                                <div className="text-[11px] text-amber-700">Telegram-аккаунт найден по номеру, но не подтверждён</div>
+                            ) : telegramBotDisplayStatus === 'TELEGRAM_IDENTITY_AVAILABLE_BOT_UNBOUND' ? (
+                                <div className="text-[11px] text-gray-500">Профиль для Telegram-бота не выбран</div>
+                            ) : liveReachability.telegram?.status === 'checking' ? (
+                                <div className="text-[11px] text-gray-500">Проверяем Telegram-аккаунт</div>
                             ) : (
-                                <div className="text-[11px] text-gray-400 italic">Профиль для Telegram-бота не выбран</div>
+                                <div className="text-[11px] text-gray-500">Telegram-аккаунт не найден</div>
                             )}
 
                             {/* Driver search/link UI */}
@@ -930,10 +985,11 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                                 const res = await fetch('/api/bot-link', {
                                                                     method: 'POST',
                                                                     headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ action: 'link', telegramId: tgIdentity.externalId, driverId: driver.id }),
+                                                                    body: JSON.stringify({ action: 'link', telegramId: botTelegramId, driverId: driver.id }),
                                                                 })
                                                                 if (res.ok) {
-                                                                    setBotLinkInfo({ linked: true, driverName: driver.fullName, driverId: driver.id })
+                                                                    await refetchContact()
+                                                                    await refreshConversations()
                                                                     setShowBotLinkSearch(false)
                                                                     setBotLinkQuery('')
                                                                     setBotLinkResults([])
