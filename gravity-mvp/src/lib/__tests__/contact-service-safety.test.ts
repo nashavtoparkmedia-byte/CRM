@@ -74,4 +74,11 @@ describe('ContactService provider phone ownership', () => {
     expect(source).not.toContain('prisma.contactPhone.findFirst')
     expect(source).not.toContain('prisma.driver.findFirst')
   })
+
+  it('routes a newly linked channel chat through the canonical main DriverProfile first', () => {
+    const source = readFileSync(path.join(process.cwd(), 'src/lib/ContactService.ts'), 'utf8')
+    expect(source).toContain('select: { mainDriverId: true, yandexDriverId: true }')
+    expect(source).toContain('where: { id: contact.mainDriverId }')
+    expect(source.indexOf('contact?.mainDriverId')).toBeLessThan(source.indexOf('contact?.yandexDriverId'))
+  })
 })

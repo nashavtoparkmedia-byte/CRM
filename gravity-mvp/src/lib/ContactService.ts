@@ -535,7 +535,9 @@ export class ContactService {
   }
 
   /**
-   * Ensure Chat has contactId, contactIdentityId, and driverId (if Contact is linked to a Driver).
+   * Ensure Chat has contactId, contactIdentityId, and driverId (if the
+   * canonical Contact has a main DriverProfile). yandexDriverId remains only
+   * as a legacy fallback for Contacts that predate multi-park profiles.
    */
   static async ensureChatLinked(chatId: string, contactId: string, identityId: string): Promise<void> {
     const updateData: Prisma.ChatUncheckedUpdateInput = {
@@ -552,17 +554,23 @@ export class ContactService {
     if (chat && !chat.driverId) {
       const contact = await prisma.contact.findUnique({
         where: { id: contactId },
-        select: { yandexDriverId: true },
+        select: { mainDriverId: true, yandexDriverId: true },
       })
 
-      if (contact?.yandexDriverId) {
+      if (contact?.mainDriverId) {
         const driver = await prisma.driver.findUnique({
-          where: { yandexDriverId: contact.yandexDriverId },
+          where: { id: contact.mainDriverId },
           select: { id: true },
         })
         if (driver) {
           updateData.driverId = driver.id
         }
+      } else if (contact?.yandexDriverId) {
+        const driver = await prisma.driver.findUnique({
+          where: { yandexDriverId: contact.yandexDriverId },
+          select: { id: true },
+        })
+        if (driver) updateData.driverId = driver.id
       }
     }
 
