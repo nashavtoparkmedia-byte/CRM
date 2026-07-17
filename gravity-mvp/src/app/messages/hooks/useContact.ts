@@ -32,7 +32,10 @@ export function useContact(contactId: string | null | undefined) {
     const refreshPromiseRef = useRef<{ contactId: string; promise: Promise<void> } | null>(null)
 
     const fetchContact = useCallback(async (id: string, signal?: AbortSignal): Promise<Contact | null> => {
-        const response = await fetch(`/api/contacts/${id}`, { signal })
+        const response = await fetch(`/api/contacts/${id}`, {
+            signal,
+            cache: 'no-store',
+        })
         if (response.status === 404) return null
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.json()

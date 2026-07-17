@@ -48,6 +48,7 @@ export function useContactSearch(query: string, debounceMs = 300) {
     try {
       const res = await fetch(`/api/contacts/search?q=${encodeURIComponent(q)}&limit=8`, {
         signal: controller.signal,
+        cache: 'no-store',
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()

@@ -3,7 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { chooseMainDriverProfile, findSuggestedDriverProfilesForContact, getDriverProfileStatus, normalizeParkName } from '@/lib/driver-profiles/multi-park'
 import { buildCanonicalContactSummary } from '@/lib/contact-display'
-import { deriveDriverProfileState, type ContactProfileAnomalyPayload } from '@/lib/contact-profile-contract'
+import {
+  CONTACT_PROFILE_SCHEMA_VERSION,
+  deriveDriverProfileState,
+  type ContactProfileAnomalyPayload,
+} from '@/lib/contact-profile-contract'
 import {
   getDriverProfileStatusLabel,
   getEmploymentTypeLabel,
@@ -494,6 +498,7 @@ export async function GET(
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
 
     return NextResponse.json({
+      schemaVersion: CONTACT_PROFILE_SCHEMA_VERSION,
       id: contact.id,
       displayName: contact.displayName,
       displayNameSource: contact.displayNameSource,
@@ -524,6 +529,8 @@ export async function GET(
       telegramBotState,
       technicalData: {
         contactId: contact.id,
+        schemaVersion: CONTACT_PROFILE_SCHEMA_VERSION,
+        buildMarker: process.env.APP_VERSION || process.env.GIT_COMMIT || 'dev',
         providerIds: contact.identities.map(identity => ({ channel: identity.channel, externalId: identity.externalId })),
         driverProfileIds: attachedProfiles.map(profile => profile.id),
         suggestedProfileIds: suggestedProfiles.map(profile => profile.id),
@@ -549,6 +556,11 @@ export async function GET(
       profileAnomalies: mainDecision.anomalies,
       suggestedDriverProfiles: suggestedProfiles,
       mergeHistory,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, max-age=0',
+        'X-CRM-Contact-Profile-Schema': String(CONTACT_PROFILE_SCHEMA_VERSION),
+      },
     })
   } catch (err: any) {
     console.error('[contacts/:id] GET Error:', err.message)

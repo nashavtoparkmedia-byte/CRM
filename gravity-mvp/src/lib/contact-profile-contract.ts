@@ -13,6 +13,13 @@ export type ContactDriverProfileState =
   | 'LINKED'
   | 'LINKED_WITH_ANOMALIES'
 
+/**
+ * Bumped only for backward-incompatible Contact profile payload changes.
+ * It is returned in technical data so stale client diagnostics can be
+ * distinguished from an operator-facing Contact state.
+ */
+export const CONTACT_PROFILE_SCHEMA_VERSION = 1
+
 export type ContactProfileSyncStatus = 'ok' | 'stale' | 'error' | 'never'
 export type DriverProfileStatus = 'working' | 'dismissed' | 'unknown'
 
@@ -160,6 +167,8 @@ export interface ContactProfileSyncStatePayload {
 
 export interface ContactTechnicalDataPayload {
   contactId: string
+  schemaVersion: number
+  buildMarker: string
   providerIds: Array<{ channel: string; externalId: string }>
   driverProfileIds: string[]
   suggestedProfileIds: string[]
@@ -217,6 +226,7 @@ export interface TelegramBotStatePayload {
 }
 
 export interface ContactProfilePayload {
+  schemaVersion: number
   id: string
   displayName: string
   displayNameSource: string

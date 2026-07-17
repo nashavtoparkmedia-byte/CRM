@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import { deriveDriverProfileState } from '@/lib/contact-profile-contract'
+import { CONTACT_PROFILE_SCHEMA_VERSION, deriveDriverProfileState } from '@/lib/contact-profile-contract'
 
 const prismaMock = vi.hoisted(() => ({
   contact: {
@@ -140,6 +140,9 @@ describe('canonical Contact profile API', () => {
     expect(response.status).toBe(200)
     const body = await response.json()
 
+    expect(response.headers.get('Cache-Control')).toBe('no-store, max-age=0')
+    expect(response.headers.get('X-CRM-Contact-Profile-Schema')).toBe(String(CONTACT_PROFILE_SCHEMA_VERSION))
+    expect(body.schemaVersion).toBe(CONTACT_PROFILE_SCHEMA_VERSION)
     expect(body.driverProfileState).toBe('UNLINKED_WITH_SUGGESTIONS')
     expect(body.primaryPhone.phone).toBe('+79222155750')
     expect(body.channels.map((item: { channel: string }) => item.channel)).toEqual(['max', 'whatsapp', 'telegram'])
@@ -156,6 +159,8 @@ describe('canonical Contact profile API', () => {
     expect(body.mainDriverProfile).toBeNull()
     expect(body.driver).toBeNull()
     expect(body.technicalData.resolutionState).toBe('UNLINKED_WITH_SUGGESTIONS')
+    expect(body.technicalData.schemaVersion).toBe(CONTACT_PROFILE_SCHEMA_VERSION)
+    expect(body.technicalData.buildMarker).toBe('dev')
     expect(body.suggestedProfiles.every((profile: { matchedSignals: string[] }) => profile.matchedSignals.includes('phone'))).toBe(true)
     expect(body.suggestedProfiles.map((profile: { employmentTypeLabel: string }) => profile.employmentTypeLabel)).toEqual([
       'Физлицо',

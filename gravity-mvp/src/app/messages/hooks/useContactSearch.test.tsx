@@ -29,7 +29,7 @@ describe('useContactSearch invalidation', () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
     expect(fetch).toHaveBeenLastCalledWith(
       '/api/contacts/search?q=%D1%88%D0%B0%D0%B1%D1%83&limit=8',
-      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      expect.objectContaining({ signal: expect.any(AbortSignal), cache: 'no-store' }),
     )
   })
 })
