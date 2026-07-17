@@ -20,6 +20,10 @@ const PROFILE_STATUSES = ['working', 'dismissed'] as const
 const LOCK_STALE_MS = 4 * 60 * 60 * 1000
 const LOCK_SERVICE_PREFIX = 'scheduler_lock:'
 
+export function driverProfileParkRefreshLockKey(externalParkId: string): string {
+  return 'driver-profiles:park-refresh:' + externalParkId
+}
+
 type RuntimeParkConnection = NightlyParkConnection & {
   parkConnectionId: string
   parkId: string
@@ -375,6 +379,24 @@ async function syncDriverProfilesForPark(
   const fetchFn = dependencies.fetchFn || fetch
   const sleep = dependencies.sleep || ((ms: number) => new Promise(resolve => setTimeout(resolve, ms)))
   const random = dependencies.random || Math.random
+  const parkRefreshLock = new DatabaseNightlySyncLock(db)
+  const parkLockKey = driverProfileParkRefreshLockKey(connection.externalParkId)
+  if (!await parkRefreshLock.acquire(parkLockKey)) {
+    opsLog('info', 'multi_park_sync_park_skipped_busy', {
+      operation: NIGHTLY_DRIVER_PROFILE_SYNC_LOCK_KEY,
+      parkCode: connection.parkCode,
+    })
+    return {
+      profilesProcessed: 0,
+      sourceRows: 0,
+      dedupedRows: 0,
+      inserts: 0,
+      updates: 0,
+      unchanged: 0,
+      retries: 0,
+      errors: 0,
+    }
+  }
   let failureStats: Partial<FailureStats> = { errors: 1 }
   try {
     const source = await fetchDriverProfilesForPark({ connection, fetchFn, sleep, random })
@@ -430,7 +452,7 @@ async function syncDriverProfilesForPark(
       where: { id: connection.parkConnectionId },
       data: { lastSuccessfulSyncAt: new Date(), lastErrorSummary: null },
     })
-    return {
+    const result = {
       profilesProcessed: deduped.profiles.length,
       sourceRows: source.sourceRows,
       dedupedRows: deduped.profiles.length,
@@ -440,8 +462,11 @@ async function syncDriverProfilesForPark(
       retries: source.retries,
       errors: 0,
     }
+    await parkRefreshLock.release(parkLockKey, { status: 'success' })
+    return result
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    await parkRefreshLock.release(parkLockKey, { status: 'error', error: message }).catch(() => undefined)
     await db.parkConnection.updateMany({
       where: { apiConnectionId: connection.apiConnectionId, externalParkId: connection.externalParkId, archivedAt: null },
       data: { lastFailedSyncAt: new Date(), lastErrorSummary: message.slice(0, 1000) },

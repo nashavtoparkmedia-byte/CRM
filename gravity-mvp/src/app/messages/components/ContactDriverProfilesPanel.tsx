@@ -22,7 +22,7 @@ interface ContactDriverProfilesPanelProps {
     profileSyncState: ProfileSyncViewState
     profileSyncError: string | null
     profileSyncedAt: string | null
-    onRetry: () => Promise<void> | void
+    onRetry: (parkCode?: string) => Promise<void> | void
     onRefetch: () => Promise<unknown> | void
     onOpenHelp: () => void
 }
@@ -245,6 +245,8 @@ export default function ContactDriverProfilesPanel({
     const effectiveSyncTime = profileSyncedAt || contact.syncState?.lastSuccessfulAt || null
     const confirmationGroups = groupDriverProfilesByPark(selectedProfiles)
     const contactPhone = formatPhone(contact.primaryPhone?.phone || contact.phones[0]?.phone || null)
+    const staleSyncParks = (contact.syncState?.parks || []).filter(park => park.state === 'stale' || park.state === 'backoff')
+    const visibleAnomalies = (contact.anomalies || []).filter(anomaly => anomaly.type !== 'sync_stale')
 
     const renderReviewProfile = (profile: ContactDriverProfilePayload, historical: boolean) => {
         const disabled = !isSuggestedProfileSelectable(profile)
@@ -297,12 +299,13 @@ export default function ContactDriverProfilesPanel({
                             {attachedProfiles.length === 0 ? 'Профиль водителя не привязан' : `Привязано профилей: ${attachedProfiles.length}`}
                         </div>
                         <div className="mt-0.5 text-[10px] text-gray-500">
+                            {staleSyncParks.length > 0 && 'Показана последняя сохранённая информация'}
                             {profileSyncState === 'syncing' && 'Обновляем данные…'}
-                            {profileSyncState === 'success' && `Обновлено: ${formatDateTime(effectiveSyncTime)}`}
+                            {staleSyncParks.length === 0 && profileSyncState === 'success' && `Обновлено: ${formatDateTime(effectiveSyncTime)}`}
                             {profileSyncState === 'error' && 'Не удалось обновить данные'}
-                            {profileSyncState === 'idle' && `Последнее обновление: ${formatDateTime(effectiveSyncTime)}`}
+                            {staleSyncParks.length === 0 && profileSyncState === 'idle' && `Последнее обновление: ${formatDateTime(effectiveSyncTime)}`}
                         </div>
-                        {profileSyncState === 'error' && profileSyncError && <div className="mt-0.5 text-[9px] text-amber-700">{profileSyncError}</div>}
+                        {profileSyncState === 'error' && profileSyncError && <div className="mt-0.5 text-[9px] text-amber-700">Показана последняя сохранённая информация.</div>}
                     </div>
                     {profileSyncState === 'syncing' ? (
                         <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin text-[#3390EC]" />
@@ -311,14 +314,42 @@ export default function ContactDriverProfilesPanel({
                             <RefreshCw size={10} /> Повторить
                         </button>
                     ) : (
-                        <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-600" />
+                        staleSyncParks.length > 0
+                            ? <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-600" />
+                            : <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-600" />
                     )}
                 </div>
 
-                {contact.anomalies?.length > 0 && (
+                {staleSyncParks.map(park => (
+                    <div key={park.parkCode} className="mb-2 flex items-start justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-[10px] text-amber-900" data-testid="profile-sync-warning">
+                        <div className="min-w-0">
+                            <div className="font-semibold">Не удалось обновить данные «{park.parkName}».</div>
+                            <div>Показана последняя сохранённая информация.</div>
+                            <div className="mt-0.5 text-[9px] text-amber-800">Последняя синхронизация: {formatDateTime(park.lastSuccessfulAt)}</div>
+                        </div>
+                        <button
+                            type="button"
+                            disabled={!park.canRetry}
+                            title={park.canRetry ? 'Повторить обновление' : 'Повторная попытка будет доступна после паузы'}
+                            onClick={() => void onRetry(park.parkCode)}
+                            className="inline-flex h-6 shrink-0 items-center gap-1 rounded bg-amber-100 px-2 text-[10px] font-semibold text-amber-800 enabled:hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            <RefreshCw size={10} /> Повторить
+                        </button>
+                    </div>
+                ))}
+
+                {visibleAnomalies.length > 0 && (
                     <div className="mb-2 space-y-1" data-testid="profile-anomalies">
-                        {contact.anomalies.map((anomaly, index) => (
-                            <div key={`${anomaly.type}-${index}`} className={`flex gap-1.5 rounded border px-2 py-1.5 text-[10px] ${anomaly.severity === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                        {visibleAnomalies.map((anomaly, index) => (
+                            <div
+                                key={anomaly.type + '-' + index}
+                                className={'flex gap-1.5 rounded border px-2 py-1.5 text-[10px] ' + (
+                                    anomaly.severity === 'error'
+                                        ? 'border-red-200 bg-red-50 text-red-700'
+                                        : 'border-amber-200 bg-amber-50 text-amber-800'
+                                )}
+                            >
                                 <AlertTriangle size={11} className="mt-px shrink-0" />
                                 <span>{anomaly.message}</span>
                             </div>

@@ -38,7 +38,12 @@ export function useContact(contactId: string | null | undefined) {
         return response.json()
     }, [])
 
-    const refreshProfiles = useCallback((id: string, signal?: AbortSignal): Promise<void> => {
+    const refreshProfiles = useCallback((
+        id: string,
+        signal?: AbortSignal,
+        force = false,
+        parkCode?: string,
+    ): Promise<void> => {
         const current = refreshPromiseRef.current
         if (current?.contactId === id) return current.promise
 
@@ -46,7 +51,12 @@ export function useContact(contactId: string | null | undefined) {
         setProfileSyncError(null)
         const promise = (async () => {
             try {
-                const refreshResponse = await fetch(`/api/contacts/${id}/driver-profiles/refresh`, { method: 'POST', signal })
+                const refreshResponse = await fetch(`/api/contacts/${id}/driver-profiles/refresh`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force, parkCode }),
+                    signal,
+                })
                 if (!refreshResponse.ok) throw new Error(`HTTP ${refreshResponse.status}`)
                 const refreshResult = await refreshResponse.json().catch(() => ({}))
                 const refreshedContact = await fetchContact(id, signal)
@@ -130,9 +140,9 @@ export function useContact(contactId: string | null | undefined) {
         }
     }, [contactId, fetchContact])
 
-    const retryProfileSync = useCallback(async () => {
+    const retryProfileSync = useCallback(async (parkCode?: string) => {
         if (!contactId) return
-        await refreshProfiles(contactId)
+        await refreshProfiles(contactId, undefined, true, parkCode)
     }, [contactId, refreshProfiles])
 
     return { contact, isLoading, error, refetch, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt }

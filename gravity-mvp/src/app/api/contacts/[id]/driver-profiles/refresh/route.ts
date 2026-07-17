@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { refreshContactMainDriver } from '@/lib/driver-profiles/multi-park'
+import { refreshContactDriverProfiles } from '@/lib/driver-profiles/contact-profile-refresh'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,15 @@ export async function POST(
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
     }
 
-    const decision = await refreshContactMainDriver(id, 'card-open-refresh')
+    const body = await _req.json().catch(() => ({})) as { force?: boolean; parkCode?: string }
+    const refresh = await refreshContactDriverProfiles({
+      contactId: id,
+      parkCode: typeof body.parkCode === 'string' ? body.parkCode : undefined,
+    })
+    const decision = await refreshContactMainDriver(
+      id,
+      body.force === true ? 'card-open-manual-retry' : 'card-open-refresh',
+    )
     const profiles = await prisma.driver.findMany({
       where: { contactId: id },
       select: { id: true, yandexDriverId: true, updatedAt: true, lastExternalPark: true, dismissedAt: true, statusOverride: true },
@@ -27,10 +36,12 @@ export async function POST(
 
     return NextResponse.json({
       ok: true,
-      refreshedAt: new Date().toISOString(),
+      refreshedAt: refresh.some(result => result.status === 'refreshed') ? new Date().toISOString() : null,
       profileCount: profiles.length,
       mainDriverId: decision?.main?.id ?? null,
       anomalies: decision?.anomalies ?? [],
+      refresh,
+      canRetry: refresh.some(result => result.status === 'backoff') === false,
       profiles,
     })
   } catch (err: unknown) {

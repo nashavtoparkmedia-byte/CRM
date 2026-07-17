@@ -180,6 +180,34 @@ describe('canonical Contact profile API', () => {
     expect(prismaMock.driver.updateMany).not.toHaveBeenCalled()
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
   })
+  test('serializes a 429 as a stale warning while keeping raw data technical', async () => {
+    const rawError = 'NASH_AVTOPARK dismissed: Yandex API 429: {"code":"429","message":"Too many requests"}'
+    prismaMock.parkConnection.findMany.mockResolvedValue([{
+      parkId: 'park-1',
+      apiConnectionId: 'connection-1',
+      externalParkId: 'park-external-1',
+      lastSuccessfulSyncAt: new Date('2026-07-17T10:00:00.000Z'),
+      lastFailedSyncAt: new Date('2026-07-17T11:00:00.000Z'),
+      lastErrorSummary: rawError,
+      park: { parkCode: 'NASH_AVTOPARK', parkName: 'Наш Автопарк' },
+    }])
+
+    const response = await GET({} as never, { params: Promise.resolve({ id: 'contact-1' }) })
+    const body = await response.json()
+
+    expect(body.syncState.status).toBe('stale')
+    expect(body.syncState.error).toBe('Не удалось обновить данные «Наш Автопарк». Показана последняя сохранённая информация.')
+    expect(body.syncState.parks[0]).toMatchObject({
+      state: 'backoff',
+      canRetry: false,
+      error: 'Не удалось обновить данные «Наш Автопарк». Показана последняя сохранённая информация.',
+    })
+    expect(String(body.syncState.error) + String(body.syncState.parks[0].error)).not.toContain('NASH_AVTOPARK')
+    expect(JSON.stringify(body.anomalies)).not.toContain('Too many requests')
+    expect(body.anomalies.some((item: { type: string }) => item.type === 'sync_error')).toBe(false)
+    expect(body.technicalData.syncFailures[0].rawError).toBe(rawError)
+  })
+
 
   test('derives stable profile states without using fake legacy defaults', () => {
     expect(deriveDriverProfileState(0, 0, 0)).toBe('UNLINKED')

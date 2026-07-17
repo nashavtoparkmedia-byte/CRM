@@ -13,7 +13,7 @@ export type ContactDriverProfileState =
   | 'LINKED'
   | 'LINKED_WITH_ANOMALIES'
 
-export type ContactProfileSyncStatus = 'ok' | 'error' | 'never'
+export type ContactProfileSyncStatus = 'ok' | 'stale' | 'error' | 'never'
 export type DriverProfileStatus = 'working' | 'dismissed' | 'unknown'
 
 export interface ContactPhonePayload {
@@ -132,6 +132,7 @@ export interface ContactProfileAnomalyPayload {
     | 'profile_belongs_to_other_contact'
     | 'different_names'
     | 'person_ownership_ambiguous'
+    | 'sync_stale'
     | 'sync_error'
   severity: 'warning' | 'error'
   message: string
@@ -151,6 +152,9 @@ export interface ContactProfileSyncStatePayload {
     lastSuccessfulAt: string | null
     lastFailedAt: string | null
     error: string | null
+    state?: 'fresh' | 'stale' | 'backoff' | 'never'
+    retryAt?: string | null
+    canRetry?: boolean
   }>
 }
 
@@ -167,6 +171,12 @@ export interface ContactTechnicalDataPayload {
     employmentTypeCode: string | null
     workStatusCode: string | null
     currentStatusCode: string | null
+  }>
+  syncFailures?: Array<{
+    parkCode: string
+    failedAt: string | null
+    retryAt: string | null
+    rawError: string | null
   }>
 }
 

@@ -379,6 +379,50 @@ describe('ContactDriverProfilesPanel', () => {
         expect(fetchMock).toHaveBeenCalledTimes(1)
     })
 
+    test('shows a human stale warning, hides Yandex internals, and disables retry during backoff', () => {
+        const rawError = 'NASH_AVTOPARK dismissed: Yandex API 429: {"code":"429","message":"Too many requests"}'
+        const payload = linkedContact()
+        payload.syncState = {
+            status: 'stale',
+            lastSuccessfulAt: '2026-07-17T10:00:00.000Z',
+            lastFailedAt: '2026-07-17T11:00:00.000Z',
+            error: rawError,
+            parks: [{
+                parkCode: 'NASH_AVTOPARK',
+                parkName: 'Наш Автопарк',
+                lastSuccessfulAt: '2026-07-17T10:00:00.000Z',
+                lastFailedAt: '2026-07-17T11:00:00.000Z',
+                error: rawError,
+                state: 'backoff',
+                retryAt: '2026-07-17T11:05:00.000Z',
+                canRetry: false,
+            }],
+        }
+        payload.anomalies = [{
+            type: 'sync_stale',
+            severity: 'warning',
+            message: rawError,
+            parkName: 'Наш Автопарк',
+            profileIds: [],
+        }]
+        const { onRetry, rerenderPanel } = renderPanel(payload)
+
+        expect(screen.getByTestId('profile-sync-warning').textContent).toContain('Не удалось обновить данные «Наш Автопарк».')
+        expect(screen.getByTestId('profile-sync-warning').textContent).toContain('Показана последняя сохранённая информация.')
+        expect(screen.queryByText(/NASH_AVTOPARK|dismissed|Too many requests|code.*429/)).toBeNull()
+        expect((screen.getByRole('button', { name: 'Повторить' }) as HTMLButtonElement).disabled).toBe(true)
+
+        rerenderPanel({
+            ...payload,
+            syncState: {
+                ...payload.syncState,
+                parks: [{ ...payload.syncState.parks[0], state: 'stale', retryAt: null, canRetry: true }],
+            },
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Повторить' }))
+        expect(onRetry).toHaveBeenCalledWith('NASH_AVTOPARK')
+    })
+
     test('preserves refresh, retry, and inline-help behavior', () => {
         const { unmount } = renderPanel(contact(), { sync: 'syncing' })
         expect(screen.getByText('Обновляем данные…')).toBeTruthy()

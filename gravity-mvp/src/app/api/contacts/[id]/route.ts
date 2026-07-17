@@ -10,6 +10,7 @@ import {
   getSuggestionBasis,
   groupDriverProfilesByPark,
 } from '@/lib/contact-profile-ui'
+import { formatProfileRefreshWarning, getContactProfileRefreshDecision } from '@/lib/driver-profiles/refresh-policy'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -325,20 +326,39 @@ export async function GET(
       && Boolean(connection.lastFailedSyncAt)
       && (!connection.lastSuccessfulSyncAt || connection.lastFailedSyncAt!.getTime() > connection.lastSuccessfulSyncAt.getTime())
     )
+    const refreshDecisionByConnection = new Map(currentSyncFailures.map(connection => [
+      connection.apiConnectionId,
+      getContactProfileRefreshDecision({
+        lastSuccessfulAt: connection.lastSuccessfulSyncAt,
+        lastFailedAt: connection.lastFailedSyncAt,
+      }),
+    ]))
     const latestSuccessfulSyncAt = latestDate(parkConnections.map(connection => connection.lastSuccessfulSyncAt))
     const latestFailedSyncAt = latestDate(parkConnections.map(connection => connection.lastFailedSyncAt))
     const syncState = {
-      status: currentSyncFailures.length > 0 ? 'error' as const : latestSuccessfulSyncAt ? 'ok' as const : 'never' as const,
+      status: currentSyncFailures.length > 0 ? 'stale' as const : latestSuccessfulSyncAt ? 'ok' as const : 'never' as const,
       lastSuccessfulAt: latestSuccessfulSyncAt,
       lastFailedAt: latestFailedSyncAt,
-      error: currentSyncFailures.map(connection => `${connection.park.parkName}: ${connection.lastErrorSummary}`).join('; ') || null,
-      parks: parkConnections.map(connection => ({
-        parkCode: connection.park.parkCode,
-        parkName: connection.park.parkName,
-        lastSuccessfulAt: connection.lastSuccessfulSyncAt,
-        lastFailedAt: connection.lastFailedSyncAt,
-        error: connection.lastErrorSummary,
-      })),
+      error: currentSyncFailures.map(connection => formatProfileRefreshWarning(connection.park.parkName)).join(' ') || null,
+      parks: parkConnections.map(connection => {
+        const decision = refreshDecisionByConnection.get(connection.apiConnectionId)
+        return {
+          parkCode: connection.park.parkCode,
+          parkName: connection.park.parkName,
+          lastSuccessfulAt: connection.lastSuccessfulSyncAt,
+          lastFailedAt: connection.lastFailedSyncAt,
+          error: decision ? formatProfileRefreshWarning(connection.park.parkName) : null,
+          state: decision?.kind === 'backoff'
+            ? 'backoff' as const
+            : decision?.kind === 'stale'
+              ? 'stale' as const
+              : connection.lastSuccessfulSyncAt
+                ? 'fresh' as const
+                : 'never' as const,
+          retryAt: decision?.retryAt || null,
+          canRetry: decision?.kind !== 'backoff',
+        }
+      }),
     }
 
     const anomalies: ContactProfileAnomalyPayload[] = mainDecision.anomalies.map(anomaly => ({
@@ -389,14 +409,18 @@ export async function GET(
     }
     for (const connection of currentSyncFailures) {
       anomalies.push({
-        type: 'sync_error',
-        severity: 'error',
-        message: `${connection.park.parkName}: ${connection.lastErrorSummary}`,
+        type: 'sync_stale',
+        severity: 'warning',
+        message: formatProfileRefreshWarning(connection.park.parkName),
         parkName: connection.park.parkName,
         profileIds: [...attachedProfiles, ...suggestedProfiles].filter(profile => profile.parkCode === connection.park.parkCode).map(profile => profile.id),
       })
     }
-    const driverProfileState = deriveDriverProfileState(attachedProfiles.length, suggestedProfiles.length, anomalies.length)
+    const driverProfileState = deriveDriverProfileState(
+      attachedProfiles.length,
+      suggestedProfiles.length,
+      anomalies.filter(anomaly => anomaly.type !== 'sync_stale').length,
+    )
     const primaryPhone = contact.phones.find(phone => phone.id === contact.primaryPhoneId) || contact.phones.find(phone => phone.isPrimary) || contact.phones[0] || null
     const channels = PROFILE_CHANNELS.map(channel => {
       const identity = contact.identities.find(item => item.channel === channel)
@@ -465,6 +489,12 @@ export async function GET(
           employmentTypeCode: profile.employmentTypeCode,
           workStatusCode: profile.workStatus,
           currentStatusCode: profile.currentStatus,
+        })),
+        syncFailures: currentSyncFailures.map(connection => ({
+          parkCode: connection.park.parkCode,
+          failedAt: dateIsoOrNull(connection.lastFailedSyncAt),
+          retryAt: dateIsoOrNull(refreshDecisionByConnection.get(connection.apiConnectionId)?.retryAt),
+          rawError: connection.lastErrorSummary,
         })),
       },
       driver,

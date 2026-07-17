@@ -6,6 +6,7 @@ import { InMemoryNightlySyncLock } from '../driver-profiles/nightly-sync'
 import {
   buildDriverProfileMutation,
   DatabaseNightlySyncLock,
+  driverProfileParkRefreshLockKey,
   runProductionDriverProfileSync,
   sourceOnlyYandexDriverId,
 } from '../driver-profiles/production-sync'
@@ -90,17 +91,20 @@ describe('production composite DriverProfile sync', () => {
     expect(mutation.statusChanged).toBe(true)
   })
 
-  test('DB-backed lease is atomic, owner-guarded, and stale-safe', async () => {
+  test('DB-backed lease is atomic, owner-guarded, and shared by card and nightly park refreshes', async () => {
     const query = vi.fn().mockResolvedValueOnce([{ locked: true }]).mockResolvedValueOnce([])
     const execute = vi.fn().mockResolvedValue(1)
     const db = { $queryRawUnsafe: query, $executeRawUnsafe: execute }
-    const first = new DatabaseNightlySyncLock(db as never, () => 'owner-a', 1234)
-    const second = new DatabaseNightlySyncLock(db as never, () => 'owner-b', 1234)
-    expect(await first.acquire('driver-profiles:nightly-full-sync')).toBe(true)
-    expect(await second.acquire('driver-profiles:nightly-full-sync')).toBe(false)
+    const cardRefresh = new DatabaseNightlySyncLock(db as never, () => 'owner-a', 1234)
+    const nightlyRefresh = new DatabaseNightlySyncLock(db as never, () => 'owner-b', 1234)
+    const key = driverProfileParkRefreshLockKey(APPROVED_PARKS[0].externalParkId)
+
+    expect(key).toContain(APPROVED_PARKS[0].externalParkId)
+    expect(await cardRefresh.acquire(key)).toBe(true)
+    expect(await nightlyRefresh.acquire(key)).toBe(false)
     expect(query.mock.calls[0][0]).toContain('ON CONFLICT')
     expect(query.mock.calls[0][0]).toContain('INTERVAL')
-    await first.release('driver-profiles:nightly-full-sync', { status: 'success' })
+    await cardRefresh.release(key, { status: 'success' })
     expect(execute.mock.calls[0][0]).toContain('"errorMessage" = $2')
     expect(execute.mock.calls[0]).toContain('owner-a')
   })

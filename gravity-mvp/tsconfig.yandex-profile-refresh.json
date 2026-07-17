@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/app/api/contacts/[id]/driver-profiles/refresh/route.ts",
+    "src/app/api/contacts/[id]/route.ts",
+    "src/app/messages/components/ContactDriverProfilesPanel.tsx",
+    "src/app/messages/components/ContactDriverProfilesPanel.test.tsx",
+    "src/app/messages/hooks/useContact.ts",
+    "src/lib/contact-profile-contract.ts",
+    "src/lib/driver-profiles/contact-profile-refresh.ts",
+    "src/lib/driver-profiles/refresh-policy.ts",
+    "src/lib/driver-profiles/production-sync.ts",
+    "src/lib/__tests__/contact-profile-refresh.test.ts",
+    "src/lib/__tests__/contact-profile-api.test.ts",
+    "src/lib/__tests__/production-sync.test.ts"
+  ],
+  "exclude": ["node_modules"]
+}
