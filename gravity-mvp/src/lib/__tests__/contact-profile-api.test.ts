@@ -182,12 +182,13 @@ describe('canonical Contact profile API', () => {
   })
   test('serializes a 429 as a stale warning while keeping raw data technical', async () => {
     const rawError = 'NASH_AVTOPARK dismissed: Yandex API 429: {"code":"429","message":"Too many requests"}'
+    const now = Date.now()
     prismaMock.parkConnection.findMany.mockResolvedValue([{
       parkId: 'park-1',
       apiConnectionId: 'connection-1',
       externalParkId: 'park-external-1',
-      lastSuccessfulSyncAt: new Date('2026-07-17T10:00:00.000Z'),
-      lastFailedSyncAt: new Date('2026-07-17T11:00:00.000Z'),
+      lastSuccessfulSyncAt: new Date(now - 60 * 60 * 1000),
+      lastFailedSyncAt: new Date(now - 1000),
       lastErrorSummary: rawError,
       park: { parkCode: 'NASH_AVTOPARK', parkName: 'Наш Автопарк' },
     }])
