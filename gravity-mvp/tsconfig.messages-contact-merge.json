@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/ContactMergeService.ts",
+    "src/lib/contact-merge-state.ts",
+    "src/lib/__tests__/contact-merge-state.test.ts"
+  ],
+  "exclude": []
+}

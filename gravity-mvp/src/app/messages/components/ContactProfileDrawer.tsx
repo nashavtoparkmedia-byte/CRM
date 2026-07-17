@@ -1510,8 +1510,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                     })
                                                 } else {
                                                     // contact-to-contact: if current is driver-linked, current is target (survivor)
-                                                    const sourceId = contact?.yandexDriverId ? mergeTarget.id : (contact?.id || chat?.contactId)
-                                                    const targetId = contact?.yandexDriverId ? (contact?.id || chat?.contactId) : mergeTarget.id
+                                                    const currentContactHasProfile = Boolean(contact?.mainDriverId || contact?.yandexDriverId)
+                                                    const sourceId = currentContactHasProfile ? mergeTarget.id : (contact?.id || chat?.contactId)
+                                                    const targetId = currentContactHasProfile ? (contact?.id || chat?.contactId) : mergeTarget.id
                                                     res = await fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
                                                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                         body: JSON.stringify({ mergedBy: userId }),
