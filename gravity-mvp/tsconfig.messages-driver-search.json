@@ -7,6 +7,7 @@
   },
   "include": [
     "src/app/api/drivers-search/route.ts",
+    "src/app/api/messages/drivers/search/route.ts",
     "src/lib/driver-profile-search.ts",
     "src/lib/__tests__/driver-profile-search.test.ts",
     "src/lib/__tests__/driver-search-route.test.ts"

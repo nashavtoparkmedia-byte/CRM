@@ -32,3 +32,15 @@ describe('local DriverProfile search route', () => {
     expect(prismaMock.driver.findMany).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('legacy Messenger DriverProfile search compatibility', () => {
+  it('uses the local multi-park catalogue and retains an array response', async () => {
+    const source = await import('node:fs/promises').then(fs => fs.readFile('src/app/api/messages/drivers/search/route.ts', 'utf8'))
+    expect(source).toContain("from '@/lib/driver-profile-search'")
+    expect(source).toContain('rankDriverProfileSearchResults')
+    expect(source).toContain('return NextResponse.json(drivers)')
+    expect(source).toContain('unsaved_${phoneDigits}')
+    expect(source).not.toContain('prisma.driver.findFirst')
+    expect(source).not.toContain('fetch(')
+  })
+})
