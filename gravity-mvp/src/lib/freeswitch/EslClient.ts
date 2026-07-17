@@ -30,7 +30,7 @@ import { broadcastCall } from '@/lib/callStreamBus'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
-import { ContactService } from '@/lib/ContactService'
+import { classifyProviderPhoneOwners, ContactService } from '@/lib/ContactService'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
@@ -204,23 +204,43 @@ async function handleChannelCreate(evt: any): Promise<void> {
     let contactId: string | null = null
     let displayName: string | null = null
     if (e164) {
-        const phone = await prisma.contactPhone.findFirst({
-            where: { phone: e164 },
+        const phoneRecords = await prisma.contactPhone.findMany({
+            where: { phone: e164, isActive: true },
             include: { contact: { include: { driver: true } } },
         })
-        if (phone) {
-            contactId = phone.contactId
-            displayName = phone.contact.displayName
-            driverId = phone.contact.driver?.id ?? null
+        const phoneOwnership = classifyProviderPhoneOwners(phoneRecords.map(phone => ({
+            contactId: phone.contactId,
+            isArchived: phone.contact.isArchived,
+        })))
+        if (phoneOwnership.kind === 'matched') {
+            const phone = phoneRecords.find(record => record.contactId === phoneOwnership.contactId)
+            if (phone) {
+                contactId = phone.contactId
+                displayName = phone.contact.displayName
+                driverId = phone.contact.driver?.id ?? null
+            }
+        } else if (phoneOwnership.kind === 'ambiguous') {
+            opsLog('warn', 'call_contact_phone_ambiguous', {
+                operation: 'call',
+                phone: e164,
+                contactIds: phoneOwnership.contactIds,
+            })
         }
-        if (!driverId) {
-            const driver = await prisma.driver.findFirst({
+
+        if (phoneOwnership.kind !== 'ambiguous' && !driverId) {
+            const drivers = await prisma.driver.findMany({
                 where: { phone: e164 },
                 select: { id: true, fullName: true },
             })
-            if (driver) {
-                driverId = driver.id
-                displayName = displayName ?? driver.fullName
+            if (drivers.length === 1) {
+                driverId = drivers[0].id
+                displayName = displayName ?? drivers[0].fullName
+            } else if (drivers.length > 1) {
+                opsLog('warn', 'call_driver_phone_ambiguous', {
+                    operation: 'call',
+                    phone: e164,
+                    driverIds: drivers.map(driver => driver.id).sort(),
+                })
             }
         }
 
@@ -230,7 +250,7 @@ async function handleChannelCreate(evt: any): Promise<void> {
         // person will land on resolveContact()'s "phone match" branch and attach
         // a fresh ContactIdentity to this Contact. The history (call ↔ chat)
         // unifies under one card automatically.
-        if (!contactId) {
+        if (phoneOwnership.kind === 'not_found' && !contactId) {
             try {
                 const resolved = await ContactService.resolveByPhone(e164, displayName)
                 if (resolved) {

@@ -57,10 +57,21 @@ describe('ContactService provider phone ownership', () => {
     expect(left).toEqual(right)
   })
 
-  it('serializes phone ownership decisions with the shared advisory lock', () => {
+  it('serializes provider and call phone ownership decisions with the shared advisory lock', () => {
     const source = readFileSync(path.join(process.cwd(), 'src/lib/ContactService.ts'), 'utf8')
     expect(source).toContain('pg_advisory_xact_lock')
     expect(source).toContain('contact-phone:${normalized}')
-    expect(source).not.toContain('contactPhone.findFirst({\n        where: { phone: normalized, isActive: true }')
+    expect(source).toContain('const existing = await tx.contactPhone.findMany')
+    expect(source).toContain('Call phone ownership is ambiguous')
+  })
+
+  it('does not let the call listener select the first Contact or Driver by phone', () => {
+    const source = readFileSync(path.join(process.cwd(), 'src/lib/freeswitch/EslClient.ts'), 'utf8')
+    expect(source).toContain('const phoneRecords = await prisma.contactPhone.findMany')
+    expect(source).toContain("'call_contact_phone_ambiguous'")
+    expect(source).toContain("'call_driver_phone_ambiguous'")
+    expect(source).toContain("phoneOwnership.kind !== 'ambiguous'")
+    expect(source).not.toContain('prisma.contactPhone.findFirst')
+    expect(source).not.toContain('prisma.driver.findFirst')
   })
 })

@@ -345,51 +345,66 @@ export class ContactService {
     const normalized = normalizePhoneE164(phone)
     if (!normalized) return null
 
-    // Skip expired temporary phones — Avito recycles its disposable numbers,
-    // and an old temporary from a previous lead would otherwise mis-attach a
-    // new call to the wrong Contact.
-    const existing = await prisma.contactPhone.findFirst({
-      where: {
-        phone: normalized,
-        isActive: true,
-        OR: [
-          { isTemporary: false },
-          { isTemporary: true, expiresAt: null },
-          { isTemporary: true, expiresAt: { gt: new Date() } },
-        ],
-      },
-      include: { contact: { select: { id: true, displayName: true } } },
-    })
-    if (existing) {
-      return { contact: existing.contact, phoneId: existing.id, isNew: false }
-    }
+    return prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
 
-    const fallbackName = (displayName && displayName.trim()) || normalized
-    const contact = await prisma.contact.create({
-      data: {
-        displayName: fallbackName,
-        displayNameSource: 'channel',
-        masterSource: 'chat',
-      },
+      // Skip expired temporary phones — Avito recycles its disposable numbers.
+      // A single active owner can be reused; archived or multiple owners are
+      // intentionally left unresolved so an incoming call cannot pick one at random.
+      const existing = await tx.contactPhone.findMany({
+        where: {
+          phone: normalized,
+          isActive: true,
+          OR: [
+            { isTemporary: false },
+            { isTemporary: true, expiresAt: null },
+            { isTemporary: true, expiresAt: { gt: new Date() } },
+          ],
+        },
+        include: { contact: { select: { id: true, displayName: true, isArchived: true } } },
+      })
+      const ownership = classifyProviderPhoneOwners(existing.map(phone => ({
+        contactId: phone.contactId,
+        isArchived: phone.contact.isArchived,
+      })))
+      if (ownership.kind === 'matched') {
+        const phone = existing.find(record => record.contactId === ownership.contactId)
+        if (phone) {
+          return { contact: phone.contact, phoneId: phone.id, isNew: false }
+        }
+      }
+      if (ownership.kind === 'ambiguous') {
+        console.warn(`[ContactService] Call phone ownership is ambiguous: phone=${normalized} contacts=${ownership.contactIds.join(',')}`)
+        return null
+      }
+
+      const fallbackName = (displayName && displayName.trim()) || normalized
+      const contact = await tx.contact.create({
+        data: {
+          displayName: fallbackName,
+          displayNameSource: 'channel',
+          masterSource: 'chat',
+        },
+      })
+      const newPhone = await tx.contactPhone.create({
+        data: {
+          contactId: contact.id,
+          phone: normalized,
+          source: 'manual',
+          isPrimary: true,
+        },
+      })
+      await tx.contact.update({
+        where: { id: contact.id },
+        data: { primaryPhoneId: newPhone.id },
+      })
+      console.log(`[ContactService] Created contact via phone: contact=${contact.id} phone=${normalized}`)
+      return {
+        contact: { id: contact.id, displayName: fallbackName },
+        phoneId: newPhone.id,
+        isNew: true,
+      }
     })
-    const newPhone = await prisma.contactPhone.create({
-      data: {
-        contactId: contact.id,
-        phone: normalized,
-        source: 'manual',
-        isPrimary: true,
-      },
-    })
-    await prisma.contact.update({
-      where: { id: contact.id },
-      data: { primaryPhoneId: newPhone.id },
-    })
-    console.log(`[ContactService] Created contact via phone: contact=${contact.id} phone=${normalized}`)
-    return {
-      contact: { id: contact.id, displayName: fallbackName },
-      phoneId: newPhone.id,
-      isNew: true,
-    }
   }
 
   /**
