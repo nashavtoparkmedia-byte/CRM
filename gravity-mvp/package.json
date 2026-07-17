@@ -9,7 +9,9 @@
     "lint": "eslint",
     "gen": "prisma generate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:node": "node scripts/run-node-tests.mjs",
+    "test:watch": "vitest",
+    "guard:messages-scope": "node scripts/messages-protected-scope.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
