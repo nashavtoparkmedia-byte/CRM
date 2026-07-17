@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/ContactService.ts",
+    "src/app/api/contacts/start-conversation/route.ts",
+    "src/app/api/contacts/[id]/chats/route.ts",
+    "src/lib/__tests__/contact-chat-routing.test.ts",
+    "src/lib/__tests__/contact-service-safety.test.ts"
+  ],
+  "exclude": []
+}

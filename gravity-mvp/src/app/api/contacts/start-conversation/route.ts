@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { ContactService } from '@/lib/ContactService'
-import { ChatChannel } from '@prisma/client'
+import { Chat, ChatChannel } from '@prisma/client'
 
 /**
  * POST /api/contacts/start-conversation
@@ -16,7 +16,7 @@ import { ChatChannel } from '@prisma/client'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { phone: rawPhone, channel, profileId } = body
+    const { phone: rawPhone, channel } = body
 
     if (!rawPhone || !channel) {
       return NextResponse.json(
@@ -47,6 +47,10 @@ export async function POST(req: NextRequest) {
       normalized,
       null,
     )
+    const contactProfile = await prisma.contact.findUnique({
+      where: { id: contact.id },
+      select: { mainDriverId: true },
+    })
 
     // Find or create Chat
     const externalChatId = `${channel}:${externalId}`
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
     // brand-new empty chat next to the existing history-rich one,
     // and operators ended up writing into a separate row from the
     // actual conversation log.
-    let chat: any = null
+    let chat: Chat | null = null
     let isNewChat = false
 
     // 1. By contactId (the canonical link).
@@ -66,21 +70,30 @@ export async function POST(req: NextRequest) {
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
     })
 
-    // 2. By driverId — legacy Telegram listener / WA importer wrote
-    //    driverId before contactId was wired in.
-    if (!chat) {
-      const driver = await prisma.driver.findFirst({ where: { phone: normalized } })
-      if (driver) {
-        chat = await prisma.chat.findFirst({
-          where: { driverId: driver.id, channel },
-          orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
-        })
-      }
+    // 2. By the Contact's already selected main profile. A phone alone can
+    // match several DriverProfiles across parks, so it must never select the
+    // first Driver row as a chat-routing fallback.
+    if (!chat && contactProfile?.mainDriverId) {
+      chat = await prisma.chat.findFirst({
+        where: {
+          driverId: contactProfile.mainDriverId,
+          channel,
+          OR: [{ contactId: null }, { contactId: contact.id }],
+        },
+        orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+      })
     }
 
     // 3. By phone-as-externalChatId (the original lookup, last resort).
     if (!chat) {
-      chat = await prisma.chat.findUnique({ where: { externalChatId } })
+      const identityChat = await prisma.chat.findUnique({ where: { externalChatId } })
+      if (identityChat?.contactId && identityChat.contactId !== contact.id) {
+        return NextResponse.json(
+          { error: 'CHAT_CONTACT_CONFLICT', message: 'Канал уже связан с другим Contact' },
+          { status: 409 },
+        )
+      }
+      chat = identityChat
     }
 
     if (!chat) {
@@ -119,8 +132,9 @@ export async function POST(req: NextRequest) {
         isNew: isNewChat,
       },
     })
-  } catch (err: any) {
-    console.error('[contacts/start-conversation] POST Error:', err.message)
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[contacts/start-conversation] POST Error:', message)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

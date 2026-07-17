@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ChatChannel } from '@prisma/client'
+import { Chat, ChatChannel } from '@prisma/client'
 
 /**
  * POST /api/contacts/:id/chats
@@ -95,7 +95,7 @@ export async function POST(
     // legacy TG chat with externalChatId = telegram:<TG user id> and
     // identity.externalId = <phone>).
     const externalChatId = `${channel}:${identity.externalId}`
-    let chat: any = null
+    let chat: Chat | null = null
     let isNew = false
 
     chat = await prisma.chat.findFirst({
@@ -103,25 +103,35 @@ export async function POST(
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
     })
 
-    if (!chat) {
-      // Try driverId (legacy)
-      const phone = await prisma.contactPhone.findFirst({
-        where: { contactId: id, isActive: true },
-        orderBy: { isPrimary: 'desc' },
+    let selectedProfileId = contact.mainDriverId
+    if (typeof profileId === 'string' && profileId) {
+      const selectedProfile = await prisma.driver.findUnique({
+        where: { id: profileId },
+        select: { id: true, contactId: true },
       })
-      if (phone) {
-        const driver = await prisma.driver.findFirst({ where: { phone: phone.phone } })
-        if (driver) {
-          chat = await prisma.chat.findFirst({
-            where: { driverId: driver.id, channel },
-            orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
-          })
-        }
+      if (!selectedProfile || selectedProfile.contactId !== id) {
+        return NextResponse.json({ error: 'PROFILE_CONTACT_CONFLICT' }, { status: 409 })
       }
+      selectedProfileId = selectedProfile.id
+    }
+
+    if (!chat && selectedProfileId) {
+      chat = await prisma.chat.findFirst({
+        where: {
+          driverId: selectedProfileId,
+          channel,
+          OR: [{ contactId: null }, { contactId: id }],
+        },
+        orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+      })
     }
 
     if (!chat) {
-      chat = await prisma.chat.findUnique({ where: { externalChatId } })
+      const identityChat = await prisma.chat.findUnique({ where: { externalChatId } })
+      if (identityChat?.contactId && identityChat.contactId !== id) {
+        return NextResponse.json({ error: 'CHAT_CONTACT_CONFLICT' }, { status: 409 })
+      }
+      chat = identityChat
     }
 
     if (!chat) {
@@ -157,8 +167,9 @@ export async function POST(
         isNew,
       },
     })
-  } catch (err: any) {
-    console.error('[contacts/:id/chats] POST Error:', err.message)
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[contacts/:id/chats] POST Error:', message)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
