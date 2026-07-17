@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/ContactService.ts",
+    "src/lib/driver-profiles/multi-park.ts",
+    "src/app/api/messages/start-chat/route.ts",
+    "src/lib/__tests__/contact-service-safety.test.ts",
+    "src/lib/__tests__/explicit-profile-start-chat.test.ts"
+  ],
+  "exclude": []
+}

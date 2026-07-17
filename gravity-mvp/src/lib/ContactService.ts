@@ -581,6 +581,67 @@ export class ContactService {
   }
 
   /**
+   * Creates or reuses a provider identity for an explicitly selected Contact.
+   * This is intentionally different from phone-based resolution: a manual
+   * DriverProfile choice is the proof, so it never searches by name or adopts
+   * a phone owner from another Contact.
+   */
+  static async ensureIdentityForContact(
+    contactId: string,
+    channel: ChatChannel,
+    externalId: string,
+    displayName?: string | null,
+  ): Promise<{ contact: { id: string; displayName: string }; identity: { id: string; channel: ChatChannel; externalId: string } }> {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await prisma.$transaction(async tx => {
+          const contact = await tx.contact.findUnique({
+            where: { id: contactId },
+            select: { id: true, displayName: true, isArchived: true },
+          })
+          if (!contact) throw new Error('CONTACT_NOT_FOUND')
+          if (contact.isArchived) throw new Error('CONTACT_ARCHIVED')
+
+          const existing = await tx.contactIdentity.findUnique({
+            where: { channel_externalId: { channel, externalId } },
+            select: { id: true, contactId: true, channel: true, externalId: true },
+          })
+          if (existing) {
+            if (existing.contactId !== contactId) throw new Error('CONTACT_IDENTITY_CONFLICT')
+            return {
+              contact: { id: contact.id, displayName: contact.displayName },
+              identity: { id: existing.id, channel: existing.channel, externalId: existing.externalId },
+            }
+          }
+
+          const identity = await tx.contactIdentity.create({
+            data: {
+              contactId,
+              channel,
+              externalId,
+              displayName: displayName || null,
+              source: 'manual',
+              confidence: 1,
+            },
+            select: { id: true, channel: true, externalId: true },
+          })
+          return {
+            contact: { id: contact.id, displayName: contact.displayName },
+            identity,
+          }
+        }, {
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+          timeout: 15000,
+        })
+      } catch (error: unknown) {
+        if (isPrismaErrorWithCode(error, 'P2002') && attempt < MAX_RETRIES) continue
+        throw error
+      }
+    }
+    throw new Error('[ContactService] Max retries exceeded while creating ContactIdentity')
+  }
+
+  /**
    * Cleanup dangling ContactIdentities after channel data deletion.
    * Scoped: only checks identities belonging to the specified contactIds.
    *

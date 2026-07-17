@@ -81,4 +81,12 @@ describe('ContactService provider phone ownership', () => {
     expect(source).toContain('where: { id: contact.mainDriverId }')
     expect(source.indexOf('contact?.mainDriverId')).toBeLessThan(source.indexOf('contact?.yandexDriverId'))
   })
+
+  it('creates a manual provider identity only for the explicitly selected Contact', () => {
+    const source = readFileSync(path.join(process.cwd(), 'src/lib/ContactService.ts'), 'utf8')
+    expect(source).toContain('static async ensureIdentityForContact')
+    expect(source).toContain('CONTACT_IDENTITY_CONFLICT')
+    expect(source).toContain('where: { channel_externalId: { channel, externalId } }')
+    expect(source).not.toContain('findFirst({ where: { fullName')
+  })
 })
