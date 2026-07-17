@@ -53,6 +53,7 @@ function profile(index: number, overrides: Partial<ContactDriverProfilePayload> 
 function contact(overrides: Partial<ContactProfilePayload> = {}): ContactProfilePayload {
     const suggestions = parks.map((_, index) => profile(index))
     return {
+        schemaVersion: 1,
         id: 'contact-1',
         displayName: '+79222155750',
         displayNameSource: 'channel',
@@ -84,6 +85,8 @@ function contact(overrides: Partial<ContactProfilePayload> = {}): ContactProfile
         anomalies: [],
         technicalData: {
             contactId: 'contact-1',
+            schemaVersion: 1,
+            buildMarker: 'messages-complete-fixture',
             providerIds: [{ channel: 'max', externalId: '902144614300' }],
             driverProfileIds: [],
             suggestedProfileIds: suggestions.map(item => item.id),

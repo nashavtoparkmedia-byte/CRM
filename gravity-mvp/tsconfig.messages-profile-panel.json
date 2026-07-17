@@ -22,11 +22,13 @@
     "src/app/messages/hooks/useContact.ts",
     "src/app/messages/components/ContactChannelRow.tsx",
     "src/app/messages/components/ContactProfileDrawer.tsx",
+    "src/app/messages/components/ContactDriverProfilesPanel.tsx",
     "src/lib/__tests__/contact-profile-fields.test.ts",
     "src/lib/__tests__/telegram-bot-profile-state.test.ts",
     "src/lib/__tests__/bot-link-route.test.ts",
     "src/lib/__tests__/messages-inline-help-contract.test.ts",
     "src/app/messages/components/ContactChannelRow.test.tsx",
+    "src/app/messages/components/ContactDriverProfilesPanel.test.tsx",
     "typecheck/messages-profile-panel/DriverTasksWidget.tsx",
     "typecheck/messages-profile-panel/TaskCreateModal.tsx"
   ],
