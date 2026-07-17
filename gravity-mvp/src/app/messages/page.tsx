@@ -1,7 +1,7 @@
-import { Metadata } from "next"
 import ChatsLayout from "./components/ChatsLayout"
 import MessagesShell from "./components/MessagesShell"
 import { SectionDescription } from "@/components/ui/SectionDescription"
+import { ContactService } from "@/lib/ContactService"
 import { prisma } from "@/lib/prisma"
 
 export default async function MessagesPage({
@@ -62,23 +62,51 @@ export default async function MessagesPage({
             }
             if (chat) idParam = chat.id
 
-            // If still no chat found and we have a phone — create one server-side
+            // If still no chat found and we have a phone, resolve the canonical
+            // Contact first. A URL must never create an orphan Chat or trust an
+            // arbitrary driver id as automatic identity evidence.
             if (!chat && typeof resolvedParams.phone === 'string') {
                 const phone = resolvedParams.phone.replace(/\D/g, '')
                 if (phone.length >= 10) {
                     const { normalizePhoneE164 } = await import('@/lib/phoneUtils')
                     const normalized = normalizePhoneE164(resolvedParams.phone) || `+${phone}`
-                    const newChat = await prisma.chat.create({
-                        data: {
-                            channel: 'whatsapp',
-                            externalChatId: `whatsapp:${phone}@s.whatsapp.net`,
-                            name: normalized,
-                            driverId: typeof resolvedParams.driver === 'string' ? resolvedParams.driver : undefined,
-                            status: 'new',
-                        },
-                        select: { id: true },
+                    const externalId = phone.slice(-10)
+                    const contactResult = await ContactService.resolveContact(
+                        'whatsapp',
+                        externalId,
+                        normalized,
+                        normalized,
+                    )
+                    const externalChatId = `whatsapp:${externalId}`
+                    const existingChat = await prisma.chat.findUnique({
+                        where: { externalChatId },
+                        select: { id: true, contactId: true },
                     })
-                    idParam = newChat.id
+                    if (!existingChat) {
+                        const newChat = await prisma.chat.create({
+                            data: {
+                                channel: 'whatsapp',
+                                externalChatId,
+                                name: contactResult.contact.displayName,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                                status: 'new',
+                            },
+                            select: { id: true },
+                        })
+                        idParam = newChat.id
+                    } else if (!existingChat.contactId || existingChat.contactId === contactResult.contact.id) {
+                        if (!existingChat.contactId) {
+                            await prisma.chat.update({
+                                where: { id: existingChat.id },
+                                data: {
+                                    contactId: contactResult.contact.id,
+                                    contactIdentityId: contactResult.identity.id,
+                                },
+                            })
+                        }
+                        idParam = existingChat.id
+                    }
                 }
             }
         } catch {}
