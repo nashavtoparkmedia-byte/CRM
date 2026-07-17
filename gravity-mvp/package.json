@@ -10,6 +10,7 @@
     "gen": "prisma generate",
     "test": "vitest run",
     "test:node": "node scripts/run-node-tests.mjs",
+    "test:messages-browser": "node scripts/run-messages-browser-acceptance.mjs",
     "test:watch": "vitest",
     "guard:messages-scope": "node scripts/messages-protected-scope.mjs"
   },

@@ -308,6 +308,39 @@ describe('ContactDriverProfilesPanel', () => {
         expect(screen.getAllByText('Сделать главным')).toHaveLength(5)
     })
 
+    test('renders the Shaburov one-park fixture with a real main profile and no legacy placeholders', () => {
+        const shaburov = profile(0, {
+            id: 'shaburov-main',
+            fullName: 'Шабуров Евгений Анатольевич',
+            phone: '+79126646745',
+            contactId: 'contact-shaburov',
+            isMain: true,
+        })
+        const payload = contact({
+            id: 'contact-shaburov',
+            displayName: 'Шабуров Евгений Анатольевич',
+            primaryPhone: { id: 'phone-shaburov', phone: '+79126646745', label: null, isPrimary: true, source: 'max' },
+            phones: [{ id: 'phone-shaburov', phone: '+79126646745', label: null, isPrimary: true, source: 'max' }],
+            driverProfileState: 'LINKED',
+            suggestedProfiles: [],
+            suggestedDriverProfiles: [],
+            attachedProfiles: [shaburov],
+            driverProfiles: [shaburov],
+            mainDriverId: shaburov.id,
+            mainDriverProfile: shaburov,
+            mainDriver: shaburov,
+            driver: shaburov,
+        })
+
+        renderPanel(payload)
+
+        expect(screen.getByTestId('main-driver-profile').textContent).toContain('Шабуров Евгений Анатольевич')
+        expect(screen.getByTestId('main-driver-profile').textContent).toContain('Наш Автопарк')
+        expect(screen.getByText(/Профили водителя: 1/)).toBeTruthy()
+        expect(screen.queryByText('Парк: Яндекс')).toBeNull()
+        expect(screen.queryByText('Роль: Водитель')).toBeNull()
+    })
+
     test('preserves the expanded state across background refresh and remount', () => {
         const payload = linkedContact()
         const first = renderPanel(payload)
