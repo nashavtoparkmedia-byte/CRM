@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "paths": {
+      "@/app/tg-bot-actions": ["./typecheck/messages-telegram-identity/tg-bot-actions.ts"],
+      "@/app/actions": ["./typecheck/messages-telegram-identity/actions.ts"],
+      "@/lib/ContactService": ["./typecheck/messages-telegram-identity/ContactService.ts"],
+      "@/lib/DriverMatchService": ["./typecheck/messages-telegram-identity/DriverMatchService.ts"],
+      "@/lib/ConversationWorkflowService": ["./typecheck/messages-telegram-identity/ConversationWorkflowService.ts"],
+      "@/lib/opsLog": ["./typecheck/messages-telegram-identity/opsLog.ts"],
+      "@/*": ["./src/*"]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/app/api/webhook/telegram/route.ts",
+    "src/lib/telegram-identity-metadata.ts",
+    "src/lib/__tests__/telegram-identity-metadata.test.ts",
+    "src/lib/__tests__/telegram-webhook-identity-route.test.ts",
+    "typecheck/messages-telegram-identity/*.ts"
+  ],
+  "exclude": []
+}

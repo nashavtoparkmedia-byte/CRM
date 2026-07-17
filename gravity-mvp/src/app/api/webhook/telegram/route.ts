@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
 import { changeDriverLimit } from '@/app/actions'
@@ -6,6 +7,11 @@ import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
+import { buildTelegramIdentityMetadata } from '@/lib/telegram-identity-metadata'
+
+function errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error)
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -28,7 +34,7 @@ export async function POST(req: NextRequest) {
             const sentAt = timestamp ? new Date(timestamp) : new Date()
             const groupExternalId = `telegram:group:${tgChatId}`
 
-            let unifiedChat = await (prisma.chat as any).upsert({
+            const unifiedChat = await prisma.chat.upsert({
                 where: { externalChatId: groupExternalId },
                 update: { lastMessageAt: sentAt },
                 create: {
@@ -46,7 +52,7 @@ export async function POST(req: NextRequest) {
                 ? (lastName ? `${firstName} ${lastName}` : firstName)
                 : (username ? `@${username}` : `User ${telegramId}`)
 
-            await (prisma.message as any).create({
+            await prisma.message.create({
                 data: {
                     chatId: unifiedChat.id,
                     direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
@@ -92,10 +98,8 @@ export async function POST(req: NextRequest) {
             // USE BOT TIMESTAMP FOR STABLE SORTING
             const sentAt = timestamp ? new Date(timestamp) : new Date()
 
-            // Chat.name приоритет — @username > REAL name > TG id.
-            // @username уникален для аккаунта и стабилен; first_name может быть
-            // "Check", "Тест", "." и т.п. Оператор всегда может поставить ФИО
-            // через карандаш в профиле (displayNameSource = 'manual').
+            // Chat.name prioritizes @username for operator scanning. Identity
+            // remains bound to immutable telegramId because username is mutable.
             const tgDisplayName = (() => {
                 if (username) return `@${username}`
                 const fn = (firstName ?? '').trim()
@@ -108,11 +112,11 @@ export async function POST(req: NextRequest) {
             })()
 
             // RETRY LOOP FOR UPSERT (concurrency protection)
-            let unifiedChat;
+            let unifiedChat: Awaited<ReturnType<typeof prisma.chat.findUnique>> = null
             let retries = 3;
             while (retries > 0) {
                 try {
-                    unifiedChat = await (prisma.chat as any).upsert({
+                    unifiedChat = await prisma.chat.upsert({
                         where: { externalChatId },
                         // PR-А: при update тоже обновляем name — для existing
                         // чатов с устаревшим `TG <id>` имя приходит c новым
@@ -126,10 +130,10 @@ export async function POST(req: NextRequest) {
                         }
                     })
                     break; // Success
-                } catch (e: any) {
+                } catch (e: unknown) {
                     retries--;
                     if (retries === 0) throw e;
-                    console.warn(`[WEBHOOK-TG] Upsert retry due to concurrency: ${e.message}`)
+                    console.warn(`[WEBHOOK-TG] Upsert retry due to concurrency: ${errorMessage(e)}`)
                     await new Promise(r => setTimeout(r, 50 * (3 - retries))) // Backoff
                 }
             }
@@ -140,7 +144,8 @@ export async function POST(req: NextRequest) {
             if (!unifiedChat.driverId) {
                 const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: telegramId.toString() })
                 if (linked) {
-                    unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
+                    const refreshedChat = await prisma.chat.findUnique({ where: { id: unifiedChat.id } })
+                    if (refreshedChat) unifiedChat = refreshedChat
                 }
                 console.log(`[WEBHOOK-TG] RELINK chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} linked=${linked}`)
             }
@@ -174,25 +179,44 @@ export async function POST(req: NextRequest) {
                     contactResult.contact.id,
                     contactResult.identity.id,
                 )
-                // Store username + name in identity metadata so the profile can show "Name (@username)"
+                const currentIdentity = await prisma.contactIdentity.findUnique({
+                    where: { id: contactResult.identity.id },
+                    select: { displayName: true, metadata: true },
+                })
+                const observedDisplayName = tgDisplayName === `TG ${telegramId}`
+                    ? null
+                    : tgDisplayName
+                const identityDisplayName = observedDisplayName
+                    || currentIdentity?.displayName
+                    || null
+
+                // telegramUserId is the stable key. Username and display data
+                // are mutable observations and never participate in matching.
                 await prisma.contactIdentity.update({
                     where: { id: contactResult.identity.id },
                     data: {
-                        metadata: {
-                            username:   username   || null,
-                            firstName:  firstName  || null,
-                            lastName:   lastName   || null,
-                        }
+                        displayName: identityDisplayName,
+                        metadata: buildTelegramIdentityMetadata(
+                            currentIdentity?.metadata,
+                            {
+                                telegramUserId: telegramId,
+                                username,
+                                firstName,
+                                lastName,
+                                displayName: identityDisplayName,
+                                observedAt: new Date(),
+                            },
+                        ),
                     },
                 })
-            } catch (contactErr: any) {
-                console.error(`[WEBHOOK-TG] ContactService error (non-blocking): ${contactErr.message}`)
+            } catch (contactErr: unknown) {
+                console.error(`[WEBHOOK-TG] ContactService error (non-blocking): ${errorMessage(contactErr)}`)
             }
             // ──────────────────────────────────────────────────────────
 
             // DE-DUPLICATION: check if we already have this message (echo from bot)
             // Increased window for burst protection
-            const existing = await (prisma.message as any).findFirst({
+            const existing = await prisma.message.findFirst({
                 where: {
                     chatId: unifiedChat.id,
                     content: text,
@@ -210,11 +234,10 @@ export async function POST(req: NextRequest) {
                 // text → текст без медиа; image/video/voice/audio/document/sticker → media-сообщение.
                 const firstAtt = Array.isArray(attachments) && attachments.length > 0 ? attachments[0] : null
                 const msgType = firstAtt?.type || 'text'
-                const msgMetadata: any = {}
-                if (Array.isArray(attachments) && attachments.length > 0) {
-                    msgMetadata.attachments = attachments
-                }
-                await (prisma.message as any).create({
+                const msgMetadata: Prisma.InputJsonObject = Array.isArray(attachments) && attachments.length > 0
+                    ? { attachments: attachments as Prisma.InputJsonValue }
+                    : {}
+                await prisma.message.create({
                     data: {
                         chatId: unifiedChat.id,
                         direction: msgDirection,
@@ -238,8 +261,8 @@ export async function POST(req: NextRequest) {
             } else {
                 console.log(`[WEBHOOK-TG] DB-DEDUP channel=telegram chatId=${unifiedChat.id} existing=${existing.id}`)
             }
-        } catch (unifiedErr: any) {
-            opsLog('error', 'webhook_telegram_save_failed', { channel: 'telegram', error: unifiedErr.message })
+        } catch (unifiedErr: unknown) {
+            opsLog('error', 'webhook_telegram_save_failed', { channel: 'telegram', error: errorMessage(unifiedErr) })
         }
 
         // Try to find if user is a linked driver
@@ -368,8 +391,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ success: true, message: responseData })
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[WEBHOOK ERROR]:', error)
-        return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 })
+        return NextResponse.json({ error: 'Internal server error', details: errorMessage(error) }, { status: 500 })
     }
 }
