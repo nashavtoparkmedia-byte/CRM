@@ -1,14 +1,55 @@
 import { prisma } from '@/lib/prisma'
-import { ChatChannel } from '@prisma/client'
-import { normalizePhoneE164, parseExternalChatId, looksLikePhone } from '@/lib/phoneUtils'
+import { ChatChannel, ContactPhoneSource, Prisma } from '@prisma/client'
+import { normalizePhoneE164 } from '@/lib/phoneUtils'
 
-interface ResolveResult {
+export type ProviderPhoneOwnership =
+  | 'not_provided'
+  | 'not_found'
+  | 'matched'
+  | 'conflict'
+  | 'ambiguous'
+
+export interface ResolveResult {
   contact: { id: string; displayName: string }
   identity: { id: string; channel: ChatChannel; externalId: string }
   isNew: boolean
+  resolutionStatus: 'identity_found' | 'phone_matched' | 'contact_created' | 'provider_only_ambiguous'
+  phoneOwnership: ProviderPhoneOwnership
+}
+
+export function classifyProviderPhoneOwners(
+  records: Array<{ contactId: string; isArchived?: boolean }>,
+): { kind: 'not_found' } | { kind: 'matched'; contactId: string } | { kind: 'ambiguous'; contactIds: string[] } {
+  const contactIds = [...new Set(records.map(record => record.contactId))].sort()
+  if (contactIds.length === 0) return { kind: 'not_found' }
+  if (records.some(record => record.isArchived)) return { kind: 'ambiguous', contactIds }
+  if (contactIds.length === 1) return { kind: 'matched', contactId: contactIds[0] }
+  return { kind: 'ambiguous', contactIds }
 }
 
 const MAX_RETRIES = 2
+
+function isPrismaErrorWithCode(value: unknown, code: string): boolean {
+  return typeof value === 'object'
+    && value !== null
+    && 'code' in value
+    && (value as { code?: unknown }).code === code
+}
+
+function phoneSourceForChannel(channel: ChatChannel): ContactPhoneSource {
+  switch (channel) {
+    case ChatChannel.telegram:
+      return ContactPhoneSource.telegram
+    case ChatChannel.whatsapp:
+      return ContactPhoneSource.whatsapp
+    case ChatChannel.max:
+      return ContactPhoneSource.max
+    case ChatChannel.phone:
+      return ContactPhoneSource.phone
+    case ChatChannel.avito:
+      return ContactPhoneSource.avito
+  }
+}
 
 /**
  * ContactService — единый сервис для работы с контактами.
@@ -39,10 +80,18 @@ export class ContactService {
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        return await this._resolve(channel, externalId, normalized, displayName || null)
-      } catch (e: any) {
+        return await prisma.$transaction(async tx => {
+          if (normalized) {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
+          }
+          return this._resolve(tx, channel, externalId, normalized, displayName || null)
+        }, {
+          isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+          timeout: 15000,
+        })
+      } catch (e: unknown) {
         // P2002 = unique constraint violation (race condition)
-        if (e.code === 'P2002' && attempt < MAX_RETRIES) {
+        if (isPrismaErrorWithCode(e, 'P2002') && attempt < MAX_RETRIES) {
           console.log(`[ContactService] Retry ${attempt + 1}/${MAX_RETRIES} after unique constraint violation`)
           continue
         }
@@ -55,6 +104,7 @@ export class ContactService {
   }
 
   private static async _resolve(
+    db: Prisma.TransactionClient,
     channel: ChatChannel,
     externalId: string,
     normalized: string | null,
@@ -62,29 +112,107 @@ export class ContactService {
   ): Promise<ResolveResult> {
 
     // ── Scenario 1: Identity already exists ──────────────────────────────
-    const existingIdentity = await prisma.contactIdentity.findUnique({
+    const existingIdentity = await db.contactIdentity.findUnique({
       where: { channel_externalId: { channel, externalId } },
-      include: { contact: { select: { id: true, displayName: true } } },
+      include: { contact: { select: { id: true, displayName: true, isArchived: true } } },
     })
 
     if (existingIdentity) {
+      let phoneOwnership: ProviderPhoneOwnership = normalized ? 'not_found' : 'not_provided'
+
+      if (normalized && existingIdentity.contact.isArchived) {
+        phoneOwnership = 'ambiguous'
+      } else if (normalized) {
+        const phoneRecords = await db.contactPhone.findMany({
+          where: { phone: normalized, isActive: true },
+          select: {
+            id: true,
+            contactId: true,
+            contact: { select: { isArchived: true } },
+          },
+        })
+        const ownership = classifyProviderPhoneOwners(
+          phoneRecords.map(record => ({
+            contactId: record.contactId,
+            isArchived: record.contact.isArchived,
+          })),
+        )
+
+        if (ownership.kind === 'ambiguous') {
+          phoneOwnership = 'ambiguous'
+        } else if (ownership.kind === 'matched' && ownership.contactId !== existingIdentity.contactId) {
+          phoneOwnership = 'conflict'
+        } else {
+          let phoneId = ownership.kind === 'matched'
+            ? phoneRecords.find(record => record.contactId === existingIdentity.contactId)?.id || null
+            : null
+
+          if (!phoneId) {
+            const inactivePhone = await db.contactPhone.findFirst({
+              where: { contactId: existingIdentity.contactId, phone: normalized },
+              select: { id: true, isActive: true },
+            })
+            if (inactivePhone) {
+              if (!inactivePhone.isActive) {
+                await db.contactPhone.update({
+                  where: { id: inactivePhone.id },
+                  data: { isActive: true },
+                })
+              }
+              phoneId = inactivePhone.id
+            } else {
+              const createdPhone = await db.contactPhone.create({
+                data: {
+                  contactId: existingIdentity.contactId,
+                  phone: normalized,
+                  source: phoneSourceForChannel(channel),
+                  isPrimary: false,
+                },
+              })
+              phoneId = createdPhone.id
+            }
+          }
+
+          if (!existingIdentity.phoneId && phoneId) {
+            await db.contactIdentity.update({
+              where: { id: existingIdentity.id },
+              data: { phoneId },
+            })
+          }
+          phoneOwnership = 'matched'
+        }
+      }
+
       console.log(`[ContactService] Resolved via identity: contact=${existingIdentity.contactId} channel=${channel} externalId=${externalId}`)
       return {
         contact: existingIdentity.contact,
         identity: { id: existingIdentity.id, channel: existingIdentity.channel, externalId: existingIdentity.externalId },
         isNew: false,
+        resolutionStatus: 'identity_found',
+        phoneOwnership,
       }
     }
 
     // ── Scenario 2: Phone match → create Identity on existing Contact ────
     if (normalized) {
-      const phoneRecord = await prisma.contactPhone.findFirst({
+      const phoneRecords = await db.contactPhone.findMany({
         where: { phone: normalized, isActive: true },
-        include: { contact: { select: { id: true, displayName: true } } },
+        select: {
+          id: true,
+          contactId: true,
+          contact: { select: { id: true, displayName: true, isArchived: true } },
+        },
       })
+      const ownership = classifyProviderPhoneOwners(
+        phoneRecords.map(record => ({
+          contactId: record.contactId,
+          isArchived: record.contact.isArchived,
+        })),
+      )
 
-      if (phoneRecord) {
-        const identity = await prisma.contactIdentity.create({
+      if (ownership.kind === 'matched') {
+        const phoneRecord = phoneRecords.find(record => record.contactId === ownership.contactId)!
+        const identity = await db.contactIdentity.create({
           data: {
             contactId: phoneRecord.contactId,
             channel,
@@ -101,6 +229,43 @@ export class ContactService {
           contact: phoneRecord.contact,
           identity: { id: identity.id, channel, externalId },
           isNew: false,
+          resolutionStatus: 'phone_matched',
+          phoneOwnership: 'matched',
+        }
+      }
+
+      if (ownership.kind === 'ambiguous') {
+        const contactDisplayName = displayName || externalId
+        const contact = await db.contact.create({
+          data: {
+            displayName: contactDisplayName,
+            displayNameSource: 'channel',
+            masterSource: 'chat',
+          },
+        })
+        const identity = await db.contactIdentity.create({
+          data: {
+            contactId: contact.id,
+            channel,
+            externalId,
+            phoneId: null,
+            displayName,
+            source: 'auto',
+            confidence: 1.0,
+            metadata: {
+              observedPhone: normalized,
+              phoneOwnership: 'ambiguous',
+              candidateContactIds: ownership.contactIds,
+            },
+          },
+        })
+        console.warn(`[ContactService] Ambiguous phone ownership: provider-only contact=${contact.id} phone=${normalized} candidates=${ownership.contactIds.join(',')}`)
+        return {
+          contact: { id: contact.id, displayName: contactDisplayName },
+          identity: { id: identity.id, channel, externalId },
+          isNew: true,
+          resolutionStatus: 'provider_only_ambiguous',
+          phoneOwnership: 'ambiguous',
         }
       }
     }
@@ -108,7 +273,7 @@ export class ContactService {
     // ── Scenario 3 & 4: Create new Contact ───────────────────────────────
     const contactDisplayName = displayName || normalized || externalId
 
-    const contact = await prisma.contact.create({
+    const contact = await db.contact.create({
       data: {
         displayName: contactDisplayName,
         displayNameSource: 'channel',
@@ -120,24 +285,24 @@ export class ContactService {
 
     // Create ContactPhone if phone is known
     if (normalized) {
-      const newPhone = await prisma.contactPhone.create({
+      const newPhone = await db.contactPhone.create({
         data: {
           contactId: contact.id,
           phone: normalized,
-          source: channel as any, // ChatChannel → ContactPhoneSource mapping
+          source: phoneSourceForChannel(channel),
           isPrimary: true,
         },
       })
       phoneId = newPhone.id
 
-      await prisma.contact.update({
+      await db.contact.update({
         where: { id: contact.id },
         data: { primaryPhoneId: newPhone.id },
       })
     }
 
     // Create ContactIdentity
-    const identity = await prisma.contactIdentity.create({
+    const identity = await db.contactIdentity.create({
       data: {
         contactId: contact.id,
         channel,
@@ -154,6 +319,8 @@ export class ContactService {
       contact: { id: contact.id, displayName: contactDisplayName },
       identity: { id: identity.id, channel, externalId },
       isNew: true,
+      resolutionStatus: 'contact_created',
+      phoneOwnership: normalized ? 'not_found' : 'not_provided',
     }
   }
 
@@ -235,6 +402,8 @@ export class ContactService {
    *   - { kind: 'exists_same_contact', phoneId, contactId }       — already attached, no-op
    *   - { kind: 'conflict', otherContactId, otherContactName }    — phone belongs to a DIFFERENT contact;
    *                                                                  caller (UI) should prompt for merge
+   *   - { kind: 'ambiguous', ownerContactIds }                    — multiple or archived owners;
+   *                                                                  automatic attachment is blocked
    *
    * For Avito → real-phone transition LeadIntake should call this with
    * `deactivateTemporaries:true` so all the contact's temp Avito numbers go
@@ -256,43 +425,65 @@ export class ContactService {
     | { kind: 'added'; phoneId: string; contactId: string }
     | { kind: 'exists_same_contact'; phoneId: string; contactId: string }
     | { kind: 'conflict'; otherContactId: string; otherContactName: string }
+    | { kind: 'ambiguous'; ownerContactIds: string[] }
   > {
     const normalized = normalizePhoneE164(phone)
     if (!normalized) throw new Error('Invalid phone number')
 
-    // Already on the target contact?
-    const same = await prisma.contactPhone.findFirst({
-      where: { contactId, phone: normalized },
-    })
-    if (same) {
-      // If row exists but inactive — reactivate.
-      if (!same.isActive) {
-        await prisma.contactPhone.update({
-          where: { id: same.id },
-          data: { isActive: true },
-        })
-      }
-      return { kind: 'exists_same_contact', phoneId: same.id, contactId }
-    }
-
-    // Phone owned by ANOTHER contact?
-    const otherOwner = await prisma.contactPhone.findFirst({
-      where: { phone: normalized, isActive: true, NOT: { contactId } },
-      include: { contact: { select: { id: true, displayName: true } } },
-    })
-    if (otherOwner) {
-      return {
-        kind: 'conflict',
-        otherContactId: otherOwner.contact.id,
-        otherContactName: otherOwner.contact.displayName,
-      }
-    }
-
-    // Clean slate — create. Optionally deactivate this contact's old
-    // temporaries (used when the real number arrives for an Avito lead).
     return await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
+
+      const target = await tx.contact.findUnique({
+        where: { id: contactId },
+        select: { id: true, isArchived: true },
+      })
+      if (!target || target.isArchived) {
+        throw new Error('Cannot add a phone to a missing, archived, or merged Contact')
+      }
+
+      const same = await tx.contactPhone.findFirst({
+        where: { contactId, phone: normalized },
+      })
+      if (same) {
+        if (!same.isActive) {
+          await tx.contactPhone.update({
+            where: { id: same.id },
+            data: { isActive: true },
+          })
+        }
+        return { kind: 'exists_same_contact' as const, phoneId: same.id, contactId }
+      }
+
+      const otherOwners = await tx.contactPhone.findMany({
+        where: { phone: normalized, isActive: true, NOT: { contactId } },
+        select: {
+          contactId: true,
+          contact: { select: { id: true, displayName: true, isArchived: true } },
+        },
+      })
+      const ownership = classifyProviderPhoneOwners(
+        otherOwners.map(owner => ({
+          contactId: owner.contactId,
+          isArchived: owner.contact.isArchived,
+        })),
+      )
+      if (ownership.kind === 'ambiguous') {
+        return {
+          kind: 'ambiguous' as const,
+          ownerContactIds: ownership.contactIds,
+        }
+      }
+      if (ownership.kind === 'matched') {
+        const otherOwner = otherOwners.find(owner => owner.contactId === ownership.contactId)!
+        return {
+          kind: 'conflict' as const,
+          otherContactId: otherOwner.contact.id,
+          otherContactName: otherOwner.contact.displayName,
+        }
+      }
+
       if (opts?.deactivateTemporaries) {
-        await (tx.contactPhone as any).updateMany({
+        await tx.contactPhone.updateMany({
           where: { contactId, isTemporary: true, isActive: true },
           data: { isActive: false, isPrimary: false },
         })
@@ -304,7 +495,7 @@ export class ContactService {
           data: { isPrimary: false },
         })
       }
-      const created = await (tx.contactPhone as any).create({
+      const created = await tx.contactPhone.create({
         data: {
           contactId,
           phone: normalized,
@@ -322,6 +513,9 @@ export class ContactService {
         })
       }
       return { kind: 'added', phoneId: created.id, contactId }
+    }, {
+      isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+      timeout: 15000,
     })
   }
 
@@ -329,7 +523,7 @@ export class ContactService {
    * Ensure Chat has contactId, contactIdentityId, and driverId (if Contact is linked to a Driver).
    */
   static async ensureChatLinked(chatId: string, contactId: string, identityId: string): Promise<void> {
-    const updateData: any = {
+    const updateData: Prisma.ChatUncheckedUpdateInput = {
       contactId,
       contactIdentityId: identityId,
     }

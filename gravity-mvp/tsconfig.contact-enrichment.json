@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "src/lib/phoneUtils.ts",
+    "src/lib/ContactService.ts",
+    "src/lib/leads/intake.ts",
+    "src/lib/__tests__/contact-service-safety.test.ts"
+  ],
+  "exclude": []
+}

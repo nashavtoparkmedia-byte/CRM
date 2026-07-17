@@ -106,7 +106,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     if (normalized) {
       const ttlDays = Number(process.env.AVITO_TEMP_PHONE_TTL_DAYS ?? '14')
       const expiresAt = new Date(Date.now() + ttlDays * 86400_000)
-      await (prisma.contactPhone as any).updateMany({
+      await prisma.contactPhone.updateMany({
         where: { contactId: resolved.contact.id, phone: normalized, isTemporary: false },
         data: { isTemporary: true, expiresAt, label: 'Временный (Авито)' },
       })
@@ -285,6 +285,11 @@ export async function updateLeadPhone(
     // to merge or just log. Auto-merge is intentionally avoided here.
     throw new Error(
       `[LeadIntake] updateLeadPhone: phone ${normalized} belongs to contact ${result.otherContactId} (${result.otherContactName}); manual merge required`,
+    )
+  }
+  if (result.kind === 'ambiguous') {
+    throw new Error(
+      `[LeadIntake] updateLeadPhone: phone ${normalized} has ambiguous ownership across ${result.ownerContactIds.length} contacts; manual conflict review required`,
     )
   }
   return { phoneId: result.phoneId, merged: false }
