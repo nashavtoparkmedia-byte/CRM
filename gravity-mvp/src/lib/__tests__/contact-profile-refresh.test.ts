@@ -100,7 +100,7 @@ describe('contact profile rate-limited refresh', () => {
   test('fresh data makes a refresh decision without an external request', async () => {
     const fresh = {
       ...staleConnection,
-      lastSuccessfulSyncAt: new Date(now.getTime() - 60_000),
+      lastSuccessfulSyncAt: new Date(Date.now() - 60_000),
     }
     reset(fresh)
 
