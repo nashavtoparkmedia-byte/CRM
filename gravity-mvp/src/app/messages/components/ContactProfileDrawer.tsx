@@ -42,6 +42,41 @@ const SOURCE_LABELS: Record<string, { label: string; color: string }> = {
     manual: { label: 'Ручной', color: 'bg-gray-100 text-gray-600' },
 }
 
+const MESSAGES_HELP_SECTIONS = [
+    {
+        title: 'Контакт.',
+        body: 'Первое сообщение из MAX, Telegram или WhatsApp создаёт карточку человека, связь с каналом, чат и запись в истории. Если номера нет, карточка остаётся с данными канала до уточнения.',
+    },
+    {
+        title: 'Добавление номера.',
+        body: 'CRM сначала проверяет владельцев. Свободный номер добавляется только после подтверждения; повтор своего номера безопасен; чужой или спорный номер не записывается и открывает ручную проверку.',
+    },
+    {
+        title: 'Профили в парках.',
+        body: 'По подтверждённому номеру CRM ищет сохранённые профили во всех шести парках. Совпадение номера или ФИО помогает найти профиль, но не доказывает принадлежность человека.',
+    },
+    {
+        title: 'Проверка.',
+        body: 'Откройте возможные профили, сравните ФИО, парк, телефон и статус, затем вручную отметьте нужные. При конфликте или уже занятом профиле CRM ничего не переносит сама.',
+    },
+    {
+        title: 'Привязка и объединение.',
+        body: 'Привязка добавляет профиль водителя к текущей карточке. Объединение соединяет две карточки вместе с их CRM-историей. Это разные действия.',
+    },
+    {
+        title: 'Главный профиль.',
+        body: 'Он выбирается только среди привязанных работающих профилей: сначала ручной выбор, затем приоритет парков. Уволенный профиль главным быть не может.',
+    },
+    {
+        title: 'Telegram-бот.',
+        body: 'Бот привязывается к конкретному профилю водителя. Если профиль не выбран, CRM честно показывает это и не выбирает его случайно.',
+    },
+    {
+        title: 'Обновление.',
+        body: 'Сохранённые данные показываются сразу. CRM решает, нужно ли обновление; если парк временно не ответил, остаётся последняя сохранённая информация и кнопка повтора появится после паузы.',
+    },
+]
+
 function getIdentitySourceBadges(identity: ContactIdentity, identityCount: number): ContactChannelBadge[] {
     if (identity.source === 'auto' && identityCount > 1) {
         return [{
@@ -1342,6 +1377,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             <summary className="cursor-pointer text-[10px] font-bold uppercase tracking-wider text-gray-400">Технические данные</summary>
                             <div className="mt-2 space-y-0.5 break-all font-mono text-[9px] text-gray-500">
                                 <div>Contact: {contact.technicalData.contactId}</div>
+                                <div>Profile schema: {contact.technicalData.schemaVersion}</div>
+                                <div>Build marker: {contact.technicalData.buildMarker}</div>
                                 <div>Resolution: {contact.technicalData.resolutionState}</div>
                                 <div>Provider IDs: {contact.technicalData.providerIds.map(item => `${item.channel}:${item.externalId}`).join(', ') || 'нет'}</div>
                                 {contact.telegramIdentity?.telegramUserId && (
@@ -1389,14 +1426,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             <button onClick={() => setShowMessagesHelp(false)} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
                         </div>
                         <div className="space-y-2 text-[12px] text-gray-700 leading-snug">
-                            <p><strong>Contact.</strong> Первое сообщение MAX, Telegram или WhatsApp создаёт человека в CRM, Identity канала, Chat и Message. Если провайдер не передал телефон, карточка остаётся с provider identity до ручного уточнения.</p>
-                            <p><strong>Добавление номера.</strong> CRM сначала проверяет владельцев. Свободный номер добавляется только после подтверждения; повтор своего номера безопасен; чужой или неоднозначный номер не записывается и открывает ручную проверку. После этого совпадения DriverProfile остаются только предложениями.</p>
-                            <p><strong>Подсказки.</strong> По подтверждённому телефону CRM ищет профили в шести парках. Совпадение телефона или ФИО — только предложение, а не доказательство принадлежности.</p>
-                            <p><strong>Проверка.</strong> Откройте «Возможные профили водителя», сравните ФИО, парк, телефон и статус, затем вручную отметьте нужные профили. Ambiguous и уже занятые профили автоматически не переносятся.</p>
-                            <p><strong>Attachment и merge.</strong> Attachment добавляет DriverProfile к текущему Contact. Merge объединяет два Contact вместе с их CRM-историей. Это разные операции.</p>
-                            <p><strong>Главный профиль.</strong> Он выбирается только среди привязанных активных профилей: ручной выбор, затем Наш Автопарк, YOKO, YOKO-2, YOKO-3, YOKO-4, YOKO.Доставка. Уволенный профиль главным быть не может.</p>
-                            <p><strong>История.</strong> Активные профили показаны по паркам, уволенные свёрнуты. Несколько активных профилей в одном парке отображаются как anomaly и не выбираются случайно.</p>
-                            <p><strong>Обновление.</strong> Ночной sync обновляет данные всех парков. При открытии карточки сохранённые данные показываются сразу, затем выполняется background refresh. При ошибке данные остаются на экране; нажмите «Повторить».</p>
+                            {MESSAGES_HELP_SECTIONS.map(section => (
+                                <p key={section.title}><strong>{section.title}</strong> {section.body}</p>
+                            ))}
                         </div>
                     </div>
                 </div>

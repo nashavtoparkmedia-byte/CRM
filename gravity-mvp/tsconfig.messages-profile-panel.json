@@ -25,6 +25,7 @@
     "src/lib/__tests__/contact-profile-fields.test.ts",
     "src/lib/__tests__/telegram-bot-profile-state.test.ts",
     "src/lib/__tests__/bot-link-route.test.ts",
+    "src/lib/__tests__/messages-inline-help-contract.test.ts",
     "src/app/messages/components/ContactChannelRow.test.tsx",
     "typecheck/messages-profile-panel/DriverTasksWidget.tsx",
     "typecheck/messages-profile-panel/TaskCreateModal.tsx"
