@@ -1,18 +1,26 @@
-# CRM Messages Inline Help
+# Как работает раздел «Сообщения»
 
-This text is mirrored in the `/messages` right panel help modal.
+Этот текст повторяет краткую помощь в правой панели `/messages`.
 
-- MAX, Telegram and WhatsApp create Contact, Identity, Chat and Message records.
-- Contact is the CRM person.
-- DriverProfile is a park-specific Yandex profile.
-- Phone and FIO are suggestions only; they do not attach cross-park profiles automatically.
-- Suggested profiles require manager confirmation.
-- DriverProfile attachment and Contact merge are different operations.
-- Main profile is selected only from attached active profiles.
-- Nightly sync and card-open refresh update saved profiles without blocking the UI.
-- Ambiguous ownership blocks automatic attachment and requires manual review.
-- The main DriverProfile remains visible while the complete park list can be expanded when needed.
-- The profile-list expansion is a local UI preference and does not change Contact data.
-- `Сделать главным` opens a separate confirmation dialog with profile details before any request is sent.
-- Channel totals count unique providers; duplicate identities do not increase the number.
-- `Источник: Яндекс` describes Contact origin only and never identifies a park.
+- **Контакт.** Это единая карточка человека в CRM. Каналы, номера, чаты и
+  сообщения дополняют её, но не создают нового человека сами по себе.
+- **Добавление номера.** CRM сначала проверяет, свободен ли номер и не
+  принадлежит ли другой карточке. Пока не будет подтверждения, номер не
+  добавляется.
+- **Профили в парках.** У одного человека может быть несколько профилей в
+  разных парках. Найденные профили - это предложения: выберите нужные и
+  подтвердите привязку.
+- **Проверка.** Одинаковое имя ещё не доказывает, что это один человек. При
+  нескольких владельцах номера CRM просит ручную проверку.
+- **Привязка и объединение.** Привязка профиля и объединение карточек - разные
+  действия. Объединяйте карточки только после проверки человека.
+- **Главный профиль.** Это профиль, который оператор выбрал основным. Если
+  выбора нет, CRM использует понятный порядок активных парков.
+- **Telegram-бот.** Бот привязывается к выбранному профилю водителя. Его
+  отсутствие не мешает переписке в Telegram.
+- **Обновление.** Данные из парков обновляются в фоне. При временной ошибке
+  остаётся последняя сохранённая информация; повтор доступен после паузы.
+
+Строки MAX, Telegram и WhatsApp показывают состояние проверки канала:
+`есть`, `нет`, `проверяем` или `нет связи`. Последнее означает техническую
+недоступность проверки в CRM, а не отсутствие аккаунта у человека.

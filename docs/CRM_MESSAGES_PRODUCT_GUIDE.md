@@ -1,10 +1,10 @@
 # CRM Messages Product Guide
 
-Version: multi-park-dev-rc
-Date: 2026-07-13
-Baseline commit: 30b713826a48afceb60351dca47de578d6056b26
-Release image: not built for production
-Last updated: 2026-07-13
+Version: messages-complete-consolidated-dev-rc
+Date: 2026-07-17
+Baseline commit: 8a95307d19a22a086794328496630962eae1b113
+Release image: not built or deployed by this DEV program
+Last updated: 2026-07-17
 
 ## Core Model
 
@@ -49,7 +49,12 @@ Nightly sync is represented by /api/cron/sync-trips and should be scheduled for 
 
 ## Card Open Refresh
 
-Opening a Contact shows stored data immediately, then POSTs /api/contacts/:id/driver-profiles/refresh. The refresh recalculates main profile and returns anomalies without blocking the UI. On error, old data remains visible.
+Opening a Contact shows stored data immediately, then makes a refresh decision.
+The external request runs only when the park data is stale or an operator uses
+an available retry. Identical in-flight requests coalesce per Contact and
+park. Retry-After, exponential backoff and jitter protect Yandex. On 429,
+timeout, or a temporary error, old data remains visible and neither profile
+work status nor main profile changes.
 
 ## Manual Binding
 
@@ -86,7 +91,25 @@ Operators can write through channels, inspect identities, review anomalies, manu
 - no fake park/role is shown;
 - Contact Resolution safety tests pass.
 
-Project rule: any Messages change must update code, tests, inline help, and this guide.
+Project rule: any Messages change must update code, tests, inline help, this
+guide, and the relevant operations/acceptance contract.
+
+## Consolidated Messages Release
+
+This DEV RC keeps one universal ProfilePanel for MAX, Telegram, WhatsApp,
+incoming calls, provider-only Contacts, and Contacts with zero, one or many
+park profiles. The three columns retain distinct jobs: find, communicate, and
+understand the person.
+
+The panel presents a human-readable channel reachability state, an explicit
+source label, saved profile data, profile suggestions, main-profile selection,
+Telegram-bot state, tags, fields and tasks. Schema and build diagnostics stay
+inside collapsed technical data. Provider codes, raw JSON and internal retry
+states do not appear in operator-facing warnings.
+
+For safe operation see `CONTACT_RESOLUTION_OPERATIONS.md`; for user
+acceptance see `CONTACT_RESOLUTION_ACCEPTANCE.md`; for messenger-specific
+behavior see `MESSAGES_PROVIDER_CONTRACTS.md`.
 
 ## Multi-Park Driver Profiles RC
 
