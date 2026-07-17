@@ -59,4 +59,31 @@ describe('ContactChannelRow', () => {
         expect(row?.contains(action)).toBe(true)
         expect(action.closest('[data-channel-row]')).toBe(row)
     })
+
+    it('keeps an unavailable action in the row and explains why it is disabled', () => {
+        const { container } = render(
+            <ContactChannelRow
+                provider="whatsapp"
+                providerLabel="WhatsApp"
+                icon="📱"
+                dotClassName="bg-amber-400"
+                dotTitle="CRM не может проверить канал"
+                badges={[
+                    { label: 'Нет связи', className: 'bg-amber-50 text-amber-700', title: 'Это не ответ провайдера' },
+                ]}
+                isWriting={false}
+                canWrite={false}
+                writeDisabledReason="CRM сейчас не может подтвердить доступный маршрут WhatsApp"
+                onWrite={vi.fn()}
+            />,
+        )
+
+        const row = container.querySelector('[data-channel-row="whatsapp"]')
+        const action = screen.getByRole('button', { name: 'Написать' })
+
+        expect((action as HTMLButtonElement).disabled).toBe(true)
+        expect(action.getAttribute('title')).toBe('CRM сейчас не может подтвердить доступный маршрут WhatsApp')
+        expect(action.getAttribute('data-channel-can-write')).toBe('false')
+        expect(row?.contains(action)).toBe(true)
+    })
 })

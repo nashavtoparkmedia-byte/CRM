@@ -19,6 +19,8 @@ interface ContactChannelRowProps {
     detail?: ReactNode
     isWriting: boolean
     onWrite: () => void
+    canWrite?: boolean
+    writeDisabledReason?: string
     muted?: boolean
     error?: string | null
 }
@@ -33,10 +35,15 @@ export default function ContactChannelRow({
     detail,
     isWriting,
     onWrite,
+    canWrite = true,
+    writeDisabledReason,
     muted = false,
     error,
 }: ContactChannelRowProps) {
     const statusTitle = [providerLabel, ...badges.map(badge => badge.label)].join(' · ')
+    const actionTitle = canWrite
+        ? `Написать в ${providerLabel}`
+        : writeDisabledReason || `Сейчас нельзя написать в ${providerLabel}`
 
     return (
         <div className="group/channel mb-0.5 min-w-0" data-channel-row={provider}>
@@ -71,9 +78,11 @@ export default function ContactChannelRow({
                 <button
                     type="button"
                     onClick={onWrite}
-                    disabled={isWriting}
-                    className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded bg-[#3390EC]/5 px-[2px] py-0.5 text-[10px] font-semibold text-[#3390EC] transition-colors hover:bg-[#3390EC]/15 disabled:opacity-50"
+                    disabled={isWriting || !canWrite}
+                    title={actionTitle}
+                    className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded bg-[#3390EC]/5 px-[2px] py-0.5 text-[10px] font-semibold text-[#3390EC] transition-colors hover:bg-[#3390EC]/15 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 disabled:opacity-100"
                     data-channel-action
+                    data-channel-can-write={canWrite ? 'true' : 'false'}
                 >
                     {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
                     Написать

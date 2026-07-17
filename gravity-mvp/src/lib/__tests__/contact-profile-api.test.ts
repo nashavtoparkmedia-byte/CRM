@@ -14,6 +14,9 @@ const prismaMock = vi.hoisted(() => ({
   parkConnection: {
     findMany: vi.fn(),
   },
+  driverTelegram: {
+    findMany: vi.fn(),
+  },
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
@@ -129,6 +132,7 @@ describe('canonical Contact profile API', () => {
       lastErrorSummary: null,
       park: { parkCode: `PARK_${index + 1}`, parkName },
     })))
+    prismaMock.driverTelegram.findMany.mockResolvedValue([])
   })
 
   test('returns six phone-only suggestions without attaching or selecting a main profile', async () => {
@@ -177,6 +181,11 @@ describe('canonical Contact profile API', () => {
     expect(body.suggestedProfiles.every((profile: { workStatus: string }) => profile.workStatus === 'working')).toBe(true)
     expect(body.technicalData.profileSourceValues).toHaveLength(6)
     expect(body.technicalData.profileSourceValues[0].employmentTypeCode).toBe('park_employee')
+    expect(body.telegramBotState).toMatchObject({
+      status: 'NO_TELEGRAM_IDENTITY',
+      linked: false,
+      driverProfile: null,
+    })
     expect(prismaMock.driver.updateMany).not.toHaveBeenCalled()
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
   })

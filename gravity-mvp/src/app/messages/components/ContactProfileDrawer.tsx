@@ -8,7 +8,7 @@ import { useConversations, refreshConversations } from "../hooks/useConversation
 import { useContactSearch } from "../hooks/useContactSearch"
 import { useContact, type ContactIdentity } from "../hooks/useContact"
 import { useChannelStatus } from "../hooks/useChannelStatus"
-import DriverTasksWidget from "./DriverTasksWidget"
+import DriverTasksWidget from "@/app/messages/components/DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
 import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
@@ -16,15 +16,11 @@ import AddPhoneResolutionDialog from "./AddPhoneResolutionDialog"
 import ContactChannelRow, { type ContactChannelBadge } from "./ContactChannelRow"
 import { countUniqueProviderChannels, formatProviderChannelCount, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
 import { getSegmentLabel } from '@/lib/contact-display'
-
-// Custom field types
-interface CustomField {
-    id: string
-    label: string
-    type: 'text' | 'select' | 'multi-select' | 'date'
-    value: string | string[]
-    options?: string[]
-}
+import {
+    readContactProfileFields,
+    writeContactProfileFields,
+    type ContactProfileField,
+} from "@/lib/contact-profile-fields"
 
 type LiveReachabilityStatus = 'confirmed' | 'unreachable' | 'checking'
 type LiveReachabilityEntry = {
@@ -32,11 +28,6 @@ type LiveReachabilityEntry = {
     retryable?: boolean
     error?: string
 }
-
-const defaultCustomFields: CustomField[] = [
-    { id: 'city', label: 'Город', type: 'text', value: '' },
-    { id: 'start_date', label: 'Дата начала', type: 'date', value: '' },
-]
 
 // Channel display config
 const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: string; dotColor: string }> = {
@@ -95,7 +86,7 @@ function formatTechnicalDate(value: string | null): string {
     return Number.isNaN(date.getTime()) ? 'нет' : date.toLocaleString('ru-RU')
 }
 
-function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, badges, dotClassName, dotTitle, error }: {
+function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, badges, dotClassName, dotTitle, canWrite, writeDisabledReason, error }: {
     identity: ContactIdentity
     cfg: { label: string; icon: string; color: string; dotColor: string } | undefined
     isWriting: boolean
@@ -103,6 +94,8 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, badges, dotClass
     badges: ContactChannelBadge[]
     dotClassName: string
     dotTitle: string
+    canWrite: boolean
+    writeDisabledReason?: string
     error?: string | null
 }) {
     const [copiedId, setCopiedId] = useState(false)
@@ -148,6 +141,8 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, badges, dotClass
             ) : undefined}
             isWriting={isWriting}
             onWrite={onWrite}
+            canWrite={canWrite}
+            writeDisabledReason={writeDisabledReason}
             error={error}
         />
     )
@@ -172,24 +167,23 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [mergeError, setMergeError] = useState<string | null>(null)
     const [mergeSuccess, setMergeSuccess] = useState(false)
     const { results: mergeSearchResults, loading: mergeSearchLoading } = useContactSearch(showMergeDialog ? mergeSearch : '')
-    const [customFields, setCustomFields] = useState<CustomField[]>(defaultCustomFields)
+    const [customFields, setCustomFields] = useState<ContactProfileField[]>([])
     const [editingFieldId, setEditingFieldId] = useState<string | null>(null)
     const [editingFieldValue, setEditingFieldValue] = useState("")
     const [showAddField, setShowAddField] = useState(false)
     const [newFieldLabel, setNewFieldLabel] = useState("")
     const [newFieldType, setNewFieldType] = useState<'text' | 'select' | 'date'>('text')
-    const [aiStatus, setAiStatus] = useState<'active' | 'paused' | 'inactive'>('inactive')
+    const [profileDataSaving, setProfileDataSaving] = useState(false)
+    const [profileDataError, setProfileDataError] = useState<string | null>(null)
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
     const [showMessagesHelp, setShowMessagesHelp] = useState(false)
 
     // TG Bot link state
     const [tgIdCopied, setTgIdCopied] = useState(false)
-    const [showBotLinkSearch, setShowBotLinkSearch] = useState(false)
-    const [botLinkQuery, setBotLinkQuery] = useState('')
-    const [botLinkResults, setBotLinkResults] = useState<{ id: string; fullName: string; phone: string | null }[]>([])
-    const [botLinkSearching, setBotLinkSearching] = useState(false)
+    const [showBotProfilePicker, setShowBotProfilePicker] = useState(false)
     const [botLinkSaving, setBotLinkSaving] = useState(false)
+    const [botLinkError, setBotLinkError] = useState<string | null>(null)
 
     // Edit display name state
     const [editingName, setEditingName] = useState(false)
@@ -204,9 +198,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [liveReachability, setLiveReachability] = useState<Record<string, LiveReachabilityEntry>>({})
 
     useEffect(() => {
-        if (!contact) return
-        const primaryPhone = contact.phones.find(p => p.isPrimary)?.phone || contact.phones[0]?.phone
-        if (!primaryPhone) return
+        if (!contact) {
+            setTags([])
+            setCustomFields([])
+            return
+        }
+        setTags(contact.tags || [])
+        setCustomFields(readContactProfileFields(contact.customFields))
+    }, [contact])
+
+    const reachabilityPhone = contact?.phones.find(phone => phone.isPrimary)?.phone || contact?.phones[0]?.phone || null
+
+    useEffect(() => {
+        if (!contact?.id || !reachabilityPhone) return
 
         let cancelled = false
         const retryTimers: ReturnType<typeof setTimeout>[] = []
@@ -217,7 +221,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             fetch('/api/channels/check-reachability', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: primaryPhone, channel }),
+                body: JSON.stringify({ phone: reachabilityPhone, channel }),
             })
                 .then(r => r.json())
                 .then(data => {
@@ -254,7 +258,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             cancelled = true
             retryTimers.forEach(clearTimeout)
         }
-    }, [contact])
+    }, [contact?.id, reachabilityPhone])
 
     // Contact API resolves the canonical bot binding from DriverTelegram and
     // attached profiles. ContactIdentity.externalId can be a phone placeholder,
@@ -266,26 +270,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         && liveReachability.telegram?.status === 'confirmed'
         ? 'TELEGRAM_DISCOVERED_BY_PHONE'
         : telegramBotState?.status || 'NO_TELEGRAM_IDENTITY'
-
-    // Debounced driver search for bot link
-    useEffect(() => {
-        if (botLinkQuery.length < 3) { setBotLinkResults([]); return }
-        setBotLinkSearching(true)
-        const timer = setTimeout(async () => {
-            try {
-                const res = await fetch('/api/bot-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'search', query: botLinkQuery }),
-                })
-                const d = await res.json()
-                setBotLinkResults(d.drivers || [])
-            } finally {
-                setBotLinkSearching(false)
-            }
-        }, 300)
-        return () => { clearTimeout(timer); setBotLinkSearching(false) }
-    }, [botLinkQuery])
 
     /** Get effective reachability for a channel: live > persisted > chat-presence > null */
     const getReachability = (identity: ContactIdentity): boolean | null => {
@@ -310,19 +294,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
     const reachabilityBadge = (reachable: boolean | null, live?: LiveReachabilityEntry) => {
         if (reachable === true) {
-            return { label: 'Найден', cls: 'text-emerald-700 bg-emerald-50', title: 'Аккаунт найден у провайдера' }
+            return { label: 'есть', cls: 'text-emerald-700 bg-emerald-50', title: 'Аккаунт найден у провайдера' }
         }
         if (reachable === false) {
-            return { label: 'Не найден', cls: 'text-gray-600 bg-gray-100', title: 'Канал проверен: аккаунт у провайдера не найден' }
+            return { label: 'нет', cls: 'text-gray-600 bg-gray-100', title: 'Канал проверен: аккаунт у провайдера не найден' }
         }
         if (live?.status === 'checking' && live.retryable === false) {
             return {
-                label: 'Нет связи',
+                label: 'нет связи',
                 cls: 'text-amber-700 bg-amber-50',
                 title: live.error || 'CRM сейчас не может проверить канал. Это не ответ провайдера и не означает, что аккаунта нет',
             }
         }
-        return { label: 'Проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
+        return { label: 'проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
     }
 
     if (!chat) return null
@@ -346,29 +330,83 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         const phoneLike = /^\+?\d[\d\s()-]{9,}$/.test(_rawDisplayName)
         return phoneLike ? formatPhone(contact?.primaryPhone?.phone || _rawDisplayName.replace(/\s/g, '')) : _rawDisplayName
     })()
+    const displayTitle = contact?.canonicalSummary?.displayTitle || displayName
     const masterSource = contact?.masterSource || (chat.driver ? 'yandex' : 'chat')
     const sourceInfo = SOURCE_LABELS[masterSource] || SOURCE_LABELS.chat
     const drawerChannelCount = contact?.canonicalSummary?.channelCount
         ?? countUniqueProviderChannels(contact?.channels)
     const contactOrDriverId = contact?.id || chat.driver?.id
+    const taskDriverId = contact?.mainDriverProfile?.id || chat.driver?.id
 
-    const handleAddTag = () => {
-        if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-            setTags([...tags, tagInput.trim()])
-            setTagInput("")
-            setShowTagInput(false)
+    const saveContactPatch = async (patch: Record<string, unknown>): Promise<boolean> => {
+        if (!contact || profileDataSaving) return false
+        setProfileDataSaving(true)
+        setProfileDataError(null)
+        try {
+            const response = await fetch(`/api/contacts/${contact.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch),
+            })
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}))
+                throw new Error(typeof data.message === 'string' ? data.message : 'Не удалось сохранить изменения')
+            }
+            await refetchContact()
+            await refreshConversations()
+            return true
+        } catch (saveError) {
+            setProfileDataError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить изменения')
+            await refetchContact()
+            return false
+        } finally {
+            setProfileDataSaving(false)
         }
     }
-    const handleRemoveTag = (tag: string) => setTags(tags.filter(t => t !== tag))
 
-    const handleFieldSave = (fieldId: string, newValue: string) => {
-        setCustomFields(fields => fields.map(f => f.id === fieldId ? { ...f, value: newValue } : f))
+    const handleAddTag = async () => {
+        if (tagInput.trim() && !tags.includes(tagInput.trim())) {
+            const nextTags = [...tags, tagInput.trim()]
+            setTags(nextTags)
+            setTagInput("")
+            setShowTagInput(false)
+            await saveContactPatch({ tags: nextTags })
+        }
+    }
+    const handleRemoveTag = async (tag: string) => {
+        const nextTags = tags.filter(item => item !== tag)
+        setTags(nextTags)
+        await saveContactPatch({ tags: nextTags })
+    }
+
+    const persistProfileFields = async (nextFields: ContactProfileField[]) => {
+        if (!contact) return
+        setCustomFields(nextFields)
+        await saveContactPatch({
+            customFields: writeContactProfileFields(contact.customFields, nextFields),
+        })
+    }
+    const handleFieldSave = async (fieldId: string, newValue: string) => {
+        const nextFields = customFields.map(field => field.id === fieldId ? { ...field, value: newValue } : field)
+        await persistProfileFields(nextFields)
         setEditingFieldId(null)
     }
-    const handleFieldDelete = (fieldId: string) => setCustomFields(fields => fields.filter(f => f.id !== fieldId))
-    const handleAddField = () => {
+    const handleFieldDelete = async (fieldId: string) => {
+        await persistProfileFields(customFields.filter(field => field.id !== fieldId))
+    }
+    const handleAddField = async () => {
         if (!newFieldLabel.trim()) return
-        setCustomFields([...customFields, { id: `custom-${Date.now()}`, label: newFieldLabel.trim(), type: newFieldType, value: '', options: newFieldType === 'select' ? ['Вариант 1', 'Вариант 2'] : undefined }])
+        const nextFields: ContactProfileField[] = [
+            ...customFields,
+            {
+                id: `custom-${Date.now()}`,
+                label: newFieldLabel.trim(),
+                type: newFieldType,
+                value: '',
+                options: newFieldType === 'select' ? ['Вариант 1', 'Вариант 2'] : undefined,
+            },
+        ]
+        await persistProfileFields(nextFields)
         setNewFieldLabel(""); setNewFieldType('text'); setShowAddField(false)
     }
 
@@ -409,6 +447,64 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             console.error('[ContactProfile] Create chat failed:', e.message)
         } finally {
             setWritingIdentityId(null)
+        }
+    }
+
+    const handleBotProfileLink = async (driverProfileId: string) => {
+        if (!contact || !botTelegramId || botLinkSaving) return
+        setBotLinkSaving(true)
+        setBotLinkError(null)
+        try {
+            const response = await fetch('/api/bot-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'link',
+                    telegramId: botTelegramId,
+                    driverId: driverProfileId,
+                    contactId: contact.id,
+                }),
+            })
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok) {
+                throw new Error(typeof data.message === 'string' ? data.message : 'Не удалось изменить профиль Telegram-бота')
+            }
+            await refetchContact()
+            await refreshConversations()
+            setShowBotProfilePicker(false)
+        } catch (linkError) {
+            setBotLinkError(linkError instanceof Error ? linkError.message : 'Не удалось изменить профиль Telegram-бота')
+        } finally {
+            setBotLinkSaving(false)
+        }
+    }
+
+    const handleBotUnlink = async () => {
+        if (!contact || !botTelegramId || botLinkSaving) return
+        if (!confirm('Отвязать Telegram-бота от профиля водителя? Чат и Contact останутся без изменений.')) return
+        setBotLinkSaving(true)
+        setBotLinkError(null)
+        try {
+            const response = await fetch('/api/bot-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'unlink',
+                    telegramId: botTelegramId,
+                    contactId: contact.id,
+                }),
+            })
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok) {
+                throw new Error(typeof data.message === 'string' ? data.message : 'Не удалось отвязать Telegram-бота')
+            }
+            await refetchContact()
+            await refreshConversations()
+            setShowBotProfilePicker(false)
+        } catch (unlinkError) {
+            setBotLinkError(unlinkError instanceof Error ? unlinkError.message : 'Не удалось отвязать Telegram-бота')
+        } finally {
+            setBotLinkSaving(false)
         }
     }
 
@@ -491,12 +587,12 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             </button>
                         </div>
                     ) : (
-                        <div className="flex items-center gap-1 mt-0.5">
-                            <h3 className="text-[15px] font-semibold text-[#111]">{displayName}</h3>
+                        <div className="mt-0.5 flex max-w-full items-start gap-1 px-1">
+                            <h3 className="min-w-0 break-words text-[15px] font-semibold leading-tight text-[#111]">{displayTitle}</h3>
                             {contact && (
                                 <button
                                     onClick={() => { setNameInput(displayName); setEditingName(true) }}
-                                    className="text-gray-300 hover:text-gray-500 transition-colors"
+                                    className="mt-0.5 shrink-0 text-gray-300 transition-colors hover:text-gray-500"
                                     title="Редактировать имя"
                                 >
                                     <Pencil size={12} />
@@ -740,6 +836,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                 reachBadge.title,
                                                 hasOperationalMaxChat ? reachBadge.title : undefined,
                                             )
+                                            const canWrite = linkedToCurrentContact || (!hasFailed && effectiveReachable === true)
+                                            const writeDisabledReason = hasFailed
+                                                ? 'Маршрут недоступен после ошибки доставки'
+                                                : effectiveReachable === false
+                                                    ? 'Аккаунт у провайдера не найден'
+                                                    : isOperationallyBlocked
+                                                        ? 'CRM сейчас не может проверить доступность канала'
+                                                        : 'Дождитесь завершения проверки аккаунта'
                                             const badges: ContactChannelBadge[] = [
                                                 ...(isCheckable ? [{
                                                     label: reachBadge.label,
@@ -760,6 +864,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                     badges={badges}
                                                     isWriting={isWriting}
                                                     onWrite={() => handleWrite(identity.channel, identity.id)}
+                                                    canWrite={canWrite}
+                                                    writeDisabledReason={writeDisabledReason}
                                                     error={hasFailed ? (chStatus.error || 'Неизвестная ошибка доставки') : null}
                                                 />
                                             )
@@ -779,6 +885,11 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const reachBadge = reachabilityBadge(missingReachable, liveEntry)
                                             const isOperationallyBlocked = isMissingCheckable && missingReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
                                             const statusDot = getChannelStatusDot(missingReachable, isOperationallyBlocked, reachBadge.title)
+                                            const writeDisabledReason = missingReachable === false
+                                                ? 'Аккаунт у провайдера не найден'
+                                                : isOperationallyBlocked
+                                                    ? 'CRM сейчас не может проверить доступность канала'
+                                                    : 'Дождитесь завершения проверки аккаунта'
                                             return (
                                                 <ContactChannelRow
                                                     key={`missing-${ch}`}
@@ -794,6 +905,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                     }] : []}
                                                     isWriting={isWriting}
                                                     onWrite={() => handleWrite(ch)}
+                                                    canWrite={missingReachable === true}
+                                                    writeDisabledReason={writeDisabledReason}
                                                     muted
                                                 />
                                             )
@@ -837,6 +950,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                 reachBadge.title,
                                 hasOperationalMaxChat ? reachBadge.title : undefined,
                             )
+                            const canWrite = linkedToCurrentContact || (!hasFailed && effectiveReachable === true)
+                            const writeDisabledReason = hasFailed
+                                ? 'Маршрут недоступен после ошибки доставки'
+                                : effectiveReachable === false
+                                    ? 'Аккаунт у провайдера не найден'
+                                    : isOperationallyBlocked
+                                        ? 'CRM сейчас не может проверить доступность канала'
+                                        : 'Дождитесь завершения проверки аккаунта'
                             const badges: ContactChannelBadge[] = [
                                 {
                                     label: reachBadge.label,
@@ -855,6 +976,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     badges={badges}
                                     dotClassName={statusDot.className}
                                     dotTitle={statusDot.title}
+                                    canWrite={canWrite}
+                                    writeDisabledReason={writeDisabledReason}
                                     error={hasFailed ? (chStatus.error || 'Неизвестная ошибка доставки') : null}
                                 />
                             )
@@ -887,40 +1010,45 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         >
                             <div className="flex items-center justify-between mb-[6px]">
                                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Telegram-бот водителя</h4>
-                                {canManageBotLink && telegramBotDisplayStatus !== 'CONFLICT' && !showBotLinkSearch && (
-                                    <button
-                                        onClick={() => { setShowBotLinkSearch(true); setBotLinkQuery(''); setBotLinkResults([]) }}
-                                        className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4]"
-                                    >
-                                        {telegramBotState?.linked ? 'Сменить' : '+ Привязать'}
-                                    </button>
-                                )}
+                                <a
+                                    href="/settings/integrations/bot"
+                                    className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4]"
+                                    title="Открыть настройки Telegram-бота"
+                                >
+                                    Настройки <ExternalLink size={9} />
+                                </a>
                             </div>
 
                             {botTelegramId && (
-                                <div className="flex items-center gap-1 mb-1.5">
-                                    {contact.telegramIdentity?.username && (
-                                        <span className="text-[11px] text-[#3390EC]">@{contact.telegramIdentity.username}</span>
+                                <div className="mb-1.5 flex min-w-0 items-center gap-1">
+                                    {contact.telegramIdentity?.displayName && (
+                                        <span className="truncate text-[11px] font-medium text-[#111]">
+                                            {contact.telegramIdentity.displayName}
+                                        </span>
                                     )}
-                                    <span className="text-[11px] text-gray-400 font-mono">ID {botTelegramId}</span>
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(botTelegramId).catch(() => {})
-                                            setTgIdCopied(true)
-                                            setTimeout(() => setTgIdCopied(false), 2000)
-                                        }}
-                                        className="text-gray-300 hover:text-[#3390EC] transition-colors"
-                                        title="Скопировать TG ID"
-                                    >
-                                        {tgIdCopied ? <span className="text-[9px] text-emerald-500">✓</span> : <Copy size={9} />}
-                                    </button>
+                                    {contact.telegramIdentity?.username && (
+                                        <span className="shrink-0 text-[11px] text-[#3390EC]">@{contact.telegramIdentity.username}</span>
+                                    )}
+                                    {!contact.telegramIdentity?.displayName && !contact.telegramIdentity?.username && (
+                                        <span className="text-[11px] text-gray-500">Telegram user</span>
+                                    )}
                                 </div>
                             )}
 
-                            {telegramBotDisplayStatus === 'BOT_BOUND' && telegramBotState?.driverProfile ? (
+                            {telegramBotState?.driverProfile ? (
                                 <div className="space-y-0.5 text-[11px] text-[#111]">
                                     <div className="flex items-center gap-1">
-                                        <span className="rounded bg-emerald-50 px-1 py-px text-[9px] font-semibold text-emerald-700">Связан</span>
+                                        <span className={`rounded px-1 py-px text-[9px] font-semibold ${
+                                            telegramBotDisplayStatus === 'BOT_BOUND'
+                                                ? 'bg-emerald-50 text-emerald-700'
+                                                : 'bg-amber-50 text-amber-700'
+                                        }`}>
+                                            {telegramBotDisplayStatus === 'BOT_BOUND_TO_DISMISSED_PROFILE'
+                                                ? 'Профиль уволен'
+                                                : telegramBotDisplayStatus === 'BOT_BOUND_TO_NON_MAIN_PROFILE'
+                                                    ? 'Не главный'
+                                                    : 'Связан'}
+                                        </span>
                                         <span className="font-medium">{telegramBotState.driverProfile.fullName}</span>
                                     </div>
                                     <div className="text-gray-500">
@@ -933,84 +1061,98 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             Привязано {new Date(telegramBotState.boundAt).toLocaleDateString('ru-RU')}
                                         </div>
                                     )}
+                                    {telegramBotDisplayStatus === 'BOT_BOUND_TO_NON_MAIN_PROFILE' && (
+                                        <div className="text-[10px] text-amber-700">
+                                            Привязка отличается от главного профиля Contact
+                                        </div>
+                                    )}
+                                    {telegramBotDisplayStatus === 'BOT_BOUND_TO_DISMISSED_PROFILE' && (
+                                        <div className="text-[10px] text-amber-700">
+                                            Выберите действующий профиль водителя
+                                        </div>
+                                    )}
                                 </div>
+                            ) : telegramBotDisplayStatus === 'BOT_BOUND_WITHOUT_PROFILE' ? (
+                                <div className="text-[11px] text-amber-700">Бот привязан, но DriverProfile этого Contact не выбран</div>
                             ) : telegramBotDisplayStatus === 'CONFLICT' ? (
                                 <div className="text-[11px] text-red-600">Обнаружена конфликтующая привязка. Требуется проверка.</div>
+                            ) : telegramBotDisplayStatus === 'TEMPORARILY_UNAVAILABLE' ? (
+                                <div className="text-[11px] text-gray-500">Данные Telegram-бота временно недоступны. Карточка Contact продолжает работать.</div>
                             ) : telegramBotDisplayStatus === 'TELEGRAM_DISCOVERED_BY_PHONE' ? (
                                 <div className="text-[11px] text-amber-700">Telegram-аккаунт найден по номеру, но не подтверждён</div>
                             ) : telegramBotDisplayStatus === 'TELEGRAM_IDENTITY_AVAILABLE_BOT_UNBOUND' ? (
-                                <div className="text-[11px] text-gray-500">Профиль для Telegram-бота не выбран</div>
+                                <div className="text-[11px] text-gray-500">Telegram identity найдена, бот не привязан к DriverProfile</div>
                             ) : liveReachability.telegram?.status === 'checking' ? (
                                 <div className="text-[11px] text-gray-500">Проверяем Telegram-аккаунт</div>
                             ) : (
-                                <div className="text-[11px] text-gray-500">Telegram-аккаунт не найден</div>
+                                <div className="text-[11px] text-gray-500">Бот не найден</div>
                             )}
 
-                            {/* Driver search/link UI */}
-                            {showBotLinkSearch && (
-                                <div className="mt-2">
-                                    <div className="flex items-center gap-1 mb-1.5">
-                                        <input
-                                            autoFocus
-                                            value={botLinkQuery}
-                                            onChange={e => setBotLinkQuery(e.target.value)}
-                                            placeholder="Телефон или имя водителя..."
-                                            className="flex-1 h-[28px] rounded-md border border-gray-200 px-2 text-[12px] outline-none focus:border-[#3390EC] bg-white"
-                                        />
-                                        <button
-                                            onClick={() => { setShowBotLinkSearch(false); setBotLinkQuery(''); setBotLinkResults([]) }}
-                                            className="text-gray-400 hover:text-gray-600 shrink-0"
-                                        >
-                                            <X size={12} />
-                                        </button>
-                                    </div>
-
-                                    {botLinkSearching ? (
-                                        <div className="text-[11px] text-gray-400 flex items-center gap-1">
-                                            <Loader2 size={10} className="animate-spin" /> Ищу...
-                                        </div>
-                                    ) : botLinkResults.length > 0 ? (
-                                        <div className="space-y-px">
-                                            {botLinkResults.map(driver => (
-                                                <div key={driver.id} className="flex items-center justify-between py-1 px-1 hover:bg-gray-50 rounded">
-                                                    <div className="min-w-0 mr-1">
-                                                        <div className="text-[12px] font-medium text-[#111] truncate">{driver.fullName}</div>
-                                                        {driver.phone && <div className="text-[10px] text-gray-400 font-mono">{driver.phone}</div>}
-                                                    </div>
-                                                    <button
-                                                        disabled={botLinkSaving}
-                                                        onClick={async () => {
-                                                            setBotLinkSaving(true)
-                                                            try {
-                                                                const res = await fetch('/api/bot-link', {
-                                                                    method: 'POST',
-                                                                    headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ action: 'link', telegramId: botTelegramId, driverId: driver.id }),
-                                                                })
-                                                                if (res.ok) {
-                                                                    await refetchContact()
-                                                                    await refreshConversations()
-                                                                    setShowBotLinkSearch(false)
-                                                                    setBotLinkQuery('')
-                                                                    setBotLinkResults([])
-                                                                }
-                                                            } finally {
-                                                                setBotLinkSaving(false)
-                                                            }
-                                                        }}
-                                                        className="shrink-0 text-[10px] font-semibold text-white bg-[#3390EC] px-2 py-0.5 rounded hover:bg-[#2B7FD4] disabled:opacity-50 flex items-center gap-1"
-                                                    >
-                                                        {botLinkSaving ? <Loader2 size={9} className="animate-spin" /> : 'Привязать'}
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : botLinkQuery.length >= 3 ? (
-                                        <div className="text-[11px] text-gray-400 italic">Водители не найдены</div>
-                                    ) : (
-                                        <div className="text-[11px] text-gray-400">Введите минимум 3 символа</div>
-                                    )}
+                            {telegramBotState?.lastUpdatedAt && (
+                                <div className="mt-1 text-[10px] text-gray-400">
+                                    Обновлено {new Date(telegramBotState.lastUpdatedAt).toLocaleString('ru-RU')}
                                 </div>
+                            )}
+
+                            <div className="mt-2 flex flex-wrap items-center gap-1">
+                                {canManageBotLink
+                                    && telegramBotDisplayStatus !== 'CONFLICT'
+                                    && telegramBotDisplayStatus !== 'TEMPORARILY_UNAVAILABLE'
+                                    && contact.attachedProfiles.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowBotProfilePicker(value => !value)
+                                            setBotLinkError(null)
+                                        }}
+                                        className="rounded bg-[#3390EC]/10 px-2 py-0.5 text-[10px] font-semibold text-[#3390EC] hover:bg-[#3390EC]/15"
+                                    >
+                                        {telegramBotState?.linked ? 'Сменить профиль' : 'Выбрать профиль'}
+                                    </button>
+                                )}
+                                {telegramBotState?.linked && canManageBotLink && (
+                                    <button
+                                        type="button"
+                                        onClick={handleBotUnlink}
+                                        disabled={botLinkSaving}
+                                        className="rounded bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-600 hover:bg-red-100 disabled:opacity-50"
+                                    >
+                                        Отвязать
+                                    </button>
+                                )}
+                            </div>
+
+                            {showBotProfilePicker && (
+                                <div className="mt-2 space-y-1 rounded-md border border-gray-100 bg-gray-50 p-1.5">
+                                    <div className="text-[10px] text-gray-500">
+                                        Выберите подтверждённый профиль этого Contact
+                                    </div>
+                                    {contact.attachedProfiles.map(profile => (
+                                        <button
+                                            key={profile.id}
+                                            type="button"
+                                            disabled={botLinkSaving}
+                                            onClick={() => handleBotProfileLink(profile.id)}
+                                            className="flex w-full items-center justify-between gap-1 rounded bg-white px-2 py-1 text-left hover:bg-blue-50 disabled:opacity-50"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block truncate text-[11px] font-medium text-[#111]">{profile.fullName}</span>
+                                                <span className="block truncate text-[9px] text-gray-400">
+                                                    {profile.parkName} · {profile.statusLabel}
+                                                </span>
+                                            </span>
+                                            {botLinkSaving
+                                                ? <Loader2 size={10} className="shrink-0 animate-spin text-[#3390EC]" />
+                                                : telegramBotState?.driverProfile?.id === profile.id
+                                                    ? <Check size={10} className="shrink-0 text-emerald-500" />
+                                                    : null}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {botLinkError && (
+                                <div className="mt-1 text-[10px] text-red-600">{botLinkError}</div>
                             )}
                         </div>
                         <div className="h-px bg-[#E8E8E8] mx-3" />
@@ -1019,7 +1161,17 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
                 {/* Custom Fields */}
                 <div className="px-[4px] py-2.5">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-[2px]">Поля</h4>
+                    <div className="mb-[2px] flex items-center justify-between">
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Поля</h4>
+                        {profileDataSaving && (
+                            <span title="Сохраняем">
+                                <Loader2 size={10} className="animate-spin text-[#3390EC]" />
+                            </span>
+                        )}
+                    </div>
+                    {profileDataError && (
+                        <div className="mb-1 text-[10px] text-red-600">{profileDataError}</div>
+                    )}
 
                     {/* Driver-specific fields from Contact */}
                     {contact?.driver && (
@@ -1070,7 +1222,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             {field.value || <span className="text-gray-400 italic">—</span>}
                                             {field.type === 'select' && <ChevronDown size={10} className="ml-0.5 text-gray-400" />}
                                         </button>
-                                        <button onClick={() => handleFieldDelete(field.id)} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 transition-all"><Trash2 size={10} /></button>
+                                        <button disabled={profileDataSaving} onClick={() => handleFieldDelete(field.id)} className="opacity-0 transition-all group-hover:opacity-100 text-gray-400 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30"><Trash2 size={10} /></button>
                                     </div>
                                 )}
                             </div>
@@ -1086,7 +1238,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     <option value="select">Список</option>
                                     <option value="date">Дата</option>
                                 </select>
-                                <button onClick={handleAddField} className="h-[26px] px-2.5 bg-[#3390EC] text-white text-[11px] font-semibold rounded hover:bg-[#2B7FD4] transition-colors">Добавить</button>
+                                <button disabled={profileDataSaving} onClick={handleAddField} className="h-[26px] px-2.5 bg-[#3390EC] text-white text-[11px] font-semibold rounded hover:bg-[#2B7FD4] transition-colors disabled:cursor-not-allowed disabled:opacity-50">Добавить</button>
                             </div>
                         </div>
                     ) : (
@@ -1105,13 +1257,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {tags.map(tag => (
                             <span key={tag} className="inline-flex items-center gap-1 bg-gray-100 text-[11px] text-gray-700 px-[2px] py-0.5 rounded-full">
                                 {tag}
-                                <button onClick={() => handleRemoveTag(tag)} className="text-gray-400 hover:text-gray-700"><X size={10} /></button>
+                                <button disabled={profileDataSaving} onClick={() => handleRemoveTag(tag)} className="text-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"><X size={10} /></button>
                             </span>
                         ))}
                         {showTagInput ? (
                             <input autoFocus value={tagInput} onChange={(e) => setTagInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleAddTag(); if (e.key === 'Escape') setShowTagInput(false); }} onBlur={() => { if (!tagInput.trim()) setShowTagInput(false); }} placeholder="Тег..." className="h-[22px] w-[80px] bg-gray-100 rounded-full px-[2px] text-[11px] outline-none placeholder:text-gray-400" />
                         ) : (
-                            <button onClick={() => setShowTagInput(true)} className="inline-flex items-center gap-0.5 text-[11px] text-[#3390EC] font-medium px-[2px] py-0.5 rounded-full bg-[#3390EC]/5 hover:bg-[#3390EC]/10 transition-colors">
+                            <button disabled={profileDataSaving} onClick={() => setShowTagInput(true)} className="inline-flex items-center gap-0.5 text-[11px] text-[#3390EC] font-medium px-[2px] py-0.5 rounded-full bg-[#3390EC]/5 hover:bg-[#3390EC]/10 transition-colors disabled:cursor-not-allowed disabled:opacity-40">
                                 <Plus size={10} /> Тег
                             </button>
                         )}
@@ -1121,15 +1273,15 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                 <div className="h-px bg-[#E8E8E8] mx-3" />
 
                 {/* Tasks Widget */}
-                {chat.driver?.id ? (
-                    <DriverTasksWidget driverId={chat.driver.id} />
+                {taskDriverId ? (
+                    <DriverTasksWidget driverId={taskDriverId} />
                 ) : (
                     <div className="px-[4px] py-3">
                         <div className="flex items-center gap-[2px] mb-[2px] text-[#9ca3af]">
                             <ClipboardList className="w-[4px] h-[4px]" />
                             <span className="text-[14px] font-semibold">Задачи</span>
                         </div>
-                        <div className="text-[12px] text-[#9ca3af] italic">Водитель не привязан к чату</div>
+                        <div className="text-[12px] text-[#9ca3af] italic">DriverProfile не привязан к Contact</div>
                     </div>
                 )}
 
@@ -1140,21 +1292,15 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">AI Агент</h4>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
-                            <div className={`w-[2px] h-[2px] rounded-full ${aiStatus === 'active' ? 'bg-green-500' : aiStatus === 'paused' ? 'bg-yellow-500' : 'bg-gray-300'}`} />
-                            <span className="text-[12px] text-[#111] font-medium">
-                                {aiStatus === 'active' ? 'Активен' : aiStatus === 'paused' ? 'Пауза' : 'Неактивен'}
-                            </span>
+                            <div className="h-[6px] w-[6px] rounded-full bg-gray-300" />
+                            <span className="text-[12px] font-medium text-[#111]">Не настроен</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                            {aiStatus === 'active' ? (
-                                <button onClick={() => setAiStatus('paused')} className="text-[10px] text-yellow-600 font-semibold px-[2px] py-0.5 bg-yellow-50 rounded hover:bg-yellow-100 transition-colors">Пауза</button>
-                            ) : (
-                                <button onClick={() => setAiStatus('active')} className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 bg-[#3390EC]/10 rounded hover:bg-[#3390EC]/20 transition-colors">Включить</button>
-                            )}
-                            {aiStatus !== 'inactive' && (
-                                <button onClick={() => setAiStatus('inactive')} className="text-[10px] text-gray-500 font-medium px-[2px] py-0.5 bg-gray-100 rounded hover:bg-gray-200 transition-colors">Взять на себя</button>
-                            )}
-                        </div>
+                        <span
+                            className="text-[10px] text-gray-400"
+                            title="Панель не создаёт локальный фиктивный статус. Настройка AI выполняется отдельной интеграцией."
+                        >
+                            Без автоматизации
+                        </span>
                     </div>
                 </div>
 
@@ -1198,6 +1344,29 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                 <div>Contact: {contact.technicalData.contactId}</div>
                                 <div>Resolution: {contact.technicalData.resolutionState}</div>
                                 <div>Provider IDs: {contact.technicalData.providerIds.map(item => `${item.channel}:${item.externalId}`).join(', ') || 'нет'}</div>
+                                {contact.telegramIdentity?.telegramUserId && (
+                                    <div className="flex items-center gap-1">
+                                        <span>Telegram userId: {contact.telegramIdentity.telegramUserId}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(contact.telegramIdentity!.telegramUserId!).catch(() => {})
+                                                setTgIdCopied(true)
+                                                setTimeout(() => setTgIdCopied(false), 2000)
+                                            }}
+                                            className="text-gray-400 hover:text-[#3390EC]"
+                                            title="Скопировать Telegram userId"
+                                        >
+                                            {tgIdCopied ? <Check size={9} /> : <Copy size={9} />}
+                                        </button>
+                                    </div>
+                                )}
+                                {contact.telegramIdentity?.lastObservedUsername && (
+                                    <div>Telegram username: @{contact.telegramIdentity.lastObservedUsername}</div>
+                                )}
+                                {contact.telegramIdentity?.lastSyncAt && (
+                                    <div>Telegram sync: {formatTechnicalDate(contact.telegramIdentity.lastSyncAt)}</div>
+                                )}
                                 <div>DriverProfile IDs: {contact.technicalData.driverProfileIds.join(', ') || 'нет'}</div>
                                 <div>Suggested IDs: {contact.technicalData.suggestedProfileIds.join(', ') || 'нет'}</div>
                                 <div>Last success: {formatTechnicalDate(contact.technicalData.lastSuccessfulSyncAt)}</div>
@@ -1265,7 +1434,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             {/* Task Create Modal */}
             {isTaskModalOpen && contactOrDriverId && (
                 <TaskCreateModal
-                    driverId={chat.driver?.id}
+                    driverId={taskDriverId}
                     contactId={contact?.id}
                     driverName={displayName}
                     source="chat"

@@ -11,6 +11,7 @@ import {
   groupDriverProfilesByPark,
 } from '@/lib/contact-profile-ui'
 import { formatProfileRefreshWarning, getContactProfileRefreshDecision } from '@/lib/driver-profiles/refresh-policy'
+import { deriveTelegramBotProfileState } from '@/lib/telegram-bot-profile-state'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -278,46 +279,91 @@ export async function GET(
 
     const contactTelegramIdentity = contact.identities.find(identity => identity.channel === 'telegram') || null
     const contactTelegramMetadata = asRecord(contactTelegramIdentity?.metadata)
-    const telegramBotLinks = attachedProfiles.length > 0
-      ? await prisma.driverTelegram.findMany({
-          where: { driverId: { in: attachedProfiles.map(profile => profile.id) } },
-          orderBy: { createdAt: 'desc' },
-        })
-      : []
+    const metadataTelegramUserId = stringOrNull(contactTelegramMetadata.telegramUserId)
+    const identityExternalId = contactTelegramIdentity?.externalId || null
+    const identityExternalIdIsPhone = Boolean(identityExternalId && /^[78]\d{10}$/.test(identityExternalId))
+    const contactTelegramUserId = metadataTelegramUserId
+      || (identityExternalId && !identityExternalIdIsPhone ? identityExternalId : null)
+    const contactTelegramIdValue = contactTelegramUserId && /^\d+$/.test(contactTelegramUserId)
+      ? BigInt(contactTelegramUserId)
+      : null
+    type TelegramBotLink = Awaited<ReturnType<typeof prisma.driverTelegram.findMany>>[number]
+    let telegramBotLinks: TelegramBotLink[] = []
+    let telegramBotLookupAvailable = true
+    try {
+      telegramBotLinks = attachedProfiles.length > 0 || contactTelegramIdValue
+        ? await prisma.driverTelegram.findMany({
+            where: {
+              OR: [
+                ...(attachedProfiles.length > 0
+                  ? [{ driverId: { in: attachedProfiles.map(profile => profile.id) } }]
+                  : []),
+                ...(contactTelegramIdValue
+                  ? [{ telegramId: contactTelegramIdValue }]
+                  : []),
+              ],
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : []
+    } catch (telegramBotLookupError) {
+      telegramBotLookupAvailable = false
+      console.error('[contacts/:id] Telegram Bot lookup unavailable', {
+        contactId: contact.id,
+        error: telegramBotLookupError instanceof Error ? telegramBotLookupError.message : String(telegramBotLookupError),
+      })
+    }
     const telegramBotLink = telegramBotLinks[0] || null
     const telegramBotProfile = telegramBotLink
-      ? attachedProfiles.find(profile => telegramBotLink.activeParkId && profile.externalParkId === telegramBotLink.activeParkId)
-        || attachedProfiles.find(profile => profile.id === telegramBotLink.driverId)
-        || null
+      ? attachedProfiles.find(profile => profile.id === telegramBotLink.driverId) || null
       : null
-    const telegramUserId = telegramBotLink?.telegramId.toString() || contactTelegramIdentity?.externalId || null
+    const telegramUserId = telegramBotLink?.telegramId.toString() || contactTelegramUserId
     const telegramUsername = telegramBotLink?.username || stringOrNull(contactTelegramMetadata.username)
+    const lastObservedUsername = stringOrNull(contactTelegramMetadata.lastObservedUsername) || telegramUsername
+    const lastObservedAt = dateIsoOrNull(contactTelegramMetadata.lastObservedAt)
+      || dateIsoOrNull(contactTelegramIdentity?.createdAt)
+    const lastSyncAt = dateIsoOrNull(contactTelegramMetadata.lastSyncAt)
+      || dateIsoOrNull(contactTelegramIdentity?.reachabilityCheckedAt)
+      || lastObservedAt
     const telegramIdentity = telegramUserId
       ? {
           telegramUserId,
           username: telegramUsername,
           displayName: contactTelegramIdentity?.displayName || null,
           source: telegramBotLink ? 'driver_telegram' as const : 'contact_identity' as const,
-          lastVerifiedAt: dateIsoOrNull(telegramBotLink?.createdAt || contactTelegramIdentity?.reachabilityCheckedAt),
+          lastObservedUsername,
+          lastObservedAt,
+          lastSyncAt,
+          lastVerifiedAt: dateIsoOrNull(telegramBotLink?.createdAt) || lastSyncAt,
         }
       : null
-    const telegramBotStatus = telegramBotLinks.length > 1
-      ? 'CONFLICT' as const
-      : telegramBotLink
-        ? 'BOT_BOUND' as const
-        : contactTelegramIdentity
-          ? 'TELEGRAM_IDENTITY_AVAILABLE_BOT_UNBOUND' as const
-          : 'NO_TELEGRAM_IDENTITY' as const
+    const telegramBotStatus = deriveTelegramBotProfileState({
+      lookupAvailable: telegramBotLookupAvailable,
+      linkCount: telegramBotLinks.length,
+      hasTelegramIdentity: Boolean(contactTelegramUserId),
+      linkedProfile: telegramBotProfile
+        ? { id: telegramBotProfile.id, normalizedStatus: telegramBotProfile.normalizedStatus }
+        : null,
+      mainDriverId: mainDriverProfile?.id || null,
+    })
+    const telegramBotLastUpdatedAt = latestDate([
+      telegramBotLink?.createdAt,
+      dateOrNull(lastSyncAt),
+      dateOrNull(lastObservedAt),
+    ])
     const telegramBotState = {
       status: telegramBotStatus,
-      linked: telegramBotStatus === 'BOT_BOUND',
+      linked: Boolean(telegramBotLink),
       telegramUserId,
       username: telegramUsername,
-      driverProfile: telegramBotStatus === 'CONFLICT' ? null : telegramBotProfile,
+      driverProfile: telegramBotStatus === 'CONFLICT' || telegramBotStatus === 'TEMPORARILY_UNAVAILABLE'
+        ? null
+        : telegramBotProfile,
       activeParkId: telegramBotLink?.activeParkId || null,
       parkName: telegramBotProfile?.parkName || null,
       boundAt: dateIsoOrNull(telegramBotLink?.createdAt),
-      source: telegramBotLink ? 'driver_telegram' as const : contactTelegramIdentity ? 'contact_identity' as const : 'none' as const,
+      lastUpdatedAt: dateIsoOrNull(telegramBotLastUpdatedAt),
+      source: telegramBotLink ? 'driver_telegram' as const : contactTelegramUserId ? 'contact_identity' as const : 'none' as const,
       conflictCount: telegramBotLinks.length,
     }
 

@@ -182,9 +182,13 @@ export interface ContactTechnicalDataPayload {
 
 export type TelegramBotStateCode =
   | 'BOT_BOUND'
+  | 'BOT_BOUND_WITHOUT_PROFILE'
+  | 'BOT_BOUND_TO_NON_MAIN_PROFILE'
+  | 'BOT_BOUND_TO_DISMISSED_PROFILE'
   | 'TELEGRAM_IDENTITY_AVAILABLE_BOT_UNBOUND'
   | 'TELEGRAM_DISCOVERED_BY_PHONE'
   | 'NO_TELEGRAM_IDENTITY'
+  | 'TEMPORARILY_UNAVAILABLE'
   | 'CONFLICT'
 
 export interface TelegramIdentityPayload {
@@ -192,6 +196,9 @@ export interface TelegramIdentityPayload {
   username: string | null
   displayName: string | null
   source: 'driver_telegram' | 'contact_identity'
+  lastObservedUsername: string | null
+  lastObservedAt: string | null
+  lastSyncAt: string | null
   lastVerifiedAt: string | null
 }
 
@@ -204,6 +211,7 @@ export interface TelegramBotStatePayload {
   activeParkId: string | null
   parkName: string | null
   boundAt: string | null
+  lastUpdatedAt: string | null
   source: 'driver_telegram' | 'contact_identity' | 'none'
   conflictCount: number
 }
