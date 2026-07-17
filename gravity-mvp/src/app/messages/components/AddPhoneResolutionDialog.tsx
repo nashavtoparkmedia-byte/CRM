@@ -328,7 +328,6 @@ export default function AddPhoneResolutionDialog({
                             <div className="max-h-[260px] space-y-2 overflow-y-auto">
                                 {preflight.ownerContacts.map(owner => <OwnerCard key={owner.id} owner={owner} onOpen={() => onOpenContact(owner)} />)}
                             </div>
-                            <div className="text-[10px] font-mono text-gray-400">PHONE_OWNERSHIP_AMBIGUOUS</div>
                             <div className="flex justify-end"><button type="button" onClick={onClose} className="h-[32px] rounded-lg bg-gray-100 px-3 text-[11px] font-semibold text-gray-700">Закрыть</button></div>
                         </>
                     )}
