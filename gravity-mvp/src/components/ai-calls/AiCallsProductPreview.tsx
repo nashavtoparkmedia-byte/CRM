@@ -21,6 +21,8 @@ import {
     type AiCallProjectType,
     type PreviewProject,
 } from '@/lib/ai-call/product-preview'
+import { createPreviewScenario, type PreviewScenario } from '@/lib/ai-call/scenario-preview'
+import { ScenarioPreviewPanel } from './ScenarioPreviewPanel'
 
 type PreviewView = 'projects' | 'scenario' | 'run' | 'result' | 'settings'
 
@@ -41,6 +43,12 @@ function statusLabel(status: PreviewProject['status']) {
 export function AiCallsProductPreview() {
     const [view, setView] = useState<PreviewView>('projects')
     const [projects, setProjects] = useState<PreviewProject[]>(PREVIEW_PROJECTS)
+    const [scenarios, setScenarios] = useState<Record<string, PreviewScenario>>(() =>
+        Object.fromEntries(PREVIEW_PROJECTS.map((project) => [
+            project.id,
+            createPreviewScenario(project.type),
+        ])),
+    )
     const [selectedProjectId, setSelectedProjectId] = useState(PREVIEW_PROJECTS[0].id)
     const [editorProjectId, setEditorProjectId] = useState<string | null>(null)
     const [isCreating, setIsCreating] = useState(false)
@@ -57,15 +65,26 @@ export function AiCallsProductPreview() {
     function saveProject() {
         try {
             if (editorProjectId) {
+                const previous = projects.find((project) => project.id === editorProjectId)
                 setProjects((current) => current.map((project) =>
                     project.id === editorProjectId
                         ? updatePreviewProject(project, { name: draftName, type: draftType })
                         : project,
                 ))
+                if (previous && previous.type !== draftType) {
+                    setScenarios((current) => ({
+                        ...current,
+                        [editorProjectId]: createPreviewScenario(draftType),
+                    }))
+                }
                 setMessage('Проект обновлён')
             } else {
                 const project = createPreviewProject(draftName, draftType, projects.length + 1)
                 setProjects((current) => [...current, project])
+                setScenarios((current) => ({
+                    ...current,
+                    [project.id]: createPreviewScenario(project.type),
+                }))
                 setSelectedProjectId(project.id)
                 setMessage('Проект создан в остановленном состоянии')
             }
@@ -245,6 +264,15 @@ export function AiCallsProductPreview() {
                             </div>
                         )}
                     </section>
+                ) : view === 'scenario' && selectedProject && scenarios[selectedProject.id] ? (
+                    <ScenarioPreviewPanel
+                        project={selectedProject}
+                        scenario={scenarios[selectedProject.id]}
+                        onChange={(scenario) => setScenarios((current) => ({
+                            ...current,
+                            [selectedProject.id]: scenario,
+                        }))}
+                    />
                 ) : (
                     <section className="rounded-xl border border-[#E4ECFC] bg-white p-8 text-center">
                         <Settings2 className="mx-auto h-8 w-8 text-[#2AABEE]" />
