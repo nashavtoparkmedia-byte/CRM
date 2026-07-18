@@ -8,9 +8,14 @@
   "include": [
     "src/app/api/drivers-search/route.ts",
     "src/app/api/messages/drivers/search/route.ts",
+    "src/app/messages/components/ContactDriverProfilesPanel.tsx",
+    "src/app/messages/components/ContactDriverProfilesPanel.test.tsx",
+    "src/app/messages/components/DriverCatalogSearchActions.tsx",
+    "src/app/messages/components/DriverCatalogSearchActions.test.tsx",
     "src/lib/driver-profile-search.ts",
     "src/lib/__tests__/driver-profile-search.test.ts",
-    "src/lib/__tests__/driver-search-route.test.ts"
+    "src/lib/__tests__/driver-search-route.test.ts",
+    "src/lib/__tests__/driver-search-six-parks-db.test.ts"
   ],
   "exclude": []
 }

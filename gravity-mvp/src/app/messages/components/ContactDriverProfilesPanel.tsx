@@ -14,6 +14,7 @@ import {
     groupDriverProfilesByPark,
     isSuggestedProfileSelectable,
 } from "@/lib/contact-profile-ui"
+import DriverCatalogSearchActions from "./DriverCatalogSearchActions"
 
 type ProfileSyncViewState = 'idle' | 'syncing' | 'success' | 'error'
 
@@ -244,7 +245,8 @@ export default function ContactDriverProfilesPanel({
 
     const effectiveSyncTime = profileSyncedAt || contact.syncState?.lastSuccessfulAt || null
     const confirmationGroups = groupDriverProfilesByPark(selectedProfiles)
-    const contactPhone = formatPhone(contact.primaryPhone?.phone || contact.phones[0]?.phone || null)
+    const rawContactPhone = contact.primaryPhone?.phone || contact.phones[0]?.phone || null
+    const contactPhone = formatPhone(rawContactPhone)
     const staleSyncParks = (contact.syncState?.parks || []).filter(park => park.state === 'stale' || park.state === 'backoff')
     const visibleAnomalies = (contact.anomalies || []).filter(anomaly => anomaly.type !== 'sync_stale')
 
@@ -319,6 +321,13 @@ export default function ContactDriverProfilesPanel({
                             : <ShieldCheck size={14} className="mt-0.5 shrink-0 text-emerald-600" />
                     )}
                 </div>
+
+                <DriverCatalogSearchActions
+                    contactId={contact.id}
+                    contactDisplayName={contact.displayName}
+                    phone={rawContactPhone}
+                    onRefetch={onRefetch}
+                />
 
                 {staleSyncParks.map(park => (
                     <div key={park.parkCode} className="mb-2 flex items-start justify-between gap-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-[10px] text-amber-900" data-testid="profile-sync-warning">
