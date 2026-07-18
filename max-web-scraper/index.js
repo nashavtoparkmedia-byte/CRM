@@ -259,7 +259,14 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   }
 
   if (senderName)   payload = { ...payload, senderName, driverName: senderName }
-  if (contactPhone) payload = { ...payload, senderPhone: contactPhone, phone: contactPhone }
+  if (contactPhone) {
+    const phoneEvidence = contactStore.getPhoneEvidence(String(payload.senderId)) || {
+      sourceKind: 'unknown',
+      trustedForAutomaticResolution: false,
+      observedAt: new Date().toISOString(),
+    }
+    payload = { ...payload, senderPhone: contactPhone, phone: contactPhone, phoneEvidence }
+  }
 
   // Переслано: текстовый префикс в content + структурированные метаданные
   if (msg.forwardedFromId) {

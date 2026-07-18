@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "noEmit": true,
+    "paths": {
+      "@/lib/messageEvents": ["./typecheck/messages-max-phone-trust/messageEvents.ts"],
+      "@/*": ["./src/*"]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "src/lib/ContactService.ts",
+    "src/lib/contacts/ContactResolutionService.ts",
+    "src/lib/contacts/strict-phone-ownership.ts",
+    "src/lib/contacts/max-phone-evidence.ts",
+    "src/app/api/webhooks/max/route.ts",
+    "src/app/api/webhook/max/route.ts",
+    "src/lib/__tests__/max-phone-evidence.test.ts",
+    "src/lib/__tests__/max-phone-trust-source.test.ts",
+    "typecheck/messages-max-phone-trust/*.ts"
+  ],
+  "exclude": []
+}

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { resolveMaxPhoneEvidence } from '@/lib/contacts/max-phone-evidence'
 import crypto from 'crypto'
 
 // PR-Г: placeholder detection — name = "..", ". .", "TG NNN", pure digits.
@@ -22,7 +23,11 @@ export async function POST(req: NextRequest) {
     try {
         console.warn('[WEBHOOK-MAX][legacy] Deprecated route /api/webhook/max received a request; scraper runtime should use /api/webhooks/max')
         const body = await req.json()
-        const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing, replyToExternalId, externalId: maxExternalId } = body
+        const {
+            phone, text, timestamp, driverName, chatId: maxChatId, senderId,
+            isOutgoing, replyToExternalId, externalId: maxExternalId,
+            phoneEvidence,
+        } = body
 
         if (!text) {
             return NextResponse.json({ error: 'Missing required field: text' }, { status: 400 })
@@ -33,6 +38,8 @@ export async function POST(req: NextRequest) {
 
         // Normalize phone. MAX might send just a name (e.g. "Все 2" -> "2" or "Александр" -> "")
         let phoneDigits = (phone || '').replace(/\D/g, '')
+        const maxPhoneEvidence = resolveMaxPhoneEvidence(phone, phoneEvidence)
+        const trustedPhone = maxPhoneEvidence.trustedForAutomaticResolution
 
         // If we didn't get a valid 10+ digit phone number, do not derive one
         // from names or recent chats. Name is not identity proof.
@@ -64,7 +71,7 @@ export async function POST(req: NextRequest) {
         console.log(`[WEBHOOK-MAX] Received: externalChatId=${externalChatId} phone=${phoneDigits} chatId=${maxChatId || 'none'} direction=${direction} text="${text.substring(0, 50)}"`)
 
         // Migration pass 1: old phone-based chats ("max:phone") → new chatId format
-        if (maxChatId && phoneDigits) {
+        if (maxChatId && phoneDigits && trustedPhone) {
             const oldExternalId = `max:${phoneDigits}`
             const oldChat = await (prisma.chat as any).findUnique({ where: { externalChatId: oldExternalId } })
             if (oldChat) {
@@ -82,7 +89,7 @@ export async function POST(req: NextRequest) {
         // Migration pass 2: old numeric-format chatIds (e.g. "201482140") — stored without "max:" prefix.
         // When op:128 delivers a NEW 12-digit chatId for a contact we already know by driverId,
         // we update the stale chat rather than creating a duplicate.
-        if (maxChatId && phoneDigits && phoneDigits.length >= 10) {
+        if (maxChatId && phoneDigits && phoneDigits.length >= 10 && trustedPhone) {
             const newExId = String(maxChatId)
             const alreadyExists = await (prisma.chat as any).findUnique({ where: { externalChatId: newExId } })
             if (!alreadyExists) {
@@ -155,9 +162,16 @@ export async function POST(req: NextRequest) {
             if (phoneDigits && phoneDigits.length >= 10) {
                 const contactResult = await ContactService.resolveContact(
                     'max',
-                    phoneDigits,
+                    String(senderId || maxChatId || externalChatId),
                     phoneDigits,
                     isPlaceholderName(bestName) ? null : bestName,
+                    {
+                        phoneEvidence: {
+                            source: maxPhoneEvidence.sourceKind,
+                            trustedForAutomaticResolution: trustedPhone,
+                            observedAt: maxPhoneEvidence.observedAt,
+                        },
+                    },
                 )
                 await ContactService.ensureChatLinked(
                     unifiedChat.id,
@@ -184,10 +198,9 @@ export async function POST(req: NextRequest) {
 
         // 2. Relink driver on every inbound if missing
         if (!unifiedChat.driverId) {
-            const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { 
-                phone: phoneDigits,
-                name: driverName || phone
-            })
+            const linked = trustedPhone
+                ? await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: phoneDigits })
+                : false
             if (linked) {
                 unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
             }

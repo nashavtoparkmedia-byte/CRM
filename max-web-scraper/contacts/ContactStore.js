@@ -14,6 +14,7 @@ class ContactStore {
    */
   ingest(payload) {
     const contacts = payload.contacts || []
+    const observedAt = new Date().toISOString()
     for (const c of contacts) {
       if (c == null || typeof c !== 'object') continue
       const userId = c.id
@@ -24,6 +25,11 @@ class ContactStore {
         firstName: nameObj.firstName || null,
         lastName:  nameObj.lastName  || null,
         phone:     c.phone ? String(c.phone) : null,
+        phoneEvidence: c.phone ? {
+          sourceKind: 'provider_profile',
+          trustedForAutomaticResolution: true,
+          observedAt,
+        } : null,
       })
     }
     console.log(`[ContactStore] Loaded ${this._map.size} contacts`)
@@ -44,6 +50,15 @@ class ContactStore {
    */
   getPhone(userId) {
     return this._map.get(String(userId))?.phone || null
+  }
+
+  /**
+   * Provenance travels with a phone. Cache-derived and UI-derived mappings do
+   * not gain provider trust merely because they share the same in-memory map.
+   */
+  getPhoneEvidence(userId) {
+    const evidence = this._map.get(String(userId))?.phoneEvidence
+    return evidence ? { ...evidence } : null
   }
 
   /**

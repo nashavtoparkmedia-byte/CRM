@@ -106,10 +106,17 @@ class InitialHistorySync {
     if (!this._contactStore || !payload.senderId) return payload
     const senderName  = this._contactStore.getName(payload.senderId)
     const senderPhone = this._contactStore.getPhone(payload.senderId)
+    const phoneEvidence = senderPhone
+      ? this._contactStore.getPhoneEvidence(payload.senderId) || {
+          sourceKind: 'unknown',
+          trustedForAutomaticResolution: false,
+          observedAt: new Date().toISOString(),
+        }
+      : null
     return {
       ...payload,
       ...(senderName  ? { senderName }  : {}),
-      ...(senderPhone ? { senderPhone } : {}),
+      ...(senderPhone ? { senderPhone, phoneEvidence } : {}),
     }
   }
 

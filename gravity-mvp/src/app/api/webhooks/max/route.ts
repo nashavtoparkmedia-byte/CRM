@@ -10,7 +10,7 @@ import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-resolution-shadow'
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { resolveMaxPhoneEvidence } from '@/lib/contacts/max-phone-evidence'
 import { opsLog } from '@/lib/opsLog'
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
@@ -92,6 +92,11 @@ type MaxWebhookBody = {
   senderName?: string | null
   senderPhone?: string | number | null
   phone?: string | number | null
+  phoneEvidence?: {
+    sourceKind?: string | null
+    trustedForAutomaticResolution?: boolean | null
+    observedAt?: string | null
+  } | null
   text?: string | null
   timestamp?: string | number | null
   messageType?: string | null
@@ -165,7 +170,11 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 export async function POST(request: Request) {
   try {
     const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
-    const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId, chatKind } = body
+    const {
+      externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone,
+      phoneEvidence, text, timestamp, messageType, attachments, isOutgoing,
+      deleted, forwardedFrom, source, replyToExternalId, chatKind,
+    } = body
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
       chatId: chatId ? String(chatId) : null,
@@ -289,8 +298,11 @@ export async function POST(request: Request) {
     const rawExternalChatId = String(rawChatId || chatId)
     const externalChatId = normalizeMaxChatId(chatId)
     const senderIdString = senderId ? String(senderId) : null
-    const normalizedSenderPhone = senderPhone || phone ? normalizePhoneE164(String(senderPhone || phone)) : null
-    const effectiveSenderPhone = normalizedSenderPhone || null
+    const maxPhoneEvidence = resolveMaxPhoneEvidence(senderPhone || phone, phoneEvidence)
+    const effectiveSenderPhone = maxPhoneEvidence.normalizedPhone
+    const trustedSenderPhone = maxPhoneEvidence.trustedForAutomaticResolution
+      ? effectiveSenderPhone
+      : null
     const maxChatKind = chatKind === 'private' || chatKind === 'group' ? chatKind : 'unknown'
     const shadowEventSource = source === 'history'
       ? 'history'
@@ -313,7 +325,10 @@ export async function POST(request: Request) {
         channelDisplayName: senderName || null,
         normalizedPhone: effectiveSenderPhone,
         phoneEvidence: effectiveSenderPhone
-          ? { source: 'unknown', trustedForAutomaticResolution: false }
+          ? {
+              source: maxPhoneEvidence.sourceKind,
+              trustedForAutomaticResolution: maxPhoneEvidence.trustedForAutomaticResolution,
+            }
           : null,
         chatKind: maxChatKind,
       },
@@ -349,40 +364,7 @@ export async function POST(request: Request) {
               rawExternalChatId,
               senderId: senderIdString,
               ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
-              connectionId: existingMetadata.connectionId || 'max_scraper',
-            },
-          },
-        })
-      }
-    }
-
-    if (!chat && !isOutgoing && effectiveSenderPhone) {
-      const last10 = effectiveSenderPhone.slice(-10)
-      const existingByPhone = await prisma.chat.findFirst({
-        where: {
-          channel: 'max',
-          OR: [
-            { metadata: { path: ['phone'], equals: effectiveSenderPhone } },
-            { driver: { phone: { contains: last10 } } },
-          ],
-        },
-        orderBy: { lastMessageAt: 'desc' },
-      })
-
-      if (existingByPhone) {
-        const existingMetadata = metadataRecord(existingByPhone.metadata)
-        chat = await prisma.chat.update({
-          where: { id: existingByPhone.id },
-          data: {
-            externalChatId,
-            ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
-            ...(senderName && existingByPhone.name?.startsWith('MAX:') ? { name: senderName } : {}),
-            metadata: {
-              ...existingMetadata,
-              previousExternalChatId: existingByPhone.externalChatId,
-              rawExternalChatId,
-              ...(senderIdString ? { senderId: senderIdString } : {}),
-              phone: effectiveSenderPhone,
+              ...(effectiveSenderPhone ? { phoneEvidence: maxPhoneEvidence } : {}),
               connectionId: existingMetadata.connectionId || 'max_scraper',
             },
           },
@@ -401,6 +383,7 @@ export async function POST(request: Request) {
           metadata: {
             ...(senderIdString       ? { senderId: senderIdString }       : {}),
             ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+            ...(effectiveSenderPhone ? { phoneEvidence: maxPhoneEvidence } : {}),
             rawExternalChatId,
             connectionId: 'max_scraper',
           },
@@ -420,6 +403,7 @@ export async function POST(request: Request) {
               ...existingMetadata,
               ...(senderIdString       ? { senderId: senderIdString }       : {}),
               ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              ...(effectiveSenderPhone ? { phoneEvidence: maxPhoneEvidence } : {}),
               rawExternalChatId,
               connectionId: existingMetadata.connectionId || 'max_scraper',
             }
@@ -621,8 +605,8 @@ export async function POST(request: Request) {
     console.log(`[MAX Webhook] chatId=${chatId} direction=${isOutgoing ? 'out' : 'in'} text="${(text || '').slice(0, 50)}"`)
 
     // Привязываем чат к водителю (по телефону/имени из MAX)
-    if (!isOutgoing && !chat.driverId && (effectiveSenderPhone || senderName)) {
-      DriverMatchService.linkChatToDriver(chat.id, { phone: effectiveSenderPhone || undefined, name: senderName }).catch(e =>
+    if (!isOutgoing && !chat.driverId && trustedSenderPhone) {
+      DriverMatchService.linkChatToDriver(chat.id, { phone: trustedSenderPhone }).catch(e =>
         console.error('[MAX Webhook] linkChatToDriver error:', e.message)
       )
     }
@@ -643,6 +627,15 @@ export async function POST(request: Request) {
           maxExternalId,
           maxPhone,
           senderName || null,
+          {
+            phoneEvidence: maxPhone
+              ? {
+                  source: maxPhoneEvidence.sourceKind,
+                  trustedForAutomaticResolution: maxPhoneEvidence.trustedForAutomaticResolution,
+                  observedAt: maxPhoneEvidence.observedAt,
+                }
+              : null,
+          },
         )
         await ContactService.ensureChatLinked(
           chat.id,
