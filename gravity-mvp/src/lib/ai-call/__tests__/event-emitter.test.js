@@ -20,6 +20,7 @@ const assert = require('node:assert/strict')
 const {
     _createPersistEvents,
     ALLOWED_TYPES,
+    buildEventKey,
     validateEvent,
 } = require('../event-emitter')
 
@@ -284,6 +285,39 @@ test('persistEvents: duplicate seq inside one payload inserts once', async () =>
     assert.equal(result.skipped, 1)
     assert.equal(inserted.length, 1)
     assert.equal(result.issues[0].code, 'duplicate_input_seq')
+})
+
+test('buildEventKey is deterministic across retry and includes session identity', () => {
+    const input = { callId: 'call-1', sessionId: 'session-1', seq: 7, type: 'call_completed' }
+    assert.equal(buildEventKey(input), buildEventKey(input))
+    assert.equal(buildEventKey(input), 'call-1:session-1:7:call_completed')
+})
+
+test('persistEvents: parallel retry is reserved once inside one process', async () => {
+    let createCalls = 0
+    const prisma = {
+        aiCallEvent: {
+            findMany: async () => {
+                await new Promise((resolve) => setTimeout(resolve, 10))
+                return []
+            },
+            createMany: async ({ data }) => {
+                createCalls += 1
+                return { count: data.length }
+            },
+        },
+    }
+    const persist = _createPersistEvents(prisma)
+    const payload = {
+        callId: 'parallel-call',
+        events: [{ type: 'call_completed', seq: 1, payload: { sessionId: 'parallel-session' } }],
+    }
+    const [first, second] = await Promise.all([persist(payload), persist(payload)])
+    assert.equal(first.inserted + second.inserted, 1)
+    assert.equal(createCalls, 1)
+    assert.ok([first, second].some((result) =>
+        result.issues.some((issue) => issue.code === 'duplicate_in_flight'),
+    ))
 })
 
 test('persistEvents: createMany called with skipDuplicates=true (idempotency safety)', async () => {

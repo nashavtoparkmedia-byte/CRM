@@ -48,6 +48,10 @@ const ALLOWED_TYPES = Object.freeze(new Set([
     'recovery_attempted',
 ]))
 
+function buildEventKey({ callId, sessionId, seq, type }) {
+    return `${callId}:${sessionId || callId}:${seq}:${type}`
+}
+
 /**
  * Validate one event row's shape. Returns either { ok: true, row }
  * (ready for createMany) or { ok: false, code, got } (skipped).
@@ -115,6 +119,11 @@ function validateEvent(e, callId) {
  *     logs `ai_call_event_insert_failed` (warn) — caller continues.
  */
 function _createPersistEvents(prismaClient) {
+    // Prevents two parallel retries in this Node process from passing the
+    // pre-insert read at the same time. Cross-process safety still requires
+    // the future reviewed UNIQUE(callId, seq) migration.
+    const inFlightKeys = new Set()
+
     return async function persistEvents({ events, callId, opsLog }) {
         const log = opsLog ?? (() => {})
 
@@ -148,7 +157,26 @@ function _createPersistEvents(prismaClient) {
             uniqueRows.push(row)
         }
 
-        if (uniqueRows.length === 0) {
+        const reservedRows = []
+        const reservedKeys = []
+        for (const row of uniqueRows) {
+            const reservationKey = `${callId}:${row.seq}`
+            const eventKey = buildEventKey({
+                callId,
+                sessionId: row.payload?.sessionId,
+                seq: row.seq,
+                type: row.type,
+            })
+            if (inFlightKeys.has(reservationKey)) {
+                issues.push({ code: 'duplicate_in_flight', got: row.seq, type: row.type, eventKey })
+                continue
+            }
+            inFlightKeys.add(reservationKey)
+            reservedKeys.push(reservationKey)
+            reservedRows.push(row)
+        }
+
+        if (reservedRows.length === 0) {
             if (issues.length > 0) {
                 log('warn', 'ai_call_event_all_skipped', { callId, issuesCount: issues.length, issues: issues.slice(0, 5) })
             }
@@ -160,19 +188,19 @@ function _createPersistEvents(prismaClient) {
             // migration can add UNIQUE(callId, seq). This closes sequential
             // retry duplication, but is intentionally not presented as a DB
             // guarantee: two concurrent writers can still race.
-            let rowsToInsert = uniqueRows
+            let rowsToInsert = reservedRows
             if (typeof prismaClient.aiCallEvent.findMany === 'function') {
                 const existing = await prismaClient.aiCallEvent.findMany({
-                    where: { callId, seq: { in: uniqueRows.map(row => row.seq) } },
+                    where: { callId, seq: { in: reservedRows.map(row => row.seq) } },
                     select: { seq: true },
                 })
                 const existingSeqs = new Set(existing.map(row => row.seq))
-                for (const row of uniqueRows) {
+                for (const row of reservedRows) {
                     if (existingSeqs.has(row.seq)) {
                         issues.push({ code: 'duplicate_existing_seq', got: row.seq, type: row.type })
                     }
                 }
-                rowsToInsert = uniqueRows.filter(row => !existingSeqs.has(row.seq))
+                rowsToInsert = reservedRows.filter(row => !existingSeqs.has(row.seq))
             }
             if (rowsToInsert.length === 0) {
                 log('info', 'ai_call_event_duplicate_skipped', {
@@ -197,6 +225,10 @@ function _createPersistEvents(prismaClient) {
                 data: rowsToInsert,
                 skipDuplicates: true,
             })
+            const duplicateCount = issues.filter(issue => issue.code.startsWith('duplicate_')).length
+            if (duplicateCount > 0) {
+                log('info', 'ai_call_event_duplicates_observed', { callId, duplicateCount })
+            }
             return {
                 inserted: result.count,
                 skipped: issues.length,
@@ -218,6 +250,8 @@ function _createPersistEvents(prismaClient) {
                 errored: true,
                 issues,
             }
+        } finally {
+            for (const key of reservedKeys) inFlightKeys.delete(key)
         }
     }
 }
@@ -225,5 +259,6 @@ function _createPersistEvents(prismaClient) {
 module.exports = {
     _createPersistEvents,
     ALLOWED_TYPES,
+    buildEventKey,
     validateEvent,
 }
