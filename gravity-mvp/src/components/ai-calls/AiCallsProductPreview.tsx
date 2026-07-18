@@ -25,6 +25,7 @@ import { createPreviewScenario, type PreviewScenario } from '@/lib/ai-call/scena
 import { ScenarioPreviewPanel } from './ScenarioPreviewPanel'
 import { MockCallSimulator } from './MockCallSimulator'
 import type { PreviewMockRun } from '@/lib/ai-call/mock-preview'
+import { ResultsPreviewPanel } from './ResultsPreviewPanel'
 
 type PreviewView = 'projects' | 'scenario' | 'run' | 'result' | 'settings'
 
@@ -288,7 +289,10 @@ export function AiCallsProductPreview() {
                                     : project,
                             ))
                         }}
+                        onOpenResult={() => setView('result')}
                     />
+                ) : view === 'result' && selectedProject ? (
+                    <ResultsPreviewPanel project={selectedProject} result={lastResult} />
                 ) : (
                     <section className="rounded-xl border border-[#E4ECFC] bg-white p-8 text-center">
                         <Settings2 className="mx-auto h-8 w-8 text-[#2AABEE]" />

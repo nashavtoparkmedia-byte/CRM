@@ -15,9 +15,10 @@ interface Props {
     project: PreviewProject
     scenario: PreviewScenario
     onComplete: (result: PreviewMockRun) => void
+    onOpenResult: () => void
 }
 
-export function MockCallSimulator({ project, scenario, onComplete }: Props) {
+export function MockCallSimulator({ project, scenario, onComplete, onOpenResult }: Props) {
     const [phone, setPhone] = useState('+7 999 000-00-01')
     const [contactName, setContactName] = useState('Тестовый контакт')
     const [answers, setAnswers] = useState('Да, готов обсудить условия и следующий шаг')
@@ -143,6 +144,13 @@ export function MockCallSimulator({ project, scenario, onComplete }: Props) {
                                 <div className="mt-1 text-sm font-medium">{result.qualificationScore}/100</div>
                             </div>
                         </div>
+                        <button
+                            type="button"
+                            onClick={onOpenResult}
+                            className="mt-4 min-h-11 w-full rounded-lg border border-[#2AABEE] px-4 text-sm font-semibold text-[#168AC5] hover:bg-[#F0F9FF]"
+                        >
+                            Открыть полный результат
+                        </button>
                     </>
                 )}
             </div>
