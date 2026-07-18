@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { getScenario, updateScenario, deleteScenario } from '@/lib/ai-call/scenarios'
 import { opsLog } from '@/lib/opsLog'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { validateScenarioQuestions } = require('@/lib/ai-call/scenario-contract')
 
 export const dynamic = 'force-dynamic'
 
@@ -30,13 +33,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params
     let body: any
     try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }) }
+    const questionResult = body.questions !== undefined
+        ? validateScenarioQuestions(body.questions)
+        : null
+    if (questionResult && !questionResult.ok) {
+        return NextResponse.json(
+            { error: 'questions_invalid', issues: questionResult.errors },
+            { status: 400 },
+        )
+    }
 
     try {
         const scenario = await updateScenario(id, {
             ...(body.name !== undefined && { name: String(body.name).trim() }),
             ...(body.description !== undefined && { description: String(body.description) }),
             ...(body.systemPrompt !== undefined && { systemPrompt: String(body.systemPrompt) }),
-            ...(body.questions !== undefined && { questions: body.questions }),
+            ...(questionResult && { questions: questionResult.questions }),
             ...(body.targetDurationSec !== undefined && { targetDurationSec: Number(body.targetDurationSec) }),
             ...(body.isActive !== undefined && { isActive: Boolean(body.isActive) }),
             ...(body.projectId !== undefined && { projectId: String(body.projectId) }),

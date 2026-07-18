@@ -12,6 +12,7 @@
 // Run: `node --test src/lib/ai-call/__tests__/event-emitter.test.js`
 
 'use strict'
+/* eslint-disable @typescript-eslint/no-require-imports */
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
@@ -24,9 +25,12 @@ const {
 
 // ── tiny stub Prisma client ─────────────────────────────────────────
 
-function makeStubPrisma({ throwOnInsert = null, recordInsert = null } = {}) {
+function makeStubPrisma({ throwOnInsert = null, recordInsert = null, existingSeqs = [] } = {}) {
     return {
         aiCallEvent: {
+            async findMany() {
+                return existingSeqs.map(seq => ({ seq }))
+            },
             async createMany({ data, skipDuplicates }) {
                 if (throwOnInsert) throw throwOnInsert
                 if (recordInsert) recordInsert(data, skipDuplicates)
@@ -228,13 +232,14 @@ test('persistEvents: missing callId → skipped, no exception', async () => {
 // Defensive: append-only contract (no update/delete surface)
 // ════════════════════════════════════════════════════════════════════
 
-test('persistEvents: only uses createMany — no update / upsert / delete', async () => {
-    // The stub client only exposes `createMany`. If the helper ever
-    // tried to call `update` or `delete`, the test would crash here.
+test('persistEvents: only reads existing keys then appends — no update / upsert / delete', async () => {
+    // The stub client only exposes `findMany` + `createMany`. If the helper
+    // ever tried to mutate existing rows, the test would crash here.
     // This lock is intentional: any future refactor that introduces
     // mutation API has to update this test, surfacing the contract change.
     const prisma = {
         aiCallEvent: {
+            findMany: async () => [],
             createMany: async ({ data }) => ({ count: data.length }),
         },
     }
@@ -244,6 +249,41 @@ test('persistEvents: only uses createMany — no update / upsert / delete', asyn
         callId: 'c',
     })
     assert.equal(r.inserted, 1)
+})
+
+test('persistEvents: repeated retry skips an existing (callId, seq)', async () => {
+    let createCalls = 0
+    const prisma = makeStubPrisma({
+        existingSeqs: [1],
+        recordInsert: () => { createCalls += 1 },
+    })
+    const persistEvents = _createPersistEvents(prisma)
+    const result = await persistEvents({
+        events: [{ type: 'greeting_started', seq: 1 }],
+        callId: 'call-retry',
+        opsLog: captureLog(),
+    })
+    assert.equal(result.inserted, 0)
+    assert.equal(result.skipped, 1)
+    assert.equal(result.issues[0].code, 'duplicate_existing_seq')
+    assert.equal(createCalls, 0)
+})
+
+test('persistEvents: duplicate seq inside one payload inserts once', async () => {
+    let inserted = null
+    const prisma = makeStubPrisma({ recordInsert: data => { inserted = data } })
+    const persistEvents = _createPersistEvents(prisma)
+    const result = await persistEvents({
+        events: [
+            { type: 'greeting_started', seq: 1 },
+            { type: 'silence_strike', seq: 1 },
+        ],
+        callId: 'call-batch',
+    })
+    assert.equal(result.inserted, 1)
+    assert.equal(result.skipped, 1)
+    assert.equal(inserted.length, 1)
+    assert.equal(result.issues[0].code, 'duplicate_input_seq')
 })
 
 test('persistEvents: createMany called with skipDuplicates=true (idempotency safety)', async () => {

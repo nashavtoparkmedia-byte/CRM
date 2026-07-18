@@ -137,7 +137,18 @@ function _createPersistEvents(prismaClient) {
             }
         }
 
-        if (validRows.length === 0) {
+        const uniqueRows = []
+        const seenSeqs = new Set()
+        for (const row of validRows) {
+            if (seenSeqs.has(row.seq)) {
+                issues.push({ code: 'duplicate_input_seq', got: row.seq, type: row.type })
+                continue
+            }
+            seenSeqs.add(row.seq)
+            uniqueRows.push(row)
+        }
+
+        if (uniqueRows.length === 0) {
             if (issues.length > 0) {
                 log('warn', 'ai_call_event_all_skipped', { callId, issuesCount: issues.length, issues: issues.slice(0, 5) })
             }
@@ -145,16 +156,45 @@ function _createPersistEvents(prismaClient) {
         }
 
         try {
+            // Application-level retry idempotency until the reviewed future
+            // migration can add UNIQUE(callId, seq). This closes sequential
+            // retry duplication, but is intentionally not presented as a DB
+            // guarantee: two concurrent writers can still race.
+            let rowsToInsert = uniqueRows
+            if (typeof prismaClient.aiCallEvent.findMany === 'function') {
+                const existing = await prismaClient.aiCallEvent.findMany({
+                    where: { callId, seq: { in: uniqueRows.map(row => row.seq) } },
+                    select: { seq: true },
+                })
+                const existingSeqs = new Set(existing.map(row => row.seq))
+                for (const row of uniqueRows) {
+                    if (existingSeqs.has(row.seq)) {
+                        issues.push({ code: 'duplicate_existing_seq', got: row.seq, type: row.type })
+                    }
+                }
+                rowsToInsert = uniqueRows.filter(row => !existingSeqs.has(row.seq))
+            }
+            if (rowsToInsert.length === 0) {
+                log('info', 'ai_call_event_duplicate_skipped', {
+                    callId,
+                    duplicateCount: issues.filter(issue => issue.code.startsWith('duplicate_')).length,
+                })
+                return {
+                    inserted: 0,
+                    skipped: issues.length,
+                    errored: false,
+                    issues,
+                }
+            }
+
             // createMany is a single round-trip and atomic. skipDuplicates
-            // future-proofs against accidental seq collision (won't happen
-            // in normal bridge emission since seq is monotonic per-session,
-            // but harmless safety net).
+            // remains enabled for the future UNIQUE(callId, seq) migration.
             //
             // The `(prismaClient as any).aiCallEvent` access path matches
             // the existing pattern in scenarios.ts — Prisma client types
             // may lag the migration on dev boxes.
             const result = await prismaClient.aiCallEvent.createMany({
-                data: validRows,
+                data: rowsToInsert,
                 skipDuplicates: true,
             })
             return {

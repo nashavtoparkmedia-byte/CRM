@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/users/user-service'
 import { opsLog } from '@/lib/opsLog'
 import { getMockPayload, pickRandomVariant, type MockVariant } from '@/lib/ai-call/mock-payload'
 import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
+import { contactResolutionHttpStatus, resolveAiCallContact } from '@/lib/ai-call/contact-resolution'
+import { decisionFromQualification, validateAiCallDecision } from '@/lib/ai-call/decision-contract'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
     try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }) }
 
     const driverId: string | null = body.driverId ?? null
-    const contactId: string | null = body.contactId ?? null
+    const requestedContactId: string | null = body.contactId ?? null
     const phoneNumber: string | null = body.phoneNumber ?? null
     const scenarioId: string | null = body.scenarioId ?? null
     const variantInput: string = body.variant ?? 'random'
@@ -54,25 +56,23 @@ export async function POST(req: NextRequest) {
             ? pickRandomVariant()
             : (['qualified', 'not_qualified', 'unclear'].includes(variantInput) ? (variantInput as MockVariant) : 'qualified')
 
-    if (!driverId && !contactId && !phoneNumber) {
+    if (!driverId && !requestedContactId && !phoneNumber) {
         return NextResponse.json({ error: 'driverId_or_contactId_or_phoneNumber_required' }, { status: 400 })
     }
 
-    // Resolve phone number for fromNumber/toNumber. We're the "from" side
-    // (the AI bot), the lead is the "to" side.
-    let toNumber = phoneNumber ?? ''
-    if (!toNumber && driverId) {
-        const d = await prisma.driver.findUnique({ where: { id: driverId }, select: { phone: true } })
-        toNumber = d?.phone ?? ''
+    const contactResolution = await resolveAiCallContact({
+        driverId,
+        contactId: requestedContactId,
+        phoneNumber,
+    })
+    if (contactResolution.status !== 'resolved') {
+        return NextResponse.json(
+            { error: contactResolution.reason, contactResolution },
+            { status: contactResolutionHttpStatus(contactResolution) },
+        )
     }
-    if (!toNumber && contactId) {
-        const c = await prisma.contact.findUnique({
-            where: { id: contactId },
-            select: { phones: { where: { isPrimary: true }, select: { phone: true }, take: 1 } },
-        })
-        toNumber = c?.phones[0]?.phone ?? ''
-    }
-    if (!toNumber) toNumber = '+70000000000'
+    const toNumber = contactResolution.phoneE164
+    const contactId = contactResolution.contactId
 
     // Validate scenarioId if passed
     let resolvedScenarioId: string | null = scenarioId
@@ -85,6 +85,21 @@ export async function POST(req: NextRequest) {
     }
 
     const mock = getMockPayload(variant)
+    const decisionValidation = validateAiCallDecision(
+        decisionFromQualification(mock.qualificationResult),
+    )
+    if ('error' in decisionValidation) {
+        opsLog('error', 'ai_call_mock_decision_invalid', {
+            operation: 'ai_call_mock',
+            errorCode: decisionValidation.error.code,
+            errorDetail: decisionValidation.error.detail,
+        })
+        return NextResponse.json(
+            { error: 'invalid_ai_decision', decision: decisionValidation.error.decision },
+            { status: 502 },
+        )
+    }
+    const aiDecision = decisionValidation.decision
     const startedAt = new Date(Date.now() - mock.durationSec * 1000)
     const answeredAt = new Date(startedAt.getTime() + 2000)
     const endedAt = new Date()
@@ -107,7 +122,10 @@ export async function POST(req: NextRequest) {
             hangupCause: 'NORMAL_CLEARING',
             transcript: mock.transcript,
             aiSummary: mock.aiSummary,
-            aiAnalysis: mock.qualificationResult as any,
+            aiAnalysis: {
+                ...mock.qualificationResult,
+                decision: aiDecision,
+            } as any,
             // AI-call specific fields (Prisma generated client; cast to any
             // in case the local node_modules generator is one regen behind)
             isAi: true,
@@ -153,6 +171,7 @@ export async function POST(req: NextRequest) {
             data: {
                 aiAnalysis: {
                     ...mock.qualificationResult,
+                    decision: aiDecision,
                     created_task_id: task.id,
                 } as any,
             },
@@ -172,6 +191,9 @@ export async function POST(req: NextRequest) {
         callId: call.id,
         variant,
         qualificationStatus: mock.qualificationResult.qualification_status,
+        decision: aiDecision,
         createdTask,
+        contactId,
+        contactResolution: contactResolution.source,
     })
 }

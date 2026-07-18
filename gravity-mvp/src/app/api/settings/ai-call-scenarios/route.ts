@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { listScenarios, createScenario } from '@/lib/ai-call/scenarios'
 import { opsLog } from '@/lib/opsLog'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { validateScenarioQuestions } = require('@/lib/ai-call/scenario-contract')
 
 export const dynamic = 'force-dynamic'
 
@@ -41,13 +44,20 @@ export async function POST(req: NextRequest) {
     const systemPrompt = String(body?.systemPrompt ?? '').trim()
     if (!name) return NextResponse.json({ error: 'name_required' }, { status: 400 })
     if (!systemPrompt) return NextResponse.json({ error: 'system_prompt_required' }, { status: 400 })
+    const questionResult = validateScenarioQuestions(body?.questions ?? [])
+    if (!questionResult.ok) {
+        return NextResponse.json(
+            { error: 'questions_invalid', issues: questionResult.errors },
+            { status: 400 },
+        )
+    }
 
     try {
         const scenario = await createScenario({
             name,
             description: body?.description ? String(body.description) : undefined,
             systemPrompt,
-            questions: Array.isArray(body?.questions) ? body.questions : [],
+            questions: questionResult.questions,
             targetDurationSec: body?.targetDurationSec ? Number(body.targetDurationSec) : undefined,
             projectId: body?.projectId ? String(body.projectId) : undefined,
         })

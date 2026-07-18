@@ -7,6 +7,7 @@ import { getCurrentUser } from '@/lib/users/user-service'
 import { opsLog } from '@/lib/opsLog'
 import { originateAiCall } from '@/lib/ai-call/esl-originate'
 import { getScenario, DEFAULT_PROJECT_ID, listScenarios } from '@/lib/ai-call/scenarios'
+import { contactResolutionHttpStatus, resolveAiCallContact } from '@/lib/ai-call/contact-resolution'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,31 +53,27 @@ export async function POST(req: NextRequest) {
     try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid_json' }, { status: 400 }) }
 
     const driverId: string | null = body.driverId ?? null
-    const contactId: string | null = body.contactId ?? null
+    const requestedContactId: string | null = body.contactId ?? null
     const phoneNumber: string | null = body.phoneNumber ?? null
     const scenarioId: string | null = body.scenarioId ?? null
 
-    if (!driverId && !contactId && !phoneNumber) {
+    if (!driverId && !requestedContactId && !phoneNumber) {
         return NextResponse.json({ error: 'driverId_or_contactId_or_phoneNumber_required' }, { status: 400 })
     }
 
-    // Resolve toNumber — same logic as the mock endpoint, so the UI calling
-    // either works identically.
-    let toNumber = phoneNumber ?? ''
-    if (!toNumber && driverId) {
-        const d = await prisma.driver.findUnique({ where: { id: driverId }, select: { phone: true } })
-        toNumber = d?.phone ?? ''
+    const contactResolution = await resolveAiCallContact({
+        driverId,
+        contactId: requestedContactId,
+        phoneNumber,
+    })
+    if (contactResolution.status !== 'resolved') {
+        return NextResponse.json(
+            { error: contactResolution.reason, contactResolution },
+            { status: contactResolutionHttpStatus(contactResolution) },
+        )
     }
-    if (!toNumber && contactId) {
-        const c = await prisma.contact.findUnique({
-            where: { id: contactId },
-            select: { phones: { where: { isPrimary: true }, select: { phone: true }, take: 1 } },
-        })
-        toNumber = c?.phones[0]?.phone ?? ''
-    }
-    if (!toNumber) {
-        return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })
-    }
+    const toNumber = contactResolution.phoneE164
+    const contactId = contactResolution.contactId
 
     // Resolve scenario. Explicit ID wins; otherwise grab the first active
     // scenario from the default "Квалификация лида" project.
@@ -166,5 +163,7 @@ export async function POST(req: NextRequest) {
         fsUuid,
         scenarioId: scenario.id,
         scenarioName: scenario.name,
+        contactId,
+        contactResolution: contactResolution.source,
     })
 }

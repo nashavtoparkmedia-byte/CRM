@@ -166,6 +166,30 @@ export type AiCallOutcomeValue =
     | 'dropped_no_input'
     | 'error'
 
+export type AiCallDecisionKind = 'reply' | 'complete' | 'transfer' | 'stop' | 'error'
+
+export type AiCallNextAction =
+    | 'continue'
+    | 'end_call'
+    | 'transfer_to_manager'
+    | 'retry'
+    | 'none'
+
+/**
+ * Stable boundary between an AI provider and the CRM runtime. Provider output
+ * must be validated before it is persisted or used to trigger a call action.
+ */
+export interface AiCallDecision {
+    kind: AiCallDecisionKind
+    nextAction: AiCallNextAction
+    replyText: string
+    qualification: 'qualified' | 'not_qualified' | 'unclear' | null
+    extractedData: Record<string, string | number | boolean | null>
+    transferRequested: boolean
+    stopReason: string | null
+    errors: string[]
+}
+
 export interface AiCallScenarioQuestion {
     /** Free-text question the AI should naturally weave into the dialog. */
     text: string

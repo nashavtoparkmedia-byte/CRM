@@ -676,6 +676,29 @@ function ScenarioEditor({
                                 placeholder="ключевые слова ответа через запятую (опционально)"
                                 className="h-[8px] rounded-md border border-transparent bg-transparent px-[2px] text-[12px] text-muted-foreground outline-none focus:border-border"
                             />
+                            <textarea
+                                value={Object.entries(q.branches ?? {})
+                                    .map(([intent, followUp]) => `${intent}=${followUp}`)
+                                    .join('\n')}
+                                onChange={(e) => {
+                                    const branches = Object.fromEntries(
+                                        e.target.value
+                                            .split(/\r?\n/)
+                                            .map((line) => {
+                                                const separator = line.indexOf('=')
+                                                if (separator <= 0) return null
+                                                const intent = line.slice(0, separator).trim()
+                                                const followUp = line.slice(separator + 1).trim()
+                                                return intent && followUp ? [intent, followUp] : null
+                                            })
+                                            .filter((entry): entry is [string, string] => entry !== null),
+                                    )
+                                    updateQuestion(idx, { branches })
+                                }}
+                                rows={Math.max(2, Object.keys(q.branches ?? {}).length)}
+                                placeholder={'Ветвления, по одному на строку:\nготов=Когда сможете выйти?'}
+                                className="min-h-[56px] rounded-md border border-transparent bg-transparent px-[2px] py-1 text-[12px] leading-5 text-muted-foreground outline-none focus:border-border"
+                            />
                         </div>
                         <button
                             type="button"
