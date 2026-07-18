@@ -30,6 +30,8 @@ export interface PreviewMockDecision {
 export interface PreviewMockRun {
     sessionId: string
     mode: PreviewMockMode
+    phone: string
+    contactName: string
     durationSec: number
     currentStep: string
     selectedBranch: string
@@ -128,6 +130,8 @@ export function runPreviewMock(input: {
         return {
             sessionId,
             mode,
+            phone: input.phone,
+            contactName: input.contactName,
             durationSec: 8,
             currentStep: 'failed',
             selectedBranch: 'Ошибка контракта',
@@ -181,6 +185,8 @@ export function runPreviewMock(input: {
     return {
         sessionId,
         mode,
+        phone: input.phone,
+        contactName: input.contactName,
         durationSec: Math.max(12, transcript.length * 6),
         currentStep: transferRequested ? 'handoff' : 'finish',
         selectedBranch: transferRequested ? 'Передача менеджеру' : 'Завершение',

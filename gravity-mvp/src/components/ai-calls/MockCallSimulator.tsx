@@ -9,6 +9,7 @@ import {
 } from '@/lib/ai-call/mock-preview'
 import type { PreviewScenario } from '@/lib/ai-call/scenario-preview'
 import type { PreviewProject } from '@/lib/ai-call/product-preview'
+import { ContactResolutionPreview } from './ContactResolutionPreview'
 
 interface Props {
     project: PreviewProject
@@ -56,6 +57,7 @@ export function MockCallSimulator({ project, scenario, onComplete }: Props) {
                     onChange={(event) => setPhone(event.target.value)}
                     className="mt-1 h-11 w-full rounded-lg border border-[#E4ECFC] px-3 outline-none focus:border-[#2AABEE]"
                 />
+                <ContactResolutionPreview phone={phone} />
                 <label className="mt-4 block text-[13px] font-medium">Имя тестового Contact</label>
                 <input
                     value={contactName}
