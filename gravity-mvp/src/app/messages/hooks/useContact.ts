@@ -15,6 +15,12 @@ export type ContactDriver = ContactDriverProfilePayload
 export type SuggestedDriverProfile = ContactDriverProfilePayload
 export type Contact = ContactProfilePayload
 
+type ContactRedirectPayload = {
+    status?: string
+    code?: string
+    canonicalContactId?: string
+}
+
 /**
  * Hook to fetch full Contact data from /api/contacts/:id.
  * Does not fetch if contactId is null/undefined.
@@ -31,12 +37,30 @@ export function useContact(contactId: string | null | undefined) {
     const activeContactIdRef = useRef<string | null>(null)
     const refreshPromiseRef = useRef<{ contactId: string; promise: Promise<void> } | null>(null)
 
-    const fetchContact = useCallback(async (id: string, signal?: AbortSignal): Promise<Contact | null> => {
+    const fetchContact = useCallback(async function fetchContactById(
+        id: string,
+        signal?: AbortSignal,
+        visited: string[] = [],
+    ): Promise<Contact | null> {
+        if (visited.includes(id) || visited.length >= 16) {
+            throw new Error('CONTACT_MERGE_REDIRECT_LOOP')
+        }
         const response = await fetch(`/api/contacts/${id}`, {
             signal,
             cache: 'no-store',
         })
         if (response.status === 404) return null
+        if (response.status === 409) {
+            const redirect = await response.json().catch(() => ({})) as ContactRedirectPayload
+            if (
+                redirect.status === 'merged_contact'
+                && redirect.code === 'CONTACT_MERGED'
+                && redirect.canonicalContactId
+            ) {
+                return fetchContactById(redirect.canonicalContactId, signal, [...visited, id])
+            }
+            throw new Error(redirect.code || `HTTP ${response.status}`)
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.json()
     }, [])
@@ -104,9 +128,10 @@ export function useContact(contactId: string | null | undefined) {
         fetchContact(contactId, controller.signal)
             .then(async data => {
                 if (!controller.signal.aborted && data) {
+                    activeContactIdRef.current = data.id
                     setContact(data)
                     setProfileSyncedAt(data.syncState?.lastSuccessfulAt || null)
-                    await refreshProfiles(contactId, controller.signal)
+                    await refreshProfiles(data.id, controller.signal)
                 } else if (!controller.signal.aborted) {
                     setContact(null)
                 }
@@ -133,7 +158,12 @@ export function useContact(contactId: string | null | undefined) {
         setError(null)
         try {
             const data = await fetchContact(contactId)
-            if (activeContactIdRef.current === contactId) setContact(data)
+            if (
+                activeContactIdRef.current === contactId
+                || (data && activeContactIdRef.current === data.id)
+            ) {
+                setContact(data)
+            }
             return data
         } catch (refetchError: any) {
             setError(refetchError?.message || 'fetch_failed')
@@ -144,9 +174,10 @@ export function useContact(contactId: string | null | undefined) {
     }, [contactId, fetchContact])
 
     const retryProfileSync = useCallback(async (parkCode?: string) => {
-        if (!contactId) return
-        await refreshProfiles(contactId, undefined, true, parkCode)
-    }, [contactId, refreshProfiles])
+        const effectiveContactId = contact?.id || contactId
+        if (!effectiveContactId) return
+        await refreshProfiles(effectiveContactId, undefined, true, parkCode)
+    }, [contact?.id, contactId, refreshProfiles])
 
     return { contact, isLoading, error, refetch, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt }
 }

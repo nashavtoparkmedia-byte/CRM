@@ -16,6 +16,7 @@ import {
 } from '@/lib/contact-profile-ui'
 import { formatProfileRefreshWarning, getContactProfileRefreshDecision } from '@/lib/driver-profiles/refresh-policy'
 import { deriveTelegramBotProfileState } from '@/lib/telegram-bot-profile-state'
+import { resolveCanonicalContactId } from '@/lib/contacts/canonical-contact'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -138,8 +139,29 @@ export async function GET(
       },
     })
 
-    if (!contact || contact.isArchived) {
+    if (!contact) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
+    if (contact.isArchived) {
+      const canonical = await resolveCanonicalContactId(id)
+      if (canonical.kind === 'resolved' && canonical.canonicalContactId !== id) {
+        return NextResponse.json({
+          status: 'merged_contact',
+          code: 'CONTACT_MERGED',
+          originalContactId: id,
+          canonicalContactId: canonical.canonicalContactId,
+          location: `/api/contacts/${canonical.canonicalContactId}`,
+        }, { status: 409 })
+      }
+      return NextResponse.json({
+        error: 'Archived Contact has no safe canonical redirect',
+        code: canonical.kind === 'ambiguous'
+          ? 'CONTACT_MERGE_AMBIGUOUS'
+          : canonical.kind === 'cycle'
+            ? 'CONTACT_MERGE_CYCLE'
+            : 'CONTACT_ARCHIVED_WITHOUT_REDIRECT',
+        contactId: id,
+      }, { status: 409 })
     }
 
     const profileSelect = {

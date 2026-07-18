@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { MessageService } from '@/lib/MessageService'
 import { prisma } from '@/lib/prisma'
 import { buildCanonicalContactSummary } from '@/lib/contact-display'
+import { resolveCanonicalContactId, type CanonicalContactLookup } from '@/lib/contacts/canonical-contact'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram']
 
@@ -32,8 +33,11 @@ async function ensureTelegramListeners() {
         const { initTelegramListeners } = await import('@/app/tg-actions')
         await initTelegramListeners()
         console.log('[API-CONVERSATIONS] Telegram listeners initialized (lazy)')
-    } catch (err: any) {
-        console.error('[API-CONVERSATIONS] Failed to init TG listeners:', err.message)
+    } catch (err: unknown) {
+        console.error(
+            '[API-CONVERSATIONS] Failed to init TG listeners:',
+            err instanceof Error ? err.message : String(err),
+        )
         _tgInitDone = false // Allow retry on next call
     }
 }
@@ -47,9 +51,37 @@ export async function GET() {
         const contactIds = Array.from(new Set(conversations
             .map(conversation => conversation.contactId || conversation.contact?.id)
             .filter((contactId): contactId is string => Boolean(contactId))))
-        const contacts = contactIds.length > 0
+        const contactStates = contactIds.length > 0
             ? await prisma.contact.findMany({
-                where: { id: { in: contactIds }, isArchived: false },
+                where: { id: { in: contactIds } },
+                select: { id: true, isArchived: true },
+            })
+            : []
+        const statesById = new Map(contactStates.map(contact => [contact.id, contact]))
+        const canonicalResolutionById = new Map<string, CanonicalContactLookup>()
+        await Promise.all(contactIds.map(async contactId => {
+            const state = statesById.get(contactId)
+            if (state && !state.isArchived) {
+                canonicalResolutionById.set(contactId, {
+                    kind: 'resolved',
+                    originalContactId: contactId,
+                    canonicalContactId: contactId,
+                    merged: false,
+                    contactIds: [contactId],
+                })
+                return
+            }
+            canonicalResolutionById.set(contactId, await resolveCanonicalContactId(contactId))
+        }))
+        const canonicalContactIds = Array.from(new Set(
+            [...canonicalResolutionById.values()]
+                .filter((resolution): resolution is Extract<CanonicalContactLookup, { kind: 'resolved' }> =>
+                    resolution.kind === 'resolved')
+                .map(resolution => resolution.canonicalContactId),
+        ))
+        const contacts = canonicalContactIds.length > 0
+            ? await prisma.contact.findMany({
+                where: { id: { in: canonicalContactIds }, isArchived: false },
                 select: {
                     id: true,
                     displayName: true,
@@ -74,9 +106,9 @@ export async function GET() {
                 },
             })
             : []
-        const profiles = contactIds.length > 0
+        const profiles = canonicalContactIds.length > 0
             ? await prisma.driver.findMany({
-                where: { contactId: { in: contactIds } },
+                where: { contactId: { in: canonicalContactIds } },
                 select: {
                     id: true,
                     contactId: true,
@@ -97,9 +129,20 @@ export async function GET() {
             profilesByContactId.set(profile.contactId, grouped)
         }
         const enriched = conversations.map(conversation => {
-            const contactId = conversation.contactId || conversation.contact?.id
-            const contact = contactId ? contactsById.get(contactId) : null
-            if (!contact) return conversation
+            const originalContactId = conversation.contactId || conversation.contact?.id
+            const resolution = originalContactId
+                ? canonicalResolutionById.get(originalContactId)
+                : null
+            const canonicalContactId = resolution?.kind === 'resolved'
+                ? resolution.canonicalContactId
+                : originalContactId
+            const contact = canonicalContactId ? contactsById.get(canonicalContactId) : null
+            if (!contact) {
+                return {
+                    ...conversation,
+                    contactResolutionStatus: resolution?.kind ?? 'unresolved',
+                }
+            }
             const providerChannels = contact.phones.length > 0
                 ? PROFILE_CHANNELS
                 : Array.from(new Set([
@@ -114,19 +157,24 @@ export async function GET() {
             })
             return {
                 ...conversation,
+                contactId: contact.id,
+                originalContactId: originalContactId !== contact.id ? originalContactId : undefined,
+                contactResolutionStatus: resolution?.kind ?? 'resolved',
                 contact: {
                     ...(conversation.contact || { id: contact.id, displayName: contact.displayName }),
+                    id: contact.id,
+                    displayName: contact.displayName,
                     canonicalSummary,
                 },
             }
         })
         return NextResponse.json(enriched)
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[API-CONVERSATIONS] GET Error:', error)
         return NextResponse.json({ 
             error: 'Internal Server Error', 
-            details: error.message,
-            stack: error.stack 
+            details: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
         }, { status: 500 })
     }
 }
