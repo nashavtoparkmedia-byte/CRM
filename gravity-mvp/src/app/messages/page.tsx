@@ -1,8 +1,9 @@
 import ChatsLayout from "./components/ChatsLayout"
 import MessagesShell from "./components/MessagesShell"
 import { SectionDescription } from "@/components/ui/SectionDescription"
-import { ContactService } from "@/lib/ContactService"
+import { normalizePhoneE164 } from "@/lib/phoneUtils"
 import { prisma } from "@/lib/prisma"
+import { resolveStrictPhoneOwnership } from "@/lib/contacts/strict-phone-ownership"
 
 export default async function MessagesPage({
     searchParams
@@ -17,98 +18,36 @@ export default async function MessagesPage({
     if (!idParam && (typeof resolvedParams.driver === 'string' || typeof resolvedParams.phone === 'string')) {
         try {
             let chat = null
-            // Try by driverId first
             if (typeof resolvedParams.driver === 'string') {
-                chat = await prisma.chat.findFirst({
-                    where: { driverId: resolvedParams.driver },
-                    orderBy: { lastMessageAt: 'desc' },
-                    select: { id: true },
+                const driver = await prisma.driver.findUnique({
+                    where: { id: resolvedParams.driver },
+                    select: { id: true, contactId: true },
                 })
-            }
-            // Fallback: search by phone
-            if (!chat && typeof resolvedParams.phone === 'string') {
-                const phone = resolvedParams.phone.replace(/\D/g, '')
-                if (phone.length >= 10) {
-                    const last10 = phone.slice(-10)
-                    // Search by externalChatId (WhatsApp uses phone as chat ID)
+                if (driver) {
                     chat = await prisma.chat.findFirst({
-                        where: { externalChatId: { contains: last10 } },
-                        orderBy: { lastMessageAt: 'desc' },
+                        where: driver.contactId
+                            ? { contactId: driver.contactId }
+                            : { driverId: driver.id },
+                        orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
                         select: { id: true },
                     })
-                    // Search by driver phone
-                    if (!chat) {
+                }
+            }
+
+            if (!chat && typeof resolvedParams.phone === 'string') {
+                const normalized = normalizePhoneE164(resolvedParams.phone)
+                if (normalized) {
+                    const ownership = await resolveStrictPhoneOwnership(prisma, normalized)
+                    if (ownership.kind === 'matched') {
                         chat = await prisma.chat.findFirst({
-                            where: { driver: { phone: { contains: last10 } } },
-                            orderBy: { lastMessageAt: 'desc' },
+                            where: { contactId: ownership.contactId },
+                            orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
                             select: { id: true },
                         })
-                    }
-                    // Search by contact phone
-                    if (!chat) {
-                        const contact = await prisma.contact.findFirst({
-                            where: { phones: { some: { phone: { contains: last10 } } } },
-                            select: { id: true },
-                        })
-                        if (contact) {
-                            chat = await prisma.chat.findFirst({
-                                where: { contactId: contact.id },
-                                orderBy: { lastMessageAt: 'desc' },
-                                select: { id: true },
-                            })
-                        }
                     }
                 }
             }
             if (chat) idParam = chat.id
-
-            // If still no chat found and we have a phone, resolve the canonical
-            // Contact first. A URL must never create an orphan Chat or trust an
-            // arbitrary driver id as automatic identity evidence.
-            if (!chat && typeof resolvedParams.phone === 'string') {
-                const phone = resolvedParams.phone.replace(/\D/g, '')
-                if (phone.length >= 10) {
-                    const { normalizePhoneE164 } = await import('@/lib/phoneUtils')
-                    const normalized = normalizePhoneE164(resolvedParams.phone) || `+${phone}`
-                    const externalId = phone.slice(-10)
-                    const contactResult = await ContactService.resolveContact(
-                        'whatsapp',
-                        externalId,
-                        normalized,
-                        normalized,
-                    )
-                    const externalChatId = `whatsapp:${externalId}`
-                    const existingChat = await prisma.chat.findUnique({
-                        where: { externalChatId },
-                        select: { id: true, contactId: true },
-                    })
-                    if (!existingChat) {
-                        const newChat = await prisma.chat.create({
-                            data: {
-                                channel: 'whatsapp',
-                                externalChatId,
-                                name: contactResult.contact.displayName,
-                                contactId: contactResult.contact.id,
-                                contactIdentityId: contactResult.identity.id,
-                                status: 'new',
-                            },
-                            select: { id: true },
-                        })
-                        idParam = newChat.id
-                    } else if (!existingChat.contactId || existingChat.contactId === contactResult.contact.id) {
-                        if (!existingChat.contactId) {
-                            await prisma.chat.update({
-                                where: { id: existingChat.id },
-                                data: {
-                                    contactId: contactResult.contact.id,
-                                    contactIdentityId: contactResult.identity.id,
-                                },
-                            })
-                        }
-                        idParam = existingChat.id
-                    }
-                }
-            }
         } catch {}
     }
     const chatId = typeof idParam === 'string' ? idParam : null

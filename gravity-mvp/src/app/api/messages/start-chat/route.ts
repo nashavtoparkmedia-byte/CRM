@@ -59,7 +59,18 @@ export async function POST(request: Request) {
 
     const contactResult = driver?.contactId
       ? await ContactService.ensureIdentityForContact(driver.contactId, channel, externalId, displayName)
-      : await ContactService.resolveContact(channel, externalId, phone, displayName)
+      : await ContactService.resolveContact(
+          channel,
+          externalId,
+          phone,
+          displayName,
+          {
+            phoneEvidence: phone
+              ? { source: isUnsaved ? 'manual_verified' : 'yandex', trustedForAutomaticResolution: true }
+              : null,
+            ambiguousPhone: 'reject',
+          },
+        )
 
     if (driver && !driver.contactId) {
       const attachment = await attachDriverProfilesToContactManually(contactResult.contact.id, [driver.id], 'operator')
@@ -106,7 +117,10 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[API-START-CHAT] POST Error:', message)
-    const status = ['CONTACT_NOT_FOUND', 'CONTACT_ARCHIVED', 'CONTACT_IDENTITY_CONFLICT'].includes(message) ? 409 : 500
+    const status = [
+      'CONTACT_NOT_FOUND', 'CONTACT_ARCHIVED', 'CONTACT_IDENTITY_CONFLICT',
+      'PHONE_OWNERSHIP_AMBIGUOUS', 'PHONE_IDENTITY_CONFLICT',
+    ].includes(message) ? 409 : 500
     return NextResponse.json({ error: status === 409 ? message : 'Internal Server Error' }, { status })
   }
 }

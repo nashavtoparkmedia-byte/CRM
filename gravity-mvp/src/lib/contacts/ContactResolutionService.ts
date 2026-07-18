@@ -1,4 +1,4 @@
-import { ChatChannel } from '@prisma/client'
+import { ChatChannel, Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
@@ -62,9 +62,17 @@ function validatedNormalizedPhone(value: string | null): string | null {
  * providerAccountId cannot scope these queries yet: neither ContactIdentity
  * nor Chat currently persists it.
  */
-export const prismaContactResolutionRepository: ContactResolutionRepository = {
+export type ContactResolutionDb = Pick<
+  Prisma.TransactionClient,
+  'contactIdentity' | 'contactPhone' | 'contactMerge'
+>
+
+export function createPrismaContactResolutionRepository(
+  db: ContactResolutionDb = prisma,
+): ContactResolutionRepository {
+  return {
   async findIdentity(channel, externalUserId) {
-    const identity = await prisma.contactIdentity.findUnique({
+    const identity = await db.contactIdentity.findUnique({
       where: {
         channel_externalId: {
           channel: channel as ChatChannel,
@@ -80,7 +88,7 @@ export const prismaContactResolutionRepository: ContactResolutionRepository = {
   },
 
   async findActivePhoneOwners(normalizedPhone) {
-    const phones = await prisma.contactPhone.findMany({
+    const phones = await db.contactPhone.findMany({
       where: { phone: normalizedPhone, isActive: true },
       select: {
         contact: { select: { id: true, isArchived: true } },
@@ -91,7 +99,7 @@ export const prismaContactResolutionRepository: ContactResolutionRepository = {
   },
 
   async findMergesFromContact(contactId) {
-    return prisma.contactMerge.findMany({
+    return db.contactMerge.findMany({
       where: { mergedId: contactId, action: 'merge' },
       select: {
         mergedId: true,
@@ -99,7 +107,10 @@ export const prismaContactResolutionRepository: ContactResolutionRepository = {
       },
     })
   },
+  }
 }
+
+export const prismaContactResolutionRepository = createPrismaContactResolutionRepository()
 
 /**
  * Read-only planner for later shadow-mode comparison. It does not create,
@@ -113,6 +124,10 @@ export class ContactResolutionService {
 
   static fromPrisma(): ContactResolutionService {
     return new ContactResolutionService(prismaContactResolutionRepository)
+  }
+
+  static fromDb(db: ContactResolutionDb): ContactResolutionService {
+    return new ContactResolutionService(createPrismaContactResolutionRepository(db))
   }
 
   async resolve(input: ContactResolutionInput): Promise<ContactResolutionResult> {

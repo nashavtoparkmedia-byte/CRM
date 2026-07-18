@@ -1,19 +1,36 @@
 import { prisma } from '@/lib/prisma'
 import { ChatChannel, ContactPhoneSource, Prisma } from '@prisma/client'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import type { PhoneEvidenceSource } from '@/lib/contacts/contact-resolution.types'
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
 
 export type ProviderPhoneOwnership =
   | 'not_provided'
+  | 'untrusted'
   | 'not_found'
   | 'matched'
   | 'conflict'
   | 'ambiguous'
 
+export type ResolveContactOptions = {
+  phoneEvidence?: {
+    source: PhoneEvidenceSource
+    trustedForAutomaticResolution: boolean
+    observedAt?: Date | string
+  } | null
+  ambiguousPhone?: 'provider_only' | 'reject'
+}
+
 export interface ResolveResult {
   contact: { id: string; displayName: string }
   identity: { id: string; channel: ChatChannel; externalId: string }
   isNew: boolean
-  resolutionStatus: 'identity_found' | 'phone_matched' | 'contact_created' | 'provider_only_ambiguous'
+  resolutionStatus:
+    | 'identity_found'
+    | 'phone_matched'
+    | 'contact_created'
+    | 'provider_only_ambiguous'
+    | 'provider_only_untrusted'
   phoneOwnership: ProviderPhoneOwnership
 }
 
@@ -51,6 +68,57 @@ function phoneSourceForChannel(channel: ChatChannel): ContactPhoneSource {
   }
 }
 
+function defaultPhoneEvidence(
+  channel: ChatChannel,
+  externalId: string,
+  normalizedPhone: string | null,
+): NonNullable<ResolveContactOptions['phoneEvidence']> | null {
+  if (!normalizedPhone) return null
+  if (channel === ChatChannel.whatsapp) {
+    const identityDigits = externalId.split('@')[0]?.replace(/\D/g, '') || ''
+    const phoneDigits = normalizedPhone.replace(/\D/g, '')
+    const trusted = identityDigits.length >= 10 && identityDigits.slice(-10) === phoneDigits.slice(-10)
+    return {
+      source: trusted ? 'whatsapp_phone_jid' : 'unknown',
+      trustedForAutomaticResolution: trusted,
+    }
+  }
+  if (channel === ChatChannel.avito || channel === ChatChannel.phone) {
+    return { source: 'manual_verified', trustedForAutomaticResolution: true }
+  }
+  return { source: 'unknown', trustedForAutomaticResolution: false }
+}
+
+function metadataRecord(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, Prisma.JsonValue>
+    : {}
+}
+
+function withPhoneEvidenceMetadata(
+  metadata: Prisma.JsonValue | null | undefined,
+  normalizedPhone: string | null,
+  externalId: string,
+  evidence: NonNullable<ResolveContactOptions['phoneEvidence']> | null,
+  result: ProviderPhoneOwnership,
+): Prisma.InputJsonValue {
+  if (!normalizedPhone || !evidence) return metadataRecord(metadata) as Prisma.InputJsonValue
+  const observedAt = evidence.observedAt instanceof Date
+    ? evidence.observedAt.toISOString()
+    : evidence.observedAt || new Date().toISOString()
+  return {
+    ...metadataRecord(metadata),
+    phoneEvidence: {
+      normalizedPhone,
+      sourceKind: evidence.source,
+      observedAt,
+      providerIdentity: externalId,
+      trustedForAutomaticResolution: evidence.trustedForAutomaticResolution,
+      result,
+    },
+  }
+}
+
 /**
  * ContactService — единый сервис для работы с контактами.
  *
@@ -75,8 +143,12 @@ export class ContactService {
     externalId: string,
     phone: string | null | undefined,
     displayName?: string | null,
+    options: ResolveContactOptions = {},
   ): Promise<ResolveResult> {
     const normalized = phone ? normalizePhoneE164(phone) : null
+    const phoneEvidence = options.phoneEvidence === undefined
+      ? defaultPhoneEvidence(channel, externalId, normalized)
+      : options.phoneEvidence
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -84,7 +156,15 @@ export class ContactService {
           if (normalized) {
             await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
           }
-          return this._resolve(tx, channel, externalId, normalized, displayName || null)
+          return this._resolve(
+            tx,
+            channel,
+            externalId,
+            normalized,
+            displayName || null,
+            phoneEvidence,
+            options.ambiguousPhone ?? 'provider_only',
+          )
         }, {
           isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
           timeout: 15000,
@@ -109,6 +189,8 @@ export class ContactService {
     externalId: string,
     normalized: string | null,
     displayName: string | null,
+    phoneEvidence: NonNullable<ResolveContactOptions['phoneEvidence']> | null,
+    ambiguousPhone: 'provider_only' | 'reject',
   ): Promise<ResolveResult> {
 
     // ── Scenario 1: Identity already exists ──────────────────────────────
@@ -116,40 +198,40 @@ export class ContactService {
       where: { channel_externalId: { channel, externalId } },
       include: { contact: { select: { id: true, displayName: true, isArchived: true } } },
     })
+    const trustedPhone = Boolean(normalized && phoneEvidence?.trustedForAutomaticResolution)
 
     if (existingIdentity) {
       let phoneOwnership: ProviderPhoneOwnership = normalized ? 'not_found' : 'not_provided'
 
       if (normalized && existingIdentity.contact.isArchived) {
         phoneOwnership = 'ambiguous'
+      } else if (normalized && !trustedPhone) {
+        phoneOwnership = 'untrusted'
       } else if (normalized) {
-        const phoneRecords = await db.contactPhone.findMany({
-          where: { phone: normalized, isActive: true },
-          select: {
-            id: true,
-            contactId: true,
-            contact: { select: { isArchived: true } },
-          },
-        })
-        const ownership = classifyProviderPhoneOwners(
-          phoneRecords.map(record => ({
-            contactId: record.contactId,
-            isArchived: record.contact.isArchived,
-          })),
-        )
+        const ownership = await resolveStrictPhoneOwnership(db, normalized)
 
         if (ownership.kind === 'ambiguous') {
+          if (ambiguousPhone === 'reject') throw new Error('PHONE_OWNERSHIP_AMBIGUOUS')
           phoneOwnership = 'ambiguous'
         } else if (ownership.kind === 'matched' && ownership.contactId !== existingIdentity.contactId) {
+          if (ambiguousPhone === 'reject') throw new Error('PHONE_IDENTITY_CONFLICT')
           phoneOwnership = 'conflict'
         } else {
           let phoneId = ownership.kind === 'matched'
-            ? phoneRecords.find(record => record.contactId === existingIdentity.contactId)?.id || null
+            ? (await db.contactPhone.findUnique({
+                where: {
+                  contactId_phone: {
+                    contactId: existingIdentity.contactId,
+                    phone: normalized,
+                  },
+                },
+                select: { id: true },
+              }))?.id || null
             : null
 
           if (!phoneId) {
-            const inactivePhone = await db.contactPhone.findFirst({
-              where: { contactId: existingIdentity.contactId, phone: normalized },
+            const inactivePhone = await db.contactPhone.findUnique({
+              where: { contactId_phone: { contactId: existingIdentity.contactId, phone: normalized } },
               select: { id: true, isActive: true },
             })
             if (inactivePhone) {
@@ -182,6 +264,14 @@ export class ContactService {
           phoneOwnership = 'matched'
         }
       }
+      if (normalized && phoneEvidence) {
+        await db.contactIdentity.update({
+          where: { id: existingIdentity.id },
+          data: {
+            metadata: withPhoneEvidenceMetadata(existingIdentity.metadata, normalized, externalId, phoneEvidence, phoneOwnership),
+          },
+        })
+      }
 
       console.log(`[ContactService] Resolved via identity: contact=${existingIdentity.contactId} channel=${channel} externalId=${externalId}`)
       return {
@@ -194,24 +284,15 @@ export class ContactService {
     }
 
     // ── Scenario 2: Phone match → create Identity on existing Contact ────
-    if (normalized) {
-      const phoneRecords = await db.contactPhone.findMany({
-        where: { phone: normalized, isActive: true },
-        select: {
-          id: true,
-          contactId: true,
-          contact: { select: { id: true, displayName: true, isArchived: true } },
-        },
-      })
-      const ownership = classifyProviderPhoneOwners(
-        phoneRecords.map(record => ({
-          contactId: record.contactId,
-          isArchived: record.contact.isArchived,
-        })),
-      )
+    if (normalized && trustedPhone) {
+      const ownership = await resolveStrictPhoneOwnership(db, normalized)
 
       if (ownership.kind === 'matched') {
-        const phoneRecord = phoneRecords.find(record => record.contactId === ownership.contactId)!
+        const phoneRecord = await db.contactPhone.findUnique({
+          where: { contactId_phone: { contactId: ownership.contactId, phone: normalized } },
+          include: { contact: { select: { id: true, displayName: true, isArchived: true } } },
+        })
+        if (!phoneRecord || phoneRecord.contact.isArchived) throw new Error('PHONE_OWNER_NOT_ACTIVE')
         const identity = await db.contactIdentity.create({
           data: {
             contactId: phoneRecord.contactId,
@@ -221,6 +302,7 @@ export class ContactService {
             displayName,
             source: 'auto',
             confidence: 1.0,
+            metadata: withPhoneEvidenceMetadata(null, normalized, externalId, phoneEvidence, 'matched'),
           },
         })
 
@@ -235,6 +317,7 @@ export class ContactService {
       }
 
       if (ownership.kind === 'ambiguous') {
+        if (ambiguousPhone === 'reject') throw new Error('PHONE_OWNERSHIP_AMBIGUOUS')
         const contactDisplayName = displayName || externalId
         const contact = await db.contact.create({
           data: {
@@ -256,6 +339,14 @@ export class ContactService {
               observedPhone: normalized,
               phoneOwnership: 'ambiguous',
               candidateContactIds: ownership.contactIds,
+              phoneEvidence: {
+                normalizedPhone: normalized,
+                sourceKind: phoneEvidence?.source || 'unknown',
+                observedAt: new Date().toISOString(),
+                providerIdentity: externalId,
+                trustedForAutomaticResolution: true,
+                result: 'ambiguous',
+              },
             },
           },
         })
@@ -283,8 +374,8 @@ export class ContactService {
 
     let phoneId: string | null = null
 
-    // Create ContactPhone if phone is known
-    if (normalized) {
+    // Only trusted provider evidence may become ContactPhone automatically.
+    if (normalized && trustedPhone) {
       const newPhone = await db.contactPhone.create({
         data: {
           contactId: contact.id,
@@ -311,6 +402,13 @@ export class ContactService {
         displayName,
         source: 'auto',
         confidence: 1.0,
+        metadata: withPhoneEvidenceMetadata(
+          null,
+          normalized,
+          externalId,
+          phoneEvidence,
+          normalized && trustedPhone ? 'not_found' : normalized ? 'untrusted' : 'not_provided',
+        ),
       },
     })
 
@@ -319,8 +417,10 @@ export class ContactService {
       contact: { id: contact.id, displayName: contactDisplayName },
       identity: { id: identity.id, channel, externalId },
       isNew: true,
-      resolutionStatus: 'contact_created',
-      phoneOwnership: normalized ? 'not_found' : 'not_provided',
+      resolutionStatus: normalized && !trustedPhone ? 'provider_only_untrusted' : 'contact_created',
+      phoneOwnership: normalized && trustedPhone
+        ? 'not_found'
+        : normalized ? 'untrusted' : 'not_provided',
     }
   }
 

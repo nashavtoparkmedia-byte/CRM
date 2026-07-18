@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { ContactService } from '@/lib/ContactService'
 import { Chat, ChatChannel } from '@prisma/client'
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
 
 /**
  * POST /api/contacts/start-conversation
@@ -40,12 +41,24 @@ export async function POST(req: NextRequest) {
 
     const externalId = normalized.replace('+', '')
 
+    const ownership = await resolveStrictPhoneOwnership(prisma, normalized)
+    if (ownership.kind === 'ambiguous') {
+      return NextResponse.json({
+        error: 'PHONE_OWNERSHIP_AMBIGUOUS',
+        candidateContactIds: ownership.contactIds,
+      }, { status: 409 })
+    }
+
     // Resolve or create Contact via ContactService
     const { contact, identity, isNew: isNewContact } = await ContactService.resolveContact(
       channel,
       externalId,
       normalized,
       null,
+      {
+        phoneEvidence: { source: 'manual_verified', trustedForAutomaticResolution: true },
+        ambiguousPhone: 'reject',
+      },
     )
     const contactProfile = await prisma.contact.findUnique({
       where: { id: contact.id },
@@ -135,6 +148,9 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[contacts/start-conversation] POST Error:', message)
+    if (message === 'PHONE_OWNERSHIP_AMBIGUOUS' || message === 'PHONE_IDENTITY_CONFLICT') {
+      return NextResponse.json({ error: message }, { status: 409 })
+    }
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
