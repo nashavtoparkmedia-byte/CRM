@@ -23,6 +23,8 @@ import {
 } from '@/lib/ai-call/product-preview'
 import { createPreviewScenario, type PreviewScenario } from '@/lib/ai-call/scenario-preview'
 import { ScenarioPreviewPanel } from './ScenarioPreviewPanel'
+import { MockCallSimulator } from './MockCallSimulator'
+import type { PreviewMockRun } from '@/lib/ai-call/mock-preview'
 
 type PreviewView = 'projects' | 'scenario' | 'run' | 'result' | 'settings'
 
@@ -55,6 +57,7 @@ export function AiCallsProductPreview() {
     const [draftName, setDraftName] = useState('')
     const [draftType, setDraftType] = useState<AiCallProjectType>('qualification')
     const [message, setMessage] = useState<string | null>(null)
+    const [lastResult, setLastResult] = useState<PreviewMockRun | null>(null)
 
     const visibleProjects = useMemo(
         () => projects.filter((project) => project.status !== 'archived'),
@@ -273,12 +276,28 @@ export function AiCallsProductPreview() {
                             [selectedProject.id]: scenario,
                         }))}
                     />
+                ) : view === 'run' && selectedProject && scenarios[selectedProject.id] ? (
+                    <MockCallSimulator
+                        project={selectedProject}
+                        scenario={scenarios[selectedProject.id]}
+                        onComplete={(result) => {
+                            setLastResult(result)
+                            setProjects((current) => current.map((project) =>
+                                project.id === selectedProject.id
+                                    ? { ...project, mockRuns: project.mockRuns + 1, updatedAt: 'Только что' }
+                                    : project,
+                            ))
+                        }}
+                    />
                 ) : (
                     <section className="rounded-xl border border-[#E4ECFC] bg-white p-8 text-center">
                         <Settings2 className="mx-auto h-8 w-8 text-[#2AABEE]" />
                         <h2 className="mt-3 text-[17px] font-semibold">{NAV_ITEMS.find((item) => item.id === view)?.label}</h2>
                         <p className="mt-1 text-sm text-[#64748B]">
-                            {selectedProject ? `Проект: ${selectedProject.name}.` : ''} Раздел будет подключён следующим изолированным commit.
+                            {selectedProject ? `Проект: ${selectedProject.name}.` : ''}
+                            {view === 'result' && lastResult
+                                ? ` Последний mock-результат: ${lastResult.outcome}.`
+                                : ' Раздел будет подключён следующим изолированным commit.'}
                         </p>
                     </section>
                 )}
