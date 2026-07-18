@@ -273,6 +273,11 @@ import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { buildTelegramIdentityMetadata } from '@/lib/telegram-identity-metadata'
+import {
+    applyTelegramSharedContactPhone,
+    readTelegramSharedContactMedia,
+} from '@/lib/telegram-shared-contact'
 
 /**
  * Скачивание медиа из Telegram падает transient-ошибкой, если соединение
@@ -397,8 +402,51 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 contactResult.contact.id,
                 contactResult.identity.id,
             )
-        } catch (contactErr: any) {
-            console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
+            const currentIdentity = await prisma.contactIdentity.findUnique({
+                where: { id: contactResult.identity.id },
+                select: { displayName: true, metadata: true },
+            })
+            const observedDisplayName = senderName || currentIdentity?.displayName || null
+            await prisma.contactIdentity.update({
+                where: { id: contactResult.identity.id },
+                data: {
+                    displayName: observedDisplayName,
+                    metadata: buildTelegramIdentityMetadata(
+                        currentIdentity?.metadata,
+                        {
+                            telegramUserId: senderId,
+                            username: message.sender?.username,
+                            firstName: message.sender?.firstName,
+                            lastName: message.sender?.lastName,
+                            displayName: observedDisplayName,
+                            observedAt: now,
+                            source: 'telegram_gramjs',
+                        },
+                    ),
+                },
+            })
+
+            const sharedContact = readTelegramSharedContactMedia(message.media)
+            if (sharedContact) {
+                await applyTelegramSharedContactPhone({
+                    contactId: contactResult.contact.id,
+                    identityId: contactResult.identity.id,
+                    senderTelegramUserId: senderId,
+                    sharedContactUserId: sharedContact.userId,
+                    phoneNumber: sharedContact.phoneNumber,
+                    firstName: sharedContact.firstName,
+                    lastName: sharedContact.lastName,
+                    providerMessageId: externalMsgId,
+                    observedAt: now,
+                    transport: 'gramjs',
+                })
+            }
+        } catch (contactErr: unknown) {
+            console.error(
+                `[${loggerPrefix}] ContactService error (non-blocking): ${
+                    contactErr instanceof Error ? contactErr.message : String(contactErr)
+                }`,
+            )
         }
         // ──────────────────────────────────────────────────────────
 

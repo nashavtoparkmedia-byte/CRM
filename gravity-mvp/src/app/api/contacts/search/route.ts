@@ -9,6 +9,7 @@ import {
   normalizeContactPhoneDigits,
   normalizeContactSearchText,
 } from '@/lib/contact-search'
+import { normalizeTelegramUsername } from '@/lib/telegram-identity-metadata'
 
 /**
  * GET /api/contacts/search?q=...&limit=10
@@ -38,6 +39,68 @@ export async function GET(req: NextRequest) {
 
     const contactIds = new Set<string>()
     const results: string[] = []
+
+    // ── Stable Telegram identity search ───────────────────────
+    // Username is mutable and therefore never used as an identity key.
+    // Current username ranks above historical observations; telegramUserId
+    // and ContactIdentity.externalId remain the stable lookup keys.
+    const telegramQuery = normalizeTelegramUsername(q)
+    const telegramIdQuery = /^\d{5,}$/.test(q) ? q : null
+    if ((telegramQuery && !isPhoneQuery && telegramQuery.length >= 2) || telegramIdQuery) {
+      const telegramMatches = await prisma.$queryRaw<Array<{ contactId: string; matchRank: number }>>(Prisma.sql`
+        SELECT identity."contactId",
+          CASE
+            WHEN identity."externalId" = ${telegramIdQuery || ''} THEN 0
+            WHEN identity.metadata->>'telegramUserId' = ${telegramIdQuery || ''} THEN 0
+            WHEN lower(COALESCE(identity.metadata->>'username', '')) = ${telegramQuery || ''} THEN 1
+            WHEN lower(COALESCE(identity.metadata->>'username', '')) LIKE ${`${telegramQuery || ''}%`} THEN 2
+            WHEN lower(COALESCE(identity.metadata->>'lastObservedUsername', '')) = ${telegramQuery || ''} THEN 3
+            WHEN EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(identity.metadata->'usernameHistory') = 'array'
+                    THEN identity.metadata->'usernameHistory'
+                  ELSE '[]'::jsonb
+                END
+              ) history
+              WHERE lower(COALESCE(history->>'username', '')) = ${telegramQuery || ''}
+            ) THEN 4
+            ELSE 5
+          END AS "matchRank"
+        FROM "ContactIdentity" identity
+        JOIN "Contact" contact ON contact.id = identity."contactId"
+        WHERE identity.channel = 'telegram'
+          AND identity."isActive" = true
+          AND contact."isArchived" = false
+          AND (
+            identity."externalId" = ${telegramIdQuery || ''}
+            OR identity.metadata->>'telegramUserId' = ${telegramIdQuery || ''}
+            OR lower(COALESCE(identity.metadata->>'username', '')) LIKE ${`%${telegramQuery || ''}%`}
+            OR lower(COALESCE(identity.metadata->>'lastObservedUsername', '')) LIKE ${`%${telegramQuery || ''}%`}
+            OR EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements(
+                CASE
+                  WHEN jsonb_typeof(identity.metadata->'usernameHistory') = 'array'
+                    THEN identity.metadata->'usernameHistory'
+                  ELSE '[]'::jsonb
+                END
+              ) history
+              WHERE lower(COALESCE(history->>'username', '')) LIKE ${`%${telegramQuery || ''}%`}
+            )
+          )
+        ORDER BY "matchRank", identity."contactId"
+        LIMIT ${candidateLimit}
+      `)
+
+      for (const match of telegramMatches) {
+        if (!contactIds.has(match.contactId)) {
+          contactIds.add(match.contactId)
+          results.push(match.contactId)
+        }
+      }
+    }
 
     // ── Phone search ──────────────────────────────────────────
     if (isPhoneQuery && digits.length >= MIN_CONTACT_PHONE_SEARCH_DIGITS) {

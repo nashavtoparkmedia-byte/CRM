@@ -35,6 +35,7 @@ class CrmIntegrationService {
                 // в webhook CRM. CRM при необходимости резолвит через Bot API
                 // (см. /api/tg-media proxy endpoint).
                 const attachments = [];
+                let sharedContact = null;
                 if (ctx.message) {
                     const m = ctx.message;
                     if (m.photo && m.photo.length > 0) {
@@ -107,6 +108,13 @@ class CrmIntegrationService {
                     } else if (m.location) {
                         if (!text) text = `[Локация: ${m.location.latitude},${m.location.longitude}]`;
                     } else if (m.contact) {
+                        sharedContact = {
+                            phoneNumber: m.contact.phone_number || null,
+                            userId: m.contact.user_id != null ? String(m.contact.user_id) : null,
+                            firstName: m.contact.first_name || null,
+                            lastName: m.contact.last_name || null,
+                            providerMessageId: m.message_id != null ? String(m.message_id) : null,
+                        };
                         if (!text) text = `[Контакт: ${m.contact.first_name || ''} ${m.contact.phone_number || ''}]`.trim();
                     }
                 }
@@ -125,6 +133,7 @@ class CrmIntegrationService {
                     firstName: firstName,
                     lastName: lastName,
                     attachments: attachments.length > 0 ? attachments : undefined,  // PR-Ц
+                    sharedContact: sharedContact || undefined,
                 };
 
                 const parsed = new URL(this.crmWebhookUrl);

@@ -26,6 +26,9 @@ describe('Telegram identity metadata', () => {
       telegramUserId: '100500',
       username: 'new_name',
       lastObservedUsername: 'new_name',
+      usernameHistory: [
+        { username: 'old_name', lastObservedAt: '2026-07-17T10:05:00.000Z' },
+      ],
       firstName: 'Ivan',
       lastName: 'Petrov',
       displayName: '@new_name',
@@ -49,6 +52,9 @@ describe('Telegram identity metadata', () => {
     expect(metadata.telegramUserId).toBe('100500')
     expect(metadata.username).toBeNull()
     expect(metadata.lastObservedUsername).toBeNull()
+    expect(metadata.usernameHistory).toEqual([
+      { username: 'old_name', lastObservedAt: '2026-07-17T11:00:00.000Z' },
+    ])
   })
 
   it('rejects a mutable username as the stable identity key', () => {
@@ -56,5 +62,15 @@ describe('Telegram identity metadata', () => {
       telegramUserId: '@operator_name',
       username: 'operator_name',
     })).toThrow('telegramUserId must contain digits only')
+  })
+
+  it('rejects changing the stable telegramUserId on an existing identity', () => {
+    expect(() => buildTelegramIdentityMetadata(
+      { telegramUserId: '100500', username: 'old_name' },
+      {
+        telegramUserId: '100501',
+        username: 'new_name',
+      },
+    )).toThrow('telegramUserId cannot change')
   })
 })

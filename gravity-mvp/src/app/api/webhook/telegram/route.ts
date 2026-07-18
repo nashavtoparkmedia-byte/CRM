@@ -8,6 +8,7 @@ import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
 import { buildTelegramIdentityMetadata } from '@/lib/telegram-identity-metadata'
+import { applyTelegramSharedContactPhone } from '@/lib/telegram-shared-contact'
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
@@ -19,10 +20,15 @@ export async function POST(req: NextRequest) {
         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
 
         // Structure expected from Bot's webhook payload
-        const { telegramId, text, direction, username, timestamp,
+        const { telegramId, text: rawText, direction, username, timestamp,
                 chatType, chatId: tgChatId, chatTitle,
                 firstName, lastName,
-                attachments } = body  // PR-Ц: media attachments from tg-bot
+                attachments, sharedContact } = body  // PR-Ц: media attachments from tg-bot
+        const text = typeof rawText === 'string' && rawText
+            ? rawText
+            : sharedContact?.phoneNumber
+                ? `[Контакт: ${sharedContact.firstName || ''} ${sharedContact.phoneNumber}]`.trim()
+                : ''
 
         if (!telegramId || !text) {
             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
@@ -209,6 +215,20 @@ export async function POST(req: NextRequest) {
                         ),
                     },
                 })
+                if (sharedContact && direction !== 'OUTGOING') {
+                    await applyTelegramSharedContactPhone({
+                        contactId: contactResult.contact.id,
+                        identityId: contactResult.identity.id,
+                        senderTelegramUserId: telegramId,
+                        sharedContactUserId: sharedContact.userId,
+                        phoneNumber: sharedContact.phoneNumber,
+                        firstName: sharedContact.firstName,
+                        lastName: sharedContact.lastName,
+                        providerMessageId: sharedContact.providerMessageId,
+                        observedAt: sentAt,
+                        transport: 'bot_webhook',
+                    })
+                }
             } catch (contactErr: unknown) {
                 console.error(`[WEBHOOK-TG] ContactService error (non-blocking): ${errorMessage(contactErr)}`)
             }

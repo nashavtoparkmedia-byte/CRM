@@ -20,6 +20,9 @@ const workflowMock = vi.hoisted(() => ({
   onOutboundMessage: vi.fn(),
   onGroupInboundMessage: vi.fn(),
 }))
+const sharedContactMock = vi.hoisted(() => ({
+  applyTelegramSharedContactPhone: vi.fn(),
+}))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/ContactService', () => ({ ContactService: contactServiceMock }))
@@ -28,6 +31,7 @@ vi.mock('@/lib/ConversationWorkflowService', () => ({ ConversationWorkflowServic
 vi.mock('@/app/tg-bot-actions', () => ({ sendTelegramBotMessage: vi.fn() }))
 vi.mock('@/app/actions', () => ({ changeDriverLimit: vi.fn() }))
 vi.mock('@/lib/opsLog', () => ({ opsLog: vi.fn() }))
+vi.mock('@/lib/telegram-shared-contact', () => sharedContactMock)
 
 import { POST } from '@/app/api/webhook/telegram/route'
 
@@ -58,6 +62,10 @@ describe('Telegram webhook identity enrichment', () => {
       metadata: { retainedAuditField: 'keep-me' },
     })
     prismaMock.contactIdentity.update.mockResolvedValue({ id: 'identity-1' })
+    sharedContactMock.applyTelegramSharedContactPhone.mockResolvedValue({
+      trustResult: 'trusted_own_contact',
+      resolutionResult: 'phone_added',
+    })
   })
 
   it('uses telegramId as the stable key and records a mutable username observation', async () => {
@@ -90,6 +98,36 @@ describe('Telegram webhook identity enrichment', () => {
           lastObservedSource: 'telegram_webhook',
         }),
       },
+    })
+  })
+
+  it('forwards a shared contact to the strict phone evidence workflow', async () => {
+    const response = await POST(request({
+      telegramId: '100500',
+      text: '[Контакт: Ivan +79990000000]',
+      direction: 'INCOMING',
+      username: 'driver',
+      timestamp: '2026-07-17T12:00:00.000Z',
+      sharedContact: {
+        userId: '100500',
+        phoneNumber: '+79990000000',
+        firstName: 'Ivan',
+        providerMessageId: '77',
+      },
+    }))
+
+    expect(response.status).toBe(200)
+    expect(sharedContactMock.applyTelegramSharedContactPhone).toHaveBeenCalledWith({
+      contactId: 'contact-1',
+      identityId: 'identity-1',
+      senderTelegramUserId: '100500',
+      sharedContactUserId: '100500',
+      phoneNumber: '+79990000000',
+      firstName: 'Ivan',
+      lastName: undefined,
+      providerMessageId: '77',
+      observedAt: new Date('2026-07-17T12:00:00.000Z'),
+      transport: 'bot_webhook',
     })
   })
 })
