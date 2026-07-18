@@ -4,6 +4,34 @@ const KINDS = new Set(['reply', 'complete', 'transfer', 'stop', 'error'])
 const NEXT_ACTIONS = new Set(['continue', 'end_call', 'transfer_to_manager', 'retry', 'none'])
 const QUALIFICATIONS = new Set(['qualified', 'not_qualified', 'unclear'])
 
+const AI_CALL_DECISION_JSON_SCHEMA = Object.freeze({
+    type: 'object',
+    additionalProperties: false,
+    required: [
+        'kind',
+        'nextAction',
+        'replyText',
+        'qualification',
+        'extractedData',
+        'transferRequested',
+        'stopReason',
+        'validationErrors',
+    ],
+    properties: {
+        kind: { type: 'string', enum: [...KINDS] },
+        nextAction: { type: 'string', enum: [...NEXT_ACTIONS] },
+        replyText: { type: 'string' },
+        qualification: { type: ['string', 'null'], enum: [...QUALIFICATIONS, null] },
+        extractedData: {
+            type: 'object',
+            additionalProperties: { type: ['string', 'number', 'boolean', 'null'] },
+        },
+        transferRequested: { type: 'boolean' },
+        stopReason: { type: ['string', 'null'] },
+        validationErrors: { type: 'array', items: { type: 'string' } },
+    },
+})
+
 function isPlainObject(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -22,7 +50,7 @@ function controlledFailure(code, detail) {
                 extractedData: {},
                 transferRequested: false,
                 stopReason: code,
-                errors: detail ? [detail] : [code],
+                validationErrors: detail ? [detail] : [code],
             },
         },
     }
@@ -39,7 +67,7 @@ function validateAiCallDecision(input) {
         'extractedData',
         'transferRequested',
         'stopReason',
-        'errors',
+        'validationErrors',
     ]
     const missing = required.filter((field) => !Object.prototype.hasOwnProperty.call(input, field))
     if (missing.length) return controlledFailure('invalid_decision', `missing_fields:${missing.join(',')}`)
@@ -65,8 +93,8 @@ function validateAiCallDecision(input) {
     if (input.stopReason !== null && typeof input.stopReason !== 'string') {
         return controlledFailure('invalid_decision', 'stop_reason_must_be_string_or_null')
     }
-    if (!Array.isArray(input.errors) || input.errors.some((error) => typeof error !== 'string')) {
-        return controlledFailure('invalid_decision', 'errors_must_be_string_array')
+    if (!Array.isArray(input.validationErrors) || input.validationErrors.some((error) => typeof error !== 'string')) {
+        return controlledFailure('invalid_decision', 'validation_errors_must_be_string_array')
     }
     if (input.transferRequested !== (input.nextAction === 'transfer_to_manager')) {
         return controlledFailure('invalid_decision', 'transfer_action_mismatch')
@@ -99,11 +127,12 @@ function decisionFromQualification(result) {
         extractedData: isPlainObject(result?.lead_data) ? result.lead_data : {},
         transferRequested,
         stopReason: typeof result?.reason === 'string' && result.reason ? result.reason : null,
-        errors: [],
+        validationErrors: [],
     }
 }
 
 module.exports = {
+    AI_CALL_DECISION_JSON_SCHEMA,
     controlledFailure,
     decisionFromQualification,
     parseAiCallDecision,

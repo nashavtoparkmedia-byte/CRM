@@ -15,7 +15,7 @@ const valid = {
     extractedData: { city: 'Казань', experienceYears: 3, hasLicense: true },
     transferRequested: false,
     stopReason: 'scenario_complete',
-    errors: [],
+    validationErrors: [],
 }
 
 test('accepts the complete typed decision contract', () => {
@@ -63,4 +63,14 @@ test('maps a qualification payload to the stable decision contract', () => {
     assert.equal(result.ok, true)
     assert.equal(result.decision.qualification, 'not_qualified')
     assert.deepEqual(result.decision.extractedData, { hasLicense: false })
+})
+
+test('exports a strict JSON schema with every runtime-required field', () => {
+    const { AI_CALL_DECISION_JSON_SCHEMA } = require('../decision-contract')
+    assert.equal(AI_CALL_DECISION_JSON_SCHEMA.additionalProperties, false)
+    assert.ok(AI_CALL_DECISION_JSON_SCHEMA.required.includes('validationErrors'))
+    assert.deepEqual(
+        new Set(AI_CALL_DECISION_JSON_SCHEMA.required),
+        new Set(Object.keys(valid)),
+    )
 })

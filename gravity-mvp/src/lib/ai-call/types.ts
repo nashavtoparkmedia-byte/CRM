@@ -187,7 +187,7 @@ export interface AiCallDecision {
     extractedData: Record<string, string | number | boolean | null>
     transferRequested: boolean
     stopReason: string | null
-    errors: string[]
+    validationErrors: string[]
 }
 
 export interface AiCallScenarioQuestion {
