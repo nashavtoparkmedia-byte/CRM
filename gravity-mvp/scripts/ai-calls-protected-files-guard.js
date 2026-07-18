@@ -9,6 +9,8 @@ const base = process.argv[2] || DEFAULT_BASE
 const repoRoot = path.resolve(__dirname, '..', '..')
 
 const allowedPrefixes = [
+    'gravity-mvp/src/app/ai-calls/',
+    'gravity-mvp/src/components/ai-calls/',
     'gravity-mvp/src/app/api/ai-calls/',
     'gravity-mvp/src/lib/ai-call/',
     'gravity-mvp/src/app/api/settings/ai-call-',
