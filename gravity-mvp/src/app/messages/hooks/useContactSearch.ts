@@ -25,6 +25,7 @@ export interface ContactSearchResult {
   identities: ContactSearchIdentity[]
   channels: string[]
   hasChat: Record<string, string>
+  mainDriverProfileId: string | null
 }
 
 interface SearchState {

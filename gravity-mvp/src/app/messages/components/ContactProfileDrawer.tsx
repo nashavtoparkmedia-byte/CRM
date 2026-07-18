@@ -29,6 +29,31 @@ type LiveReachabilityEntry = {
     error?: string
 }
 
+type ContactMergePreviewPayload = {
+    source: { id: string; displayName: string }
+    target: { id: string; displayName: string }
+    planHash: string
+    sourceVersion: string
+    targetVersion: string
+    confirmationToken: string
+    entities: {
+        identities: { count: number }
+        phones: { count: number }
+        chats: { count: number }
+        messages: { count: number }
+        attachments: { count: number }
+        tasks: { count: number }
+        calls: { count: number }
+        driverProfiles: { count: number }
+        profileAudits: { count: number }
+        telegramBindings: { count: number }
+    }
+    warnings: string[]
+    conflicts: string[]
+    blockers: Array<{ code: string; message: string }>
+    rollback: { mode: 'operator_manifest'; automatic: false }
+}
+
 // Channel display config
 const CHANNEL_CONFIG: Record<string, { label: string; icon: string; color: string; dotColor: string }> = {
     whatsapp:   { label: 'WhatsApp',   icon: '📱', color: 'text-emerald-700 bg-emerald-50', dotColor: 'bg-emerald-500' },
@@ -200,6 +225,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [mergeMode, setMergeMode] = useState<'contact' | 'driver' | null>(null)
     const [mergeLoading, setMergeLoading] = useState(false)
     const [mergeError, setMergeError] = useState<string | null>(null)
+    const [mergePreview, setMergePreview] = useState<ContactMergePreviewPayload | null>(null)
+    const [mergePreviewLoading, setMergePreviewLoading] = useState(false)
     const [mergeSuccess, setMergeSuccess] = useState(false)
     const { results: mergeSearchResults, loading: mergeSearchLoading } = useContactSearch(showMergeDialog ? mergeSearch : '')
     const [customFields, setCustomFields] = useState<ContactProfileField[]>([])
@@ -241,6 +268,47 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         setTags(contact.tags || [])
         setCustomFields(readContactProfileFields(contact.customFields))
     }, [contact])
+
+    useEffect(() => {
+        setMergePreview(null)
+        setMergeError(null)
+        if (!showMergeDialog || mergeMode !== 'contact' || !mergeTarget?.id) return
+
+        const currentContactId = contact?.id || chat?.contactId
+        if (!currentContactId) return
+        const currentContactHasProfile = Boolean(contact?.mainDriverId || contact?.yandexDriverId)
+        const sourceId = currentContactHasProfile ? mergeTarget.id : currentContactId
+        const targetId = currentContactHasProfile ? currentContactId : mergeTarget.id
+        const controller = new AbortController()
+
+        setMergePreviewLoading(true)
+        fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
+            signal: controller.signal,
+        })
+            .then(async response => {
+                const data = await response.json()
+                if (!response.ok) throw new Error(data.error || 'Не удалось подготовить план объединения')
+                return data as ContactMergePreviewPayload
+            })
+            .then(setMergePreview)
+            .catch(error => {
+                if (error instanceof DOMException && error.name === 'AbortError') return
+                setMergeError(error instanceof Error ? error.message : 'Не удалось подготовить план объединения')
+            })
+            .finally(() => {
+                if (!controller.signal.aborted) setMergePreviewLoading(false)
+            })
+
+        return () => controller.abort()
+    }, [
+        showMergeDialog,
+        mergeMode,
+        mergeTarget?.id,
+        contact?.id,
+        contact?.mainDriverId,
+        contact?.yandexDriverId,
+        chat?.contactId,
+    ])
 
     const reachabilityPhone = contact?.phones.find(phone => phone.isPrimary)?.phone || contact?.phones[0]?.phone || null
 
@@ -1524,33 +1592,72 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         : <>Привязать <strong>{displayName}</strong> к водителю <strong>{mergeTarget.fullName || mergeTarget.displayName}</strong>?</>
                                     }
                                 </p>
+                                {mergePreviewLoading && (
+                                    <p className="text-[11px] text-gray-500 flex items-center gap-1">
+                                        <Loader2 size={11} className="animate-spin" />
+                                        Проверяем состав карточек...
+                                    </p>
+                                )}
+                                {mergePreview && (
+                                    <div className="border-y border-[#E8E8E8] py-2 text-[10px] text-gray-600 space-y-1">
+                                        <div className="grid grid-cols-3 gap-x-2 gap-y-1">
+                                            <span>Каналы: {mergePreview.entities.identities.count}</span>
+                                            <span>Телефоны: {mergePreview.entities.phones.count}</span>
+                                            <span>Чаты: {mergePreview.entities.chats.count}</span>
+                                            <span>Сообщения: {mergePreview.entities.messages.count}</span>
+                                            <span>Звонки: {mergePreview.entities.calls.count}</span>
+                                            <span>Задачи: {mergePreview.entities.tasks.count}</span>
+                                            <span>Профили: {mergePreview.entities.driverProfiles.count}</span>
+                                            <span>Аудит: {mergePreview.entities.profileAudits.count}</span>
+                                            <span>Telegram Bot: {mergePreview.entities.telegramBindings.count}</span>
+                                        </div>
+                                        {mergePreview.warnings.map(warning => (
+                                            <p key={warning} className="text-amber-700">{warning}</p>
+                                        ))}
+                                        {mergePreview.conflicts.map(conflict => (
+                                            <p key={conflict} className="text-amber-700">{conflict}</p>
+                                        ))}
+                                        {mergePreview.blockers.map(blocker => (
+                                            <p key={blocker.code} className="text-red-600">{blocker.message}</p>
+                                        ))}
+                                        <p className="text-gray-400">Будет сохранён операторский rollback manifest.</p>
+                                    </div>
+                                )}
                                 {mergeError && <p className="text-[11px] text-red-500 bg-red-50 px-[2px] py-1 rounded">{mergeError}</p>}
                                 <div className="flex gap-[2px]">
-                                    <button onClick={() => { setMergeTarget(null); setMergeError(null) }} className="flex-1 h-[32px] bg-gray-100 text-gray-700 text-[12px] font-semibold rounded-lg hover:bg-gray-200">
+                                    <button onClick={() => { setMergeTarget(null); setMergePreview(null); setMergeError(null) }} className="flex-1 h-[32px] bg-gray-100 text-gray-700 text-[12px] font-semibold rounded-lg hover:bg-gray-200">
                                         Назад
                                     </button>
                                     <button
                                         onClick={async () => {
                                             setMergeLoading(true); setMergeError(null)
                                             try {
-                                                const userId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1] || 'system'
                                                 let res: Response
-                                                if (mergeMode === 'driver') {
+                                                if (mergePreview) {
+                                                    res = await fetch(`/api/contacts/${mergePreview.source.id}/merge-to/${mergePreview.target.id}`, {
+                                                        method: 'POST',
+                                                        headers: { 'Content-Type': 'application/json' },
+                                                        body: JSON.stringify({
+                                                            planHash: mergePreview.planHash,
+                                                            sourceVersion: mergePreview.sourceVersion,
+                                                            targetVersion: mergePreview.targetVersion,
+                                                            confirmationToken: mergePreview.confirmationToken,
+                                                        }),
+                                                    })
+                                                } else if (mergeMode === 'driver') {
                                                     res = await fetch(`/api/contacts/${contact?.id || chat?.contactId}/merge`, {
                                                         method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ driverId: mergeTarget.id, mergedBy: userId }),
+                                                        body: JSON.stringify({ driverId: mergeTarget.id }),
                                                     })
                                                 } else {
-                                                    // contact-to-contact: if current is driver-linked, current is target (survivor)
-                                                    const currentContactHasProfile = Boolean(contact?.mainDriverId || contact?.yandexDriverId)
-                                                    const sourceId = currentContactHasProfile ? mergeTarget.id : (contact?.id || chat?.contactId)
-                                                    const targetId = currentContactHasProfile ? (contact?.id || chat?.contactId) : mergeTarget.id
-                                                    res = await fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
-                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ mergedBy: userId }),
-                                                    })
+                                                    throw new Error('Сначала дождитесь плана объединения')
                                                 }
                                                 const data = await res.json()
+                                                if (data.status === 'merge_confirmation_required' && data.preview) {
+                                                    setMergePreview(data.preview as ContactMergePreviewPayload)
+                                                    setMergeError('Проверьте состав карточек и подтвердите объединение ещё раз')
+                                                    return
+                                                }
                                                 if (!res.ok) throw new Error(data.error || 'Ошибка объединения')
                                                 setMergeSuccess(true)
                                                 refetchContact()
@@ -1561,11 +1668,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                 setMergeLoading(false)
                                             }
                                         }}
-                                        disabled={mergeLoading}
+                                        disabled={
+                                            mergeLoading
+                                            || mergePreviewLoading
+                                            || (mergeMode === 'contact' && !mergePreview)
+                                            || Boolean(mergePreview?.blockers.length)
+                                        }
                                         className="flex-1 h-[32px] bg-[#3390EC] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2B7FD4] disabled:opacity-50 flex items-center justify-center gap-1"
                                     >
                                         {mergeLoading ? <Loader2 size={12} className="animate-spin" /> : <GitMerge size={12} />}
-                                        Объединить
+                                        {mergePreview ? 'Подтвердить' : mergeMode === 'driver' ? 'Привязать' : 'Объединить'}
                                     </button>
                                 </div>
                             </div>
@@ -1599,12 +1711,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     )}
                                     {mergeSearchResults.filter(r => r.id !== contact?.id).map(result => {
                                         const phone = result.phones?.[0]?.phone
-                                        const hasDriver = !!(result as any).driver || result.masterSource === 'yandex'
-                                        const isValidTarget = mergeMode === 'driver' ? hasDriver : true
+                                        const driverProfileId = result.mainDriverProfileId
+                                        const isValidTarget = mergeMode === 'driver' ? Boolean(driverProfileId) : true
                                         return (
                                             <button
                                                 key={result.id}
-                                                onClick={() => isValidTarget && setMergeTarget(mergeMode === 'driver' ? { id: result.id, displayName: result.displayName, fullName: result.displayName } : result)}
+                                                onClick={() => isValidTarget && setMergeTarget(
+                                                    mergeMode === 'driver'
+                                                        ? { id: driverProfileId, displayName: result.displayName, fullName: result.displayName }
+                                                        : result,
+                                                )}
                                                 disabled={!isValidTarget}
                                                 className={`w-full px-3 py-[2px] text-left flex items-center gap-2.5 transition-colors ${
                                                     isValidTarget ? 'hover:bg-blue-50 cursor-pointer' : 'opacity-40 cursor-not-allowed'

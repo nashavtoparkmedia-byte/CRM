@@ -1,43 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
+
 import { ContactMergeService, MergeError } from '@/lib/ContactMergeService'
+import { getCurrentUser } from '@/lib/users/user-service'
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id: contactId } = await params
+  const actor = await getCurrentUser()
+  if (!actor) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
 
-  let body: { driverId?: string; mergedBy?: string }
+  const { id: contactId } = await params
+  let body: { driverId?: unknown }
   try {
-    body = await req.json()
+    body = await req.json() as { driverId?: unknown }
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { driverId, mergedBy } = body
-
-  if (!driverId || typeof driverId !== 'string') {
+  if (typeof body.driverId !== 'string' || !body.driverId) {
     return NextResponse.json({ error: 'driverId is required' }, { status: 400 })
   }
 
   try {
-    const result = await ContactMergeService.mergeContactToDriver(contactId, driverId, mergedBy)
+    const result = await ContactMergeService.mergeContactToDriver(contactId, body.driverId, actor.id)
+    if (result.status === 'merge_confirmation_required') {
+      return NextResponse.json(result, { status: 409 })
+    }
     return NextResponse.json(result)
-  } catch (err: any) {
-    if (err instanceof MergeError) {
-      const statusMap: Record<string, number> = {
+  } catch (error) {
+    if (error instanceof MergeError) {
+      const statusMap: Record<MergeError['code'], number> = {
         CONTACT_NOT_FOUND: 404,
         DRIVER_NOT_FOUND: 404,
         CONTACT_ARCHIVED: 409,
         SURVIVOR_ARCHIVED: 409,
-        CONTACT_LINKED_TO_OTHER_DRIVER: 409,
-        INVALID_MERGE_STATE: 409,
+        SELF_MERGE: 400,
+        DRIVER_PROFILE_NOT_ACTIVE: 409,
+        MERGE_CONFIRMATION_REQUIRED: 409,
+        MERGE_BLOCKED: 409,
+        STALE_MERGE_PLAN: 409,
+        INVALID_CONFIRMATION_TOKEN: 403,
+        ACTOR_MISMATCH: 403,
       }
-      const status = statusMap[err.code] || 500
-      return NextResponse.json({ error: err.message, code: err.code }, { status })
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details ?? null },
+        { status: statusMap[error.code] },
+      )
     }
 
-    console.error('[API merge] Unexpected error:', err)
+    console.error('[API merge] Unexpected error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

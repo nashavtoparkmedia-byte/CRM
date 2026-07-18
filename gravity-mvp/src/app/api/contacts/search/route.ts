@@ -256,6 +256,7 @@ export async function GET(req: NextRequest) {
         identities: c.identities,
         hasChat,
         channels: providerChannels,
+        mainDriverProfileId: c.mainDriverId ?? c.driverProfiles[0]?.id ?? null,
         canonicalSummary,
       }
     })
