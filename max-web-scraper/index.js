@@ -13,6 +13,7 @@ const { chromium } = require('playwright')
 const { SessionController }        = require('./session/SessionController')
 const { TransportInterceptor, OP } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
+const { buildMaxTextMessage, withForwardingMetadata } = require('./pipeline/MessageEnvelope')
 const { MediaPipeline }            = require('./media/MediaPipeline')
 const { MessageSync }              = require('./sync/MessageSync')
 const { InitialHistorySync }       = require('./sync/InitialHistorySync')
@@ -268,17 +269,10 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     payload = { ...payload, senderPhone: contactPhone, phone: contactPhone, phoneEvidence }
   }
 
-  // Переслано: текстовый префикс в content + структурированные метаданные
-  if (msg.forwardedFromId) {
-    const fwdName  = contactStore.getName(msg.forwardedFromId) || msg.forwardedFromId
-    const fwdPhone = contactStore.getPhone(msg.forwardedFromId) || null
-    const prefix   = `[↩ ${msg.forwardedFromId}:${fwdName}]`
-    payload = {
-      ...payload,
-      text:          payload.text ? `${prefix}\n${payload.text}` : prefix,
-      forwardedFrom: { id: msg.forwardedFromId, name: fwdName, phone: fwdPhone },
-    }
-  }
+  payload = withForwardingMetadata(payload, msg, providerIdentity => ({
+    name: contactStore.getName(providerIdentity),
+    phone: contactStore.getPhone(providerIdentity),
+  }))
 
   // Скачиваем вложения
   if (msg.attachments && msg.attachments.length > 0) {
@@ -364,8 +358,7 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
 
 async function sendText(transport, chatId, text, replyToMessageId) {
   const cid = -Date.now()
-  const message = { text, cid, elements: [], attaches: [] }
-  if (replyToMessageId) message.link = { type: 'REPLY', messageId: String(replyToMessageId) }
+  const message = buildMaxTextMessage(text, replyToMessageId, cid)
   try {
     const resp = await transport.sendFrame(OP.SEND_MESSAGE, { chatId, message, notify: true }, { waitResponse: true, timeoutMs: 30_000 })
     // MAX responds with the created message; extract its server-assigned ID

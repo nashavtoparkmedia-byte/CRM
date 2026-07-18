@@ -1,0 +1,17 @@
+{
+  "chatId": "900001",
+  "message": {
+    "id": "d30102",
+    "sender": "700001",
+    "text": "Подпись к изображению",
+    "time": 1784383260000,
+    "attaches": [
+      {
+        "_type": "PHOTO",
+        "baseUrl": "https://fixture.invalid/image.jpg",
+        "name": "image.jpg",
+        "size": 128
+      }
+    ]
+  }
+}

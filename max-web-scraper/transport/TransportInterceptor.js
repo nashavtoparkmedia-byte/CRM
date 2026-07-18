@@ -2,16 +2,20 @@
 
 const fs   = require('fs')
 const path = require('path')
+const { createHash } = require('crypto')
+const { TextDecoder } = require('util')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
 const LAST_MSG_IDS_PATH = path.join(__dirname, '..', 'user_data', 'last-msg-ids.json')
+const MAX_UTF8_DIAGNOSTIC_PREFIX = '[MAX_UTF8_DIAGNOSTIC]'
+const UTF8_FATAL_DECODER = new TextDecoder('utf-8', { fatal: true })
 
 // ─── Custom msgpack decoder for MAX binary protocol ───────────────────────────
 // @msgpack/msgpack throws "key must be string or number" when Timestamp or
 // binary-type values are used as map keys (MAX does this for some internal maps).
 // This hand-rolled decoder is lenient about key types — it stringifies any key.
-function maxMsgpackDecodeAll(buf) {
+function maxMsgpackDecodeAll(buf, options = {}) {
   const view  = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
   let   pos   = 0
 
@@ -29,9 +33,22 @@ function maxMsgpackDecodeAll(buf) {
   function readF32()     { const v = view.getFloat32(pos); pos += 4; return v }
   function readF64()     { const v = view.getFloat64(pos); pos += 8; return v }
   function readStr(len)  {
+    const byteOffset = pos
     const s = buf.slice(pos, pos + len)
     pos += len
-    return Buffer.from(s).toString('utf8')
+    try {
+      return UTF8_FATAL_DECODER.decode(s)
+    } catch {
+      options.onDiagnostic?.({
+        kind: 'invalid_utf8_string',
+        byteOffset,
+        byteLength: s.length,
+        sha256: createHash('sha256').update(s).digest('hex'),
+      })
+      // Preserve current behavior for forensic compatibility. The diagnostic
+      // proves where U+FFFD entered without attempting an unsafe text repair.
+      return Buffer.from(s).toString('utf8')
+    }
   }
   function readBin(len)  { const s = buf.slice(pos, pos + len); pos += len; return s }
 
@@ -841,10 +858,20 @@ class TransportInterceptor {
     let payload = {}
     if (buf.length > 9) {
       const payloadBuf = buf.slice(9)
+      const decodeOptions = {
+        onDiagnostic: diagnostic => {
+          console.warn(`${MAX_UTF8_DIAGNOSTIC_PREFIX} ${JSON.stringify({
+            opcode,
+            frameSeq,
+            reqSeq,
+            ...diagnostic,
+          })}`)
+        },
+      }
       try {
         // Payload is a sequence of msgpack values: preamble fixints first, then the actual
         // payload object/array last. Always take the LAST value; fall back to last object.
-        const values = maxMsgpackDecodeAll(payloadBuf)
+        const values = maxMsgpackDecodeAll(payloadBuf, decodeOptions)
         if (values.length > 0) {
           const last = values[values.length - 1]
           if (last !== null && last !== undefined && typeof last === 'object') {
@@ -866,7 +893,7 @@ class TransportInterceptor {
         let recovered = false
         for (let skip = 1; skip <= 5; skip++) {
           try {
-            const alt = maxMsgpackDecodeAll(payloadBuf.slice(skip))
+            const alt = maxMsgpackDecodeAll(payloadBuf.slice(skip), decodeOptions)
             if (!alt.length) continue
             const last = alt[alt.length - 1]
             if (last !== null && last !== undefined && typeof last === 'object' && !Array.isArray(last)) {
@@ -1243,4 +1270,4 @@ class TransportInterceptor {
   }
 }
 
-module.exports = { TransportInterceptor, OP }
+module.exports = { TransportInterceptor, OP, maxMsgpackDecodeAll }

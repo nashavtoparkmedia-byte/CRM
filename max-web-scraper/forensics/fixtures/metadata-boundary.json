@@ -1,0 +1,21 @@
+{
+  "chatId": "900001",
+  "message": {
+    "id": "d30105",
+    "sender": "700001",
+    "text": "Только пользовательский текст",
+    "time": 1784383440000,
+    "attaches": [
+      {
+        "_type": "FILE",
+        "url": "https://fixture.invalid/file.pdf",
+        "name": "file.pdf",
+        "size": 256
+      }
+    ],
+    "prevM": {
+      "sender": "800001",
+      "text": "Не сериализовать"
+    }
+  }
+}

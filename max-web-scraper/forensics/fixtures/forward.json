@@ -1,0 +1,18 @@
+{
+  "chatId": "900001",
+  "message": {
+    "id": "d30104",
+    "sender": "700001",
+    "text": "",
+    "time": 1784383380000,
+    "attaches": [],
+    "link": {
+      "type": "FORWARD",
+      "message": {
+        "sender": "700777",
+        "text": "Пересланный текст без префикса",
+        "attaches": []
+      }
+    }
+  }
+}

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react"
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
+import { getRenderedMessageText } from "@/lib/max-message-render-text"
 import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
 import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/lib/calls/status"
 import { usePathname, useRouter } from "next/navigation"
@@ -198,7 +199,7 @@ export default function MessageFeed({
 
             // Mark all current items as seen (sync cache provides them at mount)
             uiItemsRef.current.forEach(item => {
-                if (item.type === 'message') seenMessageIds.current.add((item as any).message.id)
+                if (item.type === 'message') seenMessageIds.current.add(item.message.id)
             })
 
             const el = scrollerRef.current
@@ -259,7 +260,7 @@ export default function MessageFeed({
 
         isInitialLoad.current = false
         uiItems.forEach(item => {
-            if (item.type === 'message') seenMessageIds.current.add((item as any).message.id)
+            if (item.type === 'message') seenMessageIds.current.add(item.message.id)
         })
         el.scrollTop = el.scrollHeight
         currentScrollTopRef.current = el.scrollTop
@@ -400,7 +401,7 @@ export default function MessageFeed({
 
     const renderCallMessage = (item: MessageUIItem) => {
         const { message: msg, spacingTop } = item
-        const meta = msg.metadata as Record<string, any> | undefined
+        const meta = msg.metadata as Record<string, unknown> | undefined
         // Prefer the new `status` field (CallStatus enum). Fall back to
         // legacy `disposition` so historical messages still render.
         const rawStatus = (meta?.status as string | undefined) ?? null
@@ -818,20 +819,7 @@ export default function MessageFeed({
                         })()}
 
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
-                            {(() => {
-                                // Hide auto-generated media placeholders ("[Фото]", "[Видео]"
-                                // etc. from waContentWithFallback) — the attachment above
-                                // already shows the media. Real text / captions flow through.
-                                const PLACEHOLDERS = new Set([
-                                    '[Фото]', '[Видео]', '[Голосовое]',
-                                    '[Аудио]', '[Документ]', '[Стикер]', '[Контакт]',
-                                ])
-                                // Strip [↩ Name]\n prefix — already shown as styled header above
-                                const raw = (msg.content || '').replace(/^\[↩ [^\]]+\]\n?/, '')
-                                const trimmed = raw.trim()
-                                if (PLACEHOLDERS.has(trimmed)) return null
-                                return raw || null
-                            })()}
+                            {getRenderedMessageText(msg)}
                             <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]'}`} />
                         </div>
 

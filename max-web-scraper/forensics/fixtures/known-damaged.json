@@ -1,0 +1,24 @@
+[
+  {
+    "id": "replacement-character",
+    "content": "Повреждено: �"
+  },
+  {
+    "id": "raw-attachments",
+    "content": "attachments: [{\"type\":\"PHOTO\"}]"
+  },
+  {
+    "id": "raw-prev-message",
+    "content": "prevM={\"sender\":\"internal\"}"
+  },
+  {
+    "id": "legacy-forward-prefix",
+    "content": "[↩ 700777:Источник]\nСохраненный текст",
+    "metadata": {
+      "forwardedFrom": {
+        "id": "700777",
+        "name": "Источник"
+      }
+    }
+  }
+]

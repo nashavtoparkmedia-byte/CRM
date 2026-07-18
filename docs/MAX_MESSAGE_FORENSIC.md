@@ -1,33 +1,72 @@
 # MAX Message Text Forensic
 
-Status: DEV-only forensic contract. No production history has been changed.
+Status: DEV-only trace and repair-analysis tooling. Production history has not
+been read or changed by this work.
 
-## Confirmed CRM boundary
+## Evidence boundary
 
-- The outbound CRM path passes one `message` value to the MAX scraper endpoint. There is no CRM-side splitting by lines, paragraphs, text length, or repeated content.
-- The inbound MAX webhook stores provider `text` as the Message body. Attachments, reply references, forwarding data, sender identifiers, and source metadata are stored separately in structured metadata and Attachment rows.
-- The Messages feed renders `message.content` as the body and renders media from structured attachments.
+The trace harness replays saved, sanitized MAX payloads through the real
+`TransportInterceptor._normalizeMaxMsg`, `MessageParser.toCrmPayload`, canonical
+MAX webhook persistence mapping, Messages API serialization, and the same pure
+body helper used by `MessageFeed`.
 
-Therefore, a recipient receiving one CRM submission as several MAX bubbles is not caused by a text-splitting operation in the reviewed CRM code. The remaining suspect boundary is the scraper/provider path. This document does not treat that as proven without a scraper trace containing the same client message ID.
+This proves the current code contract for recorded fixture shapes. It is not a
+real-provider acceptance test and does not prove that every MAX protocol frame
+has the same shape.
 
-## Legacy text review
+## Root-cause matrix
 
-Historical MAX messages may contain encoding replacement characters or protocol fragments such as attachment or reply metadata. `max-message-text-forensics.ts` classifies those texts without changing them.
+| Symptom | Current evidence | Conclusion |
+| --- | --- | --- |
+| Replacement character `U+FFFD` | The custom msgpack decoder previously used non-fatal UTF-8 conversion. An invalid UTF-8 fixture enters as `U+FFFD` at that exact boundary. New diagnostics record byte offset, length, and SHA-256 without logging message text. | Decoder entry boundary is proven. The reason a historical real provider frame contained invalid/misaligned bytes is not proven without that original frame. No automatic repair is safe. |
+| Raw `attachments` in body | Current transport, parser, webhook, DB, API, and UI fixture replay keep attachments structured. | No current insertion path was found. Historical source remains unproven. |
+| Raw `prevM` in body | Reply fixtures keep `prevM` out of text and persist only `replyToExternalId`. | No current insertion path was found. Historical source remains unproven. |
+| Forward metadata in body | The scraper prepended `[↩ id:name]` even while sending `forwardedFrom`. | Confirmed current code cause. New messages now keep `forwardedFrom` structured and leave text unchanged. Legacy UI fallback remains for old rows. |
+| One CRM send shown as several recipient bubbles | CRM and scraper construct one text field and one opcode-64 message; no line/length split exists in the reviewed path. | No local split is present. Recipient/provider behavior needs a real provider trace with the same client/provider message identity. |
 
-The dry-run report:
+## New-message contract
 
-- has no Prisma dependency;
-- takes an isolated export only;
-- never produces replacement text;
-- marks every suspicious row for manual review;
-- must be run against an isolated DB copy before any future repair proposal.
+- `content` contains only provider/operator text.
+- Attachments are structured and stored as `MessageAttachment` rows.
+- Replies use `replyToExternalId`.
+- Forwarding uses `metadata.forwardedFrom`.
+- Arbitrary payload objects are never stringified into `content`.
+- Invalid UTF-8 produces a sanitized technical diagnostic. The trace does not
+  claim to reconstruct missing bytes.
+- Repeated equal text remains distinct when provider message IDs differ.
+- Outbound multiline text remains one provider message object.
 
-No repair is automatic. A fragment can resemble a legitimate operator message, so deletion, truncation, or reassembly without original provider evidence would risk message loss.
+## Historical read-only dry-run
 
-## Delivery evidence
+Run only against an isolated DB copy or a separately authorized read-only
+connection:
 
-CRM treats MAX send acknowledgement as `send_requested` until a real provider message ID and delivery confirmation are available. A timeout is not converted to `delivered`; repeated equal text is not deduplicated by content.
+```bash
+MAX_FORENSIC_READ_ONLY=1 \
+DATABASE_URL='postgresql://...' \
+node --experimental-strip-types scripts/max-message-text-dry-run.ts \
+  --output=/tmp/max-message-text-dry-run.json
+```
 
-## Operator guidance
+The runner performs `Message.findMany` only. It reports:
 
-When a MAX message looks damaged, preserve the CRM row and record the chat, CRM message ID, provider message ID, and approximate time. Do not retry solely to repair the display: retry may create a second real provider message. Escalate with the sanitizer-free technical trace; the right panel must not expose raw provider payloads to an operator.
+- classification per suspicious row;
+- recoverable vs manual-review-only;
+- proposed replacement when deterministic;
+- confidence;
+- aggregate counts.
+
+The only deterministic repair currently proposed is removing an exact legacy
+`[↩ id:name]` prefix when matching structured `forwardedFrom` metadata is
+already present. Replacement characters, raw attachment fragments, and raw
+`prevM` fragments remain unrecoverable without source evidence. The runner
+never writes a database row.
+
+## Test status terminology
+
+- `CODE PASS`: source and type contracts.
+- `MOCK/FIXTURE PASS`: sanitized replay and isolated runtime mocks.
+- `REAL PROVIDER NOT TESTED`: no live MAX message was sent or received by this
+  DEV work.
+
+Do not promote fixture evidence to production/provider acceptance.

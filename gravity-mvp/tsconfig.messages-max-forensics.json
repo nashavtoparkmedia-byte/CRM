@@ -2,12 +2,22 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "types": ["vitest/globals", "node"]
+    "types": ["vitest/globals", "node"],
+    "paths": {
+      "@/lib/MessageService": ["./typecheck/messages-max-forensics/MessageService.ts"],
+      "@/lib/messageEvents": ["./typecheck/messages-max-forensics/messageEvents.ts"],
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
+    "scripts/max-message-text-dry-run.ts",
+    "src/lib/max-message-render-text.ts",
     "src/lib/max-message-text-forensics.ts",
+    "src/lib/__tests__/max-message-db-dry-run.test.ts",
+    "src/lib/__tests__/max-message-end-to-end-trace.test.ts",
     "src/lib/__tests__/max-message-text-forensics.test.ts",
-    "src/lib/__tests__/max-message-pipeline-contract.test.ts"
+    "src/lib/__tests__/max-message-pipeline-contract.test.ts",
+    "typecheck/messages-max-forensics/*.ts"
   ],
   "exclude": []
 }
