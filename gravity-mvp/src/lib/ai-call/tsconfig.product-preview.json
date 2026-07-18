@@ -1,0 +1,18 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "../../app/ai-calls/page.tsx",
+    "../../components/ai-calls/**/*.tsx",
+    "./product-preview.ts",
+    "./scenario-preview.ts",
+    "./mock-preview.ts",
+    "./contact-preview.ts",
+    "./handoff-preview.ts",
+    "./result-preview.ts",
+    "./provider-preview.ts"
+  ]
+}
