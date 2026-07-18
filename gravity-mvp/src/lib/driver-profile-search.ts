@@ -1,5 +1,9 @@
 import { normalizeContactPhoneDigits, normalizeContactSearchText } from '@/lib/contact-search'
 import { getDriverProfileStatusLabel, getEmploymentTypeLabel } from '@/lib/contact-profile-ui'
+import {
+  buildYandexDispatcherTarget,
+  type YandexDispatcherTarget,
+} from '@/lib/driver-profiles/dispatcher-links'
 import { APPROVED_PARKS } from '@/lib/driver-profiles/park-identity'
 
 type DateValue = Date | string | null
@@ -35,6 +39,7 @@ export interface DriverProfileSearchCandidate {
   lastFailedSyncAt?: DateValue
   lastErrorSummary?: string | null
   contact?: DriverProfileSearchContact | null
+  dispatcherConnection?: DriverCatalogConnection | null
 }
 
 export interface DriverCatalogConnection {
@@ -80,6 +85,7 @@ export interface DriverSearchResult {
   isMain: boolean
   anomaly: string | null
   anomalies: string[]
+  dispatcher: YandexDispatcherTarget
 }
 
 export interface DriverCatalogSummary {
@@ -167,6 +173,7 @@ export function addDriverCatalogSyncMetadata(
       lastSuccessfulSyncAt: connection?.lastSuccessfulSyncAt || null,
       lastFailedSyncAt: connection?.lastFailedSyncAt || null,
       lastErrorSummary: connection?.lastErrorSummary || null,
+      dispatcherConnection: connection,
     }
   })
 }
@@ -322,5 +329,20 @@ export function toDriverSearchResult(profile: DriverProfileSearchCandidate): Dri
     isMain: Boolean(profile.contact && profile.contact.mainDriverId === profile.id),
     anomaly: anomalies[0] || null,
     anomalies,
+    dispatcher: buildYandexDispatcherTarget({
+      profile: {
+        externalDriverProfileId: profile.externalDriverProfileId,
+        externalParkId: profile.externalParkId,
+        phone: profile.phone,
+        parkName: profile.park?.parkName || null,
+      },
+      connection: profile.dispatcherConnection
+        ? {
+            externalParkId: profile.dispatcherConnection.externalParkId,
+            park: profile.dispatcherConnection.park,
+          }
+        : null,
+      configuredBaseUrl: process.env.YANDEX_DISPATCHER_BASE_URL,
+    }),
   }
 }

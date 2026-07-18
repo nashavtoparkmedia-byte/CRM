@@ -15,6 +15,7 @@ import {
     isSuggestedProfileSelectable,
 } from "@/lib/contact-profile-ui"
 import DriverCatalogSearchActions from "./DriverCatalogSearchActions"
+import DispatcherProfileActions from "./DispatcherProfileActions"
 
 type ProfileSyncViewState = 'idle' | 'syncing' | 'success' | 'error'
 
@@ -271,6 +272,7 @@ export default function ContactDriverProfilesPanel({
                     <div className="mt-0.5 text-[11px] text-gray-700">{employmentLabel(profile)}</div>
                     <div className="text-[10px] text-gray-500">{formatPhone(profile.phone)}</div>
                     <div className="text-[9px] text-gray-500">{profile.suggestionBasisLabel || 'Основание предложения не определено'}</div>
+                    <DispatcherProfileActions target={profile.dispatcher} compact />
                     {historical && <div className="mt-0.5 text-[9px] font-medium text-gray-500">Исторический профиль</div>}
                     {disabled && (
                         <div className="mt-1 text-[10px] font-medium text-red-600">
@@ -386,6 +388,7 @@ export default function ContactDriverProfilesPanel({
                         <div className="mt-0.5 text-[10px] text-gray-600">{mainProfile.parkName} · {employmentLabel(mainProfile)}</div>
                         <div className="text-[10px] text-gray-600">{formatPhone(mainProfile.phone)} · {statusLabel(mainProfile)}</div>
                         <div className="mt-1 text-[9px] text-gray-500">Синхронизация: {formatDateTime(mainProfile.lastSuccessfulSyncAt || mainProfile.sourceUpdatedAt)}</div>
+                        <DispatcherProfileActions target={mainProfile.dispatcher} />
                     </div>
                 )}
 
@@ -422,6 +425,7 @@ export default function ContactDriverProfilesPanel({
                                                 <div className="truncate text-[11px] font-medium text-[#111]">{profile.fullName}</div>
                                                 <div className="truncate text-[10px] text-gray-500">{employmentLabel(profile)} · {formatPhone(profile.phone)}</div>
                                                 <div className={`text-[9px] font-semibold ${(profile.normalizedStatus || profile.status) === 'working' ? 'text-emerald-700' : 'text-gray-500'}`}>{statusLabel(profile)}</div>
+                                                <DispatcherProfileActions target={profile.dispatcher} compact />
                                             </div>
                                             {profile.id === mainProfile?.id ? (
                                                 <span className="shrink-0 rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-semibold text-emerald-700">Главный</span>
@@ -445,6 +449,7 @@ export default function ContactDriverProfilesPanel({
                                                     <div key={profile.id} className="bg-gray-50 px-2 py-1">
                                                         <div className="text-[10px] font-medium text-gray-700">{profile.fullName}</div>
                                                         <div className="text-[9px] text-gray-500">{employmentLabel(profile)} · {formatPhone(profile.phone)} · {statusLabel(profile)}</div>
+                                                        <DispatcherProfileActions target={profile.dispatcher} compact />
                                                     </div>
                                                 ))}
                                             </div>

@@ -37,6 +37,17 @@ function result(overrides: Partial<DriverSearchResult> = {}): DriverSearchResult
         isMain: false,
         anomaly: null,
         anomalies: [],
+        dispatcher: {
+            mode: 'deep_link',
+            url: 'https://fleet.yandex.ru/map/drivers/external-profile-1?park_id=external-park-yoko',
+            parkRootUrl: 'https://fleet.yandex.ru/contractors?park_id=external-park-yoko',
+            parkCode: 'YOKO',
+            parkName: 'YOKO',
+            externalParkId: 'external-park-yoko',
+            externalDriverProfileId: 'external-profile-1',
+            phone: '+79222155750',
+            reason: 'ready',
+        },
         ...overrides,
     }
 }
@@ -77,6 +88,8 @@ describe('DriverCatalogSearchActions', () => {
         expect(screen.getByText('Ремезов Александр Юрьевич')).toBeTruthy()
         expect(screen.getByText('YOKO · Парковый СМЗ')).toBeTruthy()
         expect(screen.getByText('ID: external-profile-1')).toBeTruthy()
+        expect(screen.getByRole('link', { name: 'Диспетчерская' }).getAttribute('href'))
+            .toBe('https://fleet.yandex.ru/map/drivers/external-profile-1?park_id=external-park-yoko')
     })
 
     test('supports manual FIO search and prevents attaching a profile owned by another Contact', async () => {

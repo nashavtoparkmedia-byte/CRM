@@ -318,6 +318,17 @@ describe('ContactDriverProfilesPanel', () => {
             phone: '+79126646745',
             contactId: 'contact-shaburov',
             isMain: true,
+            dispatcher: {
+                mode: 'deep_link',
+                url: 'https://fleet.yandex.ru/map/drivers/external-1?park_id=external-park-1',
+                parkRootUrl: 'https://fleet.yandex.ru/contractors?park_id=external-park-1',
+                parkCode: 'NASH_AVTOPARK',
+                parkName: 'Наш Автопарк',
+                externalParkId: 'external-park-1',
+                externalDriverProfileId: 'external-1',
+                phone: '+79126646745',
+                reason: 'ready',
+            },
         })
         const payload = contact({
             id: 'contact-shaburov',
@@ -340,6 +351,8 @@ describe('ContactDriverProfilesPanel', () => {
         expect(screen.getByTestId('main-driver-profile').textContent).toContain('Шабуров Евгений Анатольевич')
         expect(screen.getByTestId('main-driver-profile').textContent).toContain('Наш Автопарк')
         expect(screen.getByText(/Профили водителя: 1/)).toBeTruthy()
+        expect(screen.getByRole('link', { name: 'Диспетчерская' }).getAttribute('href'))
+            .toBe('https://fleet.yandex.ru/map/drivers/external-1?park_id=external-park-1')
         expect(screen.queryByText('Парк: Яндекс')).toBeNull()
         expect(screen.queryByText('Роль: Водитель')).toBeNull()
     })

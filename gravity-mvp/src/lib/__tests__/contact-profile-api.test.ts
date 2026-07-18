@@ -184,6 +184,11 @@ describe('canonical Contact profile API', () => {
       && profile.suggestionBasisLabel === 'Совпадение номера телефона'
       && profile.linkedContactConflict === false)).toBe(true)
     expect(body.suggestedProfiles.every((profile: { workStatus: string }) => profile.workStatus === 'working')).toBe(true)
+    expect(body.suggestedProfiles.every((profile: {
+      dispatcher: { mode: string; url: string; parkRootUrl: string }
+    }) => profile.dispatcher.mode === 'deep_link'
+      && profile.dispatcher.url.startsWith('https://fleet.yandex.ru/map/drivers/')
+      && profile.dispatcher.parkRootUrl.startsWith('https://fleet.yandex.ru/contractors?park_id='))).toBe(true)
     expect(body.technicalData.profileSourceValues).toHaveLength(6)
     expect(body.technicalData.profileSourceValues[0].employmentTypeCode).toBe('park_employee')
     expect(body.telegramBotState).toMatchObject({

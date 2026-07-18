@@ -1,3 +1,5 @@
+import type { YandexDispatcherTarget } from './driver-profiles/dispatcher-links'
+
 export const CONTACT_PROFILE_PARK_ORDER = [
   'Наш Автопарк',
   'YOKO',
@@ -131,6 +133,7 @@ export interface ContactDriverProfilePayload {
   sourceUpdatedAt: string | null
   lastSuccessfulSyncAt: string | null
   lastFailedSyncAt: string | null
+  dispatcher?: YandexDispatcherTarget
 }
 
 export interface ContactProfileAnomalyPayload {

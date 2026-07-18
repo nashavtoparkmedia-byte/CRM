@@ -17,6 +17,7 @@ import {
 import { formatProfileRefreshWarning, getContactProfileRefreshDecision } from '@/lib/driver-profiles/refresh-policy'
 import { deriveTelegramBotProfileState } from '@/lib/telegram-bot-profile-state'
 import { resolveCanonicalContactId } from '@/lib/contacts/canonical-contact'
+import { buildYandexDispatcherTarget } from '@/lib/driver-profiles/dispatcher-links'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -294,6 +295,21 @@ export async function GET(
         sourceUpdatedAt: dateIsoOrNull(sourceUpdatedAt),
         lastSuccessfulSyncAt: dateIsoOrNull(connection?.lastSuccessfulSyncAt),
         lastFailedSyncAt: dateIsoOrNull(connection?.lastFailedSyncAt),
+        dispatcher: buildYandexDispatcherTarget({
+          profile: {
+            externalDriverProfileId: profile.externalDriverProfileId ?? null,
+            externalParkId: profile.externalParkId ?? null,
+            phone: profile.phone ?? null,
+            parkName: profile.parkName || profile.park?.parkName || profile.lastExternalPark || null,
+          },
+          connection: connection
+            ? {
+                externalParkId: connection.externalParkId,
+                park: connection.park,
+              }
+            : null,
+          configuredBaseUrl: process.env.YANDEX_DISPATCHER_BASE_URL,
+        }),
       }
     }
 

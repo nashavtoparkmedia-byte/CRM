@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { AlertTriangle, Check, Database, Loader2, Search, X } from "lucide-react"
 
 import type { DriverCatalogSummary, DriverSearchResult } from "@/lib/driver-profile-search"
+import DispatcherProfileActions from "./DispatcherProfileActions"
 
 interface DriverCatalogSearchActionsProps {
     contactId: string
@@ -260,6 +261,7 @@ export default function DriverCatalogSearchActions({
                                             <div className="text-[10px] text-gray-500">{formatPhone(result.phone)}</div>
                                             <div className="mt-0.5 break-all text-[9px] text-gray-400">ID: {result.externalDriverProfileId || 'не указан'}</div>
                                             <div className="text-[9px] text-gray-400">Синхронизация: {formatDateTime(result.lastSuccessfulSyncAt)}</div>
+                                            <DispatcherProfileActions target={result.dispatcher} compact />
                                             {result.linkedContact && (
                                                 <div className={`mt-1 text-[10px] font-medium ${linkedToThisContact ? 'text-emerald-700' : 'text-amber-700'}`}>
                                                     {linkedToThisContact ? 'Уже связан с этим контактом' : `Связан с контактом «${result.linkedContact.displayName}»`}
