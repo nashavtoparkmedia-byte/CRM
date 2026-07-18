@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { X, Search, Send, Loader2, AlertTriangle, Phone } from "lucide-react"
 import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
-import { useStartConversation } from "../hooks/useStartConversation"
+import { useStartConversation } from "@/app/messages/hooks/useStartConversation"
 import { useSip } from "@/lib/sip/SipContext"
 import { toast } from "sonner"
 
@@ -22,10 +22,14 @@ const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 type ReachabilityState = {
+    requestKey: string
     status?: 'confirmed' | 'unreachable' | 'checking'
     reachable: boolean | null
     retryable?: boolean
     error?: string
+    cached?: boolean
+    operationalFailure?: boolean
+    connectionHealth?: 'connected' | 'disconnected' | 'unknown' | 'unavailable'
 }
 
 interface NewChatPopoverProps {
@@ -49,77 +53,84 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
     const { loading: starting, error: startError, startByContact, startByPhone, clearError } = useStartConversation()
     const { startPlaceholderOutbound, setActiveCallFsUuid, status: sipStatus } = useSip()
 
-    // Pre-check reachability for new phone numbers on TG/WA/MAX.
-    // Operational failures stay "checking" and are retried; only confirmed
-    // provider answers are allowed to turn the UI green.
-    const [reachability, setReachability] = useState<ReachabilityState | null>(null)
-    const [checking, setChecking] = useState(false)
+    // The server owns TTL, stale decisions and request coalescing. The popover
+    // makes one debounced decision request and never starts a client retry loop.
+    const [reachabilityResult, setReachabilityResult] = useState<ReachabilityState | null>(null)
+    const [checkingKey, setCheckingKey] = useState<string | null>(null)
+    const selectedProviderChannel = CHANNELS.find(c => c.id === selectedChannel)?.dbChannel
+    const reachabilityPhone = query.trim()
+    const isReachabilityPhone = /^[\d\s\+\-\(\)]{7,}$/.test(reachabilityPhone)
+    const isReachabilityChannel =
+        selectedProviderChannel === 'telegram'
+        || selectedProviderChannel === 'whatsapp'
+        || selectedProviderChannel === 'max'
+    const reachabilityRequestKey = isReachabilityChannel && isReachabilityPhone
+        ? `${selectedProviderChannel}:${reachabilityPhone}`
+        : null
+    const reachability = reachabilityResult?.requestKey === reachabilityRequestKey
+        ? reachabilityResult
+        : null
+    const checking = checkingKey === reachabilityRequestKey
 
     useEffect(() => {
-        const channelDef = CHANNELS.find(c => c.id === selectedChannel)
-        const dbChannel = channelDef?.dbChannel
-        const isCheckable = dbChannel === 'telegram' || dbChannel === 'whatsapp' || dbChannel === 'max'
-        const phoneValue = query.trim()
-        const isPhoneInput = /^[\d\s\+\-\(\)]{7,}$/.test(phoneValue)
-
-        // Reset if not checkable or not a phone
-        if (!isCheckable || !isPhoneInput) {
-            setReachability(null)
-            setChecking(false)
-            return
-        }
-
-        setReachability(null)
+        if (!reachabilityRequestKey || !isReachabilityChannel) return
 
         const controller = new AbortController()
-        let retryTimer: ReturnType<typeof setTimeout> | null = null
-        let attempts = 0
-
-        const runCheck = async () => {
-            attempts += 1
-            setChecking(true)
+        const runDecision = async () => {
+            setCheckingKey(reachabilityRequestKey)
             try {
                 const res = await fetch('/api/channels/check-reachability', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: phoneValue, channel: dbChannel }),
+                    body: JSON.stringify({
+                        phone: reachabilityPhone,
+                        channel: selectedProviderChannel,
+                    }),
                     signal: controller.signal,
                 })
                 const data = await res.json()
                 if (!controller.signal.aborted) {
                     const normalized: ReachabilityState = {
                         ...data,
+                        requestKey: reachabilityRequestKey,
                         status: data.status || (data.reachable === false ? 'unreachable' : data.reachable === true ? 'confirmed' : 'checking'),
                     }
-                    setReachability(normalized)
-                    if ((normalized.status === 'checking' || normalized.reachable === null) && normalized.retryable !== false && attempts < 5) {
-                        retryTimer = setTimeout(runCheck, 2_000)
-                    } else {
-                        setChecking(false)
-                    }
+                    setReachabilityResult(normalized)
                 }
-            } catch (err: any) {
-                if (err.name !== 'AbortError') {
-                    console.error('[NewChat] Reachability check error:', err.message)
-                    if (!controller.signal.aborted && attempts < 5) {
-                        setReachability({ status: 'checking', reachable: null, retryable: true, error: 'Проверяем канал...' })
-                        retryTimer = setTimeout(runCheck, 2_000)
-                    }
+            } catch (error: unknown) {
+                if (error instanceof DOMException && error.name === 'AbortError') return
+                if (!controller.signal.aborted) {
+                    const message = error instanceof Error ? error.message : 'Ошибка сети'
+                    console.error('[NewChat] Reachability check error:', message)
+                    setReachabilityResult({
+                        requestKey: reachabilityRequestKey,
+                        status: 'checking',
+                        reachable: null,
+                        retryable: false,
+                        operationalFailure: true,
+                        connectionHealth: 'unavailable',
+                        error: message,
+                    })
                 }
             } finally {
-                if (!controller.signal.aborted && attempts >= 5) setChecking(false)
+                if (!controller.signal.aborted) {
+                    setCheckingKey(current => current === reachabilityRequestKey ? null : current)
+                }
             }
         }
 
-        const timer = setTimeout(runCheck, 600) // debounce 600ms
+        const timer = setTimeout(runDecision, 600)
 
         return () => {
             clearTimeout(timer)
-            if (retryTimer) clearTimeout(retryTimer)
             controller.abort()
-            setChecking(false)
         }
-    }, [query, selectedChannel])
+    }, [
+        isReachabilityChannel,
+        reachabilityPhone,
+        reachabilityRequestKey,
+        selectedProviderChannel,
+    ])
 
     useEffect(() => {
         setTimeout(() => inputRef.current?.focus(), 50)
@@ -268,8 +279,9 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 return
             }
             if (body?.fsUuid) setActiveCallFsUuid(body.fsUuid)
-        } catch (err: any) {
-            toast.error(`Ошибка сети: ${err?.message ?? err}`)
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : String(error)
+            toast.error(`Ошибка сети: ${message}`)
         }
     }
 
@@ -304,6 +316,11 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
         c.phones.find(p => p.isPrimary)?.phone || c.phones[0]?.phone || null
 
     const isPhoneChannelOuter = selectedChannel === 'phone'
+    const reachabilityConnectionBlocked = Boolean(
+        reachability?.operationalFailure
+        || reachability?.connectionHealth === 'disconnected'
+        || reachability?.connectionHealth === 'unavailable',
+    )
     return (
         <div
             ref={popoverRef}
@@ -488,7 +505,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                     </div>
                 </div>
             )}
-            {reachability?.status === 'checking' && reachability.retryable !== false && (
+            {((checking && !reachability) || (reachability?.status === 'checking' && !reachabilityConnectionBlocked)) && (
                 <div className="px-3.5 pb-1.5">
                     <div className="flex items-start gap-1.5 bg-blue-50 text-blue-700 rounded-lg px-2.5 py-1.5">
                         <Loader2 size={12} className="shrink-0 mt-0.5 animate-spin" />
@@ -496,7 +513,7 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                     </div>
                 </div>
             )}
-            {reachability?.status === 'checking' && reachability.retryable === false && (
+            {reachability?.status === 'checking' && reachabilityConnectionBlocked && (
                 <div className="px-3.5 pb-1.5">
                     <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
                         <AlertTriangle size={12} className="shrink-0 mt-0.5" />
@@ -509,6 +526,14 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                     <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
                         <AlertTriangle size={12} className="shrink-0 mt-0.5" />
                         <span className="text-[11px] leading-tight">нет: {reachability.error || 'канал проверен, аккаунт не найден'}</span>
+                    </div>
+                </div>
+            )}
+            {reachability?.status !== 'checking' && reachabilityConnectionBlocked && (
+                <div className="px-3.5 pb-1.5">
+                    <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
+                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                        <span className="text-[11px] leading-tight">нет связи: CRM сейчас не подключена к каналу. Показан сохранённый статус аккаунта</span>
                     </div>
                 </div>
             )}

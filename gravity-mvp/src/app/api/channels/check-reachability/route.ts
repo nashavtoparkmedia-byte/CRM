@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
-import { findIdentityByPhoneAndChannel, updateReachability } from '@/lib/ReachabilityService'
-import { prisma } from '@/lib/prisma'
+import {
+  getProviderConnectionHealth,
+  resolveReachabilityIdentity,
+  updateReachability,
+  type ProviderConnectionHealth,
+  type ReachabilityIdentityResolution,
+} from '@/lib/ReachabilityService'
+import {
+  getOrCreateReachabilityDecision,
+  REACHABILITY_DEFINITIVE_TTL_MS,
+  REACHABILITY_OPERATIONAL_TTL_MS,
+} from '@/lib/reachability-decision-cache'
 
-type CheckChannel = 'telegram' | 'whatsapp' | 'max'
-type ReachabilityState = 'confirmed' | 'unreachable' | 'checking'
+export type CheckChannel = 'telegram' | 'whatsapp' | 'max'
+export type ReachabilityState = 'confirmed' | 'unreachable' | 'checking'
+export type ReachabilityConnectionHealth = ProviderConnectionHealth | 'unavailable'
 
-type ReachabilityResult = {
+export type ReachabilityResult = {
   status: ReachabilityState
   reachable: boolean | null
   confirmed: boolean
@@ -19,33 +31,46 @@ type ReachabilityResult = {
   source?: string
 }
 
+type ReachabilityResponse = ReachabilityResult & {
+  cached: boolean
+  decisionSource: 'persisted' | 'live' | 'cache' | 'coalesced' | 'error'
+  checkedAt: string
+  expiresAt: string
+  connectionHealth: ReachabilityConnectionHealth
+  operationalFailure: boolean
+  identityResolution: ReachabilityIdentityResolution['kind']
+}
+
 const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
 
 /**
  * POST /api/channels/check-reachability
  *
- * Live-check whether a phone number is reachable through a messaging channel.
- *
- * Business states are binary: account exists or does not exist.
- * Operational failures are "checking" and must not be shown as green.
+ * A request is a refresh decision, not an unconditional provider call:
+ * - fresh persisted identity state wins;
+ * - phone-level decisions are cached for a TTL;
+ * - concurrent decisions for the same phone/channel are coalesced;
+ * - operational failures are cached briefly to prevent retry storms.
  */
 export async function POST(req: NextRequest) {
   let requestedChannel: CheckChannel = 'max'
   try {
     const body = await req.json()
-    const { phone: rawPhone, channel } = body
+    const rawPhone = body.phone
+    const channel = body.channel
+    const requestedIdentityId = typeof body.identityId === 'string' ? body.identityId : null
+    const force = body.force === true
 
     if (!rawPhone || !channel) {
       return NextResponse.json(
         { error: 'phone and channel are required' },
-        { status: 400 }
+        { status: 400 },
       )
     }
-
     if (!isCheckChannel(channel)) {
       return NextResponse.json(
         { error: 'Pre-check is supported only for telegram, whatsapp and max' },
-        { status: 400 }
+        { status: 400 },
       )
     }
     requestedChannel = channel
@@ -54,38 +79,144 @@ export async function POST(req: NextRequest) {
     if (!normalized) {
       return NextResponse.json(
         { error: 'Invalid phone number format' },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
-    const result = await checkChannelReachability(channel, normalized)
+    const [identityResolution, storedConnectionHealth] = await Promise.all([
+      resolveReachabilityIdentity(normalized, channel, requestedIdentityId),
+      getProviderConnectionHealth(channel),
+    ])
+    const persisted = freshPersistedDecision(identityResolution, channel, force)
+    if (persisted) {
+      return NextResponse.json(withDecisionMetadata(persisted.result, {
+        cached: true,
+        decisionSource: 'persisted',
+        checkedAtMs: persisted.checkedAtMs,
+        expiresAtMs: persisted.expiresAtMs,
+        connectionHealth: storedConnectionHealth,
+        identityResolution,
+      }))
+    }
 
-    // Persist only definitive outcomes. "checking" means CRM failed to get
-    // a reliable answer and must retry instead of pretending green success.
-    if (result.status === 'confirmed' || result.status === 'unreachable') {
-      const identityId = await findIdentityByPhoneAndChannel(normalized, channel)
-      if (identityId) {
-        if (result.status === 'unreachable') {
-          // Protect confirmed identities: a single negative live check can be
-          // caused by provider limits/privacy/UI flakiness and must not erase
-          // an account proven by a real conversation or delivery confirmation.
-          const existing = await prisma.contactIdentity.findUnique({
-            where: { id: identityId },
-            select: { reachabilityStatus: true },
-          })
-          if (existing?.reachabilityStatus === 'confirmed') {
-            return NextResponse.json(confirmed(channel, { source: 'persisted' }))
-          }
+    const cacheKey = `${channel}:${normalized}`
+    const decision = await getOrCreateReachabilityDecision({
+      key: cacheKey,
+      force,
+      load: async () => {
+        const result = await checkChannelReachability(channel, normalized)
+        return {
+          value: result,
+          ttlMs: result.status === 'checking'
+            ? REACHABILITY_OPERATIONAL_TTL_MS
+            : REACHABILITY_DEFINITIVE_TTL_MS,
         }
-        await updateReachability(identityId, result.status)
+      },
+    })
+
+    let result = decision.value
+    if (identityResolution.kind === 'matched') {
+      if (
+        result.status === 'unreachable'
+        && identityResolution.identity.reachabilityStatus === 'confirmed'
+      ) {
+        result = confirmed(channel, { source: 'persisted_protected' })
+      } else if (result.status === 'confirmed' || result.status === 'unreachable') {
+        await updateReachability(identityResolution.identity.id, result.status)
       }
     }
 
-    return NextResponse.json(result)
-  } catch (err: any) {
-    console.error('[check-reachability] Error:', err.message)
-    return NextResponse.json(checking(requestedChannel, 'Reachability check is retrying'))
+    return NextResponse.json(withDecisionMetadata(result, {
+      cached: decision.source === 'cache',
+      decisionSource: decision.source,
+      checkedAtMs: decision.checkedAtMs,
+      expiresAtMs: decision.expiresAtMs,
+      connectionHealth: effectiveConnectionHealth(
+        result,
+        storedConnectionHealth,
+        decision.source,
+      ),
+      identityResolution,
+    }))
+  } catch (error: unknown) {
+    const now = Date.now()
+    console.error('[check-reachability] Error:', errorMessage(error))
+    return NextResponse.json(withDecisionMetadata(
+      checking(requestedChannel, 'CRM сейчас не может проверить канал', {
+        retryable: false,
+        errorCode: 'decision_failed',
+      }),
+      {
+        cached: false,
+        decisionSource: 'error',
+        checkedAtMs: now,
+        expiresAtMs: now + REACHABILITY_OPERATIONAL_TTL_MS,
+        connectionHealth: 'unavailable',
+        identityResolution: { kind: 'not_found' },
+      },
+    ))
   }
+}
+
+function freshPersistedDecision(
+  resolution: ReachabilityIdentityResolution,
+  channel: CheckChannel,
+  force: boolean,
+): { result: ReachabilityResult; checkedAtMs: number; expiresAtMs: number } | null {
+  if (force || resolution.kind !== 'matched') return null
+  const checkedAt = resolution.identity.reachabilityCheckedAt
+  if (!checkedAt || resolution.identity.reachabilityStatus === 'unknown') return null
+  const checkedAtMs = checkedAt.getTime()
+  const expiresAtMs = checkedAtMs + REACHABILITY_DEFINITIVE_TTL_MS
+  if (expiresAtMs <= Date.now()) return null
+  return {
+    result: resolution.identity.reachabilityStatus === 'confirmed'
+      ? confirmed(channel, { source: 'persisted' })
+      : unreachable(channel, 'Канал проверен: аккаунт у провайдера не найден'),
+    checkedAtMs,
+    expiresAtMs,
+  }
+}
+
+function withDecisionMetadata(
+  result: ReachabilityResult,
+  metadata: {
+    cached: boolean
+    decisionSource: ReachabilityResponse['decisionSource']
+    checkedAtMs: number
+    expiresAtMs: number
+    connectionHealth: ReachabilityConnectionHealth
+    identityResolution: ReachabilityIdentityResolution
+  },
+): ReachabilityResponse {
+  return {
+    ...result,
+    cached: metadata.cached,
+    decisionSource: metadata.decisionSource,
+    checkedAt: new Date(metadata.checkedAtMs).toISOString(),
+    expiresAt: new Date(metadata.expiresAtMs).toISOString(),
+    connectionHealth: metadata.connectionHealth,
+    operationalFailure: result.status === 'checking'
+      && (metadata.connectionHealth === 'disconnected' || metadata.connectionHealth === 'unavailable'),
+    identityResolution: metadata.identityResolution.kind,
+  }
+}
+
+function effectiveConnectionHealth(
+  result: ReachabilityResult,
+  stored: ProviderConnectionHealth,
+  source: 'live' | 'cache' | 'coalesced',
+): ReachabilityConnectionHealth {
+  if (source !== 'cache' && (result.status === 'confirmed' || result.status === 'unreachable')) {
+    return 'connected'
+  }
+  if (result.status === 'checking') {
+    if (result.errorCode === 'client_not_ready' || stored === 'disconnected') {
+      return 'disconnected'
+    }
+    return 'unavailable'
+  }
+  return stored
 }
 
 function isCheckChannel(channel: unknown): channel is CheckChannel {
@@ -95,7 +226,7 @@ function isCheckChannel(channel: unknown): channel is CheckChannel {
 async function checkChannelReachability(channel: CheckChannel, phone: string): Promise<ReachabilityResult> {
   if (channel === 'telegram') {
     const { checkTelegramReachability } = await import('@/app/tg-actions')
-    const result: any = await checkTelegramReachability(phone)
+    const result = await checkTelegramReachability(phone)
     if (result.telegramId) {
       return confirmed(channel, { telegramId: result.telegramId, source: 'telegram' })
     }
@@ -107,7 +238,7 @@ async function checkChannelReachability(channel: CheckChannel, phone: string): P
 
   if (channel === 'whatsapp') {
     const { checkReachability } = await import('@/lib/whatsapp/WhatsAppService')
-    const result: any = await checkReachability(phone)
+    const result = await checkReachability(phone)
     if (result.confirmed) {
       return confirmed(channel, { source: 'whatsapp' })
     }
@@ -141,15 +272,18 @@ async function checkMaxReachability(phone: string): Promise<ReachabilityResult> 
         source: data.source || 'max-scraper',
       })
     }
-
     if (res.status === 404 || data.status === 'unreachable' || data.reachable === false) {
       return unreachable('max', data.error || 'MAX аккаунт не найден')
     }
-
-    return checking('max', data.error || `MAX проверяется (HTTP ${res.status})`)
-  } catch (err: any) {
-    console.error('[check-reachability] MAX error:', err.message)
-    return checking('max', err.message || 'MAX проверяется')
+    return checking('max', data.error || `MAX проверяется (HTTP ${res.status})`, {
+      errorCode: data.errorCode || 'provider_unavailable',
+    })
+  } catch (error: unknown) {
+    console.error('[check-reachability] MAX error:', errorMessage(error))
+    return checking('max', 'CRM сейчас не может проверить MAX', {
+      retryable: false,
+      errorCode: 'provider_unavailable',
+    })
   }
 }
 
@@ -175,7 +309,11 @@ function unreachable(channel: CheckChannel, error?: string): ReachabilityResult 
   }
 }
 
-function checking(channel: CheckChannel, error?: string, extra: Partial<ReachabilityResult> = {}): ReachabilityResult {
+function checking(
+  channel: CheckChannel,
+  error?: string,
+  extra: Partial<ReachabilityResult> = {},
+): ReachabilityResult {
   return {
     status: 'checking',
     reachable: null,
@@ -185,4 +323,8 @@ function checking(channel: CheckChannel, error?: string, extra: Partial<Reachabi
     error,
     ...extra,
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

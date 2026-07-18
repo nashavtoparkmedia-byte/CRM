@@ -1,0 +1,30 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "noEmit": true,
+    "paths": {
+      "@/app/tg-actions": ["./typecheck/messages-reachability/tg-actions.ts"],
+      "@/app/messages/hooks/useStartConversation": ["./typecheck/messages-reachability/useStartConversation.ts"],
+      "@/lib/whatsapp/WhatsAppService": ["./typecheck/messages-reachability/WhatsAppService.ts"],
+      "@/*": ["./src/*"]
+    },
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/app/api/channels/check-reachability/route.ts",
+    "src/app/messages/components/NewChatPopover.tsx",
+    "src/lib/ReachabilityService.ts",
+    "src/lib/channel-reachability-ui.ts",
+    "src/lib/reachability-decision-cache.ts",
+    "src/lib/__tests__/channel-reachability-ui.test.ts",
+    "src/lib/__tests__/reachability-decision-cache.test.ts",
+    "src/lib/__tests__/reachability-route.test.ts",
+    "src/lib/__tests__/reachability-service.test.ts",
+    "src/lib/__tests__/reachability-ui-source.test.ts",
+    "typecheck/messages-reachability/*.ts"
+  ],
+  "exclude": []
+}

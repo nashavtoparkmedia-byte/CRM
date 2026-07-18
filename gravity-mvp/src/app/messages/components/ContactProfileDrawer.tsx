@@ -21,12 +21,15 @@ import {
     writeContactProfileFields,
     type ContactProfileField,
 } from "@/lib/contact-profile-fields"
+import {
+    deriveChannelReachabilityPresentation,
+    type LiveReachabilityDecision,
+} from "@/lib/channel-reachability-ui"
 
-type LiveReachabilityStatus = 'confirmed' | 'unreachable' | 'checking'
-type LiveReachabilityEntry = {
-    status: LiveReachabilityStatus
-    retryable?: boolean
-    error?: string
+type LiveReachabilityEntry = LiveReachabilityDecision & {
+    contactId: string
+    phone: string
+    identityId: string | null
 }
 
 type ContactMergePreviewPayload = {
@@ -118,18 +121,6 @@ function getIdentitySourceBadges(identity: ContactIdentity, identityCount: numbe
         }]
     }
     return []
-}
-
-function getChannelStatusDot(
-    reachable: boolean | null,
-    isOperationallyBlocked: boolean,
-    fallbackTitle: string,
-    confirmedTitle = 'Аккаунт найден у провайдера',
-): { className: string; title: string } {
-    if (isOperationallyBlocked) return { className: 'bg-amber-400', title: fallbackTitle }
-    if (reachable === true) return { className: 'bg-emerald-500', title: confirmedTitle }
-    if (reachable === false) return { className: 'bg-red-500', title: 'Аккаунт у провайдера не найден' }
-    return { className: 'bg-gray-300', title: fallbackTitle }
 }
 
 function formatPhone(phone: string): string {
@@ -315,53 +306,84 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     useEffect(() => {
         if (!contact?.id || !reachabilityPhone) return
 
-        let cancelled = false
-        const retryTimers: ReturnType<typeof setTimeout>[] = []
+        const controller = new AbortController()
         const checkChannels = ['telegram', 'whatsapp', 'max'] as const
 
-        const runCheck = (channel: typeof checkChannels[number]) => {
-            setLiveReachability(prev => prev[channel] ? prev : { ...prev, [channel]: { status: 'checking', retryable: true } })
-            fetch('/api/channels/check-reachability', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: reachabilityPhone, channel }),
-            })
-                .then(r => r.json())
-                .then(data => {
-                    if (cancelled) return
-                    const nextStatus =
-                        data.status === 'confirmed' || data.confirmed === true || data.telegramId
-                            ? 'confirmed'
-                            : data.status === 'unreachable' || data.reachable === false
-                                ? 'unreachable'
-                                : 'checking'
-                    const nextEntry: LiveReachabilityEntry = {
-                        status: nextStatus,
+        const runDecision = async (channel: typeof checkChannels[number]) => {
+            const identity =
+                contact.identities.find(item =>
+                    item.channel === channel && item.phoneId === contact.primaryPhoneId,
+                )
+                || contact.identities.find(item =>
+                    item.channel === channel && item.phoneId === null,
+                )
+            try {
+                const response = await fetch('/api/channels/check-reachability', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phone: reachabilityPhone,
+                        channel,
+                        identityId: identity?.id || null,
+                    }),
+                    signal: controller.signal,
+                })
+                const data = await response.json()
+                if (controller.signal.aborted) return
+                const status =
+                    data.status === 'confirmed' || data.confirmed === true || data.telegramId
+                        ? 'confirmed'
+                        : data.status === 'unreachable' || data.reachable === false
+                            ? 'unreachable'
+                            : 'checking'
+                setLiveReachability(previous => ({
+                    ...previous,
+                    [channel]: {
+                        contactId: contact.id,
+                        phone: reachabilityPhone,
+                        identityId: identity?.id || null,
+                        status,
                         retryable: data.retryable !== false,
                         error: data.error,
-                    }
-                    setLiveReachability(prev => ({ ...prev, [channel]: nextEntry }))
-                    if (nextStatus === 'checking') {
-                        const retryDelayMs = data.retryable === false ? 30_000 : 5_000
-                        retryTimers.push(setTimeout(() => { if (!cancelled) runCheck(channel) }, retryDelayMs))
-                    }
-                })
-                .catch(() => {
-                    if (cancelled) return
-                    setLiveReachability(prev => ({ ...prev, [channel]: { status: 'checking', retryable: true, error: 'Ошибка сети' } }))
-                    retryTimers.push(setTimeout(() => { if (!cancelled) runCheck(channel) }, 5_000))
-                })
+                        connectionHealth: data.connectionHealth || 'unknown',
+                        cached: data.cached === true,
+                        checkedAt: data.checkedAt,
+                    },
+                }))
+            } catch (error: unknown) {
+                if (controller.signal.aborted) return
+                setLiveReachability(previous => ({
+                    ...previous,
+                    [channel]: {
+                        contactId: contact.id,
+                        phone: reachabilityPhone,
+                        identityId: identity?.id || null,
+                        status: 'checking',
+                        retryable: false,
+                        error: error instanceof Error ? error.message : 'Ошибка сети',
+                        connectionHealth: 'unavailable',
+                    },
+                }))
+            }
         }
 
         for (const channel of checkChannels) {
-            runCheck(channel)
+            void runDecision(channel)
         }
 
-        return () => {
-            cancelled = true
-            retryTimers.forEach(clearTimeout)
-        }
-    }, [contact?.id, reachabilityPhone])
+        return () => controller.abort()
+    }, [contact?.id, contact?.identities, contact?.primaryPhoneId, reachabilityPhone])
+
+    const liveReachabilityFor = (
+        channel: string,
+        target?: { phone?: string; identityId?: string },
+    ): LiveReachabilityEntry | undefined => {
+        const entry = liveReachability[channel]
+        if (entry?.contactId !== contact?.id) return undefined
+        if (target?.identityId && entry.identityId !== target.identityId) return undefined
+        if (target?.phone && entry.phone !== target.phone) return undefined
+        return entry
+    }
 
     // Contact API resolves the canonical bot binding from DriverTelegram and
     // attached profiles. ContactIdentity.externalId can be a phone placeholder,
@@ -370,47 +392,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const botTelegramId = telegramBotState?.telegramUserId || null
     const canManageBotLink = Boolean(botTelegramId && !/^[78]\d{10}$/.test(botTelegramId))
     const telegramBotDisplayStatus = telegramBotState?.status === 'NO_TELEGRAM_IDENTITY'
-        && liveReachability.telegram?.status === 'confirmed'
+        && liveReachabilityFor('telegram')?.status === 'confirmed'
         ? 'TELEGRAM_DISCOVERED_BY_PHONE'
         : telegramBotState?.status || 'NO_TELEGRAM_IDENTITY'
-
-    /** Get effective reachability for a channel: live > persisted > chat-presence > null */
-    const getReachability = (identity: ContactIdentity): boolean | null => {
-        // Live check result takes priority (if definitive)
-        const live = liveReachability[identity.channel]
-        if (live !== undefined) {
-            if (live.status === 'confirmed') return true
-            if (live.status === 'unreachable') return false
-            return null
-        }
-        // Persisted status
-        if (identity.reachabilityStatus === 'confirmed') return true
-        if (identity.reachabilityStatus === 'unreachable') {
-            // An existing chat proves channel was reachable — overrides stale 'unreachable'
-            // from an unreliable isRegisteredUser result.
-            const hasChat = contact?.chats?.some(c => c.contactIdentityId === identity.id)
-            if (hasChat) return true
-            return false
-        }
-        return null // неизвестно
-    }
-
-    const reachabilityBadge = (reachable: boolean | null, live?: LiveReachabilityEntry) => {
-        if (reachable === true) {
-            return { label: 'есть', cls: 'text-emerald-700 bg-emerald-50', title: 'Аккаунт найден у провайдера' }
-        }
-        if (reachable === false) {
-            return { label: 'нет', cls: 'text-gray-600 bg-gray-100', title: 'Канал проверен: аккаунт у провайдера не найден' }
-        }
-        if (live?.status === 'checking' && live.retryable === false) {
-            return {
-                label: 'нет связи',
-                cls: 'text-amber-700 bg-amber-50',
-                title: live.error || 'CRM сейчас не может проверить канал. Это не ответ провайдера и не означает, что аккаунта нет',
-            }
-        }
-        return { label: 'проверяем', cls: 'text-blue-700 bg-blue-50', title: 'Проверка аккаунта еще идет или будет повторена' }
-    }
 
     if (!chat) return null
 
@@ -617,13 +601,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         identities: contact.identities.filter(i => i.phoneId === phone.id),
     })) : []
     const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
-    // Каналы, в которых у contact есть ХОТЯ БЫ ОДИН confirmed identity (включая orphan).
-    // Используется в missing-channels блоке: для MAX live-check phone-reachability не делается,
-    // но если orphan MAX identity confirmed (auto-link через scraper) — статус должен быть "есть".
-    const confirmedChannelsAny = contact
-        ? new Set(contact.identities.filter(i => i.reachabilityStatus === 'confirmed').map(i => i.channel))
-        : new Set<string>()
-
     return (
         <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
             {/* Header */}
@@ -909,66 +886,41 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const isWriting = writingIdentityId === identity.id
                                             const chStatus = channelStatus[identity.channel]
                                             const hasFailed = chStatus?.status === 'failed'
-                                            // All 3 text channels are checkable. Green is only for confirmed account.
-                                            const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp' || identity.channel === 'max'
-                                            const reachable = getReachability(identity)
-                                            const liveEntry = liveReachability[identity.channel]
+                                            const liveEntry = liveReachabilityFor(identity.channel, {
+                                                identityId: identity.id,
+                                            })
                                             const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
-                                            const linkedToCurrentContact = Boolean(linkedChat)
-                                            const hasOperationalMaxChat = identity.channel === 'max' && Boolean(linkedChat?.externalChatId) && !hasFailed
-                                            const effectiveReachable = hasFailed ? false : hasOperationalMaxChat ? true : reachable
-                                            const reachBadge = hasFailed
-                                                ? {
-                                                    label: 'Ошибка',
-                                                    cls: 'text-red-700 bg-red-50',
-                                                    title: chStatus.error || 'Последняя отправка завершилась ошибкой',
-                                                }
-                                                : linkedToCurrentContact
-                                                ? {
-                                                    label: 'Связан',
-                                                    cls: 'text-emerald-700 bg-emerald-50',
-                                                    title: hasOperationalMaxChat
-                                                        ? 'Существующий MAX Chat связан с Contact и доступен для ответа'
-                                                        : 'Identity текущего чата уже принадлежит этому контакту',
-                                                }
-                                                : reachabilityBadge(reachable, liveEntry)
-                                            const isOperationallyBlocked = !hasFailed && isCheckable && effectiveReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
-                                            const statusDot = getChannelStatusDot(
-                                                effectiveReachable,
-                                                isOperationallyBlocked,
-                                                reachBadge.title,
-                                                hasOperationalMaxChat ? reachBadge.title : undefined,
-                                            )
-                                            const canWrite = linkedToCurrentContact || (!hasFailed && effectiveReachable === true)
-                                            const writeDisabledReason = hasFailed
-                                                ? 'Маршрут недоступен после ошибки доставки'
-                                                : effectiveReachable === false
-                                                    ? 'Аккаунт у провайдера не найден'
-                                                    : isOperationallyBlocked
-                                                        ? 'CRM сейчас не может проверить доступность канала'
-                                                        : 'Дождитесь завершения проверки аккаунта'
+                                            const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)
+                                            const presentation = deriveChannelReachabilityPresentation({
+                                                persistedStatus: identity.reachabilityStatus,
+                                                live: liveEntry,
+                                                routeKnown,
+                                                deliveryFailed: hasFailed,
+                                                deliveryError: chStatus?.error,
+                                            })
                                             const badges: ContactChannelBadge[] = [
-                                                ...(isCheckable ? [{
-                                                    label: reachBadge.label,
-                                                    className: reachBadge.cls,
-                                                    title: reachBadge.title,
-                                                }] : []),
+                                                {
+                                                    label: presentation.accountBadge.label,
+                                                    className: presentation.accountBadge.className,
+                                                    title: presentation.accountBadge.title,
+                                                },
+                                                ...(presentation.connectionBadge ? [presentation.connectionBadge] : []),
+                                                ...(presentation.routeBadge ? [presentation.routeBadge] : []),
                                                 ...getIdentitySourceBadges(identity, contact.identities.length),
                                             ]
-                                            // null значит "проверяем" или "нет связи", но не provider-level "нет".
                                             return (
                                                 <ContactChannelRow
                                                     key={identity.id}
                                                     provider={identity.channel}
                                                     providerLabel={cfg?.label || identity.channel}
                                                     icon={cfg?.icon || '?'}
-                                                    dotClassName={statusDot.className}
-                                                    dotTitle={statusDot.title}
+                                                    dotClassName={presentation.dotClassName}
+                                                    dotTitle={presentation.dotTitle}
                                                     badges={badges}
                                                     isWriting={isWriting}
                                                     onWrite={() => handleWrite(identity.channel, identity.id)}
-                                                    canWrite={canWrite}
-                                                    writeDisabledReason={writeDisabledReason}
+                                                    canWrite={presentation.canWrite}
+                                                    writeDisabledReason={presentation.writeDisabledReason}
                                                     error={hasFailed ? (chStatus.error || 'Неизвестная ошибка доставки') : null}
                                                 />
                                             )
@@ -977,39 +929,34 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {missingChannels.map(ch => {
                                             const cfg = CHANNEL_CONFIG[ch]
                                             const isWriting = writingIdentityId === `phone_${ch}`
-                                            const isMissingCheckable = ch === 'telegram' || ch === 'whatsapp' || ch === 'max'
-                                            const liveEntry = liveReachability[ch]
-                                            const missingReachable =
-                                                liveEntry?.status === 'confirmed'
-                                                    ? true
-                                                    : liveEntry?.status === 'unreachable'
-                                                        ? false
-                                                        : (confirmedChannelsAny.has(ch) ? true : null)
-                                            const reachBadge = reachabilityBadge(missingReachable, liveEntry)
-                                            const isOperationallyBlocked = isMissingCheckable && missingReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
-                                            const statusDot = getChannelStatusDot(missingReachable, isOperationallyBlocked, reachBadge.title)
-                                            const writeDisabledReason = missingReachable === false
-                                                ? 'Аккаунт у провайдера не найден'
-                                                : isOperationallyBlocked
-                                                    ? 'CRM сейчас не может проверить доступность канала'
-                                                    : 'Дождитесь завершения проверки аккаунта'
+                                            const liveEntry = liveReachabilityFor(ch, {
+                                                phone: phone.phone,
+                                            })
+                                            const presentation = deriveChannelReachabilityPresentation({
+                                                persistedStatus: 'unknown',
+                                                live: liveEntry,
+                                                routeKnown: false,
+                                            })
                                             return (
                                                 <ContactChannelRow
                                                     key={`missing-${ch}`}
                                                     provider={ch}
                                                     providerLabel={cfg?.label || ch}
                                                     icon={cfg?.icon || '?'}
-                                                    dotClassName={statusDot.className}
-                                                    dotTitle={statusDot.title}
-                                                    badges={isMissingCheckable ? [{
-                                                        label: reachBadge.label,
-                                                        className: reachBadge.cls,
-                                                        title: reachBadge.title,
-                                                    }] : []}
+                                                    dotClassName={presentation.dotClassName}
+                                                    dotTitle={presentation.dotTitle}
+                                                    badges={[
+                                                        {
+                                                            label: presentation.accountBadge.label,
+                                                            className: presentation.accountBadge.className,
+                                                            title: presentation.accountBadge.title,
+                                                        },
+                                                        ...(presentation.connectionBadge ? [presentation.connectionBadge] : []),
+                                                    ]}
                                                     isWriting={isWriting}
                                                     onWrite={() => handleWrite(ch)}
-                                                    canWrite={missingReachable === true}
-                                                    writeDisabledReason={writeDisabledReason}
+                                                    canWrite={presentation.canWrite}
+                                                    writeDisabledReason={presentation.writeDisabledReason}
                                                     muted
                                                 />
                                             )
@@ -1025,48 +972,26 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             const isWriting = writingIdentityId === identity.id
                             const chStatus = channelStatus[identity.channel]
                             const hasFailed = chStatus?.status === 'failed'
-                            const reachable = getReachability(identity)
-                            const liveEntry = liveReachability[identity.channel]
+                            const liveEntry = liveReachabilityFor(identity.channel, {
+                                identityId: identity.id,
+                            })
                             const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
-                            const linkedToCurrentContact = Boolean(linkedChat)
-                            const hasOperationalMaxChat = identity.channel === 'max' && Boolean(linkedChat?.externalChatId) && !hasFailed
-                            const effectiveReachable = hasFailed ? false : hasOperationalMaxChat ? true : reachable
-                            const reachBadge = hasFailed
-                                ? {
-                                    label: 'Ошибка',
-                                    cls: 'text-red-700 bg-red-50',
-                                    title: chStatus.error || 'Последняя отправка завершилась ошибкой',
-                                }
-                                : linkedToCurrentContact
-                                ? {
-                                    label: 'Связан',
-                                    cls: 'text-emerald-700 bg-emerald-50',
-                                    title: hasOperationalMaxChat
-                                        ? 'Существующий MAX Chat связан с Contact и доступен для ответа'
-                                        : 'Identity текущего чата уже принадлежит этому контакту',
-                                }
-                                : reachabilityBadge(reachable, liveEntry)
-                            const isOperationallyBlocked = !hasFailed && effectiveReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
-                            const statusDot = getChannelStatusDot(
-                                effectiveReachable,
-                                isOperationallyBlocked,
-                                reachBadge.title,
-                                hasOperationalMaxChat ? reachBadge.title : undefined,
-                            )
-                            const canWrite = linkedToCurrentContact || (!hasFailed && effectiveReachable === true)
-                            const writeDisabledReason = hasFailed
-                                ? 'Маршрут недоступен после ошибки доставки'
-                                : effectiveReachable === false
-                                    ? 'Аккаунт у провайдера не найден'
-                                    : isOperationallyBlocked
-                                        ? 'CRM сейчас не может проверить доступность канала'
-                                        : 'Дождитесь завершения проверки аккаунта'
+                            const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)
+                            const presentation = deriveChannelReachabilityPresentation({
+                                persistedStatus: identity.reachabilityStatus,
+                                live: liveEntry,
+                                routeKnown,
+                                deliveryFailed: hasFailed,
+                                deliveryError: chStatus?.error,
+                            })
                             const badges: ContactChannelBadge[] = [
                                 {
-                                    label: reachBadge.label,
-                                    className: reachBadge.cls,
-                                    title: reachBadge.title,
+                                    label: presentation.accountBadge.label,
+                                    className: presentation.accountBadge.className,
+                                    title: presentation.accountBadge.title,
                                 },
+                                ...(presentation.connectionBadge ? [presentation.connectionBadge] : []),
+                                ...(presentation.routeBadge ? [presentation.routeBadge] : []),
                                 ...getIdentitySourceBadges(identity, contact.identities.length),
                             ]
                             return (
@@ -1077,10 +1002,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     isWriting={isWriting}
                                     onWrite={() => handleWrite(identity.channel, identity.id)}
                                     badges={badges}
-                                    dotClassName={statusDot.className}
-                                    dotTitle={statusDot.title}
-                                    canWrite={canWrite}
-                                    writeDisabledReason={writeDisabledReason}
+                                    dotClassName={presentation.dotClassName}
+                                    dotTitle={presentation.dotTitle}
+                                    canWrite={presentation.canWrite}
+                                    writeDisabledReason={presentation.writeDisabledReason}
                                     error={hasFailed ? (chStatus.error || 'Неизвестная ошибка доставки') : null}
                                 />
                             )
