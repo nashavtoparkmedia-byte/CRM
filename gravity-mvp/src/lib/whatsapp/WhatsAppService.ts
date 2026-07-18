@@ -11,6 +11,7 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -1060,18 +1061,21 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 // miss or, worse, match an unrelated contact by coincidence.
                 const e164 = phoneDigits.length >= 10 ? '+7' + phoneDigits.slice(-10) : null
                 if (e164) {
-                    const phoneRow = await prisma.contactPhone.findFirst({
-                        where: { phone: e164, isActive: true },
-                        select: { contactId: true },
-                    })
-                    if (phoneRow?.contactId) {
+                    const ownership = await resolveStrictPhoneOwnership(prisma, e164)
+                    if (ownership.kind === 'matched') {
                         unifiedChat = await (prisma.chat as any).findFirst({
-                            where: { contactId: phoneRow.contactId, channel: 'whatsapp' },
+                            where: { contactId: ownership.contactId, channel: 'whatsapp' },
                             orderBy: { lastMessageAt: 'desc' },
                         })
                         if (unifiedChat) {
-                            console.log(`[WA-SERVICE] Recovered WA chat ${unifiedChat.id} (ext=${unifiedChat.externalChatId}) for ${e164} via contact ${phoneRow.contactId} — preventing LID/phone duplicate`)
+                            console.log(`[WA-SERVICE] Recovered WA chat ${unifiedChat.id} (ext=${unifiedChat.externalChatId}) for ${e164} via contact ${ownership.contactId} — preventing LID/phone duplicate`)
                         }
+                    } else if (ownership.kind === 'ambiguous') {
+                        opsLog('warn', 'wa_lid_phone_owner_ambiguous', {
+                            operation: 'message',
+                            phone: e164,
+                            contactIds: ownership.contactIds,
+                        })
                     }
                 }
             }
@@ -1154,7 +1158,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     const backfill = await ContactService.addPhoneToContact(
                         contactResult.contact.id,
                         e164,
-                        { source: 'whatsapp', isPrimary: true },
+                        { source: 'whatsapp' },
                     )
                     if (backfill.kind === 'added') {
                         console.log(`[WA-SERVICE] Backfilled phone ${e164} → contact ${contactResult.contact.id}`)

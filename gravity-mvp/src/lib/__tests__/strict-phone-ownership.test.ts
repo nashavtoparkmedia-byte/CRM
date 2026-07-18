@@ -4,6 +4,11 @@ import { mapStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
 import type { ContactResolutionResult } from '@/lib/contacts/contact-resolution.types'
 
 const warnings: ContactResolutionResult['warnings'] = []
+const unsafeMergeResults: ContactResolutionResult[] = [
+  { status: 'merge_cycle', contactIds: ['B', 'A'], warnings },
+  { status: 'merge_ambiguous', contactIds: ['B', 'A'], warnings },
+  { status: 'merge_depth_exceeded', contactIds: ['B', 'A'], warnings },
+]
 
 describe('strict phone ownership result mapping', () => {
   test('zero canonical owners is not_found', () => {
@@ -41,11 +46,7 @@ describe('strict phone ownership result mapping', () => {
     })
   })
 
-  test.each([
-    { status: 'merge_cycle', contactIds: ['B', 'A'], warnings },
-    { status: 'merge_ambiguous', contactIds: ['B', 'A'], warnings },
-    { status: 'merge_depth_exceeded', contactIds: ['B', 'A'], warnings },
-  ] as const)('unsafe canonical chain $status is ambiguous', result => {
+  test.each(unsafeMergeResults)('unsafe canonical chain $status is ambiguous', result => {
     expect(mapStrictPhoneOwnership(result)).toMatchObject({
       kind: 'ambiguous',
       contactIds: ['A', 'B'],

@@ -16,6 +16,8 @@
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { refreshContactMainDriver } from '@/lib/driver-profiles/multi-park'
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
+import { Prisma } from '@prisma/client'
 
 export interface LinkResult {
   action: 'noop' | 'linked' | 'no_contact' | 'no_driver' | 'ambiguous'
@@ -30,7 +32,7 @@ export interface LinkResult {
   }>
   contactCandidates?: Array<{
     contactId: string
-    contactPhoneId: string
+    contactPhoneId: string | null
     yandexDriverId: string | null
     isArchived: boolean
   }>
@@ -90,8 +92,25 @@ export async function linkContactToBestDriver(
   const normalized = normalizePhoneE164(phone)
   if (!normalized) return { action: 'noop', reason: 'phone could not be normalized' }
 
+  const result = await prisma.$transaction(async db => {
+    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
+    return linkContactToBestDriverLocked(db, normalized)
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+    timeout: 15000,
+  })
+  if (result.action === 'linked' && result.contactId) {
+    await refreshContactMainDriver(result.contactId, 'yandex-link')
+  }
+  return result
+}
+
+async function linkContactToBestDriverLocked(
+  db: Prisma.TransactionClient,
+  normalized: string,
+): Promise<LinkResult> {
   // 1. Найти все Driver с этим телефоном.
-  const drivers = await prisma.driver.findMany({
+  const drivers = await db.driver.findMany({
     where: { phone: normalized },
     select: {
       id: true,
@@ -105,30 +124,34 @@ export async function linkContactToBestDriver(
     return { action: 'no_driver', reason: `no Driver with phone ${normalized}` }
   }
 
-  // 2. Find all active phone owners. DB order, isArchived, primary phone,
-  // and activity are not identity proof and must not pick a winner.
-  const contactPhones = await prisma.contactPhone.findMany({
-    where: { phone: normalized, isActive: true },
-    include: { contact: true },
-  })
-  const contactPhonesByContactId = new Map<string, typeof contactPhones[number]>()
-  for (const record of contactPhones) {
-    if (!contactPhonesByContactId.has(record.contactId)) {
-      contactPhonesByContactId.set(record.contactId, record)
-    }
-  }
-
-  if (contactPhonesByContactId.size === 0) {
+  // 2. Resolve the canonical owner through the shared merge-aware planner.
+  // DB order, archived source rows, activity and primary-phone flags cannot
+  // select a winner.
+  const ownership = await resolveStrictPhoneOwnership(db, normalized)
+  if (ownership.kind === 'not_found') {
     // Contact does not exist yet; this sync does not create it.
     return { action: 'no_contact', reason: `no Contact with phone ${normalized}` }
   }
 
-  if (contactPhonesByContactId.size > 1) {
-    const contactCandidates = Array.from(contactPhonesByContactId.values()).map(record => ({
-      contactId: record.contactId,
-      contactPhoneId: record.id,
-      yandexDriverId: record.contact.yandexDriverId,
-      isArchived: record.contact.isArchived,
+  if (ownership.kind === 'ambiguous') {
+    const [contacts, phoneRows] = await Promise.all([
+      db.contact.findMany({
+        where: { id: { in: ownership.contactIds } },
+        select: { id: true, yandexDriverId: true, isArchived: true },
+      }),
+      db.contactPhone.findMany({
+        where: { phone: normalized, isActive: true },
+        select: { id: true, contactId: true },
+        orderBy: { id: 'asc' },
+      }),
+    ])
+    const contactsById = new Map(contacts.map(contact => [contact.id, contact]))
+    const phoneIdByContactId = new Map(phoneRows.map(phone => [phone.contactId, phone.id]))
+    const contactCandidates = ownership.contactIds.map(contactId => ({
+      contactId,
+      contactPhoneId: phoneIdByContactId.get(contactId) ?? null,
+      yandexDriverId: contactsById.get(contactId)?.yandexDriverId ?? null,
+      isArchived: contactsById.get(contactId)?.isArchived ?? false,
     }))
     logAmbiguousContactPhoneOwners(normalized, contactCandidates)
     return {
@@ -138,11 +161,12 @@ export async function linkContactToBestDriver(
     }
   }
 
-  const contactPhone = contactPhonesByContactId.values().next().value
-  if (!contactPhone) {
+  const contact = await db.contact.findUnique({
+    where: { id: ownership.contactId },
+  })
+  if (!contact || contact.isArchived) {
     return { action: 'no_contact', reason: `no Contact with phone ${normalized}` }
   }
-  const contact = contactPhone.contact
 
   if (drivers.length > 1) {
     const candidates = sortCandidatesForDiagnostics(drivers).map(driver => ({
@@ -200,12 +224,11 @@ export async function linkContactToBestDriver(
     update.displayName = matched.fullName
     update.displayNameSource = 'yandex'
   }
-  await prisma.contact.update({
+  await db.contact.update({
     where: { id: contact.id },
     data: update,
   })
-  await prisma.driver.updateMany({ where: { id: matched.id }, data: { contactId: contact.id } })
-  await refreshContactMainDriver(contact.id, 'yandex-link')
+  await db.driver.updateMany({ where: { id: matched.id }, data: { contactId: contact.id } })
 
   console.log(
     `[yandex-link] linked contact=${contact.id} ` +

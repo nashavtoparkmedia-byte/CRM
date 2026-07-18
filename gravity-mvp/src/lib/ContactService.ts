@@ -448,29 +448,20 @@ export class ContactService {
     return prisma.$transaction(async tx => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
 
-      // Skip expired temporary phones — Avito recycles its disposable numbers.
-      // A single active owner can be reused; archived or multiple owners are
-      // intentionally left unresolved so an incoming call cannot pick one at random.
-      const existing = await tx.contactPhone.findMany({
-        where: {
-          phone: normalized,
-          isActive: true,
-          OR: [
-            { isTemporary: false },
-            { isTemporary: true, expiresAt: null },
-            { isTemporary: true, expiresAt: { gt: new Date() } },
-          ],
-        },
-        include: { contact: { select: { id: true, displayName: true, isArchived: true } } },
-      })
-      const ownership = classifyProviderPhoneOwners(existing.map(phone => ({
-        contactId: phone.contactId,
-        isArchived: phone.contact.isArchived,
-      })))
+      const ownership = await resolveStrictPhoneOwnership(tx, normalized)
       if (ownership.kind === 'matched') {
-        const phone = existing.find(record => record.contactId === ownership.contactId)
-        if (phone) {
-          return { contact: phone.contact, phoneId: phone.id, isNew: false }
+        const contact = await tx.contact.findUnique({
+          where: { id: ownership.contactId },
+          select: { id: true, displayName: true, isArchived: true },
+        })
+        const phoneRows = await tx.contactPhone.findMany({
+          where: { phone: normalized, isActive: true },
+          orderBy: { id: 'asc' },
+          select: { id: true, contactId: true },
+        })
+        const phoneRow = phoneRows.find(record => record.contactId === ownership.contactId) ?? phoneRows[0]
+        if (contact && !contact.isArchived && phoneRow) {
+          return { contact, phoneId: phoneRow.id, isNew: false }
         }
       }
       if (ownership.kind === 'ambiguous') {
@@ -556,9 +547,28 @@ export class ContactService {
         throw new Error('Cannot add a phone to a missing, archived, or merged Contact')
       }
 
-      const same = await tx.contactPhone.findFirst({
-        where: { contactId, phone: normalized },
+      const same = await tx.contactPhone.findUnique({
+        where: { contactId_phone: { contactId, phone: normalized } },
       })
+      const ownership = await resolveStrictPhoneOwnership(tx, normalized)
+      if (ownership.kind === 'ambiguous') {
+        return {
+          kind: 'ambiguous' as const,
+          ownerContactIds: ownership.contactIds,
+        }
+      }
+      if (ownership.kind === 'matched' && ownership.contactId !== contactId) {
+        const otherOwner = await tx.contact.findUnique({
+          where: { id: ownership.contactId },
+          select: { id: true, displayName: true },
+        })
+        return {
+          kind: 'conflict' as const,
+          otherContactId: ownership.contactId,
+          otherContactName: otherOwner?.displayName ?? 'Другой контакт',
+        }
+      }
+
       if (same) {
         if (!same.isActive) {
           await tx.contactPhone.update({
@@ -567,34 +577,6 @@ export class ContactService {
           })
         }
         return { kind: 'exists_same_contact' as const, phoneId: same.id, contactId }
-      }
-
-      const otherOwners = await tx.contactPhone.findMany({
-        where: { phone: normalized, isActive: true, NOT: { contactId } },
-        select: {
-          contactId: true,
-          contact: { select: { id: true, displayName: true, isArchived: true } },
-        },
-      })
-      const ownership = classifyProviderPhoneOwners(
-        otherOwners.map(owner => ({
-          contactId: owner.contactId,
-          isArchived: owner.contact.isArchived,
-        })),
-      )
-      if (ownership.kind === 'ambiguous') {
-        return {
-          kind: 'ambiguous' as const,
-          ownerContactIds: ownership.contactIds,
-        }
-      }
-      if (ownership.kind === 'matched') {
-        const otherOwner = otherOwners.find(owner => owner.contactId === ownership.contactId)!
-        return {
-          kind: 'conflict' as const,
-          otherContactId: otherOwner.contact.id,
-          otherContactName: otherOwner.contact.displayName,
-        }
       }
 
       if (opts?.deactivateTemporaries) {

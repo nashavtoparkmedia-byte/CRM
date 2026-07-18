@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
 
-const { prismaMock } = vi.hoisted(() => ({
+const { prismaMock, refreshContactMainDriverMock, attachDriverProfilesMock } = vi.hoisted(() => ({
   prismaMock: {
+    $executeRaw: vi.fn(),
     $queryRaw: vi.fn(),
+    $transaction: vi.fn(),
     driver: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -17,22 +19,35 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     contactPhone: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
+      upsert: vi.fn(),
       update: vi.fn(),
     },
     contact: {
       findUnique: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
+      upsert: vi.fn(),
       update: vi.fn(),
+    },
+    contactMerge: {
+      findMany: vi.fn(),
     },
     contactDriverProfileAudit: {
       create: vi.fn(),
     },
   },
+  refreshContactMainDriverMock: vi.fn(),
+  attachDriverProfilesMock: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
+vi.mock('@/lib/driver-profiles/multi-park', () => ({
+  refreshContactMainDriver: refreshContactMainDriverMock,
+  attachDriverProfilesToContactByPhone: attachDriverProfilesMock,
+}))
 
 import { DriverMatchService } from '../DriverMatchService'
 import { linkContactToBestDriver } from '../contacts/yandex-link'
@@ -82,6 +97,26 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
+  prismaMock.contactPhone.findMany.mockResolvedValue([])
+  prismaMock.$executeRaw.mockResolvedValue(0)
+  prismaMock.$transaction.mockImplementation(
+    async (callback: (tx: typeof prismaMock) => Promise<unknown>) => callback(prismaMock),
+  )
+  prismaMock.contactMerge.findMany.mockResolvedValue([])
+  prismaMock.contact.findMany.mockResolvedValue([])
+  prismaMock.contact.findUnique.mockImplementation(async ({ where }: { where: { id?: string } }) => (
+    where.id
+      ? {
+          id: where.id,
+          yandexDriverId: null,
+          displayName: `Contact ${where.id}`,
+          displayNameSource: 'channel',
+          isArchived: false,
+        }
+      : null
+  ))
+  refreshContactMainDriverMock.mockResolvedValue(null)
+  attachDriverProfilesMock.mockResolvedValue({ action: 'noop' })
 })
 
 describe('DriverMatchService safety matching', () => {
@@ -238,6 +273,13 @@ describe('Yandex contact-driver enrichment safety', () => {
     prismaMock.contactPhone.findMany.mockResolvedValueOnce([
       contactPhoneRecord('contact-1', { yandexDriverId: 'yd-existing' }),
     ])
+    prismaMock.contact.findUnique.mockResolvedValueOnce({
+      id: 'contact-1',
+      yandexDriverId: 'yd-existing',
+      displayName: 'Existing Contact',
+      displayNameSource: 'channel',
+      isArchived: false,
+    })
 
     const result = await linkContactToBestDriver('+7 999 000-00-00')
 
@@ -303,27 +345,28 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
     prismaMock.contactPhone.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-    prismaMock.contact.create.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contact.upsert.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
+    prismaMock.contactPhone.upsert.mockResolvedValueOnce({ id: 'phone-1' })
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('created')
-    expect(prismaMock.contact.create).toHaveBeenCalledTimes(1)
-    expect(prismaMock.contact.create).toHaveBeenCalledWith({
-      data: {
+    expect(prismaMock.contact.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.contact.upsert).toHaveBeenCalledWith({
+      where: { yandexDriverId: 'yd-1' },
+      create: {
         displayName: 'Driver One',
         displayNameSource: 'yandex',
         masterSource: 'yandex',
         yandexDriverId: 'yd-1',
       },
+      update: {},
     })
   })
 
   test('repeated sync for same Driver reuses Contact.yandexDriverId and does not create duplicate Contact', async () => {
     prismaMock.contact.findUnique
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: 'contact-1',
@@ -336,8 +379,8 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([contactPhoneRecord('contact-1')])
-    prismaMock.contact.create.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contact.upsert.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
+    prismaMock.contactPhone.upsert.mockResolvedValueOnce({ id: 'phone-1' })
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const first = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
@@ -345,7 +388,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
 
     expect(first.action).toBe('created')
     expect(second.action).toBe('noop')
-    expect(prismaMock.contact.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.contact.upsert).toHaveBeenCalledTimes(1)
   })
 
   test('Contact with yandexDriverId but without ContactPhone is reused and gets phone', async () => {
@@ -357,39 +400,47 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       phones: [],
     })
     prismaMock.contactPhone.findMany.mockResolvedValueOnce([])
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.upsert.mockResolvedValueOnce({ id: 'phone-1' })
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('updated')
-    expect(prismaMock.contact.create).not.toHaveBeenCalled()
-    expect(prismaMock.contactPhone.create).toHaveBeenCalledWith({
-      data: {
+    expect(prismaMock.contact.upsert).not.toHaveBeenCalled()
+    expect(prismaMock.contactPhone.upsert).toHaveBeenCalledWith({
+      where: {
+        contactId_phone: {
+          contactId: 'contact-1',
+          phone: '+79990000000',
+        },
+      },
+      create: {
         contactId: 'contact-1',
         phone: '+79990000000',
         source: 'yandex',
         isPrimary: true,
       },
+      update: { isActive: true },
     })
   })
 
-  test('concurrent Contact create race reuses unique yandexDriverId winner', async () => {
-    prismaMock.contact.findUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
+  test('concurrent Contact creation is serialized by phone lock and yandexDriverId upsert', async () => {
+    prismaMock.contact.findUnique.mockResolvedValueOnce(null)
     prismaMock.contactPhone.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
-    prismaMock.contact.create.mockRejectedValueOnce({ code: 'P2002' })
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contact.upsert.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
+    prismaMock.contactPhone.upsert.mockResolvedValueOnce({ id: 'phone-1' })
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('created')
-    expect(prismaMock.contact.create).toHaveBeenCalledTimes(1)
-    expect(prismaMock.contactPhone.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(prismaMock.contact.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.contactPhone.upsert).toHaveBeenCalledTimes(1)
+    expect(prismaMock.$executeRaw.mock.invocationCallOrder[0])
+      .toBeLessThan(prismaMock.contact.findUnique.mock.invocationCallOrder[0])
   })
 
   test('ambiguous ContactPhone records do not link or create a wrong relation', async () => {
@@ -403,11 +454,19 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
 
     expect(result.action).toBe('ambiguous')
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
-    expect(prismaMock.contact.create).not.toHaveBeenCalled()
+    expect(prismaMock.contact.upsert).not.toHaveBeenCalled()
   })
 
   test('existing conflicting Contact.yandexDriverId is not overwritten by monitoring sync', async () => {
-    prismaMock.contact.findUnique.mockResolvedValueOnce(null)
+    prismaMock.contact.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 'contact-1',
+        displayName: 'Driver One',
+        displayNameSource: 'channel',
+        yandexDriverId: 'yd-other',
+        isArchived: false,
+      })
     prismaMock.contactPhone.findMany.mockResolvedValueOnce([
       { contactId: 'contact-1', contact: { id: 'contact-1', yandexDriverId: 'yd-other' } },
     ])
@@ -416,7 +475,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
 
     expect(result.action).toBe('noop')
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
-    expect(prismaMock.contact.create).not.toHaveBeenCalled()
+    expect(prismaMock.contact.upsert).not.toHaveBeenCalled()
   })
 
 
@@ -429,14 +488,14 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       phones: [],
     })
     prismaMock.contactPhone.findMany.mockResolvedValueOnce([])
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.upsert.mockResolvedValueOnce({ id: 'phone-1' })
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('updated')
     expect(result.phonesCreated).toBe(1)
-    expect(prismaMock.contactPhone.create).toHaveBeenCalledTimes(1)
+    expect(prismaMock.contactPhone.upsert).toHaveBeenCalledTimes(1)
   })
 
   test('repeated sync for existing yandex Contact does not create duplicate ContactPhone', async () => {
@@ -452,7 +511,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('noop')
-    expect(prismaMock.contactPhone.create).not.toHaveBeenCalled()
+    expect(prismaMock.contactPhone.upsert).not.toHaveBeenCalled()
   })
 
   test('existing yandex Contact does not add phone owned by another Contact', async () => {
@@ -470,7 +529,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('ambiguous_phone_owner')
-    expect(prismaMock.contactPhone.create).not.toHaveBeenCalled()
+    expect(prismaMock.contactPhone.upsert).not.toHaveBeenCalled()
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
   })
 
@@ -490,11 +549,11 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('ambiguous_phone_owner')
-    expect(prismaMock.contactPhone.create).not.toHaveBeenCalled()
+    expect(prismaMock.contactPhone.upsert).not.toHaveBeenCalled()
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
   })
 
-  test('P2002 phone attach race reuses only the same Contact owner', async () => {
+  test('inactive phone on the same Contact is reactivated without creating a duplicate', async () => {
     prismaMock.contact.findUnique.mockResolvedValueOnce({
       id: 'contact-1',
       displayName: 'Driver One',
@@ -502,23 +561,29 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       primaryPhoneId: null,
       phones: [],
     })
-    prismaMock.contactPhone.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([contactPhoneRecord('contact-1')])
-    prismaMock.contactPhone.create.mockRejectedValueOnce({ code: 'P2002' })
+    prismaMock.contactPhone.findMany.mockResolvedValueOnce([])
+    prismaMock.contactPhone.findUnique.mockResolvedValueOnce(
+      contactPhoneRecord('contact-1', {}, { isActive: false }),
+    )
+    prismaMock.contactPhone.update.mockResolvedValueOnce({})
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('updated')
     expect(result.phonesCreated).toBe(0)
+    expect(prismaMock.contactPhone.update).toHaveBeenCalledWith({
+      where: { id: 'phone-contact-1' },
+      data: { isActive: true },
+    })
+    expect(prismaMock.contactPhone.upsert).not.toHaveBeenCalled()
     expect(prismaMock.contact.update).toHaveBeenCalledWith({
       where: { id: 'contact-1' },
       data: { primaryPhoneId: 'phone-contact-1' },
     })
   })
 
-  test('P2002 phone attach race does not treat another Contact owner as success', async () => {
+  test('phone lock is acquired before an existing Contact phone decision', async () => {
     prismaMock.contact.findUnique.mockResolvedValueOnce({
       id: 'contact-1',
       displayName: 'Driver One',
@@ -526,14 +591,15 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       primaryPhoneId: null,
       phones: [],
     })
-    prismaMock.contactPhone.findMany
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([contactPhoneRecord('contact-other')])
-    prismaMock.contactPhone.create.mockRejectedValueOnce({ code: 'P2002' })
+    prismaMock.contactPhone.findMany.mockResolvedValueOnce([
+      contactPhoneRecord('contact-other'),
+    ])
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
 
     expect(result.action).toBe('ambiguous_phone_owner')
+    expect(prismaMock.$executeRaw.mock.invocationCallOrder[0])
+      .toBeLessThan(prismaMock.contact.findUnique.mock.invocationCallOrder[0])
     expect(prismaMock.contact.update).not.toHaveBeenCalled()
   })
 })
@@ -543,16 +609,18 @@ describe('Driver matching source-level route safety', () => {
     const source = readProjectFile('src/app/api/monitoring/sync/route.ts')
     const scenario2 = source.split('// ── Scenario 2:')[1].split('// ── Scenario 3:')[0]
 
-    expect(scenario2).toContain('contactPhone.findMany')
+    expect(scenario2).toContain('resolveStrictPhoneOwnership')
     expect(scenario2).not.toContain('contactPhone.findFirst')
-    expect(scenario2).toContain('phoneRecords.length > 1')
+    expect(scenario2).not.toContain('contactPhone.findMany')
+    expect(scenario2).toContain("ownership.kind === 'ambiguous'")
     expect(scenario2).toContain("event: 'monitoring_sync_contact_phone_ambiguous'")
-    expect(scenario2).toContain('phoneRecords.length === 1')
+    expect(scenario2).toContain("ownership.kind === 'matched'")
     expect(scenario2).toContain("event: 'monitoring_sync_contact_driver_existing_link_conflict'")
+    expect(source).toContain('pg_advisory_xact_lock')
 
     const conflictSection = scenario2.split("event: 'monitoring_sync_contact_driver_existing_link_conflict'")[1]
-    expect(conflictSection.split('if (phoneRecords.length === 1 && !phoneRecords[0].contact.yandexDriverId)')[0])
-      .not.toContain('prisma.contact.update')
+    expect(conflictSection.split('if (phoneOwner && !phoneOwner.yandexDriverId')[0])
+      .not.toContain('db.contact.update')
   })
 
   test('legacy MAX webhook blocks name and active-chat driver fallback', () => {

@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
+import { Prisma } from '@prisma/client'
 
 export const PARK_PRIORITY = [
   'Наш Автопарк',
@@ -366,17 +368,39 @@ export async function attachDriverProfilesToContactByPhone(phone: string | null 
   const normalized = phone ? normalizePhoneE164(phone) : null
   if (!normalized) return { action: 'noop' as const, reason: 'phone could not be normalized' }
 
-  const phoneOwners = await prisma.contactPhone.findMany({
-    where: { phone: normalized, isActive: true },
-    select: { contactId: true, contact: { select: { id: true, isArchived: true } } },
+  const result = await prisma.$transaction(async db => {
+    await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalized}`}))`
+    return attachDriverProfilesToContactByPhoneLocked(db, normalized, selectedBy)
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+    timeout: 15000,
   })
-  const activeOwnersByContact = new Map((phoneOwners || []).filter(owner => !owner.contact.isArchived).map(owner => [owner.contactId, owner]))
-  if (activeOwnersByContact.size === 0) return { action: 'no_contact' as const, reason: `no Contact with phone ${normalized}` }
-  if (activeOwnersByContact.size > 1) return { action: 'ambiguous_contact' as const, contactIds: Array.from(activeOwnersByContact.keys()) }
+  if (
+    'contactId' in result
+    && result.contactId
+    && (result.action === 'linked_profiles' || result.action === 'noop')
+  ) {
+    await refreshContactMainDriver(result.contactId, selectedBy)
+  }
+  return result
+}
 
-  const contactId = Array.from(activeOwnersByContact.keys())[0]
+async function attachDriverProfilesToContactByPhoneLocked(
+  db: Prisma.TransactionClient,
+  normalized: string,
+  selectedBy: string,
+) {
+  const ownership = await resolveStrictPhoneOwnership(db, normalized)
+  if (ownership.kind === 'not_found') {
+    return { action: 'no_contact' as const, reason: `no Contact with phone ${normalized}` }
+  }
+  if (ownership.kind === 'ambiguous') {
+    return { action: 'ambiguous_contact' as const, contactIds: ownership.contactIds }
+  }
+
+  const contactId = ownership.contactId
   const suffix = normalized.slice(-10)
-  const drivers = await prisma.driver.findMany({
+  const drivers = await db.driver.findMany({
     where: {
       OR: [
         { phone: normalized },
@@ -405,7 +429,7 @@ export async function attachDriverProfilesToContactByPhone(phone: string | null 
 
   const unlinkedIds = drivers.filter(driver => driver.contactId !== contactId).map(driver => driver.id)
   if (unlinkedIds.length > 0) {
-    await prisma.driver.updateMany({
+    await db.driver.updateMany({
       where: { id: { in: unlinkedIds }, externalPersonKey: personKeys[0] },
       data: {
         contactId,
@@ -416,6 +440,5 @@ export async function attachDriverProfilesToContactByPhone(phone: string | null 
       },
     })
   }
-  await refreshContactMainDriver(contactId, selectedBy)
   return { action: unlinkedIds.length > 0 ? 'linked_profiles' as const : 'noop' as const, contactId, linkedCount: unlinkedIds.length, profileCount: drivers.length }
 }

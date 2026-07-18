@@ -54,10 +54,11 @@ def test_yandex_link_ambiguous_does_not_write_contact_driver():
     ambiguous_section = source.split("if (drivers.length > 1)", 1)[1].split("const matched = drivers[0]", 1)[0]
     assert "action: 'ambiguous'" in ambiguous_section
     assert "logAmbiguousYandexLink" in ambiguous_section
-    assert "prisma.contact.update" not in ambiguous_section
+    assert "db.contact.update" not in ambiguous_section
     assert "contact_driver_existing_link_conflict" in source
     conflict_section = source.split("contact_driver_existing_link_conflict", 1)[1].split("// 4. Связываем", 1)[0]
-    assert "prisma.contact.update" not in conflict_section
+    assert "db.contact.update" not in conflict_section
+    assert "pg_advisory_xact_lock" in source
 
 
 def test_yandex_link_no_best_driver_auto_choice_remains():
@@ -69,11 +70,11 @@ def test_yandex_link_no_best_driver_auto_choice_remains():
 
 def test_yandex_link_contact_phone_owner_query_is_not_find_first():
     source = read(YANDEX_LINK)
-    owner_section = source.split("// 2. Find all active phone owners", 1)[1].split("if (drivers.length > 1)", 1)[0]
-    assert "contactPhone.findMany" in owner_section
+    owner_section = source.split("// 2. Resolve the canonical owner", 1)[1].split("if (drivers.length > 1)", 1)[0]
+    assert "resolveStrictPhoneOwnership" in owner_section
     assert "contactPhone.findFirst" not in owner_section
-    assert "contactPhonesByContactId.size === 0" in owner_section
-    assert "contactPhonesByContactId.size > 1" in owner_section
+    assert "ownership.kind === 'not_found'" in owner_section
+    assert "ownership.kind === 'ambiguous'" in owner_section
     assert "contact_phone_owner_ambiguous" in source
     assert "isArchived" in owner_section
 
@@ -81,11 +82,12 @@ def test_yandex_link_contact_phone_owner_query_is_not_find_first():
 def test_monitoring_sync_existing_contact_checks_other_phone_owners_before_attach():
     source = read(MONITORING_SYNC)
     scenario1 = source.split("Contact already linked to this yandexDriverId", 1)[1].split("No Contact by yandexDriverId", 1)[0]
-    assert "findActivePhoneOwners(normalizedE164)" in scenario1
-    assert "owner.contactId !== existing.id" in scenario1
+    assert "resolveStrictPhoneOwnership(db, normalizedE164)" in scenario1
+    assert "ownership.contactId !== existing.id" in scenario1
     assert "ambiguous_phone_owner" in scenario1
     assert "monitoring_sync_contact_phone_owner_conflict" in scenario1
-    conflict_section = scenario1.split("if (otherOwners.length > 0)", 1)[1].split("if (currentYandexPhone", 1)[0]
+    assert "pg_advisory_xact_lock" in source
+    conflict_section = scenario1.split("ownership.kind === 'ambiguous'", 1)[1].split("if (currentYandexPhone", 1)[0]
     assert "prisma.contactPhone.create" not in conflict_section
     assert "prisma.contact.update" not in conflict_section
 

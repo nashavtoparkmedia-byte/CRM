@@ -30,7 +30,8 @@ import { broadcastCall } from '@/lib/callStreamBus'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
-import { classifyProviderPhoneOwners, ContactService } from '@/lib/ContactService'
+import { ContactService } from '@/lib/ContactService'
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
@@ -204,37 +205,21 @@ async function handleChannelCreate(evt: any): Promise<void> {
     let contactId: string | null = null
     let displayName: string | null = null
     if (e164) {
-        const phoneRecords = await prisma.contactPhone.findMany({
-            where: { phone: e164, isActive: true },
-            include: { contact: { include: { driver: true } } },
-        })
-        const phoneOwnership = classifyProviderPhoneOwners(phoneRecords.map(phone => ({
-            contactId: phone.contactId,
-            isArchived: phone.contact.isArchived,
-        })))
-        if (phoneOwnership.kind === 'matched') {
-            const phone = phoneRecords.find(record => record.contactId === phoneOwnership.contactId)
-            if (phone) {
-                contactId = phone.contactId
-                displayName = phone.contact.displayName
-                driverId = phone.contact.driver?.id ?? null
-            }
-        } else if (phoneOwnership.kind === 'ambiguous') {
+        const phoneOwnership = await resolveStrictPhoneOwnership(prisma, e164)
+        if (phoneOwnership.kind === 'ambiguous') {
             opsLog('warn', 'call_contact_phone_ambiguous', {
                 operation: 'call',
                 phone: e164,
                 contactIds: phoneOwnership.contactIds,
             })
-        }
-
-        if (phoneOwnership.kind !== 'ambiguous' && !driverId) {
+        } else {
+            let uniqueDriver: { id: string; fullName: string } | null = null
             const drivers = await prisma.driver.findMany({
                 where: { phone: e164 },
                 select: { id: true, fullName: true },
             })
             if (drivers.length === 1) {
-                driverId = drivers[0].id
-                displayName = displayName ?? drivers[0].fullName
+                uniqueDriver = drivers[0]
             } else if (drivers.length > 1) {
                 opsLog('warn', 'call_driver_phone_ambiguous', {
                     operation: 'call',
@@ -242,20 +227,20 @@ async function handleChannelCreate(evt: any): Promise<void> {
                     driverIds: drivers.map(driver => driver.id).sort(),
                 })
             }
-        }
 
-        // Auto-create Contact if neither phone-lookup nor driver-lookup found one.
-        // This is the merge anchor for the chat-channel resolver: once a Contact
-        // with this phone exists, any subsequent MAX/TG/WA message from the same
-        // person will land on resolveContact()'s "phone match" branch and attach
-        // a fresh ContactIdentity to this Contact. The history (call ↔ chat)
-        // unifies under one card automatically.
-        if (phoneOwnership.kind === 'not_found' && !contactId) {
             try {
-                const resolved = await ContactService.resolveByPhone(e164, displayName)
+                // resolveByPhone repeats the canonical check while holding the
+                // shared advisory lock. A concurrent ownership change therefore
+                // leaves the call unresolved instead of routing it to a stale owner.
+                const resolved = await ContactService.resolveByPhone(e164, uniqueDriver?.fullName)
                 if (resolved) {
                     contactId = resolved.contact.id
-                    displayName = displayName ?? resolved.contact.displayName
+                    displayName = uniqueDriver?.fullName ?? resolved.contact.displayName
+                    const linkedContact = await prisma.contact.findUnique({
+                        where: { id: resolved.contact.id },
+                        select: { driver: { select: { id: true } } },
+                    })
+                    driverId = linkedContact?.driver?.id ?? uniqueDriver?.id ?? null
                 }
             } catch (err: any) {
                 // Don't block call processing on contact-create failure — the

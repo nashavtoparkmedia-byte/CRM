@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { attachDriverProfilesToContactByPhone, refreshContactMainDriver } from '@/lib/driver-profiles/multi-park';
+import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership';
+import { Prisma } from '@prisma/client';
 
 // In-memory mutex to prevent parallel sync runs
 let syncRunning = false;
@@ -39,48 +41,18 @@ function normalizePhone(phone: string | null | undefined): string | null {
 
 type SyncContactAction = 'created' | 'linked' | 'updated' | 'noop' | 'ambiguous' | 'ambiguous_phone_owner';
 type SyncContactResult = { action: SyncContactAction; phonesDeactivated: number; phonesCreated: number };
-type ActivePhoneOwner = {
-    id: string;
-    contactId: string;
-    contact: {
-        id: string;
-        yandexDriverId: string | null;
-        isArchived: boolean;
-    };
+type InternalSyncContactResult = SyncContactResult & {
+    contactId?: string;
+    attachProfiles?: boolean;
 };
-
-async function findActivePhoneOwners(normalizedE164: string): Promise<ActivePhoneOwner[]> {
-    return prisma.contactPhone.findMany({
-        where: { phone: normalizedE164, isActive: true },
-        select: {
-            id: true,
-            contactId: true,
-            contact: {
-                select: {
-                    id: true,
-                    yandexDriverId: true,
-                    isArchived: true,
-                },
-            },
-        },
-    });
-}
-
-function phoneOwnerDiagnostics(owners: ActivePhoneOwner[]) {
-    return owners.map((owner) => ({
-        contactId: owner.contactId,
-        contactPhoneId: owner.id,
-        yandexDriverId: owner.contact.yandexDriverId,
-        isArchived: owner.contact.isArchived,
-    }));
-}
 
 function logPhoneOwnerConflict(
     event: string,
     yandexDriverId: string,
     normalizedE164: string,
     currentContactId: string,
-    owners: ActivePhoneOwner[],
+    ownerContactIds: string[],
+    reason: string,
 ) {
     console.warn(JSON.stringify({
         level: 'warn',
@@ -89,13 +61,10 @@ function logPhoneOwnerConflict(
         yandexDriverId,
         currentContactId,
         phoneSuffix: normalizedE164.slice(-4),
-        ownerCount: owners.length,
-        owners: phoneOwnerDiagnostics(owners),
+        ownerCount: ownerContactIds.length,
+        ownerContactIds,
+        reason,
     }));
-}
-
-function isUniqueConstraintError(err: any): boolean {
-    return err?.code === 'P2002';
 }
 
 /**
@@ -114,9 +83,39 @@ export async function syncContactForDriver(
     phone: string | null,
 ): Promise<SyncContactResult> {
     const normalizedE164 = phone ? normalizePhoneE164(phone) : null;
+    const outcome = await prisma.$transaction(async (tx) => {
+        if (normalizedE164) {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`contact-phone:${normalizedE164}`}))`;
+        }
+        return syncContactForDriverLocked(tx, yandexDriverId, fullName, normalizedE164);
+    }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        timeout: 30000,
+    });
 
+    if (outcome.contactId) {
+        if (outcome.attachProfiles && normalizedE164) {
+            await attachDriverProfilesToContactByPhone(normalizedE164, 'monitoring-sync');
+        } else {
+            await refreshContactMainDriver(outcome.contactId, 'monitoring-sync');
+        }
+    }
+
+    return {
+        action: outcome.action,
+        phonesDeactivated: outcome.phonesDeactivated,
+        phonesCreated: outcome.phonesCreated,
+    };
+}
+
+async function syncContactForDriverLocked(
+    db: Prisma.TransactionClient,
+    yandexDriverId: string,
+    fullName: string,
+    normalizedE164: string | null,
+): Promise<InternalSyncContactResult> {
     // ── Scenario 1: Contact already linked to this yandexDriverId ─────
-    const existing = await prisma.contact.findUnique({
+    const existing = await db.contact.findUnique({
         where: { yandexDriverId },
         include: {
             phones: { where: { isActive: true, source: 'yandex' }, orderBy: { isPrimary: 'desc' } },
@@ -136,23 +135,37 @@ export async function syncContactForDriver(
         const currentYandexPhone = existing.phones[0];
 
         if (normalizedE164) {
-            const phoneOwners = await findActivePhoneOwners(normalizedE164);
-            const otherOwners = phoneOwners.filter((owner) => owner.contactId !== existing.id);
-            const sameContactOwner = phoneOwners.find((owner) => owner.contactId === existing.id);
+            const ownership = await resolveStrictPhoneOwnership(db, normalizedE164);
+            const sameContactOwner = await db.contactPhone.findUnique({
+                where: { contactId_phone: { contactId: existing.id, phone: normalizedE164 } },
+            });
 
-            if (otherOwners.length > 0) {
+            if (
+                ownership.kind === 'ambiguous'
+                || (ownership.kind === 'matched' && ownership.contactId !== existing.id)
+            ) {
+                const ownerContactIds = ownership.kind === 'ambiguous'
+                    ? ownership.contactIds
+                    : [ownership.contactId];
                 logPhoneOwnerConflict(
                     'monitoring_sync_contact_phone_owner_conflict',
                     yandexDriverId,
                     normalizedE164,
                     existing.id,
-                    otherOwners,
+                    ownerContactIds,
+                    ownership.kind === 'ambiguous' ? ownership.reason : 'different_canonical_owner',
                 );
                 return { action: 'ambiguous_phone_owner', phonesDeactivated: 0, phonesCreated: 0 };
             }
+            if (sameContactOwner && !sameContactOwner.isActive) {
+                await db.contactPhone.update({
+                    where: { id: sameContactOwner.id },
+                    data: { isActive: true },
+                });
+            }
 
             if (currentYandexPhone && currentYandexPhone.phone !== normalizedE164) {
-                await prisma.contactPhone.update({
+                await db.contactPhone.update({
                     where: { id: currentYandexPhone.id },
                     data: { isActive: false },
                 });
@@ -163,38 +176,20 @@ export async function syncContactForDriver(
                         updates.primaryPhoneId = sameContactOwner.id;
                     }
                 } else {
-                    try {
-                        const newPhone = await prisma.contactPhone.create({
-                            data: {
-                                contactId: existing.id,
-                                phone: normalizedE164,
-                                source: 'yandex',
-                                isPrimary: true,
-                            },
-                        });
-                        created++;
+                    const newPhone = await db.contactPhone.upsert({
+                        where: { contactId_phone: { contactId: existing.id, phone: normalizedE164 } },
+                        create: {
+                            contactId: existing.id,
+                            phone: normalizedE164,
+                            source: 'yandex',
+                            isPrimary: true,
+                        },
+                        update: { isActive: true },
+                    });
+                    created++;
 
-                        if (existing.primaryPhoneId === currentYandexPhone.id) {
-                            updates.primaryPhoneId = newPhone.id;
-                        }
-                    } catch (err: any) {
-                        if (!isUniqueConstraintError(err)) throw err;
-                        const ownersAfterRace = await findActivePhoneOwners(normalizedE164);
-                        const otherOwnersAfterRace = ownersAfterRace.filter((owner) => owner.contactId !== existing.id);
-                        const sameOwnerAfterRace = ownersAfterRace.find((owner) => owner.contactId === existing.id);
-                        if (otherOwnersAfterRace.length > 0 || !sameOwnerAfterRace) {
-                            logPhoneOwnerConflict(
-                                'monitoring_sync_contact_phone_create_race_conflict',
-                                yandexDriverId,
-                                normalizedE164,
-                                existing.id,
-                                otherOwnersAfterRace,
-                            );
-                            return { action: 'ambiguous_phone_owner', phonesDeactivated: deactivated, phonesCreated: 0 };
-                        }
-                        if (existing.primaryPhoneId === currentYandexPhone.id) {
-                            updates.primaryPhoneId = sameOwnerAfterRace.id;
-                        }
+                    if (existing.primaryPhoneId === currentYandexPhone.id) {
+                        updates.primaryPhoneId = newPhone.id;
                     }
                 }
             } else if (!currentYandexPhone) {
@@ -203,195 +198,168 @@ export async function syncContactForDriver(
                         updates.primaryPhoneId = sameContactOwner.id;
                     }
                 } else {
-                    try {
-                        const newPhone = await prisma.contactPhone.create({
-                            data: {
-                                contactId: existing.id,
-                                phone: normalizedE164,
-                                source: 'yandex',
-                                isPrimary: !existing.primaryPhoneId,
-                            },
-                        });
-                        created++;
-                        if (!existing.primaryPhoneId) {
-                            updates.primaryPhoneId = newPhone.id;
-                        }
-                    } catch (err: any) {
-                        if (!isUniqueConstraintError(err)) throw err;
-                        const ownersAfterRace = await findActivePhoneOwners(normalizedE164);
-                        const otherOwnersAfterRace = ownersAfterRace.filter((owner) => owner.contactId !== existing.id);
-                        const sameOwnerAfterRace = ownersAfterRace.find((owner) => owner.contactId === existing.id);
-                        if (otherOwnersAfterRace.length > 0 || !sameOwnerAfterRace) {
-                            logPhoneOwnerConflict(
-                                'monitoring_sync_contact_phone_create_race_conflict',
-                                yandexDriverId,
-                                normalizedE164,
-                                existing.id,
-                                otherOwnersAfterRace,
-                            );
-                            return { action: 'ambiguous_phone_owner', phonesDeactivated: 0, phonesCreated: 0 };
-                        }
-                        if (!existing.primaryPhoneId) {
-                            updates.primaryPhoneId = sameOwnerAfterRace.id;
-                        }
+                    const newPhone = await db.contactPhone.upsert({
+                        where: { contactId_phone: { contactId: existing.id, phone: normalizedE164 } },
+                        create: {
+                            contactId: existing.id,
+                            phone: normalizedE164,
+                            source: 'yandex',
+                            isPrimary: !existing.primaryPhoneId,
+                        },
+                        update: { isActive: true },
+                    });
+                    created++;
+                    if (!existing.primaryPhoneId) {
+                        updates.primaryPhoneId = newPhone.id;
                     }
                 }
             }
         }
 
         if (Object.keys(updates).length > 0) {
-            await prisma.contact.update({ where: { id: existing.id }, data: updates });
+            await db.contact.update({ where: { id: existing.id }, data: updates });
         }
-        await prisma.driver.updateMany({ where: { yandexDriverId }, data: { contactId: existing.id } });
-        await refreshContactMainDriver(existing.id, 'monitoring-sync');
+        await db.driver.updateMany({ where: { yandexDriverId }, data: { contactId: existing.id } });
 
-        return { action: (Object.keys(updates).length > 0 || deactivated > 0 || created > 0) ? 'updated' : 'noop', phonesDeactivated: deactivated, phonesCreated: created };
+        return {
+            action: (Object.keys(updates).length > 0 || deactivated > 0 || created > 0) ? 'updated' : 'noop',
+            phonesDeactivated: deactivated,
+            phonesCreated: created,
+            contactId: existing.id,
+        };
     }
 
     // ── Scenario 2: No Contact by yandexDriverId, but phone matches ───
     if (normalizedE164) {
-        const phoneRecords = await prisma.contactPhone.findMany({
-            where: { phone: normalizedE164, isActive: true },
-            include: { contact: true },
-        });
-
-        if (phoneRecords.length > 1) {
+        const ownership = await resolveStrictPhoneOwnership(db, normalizedE164);
+        if (ownership.kind === 'ambiguous') {
             console.warn(JSON.stringify({
                 level: 'warn',
                 event: 'monitoring_sync_contact_phone_ambiguous',
                 yandexDriverId,
                 phoneSuffix: normalizedE164.slice(-4),
-                candidateContactIds: phoneRecords.map((record) => record.contactId),
+                candidateContactIds: ownership.contactIds,
+                reason: ownership.reason,
             }));
             return { action: 'ambiguous', phonesDeactivated: 0, phonesCreated: 0 };
         }
 
-        if (phoneRecords.length === 1 && phoneRecords[0].contact.yandexDriverId && phoneRecords[0].contact.yandexDriverId !== yandexDriverId) {
+        const phoneOwner = ownership.kind === 'matched'
+            ? await db.contact.findUnique({ where: { id: ownership.contactId } })
+            : null;
+
+        if (phoneOwner?.yandexDriverId && phoneOwner.yandexDriverId !== yandexDriverId) {
             console.warn(JSON.stringify({
                 level: 'warn',
                 event: 'monitoring_sync_contact_driver_existing_link_conflict',
                 yandexDriverId,
-                existingYandexDriverId: phoneRecords[0].contact.yandexDriverId,
-                contactId: phoneRecords[0].contactId,
+                existingYandexDriverId: phoneOwner.yandexDriverId,
+                contactId: phoneOwner.id,
                 phoneSuffix: normalizedE164.slice(-4),
             }));
             return { action: 'noop', phonesDeactivated: 0, phonesCreated: 0 };
         }
 
-        if (phoneRecords.length === 1 && !phoneRecords[0].contact.yandexDriverId) {
-            const phoneRecord = phoneRecords[0]
+        if (phoneOwner && !phoneOwner.yandexDriverId && !phoneOwner.isArchived) {
             // Link existing Contact to Yandex
-            const nameUpdate = phoneRecord.contact.displayNameSource !== 'manual'
+            const nameUpdate = phoneOwner.displayNameSource !== 'manual'
                 ? { displayName: fullName, displayNameSource: 'yandex' as const }
                 : {};
 
-            await prisma.contact.update({
-                where: { id: phoneRecord.contactId },
+            await db.contact.update({
+                where: { id: phoneOwner.id },
                 data: {
                     yandexDriverId,
                     masterSource: 'yandex',
                     ...nameUpdate,
                 },
             });
-            await prisma.driver.updateMany({ where: { yandexDriverId }, data: { contactId: phoneRecord.contactId } });
-            await attachDriverProfilesToContactByPhone(normalizedE164, 'monitoring-sync');
+            await db.driver.updateMany({ where: { yandexDriverId }, data: { contactId: phoneOwner.id } });
 
-            console.log(`[sync] Linked Contact ${phoneRecord.contactId} to Yandex ${yandexDriverId} via phone ${normalizedE164}`);
-            return { action: 'linked', phonesDeactivated: 0, phonesCreated: 0 };
+            console.log(`[sync] Linked Contact ${phoneOwner.id} to Yandex ${yandexDriverId} via phone ${normalizedE164}`);
+            return {
+                action: 'linked',
+                phonesDeactivated: 0,
+                phonesCreated: 0,
+                contactId: phoneOwner.id,
+                attachProfiles: true,
+            };
         }
     }
 
     // ── Scenario 3: No match → create new Contact ─────────────────────
-    let contact
-    try {
-        contact = await prisma.contact.create({
-            data: {
+    const contact = await db.contact.upsert({
+        where: { yandexDriverId },
+        create: {
                 displayName: fullName,
                 displayNameSource: 'yandex',
                 masterSource: 'yandex',
                 yandexDriverId,
-            },
-        });
-    } catch (err: any) {
-        // Concurrent sync can race on Contact.yandexDriverId. The unique
-        // constraint is the final guard; reuse the row created by the winner.
-        if (err?.code !== 'P2002') throw err;
-        const existingAfterRace = await prisma.contact.findUnique({
-            where: { yandexDriverId },
-        });
-        if (!existingAfterRace) throw err;
-        contact = existingAfterRace;
-        console.warn(JSON.stringify({
-            level: 'warn',
-            event: 'monitoring_sync_contact_create_race_reused',
-            yandexDriverId,
-        }));
-    }
+        },
+        update: {},
+    });
 
     let newPhoneId: string | null = null;
     if (normalizedE164) {
-        const existingPhones = await findActivePhoneOwners(normalizedE164);
-        const otherOwners = existingPhones.filter((owner) => owner.contactId !== contact.id);
-        const sameContactOwner = existingPhones.find((owner) => owner.contactId === contact.id);
+        const ownership = await resolveStrictPhoneOwnership(db, normalizedE164);
+        const sameContactOwner = await db.contactPhone.findUnique({
+            where: { contactId_phone: { contactId: contact.id, phone: normalizedE164 } },
+        });
 
-        if (otherOwners.length > 0) {
+        if (
+            ownership.kind === 'ambiguous'
+            || (ownership.kind === 'matched' && ownership.contactId !== contact.id)
+        ) {
             logPhoneOwnerConflict(
                 'monitoring_sync_contact_phone_owner_conflict',
                 yandexDriverId,
                 normalizedE164,
                 contact.id,
-                otherOwners,
+                ownership.kind === 'ambiguous' ? ownership.contactIds : [ownership.contactId],
+                ownership.kind === 'ambiguous' ? ownership.reason : 'different_canonical_owner',
             );
         } else if (sameContactOwner) {
+            if (!sameContactOwner.isActive) {
+                await db.contactPhone.update({
+                    where: { id: sameContactOwner.id },
+                    data: { isActive: true },
+                });
+            }
             if (!contact.primaryPhoneId) {
-                await prisma.contact.update({
+                await db.contact.update({
                     where: { id: contact.id },
                     data: { primaryPhoneId: sameContactOwner.id },
                 });
             }
         } else {
-            try {
-                const newPhone = await prisma.contactPhone.create({
-                    data: {
-                        contactId: contact.id,
-                        phone: normalizedE164,
-                        source: 'yandex',
-                        isPrimary: true,
-                    },
-                });
-                newPhoneId = newPhone.id;
+            const newPhone = await db.contactPhone.upsert({
+                where: { contactId_phone: { contactId: contact.id, phone: normalizedE164 } },
+                create: {
+                    contactId: contact.id,
+                    phone: normalizedE164,
+                    source: 'yandex',
+                    isPrimary: true,
+                },
+                update: { isActive: true },
+            });
+            newPhoneId = newPhone.id;
 
-                await prisma.contact.update({
-                    where: { id: contact.id },
-                    data: { primaryPhoneId: newPhone.id },
-                });
-            } catch (err: any) {
-                if (!isUniqueConstraintError(err)) throw err;
-                const ownersAfterRace = await findActivePhoneOwners(normalizedE164);
-                const otherOwnersAfterRace = ownersAfterRace.filter((owner) => owner.contactId !== contact.id);
-                const sameOwnerAfterRace = ownersAfterRace.find((owner) => owner.contactId === contact.id);
-                if (otherOwnersAfterRace.length > 0 || !sameOwnerAfterRace) {
-                    logPhoneOwnerConflict(
-                        'monitoring_sync_contact_phone_create_race_conflict',
-                        yandexDriverId,
-                        normalizedE164,
-                        contact.id,
-                        otherOwnersAfterRace,
-                    );
-                } else if (!contact.primaryPhoneId) {
-                    await prisma.contact.update({
-                        where: { id: contact.id },
-                        data: { primaryPhoneId: sameOwnerAfterRace.id },
-                    });
-                }
-            }
+            await db.contact.update({
+                where: { id: contact.id },
+                data: { primaryPhoneId: newPhone.id },
+            });
         }
     }
 
-    await prisma.driver.updateMany({ where: { yandexDriverId }, data: { contactId: contact.id } });
-    await refreshContactMainDriver(contact.id, 'monitoring-sync');
+    await db.driver.updateMany({ where: { yandexDriverId }, data: { contactId: contact.id } });
 
-    return { action: 'created', phonesDeactivated: 0, phonesCreated: newPhoneId ? 1 : 0 };
+    return {
+        action: 'created',
+        phonesDeactivated: 0,
+        phonesCreated: newPhoneId ? 1 : 0,
+        contactId: contact.id,
+        attachProfiles: Boolean(normalizedE164),
+    };
 }
 
 export async function POST(req: NextRequest) {
@@ -504,7 +472,6 @@ export async function POST(req: NextRequest) {
                             else if (result.action === 'updated') contactsUpdated++;
                             phonesDeactivated += result.phonesDeactivated;
                             phonesCreated += result.phonesCreated;
-                            if (phone) await attachDriverProfilesToContactByPhone(phone, `monitoring-sync:${parkName}`);
                         } catch (contactErr: any) {
                             contactSyncErrors++;
                             console.error(`[sync] Contact sync error for park=${parkName} yandexDriverId=${id}: ${contactErr.message}`);
