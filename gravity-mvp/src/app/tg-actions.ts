@@ -8,6 +8,7 @@ import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
+import { buildProviderMessageDedupWhere } from '@/lib/provider-message-dedup'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -330,6 +331,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 
         const externalChatId = `telegram:${senderId}`
         const externalMsgId = message.id?.toString()
+        const replyToExternalId = message.replyTo?.replyToMsgId?.toString() || null
         // Validate message.date — corrupted timestamps (Y2038 overflow,
         // pre-2013) would wreck chronology. If we can't trust the date,
         // drop the message rather than file it under "now".
@@ -450,22 +452,17 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         }
         // ──────────────────────────────────────────────────────────
 
-        // 3. DE-DUPLICATION: by externalId or content+time
+        // 3. Provider ID is authoritative. Content/time is a legacy fallback
+        // only when Telegram did not provide a message ID.
         const existing = await (prisma.message as any).findFirst({
-            where: {
-                OR: [
-                    ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                    {
-                        chatId: unifiedChat.id,
-                        content: text,
-                        direction: 'inbound',
-                        sentAt: {
-                            gte: new Date(now.getTime() - 5000),
-                            lte: new Date(now.getTime() + 5000)
-                        }
-                    }
-                ]
-            }
+            where: buildProviderMessageDedupWhere({
+                externalId: externalMsgId,
+                chatId: unifiedChat.id,
+                content: text,
+                direction: 'inbound',
+                sentAt: now,
+                fallbackWindowMs: 5000,
+            }),
         })
 
         if (existing) {
@@ -515,7 +512,10 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                     type: msgType,
                     sentAt: now,
                     status: 'delivered',
-                    externalId: externalMsgId
+                    externalId: externalMsgId,
+                    metadata: replyToExternalId
+                        ? { quotedMsgId: replyToExternalId }
+                        : undefined,
                 }
             })
 
@@ -583,6 +583,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
 
     const externalChatId = `telegram:${recipientId}`
     const externalMsgId = message.id?.toString()
+    const replyToExternalId = message.replyTo?.replyToMsgId?.toString() || null
     const validated = validateTgDate(message.date)
     if (!validated) return
     const sentAt = validated
@@ -593,22 +594,18 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     const msgType = mediaInfo?.type || 'text'
     const contentForDedup = text
 
-    // Dedup: by externalId OR by content+time (30s window handles send→event race)
+    // Provider ID is authoritative. The only content/time fallback with an ID
+    // is the optimistic outbound CRM row (status=sent, externalId=null).
     const existing = await (prisma.message as any).findFirst({
-        where: {
-            OR: [
-                ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                {
-                    chatId: chat.id,
-                    content: contentForDedup,
-                    direction: 'outbound',
-                    sentAt: {
-                        gte: new Date(sentAt.getTime() - 30000),
-                        lte: new Date(sentAt.getTime() + 30000),
-                    },
-                },
-            ],
-        },
+        where: buildProviderMessageDedupWhere({
+            externalId: externalMsgId,
+            chatId: chat.id,
+            content: contentForDedup,
+            direction: 'outbound',
+            sentAt,
+            fallbackWindowMs: 30000,
+            allowOptimisticOutbound: true,
+        }),
     })
 
     if (existing) {
@@ -633,6 +630,9 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
             sentAt,
             status: 'delivered',
             externalId: externalMsgId,
+            metadata: replyToExternalId
+                ? { quotedMsgId: replyToExternalId }
+                : undefined,
         },
     })
 
@@ -1458,19 +1458,19 @@ export async function importTelegramHistory(
                     const isOutbound = !!msg.out
                     const histMsgType = histMediaInfo?.type || 'text'
 
-                    // Dedup
+                    const historyDirection = isOutbound ? 'outbound' : 'inbound'
+                    // History import follows the same provider-ID contract as
+                    // live delivery. Equal text with distinct IDs is distinct.
                     const existing = await (prisma.message as any).findFirst({
-                        where: {
-                            OR: [
-                                ...(externalMsgId ? [{ externalId: externalMsgId }] : []),
-                                {
-                                    chatId: unifiedChat.id,
-                                    content: msgText,
-                                    direction: isOutbound ? 'outbound' : 'inbound',
-                                    sentAt: { gte: new Date(ts.getTime() - 5000), lte: new Date(ts.getTime() + 5000) }
-                                }
-                            ]
-                        }
+                        where: buildProviderMessageDedupWhere({
+                            externalId: externalMsgId,
+                            chatId: unifiedChat.id,
+                            content: msgText,
+                            direction: historyDirection,
+                            sentAt: ts,
+                            fallbackWindowMs: 5000,
+                            allowOptimisticOutbound: historyDirection === 'outbound',
+                        }),
                     })
 
                     totalMessages++
@@ -1493,10 +1493,17 @@ export async function importTelegramHistory(
                             try {
                                 const buffer = await client.downloadMedia(msg, {})
                                 if (buffer && Buffer.isBuffer(buffer)) {
-                                    const mimeType = msg.media?.document?.mimeType ||
+                                    const document = msg.media
+                                        && 'document' in msg.media
+                                        && msg.media.document instanceof Api.Document
+                                        ? msg.media.document
+                                        : null
+                                    const mimeType = document?.mimeType ||
                                         (histMsgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                                     const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
-                                    const fileName = msg.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                                    const fileName = document?.attributes
+                                        .find(attribute => attribute instanceof Api.DocumentAttributeFilename)
+                                        ?.fileName || null
                                     await (prisma.messageAttachment as any).create({
                                         data: {
                                             messageId: savedHistMsg.id,

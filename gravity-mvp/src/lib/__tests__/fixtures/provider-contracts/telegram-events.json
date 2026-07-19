@@ -1,0 +1,63 @@
+{
+  "privateChat": {
+    "telegramId": "100500",
+    "chatId": "100500",
+    "chatType": "private",
+    "username": "driver_fixture",
+    "firstName": "Ivan",
+    "lastName": "Petrov"
+  },
+  "repeatedInbound": [
+    {
+      "providerMessageId": "71",
+      "text": "Одинаковый текст",
+      "timestamp": "2026-07-18T12:00:00.000Z"
+    },
+    {
+      "providerMessageId": "72",
+      "text": "Одинаковый текст",
+      "timestamp": "2026-07-18T12:00:01.000Z"
+    }
+  ],
+  "media": {
+    "providerMessageId": "73",
+    "text": "Подпись",
+    "timestamp": "2026-07-18T12:00:02.000Z",
+    "attachments": [
+      {
+        "type": "image",
+        "fileId": "fixture-photo-id",
+        "mimeType": "image/jpeg",
+        "fileSize": 128
+      }
+    ]
+  },
+  "reply": {
+    "providerMessageId": "77",
+    "replyToProviderMessageId": "71",
+    "text": "Ответ",
+    "timestamp": "2026-07-18T12:00:06.000Z"
+  },
+  "ownSharedContact": {
+    "providerMessageId": "74",
+    "text": "[Контакт: Ivan +79990000000]",
+    "timestamp": "2026-07-18T12:00:03.000Z",
+    "sharedContact": {
+      "userId": "100500",
+      "phoneNumber": "+79990000000",
+      "firstName": "Ivan",
+      "providerMessageId": "74"
+    }
+  },
+  "foreignSharedContact": {
+    "providerMessageId": "75",
+    "text": "[Контакт: Petr +78880000000]",
+    "timestamp": "2026-07-18T12:00:04.000Z",
+    "sharedContact": {
+      "userId": "200600",
+      "phoneNumber": "+78880000000",
+      "firstName": "Petr",
+      "providerMessageId": "75"
+    }
+  }
+}

@@ -194,6 +194,8 @@ export async function updateMaxConnectionSettings(id: string, name: string, isDe
 
 // Send a message via MAX Personal Account (Web Scraper)
 // target can be a MAX internal chatId (e.g. "201482140") or a phone number (e.g. "79222155750")
+const MAX_SEND_TIMEOUT_MS = 35_000
+
 export async function sendMaxPersonalMessage(
     target: string,
     message: string,
@@ -216,6 +218,7 @@ export async function sendMaxPersonalMessage(
         const response = await fetch(`${maxScraperUrl}/send-message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: AbortSignal.timeout(MAX_SEND_TIMEOUT_MS),
             body: JSON.stringify({
                 chatId: cleanTarget,
                 message,
@@ -246,6 +249,9 @@ export async function sendMaxPersonalMessage(
         }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)
+        if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+            throw new Error(`MAX send request timed out after ${MAX_SEND_TIMEOUT_MS}ms`)
+        }
         throw new Error(error.message || "Failed to call scraper API")
     }
 }

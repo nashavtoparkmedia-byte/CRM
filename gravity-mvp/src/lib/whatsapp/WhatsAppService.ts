@@ -1,4 +1,5 @@
 import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
@@ -12,6 +13,14 @@ import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
 import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
+import { buildProviderMessageDedupWhere } from '@/lib/provider-message-dedup'
+import {
+    canonicalWhatsAppExternalChatId,
+    mapWhatsAppMessageType,
+    resolveWhatsAppQuotedMessageId,
+    whatsAppContentWithFallback,
+} from '@/lib/whatsapp/whatsapp-message-contract'
+import { applyProviderReactionEvent } from '@/lib/provider-reaction-contract'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -138,16 +147,7 @@ async function enrichStoreFallbackMedia(
  *   - "<digits>@g.us" / group jids      → keep raw (room id, not phone)
  *   - anything else                     → keep raw (defensive)
  */
-function canonicalWaExternalChatId(rawJid: string): string {
-    if (!rawJid) return rawJid
-    if (rawJid.endsWith('@g.us')) return rawJid
-    if (rawJid.endsWith('@lid')) return rawJid
-    if (rawJid.endsWith('@c.us')) {
-        const digits = rawJid.split('@')[0].replace(/\D/g, '')
-        if (digits.length >= 10) return `whatsapp:7${digits.slice(-10)}`
-    }
-    return rawJid
-}
+const canonicalWaExternalChatId = canonicalWhatsAppExternalChatId
 
 /**
  * Live-handle a group message (@g.us). Minimal pipeline:
@@ -258,6 +258,7 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
     if (existing) return
 
     const unifiedType = mapToUnifiedMessageType(msg.type)
+    const quotedMsgId = await resolveWhatsAppQuotedMessageId(msg)
     const savedMsg = await prisma.message.create({
         data: {
             chatId: unifiedChat.id,
@@ -268,7 +269,10 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
             channel: 'whatsapp',
             sentAt: ts,
             status: isOutbound ? 'delivered' : undefined,
-            metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
+            metadata: {
+                ...(msg.author ? { groupAuthor: msg.author } : {}),
+                ...(quotedMsgId ? { quotedMsgId } : {}),
+            },
         },
     })
 
@@ -607,20 +611,15 @@ async function syncHistory(connectionId: string, client: Client) {
                         const unifiedChat = await prisma.chat.findUnique({ where: { externalChatId: syncCanonicalExt } })
                         if (unifiedChat) {
                             const existing = await prisma.message.findFirst({
-                                where: {
-                                    OR: [
-                                        { externalId: msg.id },
-                                        {
-                                            chatId: unifiedChat.id,
-                                            content: waContentWithFallback(msg.body, msg.type),
-                                            direction: msg.fromMe ? 'outbound' : 'inbound',
-                                            sentAt: {
-                                                gte: new Date(ts.getTime() - 2000),
-                                                lte: new Date(ts.getTime() + 2000)
-                                            }
-                                        }
-                                    ]
-                                }
+                                where: buildProviderMessageDedupWhere({
+                                    externalId: msg.id,
+                                    chatId: unifiedChat.id,
+                                    content: waContentWithFallback(msg.body, msg.type),
+                                    direction: msg.fromMe ? 'outbound' : 'inbound',
+                                    sentAt: ts,
+                                    fallbackWindowMs: 2000,
+                                    allowOptimisticOutbound: msg.fromMe,
+                                }),
                             })
 
                             if (existing) {
@@ -694,29 +693,8 @@ function mapMsgType(type: string): 'chat' | 'image' | 'audio' | 'video' | 'stick
     return allowed.includes(type as any) ? (type as typeof allowed[number]) : 'chat'
 }
 
-function mapToUnifiedMessageType(type: string): 'text' | 'image' | 'audio' | 'video' | 'sticker' | 'voice' | 'document' | 'system' {
-    const map: Record<string, any> = {
-        'chat': 'text',
-        'image': 'image',
-        'audio': 'audio',
-        'video': 'video',
-        'sticker': 'sticker',
-        'voice': 'voice',
-        'ptt': 'voice',        // push-to-talk voice message
-        'document': 'document',
-    }
-    return map[type] || 'text'
-}
-
-function waContentWithFallback(body: string | undefined, type: string): string {
-    if (body) return body
-    const fallbacks: Record<string, string> = {
-        image: '[Фото]', video: '[Видео]', voice: '[Голосовое]',
-        audio: '[Аудио]', document: '[Документ]', sticker: '[Стикер]',
-        ptt: '[Голосовое]', vcard: '[Контакт]',
-    }
-    return fallbacks[type] || ''
-}
+const mapToUnifiedMessageType = mapWhatsAppMessageType
+const waContentWithFallback = whatsAppContentWithFallback
 
 export function getClient(connectionId: string): Client | undefined {
     return clients.get(connectionId)
@@ -1195,24 +1173,18 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 if (waLegacyErr.code !== 'P2002') throw waLegacyErr
             }
 
-            // Unified Message — dedup by externalId OR by content+direction+time window.
-            // For outbound messages, this also catches echoes from CRM-initiated sends
-            // (which create the optimistic Message record before the WA library fires the event).
+            // Provider ID is authoritative. Content/time fallback is allowed
+            // only for an outbound optimistic CRM row without externalId.
             const existingUnified = await prisma.message.findFirst({
-                where: {
-                    OR: [
-                        { externalId: msg.id._serialized },
-                        {
-                            chatId: unifiedChat.id,
-                            content: waContentWithFallback(msg.body, msg.type),
-                            direction,
-                            sentAt: {
-                                gte: new Date(ts.getTime() - 10000),
-                                lte: new Date(ts.getTime() + 10000)
-                            }
-                        }
-                    ]
-                }
+                where: buildProviderMessageDedupWhere({
+                    externalId: msg.id._serialized,
+                    chatId: unifiedChat.id,
+                    content: waContentWithFallback(msg.body, msg.type),
+                    direction,
+                    sentAt: ts,
+                    fallbackWindowMs: 10000,
+                    allowOptimisticOutbound: isOutbound,
+                }),
             })
 
             if (existingUnified) {
@@ -1229,6 +1201,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 }
             } else {
                 const msgType = mapToUnifiedMessageType(msg.type)
+                const quotedMsgId = await resolveWhatsAppQuotedMessageId(msg)
                 const savedMsg = await prisma.message.create({
                     data: {
                         chatId: unifiedChat.id,
@@ -1238,6 +1211,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                         externalId: msg.id._serialized,
                         sentAt: ts,
                         status: isOutbound ? 'delivered' : undefined,
+                        metadata: quotedMsgId ? { quotedMsgId } : undefined,
                     }
                 })
 
@@ -1284,6 +1258,40 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             }
         } catch (err) {
             console.error(`[WA-SERVICE] Message event error for ${connectionId}:`, err)
+        }
+    })
+
+    client.on('message_reaction', async (reaction) => {
+        if (!registry.isCurrentInstance(connectionId, instanceId)) return
+        registry.touch(connectionId, instanceId)
+
+        const externalId = reaction.msgId?._serialized
+        if (!externalId) return
+
+        try {
+            const message = await prisma.message.findUnique({
+                where: { externalId },
+                select: { id: true, chatId: true, metadata: true },
+            })
+            if (!message) return
+
+            const metadata = applyProviderReactionEvent(message.metadata, {
+                provider: 'whatsapp',
+                senderId: String(reaction.senderId || 'unknown'),
+                emoji: reaction.reaction || '',
+                observedAt: clampMessageTs(reaction.timestamp),
+            })
+            const updated = await prisma.message.update({
+                where: { id: message.id },
+                data: { metadata: metadata as Prisma.InputJsonValue },
+            })
+            broadcastChatMessage(message.chatId, updated)
+        } catch (err: unknown) {
+            console.error(
+                `[WA-SERVICE] reaction handler error: ${
+                    err instanceof Error ? err.message : String(err)
+                }`,
+            )
         }
     })
 
@@ -1717,15 +1725,16 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
         }
         
         const existing = await prisma.message.findFirst({
-            where: {
+            where: buildProviderMessageDedupWhere({
+                externalId: msg.id._serialized,
                 chatId: unifiedChat.id,
                 content: text,
                 direction: 'outbound',
-                sentAt: {
-                    gte: new Date(ts.getTime() - 5000), // 5 second window
-                    lte: new Date(ts.getTime() + 5000)
-                }
-            }
+                sentAt: ts,
+                fallbackWindowMs: 5000,
+                allowOptimisticOutbound: true,
+            }),
+            orderBy: { sentAt: 'desc' },
         })
 
         if (existing) {
@@ -2114,17 +2123,15 @@ export async function importWhatsAppHistory(
 
                         // Unified Message with dedup
                         const existing = await prisma.message.findFirst({
-                            where: {
-                                OR: [
-                                    { externalId: msgId },
-                                    {
-                                        chatId: unifiedChat.id,
-                                        content: waContentWithFallback(msg.body, msg.type),
-                                        direction: msg.fromMe ? 'outbound' : 'inbound',
-                                        sentAt: { gte: new Date(ts.getTime() - 2000), lte: new Date(ts.getTime() + 2000) }
-                                    }
-                                ]
-                            }
+                            where: buildProviderMessageDedupWhere({
+                                externalId: msgId,
+                                chatId: unifiedChat.id,
+                                content: waContentWithFallback(msg.body, msg.type),
+                                direction: msg.fromMe ? 'outbound' : 'inbound',
+                                sentAt: ts,
+                                fallbackWindowMs: 2000,
+                                allowOptimisticOutbound: msg.fromMe,
+                            }),
                         })
 
                         totalMessages++
@@ -2315,7 +2322,7 @@ export async function checkReachability(
         // Prefer the same runtime truth used by the WhatsApp settings screen:
         // registry ready + live client.info. DB status can lag behind runtime
         // (for example remain "qr" while the in-memory session is ready).
-        let connId = connectionId
+        let connId: string | null | undefined = connectionId
         if (!connId) {
             connId = getLiveReachabilityConnectionId()
         }

@@ -1,0 +1,50 @@
+{
+  "private": {
+    "jid": "79222155750@c.us",
+    "providerMessageId": "true_79222155750@c.us_AAA111",
+    "body": "Личное сообщение",
+    "type": "chat"
+  },
+  "lid": {
+    "jid": "165313509372005@lid",
+    "providerMessageId": "false_165313509372005@lid_BBB222",
+    "body": "LID без выдуманного телефона",
+    "type": "chat"
+  },
+  "group": {
+    "jid": "120363000000000@g.us",
+    "providerMessageId": "false_120363000000000@g.us_CCC333",
+    "body": "Групповое сообщение",
+    "type": "chat"
+  },
+  "repeatedInbound": [
+    {
+      "providerMessageId": "false_79222155750@c.us_DDD444",
+      "body": "Одинаковый текст",
+      "timestamp": "2026-07-18T12:00:00.000Z"
+    },
+    {
+      "providerMessageId": "false_79222155750@c.us_EEE555",
+      "body": "Одинаковый текст",
+      "timestamp": "2026-07-18T12:00:01.000Z"
+    }
+  ],
+  "media": {
+    "providerMessageId": "false_79222155750@c.us_FFF666",
+    "body": "",
+    "type": "image",
+    "mimeType": "image/jpeg"
+  },
+  "reply": {
+    "providerMessageId": "false_79222155750@c.us_GGG777",
+    "quotedProviderMessageId": "true_79222155750@c.us_AAA111",
+    "body": "Ответ",
+    "type": "chat"
+  },
+  "reaction": {
+    "providerMessageId": "false_79222155750@c.us_HHH888",
+    "targetProviderMessageId": "true_79222155750@c.us_AAA111",
+    "senderId": "79222155750@c.us",
+    "emoji": "👍"
+  }
+}

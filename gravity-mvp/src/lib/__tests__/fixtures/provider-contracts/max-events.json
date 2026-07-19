@@ -1,0 +1,38 @@
+{
+  "chatId": "900001",
+  "repeatedInbound": [
+    {
+      "id": "d301aa01",
+      "sender": "700001",
+      "text": "Одинаковый текст",
+      "time": 1784383200000
+    },
+    {
+      "id": "d301aa02",
+      "sender": "700001",
+      "text": "Одинаковый текст",
+      "time": 1784383201000
+    }
+  ],
+  "replay": {
+    "id": "d301aa01",
+    "sender": "700001",
+    "text": "Одинаковый текст",
+    "time": 1784383200000
+  },
+  "file": {
+    "id": "d301aa03",
+    "sender": "700001",
+    "text": "Договор",
+    "time": 1784383202000,
+    "attaches": [
+      {
+        "_type": "FILE",
+        "fileId": "fixture-file-id",
+        "token": "fixture-token",
+        "name": "contract.pdf",
+        "size": 2048
+      }
+    ]
+  }
+}

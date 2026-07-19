@@ -9,6 +9,10 @@ import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
 import { buildTelegramIdentityMetadata } from '@/lib/telegram-identity-metadata'
 import { applyTelegramSharedContactPhone } from '@/lib/telegram-shared-contact'
+import {
+    buildProviderMessageDedupWhere,
+    buildScopedProviderMessageId,
+} from '@/lib/provider-message-dedup'
 
 function errorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error)
@@ -23,7 +27,8 @@ export async function POST(req: NextRequest) {
         const { telegramId, text: rawText, direction, username, timestamp,
                 chatType, chatId: tgChatId, chatTitle,
                 firstName, lastName,
-                attachments, sharedContact } = body  // PR-Ц: media attachments from tg-bot
+                attachments, sharedContact, providerMessageId,
+                replyToProviderMessageId } = body  // PR-Ц: media attachments from tg-bot
         const text = typeof rawText === 'string' && rawText
             ? rawText
             : sharedContact?.phoneNumber
@@ -33,6 +38,17 @@ export async function POST(req: NextRequest) {
         if (!telegramId || !text) {
             return NextResponse.json({ error: 'Missing required fields: telegramId, text' }, { status: 400 })
         }
+
+        const providerExternalId = buildScopedProviderMessageId(
+            'telegram-bot',
+            tgChatId || telegramId,
+            providerMessageId,
+        )
+        const replyToExternalId = buildScopedProviderMessageId(
+            'telegram-bot',
+            tgChatId || telegramId,
+            replyToProviderMessageId,
+        )
 
         // ── GROUP BRANCH: route group/supergroup/channel messages separately ──
         const isGroup = chatType && chatType !== 'private'
@@ -58,43 +74,80 @@ export async function POST(req: NextRequest) {
                 ? (lastName ? `${firstName} ${lastName}` : firstName)
                 : (username ? `@${username}` : `User ${telegramId}`)
 
-            await prisma.message.create({
-                data: {
+            const messageDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
+            const existing = await prisma.message.findFirst({
+                where: buildProviderMessageDedupWhere({
+                    externalId: providerExternalId,
                     chatId: unifiedChat.id,
-                    direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
                     content: text,
-                    channel: 'telegram',
-                    type: 'text',
+                    direction: messageDirection,
                     sentAt,
-                    status: 'delivered',
-                    metadata: {
-                        senderId: telegramId.toString(),
-                        senderName: senderDisplay,
-                        senderUsername: username || null
-                    }
-                }
+                    fallbackWindowMs: 20000,
+                    allowOptimisticOutbound: messageDirection === 'outbound',
+                }),
             })
 
-            // Lightweight workflow: only unreadCount + lastInboundAt (no requiresResponse, no status transition)
-            if (direction !== 'OUTGOING') {
-                await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, sentAt)
+            if (!existing) {
+                const firstAtt = Array.isArray(attachments) && attachments.length > 0
+                    ? attachments[0]
+                    : null
+                await prisma.message.create({
+                    data: {
+                        chatId: unifiedChat.id,
+                        direction: messageDirection,
+                        content: text,
+                        channel: 'telegram',
+                        type: firstAtt?.type || 'text',
+                        sentAt,
+                        status: 'delivered',
+                        externalId: providerExternalId,
+                        metadata: {
+                            senderId: telegramId.toString(),
+                            senderName: senderDisplay,
+                            senderUsername: username || null,
+                            ...(Array.isArray(attachments) && attachments.length > 0
+                                ? { attachments }
+                                : {}),
+                            ...(replyToExternalId ? { quotedMsgId: replyToExternalId } : {}),
+                        }
+                    }
+                })
+
+                // Lightweight workflow: only unreadCount + lastInboundAt (no requiresResponse, no status transition)
+                if (direction !== 'OUTGOING') {
+                    await ConversationWorkflowService.onGroupInboundMessage(unifiedChat.id, sentAt)
+                }
             }
 
             console.log(`[WEBHOOK-TG] GROUP chatId=${unifiedChat.id} type=${chatType} title=${chatTitle} sender=${senderDisplay}`)
-            return NextResponse.json({ success: true, processed: 'group_message' })
+            return NextResponse.json({
+                success: true,
+                processed: 'group_message',
+                duplicate: Boolean(existing),
+            })
         }
         // ── END GROUP BRANCH ──
 
         const tgIdBigInt = BigInt(telegramId)
 
         // Add the message to the DB for the CRM history
-        const message = await prisma.botChatMessage.create({
-            data: {
-                telegramId: tgIdBigInt,
-                text,
-                direction: direction || 'INCOMING'
-            }
-        })
+        const legacyMessageData = {
+            telegramId: tgIdBigInt,
+            text,
+            direction: direction || 'INCOMING',
+        }
+        const message = providerExternalId
+            ? await prisma.botChatMessage.upsert({
+                where: { id: `bot:${providerExternalId}` },
+                update: {},
+                create: {
+                    id: `bot:${providerExternalId}`,
+                    ...legacyMessageData,
+                },
+            })
+            : await prisma.botChatMessage.create({
+                data: legacyMessageData,
+            })
 
         // Also save to the unified Messenger chat/message tables
         // so inbound TG messages appear in the CRM Messenger UI
@@ -234,29 +287,32 @@ export async function POST(req: NextRequest) {
             }
             // ──────────────────────────────────────────────────────────
 
-            // DE-DUPLICATION: check if we already have this message (echo from bot)
-            // Increased window for burst protection
+            // Provider ID is authoritative. Content/time remains only for
+            // legacy payloads that predate providerMessageId.
+            const msgDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
             const existing = await prisma.message.findFirst({
-                where: {
+                where: buildProviderMessageDedupWhere({
+                    externalId: providerExternalId,
                     chatId: unifiedChat.id,
                     content: text,
-                    direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
-                    sentAt: {
-                        gte: new Date(sentAt.getTime() - 20000), 
-                        lte: new Date(sentAt.getTime() + 20000)
-                    }
-                }
+                    direction: msgDirection,
+                    sentAt,
+                    fallbackWindowMs: 20000,
+                    allowOptimisticOutbound: msgDirection === 'outbound',
+                }),
             })
 
             if (!existing) {
-                const msgDirection = direction === 'OUTGOING' ? 'outbound' : 'inbound'
                 // PR-Ц: определяем тип сообщения по первому attachment.
                 // text → текст без медиа; image/video/voice/audio/document/sticker → media-сообщение.
                 const firstAtt = Array.isArray(attachments) && attachments.length > 0 ? attachments[0] : null
                 const msgType = firstAtt?.type || 'text'
-                const msgMetadata: Prisma.InputJsonObject = Array.isArray(attachments) && attachments.length > 0
-                    ? { attachments: attachments as Prisma.InputJsonValue }
-                    : {}
+                const msgMetadata: Prisma.InputJsonObject = {
+                    ...(Array.isArray(attachments) && attachments.length > 0
+                        ? { attachments: attachments as Prisma.InputJsonValue }
+                        : {}),
+                    ...(replyToExternalId ? { quotedMsgId: replyToExternalId } : {}),
+                }
                 await prisma.message.create({
                     data: {
                         chatId: unifiedChat.id,
@@ -266,6 +322,7 @@ export async function POST(req: NextRequest) {
                         type: msgType,
                         sentAt: sentAt,
                         status: 'delivered',
+                        externalId: providerExternalId,
                         metadata: msgMetadata,
                     }
                 })

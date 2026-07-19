@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/app/api/webhook/telegram/route.ts",
+    "src/app/max-actions.ts",
+    "src/app/tg-actions.ts",
+    "src/lib/provider-message-dedup.ts",
+    "src/lib/provider-reaction-contract.ts",
+    "src/lib/whatsapp/whatsapp-message-contract.ts",
+    "src/lib/whatsapp/WhatsAppService.ts",
+    "src/lib/__tests__/max-message-end-to-end-trace.test.ts",
+    "src/lib/__tests__/max-provider-action-contract.test.ts",
+    "src/lib/__tests__/message-provider-retry-contract.test.ts",
+    "src/lib/__tests__/provider-message-dedup.test.ts",
+    "src/lib/__tests__/provider-reaction-contract.test.ts",
+    "src/lib/__tests__/provider-reaction-routes.test.ts",
+    "src/lib/__tests__/provider-reconnect-contract.test.ts",
+    "src/lib/__tests__/telegram-provider-contract.test.ts",
+    "src/lib/__tests__/whatsapp-provider-contract.test.ts"
+  ],
+  "exclude": []
+}

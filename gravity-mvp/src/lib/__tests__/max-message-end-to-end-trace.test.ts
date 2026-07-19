@@ -180,4 +180,24 @@ describe('MAX raw payload to rendered text trace', () => {
     expect(createPayload.content).not.toContain('attachments')
     expect(prismaMock.messageAttachment.create).toHaveBeenCalledTimes(1)
   })
+
+  test('rejects live MAX text without a real provider message ID', async () => {
+    const response = await maxWebhookPost(webhookRequest({
+      chatId: '900001',
+      senderId: '700001',
+      text: 'Text without provider identity',
+      timestamp: new Date().toISOString(),
+      messageType: 'text',
+      source: 'transport',
+      externalId: null,
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      ok: true,
+      skipped: 'text_without_provider_identity',
+      externalId: null,
+    })
+    expect(prismaMock.message.upsert).not.toHaveBeenCalled()
+  })
 })

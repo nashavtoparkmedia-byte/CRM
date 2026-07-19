@@ -30,6 +30,15 @@ class CrmIntegrationService {
                 const chatTitle = ctx.message?.chat?.title || null;
                 const firstName = ctx.from?.first_name || null;
                 const lastName  = ctx.from?.last_name || null;
+                const providerMessageId = ctx.message?.message_id != null
+                    ? String(ctx.message.message_id)
+                    : (ctx.callbackQuery?.id ? String(ctx.callbackQuery.id) : null);
+                const replyToProviderMessageId = ctx.message?.reply_to_message?.message_id != null
+                    ? String(ctx.message.reply_to_message.message_id)
+                    : null;
+                const providerTimestamp = ctx.message?.date
+                    ? new Date(ctx.message.date * 1000).toISOString()
+                    : new Date().toISOString();
 
                 // PR-Ц: media attachments — собираем file_id и пробрасываем
                 // в webhook CRM. CRM при необходимости резолвит через Bot API
@@ -126,7 +135,9 @@ class CrmIntegrationService {
                     text: text,
                     direction: direction,
                     username: username,
-                    timestamp: new Date().toISOString(),
+                    timestamp: providerTimestamp,
+                    providerMessageId: providerMessageId,
+                    replyToProviderMessageId: replyToProviderMessageId,
                     chatId: chatId?.toString() || null,
                     chatType: chatType || null,
                     chatTitle: chatTitle,
