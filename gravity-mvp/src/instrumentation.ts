@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Next.js Instrumentation Hook
  *
@@ -5,6 +6,17 @@
  */
 export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return
+
+    // Real-browser acceptance runs against an isolated DEV database. Keep that
+    // server from starting provider listeners or periodic jobs. The production
+    // runtime deliberately ignores this flag.
+    if (
+        process.env.NODE_ENV !== 'production'
+        && process.env.MESSAGES_BROWSER_TEST_MODE === '1'
+    ) {
+        console.info('[instrumentation] isolated Messages browser mode')
+        return
+    }
 
     // ── PR8.D: HTTPS_PROXY init ─────────────────────────────────────────
     // Node.js fetch (undici) НЕ читает HTTPS_PROXY env по дефолту. Из РФ

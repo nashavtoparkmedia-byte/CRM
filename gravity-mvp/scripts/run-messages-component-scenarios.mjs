@@ -11,8 +11,8 @@ const scenarios = [
   'src/lib/__tests__/telegram-bot-profile-state.test.ts',
 ]
 
-console.log('Running isolated Messages UI acceptance fixtures (Vitest + jsdom).')
-console.log('Scenarios: Remezov, Shaburov, provider channels, add-phone ownership, search, Telegram bot.')
+console.log('Running Messages component scenarios (Vitest + jsdom).')
+console.log('These are component checks, not browser E2E evidence.')
 
 const result = spawnSync(
   process.execPath,

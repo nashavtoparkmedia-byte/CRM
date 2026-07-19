@@ -10,7 +10,8 @@
     "gen": "prisma generate",
     "test": "vitest run",
     "test:node": "node scripts/run-node-tests.mjs",
-    "test:messages-browser": "node scripts/run-messages-browser-acceptance.mjs",
+    "test:messages-components": "node scripts/run-messages-component-scenarios.mjs",
+    "test:messages-browser": "node scripts/run-messages-browser-e2e.mjs",
     "test:watch": "vitest",
     "guard:messages-scope": "node scripts/messages-protected-scope.mjs"
   },
@@ -73,6 +74,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^29.0.1",
+    "puppeteer-core": "24.38.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.2",
