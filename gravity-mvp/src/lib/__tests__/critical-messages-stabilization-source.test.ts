@@ -35,11 +35,11 @@ describe('critical Messages stabilization source guards', () => {
     expect(drawer).not.toContain("body: JSON.stringify({ action: 'search', query: botLinkQuery })")
   })
 
-  it('keeps an existing MAX chat writeable without requiring phoneId', () => {
-    expect(drawer).toContain("const hasOperationalMaxChat = identity.channel === 'max'")
-    expect(drawer).toContain('Boolean(linkedChat?.externalChatId)')
-    expect(drawer).toContain('hasOperationalMaxChat ? true : reachable')
-    expect(drawer).toContain('Существующий MAX Chat связан с Contact и доступен для ответа')
+  it('uses a known provider route without restoring the legacy MAX-only branch', () => {
+    expect(drawer).toContain('const linkedChat = contact.chats.find')
+    expect(drawer).toContain('const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)')
+    expect(drawer).toContain('canWrite={presentation.canWrite}')
+    expect(drawer).not.toContain('hasOperationalMaxChat')
   })
 
   it('publishes all canonical Telegram bot states in the typed profile contract', () => {

@@ -28,7 +28,9 @@ describe('multi-park source contracts', () => {
     expect(route).toContain('prisma.apiConnection.findMany')
     expect(route).toContain('parkResults')
     expect(route).toContain('All Yandex park syncs failed')
-    expect(route).toContain('monitoring-sync:${parkName}')
+    expect(route).toContain('syncContactForDriver(id, fullName, phone)')
+    expect(route).toContain("attachDriverProfilesToContactByPhone(normalizedE164, 'monitoring-sync')")
+    expect(route).not.toContain('monitoring-sync:${parkName}')
   })
 
   test('Contact drawer does not display fake driver park or role when no DriverProfile exists', () => {
