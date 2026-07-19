@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "@/lib/freeswitch/recordingProcessor": [
+        "./typecheck/messages-incoming-calls/recordingProcessor.ts"
+      ],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "src/lib/calls/status.ts",
+    "src/lib/contacts/canonical-contact.ts",
+    "src/lib/contacts/strict-phone-ownership.ts",
+    "src/lib/freeswitch/EslClient.ts",
+    "src/lib/__tests__/incoming-call-esl-db.test.ts",
+    "typecheck/messages-incoming-calls/*.ts"
+  ],
+  "exclude": []
+}

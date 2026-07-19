@@ -32,6 +32,7 @@ import { getSipExtensionForUser } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 import { ContactService } from '@/lib/ContactService'
 import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
+import { resolveCanonicalContactId } from '@/lib/contacts/canonical-contact'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
@@ -169,11 +170,20 @@ function isTrunkLeg(evt: any): boolean {
     return false
 }
 
-async function handleChannelCreate(evt: any): Promise<void> {
+export async function handleChannelCreate(evt: any): Promise<void> {
     if (!isTrunkLeg(evt)) return
 
     const fsUuid = header(evt, 'Channel-Call-UUID')
     if (!fsUuid) return
+
+    // A repeated CHANNEL_CREATE must not repeat contact resolution or show a
+    // second incoming popup. The unique fsUuid constraint remains the final
+    // race guard for two handlers that pass this read concurrently.
+    const existingCall = await prisma.call.findUnique({
+        where: { fsUuid },
+        select: { id: true },
+    })
+    if (existingCall) return
 
     // On the trunk leg, Call-Direction matches the user-perceived direction:
     //   inbound  = Megafon → us (peer = Caller-Caller-ID-Number)
@@ -254,9 +264,8 @@ async function handleChannelCreate(evt: any): Promise<void> {
     // channel variable; for everything else it's filled on the internal
     // leg's CHANNEL_ANSWER when we learn which extension picked up.
     try {
-        const call = await prisma.call.upsert({
-            where: { fsUuid },
-            create: {
+        const call = await prisma.call.create({
+            data: {
                 direction: direction as 'inbound' | 'outbound',
                 status: 'ringing',
                 fromNumber: normalizePhoneE164(callerNumber) ?? callerNumber,
@@ -268,7 +277,6 @@ async function handleChannelCreate(evt: any): Promise<void> {
                 sipCallId: sipCallId ?? undefined,
                 metadata: { remoteNumber: e164, localNumber } as Prisma.JsonObject,
             },
-            update: {}, // create-only — repeat events ignored
         })
 
         opsLog('info', 'call_started', {
@@ -298,12 +306,14 @@ async function handleChannelCreate(evt: any): Promise<void> {
     }
 }
 
-async function handleChannelAnswer(evt: any): Promise<void> {
+export async function handleChannelAnswer(evt: any): Promise<void> {
     const fsUuid = header(evt, 'Channel-Call-UUID')
     if (!fsUuid) return
 
     const call = await prisma.call.findUnique({ where: { fsUuid } })
-    if (!call) return
+    // FreeSWITCH events can be delivered out of order around disconnect.
+    // A late ANSWER must never resurrect a finalized Call as active.
+    if (!call || call.endedAt) return
 
     if (isTrunkLeg(evt)) {
         // Trunk leg answered → the call media path is now end-to-end live.
@@ -336,7 +346,7 @@ async function handleChannelAnswer(evt: any): Promise<void> {
     })
 }
 
-async function handleChannelHangup(evt: any): Promise<void> {
+export async function handleChannelHangup(evt: any): Promise<void> {
     const fsUuid = header(evt, 'Channel-Call-UUID')
     if (!fsUuid) return
 
@@ -358,6 +368,13 @@ async function handleChannelHangup(evt: any): Promise<void> {
                 opsLog('error', 'recording_processor_threw', { operation: 'recording', callId: call.id, error: err.message })
             )
         }
+        return
+    }
+
+    // Replayed trunk hangups keep the original final status/timestamps while
+    // still repairing a previously missed timeline mirror idempotently.
+    if (call.endedAt) {
+        await syncCallToChat(call)
         return
     }
 
@@ -412,42 +429,80 @@ async function handleChannelHangup(evt: any): Promise<void> {
  * chat timeline — alongside Telegram / WhatsApp / MAX messages — without
  * having to leave the chat screen to look at the call journal.
  *
- * Idempotent on Call.id via metadata.callId. Chat row is auto-created
- * on first call per peer-number with externalChatId="phone:<E.164>".
+ * Idempotent on Call.id via Message.externalId, with metadata.callId kept
+ * as a compatibility fallback. The phone Chat is created once per peer.
  */
 export async function syncCallToChat(call: any): Promise<void> {
     if (!call.contactId) return
+
+    const canonical = await resolveCanonicalContactId(call.contactId)
+    if (canonical.kind !== 'resolved') {
+        opsLog('warn', 'call_chat_contact_unresolved', {
+            operation: 'call',
+            callId: call.id,
+            contactId: call.contactId,
+            resolution: canonical.kind,
+        })
+        return
+    }
+    const canonicalContactId = canonical.canonicalContactId
 
     const peer = call.direction === 'inbound' ? call.fromNumber : call.toNumber
     if (!peer) return
     const externalChatId = `phone:${peer}`
 
-    let chat = await prisma.chat.findUnique({ where: { externalChatId } })
-    if (!chat) {
-        chat = await prisma.chat.create({
-            data: {
-                channel: 'phone',
-                externalChatId,
-                contactId: call.contactId,
-                driverId: call.driverId ?? undefined,
-                name: peer,
-            },
-        })
-    } else if (!chat.contactId || (call.driverId && !chat.driverId)) {
+    let chat = await prisma.chat.upsert({
+        where: { externalChatId },
+        create: {
+            channel: 'phone',
+            externalChatId,
+            contactId: canonicalContactId,
+            driverId: call.driverId ?? undefined,
+            name: peer,
+        },
+        update: {},
+    }).catch(async error => {
+        if (typeof error === 'object'
+            && error !== null
+            && 'code' in error
+            && error.code === 'P2002') {
+            return prisma.chat.findUniqueOrThrow({ where: { externalChatId } })
+        }
+        throw error
+    })
+
+    if (chat.contactId && chat.contactId !== canonicalContactId) {
+        const chatCanonical = await resolveCanonicalContactId(chat.contactId)
+        if (chatCanonical.kind !== 'resolved'
+            || chatCanonical.canonicalContactId !== canonicalContactId) {
+            opsLog('warn', 'call_chat_contact_conflict', {
+                operation: 'call',
+                callId: call.id,
+                chatId: chat.id,
+                callContactId: canonicalContactId,
+                chatContactId: chat.contactId,
+            })
+            return
+        }
+    }
+
+    if (chat.contactId !== canonicalContactId || (call.driverId && !chat.driverId)) {
         chat = await prisma.chat.update({
             where: { id: chat.id },
             data: {
-                contactId: chat.contactId ?? call.contactId,
+                contactId: canonicalContactId,
                 driverId: chat.driverId ?? call.driverId ?? undefined,
             },
         })
     }
 
-    // Idempotency: don't double-insert if this Call was already synced.
-    // If the existing row's label/status doesn't match the latest Call state
-    // (e.g. we re-ran sync after status finalized), update it in place
-    // instead of skipping — keeps the chat label fresh.
-    const existing = await prisma.message.findFirst({
+    // externalId gives the timeline mirror a database-enforced idempotency
+    // key. Keep the metadata fallback for rows created before this contract.
+    const callExternalId = `call:${call.id}`
+    const existingByExternalId = await prisma.message.findUnique({
+        where: { externalId: callExternalId },
+    })
+    const existing = existingByExternalId ?? await prisma.message.findFirst({
         where: {
             chatId: chat.id,
             type: 'call',
@@ -466,10 +521,14 @@ export async function syncCallToChat(call: any): Promise<void> {
 
     if (existing) {
         const oldMeta = (existing.metadata ?? {}) as any
-        if (existing.content !== content || oldMeta.status !== call.status || oldMeta.durationSec !== (call.durationSec ?? null)) {
+        if (!existing.externalId
+            || existing.content !== content
+            || oldMeta.status !== call.status
+            || oldMeta.durationSec !== (call.durationSec ?? null)) {
             await prisma.message.update({
                 where: { id: existing.id },
                 data: {
+                    externalId: existing.externalId ?? callExternalId,
                     content,
                     metadata: {
                         callId: call.id,
@@ -505,6 +564,7 @@ export async function syncCallToChat(call: any): Promise<void> {
             // they're historical records. This also keeps them safe from
             // MessageService.recoverStuckMessages which scans status='sent'.
             status: 'delivered',
+            externalId: callExternalId,
             metadata: {
                 callId: call.id,
                 status: call.status,
@@ -512,7 +572,16 @@ export async function syncCallToChat(call: any): Promise<void> {
                 durationSec: call.durationSec ?? null,
             } as any,
         },
+    }).catch(error => {
+        if (typeof error === 'object'
+            && error !== null
+            && 'code' in error
+            && error.code === 'P2002') {
+            return null
+        }
+        throw error
     })
+    if (!created) return
 
     await prisma.chat.update({
         where: { id: chat.id },
