@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
   $queryRaw: vi.fn(),
   contact: { findMany: vi.fn() },
   contactIdentity: { findMany: vi.fn() },
+  driver: { findMany: vi.fn() },
   chat: { findMany: vi.fn() },
 }))
 
@@ -69,6 +70,7 @@ describe('Contact search API', () => {
     vi.clearAllMocks()
     prismaMock.$queryRaw.mockResolvedValue([{ contactId: hydratedContact.id }])
     prismaMock.contactIdentity.findMany.mockResolvedValue([])
+    prismaMock.driver.findMany.mockResolvedValue([])
     prismaMock.chat.findMany.mockResolvedValue([])
   })
 
@@ -86,13 +88,15 @@ describe('Contact search API', () => {
     expect(body.contacts[0].canonicalSummary.primaryPhone).toBe('+7 912 664-67-45')
     expect(body.contacts[0].hasChat).toEqual({ max: 'chat-max' })
 
-    const sql = prismaMock.$queryRaw.mock.calls[0][0] as { values: unknown[] }
-    expect(sql.values).toContain('%евг%')
-    expect(sql.values).toContain('%анат%')
+    const sqlValues = prismaMock.$queryRaw.mock.calls.flatMap(
+      ([sql]) => (sql as { values?: unknown[] }).values || [],
+    )
+    expect(sqlValues).toContain('%евг%')
+    expect(sqlValues).toContain('%анат%')
     // Production PostgreSQL runs with locale=C, so lower()/ILIKE do not fold Cyrillic.
     // Keep title-case variants to find DriverProfile names such as "Шабуров Евгений".
-    expect(sql.values).toContain('%Евг%')
-    expect(sql.values).toContain('%Анат%')
+    expect(sqlValues).toContain('%Евг%')
+    expect(sqlValues).toContain('%Анат%')
   })
 
 
@@ -128,8 +132,10 @@ describe('Contact search API', () => {
 
     expect(response.status).toBe(200)
     expect(body.contacts).toHaveLength(1)
-    const sql = prismaMock.$queryRaw.mock.calls[0][0] as { values: unknown[] }
-    expect(sql.values).toContain(`%${expectedDigits}%`)
+    const sqlValues = prismaMock.$queryRaw.mock.calls.flatMap(
+      ([sql]) => (sql as { values?: unknown[] }).values || [],
+    )
+    expect(sqlValues).toContain(`%${expectedDigits}%`)
   })
 
   test('protects against a too-short numeric query', async () => {
@@ -140,5 +146,27 @@ describe('Contact search API', () => {
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled()
     expect(prismaMock.contactIdentity.findMany).not.toHaveBeenCalled()
     expect(prismaMock.contact.findMany).not.toHaveBeenCalled()
+  })
+
+  test('finds the canonical Contact by external DriverProfile ID', async () => {
+    prismaMock.$queryRaw.mockResolvedValue([])
+    prismaMock.driver.findMany.mockResolvedValueOnce([{ contactId: hydratedContact.id }])
+    prismaMock.contact.findMany.mockResolvedValueOnce([hydratedContact])
+
+    const response = await GET(request('remezov-yoko-profile'))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.contacts).toHaveLength(1)
+    expect(body.contacts[0].id).toBe(hydratedContact.id)
+    expect(prismaMock.driver.findMany).toHaveBeenCalledWith({
+      where: {
+        externalDriverProfileId: { startsWith: 'remezov-yoko-profile', mode: 'insensitive' },
+        contactId: { not: null },
+        contact: { isArchived: false },
+      },
+      select: { contactId: true },
+      take: 8,
+    })
   })
 })

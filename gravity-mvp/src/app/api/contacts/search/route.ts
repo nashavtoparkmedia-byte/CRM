@@ -202,6 +202,23 @@ export async function GET(req: NextRequest) {
           results.push(im.contactId)
         }
       }
+
+      const profileMatches = await prisma.driver.findMany({
+        where: {
+          externalDriverProfileId: { startsWith: q, mode: 'insensitive' },
+          contactId: { not: null },
+          contact: { isArchived: false },
+        },
+        select: { contactId: true },
+        take: limit,
+      })
+
+      for (const match of profileMatches) {
+        if (match.contactId && !contactIds.has(match.contactId)) {
+          contactIds.add(match.contactId)
+          results.push(match.contactId)
+        }
+      }
     }
 
     // ── Hydrate contacts ──────────────────────────────────────
