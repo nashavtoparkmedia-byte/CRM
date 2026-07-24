@@ -11,31 +11,40 @@ const DEDUP_TTL_MS       = 5 * 60 * 1000   // 5 минут
 const MAX_DEDUP_ENTRIES  = 5000
 
 class MessageSync {
-  constructor(options = {}) {
+  constructor() {
     this.seen = new Map()
-    this._dedupPath = options.dedupPath || DEDUP_PATH
     this._load()
   }
 
   // ─── Дедупликация ────────────────────────────────────────────────────────
 
   isDuplicate(msg) {
-    // Primary: exact key match
-    if (this.seen.has(this._key(msg))) return true
-    // Secondary: fuzzy match only when there is no reliable external ID.
-    // When the protocol assigns an ID (MAX always does), identical texts
-    // are legitimate repeated messages — skip fuzzy to avoid false dedup.
-    if (msg.id || msg.externalId) return false
+    if (this._hasProviderIdentity(msg)) {
+      return this.seen.has(this._key(msg))
+    }
+    if (this._isTextOnly(msg)) return false
     return this._isFuzzyDuplicate(msg)
   }
 
   markSeen(msg) {
+    if (this._isTextOnly(msg) && !this._hasProviderIdentity(msg)) return
     this.seen.set(this._key(msg), Date.now())
-    // Also store fuzzy key for cross-source dedup
-    const fuzzyKey = this._fuzzyKey(msg)
-    if (fuzzyKey) this.seen.set(fuzzyKey, Date.now())
+    if (!this._isTextOnly(msg)) {
+      const fuzzyKey = this._fuzzyKey(msg)
+      if (fuzzyKey) this.seen.set(fuzzyKey, Date.now())
+    }
     this._prune()
     this._save()
+  }
+
+  _hasProviderIdentity(msg) {
+    return Boolean(msg?.id || msg?.externalId)
+  }
+
+  _isTextOnly(msg) {
+    const type = String(msg?.type || msg?.messageType || 'text').toLowerCase()
+    const hasAttachments = Array.isArray(msg?.attachments) && msg.attachments.length > 0
+    return type === 'text' && !hasAttachments
   }
 
   _key(msg) {
@@ -139,7 +148,7 @@ class MessageSync {
 
   _load() {
     try {
-      const raw = JSON.parse(fs.readFileSync(this._dedupPath, 'utf8'))
+      const raw = JSON.parse(fs.readFileSync(DEDUP_PATH, 'utf8'))
       const now = Date.now()
       for (const [k, ts] of Object.entries(raw)) {
         if (now - ts < DEDUP_TTL_MS) this.seen.set(k, ts)
@@ -152,7 +161,7 @@ class MessageSync {
 
   _save() {
     try {
-      fs.writeFileSync(this._dedupPath, JSON.stringify(Object.fromEntries(this.seen)))
+      fs.writeFileSync(DEDUP_PATH, JSON.stringify(Object.fromEntries(this.seen)))
     } catch (e) {
       console.error('[Sync] Ошибка сохранения dedup cache:', e.message)
     }
@@ -161,7 +170,7 @@ class MessageSync {
   // Полный сброс кэша (используется перед full-history reimport)
   clear() {
     this.seen.clear()
-    try { fs.unlinkSync(this._dedupPath) } catch {}
+    try { fs.unlinkSync(DEDUP_PATH) } catch {}
     console.log('[Sync] Dedup cache сброшен')
   }
 }

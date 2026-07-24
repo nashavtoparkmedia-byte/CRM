@@ -1,0 +1,16 @@
+{
+  "chatId": 902454841098,
+  "message": {
+    "id": { "__maxId": true, "hex": "d3019f2c1a30712705" },
+    "sender": 902264026154,
+    "text": ""
+  },
+  "loose": [
+    {
+      "_type": "FILE",
+      "previewData": { "type": "Buffer", "data": [82, 73, 70, 70] },
+      "duration": 3000,
+      "name": "unresolved.mp4"
+    }
+  ]
+}

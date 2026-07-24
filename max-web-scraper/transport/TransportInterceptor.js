@@ -2,20 +2,162 @@
 
 const fs   = require('fs')
 const path = require('path')
-const { createHash } = require('crypto')
-const { TextDecoder } = require('util')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
 const LAST_MSG_IDS_PATH = path.join(__dirname, '..', 'user_data', 'last-msg-ids.json')
-const MAX_UTF8_DIAGNOSTIC_PREFIX = '[MAX_UTF8_DIAGNOSTIC]'
-const UTF8_FATAL_DECODER = new TextDecoder('utf-8', { fatal: true })
+
+function cleanMaxString(value) {
+  if (value == null) return null
+  const text = String(value)
+    .replace(/\u0000/g, '')
+    .replace(/[\u0001-\u001F]/g, '')
+    .replace(/\uFFFD/g, '')
+    .trim()
+  return text || null
+}
+
+function maxIdToString(value) {
+  if (value == null) return null
+  if (typeof value === 'string' || typeof value === 'number') return cleanMaxString(value)
+  if (typeof value === 'object') {
+    if (value.__maxId && value.hex) return String(value.hex)
+    if (value.hex) return String(value.hex)
+    if (value.id) return maxIdToString(value.id)
+    if (value.fileId) return maxIdToString(value.fileId)
+    if (value.videoId) return maxIdToString(value.videoId)
+    if (value.mediaId) return maxIdToString(value.mediaId)
+    if (value.attachmentId) return maxIdToString(value.attachmentId)
+  }
+  return null
+}
+
+function compareMaxIdHex(a, b) {
+  const left = String(a || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
+  const right = String(b || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
+  if (!left || !right) return 0
+  try {
+    const leftInt = BigInt(`0x${left}`)
+    const rightInt = BigInt(`0x${right}`)
+    return leftInt === rightInt ? 0 : (leftInt > rightInt ? 1 : -1)
+  } catch {
+    const maxLen = Math.max(left.length, right.length)
+    const lp = left.padStart(maxLen, '0')
+    const rp = right.padStart(maxLen, '0')
+    return lp === rp ? 0 : (lp > rp ? 1 : -1)
+  }
+}
+
+function isUsableMaxMessageHex(hex) {
+  const clean = String(hex || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
+  return clean.length >= 18 && clean.startsWith('d301')
+}
+
+function selectPendingLiveDomCandidates(candidates, pendingCount) {
+  const limit = Math.max(0, Math.floor(Number(pendingCount) || 0))
+  if (!limit || !Array.isArray(candidates)) return []
+
+  return candidates
+    .filter(candidate => {
+      if (!candidate?.text || candidate.attachments?.length) return false
+      if (candidate.isOutgoing) return false
+      if (candidate.viewportW && candidate.x > candidate.viewportW * 0.55) return false
+      return Number.isFinite(candidate.displayMinute)
+    })
+    .slice(-limit)
+}
+
+function walkMaxValue(value, visit, seen = new Set(), depth = 0) {
+  if (value == null || depth > 8) return
+  if (typeof value !== 'object') {
+    visit(null, value)
+    return
+  }
+  if (seen.has(value)) return
+  seen.add(value)
+  if (Array.isArray(value)) {
+    value.forEach(item => walkMaxValue(item, visit, seen, depth + 1))
+    return
+  }
+  for (const [key, item] of Object.entries(value)) {
+    visit(key, item)
+    if (key === '__complexEntries') {
+      if (Array.isArray(item)) {
+        for (const entry of item) {
+          walkMaxValue(entry?.key, visit, seen, depth + 1)
+          walkMaxValue(entry?.value, visit, seen, depth + 1)
+        }
+      }
+      continue
+    }
+    walkMaxValue(item, visit, seen, depth + 1)
+  }
+}
+
+function findUrlParamInString(value, names) {
+  const raw = cleanMaxString(value)
+  if (!raw) return null
+  const candidates = [raw]
+  try { candidates.push(decodeURIComponent(raw)) } catch {}
+  for (const text of candidates) {
+    for (const name of names) {
+      const match = text.match(new RegExp(`(?:^|[?&=]|%3F|%26|%3D)${name}(?:=|%3D)([A-Za-z0-9._:-]+)`, 'i'))
+      if (match?.[1]) return match[1]
+    }
+  }
+  return null
+}
+
+function findNestedMediaId(value, names) {
+  let found = null
+  walkMaxValue(value, (key, item) => {
+    if (found) return
+    const keyText = String(key || '')
+    if (names.some(name => keyText.toLowerCase().includes(name.toLowerCase()))) {
+      const id = maxIdToString(item)
+      if (id) found = id
+    }
+    if (typeof item === 'string') {
+      const fromUrl = findUrlParamInString(item, names)
+      if (fromUrl) found = fromUrl
+    }
+  })
+  return found
+}
+
+function mediaMimeFromAttachment(raw, type) {
+  const explicit = cleanMaxString(raw?.mimeType || raw?.type)
+  if (explicit && explicit.includes('/')) return explicit
+  const name = cleanMaxString(raw?.name || raw?.filename)
+  if (/\.ogg\b/i.test(name || '')) return 'audio/ogg'
+  if (/\.mp4\b/i.test(name || '')) return 'video/mp4'
+  if (type === 'audio' || type === 'voice') return 'audio/ogg'
+  if (type === 'video') return 'video/mp4'
+  return explicit || null
+}
+
+function cleanMaxFilename(rawName, previewTitle, rawType = '') {
+  const raw = cleanMaxString(rawName)
+  const title = cleanMaxString(previewTitle)
+  const type = String(rawType || '').toUpperCase()
+
+  const extMatch = raw?.match(/[A-Za-z0-9._-]+\.(ogg|opus|mp3|mp4|mov|jpe?g|png|webp|gif|pdf)\b/i)
+  let name = extMatch ? extMatch[0] : raw
+
+  if (title && type === 'MUSIC' && (!name || /^[-_\d.]*ogg\b/i.test(name) || !/\.ogg\b/i.test(name))) {
+    name = /\.ogg\b/i.test(title) ? title : `${title}.ogg`
+  } else if (title && type === 'VIDEO' && (!name || !/\.(mp4|mov)\b/i.test(name))) {
+    name = /\.(mp4|mov)\b/i.test(title) ? title : `${title}.mp4`
+  }
+
+  return name || null
+}
 
 // ─── Custom msgpack decoder for MAX binary protocol ───────────────────────────
 // @msgpack/msgpack throws "key must be string or number" when Timestamp or
 // binary-type values are used as map keys (MAX does this for some internal maps).
 // This hand-rolled decoder is lenient about key types — it stringifies any key.
-function maxMsgpackDecodeAll(buf, options = {}) {
+function maxMsgpackDecodeAll(buf) {
   const view  = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
   let   pos   = 0
 
@@ -33,22 +175,9 @@ function maxMsgpackDecodeAll(buf, options = {}) {
   function readF32()     { const v = view.getFloat32(pos); pos += 4; return v }
   function readF64()     { const v = view.getFloat64(pos); pos += 8; return v }
   function readStr(len)  {
-    const byteOffset = pos
     const s = buf.slice(pos, pos + len)
     pos += len
-    try {
-      return UTF8_FATAL_DECODER.decode(s)
-    } catch {
-      options.onDiagnostic?.({
-        kind: 'invalid_utf8_string',
-        byteOffset,
-        byteLength: s.length,
-        sha256: createHash('sha256').update(s).digest('hex'),
-      })
-      // Preserve current behavior for forensic compatibility. The diagnostic
-      // proves where U+FFFD entered without attempting an unsafe text repair.
-      return Buffer.from(s).toString('utf8')
-    }
+    return Buffer.from(s).toString('utf8')
   }
   function readBin(len)  { const s = buf.slice(pos, pos + len); pos += len; return s }
 
@@ -164,6 +293,59 @@ function maxMsgpackDecodeAll(buf, options = {}) {
     if (v !== undefined) results.push(v)
   }
   return results
+}
+
+function findMsgpackFieldValue(buf, fieldName) {
+  if (!Buffer.isBuffer(buf) || !fieldName) return null
+  const key = Buffer.from(String(fieldName), 'utf8')
+  if (key.length === 0 || key.length >= 32) return null
+  const marker = Buffer.concat([Buffer.from([0xa0 | key.length]), key])
+  const index = buf.indexOf(marker)
+  if (index < 0) return null
+  const values = maxMsgpackDecodeAll(buf.slice(index + marker.length))
+  return values.length > 0 ? values[0] : null
+}
+
+function findMsgpackIdFieldValue(buf, fieldName) {
+  if (!Buffer.isBuffer(buf) || !fieldName) return null
+  const key = Buffer.from(String(fieldName), 'utf8')
+  if (key.length === 0 || key.length >= 32) return null
+  const fieldMarker = Buffer.concat([Buffer.from([0xa0 | key.length]), key])
+  const fieldIndex = buf.indexOf(fieldMarker)
+  if (fieldIndex < 0) return null
+  const valueOffset = fieldIndex + fieldMarker.length
+  if (valueOffset >= buf.length) return null
+
+  const canonicalInt64 = dataOffset => {
+    if (dataOffset < 0 || dataOffset + 8 > buf.length) return null
+    return {
+      __maxId: true,
+      hex: Buffer.concat([Buffer.from([0xd3]), buf.slice(dataOffset, dataOffset + 8)]).toString('hex'),
+    }
+  }
+
+  const marker = buf[valueOffset]
+  if (marker === 0xd3 || marker === 0xcf) {
+    return canonicalInt64(valueOffset + 1)
+  }
+
+  if (marker === 0xc7 && valueOffset + 3 <= buf.length) {
+    const length = buf[valueOffset + 1]
+    const type = buf.readInt8(valueOffset + 2)
+    const dataOffset = valueOffset + 3
+    if (type === 1 && length === 9 && (buf[dataOffset] === 0xd3 || buf[dataOffset] === 0xcf)) {
+      return canonicalInt64(dataOffset + 1)
+    }
+    if (type === 1 && length === 8) {
+      return canonicalInt64(dataOffset)
+    }
+  }
+
+  if (marker === 0xd7 && valueOffset + 10 <= buf.length && buf.readInt8(valueOffset + 1) === 1) {
+    return canonicalInt64(valueOffset + 2)
+  }
+
+  return findMsgpackFieldValue(buf, fieldName)
 }
 
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
@@ -286,26 +468,42 @@ class TransportInterceptor {
     this._cdpClient            = null
     this._pendingReqs          = new Map()  // seq → {resolve, reject, timeout}
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
-    this._outBinFrameSeq       = 200        // наши frameSeq начинаются с 200 (1-байт диапазон; браузер использует 0–~50)
+    this._browserLastBinFrameSeq = 0        // последний fseq из браузерных бинарных фреймов; наши op:71 используют +1
     this._op71Prefix           = null       // 3-байт префикс из браузерного op:71, захватывается динамически
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
     this._wsReadyCallbacks     = []
     this._lastSeenMsgId        = new Map() // chatId → last seen msgId (dedup for op:53 push)
+    this._emittedMsgIds        = new Map() // messageId -> timestamp, cross-source dedup for op:53/op:71/op:128
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
     this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
+    this._confirmedMessageAnchorAt = new Map() // chatId → runtime confirmation timestamp; persisted anchors are not live proof
     this._catchUpChatIds       = new Map() // chatId → retryCount; populated from op:48, cleared when op:71 responds
+    this._pendingNewMsgIds     = []        // msgId hex values from bare op:128 before chatId is known
+    this._pendingLiveMessageIds = new Map() // chatId -> [{pendingHex, ts}], not an op:71 anchor until confirmed
+    this._pendingLiveDrainTimers = new Map() // chatId -> timer for draining remaining live pending ids
+    this._recentOp128ChatIds   = new Map() // chatId -> timestamp for DOM fallback after empty op:71
+    this._recentOp128EventsByChat = new Map() // chatId -> recent op:128 mark timestamps for live DOM recovery budgets
+    this._lastDirectBackfillAt = new Map()
+    this._pendingOp71ChatIds   = []
+    this._pendingLooseMedia    = []
+    this._activeUiChatId       = null
 
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
     try {
       const saved = JSON.parse(fs.readFileSync(LAST_MSG_IDS_PATH, 'utf8'))
+      let skippedInvalid = 0
       for (const [cid, hex] of Object.entries(saved)) {
-        this._lastMsgRawHex.set(cid, hex)
-        this._catchUpChatIds.set(cid, 0)
+        if (!this._rememberConfirmedMessageAnchor(cid, hex, { markSeen: true, confirmedAt: 0 })) {
+          skippedInvalid += 1
+        }
       }
-      console.log(`[Transport] Loaded ${this._lastMsgRawHex.size} persisted msg IDs from disk → scheduled catch-up`)
+      console.log(`[Transport] Loaded ${this._lastMsgRawHex.size} persisted msg IDs from disk for passive catch-up`)
+      if (skippedInvalid > 0) {
+        console.warn(`[Transport] Ignored ${skippedInvalid} invalid persisted message anchor(s)`)
+      }
     } catch {
       // File doesn't exist yet — first run
     }
@@ -369,8 +567,10 @@ class TransportInterceptor {
             const opcode  = buf[5]
             const cmd     = buf[6]
             const fseq    = (buf[2] << 8) | buf[3]
-            // Захватываем 3-байт префикс браузерного op:71 (fseq < 200 = браузер, не мы)
-            if (opcode === 71 && buf.length > 11 && fseq < 200 && !this._op71Prefix) {
+            // Отслеживаем последний fseq (browser + наши фреймы) — op:71 использует max+1
+            if (fseq > this._browserLastBinFrameSeq) this._browserLastBinFrameSeq = fseq
+            // Захватываем 3-байт префикс из первого op:71 (браузер шлёт его раньше нашего catch-up)
+            if (opcode === 71 && buf.length > 11 && !this._op71Prefix) {
               this._op71Prefix = [buf[9], buf[10], buf[11]]
               console.log(`[op71prefix] captured: ${this._op71Prefix.map(b => b.toString(16).padStart(2,'0')).join(' ')} fseq:${fseq}`)
             }
@@ -397,27 +597,36 @@ class TransportInterceptor {
                       if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
                     }
                   }
-                  console.log(`[op128mark→op71] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
-                  // Add to catch-up set immediately so _fireWsReady() retries on reconnect
-                  // even if current retry loop gives up (WS was down too long)
-                  if (!this._catchUpChatIds.has(chatIdStr)) {
-                    this._catchUpChatIds.set(chatIdStr, 0)
+                  console.log(`[op128mark] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
+                  this._rememberRecentOp128Chat(chatIdStr)
+                  // If one or more bare op:128 notifications arrived before the
+                  // browser mark frame exposed chatId, move all queued provider ids
+                  // into the chat-specific pending queue in original order.
+                  const registrations = this._registerPreChatPendingForChat(chatIdStr)
+                  if (registrations.length > 0) {
+                    console.log(`[op128mark] registered ${registrations.length} pending live msg(s) for chatId:${chatIdStr} ids:${registrations.map(r => r.pendingHex.slice(0,16)).join(',')}`)
                   }
-                  const tryOp71 = (retries = 0) => {
-                    if (!this._wsConnected) {
-                      if (retries < 15) setTimeout(() => tryOp71(retries + 1), 600)
-                      else console.warn(`[op128mark→op71] gave up inline retries — catch-up set will handle on reconnect`)
-                      return
-                    }
-                    this.sendBinaryOp71(chatIdStr).catch(e => {
-                      if (retries < 5) setTimeout(() => tryOp71(retries + 1), 800)
-                      else console.warn(`[op128mark→op71] ${e.message}`)
-                    })
-                  }
-                  setTimeout(() => tryOp71(), 300)
+                  console.log(`[op128mark] active op71 disabled; guarded DOM recovery will handle gaps for chatId:${chatIdStr}`)
                 }
               } catch (e) {
                 console.warn('[op128mark→op71] decode error:', e.message)
+              }
+            }
+            // A live video notification may not expose its d301 message id in
+            // op:128/op:180. MAX Web immediately follows it with a binary
+            // op:83 request containing {chatId, messageId, videoId}. Correlate
+            // that browser-owned request only while fresh loose media exists.
+            if (opcode === OP.RESOLVE_VIDEO && cmd === 0x01 && buf.length > 9) {
+              try {
+                const request = this._decodeBrowserVideoResolveRequest(buf)
+                const correlation = this._handleBrowserVideoResolveRequest(request)
+                if (correlation?.emitted) {
+                  console.log(`[op83live] provider media emitted chatId:${correlation.chatId} id:${correlation.messageId}`)
+                } else if (this.hasRecentLooseMediaForDomRecovery({ maxAgeMs: 5000 })) {
+                  console.warn(`[op83live] live media not correlated reason:${correlation?.reason || 'unknown'}`)
+                }
+              } catch (e) {
+                console.warn('[op83live] request correlation failed:', e.message)
               }
             }
             const maxHex  = opcode === 71 ? buf.length : 20
@@ -507,6 +716,173 @@ class TransportInterceptor {
     this._processDecodedFrame(data)
   }
 
+  _isEmptyObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0
+  }
+
+  _isMessageLike(value) {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      && (value.id != null || value.text != null || Array.isArray(value.attaches) || value.link?.message)
+      && (value.sender != null || value.id != null)
+  }
+
+  _extractMessagesDeep(value, out = [], seen = new Set(), depth = 0) {
+    if (value == null || depth > 10) return out
+    if (this._isMessageLike(value)) {
+      const key = value.id?.hex || value.id || `${value.sender || ''}:${value.text || ''}:${out.length}`
+      if (!seen.has(String(key))) {
+        seen.add(String(key))
+        out.push(value)
+      }
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) this._extractMessagesDeep(item, out, seen, depth + 1)
+      return out
+    }
+    if (typeof value === 'object') {
+      if (Array.isArray(value.__complexEntries)) {
+        for (const entry of value.__complexEntries) {
+          this._extractMessagesDeep(entry?.key, out, seen, depth + 1)
+          this._extractMessagesDeep(entry?.value, out, seen, depth + 1)
+        }
+      }
+      for (const [key, item] of Object.entries(value)) {
+        if (key === '__complexEntries') continue
+        this._extractMessagesDeep(item, out, seen, depth + 1)
+      }
+    }
+    return out
+  }
+
+  _extractChatIdDeep(value, depth = 0) {
+    if (value == null || depth > 8) return null
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = this._extractChatIdDeep(item, depth + 1)
+        if (found != null) return found
+      }
+      return null
+    }
+    if (typeof value !== 'object') return null
+    if (value.chatId != null) return value.chatId
+    if (Array.isArray(value.__complexEntries)) {
+      for (const entry of value.__complexEntries) {
+        const found = this._extractChatIdDeep(entry?.key, depth + 1) ?? this._extractChatIdDeep(entry?.value, depth + 1)
+        if (found != null) return found
+      }
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (key === '__complexEntries') continue
+      const found = this._extractChatIdDeep(item, depth + 1)
+      if (found != null) return found
+    }
+    return null
+  }
+
+  _findProtocolPayloadDeep(value, requiredKeys, depth = 0) {
+    if (value == null || depth > 10 || Buffer.isBuffer(value)) return null
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = this._findProtocolPayloadDeep(item, requiredKeys, depth + 1)
+        if (found) return found
+      }
+      return null
+    }
+    if (typeof value !== 'object') return null
+    if (requiredKeys.every(key => Object.prototype.hasOwnProperty.call(value, key))) return value
+    if (Array.isArray(value.__complexEntries)) {
+      for (const entry of value.__complexEntries) {
+        const found = this._findProtocolPayloadDeep(entry?.key, requiredKeys, depth + 1)
+          || this._findProtocolPayloadDeep(entry?.value, requiredKeys, depth + 1)
+        if (found) return found
+      }
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (key === '__complexEntries') continue
+      const found = this._findProtocolPayloadDeep(item, requiredKeys, depth + 1)
+      if (found) return found
+    }
+    return null
+  }
+
+  _decodeBrowserVideoResolveRequest(frame) {
+    if (!Buffer.isBuffer(frame) || frame.length <= 9) return null
+    const payload = frame.slice(9)
+    return {
+      videoId: findMsgpackFieldValue(payload, 'videoId'),
+      chatId: findMsgpackFieldValue(payload, 'chatId'),
+      messageId: findMsgpackIdFieldValue(payload, 'messageId'),
+    }
+  }
+
+  _resolveKnownChatId(rawChatId) {
+    const raw = maxIdToString(rawChatId)
+    if (!raw) return null
+    const shortId = Number(raw) >>> 0
+    for (const source of [this._recentOp128ChatIds, this._recentActiveChatIds, this._lastMsgRawHex]) {
+      for (const cid of source.keys()) {
+        if (String(cid) === raw || (Number(cid) >>> 0) === shortId) return String(cid)
+      }
+    }
+    return raw
+  }
+
+  _singleRecentOp128ChatId(maxAgeMs = 5000) {
+    const now = Date.now()
+    const recent = [...this._recentOp128ChatIds.entries()]
+      .filter(([, seenAt]) => seenAt && now - seenAt <= maxAgeMs)
+      .sort((a, b) => b[1] - a[1])
+    return recent.length === 1 ? String(recent[0][0]) : null
+  }
+
+  _handleBrowserVideoResolveRequest(decodedPayload, { maxAgeMs = 5000 } = {}) {
+    const request = this._findProtocolPayloadDeep(decodedPayload, ['videoId', 'messageId', 'chatId'])
+    if (!request) return { emitted: false, reason: 'request_payload_not_found' }
+
+    const messageId = maxIdToString(request.messageId)
+    if (!isUsableMaxMessageHex(messageId)) return { emitted: false, reason: 'invalid_provider_message_id' }
+
+    const now = Date.now()
+    let chatId = this._resolveKnownChatId(request.chatId)
+    const recentChatId = this._singleRecentOp128ChatId(maxAgeMs)
+    const seenAt = chatId ? this._recentOp128ChatIds.get(chatId) : 0
+    if ((!seenAt || now - seenAt > maxAgeMs) && recentChatId) chatId = recentChatId
+    const correlatedAt = chatId ? this._recentOp128ChatIds.get(chatId) : 0
+    if (!chatId || !correlatedAt || now - correlatedAt > maxAgeMs) {
+      return { emitted: false, reason: 'no_recent_live_op128' }
+    }
+    if (!this.hasRecentLooseMediaForDomRecovery({ maxAgeMs })) {
+      return { emitted: false, reason: 'no_recent_loose_media' }
+    }
+
+    const confirmedAnchor = this._lastMsgRawHex.get(chatId) || null
+    const confirmedAt = this._confirmedMessageAnchorAt.get(chatId) || 0
+    const matchesFreshConfirmedAnchor = isUsableMaxMessageHex(confirmedAnchor)
+      && compareMaxIdHex(messageId, confirmedAnchor) === 0
+      && confirmedAt >= correlatedAt
+      && now - confirmedAt <= maxAgeMs
+
+    const videoId = maxIdToString(request.videoId)
+    const recentLooseVideoIds = new Set()
+    for (const entry of this._pendingLooseMedia) {
+      if (!entry?.ts || now - entry.ts > maxAgeMs) continue
+      for (const item of entry.items || []) {
+        const pendingVideoId = maxIdToString(item?.videoId)
+        if (pendingVideoId) recentLooseVideoIds.add(pendingVideoId)
+      }
+    }
+    if (videoId && recentLooseVideoIds.size > 0 && !recentLooseVideoIds.has(videoId) && !matchesFreshConfirmedAnchor) {
+      return { emitted: false, reason: 'video_id_mismatch' }
+    }
+
+    return {
+      ...this.emitPendingLooseMediaMessage(chatId, messageId, { maxAgeMs }),
+      chatId,
+      messageId,
+      videoId,
+    }
+  }
+
   _processDecodedFrame(data) {
     // DEBUG: log all non-presence frames
     if (data.opcode !== OP.PRESENCE) {
@@ -523,11 +899,11 @@ class TransportInterceptor {
     }
 
     // Ответы на наши запросы (cmd:1 = success, cmd:3 = error)
-    if ((data.cmd === 1 || data.cmd === 3) && this._pendingReqs.has(data.seq)) {
+    if ([1, 2, 3, 4].includes(data.cmd) && this._pendingReqs.has(data.seq)) {
       const { resolve, reject, timeout } = this._pendingReqs.get(data.seq)
       clearTimeout(timeout)
       this._pendingReqs.delete(data.seq)
-      if (data.cmd === 3) {
+      if (data.cmd === 3 || data.payload?.error || data.payload?.localizedMessage) {
         const err = Object.assign(
           new Error(data.payload?.localizedMessage || data.payload?.error || 'MAX error cmd=3'),
           { maxError: data.payload?.error, maxPayload: data.payload }
@@ -582,6 +958,26 @@ class TransportInterceptor {
             break
           }
         }
+      } else {
+        const chatIdRaw = this._extractChatIdDeep(data.payload) ?? this._activeUiChatId
+        const messages = this._extractMessagesDeep(data.payload)
+        if (chatIdRaw != null && messages.length > 0) {
+          const chatId = String(chatIdRaw)
+          this._recentActiveChatIds.set(chatId, Date.now())
+          for (const candidate of messages) {
+            if (!candidate?.id) continue
+            const msgId = candidate.id.__maxId ? candidate.id.hex : String(candidate.id)
+            if (this._lastSeenMsgId.get(chatId) === msgId) continue
+            this._lastSeenMsgId.set(chatId, msgId)
+            const pseudo = { chatId, message: candidate }
+            this._consumeLooseMediaForMessage(pseudo)
+            const msg = this._normalizeMaxMsg(pseudo)
+            if (msg && (msg.text || msg.attachments?.length > 0)) {
+              console.log(`[Transport] op:53 deep msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from} out:${msg.isOutgoing}`)
+              this._emit(msg)
+            }
+          }
+        }
       }
     }
 
@@ -620,22 +1016,34 @@ class TransportInterceptor {
           // Отмечаем чат как активный для запроса op:71 при следующем op:128
           this._recentActiveChatIds.set(chatId, Date.now())
 
-          if (!lastMsg) {
-            continue
+          const candidates = []
+          const candidateKeys = new Set()
+          const addCandidate = (m) => {
+            if (!m || typeof m !== 'object' || !m.id) return
+            const key = m.id.__maxId ? m.id.hex : String(m.id)
+            if (candidateKeys.has(key)) return
+            candidateKeys.add(key)
+            candidates.push(m)
           }
-          if (!lastMsg.id) continue
+          addCandidate(lastMsg)
+          for (const m of this._extractMessagesDeep(chat)) addCandidate(m)
+          if (!candidates.length) continue
+
           // _lastMsgRawHex is intentionally NOT updated from op:53 to avoid a race condition:
           // op:53 fires after a new message arrives (updating to the new msg's ID), but op:130
           // fires shortly after and needs the PREVIOUS ID to request messages newer than it.
           // _lastMsgRawHex is only updated from op:48 (startup) and op:71 responses (confirmed fetch).
-          const msgId = lastMsg.id.__maxId ? lastMsg.id.hex : String(lastMsg.id)
-          if (this._lastSeenMsgId.get(chatId) === msgId) continue
-          this._lastSeenMsgId.set(chatId, msgId)
-          const pseudo = { chatId, message: lastMsg }
-          const msg = this._normalizeMaxMsg(pseudo)
-          if (msg && !msg.isOutgoing && (msg.text || msg.attachments?.length > 0)) {
-            console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from}`)
-            this._emit(msg)
+          for (const candidate of candidates) {
+            const msgId = candidate.id.__maxId ? candidate.id.hex : String(candidate.id)
+            if (this._lastSeenMsgId.get(chatId) === msgId) continue
+            this._lastSeenMsgId.set(chatId, msgId)
+            const pseudo = { chatId, message: candidate }
+            this._consumeLooseMediaForMessage(pseudo)
+            const msg = this._normalizeMaxMsg(pseudo)
+            if (msg && (msg.text || msg.attachments?.length > 0)) {
+              console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from} out:${msg.isOutgoing}`)
+              this._emit(msg)
+            }
           }
         }
       }
@@ -676,20 +1084,25 @@ class TransportInterceptor {
             }
           }
           if (lastMsg?.id?.__maxId) {
-            this._lastMsgRawHex.set(chatId, lastMsg.id.hex)
-            console.log(`[op48] stored msgId from lastMsg for chatId:${chatId}: ${lastMsg.id.hex.slice(0,16)}`)
+            const newHex   = lastMsg.id.hex
+            // Store the REAL lastMessage ID as anchor. Op:71 returns messages with ID >= anchor
+            // (inclusive). The dedup in op:71 response skips the anchor itself via _lastSeenMsgId.
+            if (this._rememberConfirmedMessageAnchor(chatId, newHex, { markSeen: true })) {
+              console.log(`[op48] chatId:${chatId} anchor ${newHex.slice(0,16)} (lastMsg)`)
+            }
           }
           // Also scan __complexEntries: MAX stores message IDs as MAP KEYs → {__maxId, hex} after decodeExt fix
           if (Array.isArray(chat.__complexEntries)) {
-            let bestHex = this._lastMsgRawHex.get(chatId) || null
+            let bestHex = null
             for (const { key } of chat.__complexEntries) {
-              if (key?.__maxId) {
-                if (!bestHex || key.hex.slice(2) > bestHex.slice(2)) bestHex = key.hex
+              if (key?.__maxId && isUsableMaxMessageHex(key.hex)) {
+                if (!bestHex || compareMaxIdHex(key.hex, bestHex) > 0) bestHex = key.hex
               }
             }
-            if (bestHex && bestHex !== this._lastMsgRawHex.get(chatId)) {
-              this._lastMsgRawHex.set(chatId, bestHex)
-              console.log(`[op48] stored msgId from MAP KEYs for chatId:${chatId}: ${bestHex.slice(0,16)}`)
+            if (bestHex) {
+              if (this._rememberConfirmedMessageAnchor(chatId, bestHex, { markSeen: true })) {
+                console.log(`[op48] chatId:${chatId} MAP KEY anchor ${bestHex.slice(0,16)}`)
+              }
             }
           }
         }
@@ -703,22 +1116,9 @@ class TransportInterceptor {
               console.log(`[op48] persisted ${this._lastMsgRawHex.size} msg ID(s) to disk`)
             } catch (e) { console.warn('[Transport] Failed to persist msg IDs:', e.message) }
           }
-          // Register chats for catch-up only if we have a known lastMessage ID.
-          // Chats without a stored ID come from op:48 decoding false positives (non-chat
-          // objects that happen to have numeric IDs). Without a real msgId, op:71 with
-          // fallback ID=1 would fetch all history which the server may reject.
-          for (const cid of chatIds) {
-            if (this._lastMsgRawHex.has(cid) && !this._catchUpChatIds.has(cid)) {
-              this._catchUpChatIds.set(cid, 0)
-            }
-          }
-          // Also attempt immediately on the first connection (bonus early try)
-          setTimeout(() => {
-            for (const cid of chatIds) {
-              if (!this._catchUpChatIds.has(cid)) continue  // already resolved
-              this.sendBinaryOp71(cid).catch(e => console.warn(`[op48→op71] chatId:${cid}: ${e.message}`))
-            }
-          }, 3000)
+          // Active op:71 injection is intentionally disabled. MAX closes the
+          // browser socket for these synthetic frames; browser-driven op:49/op:71
+          // responses and guarded DOM recovery remain the passive catch-up paths.
         }
       }
     }
@@ -727,19 +1127,48 @@ class TransportInterceptor {
     // Браузер шлёт op:71 cmd:1 {chatId} → MAX отвечает op:71 cmd:2/4 {chatId, messages:[]}.
     // Мы шлём op:71 при op:128-уведомлении чтобы получить контент входящего сообщения.
     // Обрабатываем ВНЕ зависимости от cmd — MAX использует cmd:2 и cmd:4 непоследовательно.
-    if (data.opcode === 71 && data.payload?.chatId != null) {
-      const messages = Array.isArray(data.payload.messages) ? data.payload.messages : []
-      const chatIdRaw = data.payload.chatId
+    if (data.opcode === 71 && (data.payload?.chatId != null || Array.isArray(data.payload) || Array.isArray(data.payload?.__complexEntries) || this._isEmptyObject(data.payload))) {
+      const arrayPayload = Array.isArray(data.payload)
+      const arrayEnvelope = arrayPayload
+        ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && (x.chatId != null || Array.isArray(x.messages)))
+        : null
+      const complexPayload = !arrayPayload && Array.isArray(data.payload?.__complexEntries)
+      const complexMessages = complexPayload
+        ? data.payload.__complexEntries
+            .map(entry => {
+              const key = entry?.key
+              const value = entry?.value
+              if (key && typeof key === 'object' && (key.id != null || key.text != null || Array.isArray(key.attaches))) return key
+              if (value && typeof value === 'object' && (value.id != null || value.text != null || Array.isArray(value.attaches))) return value
+              return null
+            })
+            .filter(Boolean)
+        : []
+      let messages = arrayEnvelope
+        ? (Array.isArray(arrayEnvelope.messages) ? arrayEnvelope.messages : [])
+        : (arrayPayload
+          ? data.payload.filter(x => x && typeof x === 'object' && !Array.isArray(x) && (x.id != null || x.text != null || Array.isArray(x.attaches)))
+          : (Array.isArray(data.payload.messages) ? data.payload.messages : complexMessages))
+      if ((!messages || messages.length === 0) && data.payload && !this._isEmptyObject(data.payload)) {
+        messages = this._extractMessagesDeep(data.payload)
+      }
+      const chatIdRaw = arrayEnvelope?.chatId
+        ?? (arrayPayload ? this._pendingOp71ChatIds.shift() : (data.payload.chatId ?? this._extractChatIdDeep(data.payload) ?? ((complexPayload || this._isEmptyObject(data.payload)) ? this._pendingOp71ChatIds.shift() : null)))
+      if (chatIdRaw == null) {
+        console.warn(`[op71] payload has messages but no chatId; msgs=${messages.length}`)
+        return
+      }
       const chatIdStr = String(chatIdRaw)
+      if (this._isEmptyObject(data.payload)) {
+        data.payload = { chatId: chatIdStr, messages: [] }
+      }
       console.log(`[op71] chatId:${chatIdRaw} msgs:${messages.length}`)
-      // Server responded — remove from catch-up set (both fullId and shortId forms)
-      this._catchUpChatIds.delete(chatIdStr)
-      const shortId32str = ((Number(chatIdRaw) >>> 0)).toString()
-      if (shortId32str !== chatIdStr) this._catchUpChatIds.delete(shortId32str)
       let bestMsgHex = null
       for (const m of messages) {
         if (!m || typeof m !== 'object') continue
-        const msg = this._normalizeMaxMsg({ chatId: chatIdRaw, message: m })
+        const pseudo = { chatId: chatIdRaw, message: m }
+        this._consumeLooseMediaForMessage(pseudo)
+        const msg = this._normalizeMaxMsg(pseudo)
         if (!msg) continue
         // Dedup against op:53: if op:53 already emitted this message, skip
         const msgIdStr = msg.id || null
@@ -755,20 +1184,56 @@ class TransportInterceptor {
         }
       }
       // Advance stored pointer so the next op:71 request doesn't re-fetch the same messages
-      if (bestMsgHex) {
-        this._lastMsgRawHex.set(chatIdStr, bestMsgHex)
+      if (bestMsgHex && this._advanceLastMsgAfterOp71(chatIdStr, bestMsgHex)) {
         console.log(`[op71] advanced stored msgId for chatId:${chatIdStr}: ${bestMsgHex.slice(0,16)}`)
-        // Persist to disk so next restart can catch up this chat even if op:48 skips it
-        try {
-          fs.mkdirSync(path.dirname(LAST_MSG_IDS_PATH), { recursive: true })
-          fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
-        } catch (e) {
-          console.warn('[Transport] Failed to persist msg IDs:', e.message)
-        }
+      }
+      const catchUpState = this._finalizeOp71CatchUpState(chatIdStr)
+      if (catchUpState.pendingLiveCount > 0) {
+        console.log(`[op71] pending live drain retained chatId:${chatIdStr} remaining:${catchUpState.pendingLiveCount}`)
       }
     }
 
     // Raw-хэндлеры (contacts, chats, и т.д.)
+    // op:49 — browser-driven history load when the UI opens a chat route.
+    // MAX often sends media/text history here while our active catch-up op:71
+    // response stays empty. Use the currently opened UI chat as chatId fallback.
+    if (data.opcode === OP.GET_HISTORY && (data.payload?.chatId != null || Array.isArray(data.payload) || Array.isArray(data.payload?.messages) || Array.isArray(data.payload?.__complexEntries))) {
+      const arrayPayload = Array.isArray(data.payload)
+      const arrayEnvelope = arrayPayload
+        ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && (x.chatId != null || Array.isArray(x.messages)))
+        : null
+      let messages = arrayEnvelope
+        ? (Array.isArray(arrayEnvelope.messages) ? arrayEnvelope.messages : [])
+        : (arrayPayload
+          ? data.payload.filter(x => x && typeof x === 'object' && !Array.isArray(x) && (x.id != null || x.text != null || Array.isArray(x.attaches)))
+          : (Array.isArray(data.payload.messages) ? data.payload.messages : []))
+      if ((!messages || messages.length === 0) && data.payload) {
+        messages = this._extractMessagesDeep(data.payload)
+      }
+      const chatIdRaw = arrayEnvelope?.chatId ?? data.payload?.chatId ?? this._extractChatIdDeep(data.payload) ?? this._activeUiChatId
+      if (chatIdRaw != null && messages.length > 0) {
+        const chatIdStr = String(chatIdRaw)
+        console.log(`[op49] active history chatId:${chatIdStr} msgs:${messages.length}`)
+        for (const m of messages) {
+          if (!m || typeof m !== 'object') continue
+          const pseudo = { chatId: chatIdStr, message: m }
+          this._consumeLooseMediaForMessage(pseudo)
+          const msg = this._normalizeMaxMsg(pseudo)
+          if (!msg || (!msg.text && !msg.attachments?.length)) continue
+          const msgIdStr = msg.id || null
+          const storedHex = this._lastMsgRawHex.get(chatIdStr)
+          if (msgIdStr && isUsableMaxMessageHex(storedHex) && compareMaxIdHex(msgIdStr, storedHex) <= 0) {
+            console.log(`[op49] skip stale msgId:${String(msgIdStr).slice(0,16)} anchor:${String(storedHex).slice(0,16)} text:"${String(msg.text || '').slice(0, 50)}"`)
+            continue
+          }
+          if (msgIdStr && this._lastSeenMsgId.get(chatIdStr) === msgIdStr) continue
+          if (msgIdStr) this._lastSeenMsgId.set(chatIdStr, msgIdStr)
+          console.log(`[op49] emit msgId:${msg.id} from:${msg.from} text:"${String(msg.text || '').slice(0, 50)}"`)
+          this._emit(msg)
+        }
+      }
+    }
+
     for (const h of this._rawHandlers) {
       try { h(data) } catch {}
     }
@@ -784,25 +1249,43 @@ class TransportInterceptor {
         ? data.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
         : data.payload
       if (pl?.message) {
+        this._consumeLooseMediaForMessage(pl)
+        if ((!Array.isArray(pl.message.attaches) || pl.message.attaches.length === 0) && this._looksLikeMediaPayload(pl)) {
+          this._writeDebugJson('max_op128_message_media_no_attach.jsonl', pl)
+        }
         const msg = this._normalizeMaxMsg(pl)
-        if (msg) this._emit(msg)
         // Advance stored pointer so next restart doesn't re-fetch this message via catch-up
         if (pl.message?.id?.__maxId && pl.chatId != null) {
           const cidStr = String(pl.chatId)
           const hex = pl.message.id.hex
-          const stored = this._lastMsgRawHex.get(cidStr) || ''
-          if (!stored || hex.slice(2) > stored.slice(2)) {
-            this._lastMsgRawHex.set(cidStr, hex)
+          const stored = this._op71AnchorForLiveNotification(cidStr) || ''
+          if (this._rememberConfirmedMessageAnchor(cidStr, hex, { markSeen: true })) {
             try {
               fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
             } catch {}
+            if (stored) this._scheduleDirectBackfill(cidStr, stored, hex)
           }
         }
+        if (msg) this._emit(msg)
       } else {
         // op:128 новый формат: только уведомление об unread, без тела сообщения.
-        // Ждём op:130 который содержит chatId → он триггернёт точечный op:71.
-        const payloadSnap = JSON.stringify(data.payload).slice(0, 200)
-        console.log(`[op128] new msg notification — waiting for op:130 with chatId. payload:${payloadSnap}`)
+        // Если payload содержит ext8 ID нового сообщения — сохраняем как near-anchor для op:71.
+        const pendingHex = this._findMaxIdHex(data.payload)
+        if (pendingHex) {
+          const remembered = this._rememberPreChatPendingMessageId(pendingHex)
+          if (remembered.registered) {
+            console.log(`[op128] new msg ID queued: ${pendingHex.slice(0,16)} queue:${remembered.queueLength}`)
+          } else {
+            console.log(`[op128] ignored pending msg ID ${pendingHex.slice(0,16)}: ${remembered.reason}`)
+          }
+        } else {
+          const payloadSnap = JSON.stringify(data.payload).slice(0, 200)
+          console.log(`[op128] new msg notification — waiting for op:130 with chatId. payload:${payloadSnap}`)
+        }
+        if (this._looksLikeMediaPayload(data.payload)) {
+          this._pushLooseMedia(data.payload)
+          this._writeDebugJson('max_op128_loose_media.jsonl', data.payload)
+        }
       }
     }
 
@@ -813,19 +1296,7 @@ class TransportInterceptor {
       const chatId = data.payload?.chatId != null ? String(data.payload.chatId) : null
       if (chatId && chatId !== '0') {
         console.log(`[op130] mark confirm chatId:${chatId}`)
-        const tryOp71 = (retries = 0) => {
-          const hex = this._lastMsgRawHex.get(chatId)
-          if (hex) {
-            console.log(`[op130→op71] triggering for chatId:${chatId} msgId:${hex.slice(0,16)}`)
-            this.sendBinaryOp71(chatId).catch(e => console.warn(`[op130→op71] ${e.message}`))
-          } else if (retries < 8) {
-            // IDs not loaded yet (early reconnect) — retry after op:48/53 have time to fire
-            setTimeout(() => tryOp71(retries + 1), 800)
-          } else {
-            console.log(`[op130] no stored msgId for chatId:${chatId} after retries`)
-          }
-        }
-        tryOp71()
+        this._rememberRecentOp128Chat(chatId)
       }
     }
   }
@@ -858,20 +1329,10 @@ class TransportInterceptor {
     let payload = {}
     if (buf.length > 9) {
       const payloadBuf = buf.slice(9)
-      const decodeOptions = {
-        onDiagnostic: diagnostic => {
-          console.warn(`${MAX_UTF8_DIAGNOSTIC_PREFIX} ${JSON.stringify({
-            opcode,
-            frameSeq,
-            reqSeq,
-            ...diagnostic,
-          })}`)
-        },
-      }
       try {
         // Payload is a sequence of msgpack values: preamble fixints first, then the actual
         // payload object/array last. Always take the LAST value; fall back to last object.
-        const values = maxMsgpackDecodeAll(payloadBuf, decodeOptions)
+        const values = maxMsgpackDecodeAll(payloadBuf)
         if (values.length > 0) {
           const last = values[values.length - 1]
           if (last !== null && last !== undefined && typeof last === 'object') {
@@ -893,7 +1354,7 @@ class TransportInterceptor {
         let recovered = false
         for (let skip = 1; skip <= 5; skip++) {
           try {
-            const alt = maxMsgpackDecodeAll(payloadBuf.slice(skip), decodeOptions)
+            const alt = maxMsgpackDecodeAll(payloadBuf.slice(skip))
             if (!alt.length) continue
             const last = alt[alt.length - 1]
             if (last !== null && last !== undefined && typeof last === 'object' && !Array.isArray(last)) {
@@ -931,7 +1392,15 @@ class TransportInterceptor {
     if (!m) return null
 
     let text    = m.text || ''
-    let attaches = m.attaches || []
+    let attaches = Array.isArray(m.attaches) ? m.attaches : []
+    if (!attaches.length && Array.isArray(payload.attaches)) {
+      const rootToken = payload.token || payload['110'] || null
+      attaches = payload.attaches.map(att => ({
+        ...att,
+        token: att?.token || rootToken || null,
+        _rootMediaToken: rootToken || null,
+      }))
+    }
 
     // Forwarded messages: content lives in m.link.message, not in m.text/m.attaches.
     // Without this, text='' + attaches=[] → webhook skips with 'empty_text'.
@@ -943,6 +1412,14 @@ class TransportInterceptor {
     }
 
     const hasAttaches = Array.isArray(attaches) && attaches.length > 0
+    const direction = String(m.direction || m.dir || '').toUpperCase()
+    const protocolOutgoing = (
+      m.out === 1        || m.out === true       ||
+      m.is_out === 1     || m.is_out === true    ||
+      m.fromMe === true  || m.outgoing === true  ||
+      m.isOutgoing === true ||
+      direction === 'OUT' || direction === 'OUTGOING'
+    )
 
     return {
       id:                m.id?.__maxId ? m.id.hex : (m.id || null),
@@ -951,8 +1428,8 @@ class TransportInterceptor {
       text,
       timestamp:         m.time  || Date.now(),
       type:              hasAttaches ? this._detectMaxType(attaches) : 'text',
-      attachments:       this._extractMaxAttachments(attaches),
-      isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : false,
+      attachments:       this._extractMaxAttachmentsV2(attaches),
+      isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : protocolOutgoing,
       replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
       forwardedFromId:   (m.link?.type === 'FORWARD' && m.link.message?.sender) ? String(m.link.message.sender) : null,
       status:            m.status || null,
@@ -960,12 +1437,378 @@ class TransportInterceptor {
     }
   }
 
+  _findMaxIdHex(value, depth = 0) {
+    if (value == null || depth > 8) return null
+    if (typeof value !== 'object') return null
+    if (value.__maxId && typeof value.hex === 'string') return value.hex
+
+    const items = Array.isArray(value) ? value : Object.values(value)
+    for (const item of items) {
+      const found = this._findMaxIdHex(item, depth + 1)
+      if (found) return found
+    }
+    return null
+  }
+
+  _writeDebugJson(filename, payload) {
+    try {
+      fs.appendFileSync(path.join('/tmp', filename), JSON.stringify({
+        ts: new Date().toISOString(),
+        payload,
+      }) + '\n')
+    } catch {}
+  }
+
+  _looksLikeMediaPayload(value, depth = 0) {
+    if (value == null || depth > 8) return false
+    if (typeof value === 'string') {
+      return /videoId|fileId|photoId|previewData|MP4_|\.mp4|\.ogg|audio|voice|token|okcdn|oneme/i.test(value)
+        || /^[A-Za-z0-9_-]{48,}$/.test(value)
+    }
+    if (Buffer.isBuffer(value)) return value.length > 256
+    if (Array.isArray(value)) return value.some(item => this._looksLikeMediaPayload(item, depth + 1))
+    if (typeof value === 'object') {
+      const keys = Object.keys(value).join('|')
+      if (/videoId|fileId|photoId|previewData|baseUrl|mimeType|MP4_|audio|voice|token|(^|[|])110([|]|$)|(^|[|])476([|]|$)/i.test(keys)) return true
+      return Object.values(value).some(item => this._looksLikeMediaPayload(item, depth + 1))
+    }
+    return false
+  }
+
+  _collectLooseMedia(value, out = [], depth = 0) {
+    if (value == null || depth > 8) return out
+    if (Array.isArray(value)) {
+      for (const item of value) this._collectLooseMedia(item, out, depth + 1)
+      return out
+    }
+    if (typeof value !== 'object') return out
+
+    const token = typeof value.token === 'string' ? value.token : (typeof value['110'] === 'string' ? value['110'] : null)
+    const markerHint = value['476'] === 'videoId' ? 'video' : ''
+    const typeHint = String(value._type || value.preview?._type || value.type || markerHint || value['0'] || value['476'] || '').toLowerCase()
+    const hasPreview = !!value.previewData
+    const hasMediaId = value.videoId != null || value.fileId != null || value.photoId != null || value.mediaId != null || value.attachmentId != null
+    const filename = cleanMaxString(value.name || value.filename)
+    // Live VIDEO notifications can carry a ready signed CDN URL as MP4_1080
+    // (and resolved payloads can expose lower-quality MP4_* variants). Keep it
+    // instead of falling through to the legacy JSON op:83 request, which is
+    // incompatible with MAX's current binary WebSocket transport.
+    const directVideoUrl = cleanMaxString(
+      value.MP4_480 ||
+      value.MP4_720 ||
+      value.MP4_360 ||
+      value.MP4_240 ||
+      value.MP4_1080
+    )
+    const directUrl = directVideoUrl || cleanMaxString(value.baseUrl || value.url)
+    if (token || hasPreview || hasMediaId || directUrl || typeHint.includes('video') || typeHint.includes('file') || typeHint.includes('audio') || typeHint.includes('music') || /\.ogg\b|\.mp4\b/i.test(filename || '')) {
+      out.push({
+        _type: typeHint.includes('video') ? 'VIDEO' : (typeHint.includes('audio') || typeHint.includes('voice') || typeHint.includes('music') || /\.ogg\b/i.test(filename || '') ? 'AUDIO' : (typeHint.includes('photo') ? 'PHOTO' : 'FILE')),
+        url: directUrl || null,
+        baseUrl: directUrl || null,
+        token,
+        videoId: value.videoId || value.mediaId || findNestedMediaId(value, ['videoId', 'video_id']) || findUrlParamInString(value.thumbnail, ['id']) || null,
+        fileId: value.fileId || value.mediaId || value.attachmentId || findNestedMediaId(value, ['fileId', 'file_id', 'mediaId', 'attachmentId']) || null,
+        photoId: value.photoId || null,
+        previewData: value.previewData || null,
+        thumbnail: value.thumbnail || null,
+        duration: value.duration || value.preview?.duration || null,
+        name: filename || null,
+        size: value.size || null,
+        mimeType: value.mimeType || null,
+        raw: value,
+      })
+    }
+    for (const item of Object.values(value)) this._collectLooseMedia(item, out, depth + 1)
+    return out
+  }
+
+  _pushLooseMedia(payload) {
+    const items = this._collectLooseMedia(payload).filter(item => item.url || item.baseUrl || item.token || item.previewData || item.videoId || item.fileId || item.photoId)
+    if (!items.length) return
+    this._pendingLooseMedia.push({ ts: Date.now(), items })
+    this._pendingLooseMedia = this._pendingLooseMedia.filter(entry => Date.now() - entry.ts < 15_000).slice(-8)
+    console.log(`[Transport] buffered loose media hints: ${items.length}`)
+  }
+
+  hasRecentLooseMediaForDomRecovery({ maxAgeMs = 15_000 } = {}) {
+    const now = Date.now()
+    return this._pendingLooseMedia.some(entry => entry?.ts && now - entry.ts < maxAgeMs && Array.isArray(entry.items) && entry.items.length > 0)
+  }
+
+  emitPendingLooseMediaMessage(chatId, messageHex, { maxAgeMs = 15_000 } = {}) {
+    const chatIdStr = String(chatId || '')
+    const idHex = String(messageHex || '')
+    if (!chatIdStr || !isUsableMaxMessageHex(idHex)) return { emitted: false, reason: 'invalid_identity' }
+    if (!this.hasRecentLooseMediaForDomRecovery({ maxAgeMs })) return { emitted: false, reason: 'no_recent_loose_media' }
+
+    const pseudo = {
+      chatId: chatIdStr,
+      message: {
+        id: { __maxId: true, hex: idHex },
+        sender: null,
+        time: Date.now(),
+        attaches: [],
+      },
+    }
+    this._consumeLooseMediaForMessage(pseudo)
+    const msg = this._normalizeMaxMsg(pseudo)
+    if (!msg || !msg.attachments?.length) return { emitted: false, reason: 'normalize_failed' }
+
+    this._rememberConfirmedMessageAnchor(chatIdStr, idHex, { markSeen: true })
+    this._persistLastMsgRawHex()
+    console.log(`[Transport] emitted loose media msg chat:${chatIdStr} id:${idHex.slice(0,16)} type:${msg.type}`)
+    this._emit(msg)
+    return { emitted: true, messageId: idHex, type: msg.type, attachmentCount: msg.attachments.length }
+  }
+
+  _consumeLooseMediaForMessage(pl) {
+    if (!pl?.message || Array.isArray(pl.message.attaches) && pl.message.attaches.length > 0) return
+    if (Array.isArray(pl.attaches) && pl.attaches.length > 0) {
+      const rootToken = pl.token || pl['110'] || null
+      pl.message.attaches = pl.attaches.map(att => ({
+        ...att,
+        token: att?.token || rootToken || null,
+        _rootMediaToken: rootToken || null,
+      }))
+      console.log(`[Transport] attached root payload media to msg:${pl.message.id?.hex || pl.message.id || 'unknown'} count=${pl.message.attaches.length}`)
+      return
+    }
+    const direct = this._collectLooseMedia(pl)
+    const recent = []
+    const now = Date.now()
+    for (const entry of this._pendingLooseMedia) {
+      if (now - entry.ts < 15_000) recent.push(...entry.items)
+    }
+    const merged = [...recent, ...direct].filter(item => item.url || item.baseUrl || item.token || item.previewData || item.videoId || item.fileId || item.photoId)
+    if (!merged.length) return
+    const combined = {}
+    for (const item of merged) {
+      if ((!combined._type || combined._type === 'FILE') && item._type && item._type !== 'FILE') {
+        combined._type = item._type
+      } else {
+        combined._type = combined._type || item._type
+      }
+      combined.token = combined.token || item.token
+      combined.url = combined.url || item.url
+      combined.baseUrl = combined.baseUrl || item.baseUrl
+      combined.videoId = combined.videoId || item.videoId
+      combined.fileId = combined.fileId || item.fileId
+      combined.photoId = combined.photoId || item.photoId
+      combined.previewData = combined.previewData || item.previewData
+      combined.thumbnail = combined.thumbnail || item.thumbnail
+      combined.duration = combined.duration || item.duration
+      combined.name = combined.name || item.name
+      combined.size = combined.size || item.size
+      combined.mimeType = combined.mimeType || item.mimeType
+    }
+    if (!combined.videoId && combined.thumbnail) combined.videoId = findUrlParamInString(combined.thumbnail, ['id'])
+    if (!combined.token && combined.thumbnail) combined.token = findUrlParamInString(combined.thumbnail, ['tkn', 'token', 'signatureToken'])
+    if (!combined.fileId && combined.token && (combined._type === 'AUDIO' || combined._type === 'MUSIC')) combined.fileId = combined.token
+    if (!combined.url && !combined.baseUrl && !combined.videoId && !combined.fileId && !combined.photoId) {
+      this._writeDebugJson('max_media_missing_ids.jsonl', { pl, merged })
+      return
+    }
+    pl.message.attaches = [combined]
+    this._pendingLooseMedia = []
+    console.log(`[Transport] attached loose media to msg:${pl.message.id?.hex || pl.message.id || 'unknown'} type=${combined._type}`)
+  }
+
+  _persistLastMsgRawHex() {
+    try {
+      fs.mkdirSync(path.dirname(LAST_MSG_IDS_PATH), { recursive: true })
+      fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
+    } catch (e) {
+      console.warn('[Transport] Failed to persist msg IDs:', e.message)
+    }
+  }
+
+  _rememberConfirmedMessageAnchor(chatId, candidateHex, { markSeen = false, confirmedAt = Date.now() } = {}) {
+    const chatIdStr = String(chatId || '')
+    const confirmedHex = String(candidateHex || '')
+      .replace(/[^a-fA-F0-9]/g, '')
+      .toLowerCase()
+    if (!chatIdStr || !isUsableMaxMessageHex(confirmedHex)) return false
+
+    const previousHex = this._lastMsgRawHex.get(chatIdStr) || null
+    if (markSeen) this._lastSeenMsgId.set(chatIdStr, confirmedHex)
+    if (isUsableMaxMessageHex(previousHex) && compareMaxIdHex(confirmedHex, previousHex) < 0) {
+      return false
+    }
+
+    this._lastMsgRawHex.set(chatIdStr, confirmedHex)
+    if (Number.isFinite(confirmedAt) && confirmedAt > 0) {
+      this._confirmedMessageAnchorAt.set(chatIdStr, confirmedAt)
+    } else {
+      this._confirmedMessageAnchorAt.delete(chatIdStr)
+    }
+    return true
+  }
+
+  _rememberPreChatPendingMessageId(pendingHex) {
+    const pending = String(pendingHex || '')
+    if (!isUsableMaxMessageHex(pending)) {
+      return { registered: false, reason: 'unsafe_pending_id', pendingHex: pending, queueLength: this._pendingNewMsgIds.length }
+    }
+    const now = Date.now()
+    this._pendingNewMsgIds = this._pendingNewMsgIds
+      .filter(entry => entry?.ts && now - entry.ts <= 30_000)
+    if (!this._pendingNewMsgIds.some(entry => entry.pendingHex === pending)) {
+      this._pendingNewMsgIds.push({ pendingHex: pending, ts: now })
+    }
+    this._pendingNewMsgIds = this._pendingNewMsgIds.slice(-25)
+    return { registered: true, pendingHex: pending, queueLength: this._pendingNewMsgIds.length }
+  }
+
+  _registerPreChatPendingForChat(chatId) {
+    const chatIdStr = String(chatId || '')
+    if (!chatIdStr || !this._pendingNewMsgIds.length) return []
+    const pending = this._pendingNewMsgIds.slice()
+    this._pendingNewMsgIds = []
+    const registrations = []
+    for (const entry of pending) {
+      const registration = this._registerPendingLiveMessageId(chatIdStr, entry.pendingHex)
+      if (registration.registered) registrations.push(registration)
+    }
+    return registrations
+  }
+
+  _pendingLiveList(chatIdStr, maxAgeMs = 30_000) {
+    const now = Date.now()
+    const list = (this._pendingLiveMessageIds.get(chatIdStr) || [])
+      .filter(entry => entry?.ts && now - entry.ts <= maxAgeMs)
+    if (list.length) this._pendingLiveMessageIds.set(chatIdStr, list)
+    else this._pendingLiveMessageIds.delete(chatIdStr)
+    return list
+  }
+
+  _registerPendingLiveMessageId(chatId, pendingHex) {
+    const chatIdStr = String(chatId || '')
+    const pending = String(pendingHex || '')
+    const previousHex = this._lastMsgRawHex.get(chatIdStr) || null
+    const anchorHex = isUsableMaxMessageHex(previousHex) ? previousHex : null
+
+    if (!chatIdStr) return { registered: false, reason: 'missing_chat_id', pendingHex: pending, previousHex, anchorHex }
+    if (!isUsableMaxMessageHex(pending)) return { registered: false, reason: 'unsafe_pending_id', pendingHex: pending, previousHex, anchorHex }
+    if (isUsableMaxMessageHex(previousHex) && compareMaxIdHex(pending, previousHex) <= 0) {
+      return { registered: false, reason: 'stale_pending_id', pendingHex: pending, previousHex, anchorHex }
+    }
+
+    const list = this._pendingLiveList(chatIdStr)
+    if (!list.some(entry => entry.pendingHex === pending)) {
+      list.push({ pendingHex: pending, ts: Date.now(), previousHex, anchorHex })
+    }
+    this._pendingLiveMessageIds.set(chatIdStr, list.slice(-25))
+    this._lastSeenMsgId.delete(chatIdStr)
+    return { registered: true, pendingHex: pending, previousHex, anchorHex }
+  }
+
+  _op71AnchorForLiveNotification(chatId) {
+    const anchorHex = this._lastMsgRawHex.get(String(chatId || '')) || null
+    return isUsableMaxMessageHex(anchorHex) ? anchorHex : null
+  }
+
+  _advanceLastMsgAfterOp71(chatId, bestMsgHex) {
+    const chatIdStr = String(chatId || '')
+    const confirmedHex = String(bestMsgHex || '')
+    if (!chatIdStr || !isUsableMaxMessageHex(confirmedHex)) return false
+
+    if (!this._rememberConfirmedMessageAnchor(chatIdStr, confirmedHex)) return false
+    const remaining = this._pendingLiveList(chatIdStr)
+      .filter(entry => compareMaxIdHex(entry.pendingHex, confirmedHex) > 0)
+    if (remaining.length) this._pendingLiveMessageIds.set(chatIdStr, remaining)
+    else this._pendingLiveMessageIds.delete(chatIdStr)
+    this._persistLastMsgRawHex()
+    return true
+  }
+
+  _schedulePendingLiveDrain(chatId, delayMs = 350) {
+    const chatIdStr = String(chatId || '')
+    if (!chatIdStr || !this._pendingLiveList(chatIdStr).length) return false
+    console.log(`[pendingLiveDrain] active op71 disabled chatId:${chatIdStr} pending:${this._pendingLiveList(chatIdStr).length}; guarded DOM recovery retained`)
+    return false
+  }
+
+  _finalizeOp71CatchUpState(chatId, delayMs = 350) {
+    const chatIdStr = String(chatId || '')
+    const pendingLiveCount = this._pendingLiveList(chatIdStr).length
+    if (pendingLiveCount > 0) {
+      if (!this._catchUpChatIds.has(chatIdStr)) this._catchUpChatIds.set(chatIdStr, 0)
+      return {
+        pendingLiveCount,
+        scheduledDrain: this._schedulePendingLiveDrain(chatIdStr, delayMs),
+        catchUpRetained: true,
+      }
+    }
+
+    this._catchUpChatIds.delete(chatIdStr)
+    const shortId32str = ((Number(chatIdStr) >>> 0)).toString()
+    if (shortId32str !== chatIdStr) this._catchUpChatIds.delete(shortId32str)
+    return { pendingLiveCount: 0, scheduledDrain: false, catchUpRetained: false }
+  }
+
+  registerPendingLiveTextIdForDomRecovery(chatId, pendingHex) {
+    return this._registerPendingLiveMessageId(chatId, pendingHex)
+  }
+
+  pendingLiveTextCountForDomRecovery(chatId, { maxAgeMs = 15_000 } = {}) {
+    return this._pendingLiveList(String(chatId || ''), maxAgeMs).length
+  }
+
+  peekPendingLiveTextIdForDomRecovery(chatId, { maxAgeMs = 15_000 } = {}) {
+    const list = this._pendingLiveList(String(chatId || ''), maxAgeMs)
+    return list[0]?.pendingHex || null
+  }
+
+  confirmPendingLiveTextIdForDomRecovery(chatId, pendingHex) {
+    const chatIdStr = String(chatId || '')
+    const pending = String(pendingHex || '')
+    const remaining = this._pendingLiveList(chatIdStr)
+      .filter(entry => entry.pendingHex !== pending)
+    if (remaining.length) this._pendingLiveMessageIds.set(chatIdStr, remaining)
+    else this._pendingLiveMessageIds.delete(chatIdStr)
+  }
+
+  async forceHistoryCatchup(chatId, anchorHex) {
+    const chatIdStr = String(chatId)
+    if (anchorHex) {
+      const previous = this._lastMsgRawHex.get(chatIdStr)
+      this._lastMsgRawHex.set(chatIdStr, String(anchorHex))
+      this._lastSeenMsgId.delete(chatIdStr)
+      try {
+        fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
+      } catch {}
+      console.log(`[debug→op71] forced anchor ${String(anchorHex).slice(0,16)} for chatId:${chatIdStr} prev:${previous ? previous.slice(0,16) : 'none'}`)
+    }
+    return this.sendBinaryOp71(chatIdStr)
+  }
+
+  _scheduleDirectBackfill(chatId, anchorHex, newHex) {
+    const chatIdStr = String(chatId || '')
+    if (!chatIdStr || !anchorHex || !newHex) return
+    if (!isUsableMaxMessageHex(anchorHex) || !isUsableMaxMessageHex(newHex)) {
+      console.log(`[op128direct->op71] skipped unsafe anchor chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} new:${String(newHex).slice(0,16)}`)
+      return
+    }
+    if (compareMaxIdHex(newHex, anchorHex) <= 0) return
+    const now = Date.now()
+    const last = this._lastDirectBackfillAt.get(chatIdStr) || 0
+    if (now - last < 250) return
+    this._lastDirectBackfillAt.set(chatIdStr, now)
+    console.log(`[op128direct] gap detected chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} new:${String(newHex).slice(0,16)}; using guarded DOM recovery`)
+  }
+
   _detectMaxType(attaches) {
     if (!attaches || !attaches.length) return 'text'
-    const t = (attaches[0]._type || '').toUpperCase()
+    const first = attaches[0] || {}
+    const t = (first._type || first.preview?._type || first.type || '').toUpperCase()
+    const name = cleanMaxString(first.name || first.filename || '')
+    const mime = cleanMaxString(first.mimeType || first.type || '')
     if (t === 'PHOTO')                     return 'image'
-    if (t === 'VIDEO')                     return 'video'
+    if (t === 'VIDEO' || first.videoId || first.thumbnail || /\.mp4\b/i.test(name || '') || /^video\//i.test(mime || '')) return 'video'
+    if (t === 'MUSIC')                     return 'audio'
     if (t === 'AUDIO' || t === 'VOICE')    return 'voice'
+    if (/\.ogg\b/i.test(name || '') || /^audio\//i.test(mime || '')) return 'audio'
     if (t === 'STICKER' || t === 'SMILE')  return 'sticker'
     return 'document'
   }
@@ -976,6 +1819,7 @@ class TransportInterceptor {
       url:         a.baseUrl || a.url || null,  // MAX uses baseUrl for photos, url for audio
       name:        a.name || a.filename || null,
       size:        a.size || null,
+      mimeType:    a.mimeType || a.type || null,
       previewData: a.previewData || null,       // base64 webp thumbnail, ready to use
       photoId:     a.photoId || null,
       // VIDEO/FILE carry no direct url — only an opaque token that must be
@@ -991,7 +1835,43 @@ class TransportInterceptor {
   // Формат: [0x0a, ver=0x00, flags=0x00, frameSeqHi, frameSeqLo, 0x47=71, cmd=0x01, reqSeqHi, reqSeqLo, msgpack({chatId})]
   // ver=0x00 подтверждён: браузерный op:71 hex: 0a 00 00 16 00 47 01 00 00 ... (byte1=0x00)
 
-  async sendBinaryOp71(chatId) {
+  _extractMaxAttachmentsV2(attaches) {
+    return attaches.map(a => {
+      const rawType = String(a._type || a.preview?._type || a.type || '').toUpperCase()
+      const name = cleanMaxFilename(a.name || a.filename, a.preview?.title, rawType)
+      const videoId = maxIdToString(a.videoId) || findNestedMediaId(a, ['videoId', 'video_id']) || findUrlParamInString(a.thumbnail, ['id'])
+      const fileId = maxIdToString(a.fileId) ||
+        findNestedMediaId(a, ['fileId', 'file_id', 'mediaId', 'attachmentId']) ||
+        (a.token && (rawType === 'AUDIO' || rawType === 'MUSIC') ? cleanMaxString(a.token) : null)
+      const token = cleanMaxString(a.token || a._rootMediaToken || a['110']) ||
+        findUrlParamInString(a.thumbnail, ['tkn', 'token', 'signatureToken'])
+      const photoId = maxIdToString(a.photoId) || findNestedMediaId(a, ['photoId', 'photo_id'])
+
+      let type = (a._type || 'file').toLowerCase()
+      if (rawType === 'MUSIC') type = 'audio'
+      if (rawType === 'PHOTO' || photoId || (a.baseUrl && rawType !== 'VIDEO' && !videoId)) type = 'photo'
+      if (rawType === 'VIDEO' || videoId || a.thumbnail || /\.mp4\b/i.test(name || '')) type = 'video'
+      if ((rawType === 'AUDIO' || rawType === 'VOICE') && type === 'file') type = rawType.toLowerCase()
+      if (/\.ogg\b/i.test(name || '') && type === 'file') type = 'audio'
+
+      return {
+        type,
+        url:         a.baseUrl || a.url || null,
+        name,
+        size:        a.size || null,
+        mimeType:    mediaMimeFromAttachment(a, type),
+        previewData: a.previewData || null,
+        thumbnail:   cleanMaxString(a.thumbnail) || null,
+        duration:    a.duration || a.preview?.duration || null,
+        photoId,
+        videoId,
+        fileId,
+        token,
+      }
+    })
+  }
+
+  async sendBinaryOp71(chatId, anchorHexOverride = null) {
     if (!this._page) throw new Error('No page')
 
     const chatIdNum = Number(chatId)
@@ -1015,7 +1895,11 @@ class TransportInterceptor {
     // Browser sends the real last message ID so server returns messages newer than that.
     // We store the raw ext8 data hex from op:48/op:53 and reconstruct it exactly here.
     const msgIdsKey  = Buffer.from([0xaa, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x64, 0x73])
-    const storedHex  = this._lastMsgRawHex.get(String(chatId))
+    const storedCandidate = anchorHexOverride ? String(anchorHexOverride) : this._lastMsgRawHex.get(String(chatId))
+    if (storedCandidate && !isUsableMaxMessageHex(storedCandidate)) {
+      throw new Error(`Refusing op:71 with invalid provider anchor: ${String(storedCandidate).slice(0, 16)}`)
+    }
+    const storedHex = storedCandidate
     let msgIdEncoded
     if (storedHex) {
       // Reconstruct ext8(type=1, data=rawBytes): c7 [len] 01 [rawBytes]
@@ -1035,34 +1919,172 @@ class TransportInterceptor {
     const prefix       = this._op71Prefix ? Buffer.from(this._op71Prefix) : Buffer.alloc(0)
     const payloadBytes = Buffer.concat([prefix, map])
 
-    const frameSeq = ++this._outBinFrameSeq
-    const reqSeq   = ++this._localSeq
-
-    // Формат заголовка: [magic][byte1][frameSeqHi][frameSeqLo][flags=0x00][opcode][cmd][reqSeqHi][reqSeqLo]
-    // Предыдущий баг: frameSeq был в байтах[3-4], поэтому байт[4] = frameSeqLo ≠ 0 → сервер закрывал WS
+    // Используем следующий fseq после браузерного — избегаем скачка в последовательности
+    // Браузер использует reqSeq=0 для op:71; мы повторяем это поведение
+    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
     const header = Buffer.alloc(9)
-    header[0] = 0x0a                     // magic
-    header[1] = 0x00                     // byte1=0
-    header[2] = (frameSeq >> 8) & 0xff   // frameSeqHi (0x00 при frameSeq < 256)
-    header[3] = frameSeq & 0xff           // frameSeqLo
-    header[4] = 0x00                      // flags = ВСЕГДА 0x00
-    header[5] = 71                        // opcode
-    header[6] = 0x01                      // cmd=1 (request)
-    header[7] = (reqSeq >> 8) & 0xff
-    header[8] = reqSeq & 0xff
+    header[0] = 0x0a  // magic
+    header[1] = 0x00  // byte1=0
+    header[2] = (frameSeq >> 8) & 0xff
+    header[3] = frameSeq & 0xff
+    header[4] = 0x00  // flags
+    header[5] = 71    // opcode
+    header[6] = 0x01  // cmd=1 (request)
+    header[7] = 0x00  // reqSeq=0 (браузер всегда шлёт op:71 с reqSeq=0)
+    header[8] = 0x00
 
     const frame = Buffer.concat([header, payloadBytes])
     const b64   = frame.toString('base64')
 
     const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), b64)
     if (!result || !result.ok) throw new Error(`Binary op:71 send failed: ${result?.error}`)
+    this._pendingOp71ChatIds.push(String(chatId))
+    if (this._pendingOp71ChatIds.length > 20) this._pendingOp71ChatIds.splice(0, this._pendingOp71ChatIds.length - 20)
     const prefixHex  = (this._op71Prefix || []).map(b => b.toString(16).padStart(2,'0')).join(' ')
-    const msgIdLabel = storedHex ? storedHex.slice(0,16) : 'anchor=1(fallback)'
-    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} msgId:${msgIdLabel} frameSeq:${frameSeq} prefix:[${prefixHex}]`)
-    return reqSeq
+    const msgIdLabel = storedHex ? `${storedHex.slice(0,16)}${anchorHexOverride ? '(override)' : ''}` : 'anchor=1(fallback)'
+    console.log(`[op71bin] sent chatId:${chatIdNum} shortId:0x${shortId.toString(16)} msgId:${msgIdLabel} fseq:${frameSeq} prefix:[${prefixHex}]`)
+    return 0
   }
 
   // ─── Отправка WS фрейма (JSON) ───────────────────────────────────────────
+
+  _mpStr(value) {
+    const buf = Buffer.from(String(value), 'utf8')
+    if (buf.length < 32) return Buffer.concat([Buffer.from([0xa0 | buf.length]), buf])
+    if (buf.length < 256) return Buffer.concat([Buffer.from([0xd9, buf.length]), buf])
+    if (buf.length < 65536) return Buffer.concat([Buffer.from([0xda, (buf.length >> 8) & 0xff, buf.length & 0xff]), buf])
+    throw new Error(`String too long for msgpack: ${buf.length}`)
+  }
+
+  _mpUInt(value) {
+    const n = Number(value)
+    if (!Number.isFinite(n) || n < 0) throw new Error(`Invalid msgpack uint: ${value}`)
+    if (n < 128) return Buffer.from([n])
+    if (n < 256) return Buffer.from([0xcc, n])
+    if (n < 65536) return Buffer.from([0xcd, (n >> 8) & 0xff, n & 0xff])
+    return Buffer.from([0xce, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff])
+  }
+
+  _mpInt(value) {
+    const n = Number(value)
+    if (!Number.isSafeInteger(n) || n < -0x80000000 || n > 0xffffffff) {
+      throw new Error(`Invalid msgpack int: ${value}`)
+    }
+    if (n >= 0) return this._mpUInt(n)
+    if (n >= -32) return Buffer.from([0x100 + n])
+    if (n >= -128) return Buffer.from([0xd0, 0x100 + n])
+    if (n >= -32768) return Buffer.from([0xd1, (n >> 8) & 0xff, n & 0xff])
+    return Buffer.from([0xd2, (n >> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff])
+  }
+
+  _maxExtFromLower32(value) {
+    const shortId = Number(value) >>> 0
+    return Buffer.from([
+      0xc7, 0x09, 0x01, 0xcf,
+      0x00, 0x00, 0x00, 0x00,
+      (shortId >>> 24) & 0xff,
+      (shortId >>> 16) & 0xff,
+      (shortId >>> 8) & 0xff,
+      shortId & 0xff,
+    ])
+  }
+
+  _maxExtFromIdHex(hex, preferUnsigned = true) {
+    const clean = String(hex || '').replace(/[^a-fA-F0-9]/g, '')
+    if (!clean || clean.length % 2 !== 0) throw new Error(`Invalid MAX id hex: ${hex}`)
+    const raw = Buffer.from(clean, 'hex')
+    if (preferUnsigned && raw[0] === 0xd3) raw[0] = 0xcf
+    return Buffer.concat([Buffer.from([0xc7, raw.length, 0x01]), raw])
+  }
+
+  _buildBinaryReplyFrame(chatId, text, replyToMessageId, cid) {
+    const replyId = String(replyToMessageId || '')
+    if (!isUsableMaxMessageHex(replyId)) {
+      throw new Error('Reply requires real MAX provider message id')
+    }
+
+    const linkMap = Buffer.concat([
+      Buffer.from([0x82]),
+      this._mpStr('type'), this._mpStr('REPLY'),
+      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, true),
+    ])
+    const messageMap = Buffer.concat([
+      Buffer.from([0x85]),
+      this._mpStr('text'), this._mpStr(text),
+      this._mpStr('cid'), this._mpInt(cid),
+      this._mpStr('elements'), Buffer.from([0x90]),
+      this._mpStr('link'), linkMap,
+      this._mpStr('attaches'), Buffer.from([0x90]),
+    ])
+    const payloadMap = Buffer.concat([
+      Buffer.from([0x83]),
+      this._mpStr('chatId'), this._maxExtFromLower32(chatId),
+      this._mpStr('message'), messageMap,
+      this._mpStr('notify'), Buffer.from([0xc3]),
+    ])
+
+    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
+    const header = Buffer.alloc(9)
+    header[0] = 0x0a
+    header[1] = 0x00
+    header[2] = (frameSeq >> 8) & 0xff
+    header[3] = frameSeq & 0xff
+    header[4] = 0x00
+    header[5] = OP.SEND_MESSAGE
+    header[6] = 0x01
+    header[7] = 0x00
+    header[8] = 0x00
+
+    // Browser frames carry the low payload-length byte before the msgpack map.
+    return Buffer.concat([header, Buffer.from([payloadMap.length & 0xff]), payloadMap])
+  }
+
+  async sendBinaryReply(chatId, text, replyToMessageId, cid) {
+    if (!this._page) throw new Error('No page')
+    const frame = this._buildBinaryReplyFrame(chatId, text, replyToMessageId, cid)
+    const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), frame.toString('base64'))
+    if (!result || !result.ok) throw new Error(`Binary op:64 send failed: ${result?.error}`)
+    console.log(`[replybin] sent op:64 chatId:${chatId} replyTo:${String(replyToMessageId).slice(0,18)} fseq:${(frame[2] << 8) | frame[3]}`)
+    return true
+  }
+
+  async sendBinaryReaction(chatId, messageId, reactionId, remove = false, preferUnsignedMessageId = true) {
+    if (!this._page) throw new Error('No page')
+    const fields = [
+      this._mpStr('chatId'), this._maxExtFromLower32(chatId),
+      this._mpStr('messageId'), this._maxExtFromIdHex(messageId, preferUnsignedMessageId),
+    ]
+    if (!remove) {
+      const reactionMap = Buffer.concat([
+        Buffer.from([0x82]),
+        this._mpStr('reactionType'), this._mpStr('EMOJI'),
+        this._mpStr('id'), typeof reactionId === 'number' || /^\d+$/.test(String(reactionId)) ? this._mpUInt(reactionId) : this._mpStr(reactionId),
+      ])
+      fields.push(this._mpStr('reaction'), reactionMap)
+    }
+
+    const map = Buffer.concat([Buffer.from([0x80 | (fields.length / 2)]), ...fields])
+    const prefix = this._op71Prefix ? Buffer.from(this._op71Prefix) : Buffer.alloc(0)
+    const payloadBytes = Buffer.concat([prefix, map])
+    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
+    const opcode = remove ? OP.REMOVE_REACTION : OP.SEND_REACTION
+    const header = Buffer.alloc(9)
+    header[0] = 0x0a
+    header[1] = 0x00
+    header[2] = (frameSeq >> 8) & 0xff
+    header[3] = frameSeq & 0xff
+    header[4] = 0x00
+    header[5] = opcode & 0xff
+    header[6] = 0x01
+    header[7] = 0x00
+    header[8] = 0x00
+
+    const frame = Buffer.concat([header, payloadBytes])
+    const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), frame.toString('base64'))
+    if (!result || !result.ok) throw new Error(`Binary op:${opcode} send failed: ${result?.error}`)
+    console.log(`[reactionbin] sent op:${opcode} chatId:${chatId} msgId:${String(messageId).slice(0,18)} reaction=${reactionId || ''} fseq:${frameSeq} unsigned=${preferUnsignedMessageId}`)
+    return 0
+  }
 
   /**
    * @param {number} opcode
@@ -1113,30 +2135,6 @@ class TransportInterceptor {
   _fireWsReady() {
     const cbs = this._wsReadyCallbacks.splice(0)
     for (const cb of cbs) try { cb() } catch {}
-    // On every WS ready (including reconnects), retry catch-up op:71 for chats
-    // that haven't gotten a response yet. The first attempt (from op:48 setTimeout)
-    // often races with the browser's early reconnect (~3s into startup). The second
-    // connection is stable and the server actually responds.
-    if (this._catchUpChatIds?.size > 0) {
-      const snapshot = [...this._catchUpChatIds.keys()]
-      console.log(`[catchup] WS ready — scheduling retry for ${snapshot.length} chat(s) in 5s`)
-      setTimeout(() => {
-        for (const cid of snapshot) {
-          if (!this._catchUpChatIds.has(cid)) continue  // already resolved by op:71 response
-          const retries = this._catchUpChatIds.get(cid) || 0
-          if (retries >= 5) {
-            console.warn(`[catchup] gave up on chatId:${cid} after ${retries} retries`)
-            this._catchUpChatIds.delete(cid)
-            continue
-          }
-          this._catchUpChatIds.set(cid, retries + 1)
-          console.log(`[catchup] retry #${retries + 1} for chatId:${cid}`)
-          this.sendBinaryOp71(cid).catch(e => {
-            console.warn(`[catchup] retry #${retries + 1} failed chatId:${cid}: ${e.message}`)
-          })
-        }
-      }, 5000)
-    }
   }
 
   /**
@@ -1226,6 +2224,44 @@ class TransportInterceptor {
     this._sentReactionHandlers.push(handler)
   }
 
+  _rememberRecentOp128Chat(chatId, now = Date.now()) {
+    const chatIdStr = String(chatId || '')
+    if (!chatIdStr) return 0
+    this._recentOp128ChatIds.set(chatIdStr, now)
+    const cutoff = now - 15_000
+    const events = (this._recentOp128EventsByChat.get(chatIdStr) || [])
+      .filter(ts => Number.isFinite(ts) && ts >= cutoff)
+    events.push(now)
+    this._recentOp128EventsByChat.set(chatIdStr, events.slice(-20))
+    return events.length
+  }
+
+  recentOp128CountForChat(chatId, maxAgeMs = 15_000) {
+    const chatIdStr = String(chatId || '')
+    if (!chatIdStr) return 0
+    const now = Date.now()
+    const events = (this._recentOp128EventsByChat.get(chatIdStr) || [])
+      .filter(ts => Number.isFinite(ts) && now - ts <= maxAgeMs)
+    if (events.length) this._recentOp128EventsByChat.set(chatIdStr, events)
+    else this._recentOp128EventsByChat.delete(chatIdStr)
+    return events.length
+  }
+
+  recentOp128SeriesKeyForChat(chatId, maxAgeMs = 15_000) {
+    const chatIdStr = String(chatId || '')
+    if (!chatIdStr) return null
+    const now = Date.now()
+    const events = (this._recentOp128EventsByChat.get(chatIdStr) || [])
+      .filter(ts => Number.isFinite(ts) && now - ts <= maxAgeMs)
+      .sort((a, b) => a - b)
+    if (events.length) this._recentOp128EventsByChat.set(chatIdStr, events)
+    else {
+      this._recentOp128EventsByChat.delete(chatIdStr)
+      return null
+    }
+    return `op128-series:${Math.floor(events[0] / 1000)}`
+  }
+
   /**
    * Возвращает chatIds чатов из op:53 push.
    * Сначала пробует "свежие" (в пределах maxAgeMs). Если таких нет — возвращает
@@ -1262,6 +2298,23 @@ class TransportInterceptor {
   // ─── Внутренние ─────────────────────────────────────────────────────────
 
   _emit(msg) {
+    if (msg) {
+      const now = Date.now()
+      for (const [id, ts] of this._emittedMsgIds.entries()) {
+        if (now - ts > 10 * 60 * 1000) this._emittedMsgIds.delete(id)
+      }
+      const attachmentSig = Array.isArray(msg.attachments)
+        ? msg.attachments.map(a => [a.type, a.url, a.name, a.size, a.videoId, a.fileId, a.photoId].join(':')).join('|')
+        : ''
+      const dedupKey = msg.id
+        ? `id:${msg.id}`
+        : `sig:${msg.chatId || ''}:${msg.from || ''}:${msg.timestamp || ''}:${msg.text || ''}:${attachmentSig}`
+      if (this._emittedMsgIds.has(dedupKey)) {
+        console.log(`[Transport] skip duplicate emit ${dedupKey.slice(0, 80)}`)
+        return
+      }
+      this._emittedMsgIds.set(dedupKey, now)
+    }
     for (const h of this._messageHandlers) {
       try { h(msg) } catch (e) {
         console.error('[Transport] Handler error:', e.message)
@@ -1270,4 +2323,4 @@ class TransportInterceptor {
   }
 }
 
-module.exports = { TransportInterceptor, OP, maxMsgpackDecodeAll }
+module.exports = { TransportInterceptor, OP, selectPendingLiveDomCandidates }

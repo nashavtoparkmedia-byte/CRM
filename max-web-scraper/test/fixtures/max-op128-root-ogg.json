@@ -1,0 +1,21 @@
+{
+  "110": "fixture-ogg-token",
+  "chatId": 902454841098,
+  "message": {
+    "id": { "__maxId": true, "hex": "d3019f2c1a30712703" },
+    "sender": 902264026154,
+    "text": ""
+  },
+  "attaches": [
+    {
+      "preview": {
+        "duration": 4,
+        "trackId": 0,
+        "_type": "MUSIC",
+        "title": "cmqg473uv01f3mu257ei2n1d9"
+      },
+      "size": 13704527,
+      "name": "voice-note.ogg"
+    }
+  ]
+}

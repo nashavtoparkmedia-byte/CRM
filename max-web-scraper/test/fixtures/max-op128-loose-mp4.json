@@ -1,0 +1,18 @@
+{
+  "chatId": 902454841098,
+  "message": {
+    "id": { "__maxId": true, "hex": "d3019f2c1a30712704" },
+    "sender": 902264026154,
+    "text": ""
+  },
+  "loose": [
+    {
+      "0": "_type",
+      "476": "videoId",
+      "previewData": { "type": "Buffer", "data": [82, 73, 70, 70] },
+      "duration": 3000,
+      "thumbnail": "https://iv.okcdn.ru/getImage?metadata=id%3D17565274016389%26tkn%3Dfixture-video-token",
+      "VIDEO": "width"
+    }
+  ]
+}
