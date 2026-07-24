@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
     Bot, User, Wrench, MessageSquare, ThumbsUp, ThumbsDown, AlertTriangle,
-    KeyRound, Settings, BookOpen, RefreshCw, Power, Search, ArrowRight,
+    KeyRound, Settings, BookOpen, RefreshCw, Power, Search,
     ArrowLeft,
 } from 'lucide-react'
 

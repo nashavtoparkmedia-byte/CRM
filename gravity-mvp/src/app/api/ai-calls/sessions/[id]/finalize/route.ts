@@ -302,8 +302,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             },
         ],
         callId: id,
-        opsLog: ((level: string, event: string, ctx: object) =>
-            opsLog(level as any, event, ctx)) as any,
+        opsLog,
     })
 
     // Single ops-line summary of event persistence. The HTTP response

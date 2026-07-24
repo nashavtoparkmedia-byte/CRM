@@ -2,12 +2,11 @@
 //
 // Run: `node --test src/lib/ai-call/__tests__/scenario-schema.test.js`
 
-'use strict'
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import scenarioSchema from '../scenario-schema.js'
 
-const test = require('node:test')
-const assert = require('node:assert/strict')
-
-const { validateLeadData, coerceField, ISSUE_CODES } = require('../scenario-schema')
+const { validateLeadData, coerceField, ISSUE_CODES } = scenarioSchema
 
 // ════════════════════════════════════════════════════════════════════
 // Schema-less / empty schema → passthrough

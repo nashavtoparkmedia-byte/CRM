@@ -8,17 +8,16 @@
 //
 // Run: `node --test src/lib/ai-call/__tests__/outcome-mapper.test.js`
 
-'use strict'
-
-const test = require('node:test')
-const assert = require('node:assert/strict')
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import outcomeMapper from '../outcome-mapper.js'
 
 const {
     computeOutcome,
     tagWithValidationIssues,
     normalizeQualificationScore,
     OUTCOME_VALUES,
-} = require('../outcome-mapper')
+} = outcomeMapper
 
 // ════════════════════════════════════════════════════════════════════
 // Enum surface

@@ -28,8 +28,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { isAllowedState, isIdempotentNoOp } from '@/lib/ai-call/state-helpers'
+import type { AiCallSessionStatus } from '@/lib/ai-call/types'
 
 export const dynamic = 'force-dynamic'
+
+type BridgeOwnedSessionState = Extract<
+    AiCallSessionStatus,
+    'greeting' | 'active' | 'transferring'
+>
+
+function isBridgeOwnedSessionState(state: unknown): state is BridgeOwnedSessionState {
+    return isAllowedState(state)
+}
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
     const { id } = await ctx.params
@@ -45,7 +55,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     const target = body?.state
-    if (!isAllowedState(target)) {
+    if (!isBridgeOwnedSessionState(target)) {
         opsLog('warn', 'ai_call_state_rejected', {
             callId: id,
             reason: 'not_in_allowlist',
@@ -62,7 +72,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         return NextResponse.json({ error: 'not_found' }, { status: 404 })
     }
 
-    if (isIdempotentNoOp(call.aiSessionStatus, target as string)) {
+    if (isIdempotentNoOp(call.aiSessionStatus, target)) {
         // Idempotent path — don't write, don't even bump updatedAt.
         // Return a small marker the bridge can log if it cares.
         opsLog('info', 'ai_call_state_noop', {
@@ -78,10 +88,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         })
     }
 
-    // Cast through `any` mirrors the pattern in finalize/route.ts: Prisma
-    // client types for AI-call models may not be regenerated on every
-    // dev box, and the field name is already validated.
-    await (prisma as any).call.update({
+    // The runtime allowlist above narrows the external payload to the exact
+    // bridge-owned subset of the generated Prisma enum.
+    await prisma.call.update({
         where: { id },
         data: { aiSessionStatus: target },
     })

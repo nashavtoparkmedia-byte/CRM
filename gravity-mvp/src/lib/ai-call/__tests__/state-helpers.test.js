@@ -5,17 +5,16 @@
 // Run: `node --test src/lib/ai-call/__tests__/state-helpers.test.js`
 // Zero new dependencies.
 
-'use strict'
-
-const test = require('node:test')
-const assert = require('node:assert/strict')
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import stateHelpers from '../state-helpers.js'
 
 const {
     ALLOWED_INCOMING_STATES,
     TERMINAL_STATES,
     isAllowedState,
     isIdempotentNoOp,
-} = require('../state-helpers')
+} = stateHelpers
 
 // ────────────────────────────────────────────────────────────────────
 // Allowlist policy

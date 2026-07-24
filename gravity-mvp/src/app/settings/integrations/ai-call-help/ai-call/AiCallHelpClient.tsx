@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import {
-    BookOpen, User, Wrench, Sparkles, CheckCircle2, XCircle, HelpCircle,
+    User, Wrench, Sparkles, CheckCircle2, XCircle, HelpCircle,
     KeyRound, FolderTree, AlertTriangle, ArrowRight, ArrowLeft,
 } from 'lucide-react'
 

@@ -18,8 +18,9 @@ export async function GET() {
     try {
         const projects = await listProjects()
         return NextResponse.json({ projects })
-    } catch (err: any) {
-        opsLog('error', 'ai_call_projects_list_failed', { operation: 'ai_call_projects', error: err.message })
-        return NextResponse.json({ error: err.message }, { status: 500 })
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'ai_call_projects_list_failed'
+        opsLog('error', 'ai_call_projects_list_failed', { operation: 'ai_call_projects', error: message })
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }
