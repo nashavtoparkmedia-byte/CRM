@@ -15,7 +15,10 @@ const owner = {
     isArchived: false,
 }
 
-function preflight(status: 'FREE' | 'SAME_CONTACT' | 'OTHER_CONTACT' | 'AMBIGUOUS', owners = status === 'OTHER_CONTACT' ? [owner] : []) {
+function preflight(
+    status: 'FREE' | 'SAME_CONTACT' | 'OTHER_CONTACT' | 'AMBIGUOUS',
+    owners: Array<Omit<typeof owner, 'chatId'> & { chatId: string | null }> = status === 'OTHER_CONTACT' ? [owner] : [],
+) {
     return {
         normalizedPhone: '+79222155750',
         ownershipStatus: status,
