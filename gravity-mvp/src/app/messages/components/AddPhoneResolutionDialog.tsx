@@ -73,9 +73,8 @@ function OwnerCard({ owner, showOpen = true, onOpen }: {
                     <button
                         type="button"
                         onClick={onOpen}
-                        disabled={!owner.chatId}
-                        className="shrink-0 text-[#3390EC] disabled:text-gray-300"
-                        title={owner.chatId ? 'Открыть карточку контакта' : 'У контакта нет доступного чата'}
+                        className="shrink-0 text-[#3390EC]"
+                        title="Открыть карточку контакта"
                         aria-label="Открыть карточку контакта"
                     >
                         <ExternalLink size={15} />
@@ -308,7 +307,7 @@ export default function AddPhoneResolutionDialog({
                             <OwnerCard owner={preflight.ownerContacts[0]} onOpen={() => onOpenContact(preflight.ownerContacts[0])} />
                             <div className="flex flex-wrap justify-end gap-2">
                                 <button type="button" onClick={onClose} className="h-[32px] rounded-lg bg-gray-100 px-3 text-[11px] font-semibold text-gray-700">Отмена</button>
-                                <button type="button" onClick={() => onOpenContact(preflight.ownerContacts[0])} disabled={!preflight.ownerContacts[0].chatId} className="h-[32px] rounded-lg border border-[#3390EC] px-3 text-[11px] font-semibold text-[#3390EC] disabled:border-gray-200 disabled:text-gray-300">Открыть существующий контакт</button>
+                                <button type="button" onClick={() => onOpenContact(preflight.ownerContacts[0])} className="h-[32px] rounded-lg border border-[#3390EC] px-3 text-[11px] font-semibold text-[#3390EC]">Открыть существующий контакт</button>
                                 <button type="button" onClick={() => reviewMerge(preflight.ownerContacts[0])} className="flex h-[32px] items-center gap-1 rounded-lg bg-[#3390EC] px-3 text-[11px] font-semibold text-white">
                                     <GitMerge size={12} /> Проверить объединение
                                 </button>

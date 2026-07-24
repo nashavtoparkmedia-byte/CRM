@@ -45,6 +45,7 @@ export default function MessagesShell({
 
     // Sync channelTab with URL param (ChatChannelTabs updates URL directly)
     const urlChannel = searchParams.get('channel') || 'all'
+    const profileContactId = searchParams.get('contact') || null
     useEffect(() => {
         setChannelTab(urlChannel)
     }, [urlChannel])
@@ -52,7 +53,9 @@ export default function MessagesShell({
     // Sync chatId from URL — handles external router.push (e.g., forwarded-from click)
     const urlChatId = searchParams.get('id') || null
     useEffect(() => {
-        if (urlChatId && urlChatId !== chatId) setChatIdState(urlChatId)
+        if (urlChatId) {
+            setChatIdState((currentChatId) => currentChatId === urlChatId ? currentChatId : urlChatId)
+        }
     }, [urlChatId])
 
     const handleSelectChat = (id: string, channelHint?: string) => {
@@ -63,6 +66,7 @@ export default function MessagesShell({
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
             params.set('id', id)
+            params.delete('contact')
             if (channelHint) {
                 params.set('channel', channelHint)
             }
@@ -77,6 +81,7 @@ export default function MessagesShell({
         startTransition(() => {
             const params = new URLSearchParams(searchParams.toString())
             params.delete('id')
+            params.delete('contact')
             const qs = params.toString()
             router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
         })
@@ -101,7 +106,7 @@ export default function MessagesShell({
             />
 
             {isProfileOpen && chatId && (
-                <ContactProfileDrawer chatId={chatId} />
+                <ContactProfileDrawer chatId={chatId} contactId={profileContactId} />
             )}
         </>
     )

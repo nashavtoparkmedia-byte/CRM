@@ -112,6 +112,22 @@ describe('AddPhoneResolutionDialog', () => {
         })).toBe(false)
     })
 
+    test('OTHER_CONTACT opens the exact owner even when it has no chat', async () => {
+        const ownerWithoutChat = { ...owner, chatId: null }
+        vi.mocked(fetch).mockResolvedValueOnce(response(preflight('OTHER_CONTACT', [ownerWithoutChat])))
+        const { onOpenContact } = renderDialog()
+        enterPhone()
+        fireEvent.click(screen.getByRole('button', { name: 'Проверить и добавить' }))
+
+        await screen.findByText('Номер уже используется')
+        const openButton = screen.getByRole('button', { name: 'Открыть существующий контакт' })
+        expect((openButton as HTMLButtonElement).disabled).toBe(false)
+        fireEvent.click(openButton)
+
+        expect(onOpenContact).toHaveBeenCalledWith(ownerWithoutChat)
+        expect(fetch).toHaveBeenCalledTimes(1)
+    })
+
     test('AMBIGUOUS lists every owner and never offers merge or confirm', async () => {
         const secondOwner = { ...owner, id: 'owner-2', displayName: 'Второй контакт', chatId: 'chat-owner-2' }
         vi.mocked(fetch).mockResolvedValueOnce(response(preflight('AMBIGUOUS', [owner, secondOwner])))

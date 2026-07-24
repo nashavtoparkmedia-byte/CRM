@@ -199,12 +199,19 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, badges, dotClass
     )
 }
 
-export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
-    const { toggleProfileDrawer, updateQuery } = useChatNavigation()
+export default function ContactProfileDrawer({ chatId, contactId }: { chatId: string; contactId?: string | null }) {
+    const { toggleProfileDrawer, updateQuery, replaceQuery } = useChatNavigation()
     const { conversations } = useConversations()
     const chat = conversations.find(c => c.id === chatId || c.allChatIds?.includes(chatId))
-    const { contact, isLoading: contactLoading, refetch: refetchContact, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt } = useContact(chat?.contactId)
+    const requestedContactId = contactId || chat?.contactId
+    const { contact, resolvedContactId, isLoading: contactLoading, refetch: refetchContact, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt } = useContact(requestedContactId)
     const { channelStatus } = useChannelStatus(contact?.id)
+
+    useEffect(() => {
+        if (contactId && resolvedContactId && resolvedContactId !== contactId) {
+            replaceQuery({ contact: resolvedContactId })
+        }
+    }, [contactId, replaceQuery, resolvedContactId])
 
     const [tags, setTags] = useState<string[]>([])
     const [tagInput, setTagInput] = useState("")
@@ -668,7 +675,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         </div>
                     ) : (
                         <div className="mt-0.5 flex max-w-full items-start gap-1 px-1">
-                            <h3 className="min-w-0 break-words text-[15px] font-semibold leading-tight text-[#111]">{displayTitle}</h3>
+                            <h3 data-testid="contact-profile-title" className="min-w-0 break-words text-[15px] font-semibold leading-tight text-[#111]">{displayTitle}</h3>
                             {contact && (
                                 <button
                                     onClick={() => { setNameInput(displayName); setEditingName(true) }}
@@ -1436,9 +1443,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         refreshConversations()
                     }}
                     onOpenContact={owner => {
-                        if (!owner.chatId) return
                         setShowAddPhone(false)
-                        updateQuery({ id: owner.chatId, profile: '1' })
+                        updateQuery({ contact: owner.id, profile: '1' })
                     }}
                     onReviewMerge={owner => {
                         setShowAddPhone(false)

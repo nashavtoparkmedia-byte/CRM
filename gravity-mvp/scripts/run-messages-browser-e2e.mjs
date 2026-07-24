@@ -325,6 +325,12 @@ try {
     await submitPhonePreflight(fixture.phones.same)
     await page.waitForSelector('[data-testid="phone-resolution-success"]')
     assert((await visibleText('[data-testid="phone-resolution-success"]')).includes('Этот номер уже добавлен'))
+    const sameOffersOther = await page.evaluate(() =>
+      [...document.querySelectorAll('button')].some(button =>
+        button.textContent?.replace(/\s+/g, ' ').trim() === 'Открыть существующий контакт',
+      ),
+    )
+    assert.equal(sameOffersOther, false, 'SAME_CONTACT must not be rendered as OTHER_CONTACT')
     await closeAddPhoneDialog()
 
     await openAddPhoneDialog()
@@ -354,6 +360,81 @@ try {
     assert.deepEqual(owners, [{ contactId: fixture.contacts.addPhone }])
     await closeAddPhoneDialog()
     await screenshot('add-phone-ownership-complete')
+  })
+
+  await recordScenario('add-phone-owner-contact-route', async () => {
+    await openChat(fixture.chats.addPhone)
+    const sourceChatBefore = await prisma.chat.findUniqueOrThrow({
+      where: { id: fixture.chats.addPhone },
+      select: { contactId: true },
+    })
+
+    await openAddPhoneDialog()
+    await submitPhonePreflight(fixture.phones.other)
+    await waitForVisibleText('Номер уже используется')
+    await clickButton('Открыть существующий контакт', '[data-testid="add-phone-resolution-dialog"]')
+
+    await page.waitForFunction(
+      ({ ownerId, sourceChatId }) => {
+        const params = new URL(window.location.href).searchParams
+        return params.get('contact') === ownerId && params.get('id') === sourceChatId
+      },
+      { timeout: timeoutMs },
+      { ownerId: fixture.contacts.otherOwner, sourceChatId: fixture.chats.addPhone },
+    )
+    await page.waitForFunction(
+      ownerName => document.querySelector('[data-testid="contact-profile-title"]')
+        ?.textContent?.includes(ownerName),
+      { timeout: timeoutMs },
+      'Другой владелец номера',
+    )
+    const ownerUrl = new URL(page.url())
+    assert.equal(ownerUrl.searchParams.get('id'), fixture.chats.addPhone)
+    assert.equal(ownerUrl.searchParams.get('contact'), fixture.contacts.otherOwner)
+    assert((await visibleText()).includes('Проверка добавления номера'), 'source Chat must remain visible')
+    const sourceChatAfter = await prisma.chat.findUniqueOrThrow({
+      where: { id: fixture.chats.addPhone },
+      select: { contactId: true },
+    })
+    assert.deepEqual(sourceChatAfter, sourceChatBefore, 'opening an owner must not move the source Chat')
+    await screenshot('add-phone-other-owner-route')
+
+    await page.goBack({ waitUntil: 'domcontentloaded', timeout: timeoutMs })
+    await page.waitForFunction(
+      sourceChatId => {
+        const params = new URL(window.location.href).searchParams
+        return params.get('id') === sourceChatId && !params.has('contact')
+      },
+      { timeout: timeoutMs },
+      fixture.chats.addPhone,
+    )
+    await page.waitForFunction(
+      sourceName => document.querySelector('[data-testid="contact-profile-title"]')
+        ?.textContent?.includes(sourceName),
+      { timeout: timeoutMs },
+      'Контакт проверки телефона',
+    )
+
+    await page.goto(
+      `${baseUrl}/messages?id=${fixture.chats.addPhone}&profile=1&contact=${fixture.contacts.archivedSource}`,
+      { waitUntil: 'domcontentloaded', timeout: timeoutMs },
+    )
+    await page.waitForFunction(
+      ({ canonicalId, sourceChatId }) => {
+        const params = new URL(window.location.href).searchParams
+        return params.get('contact') === canonicalId && params.get('id') === sourceChatId
+      },
+      { timeout: timeoutMs },
+      { canonicalId: fixture.contacts.canonicalTarget, sourceChatId: fixture.chats.addPhone },
+    )
+    await page.waitForFunction(
+      canonicalName => document.querySelector('[data-testid="contact-profile-title"]')
+        ?.textContent?.includes(canonicalName),
+      { timeout: timeoutMs },
+      'Канонический связанный контакт',
+    )
+    assert((await visibleText()).includes('Проверка добавления номера'), 'canonical redirect must preserve the source Chat')
+    await screenshot('add-phone-archived-owner-canonical-route')
   })
 
   await recordScenario('merge-api-and-redirect', async () => {

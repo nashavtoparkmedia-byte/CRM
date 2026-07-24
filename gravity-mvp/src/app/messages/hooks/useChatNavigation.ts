@@ -29,6 +29,22 @@ export function useChatNavigation() {
         router.push(`${pathname}${query}`, { scroll: false })
     }, [pathname, router, searchParams])
 
+    const replaceQuery = useCallback((updates: Record<string, string | null>) => {
+        const current = new URLSearchParams(Array.from(searchParams.entries()))
+
+        Object.entries(updates).forEach(([key, value]) => {
+            if (value === null) {
+                current.delete(key)
+            } else {
+                current.set(key, value)
+            }
+        })
+
+        const search = current.toString()
+        const query = search ? `?${search}` : ""
+        router.replace(`${pathname}${query}`, { scroll: false })
+    }, [pathname, router, searchParams])
+
     const setChatId = useCallback((id: string | null) => {
         // Changing chat does not reset the channel
         updateQuery({ id })
@@ -43,7 +59,11 @@ export function useChatNavigation() {
     }, [updateQuery])
 
     const toggleProfileDrawer = useCallback((isOpen: boolean) => {
-        updateQuery({ profile: isOpen ? "1" : null })
+        if (isOpen) {
+            updateQuery({ profile: "1" })
+            return
+        }
+        updateQuery({ profile: null, contact: null })
     }, [updateQuery])
 
     return {
@@ -51,6 +71,7 @@ export function useChatNavigation() {
         setListTab,
         setChannel,
         toggleProfileDrawer,
-        updateQuery
+        updateQuery,
+        replaceQuery,
     }
 }

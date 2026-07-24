@@ -33,6 +33,9 @@ export function useContact(contactId: string | null | undefined) {
     const [profileSyncState, setProfileSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle')
     const [profileSyncError, setProfileSyncError] = useState<string | null>(null)
     const [profileSyncedAt, setProfileSyncedAt] = useState<string | null>(null)
+    const [resolvedContactRequest, setResolvedContactRequest] = useState<{
+        requestedId: string; resolvedId: string | null
+    } | null>(null)
     const abortRef = useRef<AbortController | null>(null)
     const activeContactIdRef = useRef<string | null>(null)
     const refreshPromiseRef = useRef<{ contactId: string; promise: Promise<void> } | null>(null)
@@ -114,6 +117,7 @@ export function useContact(contactId: string | null | undefined) {
             setProfileSyncState('idle')
             setProfileSyncError(null)
             setProfileSyncedAt(null)
+            setResolvedContactRequest(null)
             return
         }
 
@@ -124,6 +128,7 @@ export function useContact(contactId: string | null | undefined) {
 
         setIsLoading(true)
         setError(null)
+        setResolvedContactRequest(null)
 
         fetchContact(contactId, controller.signal)
             .then(async data => {
@@ -131,9 +136,11 @@ export function useContact(contactId: string | null | undefined) {
                     activeContactIdRef.current = data.id
                     setContact(data)
                     setProfileSyncedAt(data.syncState?.lastSuccessfulAt || null)
+                    setResolvedContactRequest({ requestedId: contactId, resolvedId: data.id })
                     await refreshProfiles(data.id, controller.signal)
                 } else if (!controller.signal.aborted) {
                     setContact(null)
+                    setResolvedContactRequest({ requestedId: contactId, resolvedId: null })
                 }
             })
             .catch(err => {
@@ -163,6 +170,7 @@ export function useContact(contactId: string | null | undefined) {
                 || (data && activeContactIdRef.current === data.id)
             ) {
                 setContact(data)
+                setResolvedContactRequest({ requestedId: contactId, resolvedId: data?.id || null })
             }
             return data
         } catch (refetchError: any) {
@@ -179,5 +187,9 @@ export function useContact(contactId: string | null | undefined) {
         await refreshProfiles(effectiveContactId, undefined, true, parkCode)
     }, [contact?.id, contactId, refreshProfiles])
 
-    return { contact, isLoading, error, refetch, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt }
+    const resolvedContactId = resolvedContactRequest && resolvedContactRequest.requestedId === contactId
+        ? resolvedContactRequest.resolvedId
+        : null
+
+    return { contact, resolvedContactId, isLoading, error, refetch, retryProfileSync, profileSyncState, profileSyncError, profileSyncedAt }
 }
