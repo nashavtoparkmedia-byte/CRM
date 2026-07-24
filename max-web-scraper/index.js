@@ -2383,27 +2383,6 @@ function looksLikeDomRecoverableMediaPayload(value, depth = 0) {
   return Object.values(value).some(item => looksLikeDomRecoverableMediaPayload(item, depth + 1))
 }
 
-function scheduleDomFallbackForRecentMedia(reason, delayMs = 2200) {
-  if (!isReady || !page) return
-  const now = Date.now()
-  if (now - domMediaFallbackScheduledAt < 1000) return
-  domMediaFallbackScheduledAt = now
-  setTimeout(() => {
-    if (uiSendInProgress) return
-    const chatId = latestRecentOp128ChatId()
-    if (!chatId) return
-    const runner = reason === 'loose_op128_media'
-      ? forwardRecentDomMessages(String(chatId), reason, {
-          freshOnly: true,
-          enrichPeer: true,
-        })
-      : forwardLatestDomMessage(String(chatId), reason)
-    runner
-      .then(result => console.log(`[domFallback] result ${JSON.stringify(result).slice(0, 500)}`))
-      .catch(e => console.error('[domFallback] failed:', e.message))
-  }, delayMs)
-}
-
 function scheduleAutomaticDomMirrorRecovery(chatId, reason = 'missing_protocol_anchor', attempt = 0) {
   if (!isReady || !page || !chatId) return
   const chatIdStr = String(chatId)
@@ -3264,7 +3243,7 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
     const candidates = await scrapeRecentDomMessages(uiRouteId)
     let recoverable = (reason === 'empty_op71_after_op128'
       ? candidates
-        .filter(candidate => candidate.text && !candidate.attachments?.length)
+        .filter(candidate => candidate.text || candidate.attachments?.length)
       : candidates)
       .map(candidate => ({ ...candidate, _chatId: String(chatId) }))
     const preSkipped = {}
@@ -5709,9 +5688,8 @@ async function init() {
       if (!isReady) return
       const payloadIsEmpty = !data.payload || (Array.isArray(data.payload) && data.payload.length === 0)
       // A MAX file/photo notification may decode without recognizable media
-      // keys. The media-only DOM pass is idempotent and ignores text rows, so
-      // schedule it for every fresh op:128 instead of trusting the loose parser.
-      scheduleDomFallbackForRecentMedia('loose_op128_media')
+      // keys. The canonical guarded DOM pass recovers both text and media so
+      // the two paths cannot race on the single DOM recovery lock.
       if (payloadIsEmpty) {
         console.log('[op128] Пустой payload — пропускаем (op:71 через JSON убивает WS, используем только пассивный перехват)')
       }

@@ -109,7 +109,8 @@ function selectPendingLiveDomCandidates(candidates, pendingCount) {
 
   return candidates
     .filter(candidate => {
-      if (!candidate?.text || candidate.attachments?.length) return false
+      const hasContent = Boolean(candidate?.text || candidate?.attachments?.length)
+      if (!hasContent) return false
       if (candidate.isOutgoing) return false
       if (candidate.viewportW && candidate.x > candidate.viewportW * 0.55) return false
       return Number.isFinite(candidate.displayMinute)

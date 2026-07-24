@@ -378,6 +378,54 @@ test('provider-backed live DOM recovery survives a media-to-text transition', ()
   assert.equal(transport.pendingLiveTextCountForDomRecovery(chatId), 0)
 })
 
+test('provider-backed live DOM recovery keeps production JPEG and PDF candidates', () => {
+  const selected = selectPendingLiveDomCandidates([
+    {
+      text: '',
+      attachments: [{ type: 'image', url: 'blob:production-jpeg' }],
+      isOutgoing: false,
+      displayMinute: 1216,
+    },
+    {
+      text: 'Документ.pdf',
+      attachments: [{
+        type: 'document',
+        name: 'Документ.pdf',
+        downloadable: true,
+      }],
+      isOutgoing: false,
+      displayMinute: 1216,
+    },
+    {
+      text: 'own upload',
+      attachments: [{ type: 'image', url: 'blob:outgoing' }],
+      isOutgoing: true,
+      displayMinute: 1216,
+    },
+  ], 2)
+
+  assert.deepEqual(
+    selected.map(candidate => candidate.attachments[0].type),
+    ['image', 'document'],
+  )
+})
+
+test('op128 schedules one canonical DOM recovery path for text and media', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const rawStart = source.indexOf('transport.onRawFrame(async data =>')
+  const incomingStart = source.indexOf('if (data.opcode === OP.INCOMING_MSG) {', rawStart)
+  const incomingEnd = source.indexOf('// Логируем остальные неизвестные push-опкоды', incomingStart)
+  const incomingBlock = source.slice(incomingStart, incomingEnd)
+  const recoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
+  const candidateStart = source.lastIndexOf('const candidates = await scrapeRecentDomMessages', recoveryStart)
+  const recoveryEnd = source.indexOf('const results = []', recoveryStart)
+  const recoveryBlock = source.slice(candidateStart, recoveryEnd)
+
+  assert.doesNotMatch(incomingBlock, /scheduleDomFallbackForRecentMedia/)
+  assert.match(incomingBlock, /scheduleAutomaticDomMirrorRecovery\(String\(chatId\), 'empty_op71_after_op128'\)/)
+  assert.match(recoveryBlock, /candidate\.text \|\| candidate\.attachments\?\.length/)
+})
+
 test('anchorless live DOM text is gated by a correlated provider identity', () => {
   const source = fs.readFileSync(require.resolve('../index'), 'utf8')
   const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
