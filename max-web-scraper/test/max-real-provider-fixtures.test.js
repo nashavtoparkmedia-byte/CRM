@@ -131,6 +131,18 @@ test('inbound reply target accepts the real MAX id from a structured link', () =
   }), 'd3019f94c8d5d852f0')
 })
 
+test('inbound reply preserves a direct structured id from legacy sanitized events', () => {
+  assert.equal(maxReplyTargetId({
+    type: 'REPLY',
+    messageId: 'd30101',
+  }), 'd30101')
+  assert.equal(maxReplyTargetId({
+    type: 'REPLY',
+    messageId: 'd30101',
+    replyToMessageId: 'd30102',
+  }), null)
+})
+
 test('inbound reply target accepts a single complex MAX id only with a reply marker', () => {
   const complex = {
     __complexEntries: [{

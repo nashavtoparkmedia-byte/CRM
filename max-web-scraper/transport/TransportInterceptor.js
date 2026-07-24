@@ -35,6 +35,16 @@ function maxIdToString(value) {
 function maxReplyTargetId(link) {
   if (!link || typeof link !== 'object') return null
   let hasReplyMarker = String(link.type || link.kind || '').toUpperCase() === 'REPLY'
+  const directIds = new Set([
+    link.messageId,
+    link.replyToMessageId,
+    link.replyTo,
+    link.id,
+    link.message?.id,
+  ].map(maxIdToString).filter(id => /^d301[0-9a-f]+$/i.test(String(id || ''))))
+  if (hasReplyMarker && directIds.size === 1) return [...directIds][0]
+  if (hasReplyMarker && directIds.size > 1) return null
+
   const ids = new Set()
   const visit = (value, depth = 0) => {
     if (value == null || depth > 8) return
@@ -64,13 +74,7 @@ function maxReplyTargetId(link) {
     }
   }
 
-  for (const candidate of [
-    link.messageId,
-    link.replyToMessageId,
-    link.replyTo,
-    link.id,
-    link.message?.id,
-  ]) {
+  for (const candidate of directIds) {
     const id = maxIdToString(candidate)
     if (id && isUsableMaxMessageHex(id)) ids.add(id)
   }
