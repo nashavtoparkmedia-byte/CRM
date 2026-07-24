@@ -253,6 +253,20 @@ export async function POST(request: Request) {
 
     const externalIdString = externalId ? String(externalId) : null
     const replyToExternalIdString = replyToExternalId ? String(replyToExternalId) : null
+    const replyQuoteTextString = typeof replyQuoteText === 'string' && replyQuoteText.trim()
+      ? replyQuoteText.trim()
+      : null
+    const providerReplyMetadata = replyToExternalIdString
+      ? {
+          replyToExternalId: replyToExternalIdString,
+          replyResolutionStatus: 'resolved',
+        }
+      : replyQuoteTextString
+        ? {
+            unresolvedReplyQuoteText: replyQuoteTextString,
+            replyResolutionStatus: 'ambiguous_or_missing',
+          }
+        : {}
     const isTextProviderEvent = isTextType && usableAttachments.length === 0
     const isPlaceholderTextId = !!externalIdString && (
       externalIdString.startsWith('max-dom-') ||
@@ -284,9 +298,7 @@ export async function POST(request: Request) {
       })
       if (existingText) {
         let resolvedReplyToExternalId = replyToExternalIdString
-        const normalizedReplyQuote = typeof replyQuoteText === 'string'
-          ? replyQuoteText.trim()
-          : ''
+        const normalizedReplyQuote = replyQuoteTextString || ''
         if (!resolvedReplyToExternalId && source === 'live_dom_reply_enrichment' && normalizedReplyQuote) {
           const candidates = await prisma.message.findMany({
             where: {
@@ -522,7 +534,7 @@ export async function POST(request: Request) {
             type: msgType,
             content,
             sentAt,
-            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
           },
         })
         console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
@@ -606,7 +618,7 @@ export async function POST(request: Request) {
           externalId: externalIdString,
           status:    'delivered',
           sentAt,   // validated above
-          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
         },
       })
     }

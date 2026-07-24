@@ -15,6 +15,7 @@ const { SessionController }        = require('./session/SessionController')
 const {
   TransportInterceptor,
   OP,
+  maxReplyTargetId,
   selectPendingLiveDomCandidates,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
@@ -1081,7 +1082,10 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
   const directUiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
   if (directUiRouteId && !replyToMessageId) {
     const directText = text
-    const ackPromise = waitForUiSendAck(transport, 15_000)
+    const ackPromise = waitForUiSendAck(transport, 15_000, {
+      chatId,
+      text: directText,
+    })
     const uiSent = await sendTextViaUi(directUiRouteId, directText, chatId).catch(uiErr => {
       console.warn(`[sendText] Direct UI send failed: ${uiErr.message}`)
       return false
@@ -1121,7 +1125,11 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         console.log(`[sendText] resolved DOM reply target chatId=${chatId} providerId=${resolvedReplyToMessageId.slice(0, 18)} via=${resolved.reason}`)
       }
       console.log(`[sendText] reply via MAX provider frame chatId=${chatId} uiRoute=${directUiRouteId || 'none'}`)
-      const ackPromise = waitForUiSendAck(transport, timeoutMs)
+      const ackPromise = waitForUiSendAck(transport, timeoutMs, {
+        chatId: resolvedReplyChatId || wsChatId,
+        text,
+        replyToMessageId: resolvedReplyToMessageId,
+      })
       let replyResult = null
       if (typeof transport?.sendBinaryReply === 'function') {
         await transport.sendBinaryReply(
@@ -1189,7 +1197,10 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         throw e
       }
       const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId
-      const ackPromise = waitForUiSendAck(transport, 15_000)
+      const ackPromise = waitForUiSendAck(transport, 15_000, {
+        chatId,
+        text,
+      })
       const uiSent = await sendTextViaUi(uiRouteId, text, chatId).catch(uiErr => {
         console.warn(`[sendText] UI fallback failed: ${uiErr.message}`)
         return false
@@ -1312,12 +1323,30 @@ async function sendTextViaUi(chatId, text, protocolChatId = null) {
     uiSendInProgress = false
   }
 }
-function waitForUiSendAck(transport, timeoutMs = 60_000) {
+
+function normalizedProviderEchoText(message) {
+  const value = typeof message?.text === 'string'
+    ? message.text
+    : (message?.text?.plain ?? message?.message?.text ?? '')
+  return String(value || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n/g, '\n')
+    .trim()
+}
+
+function waitForUiSendAck(transport, timeoutMs = 60_000, expected = {}) {
   if (!transport?._rawHandlers) return Promise.resolve(null)
+  const expectedChatId = expected.chatId != null ? String(expected.chatId) : null
+  const expectedText = String(expected.text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n/g, '\n')
+    .trim()
+  const expectedReplyId = expected.replyToMessageId
+    ? String(expected.replyToMessageId)
+    : null
+
   return new Promise(resolve => {
     let done = false
-    let bestId = null
-    let fallbackTimer = null
     const cleanup = () => {
       const index = transport._rawHandlers.indexOf(handler)
       if (index >= 0) transport._rawHandlers.splice(index, 1)
@@ -1326,64 +1355,31 @@ function waitForUiSendAck(transport, timeoutMs = 60_000) {
       if (done) return
       done = true
       clearTimeout(timer)
-      if (fallbackTimer) clearTimeout(fallbackTimer)
       cleanup()
       resolve(value)
     }
-    const idsRelated = (a, b) => {
-      const aa = String(a || '').replace(/[^a-fA-F0-9]/g, '')
-      const bb = String(b || '').replace(/[^a-fA-F0-9]/g, '')
-      if (!aa || !bb) return false
-      return aa.includes(bb.slice(-10)) || bb.includes(aa.slice(-10))
-    }
-    const considerId = (id, immediate = false) => {
-      if (!id) return
-      const idStr = String(id)
-      const isProviderId = isRealMaxMessageId(idStr)
-      const related = bestId ? idsRelated(bestId, idStr) : true
-      const preferProtocolMsgId = related && /^d301/i.test(idStr) && !/^d301/i.test(String(bestId || ''))
-      if (!bestId || (related && (preferProtocolMsgId || idStr.length > String(bestId).length))) {
-        bestId = idStr
-      }
-      // op:64 often exposes a temporary d300 id before op:180 publishes the
-      // durable d301 id. Never complete early on the temporary correlation id.
-      if ((immediate || isProviderId) && isRealMaxMessageId(bestId)) finish(bestId)
-      if (!fallbackTimer) {
-        fallbackTimer = setTimeout(
-          () => finish(isRealMaxMessageId(bestId) ? bestId : null),
-          Math.min(timeoutMs, 3500),
-        )
-      }
-    }
-    const collectIds = (value, out = [], depth = 0) => {
-      if (value == null || depth > 7) return out
-      const direct = extractMaxId(value)
-      if (direct) out.push(direct)
-      if (Array.isArray(value)) {
-        for (const item of value) collectIds(item, out, depth + 1)
-      } else if (typeof value === 'object') {
-        if (Array.isArray(value.__complexEntries)) {
-          for (const entry of value.__complexEntries) {
-            collectIds(entry?.key, out, depth + 1)
-            collectIds(entry?.value, out, depth + 1)
-          }
-        }
-        for (const [key, item] of Object.entries(value)) {
-          if (key === '__complexEntries') continue
-          collectIds(item, out, depth + 1)
-        }
-      }
-      return out
-    }
     const handler = data => {
-      if (data?.opcode === OP.SEND_MESSAGE && data?.cmd === 2) {
-        const maxMsgId = extractMaxId(data.payload?.message?.id || data.payload?.id || data.payload)
-        considerId(maxMsgId)
+      // op180 is a reaction/read snapshot and cannot prove that a text or
+      // reply was accepted. Confirmation must be an exact provider message
+      // echo with matching chat, body and (for replies) target.
+      if (![OP.SEND_MESSAGE, 49, 53, 71, 128].includes(data?.opcode)) return
+      for (const candidate of collectMessageCandidates(data.payload)) {
+        const message = candidate.message || {}
+        const providerId = extractMaxId(message.id || message.messageId)
+        if (!isRealMaxMessageId(providerId)) continue
+        if (expectedChatId && candidate.chatId && String(candidate.chatId) !== expectedChatId) continue
+        if (expectedText && normalizedProviderEchoText(message) !== expectedText) continue
+        if (expectedReplyId) {
+          const echoedReplyId = maxReplyTargetId(message.link || message.reply || message)
+          if (String(echoedReplyId || '') !== expectedReplyId) continue
+        }
+        const sender = String(message.sender || message.from || '')
+        const isOwnEcho = data.opcode === OP.SEND_MESSAGE ||
+          Boolean(message.isOut || message.isOutgoing) ||
+          (transport._myUserId && sender === String(transport._myUserId))
+        if (!isOwnEcho) continue
+        finish(String(providerId))
         return
-      }
-      if (![53, 71, 128, 180].includes(data?.opcode)) return
-      for (const id of collectIds(data.payload)) {
-        if (!bestId || idsRelated(bestId, id)) considerId(id, String(id).length > String(bestId || '').length)
       }
     }
     const timer = setTimeout(() => finish(null), timeoutMs)
@@ -2443,10 +2439,6 @@ function domReplyQuoteParts(text) {
   }
 }
 
-function domReplyQuoteLeafText(text) {
-  return domReplyQuoteParts(text)?.leafText || null
-}
-
 function looksLikeDomReplyQuoteText(chatId, candidate) {
   if (!candidate?.text || candidate.attachments?.length) return false
   if (candidate.hasReplyQuote) return true
@@ -3031,6 +3023,19 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const replyParts = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
     ? domReplyQuoteParts(latest.text)
     : null
+  const isStructuredDomReply = Boolean(
+    replyParts?.leafText &&
+    replyParts?.quotedText &&
+    (latest.hasReplyQuote || looksLikeDomReplyQuoteText(chatId, latest))
+  )
+  if (isStructuredDomReply && !isDomNoiseText(replyParts.leafText)) {
+    latest = {
+      ...latest,
+      text: replyParts.leafText,
+      _replyQuoteText: replyParts.quotedText,
+      _domReplyQuoteLeafRecovered: true,
+    }
+  }
   const replyBridge = new MaxWebReplyBridge(page)
   if (pendingProviderId) {
     try {
@@ -3083,34 +3088,26 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
       console.warn(`[domFallback] strict reply lookup failed chatId=${chatId}: ${error.message}`)
     }
   }
-  if (reason === 'empty_op71_after_op128' && looksLikeDomReplyQuoteText(chatId, latest)) {
-    const leafText = domReplyQuoteLeafText(latest.text)
-    if (resolvedProviderId && leafText && !isDomNoiseText(leafText)) {
-      latest = { ...latest, text: leafText, _domReplyQuoteLeafRecovered: true }
-    } else if (leafText && replyParts?.quotedText) {
-      const directReply = findRecentDirectInboundText(chatId, leafText)
-      if (isRealMaxMessageId(directReply?.externalId)) {
-        const enrichment = await forwardToWebhook({
-          externalId: directReply.externalId,
-          chatId: String(chatId),
-          text: leafText,
-          timestamp: options.timestamp || Date.now(),
-          messageType: 'text',
-          attachments: [],
-          isOutgoing: false,
-          source: 'live_dom_reply_enrichment',
-          replyQuoteText: replyParts.quotedText,
-        })
-        return {
-          success: enrichment.status >= 200 && enrichment.status < 300,
-          enrichedReply: true,
-          externalId: directReply.externalId,
-          webhook: enrichment,
-        }
+  if (isStructuredDomReply && !latest._replyToExternalId) {
+    const directReply = findRecentDirectInboundText(chatId, replyParts.leafText)
+    if (isRealMaxMessageId(directReply?.externalId)) {
+      const enrichment = await forwardToWebhook({
+        externalId: directReply.externalId,
+        chatId: String(chatId),
+        text: replyParts.leafText,
+        timestamp: options.timestamp || Date.now(),
+        messageType: 'text',
+        attachments: [],
+        isOutgoing: false,
+        source: 'live_dom_reply_enrichment',
+        replyQuoteText: replyParts.quotedText,
+      })
+      return {
+        success: enrichment.status >= 200 && enrichment.status < 300,
+        enrichedReply: true,
+        externalId: directReply.externalId,
+        webhook: enrichment,
       }
-      return { skipped: 'dom_reply_quote_unresolved', text: latest.text }
-    } else {
-      return { skipped: 'dom_reply_quote_text', text: latest.text }
     }
   }
   if (latest._skipDomTextAlreadyRecovered) {
@@ -3158,6 +3155,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     isOutgoing: isOutgoingCandidate,
     source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
+    ...(latest._replyQuoteText ? { replyQuoteText: latest._replyQuoteText } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmPhone && crmPhoneEvidence ? { phoneEvidence: crmPhoneEvidence } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),

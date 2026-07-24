@@ -628,7 +628,10 @@ export default function MessageFeed({
                         {/* Reply preview (цитата) */}
                         {(() => {
                             const quotedId = (msg.metadata?.quotedMsgId || msg.metadata?.replyToExternalId) as string | undefined
-                            if (!quotedId) return null
+                            const unresolvedQuote = typeof msg.metadata?.unresolvedReplyQuoteText === 'string'
+                                ? msg.metadata.unresolvedReplyQuoteText.trim()
+                                : ''
+                            if (!quotedId && !unresolvedQuote) return null
                             const quotedMsg = uiItems.find(
                                 (i): i is MessageUIItem => i.type === 'message' && (
                                     i.message.externalId === quotedId || i.message.id === quotedId
@@ -636,14 +639,14 @@ export default function MessageFeed({
                             )?.message
                             const senderName = quotedMsg
                                 ? (quotedMsg.direction === 'outbound' ? 'Вы' : (quotedMsg.account || 'Контакт'))
-                                : 'Сообщение'
+                                : (unresolvedQuote ? 'MAX' : 'Сообщение')
                             const snippet = quotedMsg
                                 ? (quotedMsg.type === 'image' ? '📷 Фото'
                                     : quotedMsg.type === 'video' ? '🎥 Видео'
                                     : quotedMsg.type === 'voice' ? '🎤 Голосовое'
                                     : quotedMsg.type === 'document' ? '📎 Документ'
                                     : (quotedMsg.content || '').substring(0, 80))
-                                : null
+                                : unresolvedQuote.substring(0, 80)
                             return (
                                 <div className={`mb-2 rounded-[6px] overflow-hidden border-l-[3px] ${
                                     isOutbound ? 'border-[#3a7a50] bg-[#aee89a]/40' : 'border-[#3390EC] bg-[#3390EC]/10'

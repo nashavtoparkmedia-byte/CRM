@@ -459,14 +459,17 @@ test('provider-backed DOM reply recovery forwards only reply body text', () => {
 
   const forwardBlock = source.slice(forwardStart, forwardEnd)
   const pendingIndex = forwardBlock.indexOf('const pendingProviderId =')
-  const quoteIndex = forwardBlock.indexOf("looksLikeDomReplyQuoteText(chatId, latest)")
-  const leafIndex = forwardBlock.indexOf('latest = { ...latest, text: leafText')
+  const quoteIndex = forwardBlock.indexOf('const isStructuredDomReply =')
+  const quoteTextIndex = forwardBlock.indexOf('_replyQuoteText: replyParts.quotedText')
+  const unresolvedIndex = forwardBlock.indexOf('replyQuoteText: latest._replyQuoteText')
+  const webhookIndex = forwardBlock.indexOf('const result = await forwardToWebhook')
   const externalIndex = forwardBlock.indexOf('const externalId = isOutgoingCandidate')
 
-  assert.ok(pendingIndex > -1 && quoteIndex > -1 && leafIndex > -1 && externalIndex > -1)
+  assert.ok(pendingIndex > -1 && quoteIndex > -1 && quoteTextIndex > -1 && unresolvedIndex > -1 && webhookIndex > -1 && externalIndex > -1)
   assert.ok(pendingIndex < quoteIndex, 'provider id must be checked before quote handling')
-  assert.ok(quoteIndex < leafIndex, 'quote branch must normalize to leaf text')
-  assert.ok(leafIndex < externalIndex, 'normalized text must be used for webhook payload')
+  assert.ok(quoteIndex < quoteTextIndex, 'structured DOM reply must preserve quoted text separately')
+  assert.ok(quoteTextIndex < externalIndex, 'normalized body must be used for webhook payload')
+  assert.ok(webhookIndex < unresolvedIndex, 'unresolved quote must be forwarded inside webhook metadata')
 })
 
 

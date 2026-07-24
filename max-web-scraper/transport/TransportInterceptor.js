@@ -521,6 +521,7 @@ class TransportInterceptor {
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
     this._browserLastBinFrameSeq = 0        // последний fseq из браузерных бинарных фреймов; наши op:71 используют +1
     this._op71Prefix           = null       // 3-байт префикс из браузерного op:71, захватывается динамически
+    this._browserBinaryRequestPrefix = null // 2-byte f0/schema prefix captured from a browser-owned binary request
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
@@ -620,6 +621,13 @@ class TransportInterceptor {
             const fseq    = (buf[2] << 8) | buf[3]
             // Отслеживаем последний fseq (browser + наши фреймы) — op:71 использует max+1
             if (fseq > this._browserLastBinFrameSeq) this._browserLastBinFrameSeq = fseq
+            // MAX binary request header is 10 bytes, followed by a two-byte
+            // browser protocol prefix and then MessagePack. Capture only a
+            // browser-shaped prefix; the old synthetic frames started their
+            // map at byte 9 and must never become a template.
+            if (cmd === 0x01 && buf.length > 12 && buf[10] === 0xf0) {
+              this._browserBinaryRequestPrefix = [buf[10], buf[11]]
+            }
             // Захватываем 3-байт префикс из первого op:71 (браузер шлёт его раньше нашего catch-up)
             if (opcode === 71 && buf.length > 11 && !this._op71Prefix) {
               this._op71Prefix = [buf[9], buf[10], buf[11]]
@@ -2048,6 +2056,33 @@ class TransportInterceptor {
     return Buffer.concat([Buffer.from([0xc7, raw.length, 0x01]), raw])
   }
 
+  _buildBrowserBinaryRequestFrame(opcode, payloadMap) {
+    const capturedPrefix = this._browserBinaryRequestPrefix ||
+      (Array.isArray(this._op71Prefix) ? this._op71Prefix.slice(-2) : null)
+    if (!capturedPrefix || capturedPrefix.length !== 2 || capturedPrefix[0] !== 0xf0) {
+      throw new Error(`Binary op:${opcode} requires a browser-captured MAX request prefix`)
+    }
+
+    const payload = Buffer.concat([Buffer.from(capturedPrefix), payloadMap])
+    if (payload.length > 0xffff) {
+      throw new Error(`Binary op:${opcode} payload is too large: ${payload.length}`)
+    }
+
+    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
+    const header = Buffer.alloc(10)
+    header[0] = 0x0a
+    header[1] = 0x00
+    header[2] = (frameSeq >> 8) & 0xff
+    header[3] = frameSeq & 0xff
+    header[4] = 0x00
+    header[5] = opcode & 0xff
+    header[6] = 0x01
+    header[7] = 0x00
+    header[8] = (payload.length >> 8) & 0xff
+    header[9] = payload.length & 0xff
+    return Buffer.concat([header, payload])
+  }
+
   _buildBinaryReplyFrame(chatId, text, replyToMessageId, cid) {
     const replyId = String(replyToMessageId || '')
     if (!isUsableMaxMessageHex(replyId)) {
@@ -2074,20 +2109,7 @@ class TransportInterceptor {
       this._mpStr('notify'), Buffer.from([0xc3]),
     ])
 
-    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
-    const header = Buffer.alloc(9)
-    header[0] = 0x0a
-    header[1] = 0x00
-    header[2] = (frameSeq >> 8) & 0xff
-    header[3] = frameSeq & 0xff
-    header[4] = 0x00
-    header[5] = OP.SEND_MESSAGE
-    header[6] = 0x01
-    header[7] = 0x00
-    header[8] = 0x00
-
-    // Browser frames carry the low payload-length byte before the msgpack map.
-    return Buffer.concat([header, Buffer.from([payloadMap.length & 0xff]), payloadMap])
+    return this._buildBrowserBinaryRequestFrame(OP.SEND_MESSAGE, payloadMap)
   }
 
   async sendBinaryReply(chatId, text, replyToMessageId, cid) {

@@ -300,7 +300,12 @@ test('MAX reply text uses a MAX provider frame with a real target and is not dow
   assert.match(block, /const wsChatId = chatId/)
   assert.doesNotMatch(block, /replyToMessageId && directUiRouteId \? Number\(directUiRouteId\) : chatId/)
   assert.match(block, /reply via MAX provider frame chatId=\$\{chatId\}/)
-  assert.match(block, /const ackPromise = waitForUiSendAck\(transport, timeoutMs\)/)
+  assert.match(block, /const ackPromise = waitForUiSendAck\(transport, timeoutMs, \{[\s\S]*?chatId: resolvedReplyChatId \|\| wsChatId,[\s\S]*?text,[\s\S]*?replyToMessageId: resolvedReplyToMessageId,[\s\S]*?\}\)/)
+  const ackStart = scraper.indexOf('function waitForUiSendAck')
+  const ackEnd = scraper.indexOf('async function sendTextViaUi', ackStart)
+  const ackBlock = scraper.slice(ackStart, ackEnd)
+  assert.doesNotMatch(ackBlock, /OP\.MEDIA_STATUS/)
+  assert.match(ackBlock, /String\(echoedReplyId \|\| ''\) !== expectedReplyId/)
   assert.match(block, /if \(typeof transport\?\.sendBinaryReply === 'function'\)/)
   assert.match(block, /await transport\.sendBinaryReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?text,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
   assert.match(block, /replyResult = await replyBridge\.sendReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
@@ -321,7 +326,7 @@ test('MAX reply text uses a MAX provider frame with a real target and is not dow
   )
 })
 
-test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-composed bubbles', () => {
+test('MAX inbound reply keeps provider reply id and DOM fallback separates quote metadata from body', () => {
   const scraper = read('max-web-scraper/index.js')
   const parser = read('max-web-scraper/parser/MessageParser.js')
   const route = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
@@ -333,14 +338,12 @@ test('MAX inbound reply keeps provider reply id and DOM fallback skips quote-com
 
   assert.match(scraper, /function looksLikeDomReplyQuoteText\(chatId, candidate\)/)
   assert.match(scraper, /candidate\.hasReplyQuote/)
-  assert.match(scraper, /dom_reply_quote_text/)
   assert.match(scraper, /recentDirectInboundTextHits\(chatId, parts\.leafText\)\.length > 0/)
-  assertBefore(
-    scraper,
-    "return { skipped: 'dom_reply_quote_text', text: latest.text }",
-    'const externalId = isOutgoingCandidate',
-    'DOM quote-composed reply bubbles must be filtered before assigning max-dom ids',
-  )
+  assert.match(scraper, /text: replyParts\.leafText/)
+  assert.match(scraper, /_replyQuoteText: replyParts\.quotedText/)
+  assert.match(scraper, /replyQuoteText: latest\._replyQuoteText/)
+  assert.match(route, /unresolvedReplyQuoteText: replyQuoteTextString/)
+  assert.match(route, /replyResolutionStatus: 'ambiguous_or_missing'/)
 })
 
 test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {
