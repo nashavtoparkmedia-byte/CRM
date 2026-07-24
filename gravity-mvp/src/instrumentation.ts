@@ -7,6 +7,9 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
+    const nodeProcess = (globalThis as typeof globalThis & { process?: NodeJS.Process }).process
+    if (!nodeProcess) return
+
     // Real-browser acceptance runs against an isolated DEV database. Keep that
     // server from starting provider listeners or periodic jobs. The production
     // runtime deliberately ignores this flag.
@@ -309,7 +312,7 @@ export async function register() {
 
         const forceExit = setTimeout(() => {
             log('warn', 'shutdown_timeout', { signal, timeoutMs: SHUTDOWN_TIMEOUT })
-            process.exit(1)
+            nodeProcess.exit(1)
         }, SHUTDOWN_TIMEOUT)
         // Allow process to exit before timer fires if all cleanup is done
         forceExit.unref()
@@ -375,11 +378,11 @@ export async function register() {
         }
 
         clearTimeout(forceExit)
-        process.exit(0)
+        nodeProcess.exit(0)
     }
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'))
-    process.on('SIGINT', () => shutdown('SIGINT'))
+    nodeProcess.on('SIGTERM', () => shutdown('SIGTERM'))
+    nodeProcess.on('SIGINT', () => shutdown('SIGINT'))
 
     // ── Last-resort handlers ────────────────────────────────────────────
     // Without these, an uncaught error in puppeteer / WA listeners crashes
@@ -389,10 +392,10 @@ export async function register() {
     // IMPORTANT: handler is synchronous up to the stderr write so the log
     // is guaranteed to flush before process.exit(). Async import is avoided
     // here because it yields and the log may be lost if exit fires first.
-    process.on('uncaughtException', (err: Error) => {
+    nodeProcess.on('uncaughtException', (err: Error) => {
         // Synchronous stderr write — always flushes before exit()
         try {
-            process.stderr.write(
+            nodeProcess.stderr.write(
                 JSON.stringify({ level: 'error', event: 'uncaught_exception', ts: new Date().toISOString(), error: err.message, stack: err.stack }) + '\n'
             )
         } catch {
@@ -408,17 +411,17 @@ export async function register() {
                 ])
             } catch { /* ignore */ }
         })()
-        cleanup.finally(() => process.exit(1))
+        cleanup.finally(() => nodeProcess.exit(1))
         // Hard cap: even if cleanup hangs, exit after 6s
-        setTimeout(() => process.exit(1), 6000).unref()
+        setTimeout(() => nodeProcess.exit(1), 6000).unref()
     })
 
-    process.on('unhandledRejection', (reason: unknown) => {
+    nodeProcess.on('unhandledRejection', (reason: unknown) => {
         // Synchronous log — don't exit on unhandled rejection (typically benign).
         const msg = reason instanceof Error ? reason.message : String(reason)
         const stack = reason instanceof Error ? reason.stack : undefined
         try {
-            process.stderr.write(
+            nodeProcess.stderr.write(
                 JSON.stringify({ level: 'error', event: 'unhandled_rejection', ts: new Date().toISOString(), reason: msg, stack }) + '\n'
             )
         } catch {
