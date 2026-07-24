@@ -288,7 +288,7 @@ test('MAX UI text fallback does not depend on browser clipboard permission', () 
 })
 
 
-test('MAX reply text uses MAX Web store with a real provider target and is not downgraded to plain UI text', () => {
+test('MAX reply text uses a MAX provider frame with a real target and is not downgraded to plain UI text', () => {
   const scraper = read('max-web-scraper/index.js')
   const bridge = read('max-web-scraper/reply/MaxWebReplyBridge.js')
   const start = scraper.indexOf('async function sendText')
@@ -299,9 +299,11 @@ test('MAX reply text uses MAX Web store with a real provider target and is not d
 
   assert.match(block, /const wsChatId = chatId/)
   assert.doesNotMatch(block, /replyToMessageId && directUiRouteId \? Number\(directUiRouteId\) : chatId/)
-  assert.match(block, /reply via MAX Web store chatId=\$\{chatId\}/)
+  assert.match(block, /reply via MAX provider frame chatId=\$\{chatId\}/)
   assert.match(block, /const ackPromise = waitForUiSendAck\(transport, timeoutMs\)/)
-  assert.match(block, /const replyResult = await replyBridge\.sendReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
+  assert.match(block, /if \(typeof transport\?\.sendBinaryReply === 'function'\)/)
+  assert.match(block, /await transport\.sendBinaryReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?text,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
+  assert.match(block, /replyResult = await replyBridge\.sendReply\([\s\S]*?resolvedReplyChatId \|\| wsChatId,[\s\S]*?resolvedReplyToMessageId,[\s\S]*?cid,[\s\S]*?\)/)
   assert.match(block, /const storeConfirmedId = isRealMaxMessageId\(replyResult\?\.providerMessageId\)/)
   assert.match(block, /const maxMsgId = storeConfirmedId \|\| await ackPromise/)
   assert.match(block, /replyBridge\.resolveProviderId\([\s\S]*?quotedMessageContext \|\| \{\},[\s\S]*?\{ uiChatId: directUiRouteId \},[\s\S]*?\)/)

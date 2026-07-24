@@ -24,6 +24,11 @@ class ContactStore {
         firstName: nameObj.firstName || null,
         lastName:  nameObj.lastName  || null,
         phone:     c.phone ? String(c.phone) : null,
+        phoneEvidence: c.phone ? {
+          sourceKind: 'provider_profile',
+          providerIdentityId: String(userId),
+          observedAt: new Date().toISOString(),
+        } : null,
       })
     }
     console.log(`[ContactStore] Loaded ${this._map.size} contacts`)
@@ -44,6 +49,11 @@ class ContactStore {
    */
   getPhone(userId) {
     return this._map.get(String(userId))?.phone || null
+  }
+
+  getPhoneEvidence(userId) {
+    const evidence = this._map.get(String(userId))?.phoneEvidence
+    return evidence && typeof evidence === 'object' ? { ...evidence } : null
   }
 
   /**

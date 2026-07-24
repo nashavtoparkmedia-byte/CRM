@@ -96,6 +96,9 @@ type MaxWebhookBody = {
     sourceKind?: string | null
     trustedForAutomaticResolution?: boolean | null
     observedAt?: string | null
+    providerIdentityId?: string | number | null
+    protocolChatId?: string | number | null
+    uiRouteId?: string | number | null
   } | null
   text?: string | null
   timestamp?: string | number | null
@@ -106,6 +109,7 @@ type MaxWebhookBody = {
   forwardedFrom?: unknown
   source?: string | null
   replyToExternalId?: string | number | null
+  replyQuoteText?: string | null
   chatKind?: 'private' | 'group' | 'unknown' | null
 }
 
@@ -173,7 +177,7 @@ export async function POST(request: Request) {
     const {
       externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone,
       phoneEvidence, text, timestamp, messageType, attachments, isOutgoing,
-      deleted, forwardedFrom, source, replyToExternalId, chatKind,
+      deleted, forwardedFrom, source, replyToExternalId, replyQuoteText, chatKind,
     } = body
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
@@ -276,9 +280,49 @@ export async function POST(request: Request) {
     if (isTextProviderEvent && externalIdString) {
       const existingText = await prisma.message.findUnique({
         where: { externalId: externalIdString },
-        select: { id: true, chatId: true },
+        select: { id: true, chatId: true, metadata: true, sentAt: true },
       })
       if (existingText) {
+        let resolvedReplyToExternalId = replyToExternalIdString
+        const normalizedReplyQuote = typeof replyQuoteText === 'string'
+          ? replyQuoteText.trim()
+          : ''
+        if (!resolvedReplyToExternalId && source === 'live_dom_reply_enrichment' && normalizedReplyQuote) {
+          const candidates = await prisma.message.findMany({
+            where: {
+              chatId: existingText.chatId,
+              id: { not: existingText.id },
+              content: normalizedReplyQuote,
+              externalId: { startsWith: 'd301' },
+              sentAt: { lte: existingText.sentAt },
+            },
+            select: { externalId: true },
+            orderBy: { sentAt: 'desc' },
+            take: 2,
+          })
+          if (candidates.length === 1 && candidates[0].externalId) {
+            resolvedReplyToExternalId = candidates[0].externalId
+          }
+        }
+        if (resolvedReplyToExternalId || normalizedReplyQuote) {
+          await prisma.message.update({
+            where: { id: existingText.id },
+            data: {
+              metadata: {
+                ...metadataRecord(existingText.metadata),
+                ...(resolvedReplyToExternalId
+                  ? {
+                      replyToExternalId: resolvedReplyToExternalId,
+                      replyResolutionStatus: 'resolved',
+                    }
+                  : {
+                      unresolvedReplyQuoteText: normalizedReplyQuote,
+                      replyResolutionStatus: 'ambiguous_or_missing',
+                    }),
+              },
+            },
+          })
+        }
         maxRuntimeTrace('webhook.duplicate', {
           providerMessageId: externalIdString,
           chatId: String(chatId),
@@ -291,6 +335,7 @@ export async function POST(request: Request) {
           chatInternalId: existingText.chatId,
           messageId: existingText.id,
           deduped: true,
+          replyEnriched: Boolean(resolvedReplyToExternalId),
         })
       }
     }
@@ -298,7 +343,10 @@ export async function POST(request: Request) {
     const rawExternalChatId = String(rawChatId || chatId)
     const externalChatId = normalizeMaxChatId(chatId)
     const senderIdString = senderId ? String(senderId) : null
-    const maxPhoneEvidence = resolveMaxPhoneEvidence(senderPhone || phone, phoneEvidence)
+    const maxPhoneEvidence = resolveMaxPhoneEvidence(senderPhone || phone, phoneEvidence, {
+      externalChatId,
+      senderId: senderIdString,
+    })
     const effectiveSenderPhone = maxPhoneEvidence.normalizedPhone
     const trustedSenderPhone = maxPhoneEvidence.trustedForAutomaticResolution
       ? effectiveSenderPhone
@@ -314,8 +362,8 @@ export async function POST(request: Request) {
 
     // Stage 3B shadow starts before the first Chat/Contact/Identity/Phone
     // mutation. Its result is diagnostic only and never feeds legacy flow.
-    // MAX currently does not prove phone provenance in this payload, so a
-    // provider phone remains untrusted for automatic planner matching.
+    // Only a provider-profile phone bound to this identity, protocol chat and
+    // derived UI route may participate in automatic planner matching.
     const maxContactResolutionShadow = await startMaxContactResolutionShadow({
       resolutionInput: {
         channel: 'max',
@@ -633,6 +681,10 @@ export async function POST(request: Request) {
                   source: maxPhoneEvidence.sourceKind,
                   trustedForAutomaticResolution: maxPhoneEvidence.trustedForAutomaticResolution,
                   observedAt: maxPhoneEvidence.observedAt,
+                  providerIdentityId: maxPhoneEvidence.providerIdentityId,
+                  protocolChatId: maxPhoneEvidence.protocolChatId,
+                  uiRouteId: maxPhoneEvidence.uiRouteId,
+                  trustResult: maxPhoneEvidence.trustResult,
                 }
               : null,
           },

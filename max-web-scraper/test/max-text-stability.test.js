@@ -433,7 +433,7 @@ test('single live DOM text after unsafe op128 can recover without direct anchor'
   assert.match(liveRecoveryBlock, /liveWindowDetails\.recentOp128Count > 0/)
   assert.match(liveRecoveryBlock, /selectPendingLiveDomCandidates\(\s*recoverable,\s*Math\.min\(recoverable\.length, liveWindowDetails\.recentOp128Count\)/s)
   assert.match(liveRecoveryBlock, /candidate\._liveDomSeriesCandidate = true/)
-  assert.match(source, /source: isOutgoingCandidate \? 'max_web_mirror' : \(pendingProviderId \? 'live_dom_recovery' : 'dom_fallback'\)/)
+  assert.match(source, /source: isOutgoingCandidate \? 'max_web_mirror' : \(resolvedProviderId \? 'live_dom_recovery' : 'dom_fallback'\)/)
 })
 
 
@@ -524,4 +524,3 @@ test('loose video keeps the direct MP4 source from the live MAX payload', () => 
   assert.equal(emitted[0].attachments[0].url, videoUrl)
   assert.equal(emitted[0].attachments[0].videoId, '17565274016389')
 })
-

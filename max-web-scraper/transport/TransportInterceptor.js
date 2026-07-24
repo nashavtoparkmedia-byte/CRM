@@ -32,6 +32,52 @@ function maxIdToString(value) {
   return null
 }
 
+function maxReplyTargetId(link) {
+  if (!link || typeof link !== 'object') return null
+  let hasReplyMarker = String(link.type || link.kind || '').toUpperCase() === 'REPLY'
+  const ids = new Set()
+  const visit = (value, depth = 0) => {
+    if (value == null || depth > 8) return
+    if (typeof value === 'string') {
+      if (value.toUpperCase() === 'REPLY') hasReplyMarker = true
+      const direct = maxIdToString(value)
+      if (direct && isUsableMaxMessageHex(direct)) ids.add(direct)
+      return
+    }
+    if (typeof value !== 'object') return
+    const direct = maxIdToString(value)
+    if (direct && isUsableMaxMessageHex(direct)) ids.add(direct)
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item, depth + 1)
+      return
+    }
+    if (Array.isArray(value.__complexEntries)) {
+      for (const entry of value.__complexEntries) {
+        visit(entry?.key, depth + 1)
+        visit(entry?.value, depth + 1)
+      }
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (key === '__complexEntries') continue
+      if (String(key).toUpperCase() === 'REPLY') hasReplyMarker = true
+      visit(item, depth + 1)
+    }
+  }
+
+  for (const candidate of [
+    link.messageId,
+    link.replyToMessageId,
+    link.replyTo,
+    link.id,
+    link.message?.id,
+  ]) {
+    const id = maxIdToString(candidate)
+    if (id && isUsableMaxMessageHex(id)) ids.add(id)
+  }
+  visit(link)
+  return hasReplyMarker && ids.size === 1 ? [...ids][0] : null
+}
+
 function compareMaxIdHex(a, b) {
   const left = String(a || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
   const right = String(b || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase()
@@ -1430,7 +1476,7 @@ class TransportInterceptor {
       type:              hasAttaches ? this._detectMaxType(attaches) : 'text',
       attachments:       this._extractMaxAttachmentsV2(attaches),
       isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : protocolOutgoing,
-      replyToMessageId:  (m.link?.type === 'REPLY' && m.link?.messageId) ? String(m.link.messageId) : null,
+      replyToMessageId:  maxReplyTargetId(m.link),
       forwardedFromId:   (m.link?.type === 'FORWARD' && m.link.message?.sender) ? String(m.link.message.sender) : null,
       status:            m.status || null,
       raw:               payload,
@@ -2323,4 +2369,9 @@ class TransportInterceptor {
   }
 }
 
-module.exports = { TransportInterceptor, OP, selectPendingLiveDomCandidates }
+module.exports = {
+  TransportInterceptor,
+  OP,
+  maxReplyTargetId,
+  selectPendingLiveDomCandidates,
+}

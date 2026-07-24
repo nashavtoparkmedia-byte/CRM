@@ -5,6 +5,9 @@ export type MaxPhoneEvidenceInput = {
   sourceKind?: string | null
   trustedForAutomaticResolution?: boolean | null
   observedAt?: string | null
+  providerIdentityId?: string | number | null
+  protocolChatId?: string | number | null
+  uiRouteId?: string | number | null
 } | null | undefined
 
 export type ResolvedMaxPhoneEvidence = {
@@ -12,6 +15,10 @@ export type ResolvedMaxPhoneEvidence = {
   sourceKind: PhoneEvidenceSource
   trustedForAutomaticResolution: boolean
   observedAt: string
+  providerIdentityId: string | null
+  protocolChatId: string | null
+  uiRouteId: string | null
+  trustResult: 'bound_provider_profile' | 'untrusted_source' | 'unbound_provider_profile'
 }
 
 const MAX_PHONE_SOURCES = new Set<PhoneEvidenceSource>([
@@ -40,25 +47,70 @@ function observationTime(value: unknown, now: () => Date): string {
   return now().toISOString()
 }
 
+function digits(value: unknown): string | null {
+  const normalized = String(value ?? '').replace(/\D/g, '')
+  return normalized || null
+}
+
+function expectedUiRouteId(protocolChatId: string | null): string | null {
+  if (!protocolChatId) return null
+  try {
+    return BigInt.asUintN(32, BigInt(protocolChatId)).toString()
+  } catch {
+    return null
+  }
+}
+
 export function resolveMaxPhoneEvidence(
   rawPhone: unknown,
   input: MaxPhoneEvidenceInput,
-  options: { now?: () => Date } = {},
+  options: {
+    now?: () => Date
+    externalChatId?: string | number | null
+    senderId?: string | number | null
+  } = {},
 ): ResolvedMaxPhoneEvidence {
   const normalizedPhone = typeof rawPhone === 'string' || typeof rawPhone === 'number'
     ? normalizePhoneE164(String(rawPhone))
     : null
   const source = sourceKind(input?.sourceKind)
+  const providerIdentityId = digits(input?.providerIdentityId)
+  const protocolChatId = digits(input?.protocolChatId)
+  const uiRouteId = digits(input?.uiRouteId)
+  const externalChatId = digits(options.externalChatId)
+  const senderId = digits(options.senderId)
+  const identityMatches = Boolean(
+    providerIdentityId
+      && (providerIdentityId === senderId || providerIdentityId === externalChatId),
+  )
+  const routeMatches = Boolean(
+    protocolChatId
+      && externalChatId
+      && protocolChatId === externalChatId
+      && uiRouteId
+      && uiRouteId === expectedUiRouteId(protocolChatId),
+  )
+  const providerBindingValid = identityMatches && routeMatches
   const trustedForAutomaticResolution = Boolean(
     normalizedPhone
       && input?.trustedForAutomaticResolution === true
-      && MAX_TRUSTED_PHONE_SOURCES.has(source),
+      && MAX_TRUSTED_PHONE_SOURCES.has(source)
+      && providerBindingValid,
   )
+  const trustResult = trustedForAutomaticResolution
+    ? 'bound_provider_profile'
+    : source === 'provider_profile'
+      ? 'unbound_provider_profile'
+      : 'untrusted_source'
 
   return {
     normalizedPhone,
     sourceKind: source,
     trustedForAutomaticResolution,
     observedAt: observationTime(input?.observedAt, options.now || (() => new Date())),
+    providerIdentityId,
+    protocolChatId,
+    uiRouteId,
+    trustResult,
   }
 }

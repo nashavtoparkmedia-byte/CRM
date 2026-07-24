@@ -23,6 +23,15 @@ const { MessageSync }              = require('./sync/MessageSync')
 const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
+const {
+  createMaxProviderProfileEvidence,
+  isBoundMaxPhoneEvidence,
+} = require('./contacts/MaxPhoneEvidence')
+const {
+  createReactionEventDeduper,
+  reactionSnapshotEvent,
+  reactionSnapshotMessageId,
+} = require('./lib/MaxReactionEvents')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
@@ -275,8 +284,22 @@ function loadPhoneChatIdCache() {
     if (!fs.existsSync(PHONE_CHATID_CACHE)) return
     const data = JSON.parse(fs.readFileSync(PHONE_CHATID_CACHE, 'utf8'))
     let n = 0
-    for (const [phone, chatId] of Object.entries(data)) {
-      contactStore._map.set(String(chatId), { name: null, firstName: null, lastName: null, phone: String(phone) })
+    const entries = data?.version === 2 && data.byChatId && typeof data.byChatId === 'object'
+      ? Object.entries(data.byChatId).map(([chatId, entry]) => ({
+          chatId,
+          phone: entry?.phone,
+          phoneEvidence: isBoundMaxPhoneEvidence(entry?.phoneEvidence) ? entry.phoneEvidence : null,
+        }))
+      : Object.entries(data).map(([phone, chatId]) => ({ phone, chatId, phoneEvidence: null }))
+    for (const { phone, chatId, phoneEvidence } of entries) {
+      if (!phone || !chatId) continue
+      contactStore._map.set(String(chatId), {
+        name: null,
+        firstName: null,
+        lastName: null,
+        phone: String(phone),
+        phoneEvidence,
+      })
       n++
     }
     if (n) console.log(`[PhoneCache] Loaded ${n} entries from volume`)
@@ -293,19 +316,35 @@ function normalizePhoneForCrmPayload(phone) {
   return digits || null
 }
 
-function savePhoneChatId(phone, chatId) {
+function savePhoneChatId(phone, chatId, phoneEvidence = null) {
   try {
-    let data = {}
+    let data = { version: 2, byChatId: {} }
     if (fs.existsSync(PHONE_CHATID_CACHE)) {
-      data = JSON.parse(fs.readFileSync(PHONE_CHATID_CACHE, 'utf8'))
+      const existing = JSON.parse(fs.readFileSync(PHONE_CHATID_CACHE, 'utf8'))
+      if (existing?.version === 2 && existing.byChatId && typeof existing.byChatId === 'object') {
+        data = existing
+      } else {
+        for (const [legacyPhone, legacyChatId] of Object.entries(existing || {})) {
+          data.byChatId[String(legacyChatId)] = { phone: String(legacyPhone), phoneEvidence: null }
+        }
+      }
     }
     const key = String(phone).replace(/\D/g, '')
     const chatIdStr = String(chatId)
-    data[key] = chatIdStr
+    const boundEvidence = isBoundMaxPhoneEvidence(phoneEvidence) ? phoneEvidence : null
+    data.byChatId[chatIdStr] = { phone: key, phoneEvidence: boundEvidence }
     fs.mkdirSync(USER_DATA_DIR, { recursive: true })
     fs.writeFileSync(PHONE_CHATID_CACHE, JSON.stringify(data, null, 2))
     if (contactStore && key) {
-      contactStore._map.set(chatIdStr, { name: null, firstName: null, lastName: null, phone: key })
+      const current = contactStore._map.get(chatIdStr) || {}
+      contactStore._map.set(chatIdStr, {
+        ...current,
+        name: current.name || null,
+        firstName: current.firstName || null,
+        lastName: current.lastName || null,
+        phone: key,
+        phoneEvidence: boundEvidence || current.phoneEvidence || null,
+      })
     }
     console.log(`[PhoneCache] Saved ${key} → ${chatIdStr}`)
   } catch (e) {
@@ -318,6 +357,15 @@ function cachedPhoneForChatId(...chatIds) {
     if (chatId == null) continue
     const phone = contactStore?.getPhone?.(String(chatId))
     if (phone) return phone
+  }
+  return null
+}
+
+function cachedPhoneEvidenceForChatId(...chatIds) {
+  for (const chatId of chatIds) {
+    if (chatId == null) continue
+    const evidence = contactStore?.getPhoneEvidence?.(String(chatId))
+    if (isBoundMaxPhoneEvidence(evidence)) return evidence
   }
   return null
 }
@@ -395,6 +443,7 @@ async function finishImportSession(status = 'completed', resultType = 'partial')
 // Когда мы отправляем реакцию из CRM, MAX сервер пушит opcode 135 обратно.
 // Без фильтра это создаёт дублирующее обновление в CRM (реакция уже сохранена через broadcastChatMessage).
 const recentOwnReactionIds = new Set()
+const claimReactionForward = createReactionEventDeduper({ ttlMs: 5000 })
 
 // ─── Маппинг ID → emoji (из opcode 28) ────────────────────────────────────────
 // MAX хранит реакции как { reactionType:'EMOJI', id: <integer> } где id — это
@@ -544,7 +593,7 @@ function waitForReactionConfirmation(transport, { chatId, messageId, emoji, remo
           }
         }
 
-        if (data.opcode === 155 && matches(payload.messageId || payload.id)) {
+        if (data.opcode === 155 && matches(reactionSnapshotMessageId(payload))) {
           const counters = normalizeReactionCounters(payload.reactionInfo || payload)
           if (counters.length > 0 || remove) {
             finish({
@@ -590,7 +639,7 @@ function normalizeReactionCounters(source) {
   const counters = []
   for (const item of raw) {
     const reaction = normalizeReactionEmoji(item?.reaction || item?.id || item?.emoji || item)
-    const count = Number(item?.count ?? item?.value ?? 1)
+    const count = Number(item?.count ?? item?.totalCount ?? item?.value ?? 1)
     if (reaction && count > 0) counters.push({ reaction, count })
   }
   return counters
@@ -616,7 +665,7 @@ function extractReactionEventsDeep(value, out = [], seen = new Set(), depth = 0)
     }
   }
 
-  const messageId = extractMaxId(value.messageId || value.id)
+  const messageId = reactionSnapshotMessageId(value) || extractMaxId(value.messageId || value.id)
   const counters = normalizeReactionCounters(value.reactionInfo || value.messagesReactions || value.counters || value.reactions ? value : null)
   if (messageId && counters.length > 0) {
     const key = `counters:${messageId}:${JSON.stringify(counters)}`
@@ -829,17 +878,34 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   // Для исходящих echo: senderId=наш userId → getPhone вернёт null, это нормально.
   const senderName = contactStore.getName(payload.senderId)
   let contactPhone = contactStore.getPhone(String(payload.senderId))
+  let contactPhoneSource = contactStore.getPhoneEvidence?.(String(payload.senderId))
 
   if (!contactPhone && !msg.isOutgoing && payload.senderId && transport) {
     const freshPhone = await getContactPhone(payload.senderId)
     if (freshPhone) {
       console.log(`[handleIncoming] op:32 resolved: sender=${payload.senderId} → phone=${freshPhone}`)
       contactPhone = freshPhone
+      contactPhoneSource = contactStore.getPhoneEvidence?.(String(payload.senderId))
     }
   }
 
   if (senderName)   payload = { ...payload, senderName, driverName: senderName }
-  if (contactPhone) payload = { ...payload, senderPhone: contactPhone, phone: contactPhone }
+  if (contactPhone) {
+    const uiRouteId = resolveUiRouteIdForChat(payload.chatId).uiRouteId
+    const phoneEvidence = createMaxProviderProfileEvidence({
+      providerIdentityId: contactPhoneSource?.providerIdentityId || payload.senderId || payload.chatId,
+      protocolChatId: payload.chatId,
+      uiRouteId,
+      observedAt: contactPhoneSource?.observedAt,
+    })
+    payload = {
+      ...payload,
+      senderPhone: contactPhone,
+      phone: contactPhone,
+      ...(phoneEvidence ? { phoneEvidence } : {}),
+    }
+    if (phoneEvidence) savePhoneChatId(contactPhone, payload.chatId, phoneEvidence)
+  }
 
   // Переслано: текстовый префикс в content + структурированные метаданные
   if (msg.forwardedFromId) {
@@ -1054,15 +1120,25 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         resolvedReplyChatId = resolved.providerChatId || null
         console.log(`[sendText] resolved DOM reply target chatId=${chatId} providerId=${resolvedReplyToMessageId.slice(0, 18)} via=${resolved.reason}`)
       }
-      console.log(`[sendText] reply via MAX Web store chatId=${chatId} uiRoute=${directUiRouteId || 'none'}`)
+      console.log(`[sendText] reply via MAX provider frame chatId=${chatId} uiRoute=${directUiRouteId || 'none'}`)
       const ackPromise = waitForUiSendAck(transport, timeoutMs)
-      const replyResult = await replyBridge.sendReply(
-        resolvedReplyChatId || wsChatId,
-        text,
-        resolvedReplyToMessageId,
-        cid,
-        { uiChatId: directUiRouteId },
-      )
+      let replyResult = null
+      if (typeof transport?.sendBinaryReply === 'function') {
+        await transport.sendBinaryReply(
+          resolvedReplyChatId || wsChatId,
+          text,
+          resolvedReplyToMessageId,
+          cid,
+        )
+      } else {
+        replyResult = await replyBridge.sendReply(
+          resolvedReplyChatId || wsChatId,
+          text,
+          resolvedReplyToMessageId,
+          cid,
+          { uiChatId: directUiRouteId },
+        )
+      }
       const storeConfirmedId = isRealMaxMessageId(replyResult?.providerMessageId)
         ? replyResult.providerMessageId
         : null
@@ -1263,14 +1339,20 @@ function waitForUiSendAck(transport, timeoutMs = 60_000) {
     const considerId = (id, immediate = false) => {
       if (!id) return
       const idStr = String(id)
+      const isProviderId = isRealMaxMessageId(idStr)
       const related = bestId ? idsRelated(bestId, idStr) : true
       const preferProtocolMsgId = related && /^d301/i.test(idStr) && !/^d301/i.test(String(bestId || ''))
       if (!bestId || (related && (preferProtocolMsgId || idStr.length > String(bestId).length))) {
         bestId = idStr
       }
-      if (immediate && bestId) finish(bestId)
+      // op:64 often exposes a temporary d300 id before op:180 publishes the
+      // durable d301 id. Never complete early on the temporary correlation id.
+      if ((immediate || isProviderId) && isRealMaxMessageId(bestId)) finish(bestId)
       if (!fallbackTimer) {
-        fallbackTimer = setTimeout(() => finish(bestId), Math.min(timeoutMs, 2500))
+        fallbackTimer = setTimeout(
+          () => finish(isRealMaxMessageId(bestId) ? bestId : null),
+          Math.min(timeoutMs, 3500),
+        )
       }
     }
     const collectIds = (value, out = [], depth = 0) => {
@@ -1816,6 +1898,7 @@ const domFallbackSeen = new Set()
 const domRecoveredTextCounts = new Map()
 let domFallbackRunning = false
 let domFallbackScheduledAt = 0
+let domMediaFallbackScheduledAt = 0
 let uiSendInProgress = false
 const automaticDomRecoveryTimers = new Map()
 const recentCrmOutboundTexts = []
@@ -2303,14 +2386,17 @@ function looksLikeDomRecoverableMediaPayload(value, depth = 0) {
 function scheduleDomFallbackForRecentMedia(reason, delayMs = 2200) {
   if (!isReady || !page) return
   const now = Date.now()
-  if (now - domFallbackScheduledAt < 1000) return
-  domFallbackScheduledAt = now
+  if (now - domMediaFallbackScheduledAt < 1000) return
+  domMediaFallbackScheduledAt = now
   setTimeout(() => {
     if (uiSendInProgress) return
     const chatId = latestRecentOp128ChatId()
     if (!chatId) return
     const runner = reason === 'loose_op128_media'
-      ? forwardRecentDomMessages(String(chatId), reason)
+      ? forwardRecentDomMessages(String(chatId), reason, {
+          freshOnly: true,
+          enrichPeer: true,
+        })
       : forwardLatestDomMessage(String(chatId), reason)
     runner
       .then(result => console.log(`[domFallback] result ${JSON.stringify(result).slice(0, 500)}`))
@@ -2336,7 +2422,7 @@ function scheduleAutomaticDomMirrorRecovery(chatId, reason = 'missing_protocol_a
       const result = await forwardRecentDomMessages(chatIdStr, reason, {
         freshOnly: true,
         includeOutgoing: !isLiveInboundRecovery,
-        enrichPeer: !isLiveInboundRecovery,
+        enrichPeer: true,
       })
       console.log(`[domMirror] ${reason} chatId=${chatIdStr} result=${JSON.stringify(result).slice(0, 600)}`)
     } catch (e) {
@@ -2459,6 +2545,47 @@ function cleanDomMediaCaption(text, attachments = []) {
 
 async function materializeUrlAttachment(att) {
   if (!att?.url || !mediaPipeline) return null
+  const browserDownload = async () => {
+    if (!page) return null
+    const result = await page.evaluate(async ({ url, maxBytes }) => {
+      try {
+        const response = await fetch(url, { credentials: 'include' })
+        if (!response.ok) return { ok: false, reason: `http_${response.status}` }
+        const blob = await response.blob()
+        if (blob.size <= 0 || blob.size > maxBytes) {
+          return { ok: false, reason: blob.size > maxBytes ? 'too_large' : 'empty' }
+        }
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result || ''))
+          reader.onerror = () => reject(reader.error || new Error('file_reader_failed'))
+          reader.readAsDataURL(blob)
+        })
+        return {
+          ok: true,
+          dataUrl,
+          size: blob.size,
+          mimeType: blob.type || null,
+        }
+      } catch (error) {
+        return { ok: false, reason: String(error?.message || error) }
+      }
+    }, { url: att.url, maxBytes: 25 * 1024 * 1024 }).catch(() => null)
+    if (!result?.ok || !result.dataUrl) return null
+    return {
+      ...att,
+      url: result.dataUrl,
+      mimeType: result.mimeType || att.mimeType || inferMimeType(att.name, att.type),
+      size: result.size || att.size || null,
+      downloadStatus: 'ok',
+      source: 'dom_authenticated_fetch',
+    }
+  }
+
+  if (/^(blob:|data:)/i.test(String(att.url))) {
+    const browserFile = await browserDownload()
+    if (browserFile) return browserFile
+  }
   try {
     const file = await mediaPipeline.downloadAttachment(att.url, att.mimeType)
     const mimeType = file.mimeType || att.mimeType || inferMimeType(att.name, att.type)
@@ -2473,6 +2600,8 @@ async function materializeUrlAttachment(att) {
     }
   } catch (e) {
     console.warn(`[domFallback] media URL download failed type=${att.type || 'unknown'} name=${att.name || ''}: ${e.message}`)
+    const browserFile = await browserDownload()
+    if (browserFile) return browserFile
     return null
   }
 }
@@ -2517,12 +2646,20 @@ async function downloadDomFileAttachment(uiRouteId, fileName, mimeType = null, t
     await page.waitForTimeout(1200)
   }
 
-  const downloadButtons = page.locator('button[aria-label*="Скачать"], button[aria-label*="Download"], button')
+  const messageRows = page.locator('[role="listitem"], .item, [class*="messageWrapper"]')
     .filter({ hasText: String(fileName) })
-  const count = await downloadButtons.count().catch(() => 0)
-  if (count <= 0) return null
-
-  const button = downloadButtons.nth(count - 1)
+  const rowCount = await messageRows.count().catch(() => 0)
+  if (rowCount <= 0) return null
+  const row = messageRows.nth(rowCount - 1)
+  const strictButtons = row.locator([
+    'button[aria-label*="Скачать"]',
+    'button[aria-label*="Download"]',
+    'button[title*="Скачать"]',
+    'button[title*="Download"]',
+  ].join(', '))
+  const buttonCount = await strictButtons.count().catch(() => 0)
+  if (buttonCount <= 0) return null
+  const button = strictButtons.nth(buttonCount - 1)
   if (!await button.isVisible({ timeout: 1500 }).catch(() => false)) return null
 
   try {
@@ -2655,8 +2792,19 @@ async function scrapeRecentDomMessages(uiRouteId) {
         const r = img.getBoundingClientRect()
         const src = img.currentSrc || img.src || img.getAttribute('src') || ''
         if (!src || r.width < 60 || r.height < 60) continue
-        const name = `${nameFromUrl(src, 'max-image')}.jpg`
-        attachments.push({ type: 'image', url: src, name, mimeType: 'image/jpeg', sourceKind: 'dom_img' })
+        const exposedName = [img.getAttribute('alt'), img.getAttribute('title'), img.getAttribute('download')]
+          .map(value => String(value || '').match(/([^\n\r<>:"/\\|?*]+\.(?:jpe?g|png|webp|gif))\b/i)?.[1] || null)
+          .find(Boolean)
+        let pathName = null
+        try {
+          const parsedName = decodeURIComponent(new URL(src).pathname.split('/').pop() || '')
+          if (/\.(jpe?g|png|webp|gif)$/i.test(parsedName)) pathName = parsedName
+        } catch {}
+        const name = exposedName || pathName || `${nameFromUrl(src, 'max-image')}.jpg`
+        const mimeType = /\.png$/i.test(name) ? 'image/png'
+          : (/\.webp$/i.test(name) ? 'image/webp'
+            : (/\.gif$/i.test(name) ? 'image/gif' : 'image/jpeg'))
+        attachments.push({ type: 'image', url: src, name, mimeType, sourceKind: 'dom_img' })
       }
 
       for (const video of [...message.querySelectorAll('video')]) {
@@ -2670,9 +2818,9 @@ async function scrapeRecentDomMessages(uiRouteId) {
 
       for (const button of [...message.querySelectorAll('button[aria-label*="Скачать"], button[aria-label*="Download"]')]) {
         const buttonText = (button.innerText || button.textContent || '').trim()
-        const match = buttonText.match(/[^\n\r]+\.(ogg|opus|mp3|m4a|aac|wav|mp4|mov|jpe?g|png|webp|gif|pdf|zip)\b/i)
+        const match = (buttonText || rawText).match(/([^\n\r<>:"/\\|?*]+\.(ogg|opus|mp3|m4a|aac|wav|mp4|mov|jpe?g|png|webp|gif|pdf|zip))\b/i)
         if (!match) continue
-        const name = match[0].trim()
+        const name = match[1].trim()
         const lower = name.toLowerCase()
         const type = /\.(ogg|opus|mp3|m4a|aac|wav)$/i.test(lower)
           ? 'audio'
@@ -2681,7 +2829,8 @@ async function scrapeRecentDomMessages(uiRouteId) {
             : (/\.(jpe?g|png|webp|gif)$/i.test(lower) ? 'image' : 'document'))
         const mimeType = /\.(ogg|opus)$/i.test(lower) ? 'audio/ogg'
           : (/\.(mp4)$/i.test(lower) ? 'video/mp4'
-            : (/\.(jpe?g)$/i.test(lower) ? 'image/jpeg' : null))
+            : (/\.(jpe?g)$/i.test(lower) ? 'image/jpeg'
+              : (/\.pdf$/i.test(lower) ? 'application/pdf' : null)))
         attachments.push({ type, name, mimeType, downloadable: true, sourceKind: 'dom_download' })
       }
 
@@ -2767,7 +2916,10 @@ async function scrapeLatestDomMessage(uiRouteId) {
   return candidates[candidates.length - 1] || null
 }
 
-async function scrapeDomPeerIdentity(uiRouteId, { forcePhone = false } = {}) {
+async function scrapeDomPeerIdentity(
+  uiRouteId,
+  { forcePhone = false, protocolChatId = null, providerIdentityId = null } = {},
+) {
   if (!page || !isReady) return {}
   const targetUrl = `https://web.max.ru/${uiRouteId}`
   if (!page.url().includes(`/${uiRouteId}`)) {
@@ -2834,7 +2986,17 @@ async function scrapeDomPeerIdentity(uiRouteId, { forcePhone = false } = {}) {
       }
       return null
     }).catch(() => null)
-    if (profile?.phone) identity.phone = normalizePhoneForCrmPayload(profile.phone)
+    if (profile?.phone) {
+      identity.phone = normalizePhoneForCrmPayload(profile.phone)
+      identity.phoneEvidence = createMaxProviderProfileEvidence({
+        providerIdentityId: providerIdentityId || protocolChatId,
+        protocolChatId,
+        uiRouteId,
+      })
+      if (!identity.phoneEvidence) {
+        console.warn(`[domIdentity] phone rejected because profile route is not bound protocolChatId=${protocolChatId || 'none'} uiRouteId=${uiRouteId}`)
+      }
+    }
   } finally {
     if (opened || !page.url().includes(`/${uiRouteId}`)) {
       await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 }).catch(() => {})
@@ -2881,7 +3043,9 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   if (isOutgoingCandidate && latest.attachments?.length && !options.includeOutgoingMedia) {
     return { skipped: 'outgoing_media_mirror_deferred', text: latest.text }
   }
-  const pendingProviderId = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
+  const pendingProviderId = ['empty_op71_after_op128', 'loose_op128_media'].includes(reason)
+    && !isOutgoingCandidate
+    && (latest.text || latest.attachments?.length)
     ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
     : null
   let resolvedProviderId = pendingProviderId
@@ -2944,6 +3108,28 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     const leafText = domReplyQuoteLeafText(latest.text)
     if (resolvedProviderId && leafText && !isDomNoiseText(leafText)) {
       latest = { ...latest, text: leafText, _domReplyQuoteLeafRecovered: true }
+    } else if (leafText && replyParts?.quotedText) {
+      const directReply = findRecentDirectInboundText(chatId, leafText)
+      if (isRealMaxMessageId(directReply?.externalId)) {
+        const enrichment = await forwardToWebhook({
+          externalId: directReply.externalId,
+          chatId: String(chatId),
+          text: leafText,
+          timestamp: options.timestamp || Date.now(),
+          messageType: 'text',
+          attachments: [],
+          isOutgoing: false,
+          source: 'live_dom_reply_enrichment',
+          replyQuoteText: replyParts.quotedText,
+        })
+        return {
+          success: enrichment.status >= 200 && enrichment.status < 300,
+          enrichedReply: true,
+          externalId: directReply.externalId,
+          webhook: enrichment,
+        }
+      }
+      return { skipped: 'dom_reply_quote_unresolved', text: latest.text }
     } else {
       return { skipped: 'dom_reply_quote_text', text: latest.text }
     }
@@ -2974,11 +3160,15 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
 
   const messageType = attachments[0]?.type || 'text'
   const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
+  const cachedPhoneEvidence = cachedPhoneEvidenceForChatId(chatId, uiRouteId)
   const crmPhone = normalizePhoneForCrmPayload(options.phone || cachedPhone)
+  const crmPhoneEvidence = isBoundMaxPhoneEvidence(options.phoneEvidence)
+    ? options.phoneEvidence
+    : cachedPhoneEvidence
   const crmSenderName = options.senderName || options.name || null
   console.log(`[domFallback] ${reason} chatId=${chatId} text="${String(text || '').slice(0, 80)}" attachments=${attachments.length}`)
   rememberKnownChatId(chatId)
-  if (crmPhone) savePhoneChatId(crmPhone, chatId)
+  if (crmPhone) savePhoneChatId(crmPhone, chatId, crmPhoneEvidence)
   const result = await forwardToWebhook({
     externalId,
     chatId: String(chatId),
@@ -2990,6 +3180,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
+    ...(crmPhone && crmPhoneEvidence ? { phoneEvidence: crmPhoneEvidence } : {}),
     ...(crmSenderName ? { senderName: crmSenderName } : {}),
   })
   if (pendingProviderId && result.status >= 200 && result.status < 300 && !result.skipped) {
@@ -3050,15 +3241,23 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
     let effectiveOptions = { ...options }
     if (options.enrichPeer) {
       const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
+      const cachedPhoneEvidence = cachedPhoneEvidenceForChatId(chatId, uiRouteId)
       const peerIdentity = await scrapeDomPeerIdentity(uiRouteId, {
-        forcePhone: Boolean(options.forcePeerIdentity || !cachedPhone),
+        forcePhone: Boolean(options.forcePeerIdentity || !cachedPhone || !cachedPhoneEvidence),
+        protocolChatId: chatId,
+        providerIdentityId: options.providerIdentityId || chatId,
       }).catch(e => {
         console.warn(`[domIdentity] failed chatId=${chatId}: ${e.message}`)
         return {}
       })
-      effectiveOptions = { ...peerIdentity, ...effectiveOptions }
+      effectiveOptions = {
+        ...(cachedPhone ? { phone: cachedPhone } : {}),
+        ...(cachedPhoneEvidence ? { phoneEvidence: cachedPhoneEvidence } : {}),
+        ...peerIdentity,
+        ...effectiveOptions,
+      }
       if (peerIdentity.phone) {
-        savePhoneChatId(peerIdentity.phone, chatId)
+        savePhoneChatId(peerIdentity.phone, chatId, peerIdentity.phoneEvidence)
         console.log(`[domIdentity] chatId=${chatId} phone=${peerIdentity.phone} name=${peerIdentity.senderName || 'unknown'}`)
       }
     }
@@ -5380,28 +5579,28 @@ async function init() {
     }
     // Opcode 155 — сервер пушит полный snapshot реакций на конкретное сообщение
     // Это основной механизм: counters = [{count, reaction}]
-    if (data.opcode === 155 && data.payload?.messageId) {
-      const p            = data.payload
-      const externalMsgId = String(p.messageId)
-      // Нормализуем reaction в каждом counter: может быть integer ID → emoji символ
-      const rawCounters   = p.counters || []
-      const counters      = rawCounters.map(c => ({ ...c, reaction: normalizeReactionEmoji(c.reaction) }))
-      const reactionUrl   = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
-      console.log(`[App] opcode155 reaction snapshot: msgId=${externalMsgId} counters=${JSON.stringify(counters)}`)
-      maxDeliveryLog({
-        operation: 'reaction',
-        status: 'max_echo_received',
-        maxMessageId: externalMsgId,
-        externalId: externalMsgId,
-        protocolChatId: p.chatId ? String(p.chatId) : undefined,
-        counters,
-        opcode: 155,
-      })
-      fetch(reactionUrl, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ externalMsgId, counters }),
-      }).catch(e => console.error('[App] opcode155 reaction sync error:', e.message))
+    if (data.opcode === 155) {
+      const event = reactionSnapshotEvent(data.payload, normalizeReactionEmoji)
+      if (event && claimReactionForward(event)) {
+        const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
+        console.log(`[App] opcode155 reaction snapshot: msgId=${event.externalMsgId} counters=${JSON.stringify(event.counters)}`)
+        maxDeliveryLog({
+          operation: 'reaction',
+          status: 'max_echo_received',
+          maxMessageId: event.externalMsgId,
+          externalId: event.externalMsgId,
+          protocolChatId: data.payload?.chatId ? String(data.payload.chatId) : undefined,
+          counters: event.counters,
+          opcode: 155,
+        })
+        fetch(reactionUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(event),
+        }).catch(e => console.error('[App] opcode155 reaction sync error:', e.message))
+      } else {
+        if (!event) appendDebugJson('max_reactions_unparsed.jsonl', data.payload)
+      }
     }
     // Opcode 135 — chat update push; содержит lastReaction + lastReactedMessageId
     // В реальности opcode 155 не приходит при реакции другого пользователя — только 135.
@@ -5426,6 +5625,8 @@ async function init() {
         if (byMessage.size > 0) {
           const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
           for (const [externalMsgId, counters] of byMessage.entries()) {
+            const event = { externalMsgId, counters }
+            if (!claimReactionForward(event)) continue
             console.log(`[App] opcode180 reaction snapshot: msgId=${externalMsgId} counters=${JSON.stringify(counters)}`)
             maxDeliveryLog({
               operation: 'reaction',
@@ -5438,7 +5639,7 @@ async function init() {
             fetch(reactionUrl, {
               method:  'POST',
               headers: { 'Content-Type': 'application/json' },
-              body:    JSON.stringify({ externalMsgId, counters }),
+              body:    JSON.stringify(event),
             }).catch(e => console.error('[App] opcode180 reaction sync error:', e.message))
           }
         } else {
@@ -5451,7 +5652,8 @@ async function init() {
     if (data.opcode === 135 && data.payload?.chat?.lastReactedMessageId && data.payload?.chat?.lastReaction) {
       const externalMsgId = String(data.payload.chat.lastReactedMessageId)
       const emoji          = normalizeReactionEmoji(data.payload.chat.lastReaction)
-      if (!recentOwnReactionIds.has(externalMsgId)) {
+      const event = { externalMsgId, emoji, isRemove: false }
+      if (!recentOwnReactionIds.has(externalMsgId) && claimReactionForward(event)) {
         const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
         console.log(`[App] opcode135 reaction: msgId=${externalMsgId} raw=${JSON.stringify(data.payload.chat.lastReaction)} emoji=${emoji}`)
         maxDeliveryLog({
@@ -5466,7 +5668,7 @@ async function init() {
         fetch(reactionUrl, {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ externalMsgId, emoji, isRemove: false }),
+          body:    JSON.stringify(event),
         }).catch(e => console.error('[App] opcode135 reaction sync error:', e.message))
       } else {
         console.log(`[App] opcode135 skip own-reaction echo: msgId=${externalMsgId}`)
@@ -5488,6 +5690,7 @@ async function init() {
             const key = `${externalMsgId}:${event.emoji || ''}:${JSON.stringify(event.counters || null)}:${!!event.isRemove}`
             if (sentKeys.has(key)) continue
             sentKeys.add(key)
+            if (!claimReactionForward(event)) continue
             console.log(`[App] opcode${data.opcode} reaction deep: msgId=${externalMsgId} event=${JSON.stringify(event).slice(0, 200)}`)
             fetch(reactionUrl, {
               method:  'POST',
@@ -5505,9 +5708,10 @@ async function init() {
     if (data.opcode === OP.INCOMING_MSG) {
       if (!isReady) return
       const payloadIsEmpty = !data.payload || (Array.isArray(data.payload) && data.payload.length === 0)
-      if (!payloadIsEmpty && looksLikeDomRecoverableMediaPayload(data.payload)) {
-        scheduleDomFallbackForRecentMedia('loose_op128_media')
-      }
+      // A MAX file/photo notification may decode without recognizable media
+      // keys. The media-only DOM pass is idempotent and ignores text rows, so
+      // schedule it for every fresh op:128 instead of trusting the loose parser.
+      scheduleDomFallbackForRecentMedia('loose_op128_media')
       if (payloadIsEmpty) {
         console.log('[op128] Пустой payload — пропускаем (op:71 через JSON убивает WS, используем только пассивный перехват)')
       }

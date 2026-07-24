@@ -17,6 +17,10 @@ export type ResolveContactOptions = {
     source: PhoneEvidenceSource
     trustedForAutomaticResolution: boolean
     observedAt?: Date | string
+    providerIdentityId?: string | null
+    protocolChatId?: string | null
+    uiRouteId?: string | null
+    trustResult?: string | null
   } | null
   ambiguousPhone?: 'provider_only' | 'reject'
 }
@@ -113,6 +117,10 @@ function withPhoneEvidenceMetadata(
       sourceKind: evidence.source,
       observedAt,
       providerIdentity: externalId,
+      providerIdentityId: evidence.providerIdentityId || null,
+      protocolChatId: evidence.protocolChatId || null,
+      uiRouteId: evidence.uiRouteId || null,
+      trustResult: evidence.trustResult || null,
       trustedForAutomaticResolution: evidence.trustedForAutomaticResolution,
       result,
     },
