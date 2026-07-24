@@ -336,18 +336,15 @@ test('live inbound recovery uses guarded DOM batches without injecting active op
 
 test('DOM recovery calculates ordering while real direct anchors are still present', () => {
   const source = fs.readFileSync(require.resolve('../index'), 'utf8')
-  const estimateStart = source.indexOf('function estimateDomRecoveryTimestampMs(')
-  const estimateEnd = source.indexOf('\nfunction stableDomMessageId(', estimateStart)
   const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
   const anchorFilter = source.indexOf('const beforeAnchorFilter', liveRecoveryStart)
   const timestampAssignment = source.indexOf('_recoveryTimestamp = new Date(', liveRecoveryStart)
 
-  assert.notEqual(estimateStart, -1)
-  assert.notEqual(estimateEnd, -1)
   assert.notEqual(liveRecoveryStart, -1)
   assert.notEqual(anchorFilter, -1)
   assert.notEqual(timestampAssignment, -1)
-  assert.doesNotMatch(source.slice(estimateStart, estimateEnd), /findRecentDirectInboundText/)
+  assert.match(source, /const hasDirectTimestampAnchor = hasDirectDomTimestampAnchor\(recoverable\)/)
+  assert.match(source, /const useLiveRecoveryTime = !hasDirectTimestampAnchor &&/)
   assert.ok(timestampAssignment < anchorFilter, 'timestamps must be assigned before direct anchors are filtered out')
 })
 
@@ -498,8 +495,8 @@ test('live DOM recovery timestamps provider-backed/no-anchor text at recovery ti
   assert.notEqual(liveRecoveryEnd, -1)
   assert.match(liveRecoveryBlock, /candidate\._liveDomNoAnchorCandidate = true/)
   assert.match(liveRecoveryBlock, /const liveRecoveryNowMs = Date\.now\(\)/)
-  assert.match(liveRecoveryBlock, /const useLiveRecoveryTime = recoverable\[i\]\._pendingLiveProviderCandidate \|\| recoverable\[i\]\._liveDomNoAnchorCandidate/)
-  assert.match(liveRecoveryBlock, /useLiveRecoveryTime\s*\? liveRecoveryNowMs - liveOffsetMs\s*:\s*estimateDomRecoveryTimestampMs\(recoverable, i\)/s)
+  assert.match(liveRecoveryBlock, /const useLiveRecoveryTime = !hasDirectTimestampAnchor &&/)
+  assert.match(liveRecoveryBlock, /recoverable\[i\]\._pendingLiveProviderCandidate \|\| recoverable\[i\]\._liveDomNoAnchorCandidate/)
 })
 
 test('media UI send blocks live DOM recovery until upload/send finishes', () => {

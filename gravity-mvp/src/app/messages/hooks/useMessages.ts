@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { prepareMessagesForUI, UIItem } from "../utils/message-utils"
 import { patchConversation } from "./useConversations"
+import { sortMessagesChronologically } from "../utils/message-order"
 
 export interface MessageAttachment {
     id: string
@@ -24,6 +25,7 @@ export interface Message {
     content: string
     sentAt: string
     status: 'queued' | 'sent' | 'delivered' | 'read' | 'failed'
+    createdAt?: string
     channel: string
     origin?: 'operator' | 'ai' | 'auto' | 'system'
     account?: string
@@ -55,7 +57,7 @@ export function prefetchMessages(chatId: string): Promise<void> {
         .then((data: any) => {
             if (Array.isArray(data)) {
                 const enriched = data.map((m: any) => ({ ...m, channel: m.channel || 'whatsapp' }))
-                messageCache.set(chatId, enriched)
+                messageCache.set(chatId, sortMessagesChronologically(enriched))
             }
         })
         .catch(() => { /* fire-and-forget */ })
@@ -88,6 +90,7 @@ export function useMessages(chatId: string | null) {
 
     const lastFetchTime = useRef(0)
     const loadInFlight = useRef(false)
+    const loadMessagesRef = useRef<((opts?: { silent?: boolean; force?: boolean }) => Promise<void>) | null>(null)
 
     // Prepare UI items (grouping, separators, etc.)
     const uiItems = useMemo(() => prepareMessagesForUI(messages), [messages]);
@@ -160,7 +163,7 @@ export function useMessages(chatId: string | null) {
                         )
                     })
 
-                    const merged = [...enrichedData, ...pendingOptimistic]
+                    const merged = sortMessagesChronologically([...enrichedData, ...pendingOptimistic])
                     messageCache.set(chatId, merged)
                     setMessages(merged)
                     setHasMoreHistory(enrichedData.length >= 50)
@@ -174,6 +177,7 @@ export function useMessages(chatId: string | null) {
             }
         }
 
+        loadMessagesRef.current = loadMessages
         // First load: silent=true if we already have cache (instant render),
         // otherwise spinner while we fetch the very first batch.
         loadMessages({ silent: !!cached })
@@ -237,9 +241,8 @@ export function useMessages(chatId: string | null) {
                         next[existing] = { ...next[existing], ...incoming, channel: incoming.channel || 'whatsapp' }
                     } else {
                         next = [...prev, { ...incoming, channel: incoming.channel || 'whatsapp' }]
-                        // Keep the list sorted by sentAt
-                        next.sort((a, b) => new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime())
                     }
+                    next = sortMessagesChronologically(next)
                     messageCache.set(chatId, next)
                     return next
                 })
@@ -271,6 +274,7 @@ export function useMessages(chatId: string | null) {
             clearInterval(interval)
             window.removeEventListener('focus', refreshActiveChat)
             document.removeEventListener('visibilitychange', refreshOnVisibility)
+            if (loadMessagesRef.current === loadMessages) loadMessagesRef.current = null
             if (eventSource) eventSource.close()
         }
     }, [chatId])
@@ -432,7 +436,7 @@ export function useMessages(chatId: string | null) {
                 )
                 messageCache.set(chatId, updatedMsgs)
                 setMessages(updatedMsgs)
-                await loadMessages({ silent: true, force: true })
+                await loadMessagesRef.current?.({ silent: true, force: true })
             }
         } catch {
             const failedMsgs = (messageCache.get(chatId) || []).map(m =>

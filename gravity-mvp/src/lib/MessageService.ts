@@ -316,7 +316,12 @@ export class MessageService {
         const ids = Array.isArray(chatIds) ? chatIds : [chatIds]
         const messages = await prisma.message.findMany({
             where: { chatId: { in: ids } },
-            orderBy: [{ sentAt: 'desc' }, { createdAt: 'desc' }],
+            orderBy: [
+                { sentAt: 'desc' },
+                { externalId: 'desc' },
+                { createdAt: 'desc' },
+                { id: 'desc' },
+            ],
             take: limit,
             // Phase 2: do NOT return MessageAttachment.url here. Each
             // attachment.url can be a base64 data URL up to 25MB; multiple

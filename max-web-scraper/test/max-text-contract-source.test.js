@@ -129,7 +129,7 @@ test('CRM message ordering is based on provider sentAt before createdAt fallback
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
   const route = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
 
-  assert.match(messageService, /orderBy: \[\{ sentAt: 'desc' \}, \{ createdAt: 'desc' \}\]/)
+  assert.match(messageService, /\{ sentAt: 'desc' \},\s+\{ externalId: 'desc' \},\s+\{ createdAt: 'desc' \},\s+\{ id: 'desc' \}/s)
   assert.match(route, /sentAt,\s+\/\/ validated above/)
   assertBefore(
     route,

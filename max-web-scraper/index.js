@@ -35,6 +35,10 @@ const {
   reactionSnapshotEvent,
   reactionSnapshotMessageId,
 } = require('./lib/MaxReactionEvents')
+const {
+  estimateDomRecoveryTimestampMs,
+  hasDirectDomTimestampAnchor,
+} = require('./lib/MaxMessageOrdering')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
 const QRCode                       = require('qrcode')
@@ -2058,10 +2062,6 @@ function rememberDomRecoveredText(chatId, text) {
   domRecoveredTextCounts.set(key, { count: current + 1, ts: now })
 }
 
-function directHitTimestampMs(hit) {
-  return timestampMsFromValue(hit?.sentAtMs) || timestampMsFromValue(hit?.ts)
-}
-
 function parsePlainIntegerText(text) {
   const value = String(text || '').trim()
   if (!/^\d{1,6}$/.test(value)) return null
@@ -2243,39 +2243,6 @@ function markLiveDomContextBeforeFirstDirect(recoverable, keepFrom, firstDirectI
       recoverable[i]._liveDomContextBeforeDirect = true
     }
   }
-}
-
-function estimateDomRecoveryTimestampMs(candidates, index) {
-  const now = Date.now()
-  const anchors = candidates.map(candidate => directHitTimestampMs(candidate._directHit))
-
-  let prevIndex = -1
-  let prevMs = null
-  for (let i = index - 1; i >= 0; i--) {
-    if (anchors[i]) {
-      prevIndex = i
-      prevMs = anchors[i]
-      break
-    }
-  }
-
-  let nextIndex = -1
-  let nextMs = null
-  for (let i = index + 1; i < candidates.length; i++) {
-    if (anchors[i]) {
-      nextIndex = i
-      nextMs = anchors[i]
-      break
-    }
-  }
-
-  if (prevMs && nextMs && nextMs > prevMs) {
-    const ratio = (index - prevIndex) / (nextIndex - prevIndex)
-    return Math.round(prevMs + (nextMs - prevMs) * ratio)
-  }
-  if (prevMs) return prevMs + (index - prevIndex) * 1000
-  if (nextMs) return nextMs - (nextIndex - index) * 1000
-  return now - (candidates.length - index) * 1000
 }
 
 function stableDomMessageId(chatId, text) {
@@ -3339,10 +3306,12 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
         preSkipped.dom_context_before_first_direct = keepFrom
         recoverable = recoverable.slice(keepFrom)
       }
+      const hasDirectTimestampAnchor = hasDirectDomTimestampAnchor(recoverable)
       const liveRecoveryNowMs = Date.now()
       for (let i = 0; i < recoverable.length; i++) {
         if (!recoverable[i]._directHit) {
-          const useLiveRecoveryTime = recoverable[i]._pendingLiveProviderCandidate || recoverable[i]._liveDomNoAnchorCandidate
+          const useLiveRecoveryTime = !hasDirectTimestampAnchor &&
+            (recoverable[i]._pendingLiveProviderCandidate || recoverable[i]._liveDomNoAnchorCandidate)
           const liveOffsetMs = (recoverable.length - i) * 250
           recoverable[i]._recoveryTimestamp = new Date(
             useLiveRecoveryTime
