@@ -30,6 +30,8 @@ const {
 } = require('./contacts/MaxPhoneEvidence')
 const {
   createReactionEventDeduper,
+  explicitChatReactionConfirms,
+  reactionCountersConfirm,
   reactionSnapshotEvent,
   reactionSnapshotMessageId,
 } = require('./lib/MaxReactionEvents')
@@ -513,7 +515,7 @@ function extractReactionCountersFromMap(messagesReactions) {
       if (reaction && count > 0) counters.push({ reaction, count })
     }
 
-    if (counters.length > 0) countersByMessage.set(externalMsgId, counters)
+    countersByMessage.set(externalMsgId, counters)
   }
 
   return countersByMessage
@@ -575,28 +577,22 @@ function waitForReactionConfirmation(transport, { chatId, messageId, emoji, remo
         if (data.opcode === 180 && payload.messagesReactions) {
           const byMessage = extractReactionCountersFromMap(payload.messagesReactions)
           if (byMessage.has(expectedMessageId)) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op180',
-              counters: byMessage.get(expectedMessageId),
-            })
-            return
-          }
-          if (compactReactionSnapshotMatches(payload.messagesReactions, expectedMessageId)) {
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op180_compact',
-              counters: expectedEmoji ? [{ reaction: expectedEmoji, count: remove ? 0 : 1 }] : undefined,
-            })
-            return
+            const counters = byMessage.get(expectedMessageId)
+            if (reactionCountersConfirm(counters, expectedEmoji, remove)) {
+              finish({
+                reactionConfirmed: true,
+                deliveryStatus: 'delivered',
+                source: 'op180',
+                counters,
+              })
+              return
+            }
           }
         }
 
         if (data.opcode === 155 && matches(reactionSnapshotMessageId(payload))) {
           const counters = normalizeReactionCounters(payload.reactionInfo || payload)
-          if (counters.length > 0 || remove) {
+          if (reactionCountersConfirm(counters, expectedEmoji, remove)) {
             finish({
               reactionConfirmed: true,
               deliveryStatus: 'delivered',
@@ -608,16 +604,18 @@ function waitForReactionConfirmation(transport, { chatId, messageId, emoji, remo
         }
 
         if (data.opcode === 135 && payload.chat) {
-          const chatMatches = !expectedChatId || !payload.chat.id || String(payload.chat.id) === expectedChatId
+          const chatMatches = !expectedChatId || String(payload.chat.id || '') === expectedChatId
           if (chatMatches && matches(payload.chat.lastReactedMessageId)) {
-            const reaction = normalizeReactionEmoji(payload.chat.lastReaction || expectedEmoji)
-            finish({
-              reactionConfirmed: true,
-              deliveryStatus: 'delivered',
-              source: 'op135',
-              reaction,
-              counters: reaction ? [{ reaction, count: remove ? 0 : 1 }] : undefined,
-            })
+            const reaction = normalizeReactionEmoji(payload.chat.lastReaction)
+            if (explicitChatReactionConfirms(reaction, expectedEmoji, remove)) {
+              finish({
+                reactionConfirmed: true,
+                deliveryStatus: 'delivered',
+                source: 'op135',
+                reaction,
+                counters: reaction ? [{ reaction, count: 1 }] : [],
+              })
+            }
           }
         }
       } catch (e) {
@@ -5058,7 +5056,13 @@ async function sendFile(transport, chatId, fileBuffer, filename, mimeType, capti
 // ─── Реакции: opcode 178 (поставить) / 179 (снять) ───────────────────────────
 
 async function sendReaction(transport, chatId, messageId, emoji) {
-  const reactionId = reactionIdByEmoji.get(String(emoji)) || emoji
+  const normalizedEmoji = normalizeReactionEmoji(emoji)
+  const reactionId = reactionIdByEmoji.get(normalizedEmoji)
+  if (!Number.isInteger(reactionId)) {
+    const unsupported = new Error(`MAX does not advertise provider reaction support for ${normalizedEmoji}`)
+    unsupported.code = 'UNSUPPORTED_MAX_REACTION'
+    throw unsupported
+  }
   try {
     const confirmationPromise = waitForReactionConfirmation(transport, {
       chatId,
@@ -5180,11 +5184,12 @@ async function sendReaction(transport, chatId, messageId, emoji) {
   return { frameSent: true, reactionConfirmed: false, responseReceived: Boolean(resp), deliveryStatus: 'send_requested', source: 'json_response' }
 }
 
-async function removeReaction(transport, chatId, messageId) {
+async function removeReaction(transport, chatId, messageId, emoji) {
   try {
     const confirmationPromise = waitForReactionConfirmation(transport, {
       chatId,
       messageId,
+      emoji,
       remove: true,
       timeoutMs: 15_000,
     })
@@ -5228,7 +5233,25 @@ async function removeReaction(transport, chatId, messageId) {
   let resp = null
   for (const payload of payloads) {
     try {
+      const confirmationPromise = waitForReactionConfirmation(transport, {
+        chatId,
+        messageId,
+        emoji,
+        remove: true,
+        timeoutMs: 15_000,
+      })
       resp = await transport.sendFrame(OP.REMOVE_REACTION, payload, { waitResponse: true, timeoutMs: 15_000 })
+      const confirmation = await confirmationPromise
+      if (confirmation?.reactionConfirmed) {
+        return {
+          frameSent: true,
+          reactionConfirmed: true,
+          responseReceived: Boolean(resp),
+          deliveryStatus: 'delivered',
+          source: confirmation.source,
+          counters: confirmation.counters,
+        }
+      }
       break
     } catch (e) {
       lastErr = e
@@ -5527,9 +5550,12 @@ async function init() {
       try {
         for (const a of data.payload.animojis) {
           if (a == null || typeof a !== 'object') continue
-          if (a.id && a.emoji) reactionEmojiById.set(Number(a.id), a.emoji)
+          if (a.id && a.emoji) {
+            reactionEmojiById.set(Number(a.id), a.emoji)
+            reactionIdByEmoji.set(normalizeReactionEmoji(a.emoji), Number(a.id))
+          }
         }
-        console.log(`[App] reactionEmojiById: ${reactionEmojiById.size} записей`)
+        console.log(`[App] provider reactions: ${reactionIdByEmoji.size} entries`)
       } catch (e) { console.error('[App] opcode28 animoji error:', e.message) }
     }
     // opcode 288 — QR link от MAX сервера
@@ -6252,14 +6278,15 @@ app.post('/send-reaction', async (req, res) => {
   try {
     let result
     if (remove) {
-      result = await removeReaction(transport, Number(chatId), messageId)
+      result = await removeReaction(transport, Number(chatId), messageId, emoji)
     } else {
       // Помечаем как нашу собственную реакцию чтобы opcode 135 echo не дублировал обновление
       result = await sendReaction(transport, Number(chatId), messageId, emoji)
     }
     res.json({ success: true, ...result })
   } catch (e) {
-    res.status(500).json({ error: e.message })
+    const status = e.code === 'UNSUPPORTED_MAX_REACTION' ? 422 : 500
+    res.status(status).json({ error: e.message, code: e.code || null })
   }
 })
 

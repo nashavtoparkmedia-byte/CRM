@@ -61,10 +61,26 @@ function createReactionEventDeduper({ ttlMs = 5000, now = () => Date.now() } = {
   }
 }
 
+function reactionCountersConfirm(counters, expectedEmoji, remove = false) {
+  const expected = String(expectedEmoji || '')
+  if (!expected || !Array.isArray(counters)) return false
+  const current = counters.find(item => String(item?.reaction || '') === expected)
+  const count = Number(current?.count || 0)
+  return remove ? count <= 0 : count > 0
+}
+
+function explicitChatReactionConfirms(reaction, expectedEmoji, remove = false) {
+  const current = String(reaction || '')
+  const expected = String(expectedEmoji || '')
+  return remove ? current === '' : Boolean(expected && current === expected)
+}
+
 module.exports = {
   createReactionEventDeduper,
+  explicitChatReactionConfirms,
   extractMaxId,
   normalizeSnapshotCounters,
+  reactionCountersConfirm,
   reactionSnapshotEvent,
   reactionSnapshotMessageId,
 }

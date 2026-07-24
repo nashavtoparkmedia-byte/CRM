@@ -2121,8 +2121,10 @@ class TransportInterceptor {
     return true
   }
 
-  async sendBinaryReaction(chatId, messageId, reactionId, remove = false, preferUnsignedMessageId = true) {
-    if (!this._page) throw new Error('No page')
+  _buildBinaryReactionFrame(chatId, messageId, reactionId, remove = false, preferUnsignedMessageId = true) {
+    if (!remove && !Number.isInteger(Number(reactionId))) {
+      throw new Error(`MAX reaction requires a numeric provider reaction id`)
+    }
     const fields = [
       this._mpStr('chatId'), this._maxExtFromLower32(chatId),
       this._mpStr('messageId'), this._maxExtFromIdHex(messageId, preferUnsignedMessageId),
@@ -2131,31 +2133,23 @@ class TransportInterceptor {
       const reactionMap = Buffer.concat([
         Buffer.from([0x82]),
         this._mpStr('reactionType'), this._mpStr('EMOJI'),
-        this._mpStr('id'), typeof reactionId === 'number' || /^\d+$/.test(String(reactionId)) ? this._mpUInt(reactionId) : this._mpStr(reactionId),
+        this._mpStr('id'), this._mpUInt(reactionId),
       ])
       fields.push(this._mpStr('reaction'), reactionMap)
     }
 
     const map = Buffer.concat([Buffer.from([0x80 | (fields.length / 2)]), ...fields])
-    const prefix = this._op71Prefix ? Buffer.from(this._op71Prefix) : Buffer.alloc(0)
-    const payloadBytes = Buffer.concat([prefix, map])
-    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
     const opcode = remove ? OP.REMOVE_REACTION : OP.SEND_REACTION
-    const header = Buffer.alloc(9)
-    header[0] = 0x0a
-    header[1] = 0x00
-    header[2] = (frameSeq >> 8) & 0xff
-    header[3] = frameSeq & 0xff
-    header[4] = 0x00
-    header[5] = opcode & 0xff
-    header[6] = 0x01
-    header[7] = 0x00
-    header[8] = 0x00
+    return this._buildBrowserBinaryRequestFrame(opcode, map)
+  }
 
-    const frame = Buffer.concat([header, payloadBytes])
+  async sendBinaryReaction(chatId, messageId, reactionId, remove = false, preferUnsignedMessageId = true) {
+    if (!this._page) throw new Error('No page')
+    const frame = this._buildBinaryReactionFrame(chatId, messageId, reactionId, remove, preferUnsignedMessageId)
+    const opcode = frame[5]
     const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), frame.toString('base64'))
     if (!result || !result.ok) throw new Error(`Binary op:${opcode} send failed: ${result?.error}`)
-    console.log(`[reactionbin] sent op:${opcode} chatId:${chatId} msgId:${String(messageId).slice(0,18)} reaction=${reactionId || ''} fseq:${frameSeq} unsigned=${preferUnsignedMessageId}`)
+    console.log(`[reactionbin] sent op:${opcode} chatId:${chatId} msgId:${String(messageId).slice(0,18)} reaction=${reactionId || ''} fseq:${(frame[2] << 8) | frame[3]} unsigned=${preferUnsignedMessageId}`)
     return 0
   }
 
