@@ -1,7 +1,7 @@
 'use server'
 
 import { NextResponse } from 'next/server'
-import type { Message, MessageType } from '@prisma/client'
+import type { Message, MessageType, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -12,6 +12,12 @@ import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-reso
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { resolveMaxPhoneEvidence } from '@/lib/contacts/max-phone-evidence'
 import { opsLog } from '@/lib/opsLog'
+import {
+  buildMaxReplyStorage,
+  reconcileMaxReplyMetadata,
+  type MaxReplyStorageDecision,
+  type MaxReplyTarget,
+} from '@/lib/max-reply-storage'
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
 let maxRuntimeTraceSeq = 0
@@ -109,6 +115,7 @@ type MaxWebhookBody = {
   forwardedFrom?: unknown
   source?: string | null
   replyToExternalId?: string | number | null
+  replyBodyText?: string | null
   replyQuoteText?: string | null
   chatKind?: 'private' | 'group' | 'unknown' | null
 }
@@ -171,13 +178,90 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
   )
 }
 
+async function resolveMaxReplyStorage(params: {
+  chatId: string
+  sentAt: Date
+  rawContent: string
+  replyBodyText: string | null
+  replyQuoteText: string | null
+  replyToExternalId: string | null
+  excludeMessageId?: string
+}): Promise<MaxReplyStorageDecision> {
+  const targets: MaxReplyTarget[] = []
+  if (params.replyToExternalId) {
+    const byProviderId = await prisma.message.findMany({
+      where: {
+        chatId: params.chatId,
+        externalId: params.replyToExternalId,
+        ...(params.excludeMessageId ? { id: { not: params.excludeMessageId } } : {}),
+      },
+      select: { id: true, externalId: true },
+      take: 2,
+    })
+    targets.push(...byProviderId)
+  }
+
+  if (targets.length === 0 && params.replyQuoteText) {
+    const byQuote = await prisma.message.findMany({
+      where: {
+        chatId: params.chatId,
+        content: params.replyQuoteText,
+        sentAt: { lte: params.sentAt },
+        ...(params.excludeMessageId ? { id: { not: params.excludeMessageId } } : {}),
+      },
+      select: { id: true, externalId: true },
+      orderBy: { sentAt: 'desc' },
+      take: 2,
+    })
+    targets.push(...byQuote)
+  }
+
+  return buildMaxReplyStorage({
+    rawContent: params.rawContent,
+    replyBodyText: params.replyBodyText,
+    replyQuoteText: params.replyQuoteText,
+    replyToExternalId: params.replyToExternalId,
+    targets,
+  })
+}
+
+async function reconcileDelayedMaxReplyTargets(target: Message): Promise<void> {
+  if (!target.externalId || !/^d301[0-9a-f]{14}$/i.test(target.externalId)) return
+  const pendingReplies = await prisma.message.findMany({
+    where: {
+      chatId: target.chatId,
+      id: { not: target.id },
+      metadata: {
+        path: ['replyToExternalId'],
+        equals: target.externalId,
+      },
+    },
+    select: { id: true, metadata: true },
+    take: 100,
+  })
+
+  for (const pending of pendingReplies) {
+    const metadata = metadataRecord(pending.metadata)
+    if (metadata.quotedMsgId === target.id) continue
+    await prisma.message.update({
+      where: { id: pending.id },
+      data: {
+        metadata: reconcileMaxReplyMetadata(metadata, {
+          id: target.id,
+          externalId: target.externalId,
+        }) as Prisma.InputJsonValue,
+      },
+    })
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
     const {
       externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone,
       phoneEvidence, text, timestamp, messageType, attachments, isOutgoing,
-      deleted, forwardedFrom, source, replyToExternalId, replyQuoteText, chatKind,
+      deleted, forwardedFrom, source, replyToExternalId, replyBodyText, replyQuoteText, chatKind,
     } = body
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
@@ -253,20 +337,12 @@ export async function POST(request: Request) {
 
     const externalIdString = externalId ? String(externalId) : null
     const replyToExternalIdString = replyToExternalId ? String(replyToExternalId) : null
+    const replyBodyTextString = typeof replyBodyText === 'string' && replyBodyText.trim()
+      ? replyBodyText.trim()
+      : null
     const replyQuoteTextString = typeof replyQuoteText === 'string' && replyQuoteText.trim()
       ? replyQuoteText.trim()
       : null
-    const providerReplyMetadata = replyToExternalIdString
-      ? {
-          replyToExternalId: replyToExternalIdString,
-          replyResolutionStatus: 'resolved',
-        }
-      : replyQuoteTextString
-        ? {
-            unresolvedReplyQuoteText: replyQuoteTextString,
-            replyResolutionStatus: 'ambiguous_or_missing',
-          }
-        : {}
     const isTextProviderEvent = isTextType && usableAttachments.length === 0
     const isPlaceholderTextId = !!externalIdString && (
       externalIdString.startsWith('max-dom-') ||
@@ -294,44 +370,27 @@ export async function POST(request: Request) {
     if (isTextProviderEvent && externalIdString) {
       const existingText = await prisma.message.findUnique({
         where: { externalId: externalIdString },
-        select: { id: true, chatId: true, metadata: true, sentAt: true },
+        select: { id: true, chatId: true, content: true, metadata: true, sentAt: true },
       })
       if (existingText) {
-        let resolvedReplyToExternalId = replyToExternalIdString
-        const normalizedReplyQuote = replyQuoteTextString || ''
-        if (!resolvedReplyToExternalId && source === 'live_dom_reply_enrichment' && normalizedReplyQuote) {
-          const candidates = await prisma.message.findMany({
-            where: {
-              chatId: existingText.chatId,
-              id: { not: existingText.id },
-              content: normalizedReplyQuote,
-              externalId: { startsWith: 'd301' },
-              sentAt: { lte: existingText.sentAt },
-            },
-            select: { externalId: true },
-            orderBy: { sentAt: 'desc' },
-            take: 2,
-          })
-          if (candidates.length === 1 && candidates[0].externalId) {
-            resolvedReplyToExternalId = candidates[0].externalId
-          }
-        }
-        if (resolvedReplyToExternalId || normalizedReplyQuote) {
+        const replyStorage = await resolveMaxReplyStorage({
+          chatId: existingText.chatId,
+          sentAt: existingText.sentAt,
+          rawContent: existingText.content,
+          replyBodyText: replyBodyTextString || (source === 'live_dom_reply_enrichment' ? String(text || '') : null),
+          replyQuoteText: replyQuoteTextString,
+          replyToExternalId: replyToExternalIdString,
+          excludeMessageId: existingText.id,
+        })
+        if (replyStorage.isReply) {
           await prisma.message.update({
             where: { id: existingText.id },
             data: {
+              content: replyStorage.content,
               metadata: {
                 ...metadataRecord(existingText.metadata),
-                ...(resolvedReplyToExternalId
-                  ? {
-                      replyToExternalId: resolvedReplyToExternalId,
-                      replyResolutionStatus: 'resolved',
-                    }
-                  : {
-                      unresolvedReplyQuoteText: normalizedReplyQuote,
-                      replyResolutionStatus: 'ambiguous_or_missing',
-                    }),
-              },
+                ...replyStorage.metadata,
+              } as Prisma.InputJsonValue,
             },
           })
         }
@@ -347,7 +406,7 @@ export async function POST(request: Request) {
           chatInternalId: existingText.chatId,
           messageId: existingText.id,
           deduped: true,
-          replyEnriched: Boolean(resolvedReplyToExternalId),
+          replyEnriched: Boolean(replyStorage.target),
         })
       }
     }
@@ -502,7 +561,17 @@ export async function POST(request: Request) {
       image: '[Фото]', video: '[Видео]', voice: '[Голосовое]',
       audio: '[Аудио]', document: '[Документ]',
     }
-    const content = text || contentFallbacks[effectiveMessageTypeKey] || ''
+    const rawContent = text || contentFallbacks[effectiveMessageTypeKey] || ''
+    const replyStorage = await resolveMaxReplyStorage({
+      chatId: chat.id,
+      sentAt,
+      rawContent,
+      replyBodyText: replyBodyTextString,
+      replyQuoteText: replyQuoteTextString,
+      replyToExternalId: replyToExternalIdString,
+    })
+    const content = replyStorage.content
+    const providerReplyMetadata = replyStorage.metadata
 
     let message: Message | null = null
     const shouldUpgradeDomMessage =
@@ -622,6 +691,8 @@ export async function POST(request: Request) {
         },
       })
     }
+    await reconcileDelayedMaxReplyTargets(message)
+
     maxRuntimeTrace('webhook.stored', {
       providerMessageId: externalIdString,
       chatId: String(chatId),

@@ -1,0 +1,11 @@
+{
+  "chatId": "902454841098",
+  "providerMessageId": "d3019f98f036d96efb",
+  "rawText": "Парк Yoko\nОтветь в MAX на конкретное сообщение.\nОтветил",
+  "hasReplyQuote": false,
+  "expected": {
+    "headerText": "Парк Yoko",
+    "quotedText": "Ответь в MAX на конкретное сообщение.",
+    "bodyText": "Ответил"
+  }
+}

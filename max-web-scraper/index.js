@@ -36,6 +36,10 @@ const {
   reactionSnapshotMessageId,
 } = require('./lib/MaxReactionEvents')
 const {
+  isProviderBackedDomReplyCandidate,
+  splitMaxDomReplyText,
+} = require('./lib/MaxDomReply')
+const {
   estimateDomRecoveryTimestampMs,
   hasDirectDomTimestampAnchor,
 } = require('./lib/MaxMessageOrdering')
@@ -2395,13 +2399,7 @@ function isDomNoiseText(text) {
 }
 
 function domReplyQuoteParts(text) {
-  const lines = cleanDomMessageText(text).split('\n').map(line => line.trim()).filter(Boolean)
-  if (lines.length < 3) return null
-  return {
-    headerText: lines[0],
-    quotedText: lines.slice(1, -1).join('\n').trim(),
-    leafText: lines[lines.length - 1],
-  }
+  return splitMaxDomReplyText(cleanDomMessageText(text))
 }
 
 function looksLikeDomReplyQuoteText(chatId, candidate) {
@@ -2988,17 +2986,21 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const replyParts = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
     ? domReplyQuoteParts(latest.text)
     : null
+  const isProviderBackedReplyCandidate = isProviderBackedDomReplyCandidate(replyParts, {
+    hasReplyQuote: latest.hasReplyQuote,
+    providerMessageId: pendingProviderId,
+  })
   const isStructuredDomReply = Boolean(
-    replyParts?.leafText &&
-    replyParts?.quotedText &&
+    isProviderBackedReplyCandidate &&
     (latest.hasReplyQuote || looksLikeDomReplyQuoteText(chatId, latest))
   )
-  if (isStructuredDomReply && !isDomNoiseText(replyParts.leafText)) {
+  if (isProviderBackedReplyCandidate && !isDomNoiseText(replyParts.bodyText)) {
     latest = {
       ...latest,
-      text: replyParts.leafText,
+      ...(isStructuredDomReply ? { text: replyParts.bodyText } : {}),
+      _replyBodyText: replyParts.bodyText,
       _replyQuoteText: replyParts.quotedText,
-      _domReplyQuoteLeafRecovered: true,
+      _domReplyQuoteLeafRecovered: isStructuredDomReply,
     }
   }
   const replyBridge = new MaxWebReplyBridge(page)
@@ -3015,6 +3017,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
           text: providerMessage.text,
           _providerTimestamp: providerMessage.timestamp,
           _replyToExternalId: providerMessage.replyToExternalId,
+          _replyBodyText: providerMessage.replyToExternalId ? providerMessage.text : latest._replyBodyText,
           _providerStoreRecovered: true,
         }
       }
@@ -3022,24 +3025,26 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
       console.warn(`[domFallback] provider store lookup failed chatId=${chatId} msgId=${pendingProviderId}: ${error.message}`)
     }
   }
-  if (!resolvedProviderId && replyParts?.leafText && replyParts.quotedText) {
+  if (!latest._replyToExternalId && replyParts?.bodyText && replyParts.quotedText) {
     try {
       const receivedAt = options.timestamp || Date.now()
       const resolvedReply = await replyBridge.resolveInboundReply(
         chatId,
         {
-          bodyText: replyParts.leafText,
+          bodyText: replyParts.bodyText,
           quotedText: replyParts.quotedText,
           receivedAt,
           sentAt: receivedAt,
         },
         { uiChatId: uiRouteId },
       )
-      if (isRealMaxMessageId(resolvedReply.providerMessageId) && isRealMaxMessageId(resolvedReply.replyToExternalId)) {
+      const providerIdentityMatches = !pendingProviderId || resolvedReply.providerMessageId === pendingProviderId
+      if (providerIdentityMatches && isRealMaxMessageId(resolvedReply.providerMessageId) && isRealMaxMessageId(resolvedReply.replyToExternalId)) {
         resolvedProviderId = resolvedReply.providerMessageId
         latest = {
           ...latest,
-          text: replyParts.leafText,
+          text: replyParts.bodyText,
+          _replyBodyText: replyParts.bodyText,
           _providerTimestamp: resolvedReply.timestamp,
           _replyToExternalId: resolvedReply.replyToExternalId,
           _providerStoreRecovered: true,
@@ -3054,12 +3059,12 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     }
   }
   if (isStructuredDomReply && !latest._replyToExternalId) {
-    const directReply = findRecentDirectInboundText(chatId, replyParts.leafText)
+    const directReply = findRecentDirectInboundText(chatId, replyParts.bodyText)
     if (isRealMaxMessageId(directReply?.externalId)) {
       const enrichment = await forwardToWebhook({
         externalId: directReply.externalId,
         chatId: String(chatId),
-        text: replyParts.leafText,
+        text: replyParts.bodyText,
         timestamp: options.timestamp || Date.now(),
         messageType: 'text',
         attachments: [],
@@ -3120,6 +3125,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     isOutgoing: isOutgoingCandidate,
     source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
+    ...(latest._replyBodyText ? { replyBodyText: latest._replyBodyText } : {}),
     ...(latest._replyQuoteText ? { replyQuoteText: latest._replyQuoteText } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
     ...(crmPhone && crmPhoneEvidence ? { phoneEvidence: crmPhoneEvidence } : {}),
