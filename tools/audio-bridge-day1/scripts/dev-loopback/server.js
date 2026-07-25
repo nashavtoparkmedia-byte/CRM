@@ -201,12 +201,16 @@ function createDevLoopbackRuntime({
     port = 0,
     token,
     limits = {},
+    transformOutboundPayload = payload => payload,
 } = {}) {
     if (host !== '127.0.0.1') {
         throw new Error('dev_loopback_must_bind_ipv4_loopback')
     }
     if (typeof token !== 'string' || token.length < 32) {
         throw new Error('dev_loopback_token_required')
+    }
+    if (typeof transformOutboundPayload !== 'function') {
+        throw new Error('dev_loopback_transform_must_be_function')
     }
 
     const effectiveLimits = Object.freeze({ ...DEFAULT_LIMITS, ...limits })
@@ -219,6 +223,7 @@ function createDevLoopbackRuntime({
         invalidSessionIds: 0,
     }
     let stopping = false
+    let stopPromise = null
 
     const sendControl = (ws, payload) => {
         if (ws?.readyState !== WebSocket.OPEN) return false
@@ -308,10 +313,41 @@ function createDevLoopbackRuntime({
                     break
                 }
 
+                let outboundPayload
+                try {
+                    outboundPayload = transformOutboundPayload(
+                        Buffer.from(item.payload),
+                        Object.freeze({
+                            sessionId: session.sessionId,
+                            sequence: item.sequence,
+                            sentAtMs: item.sentAtMs,
+                            flags: item.flags,
+                        }),
+                    )
+                } catch {
+                    session.metrics.rejectedFrames += 1
+                    completeSession(session, 'outbound_transform_failed', {
+                        state: 'failed',
+                        closeCode: CLOSE_CODES.badRequest,
+                    })
+                    break
+                }
+                if (
+                    !Buffer.isBuffer(outboundPayload)
+                    || outboundPayload.length !== AUDIO_CONTRACT.bytesPerFrame
+                ) {
+                    session.metrics.rejectedFrames += 1
+                    completeSession(session, 'outbound_transform_invalid', {
+                        state: 'failed',
+                        closeCode: CLOSE_CODES.badRequest,
+                    })
+                    break
+                }
+
                 session.queue.shift()
                 const outbound = encodeAudioFrame({
                     sequence: item.sequence,
-                    payload: item.payload,
+                    payload: outboundPayload,
                     sentAtMs: item.sentAtMs,
                     flags: item.flags,
                 })
@@ -322,7 +358,7 @@ function createDevLoopbackRuntime({
                     break
                 }
                 session.metrics.framesSent += 1
-                session.metrics.bytesSent += item.payload.length
+                session.metrics.bytesSent += outboundPayload.length
                 session.metrics.latencies.push(Math.max(0, Date.now() - item.sentAtMs))
             }
         } finally {
@@ -740,21 +776,24 @@ function createDevLoopbackRuntime({
         })
     })
 
-    const stop = async () => {
-        if (stopping) return
-        stopping = true
-        for (const session of [...activeSessions.values()]) {
-            completeSession(session, 'runtime_shutdown', {
-                state: 'ended',
-                closeConnection: false,
-            })
-            try { session.connection?.terminate() } catch {}
-        }
-        for (const client of wss.clients) {
-            try { client.terminate() } catch {}
-        }
-        await new Promise(resolve => wss.close(() => resolve()))
-        await new Promise(resolve => httpServer.close(() => resolve()))
+    const stop = () => {
+        if (stopPromise) return stopPromise
+        stopPromise = (async () => {
+            stopping = true
+            for (const session of [...activeSessions.values()]) {
+                completeSession(session, 'runtime_shutdown', {
+                    state: 'ended',
+                    closeConnection: false,
+                })
+                try { session.connection?.terminate() } catch {}
+            }
+            for (const client of wss.clients) {
+                try { client.terminate() } catch {}
+            }
+            await new Promise(resolve => wss.close(() => resolve()))
+            await new Promise(resolve => httpServer.close(() => resolve()))
+        })()
+        return stopPromise
     }
 
     return {
