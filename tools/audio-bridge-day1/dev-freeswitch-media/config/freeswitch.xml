@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<document type="freeswitch/xml">
+  <section name="configuration" description="YOKO DEV-only configuration">
+    <X-PRE-PROCESS cmd="include" data="autoload_configs/*.xml"/>
+  </section>
+  <section name="dialplan" description="YOKO DEV-only dialplan">
+    <X-PRE-PROCESS cmd="include" data="dialplan/*.xml"/>
+  </section>
+</document>

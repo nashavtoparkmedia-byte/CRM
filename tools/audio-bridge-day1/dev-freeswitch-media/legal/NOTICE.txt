@@ -1,0 +1,9 @@
+YOKO CRM internal DEV capability image.
+
+mod_audio_stream source:
+https://github.com/AlchemillaHQ/mod-audio-stream
+commit a25fb1fe530ec6a612d321ff04f70be69b1a257c
+license GNU Affero General Public License v3 only (or a separate proprietary license from its copyright holder).
+
+This image is not approved for production, external distribution, or deployment.
+Any production or conveyed use requires a separate legal/license decision and compliance with all applicable AGPL obligations.

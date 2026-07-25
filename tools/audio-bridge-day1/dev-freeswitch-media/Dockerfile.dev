@@ -1,0 +1,134 @@
+# syntax=docker/dockerfile:1.7
+
+ARG DEBIAN_BUILDER="debian@sha256:63a496b5d3b99214b39f5ed70eb71a61e590a77979c79cbee4faf991f8c0783e"
+ARG FREESWITCH_RUNTIME="safarov/freeswitch@sha256:b31c743f4c911a19687c61e3214968f2a24f93f9d3d667cc26284192e158ffc6"
+ARG DEBIAN_SNAPSHOT="20260713T000000Z"
+ARG FREESWITCH_COMMIT="a88d069d6ffb74df797bcaf001f7e63181c07a09"
+ARG FREESWITCH_SOURCE_SHA256="ca4932f5d5fb76040901df1eaba3c2d5fb71a500d81549c70f78a8f47c410094"
+ARG MODULE_COMMIT="a25fb1fe530ec6a612d321ff04f70be69b1a257c"
+ARG MODULE_SOURCE_SHA256="32aa5649c92b6795659cbbc2f53cd3a2d90337e807ce45c366ca7c81a0cf6f46"
+ARG PROVENANCE_SHA256="4430927b331a4ba864552e2df05fcc686967d1a3d12a4b3fa19558c206c1fef0"
+
+FROM ${FREESWITCH_RUNTIME} AS runtime-base
+
+FROM ${DEBIAN_BUILDER} AS builder
+
+ARG DEBIAN_SNAPSHOT
+ARG FREESWITCH_COMMIT
+ARG FREESWITCH_SOURCE_SHA256
+ARG MODULE_COMMIT
+ARG MODULE_SOURCE_SHA256
+
+COPY apt/sources.list /etc/apt/sources.list
+COPY apt/99snapshot /etc/apt/apt.conf.d/99snapshot
+
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        autoconf \
+        automake \
+        build-essential \
+        ca-certificates \
+        cmake \
+        libcurl4-openssl-dev \
+        libedit-dev \
+        libjpeg-dev \
+        libldns-dev \
+        libncurses-dev \
+        libopus-dev \
+        libpcre3-dev \
+        libsndfile1-dev \
+        libspeexdsp-dev \
+        libsqlite3-dev \
+        libssl-dev \
+        libtiff-dev \
+        libtool \
+        libtool-bin \
+        libuuid1 \
+        nasm \
+        pkg-config \
+        uuid-dev \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libspeex-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY freeswitch-a88d069d.tar.gz /tmp/freeswitch.tar.gz
+COPY mod-audio-stream-a25fb1fe.tar.gz /tmp/mod-audio-stream.tar.gz
+
+RUN printf '%s  %s\n' "${FREESWITCH_SOURCE_SHA256}" /tmp/freeswitch.tar.gz | sha256sum -c -
+RUN printf '%s  %s\n' "${MODULE_SOURCE_SHA256}" /tmp/mod-audio-stream.tar.gz | sha256sum -c -
+
+RUN mkdir -p /usr/src/freeswitch /usr/src/mod-audio-stream /opt/fs-sdk/lib/pkgconfig /opt/fs-sdk/include \
+    && tar -xzf /tmp/freeswitch.tar.gz --strip-components=1 -C /usr/src/freeswitch \
+    && tar -xzf /tmp/mod-audio-stream.tar.gz --strip-components=1 -C /usr/src/mod-audio-stream
+
+WORKDIR /usr/src/freeswitch
+RUN ./bootstrap.sh -j2
+COPY fs-sdk-modules.conf /usr/src/freeswitch/modules.conf
+COPY fs-sdk-stubs/spandsp.pc /opt/fs-sdk/lib/pkgconfig/spandsp.pc
+COPY fs-sdk-stubs/sofia-sip-ua.pc /opt/fs-sdk/lib/pkgconfig/sofia-sip-ua.pc
+ENV PKG_CONFIG_PATH="/opt/fs-sdk/lib/pkgconfig"
+RUN ./configure \
+      --prefix=/opt/fs-sdk \
+      --disable-dependency-tracking \
+      --disable-core-pgsql-support \
+      --disable-silent-rules
+
+RUN cp -a src/include/. /opt/fs-sdk/include/
+COPY --from=runtime-base /usr/lib/libfreeswitch.so.1.0.0 /opt/fs-sdk/lib/libfreeswitch.so.1.0.0
+RUN ln -s libfreeswitch.so.1.0.0 /opt/fs-sdk/lib/libfreeswitch.so
+
+COPY freeswitch.pc /opt/fs-sdk/lib/pkgconfig/freeswitch.pc
+
+WORKDIR /usr/src/mod-audio-stream
+RUN cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_TESTING=OFF \
+      -DCMAKE_SKIP_RPATH=ON \
+      -DCMAKE_PREFIX_PATH=/opt/fs-sdk \
+      -DPKG_CONFIG_USE_CMAKE_PREFIX_PATH=ON
+RUN cmake --build build --parallel 2
+
+RUN mkdir -p /out \
+    && cp build/mod_audio_stream.so /out/mod_audio_stream.so \
+    && strip --strip-unneeded /out/mod_audio_stream.so \
+    && ldd /out/mod_audio_stream.so \
+    && readelf -d /out/mod_audio_stream.so
+
+RUN dpkg-query -W -f='${binary:Package}\t${Version}\n' | sort > /out/build-packages.tsv
+
+FROM ${FREESWITCH_RUNTIME} AS final
+
+ARG FREESWITCH_COMMIT
+ARG FREESWITCH_SOURCE_SHA256
+ARG MODULE_COMMIT
+ARG MODULE_SOURCE_SHA256
+ARG PROVENANCE_SHA256
+
+LABEL org.opencontainers.image.title="YOKO DEV FreeSWITCH media capability image" \
+      org.opencontainers.image.description="DEV-only FreeSWITCH 1.10.12 with pinned bidirectional mod_audio_stream; never production" \
+      org.opencontainers.image.source="https://github.com/AlchemillaHQ/mod-audio-stream" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      io.yoko.dev-only="true" \
+      io.yoko.production-use="prohibited-without-separate-license-review" \
+      io.yoko.freeswitch.commit="${FREESWITCH_COMMIT}" \
+      io.yoko.freeswitch.source-sha256="${FREESWITCH_SOURCE_SHA256}" \
+      io.yoko.module.commit="${MODULE_COMMIT}" \
+      io.yoko.module.source-sha256="${MODULE_SOURCE_SHA256}" \
+      io.yoko.provenance.sha256="${PROVENANCE_SHA256}"
+
+RUN rm -rf -- /usr/share/freeswitch/conf/vanilla
+
+COPY --from=builder /out/mod_audio_stream.so /usr/lib/freeswitch/mod/mod_audio_stream.so
+COPY --from=builder /out/build-packages.tsv /usr/share/yoko-fs-media-dev/build-packages.tsv
+COPY legal/AGPL-3.0.txt /usr/share/yoko-fs-media-dev/licenses/AGPL-3.0.txt
+COPY legal/NOTICE.txt /usr/share/yoko-fs-media-dev/NOTICE.txt
+COPY provenance.json /usr/share/yoko-fs-media-dev/provenance.json
+COPY checksums.sha256 /usr/share/yoko-fs-media-dev/checksums.sha256
+COPY config/ /usr/share/freeswitch/conf/yoko-media-dev/
+
+ENTRYPOINT ["/usr/bin/freeswitch"]
+CMD ["-nonat", "-nf", "-nc", "-conf", "/usr/share/freeswitch/conf/yoko-media-dev", "-log", "/tmp/log", "-db", "/tmp/db", "-run", "/tmp/run"]

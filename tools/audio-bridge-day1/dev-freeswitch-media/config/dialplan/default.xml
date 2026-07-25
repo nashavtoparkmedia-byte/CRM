@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<include>
+  <context name="default">
+    <extension name="yoko-media-capability">
+      <condition field="destination_number" expression="^1000$">
+        <action application="answer"/>
+        <action application="set" data="STREAM_PLAYBACK=true"/>
+        <action application="set" data="STREAM_SAMPLE_RATE=8000"/>
+        <action application="set" data="STREAM_BUFFER_SIZE=20"/>
+        <action application="set" data="STREAM_EXTRA_HEADERS={&quot;X-Yoko-Dev-Probe&quot;:&quot;capability-v1&quot;}"/>
+        <action application="set" data="RECORD_STEREO=true"/>
+        <action application="uuid_audio_stream" data="start ws://yoko-media-bridge:8080/${uuid} mono 8k"/>
+        <action application="record_session" data="/tmp/yoko-return-${uuid}.wav"/>
+        <action application="playback" data="tone_stream://%(6000,0,200)"/>
+      </condition>
+    </extension>
+  </context>
+</include>

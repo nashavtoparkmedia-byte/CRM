@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<configuration name="acl.conf" description="YOKO DEV-only ACL">
+  <network-lists>
+    <list name="loopback.auto" default="deny">
+      <node type="allow" cidr="127.0.0.0/8"/>
+    </list>
+  </network-lists>
+</configuration>

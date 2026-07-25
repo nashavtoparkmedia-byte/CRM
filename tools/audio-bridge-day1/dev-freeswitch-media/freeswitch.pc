@@ -1,0 +1,11 @@
+prefix=/opt/fs-sdk
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+modulesdir=/usr/lib/freeswitch/mod
+
+Name: freeswitch
+Version: 1.10.12
+Description: FreeSWITCH exact source SDK for external module build
+Libs: -L${libdir} -Wl,-rpath-link,${libdir} -lfreeswitch
+Cflags: -I${includedir} -I/usr/src/freeswitch/libs/apr/include -I/usr/src/freeswitch/libs/libteletone/src
