@@ -5,6 +5,7 @@ const prismaMock = vi.hoisted(() => ({
         findUnique: vi.fn(),
         findFirst: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
         create: vi.fn(),
     },
     whatsAppConnection: { findFirst: vi.fn() },
@@ -57,6 +58,7 @@ describe('MessageService provider retry contract', () => {
         prismaMock.message.findUnique.mockResolvedValue(failedMaxMessage())
         prismaMock.message.findFirst.mockResolvedValue(null)
         prismaMock.message.update.mockResolvedValue({ id: 'message-retry-1' })
+        prismaMock.message.updateMany.mockResolvedValue({ count: 1 })
         workflowMock.onOutboundMessage.mockResolvedValue(undefined)
     })
 
@@ -74,12 +76,15 @@ describe('MessageService provider retry contract', () => {
         expect(prismaMock.message.update).toHaveBeenNthCalledWith(1, {
             where: { id: 'message-retry-1' },
             data: {
-                status: 'sent',
+                status: 'queued',
                 metadata: expect.objectContaining({ retryAttempt: 1 }),
             },
         })
-        expect(prismaMock.message.update).toHaveBeenLastCalledWith({
-            where: { id: 'message-retry-1' },
+        expect(prismaMock.message.updateMany).toHaveBeenLastCalledWith({
+            where: {
+                id: 'message-retry-1',
+                status: { in: ['queued', 'sent'] },
+            },
             data: {
                 status: 'delivered',
                 externalId: 'd301abcdef01',
@@ -93,6 +98,14 @@ describe('MessageService provider retry contract', () => {
                 }),
             },
         })
+        expect(maxSendMock).toHaveBeenCalledWith(
+            '900001',
+            'Повторить меня',
+            expect.objectContaining({
+                clientMessageId: 'client-retry-1',
+                crmMessageId: 'message-retry-1',
+            }),
+        )
     })
 
     it('keeps a failed retry on the same row and preserves retryability', async () => {
@@ -105,8 +118,11 @@ describe('MessageService provider retry contract', () => {
             error: 'timeout while waiting for MAX',
         })
         expect(prismaMock.message.create).not.toHaveBeenCalled()
-        expect(prismaMock.message.update).toHaveBeenLastCalledWith({
-            where: { id: 'message-retry-1' },
+        expect(prismaMock.message.updateMany).toHaveBeenLastCalledWith({
+            where: {
+                id: 'message-retry-1',
+                status: { in: ['queued', 'sent'] },
+            },
             data: {
                 status: 'failed',
                 externalId: undefined,

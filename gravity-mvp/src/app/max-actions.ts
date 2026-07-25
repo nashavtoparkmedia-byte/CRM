@@ -203,7 +203,8 @@ export async function sendMaxPersonalMessage(
     quotedMsgId?: string,
     uiChatId?: string,
     clientMessageId?: string,
-    quotedContext?: { text?: string; sentAt?: string; direction?: string }
+    quotedContext?: { text?: string; sentAt?: string; direction?: string },
+    crmMessageId?: string
 ) {
     if (!target || !message) {
         throw new Error("Target (chatId or phone) and message are required")
@@ -227,7 +228,8 @@ export async function sendMaxPersonalMessage(
                 quotedSentAt: quotedContext?.sentAt,
                 quotedDirection: quotedContext?.direction,
                 uiChatId,
-                clientMessageId
+                clientMessageId,
+                crmMessageId
             })
         })
 
@@ -246,6 +248,7 @@ export async function sendMaxPersonalMessage(
             resolvedChatId: data.chatId ? String(data.chatId) : null,
             deliveryConfirmed: Boolean(data.deliveryConfirmed),
             deliveryStatus: data.deliveryStatus || data.status || null,
+            queueId: typeof data.queueId === 'string' ? data.queueId : null,
         }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)
@@ -267,6 +270,7 @@ export async function sendMaxMessage(phone: string, message: string, options?: {
     quotedDirection?: string
     uiChatId?: string
     clientMessageId?: string
+    crmMessageId?: string
 }) {
     if (!phone || !message) {
         throw new Error("Phone and message are required")
@@ -284,7 +288,8 @@ export async function sendMaxMessage(phone: string, message: string, options?: {
                 text: options.quotedText,
                 sentAt: options.quotedSentAt,
                 direction: options.quotedDirection,
-            }
+            },
+            options.crmMessageId
         )
     }
 

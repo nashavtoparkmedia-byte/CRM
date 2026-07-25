@@ -553,7 +553,7 @@ export class MessageService {
                 chatId: currentChatId,
                 content,
                 direction: 'outbound',
-                status: 'sent',
+                status: channel === 'max' ? 'queued' : 'sent',
                 channel: channel,
                 sentAt: now,
                 type: 'text',
@@ -605,7 +605,8 @@ export class MessageService {
                         quotedSentAt: providerQuotedSentAt,
                         quotedDirection: providerQuotedDirection,
                         uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
-                        clientMessageId: clientMessageId || messageId
+                        clientMessageId: clientMessageId || messageId,
+                        crmMessageId: messageId,
                     })
                     const rawMaxExternalId = (maxRes as any)?.externalId
                     const rawMaxMessageId = (maxRes as any)?.maxMessageId
@@ -615,12 +616,18 @@ export class MessageService {
                     const rawMaxDeliveryStatus = (maxRes as any)?.deliveryStatus || (maxRes as any)?.status
                     const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
                     const maxDeliveryConfirmed = Boolean((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const maxQueueId = (maxRes as { queueId?: unknown } | null)?.queueId
                     if (maxExternalId) deliveryExternalId = maxExternalId
-                    deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
+                    deliveryStatus = maxDeliveryConfirmed
+                        ? 'delivered'
+                        : (maxDeliveryStatus === 'queued' ? 'queued' : 'sent')
                     maxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed
+                            ? 'delivered'
+                            : (maxDeliveryStatus === 'queued' ? 'queued' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested')),
                         deliveryConfirmed: maxDeliveryConfirmed,
+                        queueId: typeof maxQueueId === 'string' ? maxQueueId : null,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalChatId,
@@ -755,14 +762,27 @@ export class MessageService {
                 }
             }
 
-            await (prisma.message as any).update({
-                where: { id: messageId },
-                data: {
-                    status: deliveryStatus,
-                    externalId: deliveryExternalId || undefined,
-                    metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-                }
-            })
+            const messageUpdate = {
+                status: deliveryStatus,
+                externalId: deliveryExternalId || undefined,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined
+            }
+            if (channel === 'max') {
+                // A fast provider callback may already have finalized this row.
+                // Never let the HTTP enqueue response downgrade delivered/failed.
+                await prisma.message.updateMany({
+                    where: {
+                        id: messageId,
+                        status: { in: deliveryStatus === 'queued' ? ['queued'] : ['queued', 'sent'] },
+                    },
+                    data: messageUpdate,
+                })
+            } else {
+                await (prisma.message as any).update({
+                    where: { id: messageId },
+                    data: messageUpdate,
+                })
+            }
             const now = new Date()
             await (prisma.chat as any).update({
                 where: { id: currentChatId },
@@ -831,14 +851,18 @@ export class MessageService {
             messageId, chatId: message.chatId, channel: message.channel, retryAttempt: attempt,
         })
 
-        // Reset to 'sent' for delivery attempt
+        // MAX retries re-enter the durable provider queue; other providers
+        // keep their existing synchronous sent lifecycle.
         await (prisma.message as any).update({
             where: { id: messageId },
-            data: { status: 'sent', metadata: { ...meta, retryAttempt: attempt } },
+            data: {
+                status: message.channel === 'max' ? 'queued' : 'sent',
+                metadata: { ...meta, retryAttempt: attempt },
+            },
         })
 
         // Re-dispatch through channel
-        let deliveryStatus = 'failed'
+        let deliveryStatus: MessageStatus = 'failed'
         let errorMessage: string | null = null
         let deliveryExternalId: string | null = null
         let retryMaxDeliveryMetadata: any = null
@@ -891,7 +915,8 @@ export class MessageService {
                         quotedSentAt: retryQuotedSentAt,
                         quotedDirection: retryQuotedDirection,
                         uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
-                        clientMessageId: message.clientMessageId || message.id
+                        clientMessageId: message.clientMessageId || message.id,
+                        crmMessageId: message.id,
                     })
                     const rawMaxExternalId = (retryMaxRes as any)?.externalId
                     const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
@@ -901,12 +926,18 @@ export class MessageService {
                     const rawMaxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || (retryMaxRes as any)?.status
                     const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
                     const maxDeliveryConfirmed = Boolean((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const maxQueueId = (retryMaxRes as { queueId?: unknown } | null)?.queueId
                     if (maxExternalId) deliveryExternalId = maxExternalId
-                    deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
+                    deliveryStatus = maxDeliveryConfirmed
+                        ? 'delivered'
+                        : (maxDeliveryStatus === 'queued' ? 'queued' : 'sent')
                     retryMaxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed
+                            ? 'delivered'
+                            : (maxDeliveryStatus === 'queued' ? 'queued' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested')),
                         deliveryConfirmed: maxDeliveryConfirmed,
+                        queueId: typeof maxQueueId === 'string' ? maxQueueId : null,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalId,
@@ -954,14 +985,25 @@ export class MessageService {
             opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
         }
 
-        await (prisma.message as any).update({
-            where: { id: messageId },
-            data: {
-                status: deliveryStatus,
-                externalId: deliveryExternalId || undefined,
-                metadata: retryMeta,
-            },
-        })
+        const retryUpdate = {
+            status: deliveryStatus,
+            externalId: deliveryExternalId || undefined,
+            metadata: retryMeta,
+        }
+        if (message.channel === 'max') {
+            await prisma.message.updateMany({
+                where: {
+                    id: messageId,
+                    status: { in: deliveryStatus === 'queued' ? ['queued'] : ['queued', 'sent'] },
+                },
+                data: retryUpdate,
+            })
+        } else {
+            await (prisma.message as any).update({
+                where: { id: messageId },
+                data: retryUpdate,
+            })
+        }
 
         if (deliveryStatus !== 'failed') {
             await ConversationWorkflowService.onOutboundMessage(message.chatId, new Date())

@@ -96,7 +96,10 @@ test('MAX outbound text delivery is confirmed only by a real d301 provider messa
 
   assert.match(messageService, /Boolean\(\(maxRes as any\)\?\.deliveryConfirmed && isRealMaxMessageId\(maxExternalId\)\)/)
   assert.doesNotMatch(messageService, /\|\| maxDeliveryStatus === 'delivered'/)
-  assert.match(messageService, /deliveryStatus = maxDeliveryConfirmed \? 'delivered' : 'sent'/)
+  assert.match(
+    messageService,
+    /deliveryStatus = maxDeliveryConfirmed\s*\?\s*'delivered'\s*:\s*\(maxDeliveryStatus === 'queued' \? 'queued' : 'sent'\)/,
+  )
 })
 
 test('CRM retry preserves reply identity and does not promote every HTTP 200 to delivered', () => {
@@ -352,13 +355,14 @@ test('MAX inbound reply keeps provider reply id and DOM fallback separates quote
   assert.match(storage, /content: body && hasAuthoritativeRelation \? body : rawContent/)
 })
 
-test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {
+test('MAX known-chat text send endpoint durably queues before HTTP response', () => {
   const scraper = read('max-web-scraper/index.js')
 
-  assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(/)
-  assert.match(scraper, /\{ text: quotedText, sentAt: quotedSentAt, direction: quotedDirection \}/)
-  assert.match(scraper, /externalId: sendResult\.externalId \|\| null/)
-  assert.match(scraper, /maxMessageId: sendResult\.maxMessageId \|\| null/)
+  assert.match(scraper, /const queued = maxOutboundQueue\.enqueue\(\{/)
+  assert.match(scraper, /quotedText,\s*quotedSentAt,\s*quotedDirection,/)
+  assert.match(scraper, /res\.status\(delivered \? 200 : 202\)\.json\(\{/)
+  assert.match(scraper, /deliveryStatus: delivered \? 'delivered' : 'queued'/)
+  assert.match(scraper, /source: 'persistent_fifo'/)
   assert.doesNotMatch(scraper, /externalId: maxMsgId \|\| null, deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
 })
 
@@ -384,15 +388,19 @@ test('MAX outbound text passes stable clientMessageId through CRM and scraper re
   assert.match(scraper, /crypto\.createHash\('sha1'\)\.update\(String\(seed\)\)\.digest\(\)/)
   assert.match(scraper, /async function sendText\(transport, chatId, text, replyToMessageId, uiChatId, clientMessageId, quotedMessageContext\)/)
   assert.match(scraper, /const cid = stableTextCid\(clientMessageId\)/)
-  assert.match(scraper, /let \{ chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId \} = req\.body/)
-  assert.match(scraper, /clientMessageId,\s*\{ text: quotedText, sentAt: quotedSentAt, direction: quotedDirection \}/)
+  assert.match(scraper, /let \{ chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId, crmMessageId \} = req\.body/)
+  assert.match(scraper, /crmMessageId,\s*clientMessageId,\s*chatId: String\(chatId\)/)
+  assert.match(scraper, /item\.clientMessageId \|\| item\.crmMessageId/)
 
   assert.match(maxActions, /clientMessageId\?: string/)
+  assert.match(maxActions, /crmMessageId\?: string/)
   assert.match(maxActions, /quotedText: quotedContext\?\.text/)
   assert.match(maxActions, /quotedSentAt: quotedContext\?\.sentAt/)
   assert.match(maxActions, /quotedDirection: quotedContext\?\.direction/)
   assert.match(messageService, /clientMessageId: clientMessageId \|\| messageId/)
   assert.match(messageService, /clientMessageId: message\.clientMessageId \|\| message\.id/)
+  assert.match(messageService, /crmMessageId: messageId/)
+  assert.match(messageService, /crmMessageId: message\.id/)
 })
 
 test('MAX reply timeout does one quick retry on stable WS before falling back to background retry', () => {

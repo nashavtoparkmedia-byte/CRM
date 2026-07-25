@@ -45,6 +45,7 @@ const {
   isProviderBackedDomReplyCandidate,
   splitMaxDomReplyText,
 } = require('./lib/MaxDomReply')
+const { MaxOutboundQueue }         = require('./lib/MaxOutboundQueue')
 const {
   estimateDomRecoveryTimestampMs,
   hasDirectDomTimestampAnchor,
@@ -61,6 +62,7 @@ const MAX_URL         = 'https://web.max.ru/'
 const USER_DATA_DIR        = path.join(__dirname, 'user_data')
 const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
+const MAX_OUTBOUND_QUEUE_PATH = path.join(USER_DATA_DIR, 'max_outbound_queue.json')
 const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
@@ -866,6 +868,59 @@ async function forwardToWebhook(payload) {
   })
 }
 
+function maxDeliveryStatusUrl() {
+  const url = new URL(CRM_WEBHOOK_URL)
+  url.pathname = '/api/webhook/max/delivery-status'
+  url.search = ''
+  return url
+}
+
+async function reportMaxOutboundStatus(item) {
+  const url = maxDeliveryStatusUrl()
+  const body = JSON.stringify({
+    queueId: item.queueId,
+    crmMessageId: item.crmMessageId,
+    clientMessageId: item.clientMessageId,
+    status: item.status,
+    attempt: item.attempt,
+    retryable: item.retryable,
+    error: item.error,
+    errorCode: item.errorCode,
+    externalId: item.externalId,
+    chatId: item.chatId,
+    uiChatId: item.uiChatId,
+    quotedMsgId: item.quotedMsgId,
+    source: item.source,
+    deliveryConfirmed: item.deliveryConfirmed,
+    updatedAt: item.updatedAt,
+  })
+  const mod = url.protocol === 'https:' ? https : http
+
+  await new Promise((resolve, reject) => {
+    const req = mod.request({
+      hostname: url.hostname,
+      port: url.port || (url.protocol === 'https:' ? 443 : 80),
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'X-MAX-Delivery-Source': 'max-scraper',
+      },
+    }, res => {
+      res.resume()
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) return resolve()
+        reject(new Error(`CRM delivery callback returned ${res.statusCode}`))
+      })
+    })
+    req.setTimeout(5000, () => req.destroy(new Error('CRM delivery callback timeout')))
+    req.on('error', reject)
+    req.write(body)
+    req.end()
+  })
+}
+
 // ─── Обработка входящего сообщения ───────────────────────────────────────────
 
 async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
@@ -884,14 +939,32 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     return
   }
 
-  if (messageSync.isDuplicate(msg)) return
-  messageSync.markSeen(msg)
-
   if (!msg.isOutgoing && !transport?._myUserId && msg.status) {
     const status = String(msg.status).toUpperCase()
     if (['SENT', 'DELIVERED', 'READ'].includes(status)) {
       console.warn(`[handleIncoming] Marking probable own MAX echo as outgoing: msgId=${msg.id || 'n/a'} status=${status}`)
       msg = { ...msg, isOutgoing: true }
+    }
+  }
+  if (!msg.isOutgoing && transport?._myUserId) {
+    const senderId = String(msg.from || msg.sender || msg.senderId || '')
+    if (senderId && senderId === String(transport._myUserId)) {
+      msg = { ...msg, isOutgoing: true }
+    }
+  }
+
+  if (msg.isOutgoing && msg.id) {
+    const queued = await maxOutboundQueue.confirmEcho({
+      chatId: msg.chatId,
+      message: normalizedProviderEchoText(msg),
+      replyToExternalId: maxReplyTargetId(msg.link || msg.reply || msg),
+      externalId: String(msg.id),
+      source: 'provider_echo',
+    })
+    if (queued) {
+      console.log(`[MaxOutboundQueue] provider echo confirmed queueId=${queued.queueId} msgId=${msg.id}`)
+      messageSync.markSeen(msg)
+      return
     }
   }
 
@@ -903,6 +976,9 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     messageSync.markSeen(msg)
     return
   }
+
+  if (messageSync.isDuplicate(msg)) return
+  messageSync.markSeen(msg)
 
   let payload = MessageParser.toCrmPayload(msg)
   if (msg.rawChatId && String(msg.rawChatId) !== String(msg.chatId)) {
@@ -3136,6 +3212,31 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     ? stableDomMirrorMessageId(chatId, text, attachments, latest)
     : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
+
+  const queueEchoExternalId = isRealMaxMessageId(resolvedProviderId)
+    ? String(resolvedProviderId)
+    : (isRealMaxMessageId(externalId) ? String(externalId) : null)
+  if (
+    queueEchoExternalId &&
+    matchesRecentCrmOutboundText(chatId, uiRouteId, text)
+  ) {
+    const queued = await maxOutboundQueue.confirmEcho({
+      chatId: String(chatId),
+      message: text,
+      replyToExternalId: latest._replyToExternalId || null,
+      externalId: queueEchoExternalId,
+      source: 'provider_dom_echo',
+    })
+    if (queued) {
+      domFallbackSeen.add(queueEchoExternalId)
+      console.log(`[MaxOutboundQueue] DOM provider echo confirmed queueId=${queued.queueId} msgId=${queueEchoExternalId}`)
+      return {
+        skipped: 'outbound_queue_echo',
+        queueId: queued.queueId,
+        externalId: queueEchoExternalId,
+      }
+    }
+  }
   domFallbackSeen.add(externalId)
 
   const messageType = attachments[0]?.type || 'text'
@@ -5352,13 +5453,14 @@ async function shutdown(signal) {
   if (isShuttingDown) return
   isShuttingDown = true
   console.log(`[App] Получен ${signal} — graceful shutdown...`)
+  maxOutboundQueue.stop()
 
   // Ждём завершения текущей очереди отправки (max 10s)
   const deadline = Date.now() + 10_000
-  while (isSending && Date.now() < deadline) {
+  while ((isSending || maxOutboundQueue.draining) && Date.now() < deadline) {
     await new Promise(r => setTimeout(r, 100))
   }
-  if (isSending) console.warn('[App] Очередь отправки не завершена — принудительный выход')
+  if (isSending || maxOutboundQueue.draining) console.warn('[App] Очередь отправки не завершена — будет восстановлена после запуска')
 
   // Close Playwright context so Chromium child processes don't linger
   // and hold user_data file locks after we exit. Cap at 5s.
@@ -5428,11 +5530,61 @@ let nameSync      = null  // PR-П: NameSync — раз в час подтяги
 let isReady       = false
 let readySinceAt  = 0
 
+async function executeMaxOutbound(item) {
+  if (!isReady) {
+    const error = new Error('MAX transport is not ready')
+    error.code = 'MAX_TRANSPORT_NOT_READY'
+    error.retryable = true
+    throw error
+  }
+  if (!transport?._wsConnected && typeof transport?.waitForStableWs === 'function') {
+    await transport.waitForStableWs(800, 8000).catch(() => false)
+  }
+  if (!transport?._wsConnected) {
+    const error = new Error('MAX websocket is disconnected')
+    error.code = 'MAX_WS_DISCONNECTED'
+    error.retryable = true
+    throw error
+  }
+  try {
+    return normalizeTextSendResult(await enqueueSend(() => sendText(
+      transport,
+      Number(item.chatId),
+      item.message,
+      item.quotedMsgId,
+      item.uiChatId,
+      item.clientMessageId || item.crmMessageId,
+      {
+        text: item.quotedText,
+        sentAt: item.quotedSentAt,
+        direction: item.quotedDirection,
+      },
+    )))
+  } catch (error) {
+    if (error?.maxError) {
+      error.retryable = false
+      error.code = error.maxError.code || 'MAX_PROVIDER_REJECTED'
+    } else if (/Reply target has no unambiguous MAX provider id/i.test(String(error?.message || ''))) {
+      error.retryable = false
+      error.code = 'MAX_REPLY_TARGET_UNRESOLVED'
+    }
+    throw error
+  }
+}
+
+const maxOutboundQueue = new MaxOutboundQueue({
+  filePath: MAX_OUTBOUND_QUEUE_PATH,
+  execute: executeMaxOutbound,
+  report: reportMaxOutboundStatus,
+  logger: console,
+})
+
 function markReady(reason) {
   if (isReady) return
   isReady = true
   readySinceAt = Date.now()
   session.isLoggedIn = true
+  maxOutboundQueue.start()
   console.log(`[App] Ready via ${reason}`)
 }
 
@@ -5810,13 +5962,14 @@ async function init() {
     console.warn(`[App] WS auth lost (${_authFailStreak} consecutive has_profile=false) — reloading page...`)
     _authFailStreak = 0
     isReady = false
+    maxOutboundQueue.stop()
     setTimeout(async () => {
       try {
         await page.goto(MAX_URL, { waitUntil: 'domcontentloaded', timeout: 30_000 })
         console.log('[App] Page reloaded after auth loss — waiting for re-auth...')
       } catch (e) {
         console.error('[App] Auth-loss reload failed:', e.message)
-        isReady = true  // вернуть чтобы не завис навсегда
+        markReady('auth-loss-reload-fallback')
       }
     }, 2000)
   })
@@ -5881,6 +6034,7 @@ async function init() {
 
   session.onLogout(() => {
     isReady = false
+    maxOutboundQueue.stop()
     if (nameSync) { nameSync.stop(); nameSync = null }
     console.log('[App] Сессия завершена')
   })
@@ -6108,7 +6262,7 @@ app.post('/debug/dom-identity', async (req, res) => {
 })
 
 app.post('/send-message', async (req, res) => {
-  let { chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId } = req.body
+  let { chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId, crmMessageId } = req.body
   if (!message) {
     return res.status(400).json({ error: 'message is required' })
   }
@@ -6259,22 +6413,38 @@ app.post('/send-message', async (req, res) => {
     return
   }
 
-  try {
-    const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(
-      transport,
-      Number(chatId),
-      message,
-      quotedMsgId,
-      uiChatId,
-      clientMessageId,
-      { text: quotedText, sentAt: quotedSentAt, direction: quotedDirection },
-    )))
-    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
-  } catch (e) {
-    const isMaxErr = e.maxError
-    console.error(`[Send] sendText failed: ${e.message}`)
-    res.status(isMaxErr ? 422 : 500).json({ error: e.message, maxError: e.maxError || null })
+  const queued = maxOutboundQueue.enqueue({
+    crmMessageId,
+    clientMessageId,
+    chatId: String(chatId),
+    uiChatId,
+    message,
+    quotedMsgId,
+    quotedText,
+    quotedSentAt,
+    quotedDirection,
+  })
+  maxOutboundQueue.start()
+  const delivered = queued.status === 'delivered' && isRealMaxMessageId(queued.externalId)
+  if (queued.status === 'failed' && queued.retryable === false) {
+    return res.status(422).json({
+      error: queued.error || 'MAX delivery failed',
+      errorCode: queued.errorCode || null,
+      queueId: queued.queueId,
+      deliveryStatus: 'failed',
+    })
   }
+  res.status(delivered ? 200 : 202).json({
+    success: true,
+    queued: !delivered,
+    queueId: queued.queueId,
+    chatId: String(chatId),
+    externalId: delivered ? queued.externalId : null,
+    maxMessageId: delivered ? queued.externalId : null,
+    deliveryConfirmed: delivered,
+    deliveryStatus: delivered ? 'delivered' : 'queued',
+    source: 'persistent_fifo',
+  })
 })
 
 app.get('/reaction-capabilities', (_req, res) => {
@@ -6485,7 +6655,12 @@ app.get('/contacts', (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: isReady ? 'ready' : 'initializing', isReady, queueLength: sendQueue.length })
+  res.json({
+    status: isReady ? 'ready' : 'initializing',
+    isReady,
+    queueLength: sendQueue.length + maxOutboundQueue.pendingCount(),
+    persistentOutboundQueueLength: maxOutboundQueue.pendingCount(),
+  })
 })
 
 app.get('/status', (req, res) => {
@@ -6515,6 +6690,7 @@ app.post('/reload-page', async (req, res) => {
   try {
     console.log('[Reload] Принудительная перезагрузка страницы MAX...')
     isReady = false
+    maxOutboundQueue.stop()
     await page.goto('https://web.max.ru', { waitUntil: 'domcontentloaded', timeout: 30_000 })
     console.log('[Reload] Страница перезагружена, ждём WS auth...')
     res.json({ ok: true })
