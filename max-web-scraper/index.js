@@ -36,6 +36,12 @@ const {
   reactionSnapshotMessageId,
 } = require('./lib/MaxReactionEvents')
 const {
+  extractCompactReactionSnapshots,
+  normalizeEmojiAlias,
+  reactionCapabilityEmojis,
+  recoverReactionCatalog,
+} = require('./lib/MaxReactionProtocol')
+const {
   isProviderBackedDomReplyCandidate,
   splitMaxDomReplyText,
 } = require('./lib/MaxDomReply')
@@ -473,6 +479,24 @@ const reactionIdByEmoji = new Map([
 reactionEmojiById.set(1, '👍')
 reactionEmojiById.set(117, '⚡️')
 
+function registerProviderReaction(id, emoji) {
+  const providerId = Number(id)
+  const providerEmoji = String(emoji || '')
+  if (!Number.isInteger(providerId) || !providerEmoji) return false
+  reactionEmojiById.set(providerId, providerEmoji)
+  reactionIdByEmoji.set(providerEmoji, providerId)
+  reactionIdByEmoji.set(normalizeEmojiAlias(providerEmoji), providerId)
+  return true
+}
+
+function providerReactionEmojis() {
+  return reactionCapabilityEmojis(
+    [...reactionEmojiById.entries()].map(([id, emoji]) => ({ id, emoji })),
+  )
+}
+
+const knownMaxReactionState = new Map()
+
 function normalizeReactionEmoji(raw) {
   if (!raw) return ''
   // Если это объект { id, reactionType } — извлекаем id
@@ -497,7 +521,7 @@ function extractMaxId(value) {
   return null
 }
 
-function extractReactionCountersFromMap(messagesReactions) {
+function extractReactionCountersFromMap(messagesReactions, requestedMessageIds = []) {
   const countersByMessage = new Map()
   const entries = Array.isArray(messagesReactions?.__complexEntries)
     ? messagesReactions.__complexEntries
@@ -515,15 +539,24 @@ function extractReactionCountersFromMap(messagesReactions) {
         ? value.reactions
         : Array.isArray(value)
           ? value
-          : []
+          : null
 
-    for (const item of source) {
-      const reaction = normalizeReactionEmoji(item?.reaction || item?.id || item?.emoji || item)
-      const count = Number(item?.count ?? item?.value ?? 1)
-      if (reaction && count > 0) counters.push({ reaction, count })
+    if (source) {
+      for (const item of source) {
+        const reaction = normalizeReactionEmoji(item?.reaction || item?.id || item?.emoji || item)
+        const count = Number(item?.count ?? item?.value ?? 1)
+        if (reaction && count > 0) counters.push({ reaction, count })
+      }
+      countersByMessage.set(externalMsgId, counters)
     }
+  }
 
-    countersByMessage.set(externalMsgId, counters)
+  const compact = extractCompactReactionSnapshots(messagesReactions, {
+    requestedMessageIds,
+    supportedEmojis: providerReactionEmojis(),
+  })
+  for (const [messageId, counters] of compact) {
+    countersByMessage.set(messageId, counters)
   }
 
   return countersByMessage
@@ -583,7 +616,8 @@ function waitForReactionConfirmation(transport, { chatId, messageId, emoji, remo
         const payload = data.payload || {}
 
         if (data.opcode === 180 && payload.messagesReactions) {
-          const byMessage = extractReactionCountersFromMap(payload.messagesReactions)
+          const requestedMessageIds = payload.__reactionRequest?.messageIds || []
+          const byMessage = extractReactionCountersFromMap(payload.messagesReactions, requestedMessageIds)
           if (byMessage.has(expectedMessageId)) {
             const counters = byMessage.get(expectedMessageId)
             if (reactionCountersConfirm(counters, expectedEmoji, remove)) {
@@ -5523,14 +5557,11 @@ async function init() {
     // opcode 28 — animoji/реакции маппинг: id → emoji символ
     if (data.opcode === 28 && data.payload?.animojis) {
       try {
-        for (const a of data.payload.animojis) {
-          if (a == null || typeof a !== 'object') continue
-          if (a.id && a.emoji) {
-            reactionEmojiById.set(Number(a.id), a.emoji)
-            reactionIdByEmoji.set(normalizeReactionEmoji(a.emoji), Number(a.id))
-          }
+        const catalog = recoverReactionCatalog(data.payload.animojis)
+        for (const reaction of catalog) {
+          registerProviderReaction(reaction.id, reaction.emoji)
         }
-        console.log(`[App] provider reactions: ${reactionIdByEmoji.size} entries`)
+        console.log(`[App] provider reactions: ${providerReactionEmojis().join(' ')} (${reactionIdByEmoji.size} aliases)`)
       } catch (e) { console.error('[App] opcode28 animoji error:', e.message) }
     }
     // opcode 288 — QR link от MAX сервера
@@ -5599,13 +5630,28 @@ async function init() {
             }
           }
         }
-        const byMessage = extractReactionCountersFromMap(data.payload.messagesReactions)
+        const requestedMessageIds = data.payload.__reactionRequest?.messageIds || []
+        const byMessage = extractReactionCountersFromMap(
+          data.payload.messagesReactions,
+          requestedMessageIds,
+        )
+        for (const messageId of requestedMessageIds) {
+          if (knownMaxReactionState.has(messageId) && !byMessage.has(messageId)) {
+            byMessage.set(messageId, [])
+          }
+        }
         if (byMessage.size > 0) {
           const reactionUrl = CRM_WEBHOOK_URL.replace(/\/api\/webhooks?\/max\/?.*$/, '/api/webhook/max/reaction')
           for (const [externalMsgId, counters] of byMessage.entries()) {
-            const event = { externalMsgId, counters }
+            const event = {
+              externalMsgId,
+              counters,
+              actor: null,
+              source: 'op180_compact',
+            }
             if (!claimReactionForward(event)) continue
             console.log(`[App] opcode180 reaction snapshot: msgId=${externalMsgId} counters=${JSON.stringify(counters)}`)
+            knownMaxReactionState.set(externalMsgId, counters)
             maxDeliveryLog({
               operation: 'reaction',
               status: 'max_echo_received',
@@ -5656,7 +5702,7 @@ async function init() {
     // Если payload содержит данные — TransportInterceptor уже обработал через transport.onMessage.
     // ВАЖНО: отправлять op:71 через JSON нельзя — MAX закрывает WS (то же поведение что op:49).
     // op:71 обрабатывается пассивно когда браузер сам открывает чат и запрашивает историю.
-    if ([53, 135, 155, 180].includes(data.opcode) && data.payload) {
+    if ([53, 135, 155].includes(data.opcode) && data.payload) {
       try {
         const events = extractReactionEventsDeep(data.payload)
         if (events.length > 0) {
@@ -6229,6 +6275,14 @@ app.post('/send-message', async (req, res) => {
     console.error(`[Send] sendText failed: ${e.message}`)
     res.status(isMaxErr ? 422 : 500).json({ error: e.message, maxError: e.maxError || null })
   }
+})
+
+app.get('/reaction-capabilities', (_req, res) => {
+  res.json({
+    supported: true,
+    emojis: providerReactionEmojis(),
+    source: reactionEmojiById.size > 2 ? 'provider_catalog' : 'safe_fallback',
+  })
 })
 
 // Поставить/снять emoji-реакцию на сообщение

@@ -330,6 +330,7 @@ test('MAX inbound reply keeps provider reply id and DOM fallback separates quote
   const scraper = read('max-web-scraper/index.js')
   const parser = read('max-web-scraper/parser/MessageParser.js')
   const route = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
+  const storage = read('gravity-mvp/src/lib/max-reply-storage.ts')
 
   assert.match(parser, /replyToExternalId: msg\.replyToMessageId \|\| null/)
   assert.match(route, /replyToExternalId\?: string \| number \| null/)
@@ -339,11 +340,16 @@ test('MAX inbound reply keeps provider reply id and DOM fallback separates quote
   assert.match(scraper, /function looksLikeDomReplyQuoteText\(chatId, candidate\)/)
   assert.match(scraper, /candidate\.hasReplyQuote/)
   assert.match(scraper, /recentDirectInboundTextHits\(chatId, parts\.leafText\)\.length > 0/)
-  assert.match(scraper, /text: replyParts\.leafText/)
+  assert.match(scraper, /text: replyParts\.bodyText/)
+  assert.match(scraper, /_replyBodyText: replyParts\.bodyText/)
   assert.match(scraper, /_replyQuoteText: replyParts\.quotedText/)
+  assert.match(scraper, /replyBodyText: latest\._replyBodyText/)
   assert.match(scraper, /replyQuoteText: latest\._replyQuoteText/)
-  assert.match(route, /unresolvedReplyQuoteText: replyQuoteTextString/)
-  assert.match(route, /replyResolutionStatus: 'ambiguous_or_missing'/)
+  assert.match(route, /resolveMaxReplyStorage/)
+  assert.match(route, /content: replyStorage\.content/)
+  assert.match(storage, /metadata\.unresolvedReplyQuoteText = quote/)
+  assert.match(storage, /metadata\.replyResolutionStatus = 'ambiguous_or_missing'/)
+  assert.match(storage, /content: body && hasAuthoritativeRelation \? body : rawContent/)
 })
 
 test('MAX known-chat text send endpoint normalizes object send results before HTTP response', () => {

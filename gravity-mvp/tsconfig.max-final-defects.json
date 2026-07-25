@@ -7,11 +7,15 @@
   },
   "include": [
     "next-env.d.ts",
+    "src/app/api/messages/reaction/route.ts",
+    "src/app/api/webhook/max/reaction/route.ts",
     "src/app/api/webhooks/max/route.ts",
+    "src/app/messages/components/MessageContextMenu.tsx",
     "src/app/messages/components/MessageFeed.tsx",
     "src/app/messages/hooks/useMessages.ts",
     "src/app/messages/utils/message-order.ts",
     "src/lib/MessageService.ts",
+    "src/lib/__tests__/max-reaction-capabilities-ui.test.ts",
     "src/lib/__tests__/max-reply-metadata-ui-contract.test.ts",
     "src/lib/__tests__/message-ordering-contract.test.ts",
     "src/lib/__tests__/message-ordering-db.test.ts"

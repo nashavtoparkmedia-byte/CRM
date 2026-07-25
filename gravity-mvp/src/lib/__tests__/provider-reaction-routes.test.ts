@@ -132,10 +132,119 @@ describe('provider reaction route contracts', () => {
         ))
 
         expect(echo.status).toBe(200)
+        expect(prismaMock.message.findFirst).toHaveBeenCalledWith({
+            where: {
+                channel: 'max',
+                externalId: 'd301abcdef1234',
+            },
+        })
+        expect(prismaMock.message.update).toHaveBeenCalledWith(
+            expect.objectContaining({
+                where: { id: 'message-max' },
+                data: {
+                    metadata: expect.objectContaining({
+                        reactions: { '👍': 1 },
+                    }),
+                },
+            }),
+        )
+        expect(broadcastMock).toHaveBeenCalled()
+    })
+
+    it('removes a MAX reaction only after provider confirmation', async () => {
+        prismaMock.message.findUnique.mockResolvedValue({
+            ...messageFixture('max', 'd301abcdef1234'),
+            metadata: { reactions: { '👍': 1 } },
+        })
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            success: true,
+            reactionConfirmed: true,
+            counters: [],
+        }), { status: 200 })))
+
+        const response = await sendReaction(request(
+            'http://localhost/api/messages/reaction',
+            { messageId: 'message-max', emoji: '👍' },
+        ))
+
+        expect(response.status).toBe(200)
         expect(prismaMock.message.update).toHaveBeenCalledWith({
             where: { id: 'message-max' },
-            data: { metadata: { reactions: { '👍': 1 } } },
+            data: {
+                metadata: {
+                    reactions: {},
+                },
+            },
         })
-        expect(broadcastMock).toHaveBeenCalled()
+    })
+
+    it('does not report or persist MAX success after provider failure', async () => {
+        prismaMock.message.findUnique.mockResolvedValue(
+            messageFixture('max', 'd301abcdef1234'),
+        )
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            error: 'provider rejected reaction frame',
+        }), { status: 422 })))
+
+        const response = await sendReaction(request(
+            'http://localhost/api/messages/reaction',
+            { messageId: 'message-max', emoji: '👍' },
+        ))
+
+        expect(response.status).toBe(502)
+        expect(prismaMock.message.update).not.toHaveBeenCalled()
+        expect(broadcastMock).not.toHaveBeenCalled()
+    })
+
+    it('applies inbound remove snapshots and keeps replay idempotent', async () => {
+        prismaMock.message.findFirst
+            .mockResolvedValueOnce({
+                id: 'message-max',
+                chatId: 'chat-max',
+                metadata: { reactions: { '👍': 1 } },
+            })
+            .mockResolvedValueOnce({
+                id: 'message-max',
+                chatId: 'chat-max',
+                metadata: { reactions: {} },
+            })
+
+        const first = await receiveMaxReaction(request(
+            'http://localhost/api/webhook/max/reaction',
+            {
+                externalMsgId: 'd301abcdef1234',
+                counters: [],
+                actor: null,
+                source: 'op180_compact',
+            },
+        ))
+        const replay = await receiveMaxReaction(request(
+            'http://localhost/api/webhook/max/reaction',
+            {
+                externalMsgId: 'd301abcdef1234',
+                counters: [],
+                actor: null,
+                source: 'op180_compact',
+            },
+        ))
+
+        expect(first.status).toBe(200)
+        expect(replay.status).toBe(200)
+        expect(prismaMock.message.update).toHaveBeenCalledTimes(2)
+        for (const call of prismaMock.message.update.mock.calls) {
+            expect(call[0]).toEqual(expect.objectContaining({
+                where: { id: 'message-max' },
+                data: {
+                    metadata: expect.objectContaining({
+                        reactions: {},
+                        maxReactionSync: expect.objectContaining({
+                            externalMsgId: 'd301abcdef1234',
+                            actor: null,
+                            source: 'op180_compact',
+                        }),
+                    }),
+                },
+            }))
+        }
     })
 })

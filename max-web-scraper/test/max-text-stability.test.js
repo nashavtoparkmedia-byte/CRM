@@ -440,6 +440,7 @@ test('anchorless live DOM text is gated by a correlated provider identity', () =
 
 test('provider-backed DOM reply recovery forwards only reply body text', () => {
   const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const replyHelper = fs.readFileSync(require.resolve('../lib/MaxDomReply'), 'utf8')
   const helperStart = source.indexOf('function domReplyQuoteParts(')
   const helperEnd = source.indexOf('function decodeBase64Payload(', helperStart)
   const forwardStart = source.indexOf('async function forwardDomCandidate(')
@@ -451,7 +452,9 @@ test('provider-backed DOM reply recovery forwards only reply body text', () => {
   assert.notEqual(forwardEnd, -1)
 
   const helperBlock = source.slice(helperStart, helperEnd)
-  assert.match(helperBlock, /quotedText: lines\.slice\(1, -1\)\.join\('\\n'\)\.trim\(\)/)
+  assert.match(helperBlock, /return splitMaxDomReplyText\(cleanDomMessageText\(text\)\)/)
+  assert.match(replyHelper, /const bodyText = lines\[lines\.length - 1\]/)
+  assert.match(replyHelper, /const quotedText = lines\.slice\(1, -1\)\.join\('\\n'\)\.trim\(\)/)
   assert.match(helperBlock, /recentDirectInboundTextHits\(chatId, parts\.quotedText\)/)
 
   const forwardBlock = source.slice(forwardStart, forwardEnd)

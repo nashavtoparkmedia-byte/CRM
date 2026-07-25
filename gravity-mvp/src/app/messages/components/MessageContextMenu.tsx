@@ -12,6 +12,23 @@ const EXTENDED_EMOJIS = [
     "🤝"
 ]
 
+const MAX_REACTION_FALLBACK = ["👍", "⚡️"]
+let maxReactionCapabilities: Promise<string[]> | null = null
+
+function loadMaxReactionCapabilities(): Promise<string[]> {
+    if (!maxReactionCapabilities) {
+        maxReactionCapabilities = fetch('/api/messages/reaction?channel=max', {
+            cache: 'no-store',
+        })
+            .then(response => response.ok ? response.json() : null)
+            .then(body => Array.isArray(body?.emojis) && body.emojis.length > 0
+                ? body.emojis
+                : MAX_REACTION_FALLBACK)
+            .catch(() => MAX_REACTION_FALLBACK)
+    }
+    return maxReactionCapabilities
+}
+
 interface MessageContextMenuProps {
     msg: Message
     x: number
@@ -28,6 +45,7 @@ export default function MessageContextMenu({
 }: MessageContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null)
     const [showExtended, setShowExtended] = useState(false)
+    const [maxEmojis, setMaxEmojis] = useState(MAX_REACTION_FALLBACK)
 
     // Position adjustment to keep menu in viewport
     useEffect(() => {
@@ -61,7 +79,19 @@ export default function MessageContextMenu({
         }
     }, [handleClickOutside, onClose])
 
+    useEffect(() => {
+        if (msg.channel !== 'max') return
+        let active = true
+        loadMaxReactionCapabilities().then(emojis => {
+            if (active) setMaxEmojis(emojis)
+        })
+        return () => { active = false }
+    }, [msg.channel])
+
     const reactions = (msg.metadata?.reactions as Record<string, number>) || {}
+    const quickEmojis = msg.channel === 'max' ? maxEmojis.slice(0, 6) : QUICK_EMOJIS
+    const extendedEmojis = msg.channel === 'max' ? maxEmojis.slice(6) : EXTENDED_EMOJIS
+    const hasExtended = extendedEmojis.length > 0
 
     const renderEmoji = (emoji: string) => {
         const isActive = !!reactions[emoji]
@@ -72,6 +102,7 @@ export default function MessageContextMenu({
                 className={`w-[34px] h-[34px] rounded-lg text-[19px] flex items-center justify-center transition-all hover:scale-125 hover:bg-gray-100 ${
                     isActive ? 'bg-[#3390EC]/10 scale-110' : ''
                 }`}
+                title={msg.channel === 'max' ? `Реакция MAX ${emoji}` : undefined}
             >
                 {emoji}
             </button>
@@ -96,17 +127,19 @@ export default function MessageContextMenu({
                 <div className="border-b border-gray-100">
                     {showExtended ? (
                         <div className="px-[2px] py-[2px] grid grid-cols-6 gap-0.5">
-                            {[...QUICK_EMOJIS, ...EXTENDED_EMOJIS].map(renderEmoji)}
+                            {[...quickEmojis, ...extendedEmojis].map(renderEmoji)}
                         </div>
                     ) : (
                         <div className="flex items-center px-1.5 py-1.5">
-                            {QUICK_EMOJIS.map(renderEmoji)}
+                            {quickEmojis.map(renderEmoji)}
+                            {hasExtended && (
                             <button
                                 onClick={() => setShowExtended(true)}
                                 className="w-[34px] h-[34px] rounded-lg flex items-center justify-center transition-all hover:bg-gray-100 text-gray-400"
                             >
                                 <ChevronRight size={16} />
                             </button>
+                            )}
                         </div>
                     )}
                 </div>

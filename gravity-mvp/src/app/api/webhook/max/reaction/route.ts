@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Prisma JSON metadata is validated at this boundary */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -14,26 +15,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'externalMsgId required' }, { status: 400 })
         }
 
-        // Find message by externalId. MAX sometimes sends reaction ids in a
-        // different packed form than the send ack, but the meaningful suffix
-        // overlaps, so keep a bounded suffix fallback.
-        let message = await (prisma.message as any).findFirst({
-            where: { externalId: String(externalMsgId) },
+        const message = await (prisma.message as any).findFirst({
+            where: {
+                channel: 'max',
+                externalId: String(externalMsgId),
+            },
         })
-
-        if (!message) {
-            const compactId = String(externalMsgId).replace(/[^a-fA-F0-9]/g, '')
-            const suffix = compactId.slice(-10)
-            if (suffix.length >= 8) {
-                message = await (prisma.message as any).findFirst({
-                    where: {
-                        channel: 'max',
-                        externalId: { contains: suffix },
-                    },
-                    orderBy: { sentAt: 'desc' },
-                })
-            }
-        }
 
         if (!message) {
             console.warn(`[WEBHOOK-MAX/reaction] Message not found: externalMsgId=${externalMsgId}`)
@@ -69,7 +56,18 @@ export async function POST(req: NextRequest) {
 
         const updated = await (prisma.message as any).update({
             where: { id: message.id },
-            data: { metadata: { ...meta, reactions } },
+            data: {
+                metadata: {
+                    ...meta,
+                    reactions,
+                    maxReactionSync: {
+                        externalMsgId: String(externalMsgId),
+                        actor: body.actor ? String(body.actor) : null,
+                        source: body.source ? String(body.source) : 'provider_snapshot',
+                        observedAt: new Date().toISOString(),
+                    },
+                },
+            },
         })
 
         // Broadcast via SSE so open chat tabs refresh instantly

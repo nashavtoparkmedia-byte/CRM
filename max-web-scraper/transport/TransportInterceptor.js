@@ -2,6 +2,9 @@
 
 const fs   = require('fs')
 const path = require('path')
+const {
+  extractMaxMessageIdsFromBinaryFrame,
+} = require('../lib/MaxReactionProtocol')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
@@ -541,6 +544,7 @@ class TransportInterceptor {
     this._pendingOp71ChatIds   = []
     this._pendingLooseMedia    = []
     this._activeUiChatId       = null
+    this._reactionSnapshotRequests = new Map()
 
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
@@ -686,6 +690,24 @@ class TransportInterceptor {
                 }
               } catch (e) {
                 console.warn('[op83live] request correlation failed:', e.message)
+              }
+            }
+            if (opcode === OP.MARK_READ && cmd === 0x02) {
+              const messageIds = extractMaxMessageIdsFromBinaryFrame(buf)
+              if (messageIds.length > 0) {
+                const requestSeq = (buf[7] << 8) | buf[8]
+                this._reactionSnapshotRequests.set(requestSeq, {
+                  messageIds,
+                  observedAt: Date.now(),
+                  source: 'browser_op180_request',
+                })
+                const cutoff = Date.now() - 30_000
+                for (const [seq, request] of this._reactionSnapshotRequests) {
+                  if (request.observedAt < cutoff) this._reactionSnapshotRequests.delete(seq)
+                }
+                console.log(
+                  `[op180request] seq:${requestSeq} messages:${messageIds.length}`,
+                )
               }
             }
             const maxHex  = opcode === 71 ? buf.length : 20
@@ -1434,6 +1456,14 @@ class TransportInterceptor {
     const mappedCmd = (cmd === 4) ? 1 : (cmd === 1 ? 0 : cmd)
 
     const data = { opcode, cmd: mappedCmd, seq: reqSeq, payload, _frameSeq: frameSeq }
+
+    if (opcode === OP.MARK_READ) {
+      const request = this._reactionSnapshotRequests.get(reqSeq)
+      if (request) {
+        payload.__reactionRequest = request
+        this._reactionSnapshotRequests.delete(reqSeq)
+      }
+    }
 
     if (opcode !== OP.PRESENCE) {
       console.log('[BIN] op:', opcode, 'cmd:', cmd, '→', mappedCmd, 'seq:', reqSeq,
@@ -2355,6 +2385,7 @@ class TransportInterceptor {
     this._sentReactionHandlers = []
     for (const { timeout } of this._pendingReqs.values()) clearTimeout(timeout)
     this._pendingReqs.clear()
+    this._reactionSnapshotRequests.clear()
     if (this._cdpClient) {
       this._cdpClient.detach().catch(() => {})
       this._cdpClient = null

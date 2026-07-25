@@ -1,6 +1,36 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- provider SDK clients expose runtime-only shapes */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
+
+const MAX_REACTION_FALLBACK = ['👍', '⚡️']
+
+export async function GET(req: NextRequest) {
+    const channel = req.nextUrl.searchParams.get('channel')
+    if (channel !== 'max') {
+        return NextResponse.json({ supported: true, emojis: [] })
+    }
+
+    try {
+        const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+        const response = await fetch(`${maxScraperUrl}/reaction-capabilities`, {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(3_000),
+        })
+        if (!response.ok) throw new Error(`MAX capabilities HTTP ${response.status}`)
+        const body = await response.json()
+        const emojis = Array.isArray(body.emojis) && body.emojis.length > 0
+            ? body.emojis
+            : MAX_REACTION_FALLBACK
+        return NextResponse.json({ supported: true, emojis, source: body.source })
+    } catch {
+        return NextResponse.json({
+            supported: true,
+            emojis: MAX_REACTION_FALLBACK,
+            source: 'safe_fallback',
+        })
+    }
+}
 
 /**
  * POST /api/messages/reaction
