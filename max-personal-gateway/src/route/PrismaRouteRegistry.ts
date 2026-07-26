@@ -25,6 +25,7 @@ import type { JsonValue, RedactionEvidence } from '../journal/types.ts'
 
 const MAX_LIST_LIMIT = 100
 const MAX_EXACT_VALUE_LENGTH = 512
+const MAX_CONCURRENCY_RETRIES = 4
 const EXACT_AUTHORITIES: ReadonlySet<RouteEvidenceAuthority> = new Set(['protocol_exact', 'provider_exact'])
 const EVIDENCE_AUTHORITIES: ReadonlySet<RouteEvidenceAuthority> = new Set([
   'protocol_exact',
@@ -188,6 +189,12 @@ function nonNegativeInteger(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new RouteRegistryError('INVALID_INPUT', `${field} must be a non-negative integer`)
   }
+}
+
+function isPrismaConcurrencyError(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false
+  const code = Reflect.get(error, 'code')
+  return code === 'P2002' || code === 'P2034'
 }
 
 function validDate(value: unknown, field: string): asserts value is Date {
@@ -451,8 +458,10 @@ export class PrismaRouteRegistry implements RouteRegistry {
     }
     const exact = EXACT_AUTHORITIES.has(authority)
 
-    try {
-      return await this.#client.$transaction(async transaction => {
+    let lastError: unknown
+    for (let attempt = 0; attempt <= MAX_CONCURRENCY_RETRIES; attempt += 1) {
+      try {
+        return await this.#client.$transaction(async transaction => {
         if (input.sourceRawObservationId !== undefined) {
           const raw = await transaction.maxRawTransportEvent.findUnique({
             where: { observationId: input.sourceRawObservationId },
@@ -685,10 +694,15 @@ export class PrismaRouteRegistry implements RouteRegistry {
           idempotent: false,
           semanticChange,
         })
-      })
-    } catch (error) {
-      throw asRouteDatabaseError(error)
+        })
+      } catch (error) {
+        lastError = error
+        if (!isPrismaConcurrencyError(error) || attempt === MAX_CONCURRENCY_RETRIES) {
+          throw asRouteDatabaseError(error)
+        }
+      }
     }
+    throw asRouteDatabaseError(lastError)
   }
 
   async #createConflicts(
@@ -704,7 +718,56 @@ export class PrismaRouteRegistry implements RouteRegistry {
       where: conversationKey(input.accountId, primaryIncumbentKey),
     })
     if (!primary) throw new RouteRegistryError('NOT_FOUND', 'Conflicting route was not found')
-    const targetVersion = primary.routeVersion + 1
+    const anchorPlan = plans.find(plan => plan.existing?.conversationKey === primaryIncumbentKey) ?? plans[0]!
+    const conflictTemplates: Array<{
+      incumbentKey: string
+      candidateKey: string
+      identityPlan: ObservationPlan
+      sourceIndex: number
+    }> = []
+    if (explicitCandidateKey) {
+      for (const incumbentKey of bindingKeys.filter(key => key !== explicitCandidateKey)) {
+        const planIndex = plans.findIndex(plan => plan.existing?.conversationKey === incumbentKey)
+        if (planIndex < 0) continue
+        conflictTemplates.push({
+          incumbentKey,
+          candidateKey: explicitCandidateKey,
+          identityPlan: plans[planIndex]!,
+          sourceIndex: planIndex,
+        })
+      }
+    } else {
+      for (const candidateKey of bindingKeys.filter(key => key !== primaryIncumbentKey)) {
+        const sourceIndex = plans.findIndex(plan => plan.existing?.conversationKey === candidateKey)
+        if (sourceIndex < 0) continue
+        conflictTemplates.push({
+          incumbentKey: primaryIncumbentKey,
+          candidateKey,
+          identityPlan: anchorPlan,
+          sourceIndex,
+        })
+      }
+    }
+    if (conflictTemplates.length === 0) {
+      throw new RouteRegistryError('IDENTITY_CONFLICT', 'Ambiguous exact evidence has no safe conflict projection')
+    }
+
+    const priorOpenConflicts: Array<ConflictRecord | null> = []
+    for (const template of conflictTemplates) {
+      const matches = await transaction.maxRouteConflict.findMany({
+        where: {
+          accountId: input.accountId,
+          identityKind: template.identityPlan.identity.kind,
+          identityValue: template.identityPlan.identity.value,
+          incumbentConversationKey: template.incumbentKey,
+          candidateConversationKey: template.candidateKey,
+          status: 'open',
+        },
+        take: 1,
+      })
+      priorOpenConflicts.push(matches[0] ?? null)
+    }
+    const targetVersion = primary.routeVersion + (priorOpenConflicts.some(conflict => conflict === null) ? 1 : 0)
     const observationIds: string[] = []
     const results: RouteObservationResult[] = []
     for (const plan of plans) {
@@ -740,47 +803,23 @@ export class PrismaRouteRegistry implements RouteRegistry {
       results.push('conflict')
     }
 
-    const anchorPlan = plans.find(plan => plan.existing?.conversationKey === primaryIncumbentKey) ?? plans[0]!
-    const conflictPlans: Array<{
-      incumbentKey: string
-      candidateKey: string
-      identityPlan: ObservationPlan
-      sourceObservationId: string
-    }> = []
-    if (explicitCandidateKey) {
-      for (const incumbentKey of bindingKeys.filter(key => key !== explicitCandidateKey)) {
-        const planIndex = plans.findIndex(plan => plan.existing?.conversationKey === incumbentKey)
-        if (planIndex < 0) continue
-        conflictPlans.push({
-          incumbentKey,
-          candidateKey: explicitCandidateKey,
-          identityPlan: plans[planIndex]!,
-          sourceObservationId: observationIds[planIndex]!,
-        })
-      }
-    } else {
-      for (const candidateKey of bindingKeys.filter(key => key !== primaryIncumbentKey)) {
-        const sourceIndex = plans.findIndex(plan => plan.existing?.conversationKey === candidateKey)
-        if (sourceIndex < 0) continue
-        conflictPlans.push({
-          incumbentKey: primaryIncumbentKey,
-          candidateKey,
-          identityPlan: anchorPlan,
-          sourceObservationId: observationIds[sourceIndex]!,
-        })
-      }
-    }
-    if (conflictPlans.length === 0) {
-      throw new RouteRegistryError('IDENTITY_CONFLICT', 'Ambiguous exact evidence has no safe conflict projection')
-    }
+    const conflictPlans = conflictTemplates.map(template => ({
+      ...template,
+      sourceObservationId: observationIds[template.sourceIndex]!,
+    }))
 
     const conflictIds: string[] = []
     const bindingsToBlock = new Map<string, IdentityRecord>()
     const routeKeysToBlock = new Set<string>()
     let createdConflict = false
-    for (const plan of conflictPlans) {
+    for (const [index, plan] of conflictPlans.entries()) {
       routeKeysToBlock.add(plan.incumbentKey)
       routeKeysToBlock.add(plan.candidateKey)
+      const open = priorOpenConflicts[index]
+      if (open) {
+        conflictIds.push(open.conflictId)
+        continue
+      }
       const prior = await transaction.maxRouteConflict.findUnique({
         where: conflictSourceKey(input.accountId, plan.sourceObservationId),
       })
@@ -842,7 +881,7 @@ export class PrismaRouteRegistry implements RouteRegistry {
       routeObservationIds: observationIds,
       processingResults: results,
       conflictId: conflictIds[0],
-      idempotent: !createdConflict,
+      idempotent: false,
       semanticChange: createdConflict,
     })
   }

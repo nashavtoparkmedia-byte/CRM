@@ -18,4 +18,25 @@ The Route Registry uses `(accountId, conversationKey)` as the stable internal ro
 
 `routeVersion` advances only for semantic routing changes. Exact evidence may create or attach a binding; weak web and legacy evidence stays provisional or confirms only an already exact association. Explicit supersede keeps the old identity as history and uses an optimistic version guard. A sendable snapshot is immutable and requires an active route, one unambiguous active identity of each present kind, mandatory active protocol-chat evidence, and no open conflict.
 
-`MAX_ROUTE_REGISTRY_ENABLED` is an account allowlist and defaults to false. Route matching never uses a CRM name or phone, and Stage 2 does not perform Contact resolution. It has no Redis, Chromium, listener, sender, live MAX integration, or provider action. Migrations remain unapplied. The combined real PostgreSQL gate is pending because disposable PostgreSQL binaries are unavailable; it is mandatory before Stage 3 live/shadow integration. Stage 3 has not started.
+`MAX_ROUTE_REGISTRY_ENABLED` is an account allowlist and defaults to false. Route matching never uses a CRM name or phone, and Stage 2 does not perform Contact resolution. It has no Redis, Chromium, listener, sender, live MAX integration, or provider action. Migrations remain unapplied. Stage 3 has not started.
+
+## Disposable real PostgreSQL gate
+
+The opt-in integration suite never reads generic `DATABASE_URL`. It requires
+`PERSONAL_MAX_REAL_POSTGRES_URL`, rejects non-local hosts and the default
+PostgreSQL port, and requires a database name containing the
+`personal_max_...gate` disposable marker. The database must already contain the
+Stage 1 and Stage 2 migrations. A normal unit run therefore never opens a
+database connection.
+
+When the generated client is not installed at the normal Gravity package
+location, an isolated gate harness may also set
+`PERSONAL_MAX_REAL_PRISMA_CLIENT` to an absolute generated-client entry point.
+All test data uses unique account/run identifiers. Immutable evidence rows are
+removed by deleting the disposable database or cluster; the suite never weakens
+append-only triggers or drops shared schemas.
+
+```sh
+PERSONAL_MAX_REAL_POSTGRES_URL='postgresql://local-user@127.0.0.1:high-port/personal_max_integration_gate' \
+  npm run test:real-postgres
+```

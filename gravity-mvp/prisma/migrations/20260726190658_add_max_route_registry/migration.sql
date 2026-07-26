@@ -139,7 +139,7 @@ ON "MaxRouteConversation"("accountId", "state");
 CREATE INDEX "MaxRouteConversation_accountId_routeVersion_idx"
 ON "MaxRouteConversation"("accountId", "routeVersion");
 
-CREATE UNIQUE INDEX "MaxRouteIdentityBinding_accountId_identityKind_identityValue_key"
+CREATE UNIQUE INDEX "MaxRouteIdentityBinding_accountId_identityKind_identityValu_key"
 ON "MaxRouteIdentityBinding"("accountId", "identityKind", "identityValue");
 CREATE UNIQUE INDEX "MaxRouteIdentityBinding_one_active_kind_per_conversation_key"
 ON "MaxRouteIdentityBinding"("accountId", "conversationKey", "identityKind")
@@ -164,45 +164,51 @@ CREATE UNIQUE INDEX "MaxRouteConflict_accountId_sourceRouteObservationId_key"
 ON "MaxRouteConflict"("accountId", "sourceRouteObservationId");
 CREATE INDEX "MaxRouteConflict_accountId_status_createdAt_idx"
 ON "MaxRouteConflict"("accountId", "status", "createdAt");
-CREATE INDEX "MaxRouteConflict_accountId_identityKind_identityValue_status_idx"
+CREATE INDEX "MaxRouteConflict_accountId_identityKind_identityValue_statu_idx"
 ON "MaxRouteConflict"("accountId", "identityKind", "identityValue", "status");
+CREATE UNIQUE INDEX "MaxRouteConflict_one_open_identity_route_pair_key"
+ON "MaxRouteConflict"(
+    "accountId", "identityKind", "identityValue",
+    "incumbentConversationKey", "candidateConversationKey"
+)
+WHERE "status" = 'open';
 CREATE INDEX "MaxRouteConflict_accountId_incumbentConversationKey_status_idx"
 ON "MaxRouteConflict"("accountId", "incumbentConversationKey", "status");
 CREATE INDEX "MaxRouteConflict_accountId_candidateConversationKey_status_idx"
 ON "MaxRouteConflict"("accountId", "candidateConversationKey", "status");
 
 ALTER TABLE "MaxRouteIdentityBinding"
-ADD CONSTRAINT "MaxRouteIdentityBinding_conversation_fkey"
+ADD CONSTRAINT "MaxRouteIdentityBinding_accountId_conversationKey_fkey"
 FOREIGN KEY ("accountId", "conversationKey")
 REFERENCES "MaxRouteConversation"("accountId", "conversationKey")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "MaxRouteObservation"
-ADD CONSTRAINT "MaxRouteObservation_candidateConversation_fkey"
+ADD CONSTRAINT "MaxRouteObservation_accountId_candidateConversationKey_fkey"
 FOREIGN KEY ("accountId", "candidateConversationKey")
 REFERENCES "MaxRouteConversation"("accountId", "conversationKey")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "MaxRouteObservation"
-ADD CONSTRAINT "MaxRouteObservation_sourceRawObservation_fkey"
+ADD CONSTRAINT "MaxRouteObservation_accountId_sourceRawObservationId_fkey"
 FOREIGN KEY ("accountId", "sourceRawObservationId")
 REFERENCES "MaxRawTransportEvent"("accountId", "observationId")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "MaxRouteConflict"
-ADD CONSTRAINT "MaxRouteConflict_incumbentConversation_fkey"
+ADD CONSTRAINT "MaxRouteConflict_accountId_incumbentConversationKey_fkey"
 FOREIGN KEY ("accountId", "incumbentConversationKey")
 REFERENCES "MaxRouteConversation"("accountId", "conversationKey")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "MaxRouteConflict"
-ADD CONSTRAINT "MaxRouteConflict_candidateConversation_fkey"
+ADD CONSTRAINT "MaxRouteConflict_accountId_candidateConversationKey_fkey"
 FOREIGN KEY ("accountId", "candidateConversationKey")
 REFERENCES "MaxRouteConversation"("accountId", "conversationKey")
 ON DELETE RESTRICT ON UPDATE CASCADE;
 
 ALTER TABLE "MaxRouteConflict"
-ADD CONSTRAINT "MaxRouteConflict_sourceObservation_fkey"
+ADD CONSTRAINT "MaxRouteConflict_accountId_sourceRouteObservationId_fkey"
 FOREIGN KEY ("accountId", "sourceRouteObservationId")
 REFERENCES "MaxRouteObservation"("accountId", "routeObservationId")
 ON DELETE RESTRICT ON UPDATE CASCADE;

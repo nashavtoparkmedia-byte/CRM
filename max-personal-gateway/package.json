@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:journal": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }
 }

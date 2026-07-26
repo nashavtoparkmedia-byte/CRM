@@ -132,6 +132,10 @@ function nonNegativeInteger(value: number, field: string): void {
   }
 }
 
+function isPrismaUniqueError(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && Reflect.get(error, 'code') === 'P2002'
+}
+
 function replayAvailability(value: unknown): ReplayAvailability {
   if (value !== 'available' && value !== 'quarantined') {
     throw new JournalError('INVALID_INPUT', 'Replay availability is not supported')
@@ -520,6 +524,9 @@ export class PrismaRawEventJournal implements RawEventJournal {
         return mapCursor(updated)
       })
     } catch (error) {
+      if (isPrismaUniqueError(error)) {
+        throw new JournalError('CURSOR_CONFLICT', 'Cursor was created concurrently')
+      }
       throw asJournalDatabaseError(error)
     }
   }
