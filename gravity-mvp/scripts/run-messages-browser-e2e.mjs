@@ -190,13 +190,18 @@ async function assertChannelRows() {
   for (const channel of ['max', 'telegram', 'whatsapp']) {
     const selector = `[data-channel-row="${channel}"]`
     await page.waitForSelector(selector, { timeout: timeoutMs })
-    const rows = await page.$$eval(selector, elements => elements.map(element => ({
-      text: element.innerText,
-      scrollWidth: element.scrollWidth,
-      clientWidth: element.clientWidth,
-    })))
+    const rows = await page.$$eval(selector, elements => elements.map(element => {
+      const action = element.querySelector('[data-channel-action]')
+      return {
+        actionTitle: action?.getAttribute('title') || '',
+        canWrite: action?.getAttribute('data-channel-can-write') || null,
+        scrollWidth: element.scrollWidth,
+        clientWidth: element.clientWidth,
+      }
+    }))
     assert.equal(rows.length, 1, `${channel} must have exactly one canonical row`)
-    assert(rows[0].text.includes('????????'), `${channel} write action missing`)
+    assert(rows[0].actionTitle.length > 0, `${channel} write action missing`)
+    assert.equal(rows[0].canWrite, 'true', `${channel} write action must use its canonical route`)
     assert(rows[0].scrollWidth <= rows[0].clientWidth + 1, `${channel} row overflows`)
   }
 }
