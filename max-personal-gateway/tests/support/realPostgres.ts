@@ -22,6 +22,9 @@ export interface RealPrismaClient {
   readonly maxRouteConflict: Record<string, (...args: any[]) => Promise<any>>
   readonly maxInboundNormalizationResult: Record<string, (...args: any[]) => Promise<any>>
   readonly maxInboundNormalizedEvent: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxOutboundCommand: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxOutboundConversationActor: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxOutboundCommandReservation: Record<string, (...args: any[]) => Promise<any>>
   $connect(): Promise<void>
   $disconnect(): Promise<void>
   $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>

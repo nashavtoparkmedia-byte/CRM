@@ -297,10 +297,82 @@ model MaxRouteConversation {
   observations        MaxRouteObservation[]     @relation("RouteObservationCandidate")
   incumbentConflicts  MaxRouteConflict[]        @relation("RouteConflictIncumbent")
   candidateConflicts  MaxRouteConflict[]        @relation("RouteConflictCandidate")
+  outboundCommands    MaxOutboundCommand[]
+  outboundActor       MaxOutboundConversationActor?
 
   @@unique([accountId, conversationKey])
   @@index([accountId, state])
   @@index([accountId, routeVersion])
+}
+
+/// Immutable outbound intent. Dispatch and provider state deliberately do not
+/// exist at this boundary; Stage 4 can only prepare a future handoff.
+model MaxOutboundCommand {
+  commandId          String                          @id
+  accountId          String
+  conversationKey    String
+  clientMessageId    String?
+  commandSequence    Int
+  commandKind        String
+  envelopeVersion    String
+  commandPayload     Json
+  payloadSha256      String
+  source             String
+  createdAt          DateTime                        @default(now())
+  conversation       MaxRouteConversation            @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundCommand_account_conversation_fkey")
+  reservations       MaxOutboundCommandReservation[]
+
+  @@unique([accountId, conversationKey, commandSequence], map: "MaxOutboundCommand_account_conversation_sequence_key")
+  @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundCommand_account_conversation_command_sequence_key")
+  @@index([accountId, conversationKey, createdAt], map: "MaxOutboundCommand_account_conversation_created_idx")
+}
+
+/// Mutable coordination state for exactly one account-scoped conversation.
+/// Its lease epoch is not the SessionOwner fencing epoch and cannot authorize
+/// any physical provider action.
+model MaxOutboundConversationActor {
+  accountId           String
+  conversationKey     String
+  nextCommandSequence Int                               @default(0)
+  nextHandoffSequence Int                               @default(1)
+  leaseOwnerId        String?
+  leaseEpoch          Int                               @default(0)
+  leaseUntil          DateTime?
+  optimisticVersion   Int                               @default(0)
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  conversation        MaxRouteConversation              @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundConversationActor_account_conversation_fkey")
+  reservations        MaxOutboundCommandReservation[]
+
+  @@id([accountId, conversationKey])
+  @@index([leaseUntil], map: "MaxOutboundConversationActor_lease_until_idx")
+}
+
+/// Durable exclusive reservation of the current per-conversation FIFO head.
+/// `handed_off` means only that a future Dispatch Ledger boundary accepted the
+/// command; it is not provider acceptance, delivery, or read evidence.
+model MaxOutboundCommandReservation {
+  reservationId     String                       @id @default(cuid())
+  accountId         String
+  conversationKey   String
+  commandId         String
+  commandSequence   Int
+  leaseOwnerId      String
+  leaseEpoch        Int
+  reservationState String
+  reservationVersion Int                        @default(0)
+  reservedAt        DateTime
+  leaseUntil        DateTime
+  releasedAt        DateTime?
+  handoffReference  String?
+  handedOffAt       DateTime?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  command           MaxOutboundCommand           @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundCommandReservation_command_fkey")
+  actor             MaxOutboundConversationActor @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundCommandReservation_actor_fkey")
+
+  @@index([reservationState, leaseUntil], map: "MaxOutboundCommandReservation_state_lease_idx")
+  @@index([accountId, conversationKey, commandSequence], map: "MaxOutboundCommandReservation_account_conversation_sequence_idx")
 }
 
 /// Current exact/provisional identity projection. The account-scoped unique

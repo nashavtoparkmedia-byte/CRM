@@ -7,6 +7,7 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:journal": "node --experimental-strip-types --test tests/*.test.ts",
     "test:stage3": "node --experimental-strip-types --test tests/inbound*.test.ts tests/shadowInboundProcessor.test.ts",
+    "test:stage4": "node --experimental-strip-types --test tests/outbound*.test.ts",
     "test:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }

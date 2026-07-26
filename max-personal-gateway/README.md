@@ -1,6 +1,6 @@
-# MAX Personal Gateway — Stages 1–3
+# MAX Personal Gateway — Stages 1–4
 
-This module implements the offline transport foundations through Stage 3: Raw Event Journal, durable Route Registry, and shadow inbound normalization. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
+This module implements the offline transport foundations through Stage 4: Raw Event Journal, durable Route Registry, shadow inbound normalization, and durable per-conversation outbound actors. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
 
 Each physical observation is immutable and receives a distinct `observationId` and monotonically ordered journal position, even when payload, hash, provider event ID, or timestamp are identical. Mutable processing state is stored separately and unique per `(observationId, parserVersion)`. Consumer cursors are isolated by consumer, account, and parser version.
 
@@ -28,7 +28,15 @@ The pure normalizer supports text and outbound echoes; JPEG, PDF, MP4, OGG/voice
 
 The shadow processor claims the existing parser-versioned raw processing state, then atomically inserts the terminal result/events and terminal processing state in PostgreSQL. It reuses the Stage 1 account/parser consumer cursor and advances only after a durable normalized, unsupported, or quarantined result. PostgreSQL remains authoritative; Redis is not a dependency. There is no Contact resolution, CRM projection, Route Registry mutation, media worker, browser navigation, listener/sender wiring, or provider action.
 
-`MAX_INBOUND_NORMALIZER_ENABLED` is a fail-closed account allowlist and defaults to false. The flag is not imported by the existing MAX listener and Stage 3 is shadow/offline only by absence of runtime wiring. The additive migration is exercised only by the disposable real PostgreSQL gate; it is not applied to production. Stage 4 has not started.
+`MAX_INBOUND_NORMALIZER_ENABLED` is a fail-closed account allowlist and defaults to false. The flag is not imported by the existing MAX listener and Stage 3 is shadow/offline only by absence of runtime wiring. The additive migration is exercised only by the disposable real PostgreSQL gate; it is not applied to production.
+
+## Stage 4: durable per-conversation outbound actors
+
+An immutable outbound text command is addressed only by `(accountId, conversationKey)`. PostgreSQL allocates `commandSequence` transactionally on that conversation's actor row, preserving an independent FIFO for every conversation. Exact `commandId` and account-scoped `clientMessageId` retries are idempotent; text, payload hashes, timestamps, names, phones, and route identifiers are never deduplication keys. Consequently identical text with different command/client IDs remains a distinct physical command and its whitespace and Unicode are preserved exactly.
+
+Each actor has an account/conversation-scoped lease, monotonic `leaseEpoch`, optimistic version and durable reservation of only `nextHandoffSequence`. Release or expiry keeps the same FIFO head retryable. Preparation reads the current sendable Route Registry snapshot and returns `physicalSendAuthorized: false`; unresolved, conflicted, retired, missing-protocol, open-conflict, or cross-account routes fail closed. The actor never mutates Route Registry state and never uses an active DOM dialog, global promise tail, global queue, Redis counter, provider identity supplied by a caller, or text/time matching.
+
+Actor lease is not SessionOwner fencing and never authorizes physical provider action. `handed_off` is only an atomic future Dispatch Ledger boundary marker: it is not a send, MAX acceptance, provider message identity, delivery, or read receipt. Stage 4 contains no Dispatch Ledger, browser/provider operation, runtime sender/listener integration, retry after physical action, or CRM projection. `MAX_PER_CHAT_OUTBOUND_ACTOR_ENABLED` is a fail-closed account allowlist and defaults to false. PostgreSQL is authoritative and the additive migration is exercised only by the disposable real PostgreSQL gate. Stage 5 has not started.
 
 ## Disposable real PostgreSQL gate
 
@@ -36,7 +44,7 @@ The opt-in integration suite never reads generic `DATABASE_URL`. It requires
 `PERSONAL_MAX_REAL_POSTGRES_URL`, rejects non-local hosts and the default
 PostgreSQL port, and requires a database name containing the
 `personal_max_...gate` disposable marker. The database must already contain the
-Stage 1, Stage 2, and Stage 3 migrations. A normal unit run therefore never opens a
+Stage 1, Stage 2, Stage 3, and Stage 4 migrations. A normal unit run therefore never opens a
 database connection.
 
 When the generated client is not installed at the normal Gravity package
