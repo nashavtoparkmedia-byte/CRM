@@ -364,7 +364,8 @@ export class MessageService {
      */
     static async recoverStuckMessages(maxAgeMinutes = 5): Promise<number> {
         const cutoff = new Date(Date.now() - maxAgeMinutes * 60_000)
-        const candidates = await (prisma.message as any).findMany({
+        const messageModel = prisma.message as any
+        const candidates = await messageModel.findMany({
             where: {
                 direction: 'outbound',
                 status: 'sent',
@@ -383,7 +384,7 @@ export class MessageService {
             .map((candidate: { id: string }) => candidate.id)
         if (recoverableIds.length === 0) return 0
 
-        const result = await (prisma.message as any).updateMany({
+        const result = await messageModel.updateMany({
             where: { id: { in: recoverableIds } },
             data: {
                 status: 'failed',
