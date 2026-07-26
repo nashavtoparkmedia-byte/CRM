@@ -127,6 +127,91 @@ model MaxPersonalSession {
   updatedAt               DateTime             @updatedAt
 }
 
+/// Append-only physical MAX transport observation. Correlation fields and
+/// payloadSha256 are deliberately non-unique: identical observations are
+/// distinct evidence and must receive distinct observationId/sequence values.
+model MaxRawTransportEvent {
+  observationId        String                      @id @default(cuid())
+  journalSequence      BigInt                      @unique @default(autoincrement())
+  accountId            String
+  observedAt           DateTime
+  persistedAt          DateTime                    @default(now())
+  sourceTransport      String
+  sourceOrigin         String
+  historyLive          String
+  socketGeneration     String?
+  frameId              String?
+  providerEventId      String?
+  transportSequence    String?
+  opcode                Int?
+  eventType             String?
+  payloadEncoding       String
+  sanitizedPayload      Json
+  payloadSha256         String
+  payloadSizeBytes      Int
+  replayAvailability    String                      @default("available")
+  quarantineReason      String?
+  sanitizerVersion      String
+  captureAdapterVersion String
+  schemaVersion         Int                         @default(1)
+  correlationMetadata   Json?
+  redactionMetadata     Json
+  quarantineEligible    Boolean                     @default(true)
+  processingStates      MaxRawTransportProcessing[]
+
+  @@index([accountId, journalSequence])
+  @@index([accountId, observedAt])
+  @@index([accountId, providerEventId])
+  @@index([accountId, frameId])
+  @@index([accountId, transportSequence])
+  @@index([payloadSha256])
+  @@index([opcode])
+}
+
+/// Mutable parser lifecycle is separate from immutable raw evidence. State is
+/// constrained by the reviewed migration and validated at the adapter boundary.
+/// A raw observation may be processed once per parserVersion without preventing
+/// a later parser version from replaying the same evidence.
+model MaxRawTransportProcessing {
+  id                  String               @id @default(cuid())
+  observationId       String
+  parserVersion       String
+  state               String               @default("pending")
+  attempts            Int                  @default(0)
+  claimedBy           String?
+  claimedAt           DateTime?
+  leaseUntil          DateTime?
+  leaseVersion        Int                  @default(0)
+  completedAt         DateTime?
+  lastErrorCode       String?
+  lastErrorSummary    String?
+  quarantineReason    String?
+  replayMetadata      Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  rawObservation      MaxRawTransportEvent @relation(fields: [observationId], references: [observationId], onDelete: Restrict)
+
+  @@unique([observationId, parserVersion])
+  @@index([state, leaseUntil])
+  @@index([claimedBy, leaseUntil])
+  @@index([parserVersion, state])
+}
+
+/// Durable account-scoped consumer progress. Optimistic version prevents a
+/// stale worker from silently overwriting a newer restart checkpoint.
+model MaxRawTransportCursor {
+  id                  String   @id @default(cuid())
+  consumerId          String
+  accountId           String
+  parserVersion       String
+  lastJournalSequence BigInt   @default(0)
+  version             Int      @default(0)
+  updatedAt           DateTime @updatedAt
+
+  @@unique([consumerId, accountId, parserVersion])
+  @@index([accountId, lastJournalSequence])
+}
+
 model WhatsAppConnection {
   id          String                   @id @default(cuid())
   name        String?
@@ -2302,4 +2387,3 @@ enum AiOutcome {
   dropped_no_input
   error
 }
-
