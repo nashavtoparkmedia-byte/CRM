@@ -160,12 +160,12 @@ test('MAX DOM recovery resolves browser route separately from protocol chat id',
 
   assert.match(scraper, /function dialogParticipantUiRouteId\(chatId\)/)
   assert.match(scraper, /function resolveUiRouteIdForChat\(chatId\)/)
-  assert.match(scraper, /const staticRouteId = UI_CHAT_ID_OVERRIDES\[chatIdStr\]/)
+  assert.match(scraper, /return resolveMaxUiRouteId\(chatIdStr, \{/)
   assert.match(scraper, /chatCache\.get\(chatIdStr\)/)
   assert.match(scraper, /String\(chat\.type\)\.toUpperCase\(\) !== 'DIALOG'/)
   assert.match(scraper, /const otherParticipants = participants/)
-  assert.match(scraper, /return \{ uiRouteId: participantRouteId, source: 'dialog_participant' \}/)
-  assert.match(scraper, /return \{ uiRouteId: chatIdStr, source: 'protocol_chat_id' \}/)
+  assert.match(scraper, /overrides: UI_CHAT_ID_OVERRIDES/)
+  assert.match(scraper, /participantRouteId,/)
   assert.match(scraper, /'901943199056': '66896'/)
   assertBeforeAfter(
     scraper,
@@ -321,7 +321,7 @@ test('MAX reply text uses a MAX provider frame with a real target and is not dow
   assertBefore(
     block,
     'if (replyToMessageId) {',
-    'const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId',
+    'const uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId',
     'reply failures must stop before plain UI fallback can send an unquoted message',
   )
 })

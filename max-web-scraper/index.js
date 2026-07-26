@@ -28,6 +28,7 @@ const {
   createMaxProviderProfileEvidence,
   isBoundMaxPhoneEvidence,
 } = require('./contacts/MaxPhoneEvidence')
+const { resolveMaxUiRouteId }       = require('./contacts/MaxChatRoutes')
 const {
   createReactionEventDeduper,
   explicitChatReactionConfirms,
@@ -102,13 +103,11 @@ function dialogParticipantUiRouteId(chatId) {
 
 function resolveUiRouteIdForChat(chatId) {
   const chatIdStr = String(chatId || '')
-  const staticRouteId = UI_CHAT_ID_OVERRIDES[chatIdStr]
-  if (staticRouteId) return { uiRouteId: String(staticRouteId), source: 'static_override' }
-
   const participantRouteId = dialogParticipantUiRouteId(chatIdStr)
-  if (participantRouteId) return { uiRouteId: participantRouteId, source: 'dialog_participant' }
-
-  return { uiRouteId: chatIdStr, source: 'protocol_chat_id' }
+  return resolveMaxUiRouteId(chatIdStr, {
+    overrides: UI_CHAT_ID_OVERRIDES,
+    participantRouteId,
+  })
 }
 
 const MAX_DELIVERY_STATUSES = new Set([
@@ -940,7 +939,7 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
       let attUrl = att.url
       const attType = String(att.type || '').toLowerCase()
       if (!attUrl && att.name && ['audio', 'voice', 'file', 'document'].includes(String(att.type || '').toLowerCase())) {
-        const uiRouteId = UI_CHAT_ID_OVERRIDES[String(rawChatId)] || UI_CHAT_ID_OVERRIDES[String(msg.chatId)] || String(rawChatId || msg.chatId)
+        const uiRouteId = resolveUiRouteIdForChat(rawChatId || msg.chatId).uiRouteId
         const domFile = await downloadDomFileAttachment(uiRouteId, att.name, att.mimeType, att.type)
         if (domFile?.url) {
           downloaded.push({
@@ -1081,7 +1080,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
   let resolvedReplyToMessageId = replyToMessageId ? String(replyToMessageId) : null
   let resolvedReplyChatId = null
 
-  const directUiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
+  const directUiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
   if (directUiRouteId && !replyToMessageId) {
     const directText = text
     const ackPromise = waitForUiSendAck(transport, 15_000, {
@@ -1198,7 +1197,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         console.warn('[sendText] reply send failed without MAX confirmation; not downgrading to plain UI text')
         throw e
       }
-      const uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || chatId
+      const uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
       const ackPromise = waitForUiSendAck(transport, 15_000, {
         chatId,
         text,
@@ -1640,7 +1639,7 @@ function waitForUiMediaEcho(transport, options = {}) {
 async function sendMediaViaUi(chatId, fileBuffer, filename, mimeType, caption, transportForAck = null) {
   if (!page || !isReady) return false
 
-  const uiRouteId = UI_CHAT_ID_OVERRIDES[String(chatId)] || String(chatId)
+  const uiRouteId = resolveUiRouteIdForChat(chatId).uiRouteId
   const targetUrl = `https://web.max.ru/${uiRouteId}`
   if (transportForAck) transportForAck._activeUiChatId = protocolChatIdForUiRoute(chatId)
   const safeName = String(filename || 'upload.bin').replace(/[^\w.\-]+/g, '_').slice(-120) || 'upload.bin'
@@ -6302,7 +6301,7 @@ app.post('/send-image', async (req, res) => {
     const externalId = await enqueueSend(async () => {
       if (phone || uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)]) {
         try {
-          let uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
+          let uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
           if (!uiRouteId && phone) {
             uiRouteId = await resolvePhoneLive(String(phone).replace(/\D/g, ''))
             if (uiRouteId) console.log(`[send-image] phone resolved for UI-first media: ${phone} -> ${uiRouteId}`)
@@ -6323,12 +6322,12 @@ app.post('/send-image', async (req, res) => {
         return await sendImage(transport, page, Number(chatId), fileBuffer, filename, mimeType, caption)
       } catch (nativeErr) {
         console.warn(`[send-image] native send failed, trying UI fallback: ${nativeErr.message}`)
-        let uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
+        let uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
         if (!uiRouteId && phone) {
           uiRouteId = await resolvePhoneLive(String(phone).replace(/\D/g, ''))
           if (uiRouteId) console.log(`[send-image] phone resolved for UI fallback: ${phone} -> ${uiRouteId}`)
         }
-        uiRouteId = uiRouteId || Number(chatId)
+        uiRouteId = uiRouteId || resolveUiRouteIdForChat(chatId).uiRouteId
         const uiSent = await sendMediaViaUi(uiRouteId, fileBuffer, filename, mimeType, caption, transport)
         if (uiSent) return uiSent
         throw nativeErr
@@ -6360,7 +6359,7 @@ app.post('/send-media', async (req, res) => {
       const shouldPreferUiMedia = (mediaType === 'image' || mimeType.startsWith('image/')) && (hasCaption || phone || uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)])
       if (shouldPreferUiMedia) {
         try {
-          let uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
+          let uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
           if (!uiRouteId && phone) {
             uiRouteId = await resolvePhoneLive(String(phone).replace(/\D/g, ''))
             if (uiRouteId) console.log(`[send-media] phone resolved for UI-first media: ${phone} -> ${uiRouteId}`)
@@ -6394,12 +6393,12 @@ app.post('/send-media', async (req, res) => {
       }
       } catch (nativeErr) {
         console.warn(`[send-media] native send failed, trying UI fallback: ${nativeErr.message}`)
-        let uiRouteId = uiChatId || UI_CHAT_ID_OVERRIDES[String(chatId)] || null
+        let uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
         if (!uiRouteId && phone) {
           uiRouteId = await resolvePhoneLive(String(phone).replace(/\D/g, ''))
           if (uiRouteId) console.log(`[send-media] phone resolved for UI fallback: ${phone} -> ${uiRouteId}`)
         }
-        uiRouteId = uiRouteId || cid
+        uiRouteId = uiRouteId || resolveUiRouteIdForChat(chatId).uiRouteId
         const uiSent = await sendMediaViaUi(uiRouteId, fileBuffer, filename, mimeType, caption, transport)
         if (uiSent) return uiSent
         throw nativeErr
