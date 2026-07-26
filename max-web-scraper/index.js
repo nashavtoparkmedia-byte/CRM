@@ -42,6 +42,7 @@ const {
 } = require('./lib/MaxMessageOrdering')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
+const { PerKeyTaskQueue }          = require('./lib/PerKeyTaskQueue')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -1026,22 +1027,27 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
       }
     }
     if (downloaded.length === 0) {
-      appendDebugJson('max_media_dropped_no_attachment.jsonl', {
+      appendDebugJson('max_media_retryable_no_attachment.jsonl', {
         chatId: msg.chatId,
         messageId: msg.id,
         messageType: payload.messageType,
         text: payload.text ? '[present]' : '',
         attachmentCount: msg.attachments.length,
       })
-      if (!String(payload.text || '').trim() && ['image', 'photo'].includes(String(payload.messageType || '').toLowerCase())) {
-        console.warn(`[media_no_download_source] dropped empty image message chatId=${msg.chatId} messageId=${msg.id || 'n/a'}`)
-        return
-      }
-      if (String(payload.text || '').trim()) {
-        payload = { ...payload, messageType: 'text', attachments: [] }
-      }
+      console.warn(`[media_no_download_source] preserving retryable message chatId=${msg.chatId} messageId=${msg.id || 'n/a'}`)
     }
-    payload = { ...payload, attachments: downloaded }
+    const failedDownloadCount = downloaded.filter(att => att.downloadStatus === 'failed').length
+    payload = {
+      ...payload,
+      attachments: downloaded,
+      attachmentResolution: {
+        status: downloaded.length > 0 && failedDownloadCount === 0 ? 'resolved' : 'retryable',
+        reason: downloaded.length === 0 ? 'no_download_source' : (failedDownloadCount > 0 ? 'download_failed' : null),
+        expectedCount: msg.attachments.length,
+        resolvedCount: downloaded.length - failedDownloadCount,
+        failedCount: failedDownloadCount,
+      },
+    }
   }
 
   try {
@@ -3088,17 +3094,23 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     }
   }
 
-  const attachments = await materializeDomFallbackAttachments(uiRouteId, latest.attachments || [])
+  const rawAttachmentHints = latest.attachments || []
+  const attachments = await materializeDomFallbackAttachments(uiRouteId, rawAttachmentHints)
   const text = attachments.length > 0 ? cleanDomMediaCaption(latest.text, attachments) : latest.text
-  if (!text && !attachments.length) return { skipped: 'no_download_source', rawAttachments: latest.attachments?.length || 0 }
+  if (!text && !attachments.length && !rawAttachmentHints.length) {
+    return { skipped: 'no_content', rawAttachments: 0 }
+  }
 
+  const attachmentIdentity = attachments.length > 0 ? attachments : rawAttachmentHints
   const externalId = isOutgoingCandidate
-    ? stableDomMirrorMessageId(chatId, text, attachments, latest)
-    : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachments, latest))
+    ? stableDomMirrorMessageId(chatId, text, attachmentIdentity, latest)
+    : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachmentIdentity, latest))
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
   domFallbackSeen.add(externalId)
 
-  const messageType = attachments[0]?.type || 'text'
+  const rawMessageType = attachments[0]?.type || rawAttachmentHints[0]?.type || 'text'
+  const messageType = ['photo', 'image'].includes(String(rawMessageType).toLowerCase())
+    ? 'image' : rawMessageType
   const cachedPhone = cachedPhoneForChatId(chatId, uiRouteId)
   const cachedPhoneEvidence = cachedPhoneEvidenceForChatId(chatId, uiRouteId)
   const crmPhone = normalizePhoneForCrmPayload(options.phone || cachedPhone)
@@ -3116,6 +3128,14 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
     timestamp: latest._providerTimestamp || options.timestamp || Date.now(),
     messageType,
     attachments,
+    ...(rawAttachmentHints.length > 0 ? {
+      attachmentResolution: {
+        status: attachments.length > 0 ? 'resolved' : 'retryable',
+        reason: attachments.length > 0 ? null : 'dom_download_source_unavailable',
+        expectedCount: rawAttachmentHints.length,
+        resolvedCount: attachments.length,
+      },
+    } : {}),
     isOutgoing: isOutgoingCandidate,
     source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
@@ -5370,6 +5390,7 @@ const session      = new SessionController()
 const transport    = new TransportInterceptor()
 const sync         = new MessageSync()
 const contactStore = new ContactStore()
+const inboundMessageQueue = new PerKeyTaskQueue()
 
 const chatCache = new Map()  // chatId → chat object (собирается из opcode 48 при старте)
 
@@ -5701,7 +5722,10 @@ async function init() {
   })
 
   transport.onMessage(msg => {
-    handleIncoming(msg, mediaPipeline, sync, transport).catch(e =>
+    const queueKey = normalizeMaxChatId(msg?.chatId || 'unknown')
+    inboundMessageQueue.enqueue(queueKey, () =>
+      handleIncoming(msg, mediaPipeline, sync, transport)
+    ).catch(e =>
       console.error('[App] handleIncoming error:', e.message)
     )
   })

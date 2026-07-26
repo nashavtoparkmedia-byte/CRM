@@ -110,6 +110,11 @@ describe('MAX raw payload to rendered text trace', () => {
       return storedMessage
     })
     prismaMock.message.findMany.mockImplementation(async () => [storedMessage])
+    prismaMock.message.update.mockImplementation(async ({ where, data }) => ({
+      ...storedMessage,
+      id: where.id,
+      ...data,
+    }))
 
     contactServiceMock.resolveContact.mockResolvedValue({
       contact: { id: 'contact-1' },
@@ -178,6 +183,91 @@ describe('MAX raw payload to rendered text trace', () => {
     expect(createPayload.content).toBe('Подпись к изображению')
     expect(createPayload.metadata.attachments).toHaveLength(1)
     expect(createPayload.content).not.toContain('attachments')
+    expect(prismaMock.messageAttachment.create).toHaveBeenCalledTimes(1)
+  })
+
+  test('stores a retryable inbound image before its file is downloadable', async () => {
+    const response = await maxWebhookPost(webhookRequest({
+      externalId: 'd301-retryable-image',
+      chatId: '900001',
+      senderId: '700001',
+      timestamp: Date.now() - 1_000,
+      messageType: 'image',
+      attachments: [],
+      attachmentResolution: {
+        status: 'retryable',
+        reason: 'no_download_source',
+        expectedCount: 1,
+        resolvedCount: 0,
+        failedCount: 1,
+      },
+      isOutgoing: false,
+      source: 'transport',
+    }))
+
+    expect(response.status).toBe(200)
+    const createPayload = prismaMock.message.upsert.mock.calls[0][0].create
+    expect(createPayload.content).toBe('[\u0424\u043e\u0442\u043e]')
+    expect(createPayload.metadata.attachmentResolution).toEqual({
+      status: 'retryable',
+      reason: 'no_download_source',
+      expectedCount: 1,
+      resolvedCount: 0,
+      failedCount: 1,
+    })
+    expect(prismaMock.messageAttachment.create).not.toHaveBeenCalled()
+  })
+
+  test('upgrades the same retryable image when its attachment arrives', async () => {
+    prismaMock.message.upsert.mockResolvedValue({
+      id: 'message-retryable',
+      chatId: 'chat-1',
+      metadata: {
+        attachmentResolution: {
+          status: 'retryable',
+          reason: 'no_download_source',
+        },
+      },
+    })
+
+    const response = await maxWebhookPost(webhookRequest({
+      externalId: 'd301-retryable-image',
+      chatId: '900001',
+      senderId: '700001',
+      timestamp: Date.now() - 1_000,
+      messageType: 'image',
+      attachments: [{
+        type: 'image',
+        name: 'photo.jpg',
+        mimeType: 'image/jpeg',
+        url: 'data:image/jpeg;base64,ZmFrZQ==',
+        downloadStatus: 'ok',
+      }],
+      attachmentResolution: {
+        status: 'resolved',
+        expectedCount: 1,
+        resolvedCount: 1,
+        failedCount: 0,
+      },
+      isOutgoing: false,
+      source: 'transport',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(prismaMock.message.update).toHaveBeenCalledWith({
+      where: { id: 'message-retryable' },
+      data: {
+        metadata: {
+          attachmentResolution: {
+            status: 'resolved',
+            reason: null,
+            expectedCount: 1,
+            resolvedCount: 1,
+            failedCount: 0,
+          },
+        },
+      },
+    })
     expect(prismaMock.messageAttachment.create).toHaveBeenCalledTimes(1)
   })
 

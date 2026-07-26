@@ -82,6 +82,8 @@ type AttachmentLike = {
   fileSize?: number | string | null
   type?: string | null
   url?: string | null
+  downloadStatus?: string | null
+  downloadError?: string | null
 }
 
 type MaxWebhookBody = {
@@ -104,6 +106,13 @@ type MaxWebhookBody = {
   timestamp?: string | number | null
   messageType?: string | null
   attachments?: AttachmentLike[] | null
+  attachmentResolution?: {
+    status?: string | null
+    reason?: string | null
+    expectedCount?: number | null
+    resolvedCount?: number | null
+    failedCount?: number | null
+  } | null
   isOutgoing?: boolean | null
   deleted?: boolean | null
   forwardedFrom?: unknown
@@ -177,7 +186,7 @@ export async function POST(request: Request) {
     const {
       externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone,
       phoneEvidence, text, timestamp, messageType, attachments, isOutgoing,
-      deleted, forwardedFrom, source, replyToExternalId, replyQuoteText, chatKind,
+      attachmentResolution, deleted, forwardedFrom, source, replyToExternalId, replyQuoteText, chatKind,
     } = body
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
@@ -218,9 +227,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, skipped: 'empty_text' })
     }
     const usableAttachments = Array.isArray(attachments)
-      ? attachments.filter((att): att is AttachmentLike & { url: string } => att && typeof att.url === 'string' && att.url.length > 0)
+      ? attachments.filter((att): att is AttachmentLike & { url: string } =>
+          Boolean(att) &&
+          att.downloadStatus !== 'failed' &&
+          typeof att.url === 'string' &&
+          att.url.length > 0
+        )
       : []
-    if (!isOutgoing && messageType === 'image' && usableAttachments.length === 0) {
+    const retryableAttachment = attachmentResolution?.status === 'retryable'
+    const attachmentResolutionMetadata = messageType && messageType !== 'text'
+      ? {
+          status: retryableAttachment ? 'retryable' : 'resolved',
+          reason: retryableAttachment ? (attachmentResolution?.reason || 'download_pending') : null,
+          expectedCount: Number(attachmentResolution?.expectedCount ?? attachments?.length ?? 0),
+          resolvedCount: Number(attachmentResolution?.resolvedCount ?? usableAttachments.length),
+          failedCount: Number(
+            attachmentResolution?.failedCount ??
+            (attachments?.filter(att => att.downloadStatus === 'failed').length || 0)
+          ),
+        }
+      : null
+    if (
+      !isOutgoing &&
+      messageType === 'image' &&
+      usableAttachments.length === 0 &&
+      !retryableAttachment
+    ) {
       console.warn(`[MAX Webhook] skipped image without attachment chatId=${chatId} externalId=${externalId || 'n/a'}`)
       opsLog('warn', 'max_image_without_attachment_skipped', {
         channel: 'max',
@@ -534,7 +566,7 @@ export async function POST(request: Request) {
             type: msgType,
             content,
             sentAt,
-            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
+            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(attachmentResolutionMetadata ? { attachmentResolution: attachmentResolutionMetadata } : {}), ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
           },
         })
         console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
@@ -618,9 +650,21 @@ export async function POST(request: Request) {
           externalId: externalIdString,
           status:    'delivered',
           sentAt,   // validated above
-          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
+          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(attachmentResolutionMetadata ? { attachmentResolution: attachmentResolutionMetadata } : {}), ...(source ? { source } : {}), ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
         },
       })
+    }
+    if (attachmentResolutionMetadata?.status === 'resolved') {
+      const existingMetadata = metadataRecord(message.metadata)
+      const previousResolution = metadataRecord(existingMetadata.attachmentResolution)
+      if (previousResolution.status === 'retryable') {
+        message = await prisma.message.update({
+          where: { id: message.id },
+          data: {
+            metadata: { ...existingMetadata, attachmentResolution: attachmentResolutionMetadata },
+          },
+        })
+      }
     }
     maxRuntimeTrace('webhook.stored', {
       providerMessageId: externalIdString,
