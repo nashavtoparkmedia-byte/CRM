@@ -158,7 +158,9 @@ model MaxRawTransportEvent {
   redactionMetadata     Json
   quarantineEligible    Boolean                     @default(true)
   processingStates      MaxRawTransportProcessing[]
+  routeObservations     MaxRouteObservation[]
 
+  @@unique([accountId, observationId])
   @@index([accountId, journalSequence])
   @@index([accountId, observedAt])
   @@index([accountId, providerEventId])
@@ -210,6 +212,114 @@ model MaxRawTransportCursor {
 
   @@unique([consumerId, accountId, parserVersion])
   @@index([accountId, lastJournalSequence])
+}
+
+/// Stable internal route anchor. Provider identifiers are projections and may
+/// drift; they never replace the account-scoped conversationKey.
+model MaxRouteConversation {
+  id                  String                    @id @default(cuid())
+  accountId           String
+  conversationKey     String
+  routeVersion        Int                       @default(0)
+  optimisticVersion   Int                       @default(0)
+  state               String                    @default("unresolved")
+  retiredAt           DateTime?
+  retiredBy           String?
+  retirementReason    String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  identities          MaxRouteIdentityBinding[]
+  observations        MaxRouteObservation[]     @relation("RouteObservationCandidate")
+  incumbentConflicts  MaxRouteConflict[]        @relation("RouteConflictIncumbent")
+  candidateConflicts  MaxRouteConflict[]        @relation("RouteConflictCandidate")
+
+  @@unique([accountId, conversationKey])
+  @@index([accountId, state])
+  @@index([accountId, routeVersion])
+}
+
+/// Current exact/provisional identity projection. The account-scoped unique
+/// key prevents last-write-wins reassignment of one provider identity.
+model MaxRouteIdentityBinding {
+  id              String               @id @default(cuid())
+  accountId       String
+  identityKind    String
+  identityValue   String
+  conversationKey String
+  status          String               @default("provisional")
+  firstSeenAt     DateTime
+  lastSeenAt      DateTime
+  evidenceRef     String
+  version         Int                  @default(0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  conversation    MaxRouteConversation @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+
+  @@unique([accountId, identityKind, identityValue])
+  @@index([accountId, conversationKey, status])
+  @@index([accountId, identityKind, status])
+}
+
+/// Append-only extracted routing evidence. Idempotency is scoped to one
+/// physical/source observation and extractor result, never payload similarity.
+model MaxRouteObservation {
+  routeObservationId       String                @id @default(cuid())
+  accountId                String
+  idempotencyKey           String
+  sourceRawObservationId   String?
+  extractorVersion         String
+  observedAt               DateTime
+  evidenceSource           String
+  evidenceAuthority        String
+  candidateConversationKey String?
+  identityKind             String
+  identityValue            String
+  sanitizedEvidence        Json
+  evidenceSha256           String
+  evidenceSizeBytes        Int
+  evidenceQuarantined      Boolean               @default(false)
+  redactionMetadata        Json
+  processingResult         String
+  routeVersionAfter        Int?
+  createdAt                DateTime              @default(now())
+  candidateConversation    MaxRouteConversation? @relation("RouteObservationCandidate", fields: [accountId, candidateConversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+  conflicts                MaxRouteConflict[]
+  sourceRawObservation     MaxRawTransportEvent? @relation(fields: [accountId, sourceRawObservationId], references: [accountId, observationId], onDelete: Restrict)
+
+  @@unique([accountId, idempotencyKey])
+  @@unique([accountId, routeObservationId])
+  @@index([sourceRawObservationId])
+  @@index([accountId, observedAt])
+  @@index([accountId, candidateConversationKey])
+}
+
+/// Durable ambiguity record. Resolution is explicit, versioned, and audited;
+/// automatic observation never silently reassigns an incumbent binding.
+model MaxRouteConflict {
+  conflictId                  String                @id @default(cuid())
+  accountId                   String
+  identityKind                String
+  identityValue               String
+  incumbentConversationKey    String
+  candidateConversationKey    String
+  sourceRouteObservationId    String
+  status                      String                @default("open")
+  expectedRouteVersion        Int
+  version                     Int                   @default(0)
+  createdAt                   DateTime              @default(now())
+  resolvedAt                  DateTime?
+  resolutionReason            String?
+  resolvedBy                  String?
+  auditMetadata               Json?
+  incumbentConversation       MaxRouteConversation  @relation("RouteConflictIncumbent", fields: [accountId, incumbentConversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+  candidateConversation       MaxRouteConversation  @relation("RouteConflictCandidate", fields: [accountId, candidateConversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+  sourceObservation           MaxRouteObservation   @relation(fields: [accountId, sourceRouteObservationId], references: [accountId, routeObservationId], onDelete: Restrict)
+
+  @@unique([accountId, sourceRouteObservationId])
+  @@index([accountId, status, createdAt])
+  @@index([accountId, identityKind, identityValue, status])
+  @@index([accountId, incumbentConversationKey, status])
+  @@index([accountId, candidateConversationKey, status])
 }
 
 model WhatsAppConnection {
