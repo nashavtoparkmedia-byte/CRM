@@ -43,6 +43,7 @@ const {
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
 const { PerKeyTaskQueue }          = require('./lib/PerKeyTaskQueue')
+const { SerializedOutboundQueue }  = require('./lib/SerializedOutboundQueue')
 const { resolveOutboundProviderMessageId } = require('./lib/MaxOutboundConfirmation')
 const QRCode                       = require('qrcode')
 
@@ -768,24 +769,10 @@ function previewAttachmentFromData(att, msg) {
   }
 }
 
-const sendQueue = []
-let   isSending = false
+const outboundSendQueue = new SerializedOutboundQueue()
 
 async function enqueueSend(fn) {
-  return new Promise((resolve, reject) => {
-    sendQueue.push({ fn, resolve, reject })
-    if (!isSending) processSendQueue()
-  })
-}
-
-async function processSendQueue() {
-  isSending = true
-  while (sendQueue.length > 0) {
-    const { fn, resolve, reject } = sendQueue.shift()
-    try   { resolve(await fn()) }
-    catch (e) { reject(e) }
-  }
-  isSending = false
+  return outboundSendQueue.enqueue(fn)
 }
 
 // ─── CRM webhook forward ─────────────────────────────────────────────────────
@@ -6465,7 +6452,7 @@ app.get('/contacts', (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: isReady ? 'ready' : 'initializing', isReady, queueLength: sendQueue.length })
+  res.json({ status: isReady ? 'ready' : 'initializing', isReady, queueLength: outboundSendQueue.size })
 })
 
 app.get('/status', (req, res) => {
