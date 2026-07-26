@@ -1,6 +1,9 @@
 import {
   CONTACT_PROFILE_PARK_ORDER,
+  type ContactChatPayload,
   type ContactDriverProfilePayload,
+  type ContactIdentityPayload,
+  type ContactPhonePayload,
   type DriverProfileStatus,
 } from './contact-profile-contract'
 
@@ -52,6 +55,93 @@ export function getIdentitySourceLabel(source: string | null | undefined): strin
   if (source === 'auto') return 'Автоматически'
   if (source === 'manual') return 'Вручную'
   return 'Связан'
+}
+
+function normalizedPhoneDigits(value: string | null | undefined): string {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('8')) return `7${digits.slice(1)}`
+  if (digits.length === 10) return `7${digits}`
+  return digits
+}
+
+function strongerReachability(
+  left: ContactIdentityPayload['reachabilityStatus'],
+  right: ContactIdentityPayload['reachabilityStatus'],
+): ContactIdentityPayload['reachabilityStatus'] {
+  const rank = { unknown: 0, unreachable: 1, confirmed: 2 } as const
+  return rank[right] > rank[left] ? right : left
+}
+
+export function selectCanonicalContactChannelIdentities(input: {
+  identities: ContactIdentityPayload[]
+  chats: ContactChatPayload[]
+  phones: ContactPhonePayload[]
+}): ContactIdentityPayload[] {
+  const linkedIdentityIds = new Set(
+    input.chats.map(chat => chat.contactIdentityId).filter((id): id is string => Boolean(id)),
+  )
+  const phoneDigits = new Set(input.phones.map(phone => normalizedPhoneDigits(phone.phone)).filter(Boolean))
+  const byProviderIdentity = new Map<string, ContactIdentityPayload>()
+
+  for (const identity of input.identities) {
+    const key = `${identity.channel.toLowerCase()}:${identity.externalId.toLowerCase()}`
+    const existing = byProviderIdentity.get(key)
+    if (!existing) {
+      byProviderIdentity.set(key, identity)
+      continue
+    }
+    const preferIncoming = linkedIdentityIds.has(identity.id) && !linkedIdentityIds.has(existing.id)
+    const preferred = preferIncoming ? identity : existing
+    byProviderIdentity.set(key, {
+      ...preferred,
+      reachabilityStatus: strongerReachability(
+        existing.reachabilityStatus,
+        identity.reachabilityStatus,
+      ),
+    })
+  }
+
+  const deduped = Array.from(byProviderIdentity.values())
+  const byChannel = new Map<string, ContactIdentityPayload[]>()
+  for (const identity of deduped) {
+    const group = byChannel.get(identity.channel) || []
+    group.push(identity)
+    byChannel.set(identity.channel, group)
+  }
+
+  const selected: ContactIdentityPayload[] = []
+  for (const identities of byChannel.values()) {
+    const routed = identities.filter(identity => linkedIdentityIds.has(identity.id))
+    if (routed.length === 0) {
+      selected.push(...identities)
+      continue
+    }
+
+    const phonePlaceholders = identities.filter(identity =>
+      !linkedIdentityIds.has(identity.id) &&
+      Boolean(identity.phoneId) &&
+      phoneDigits.has(normalizedPhoneDigits(identity.externalId)),
+    )
+    const placeholderIds = new Set(phonePlaceholders.map(identity => identity.id))
+    const visible = identities.filter(identity => !placeholderIds.has(identity.id))
+
+    if (routed.length === 1 && phonePlaceholders.length > 0) {
+      const routeId = routed[0].id
+      const combinedStatus = phonePlaceholders.reduce(
+        (status, identity) => strongerReachability(status, identity.reachabilityStatus),
+        routed[0].reachabilityStatus,
+      )
+      selected.push(...visible.map(identity =>
+        identity.id === routeId
+          ? { ...identity, reachabilityStatus: combinedStatus }
+          : identity
+      ))
+    } else {
+      selected.push(...visible)
+    }
+  }
+
+  return selected
 }
 
 function russianForm(count: number, one: string, few: string, many: string): string {

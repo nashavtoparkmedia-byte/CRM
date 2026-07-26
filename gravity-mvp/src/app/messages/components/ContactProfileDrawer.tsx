@@ -14,7 +14,7 @@ import CallButton from "@/components/sip/CallButton"
 import ContactDriverProfilesPanel from "./ContactDriverProfilesPanel"
 import AddPhoneResolutionDialog from "./AddPhoneResolutionDialog"
 import ContactChannelRow, { type ContactChannelBadge } from "./ContactChannelRow"
-import { countUniqueProviderChannels, formatProviderChannelCount, getIdentitySourceLabel } from "@/lib/contact-profile-ui"
+import { countUniqueProviderChannels, formatProviderChannelCount, getIdentitySourceLabel, selectCanonicalContactChannelIdentities } from "@/lib/contact-profile-ui"
 import { getSegmentLabel } from '@/lib/contact-display'
 import {
     readContactProfileFields,
@@ -602,12 +602,27 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
         }
     }
 
-    // ── Group identities by phone ─────────────────────────────
+    // Channel rows are canonical UI projections. Phone reachability placeholders
+    // stay in CRM data but collapse into the one provider identity that owns a chat.
+    const canonicalIdentities = contact
+        ? selectCanonicalContactChannelIdentities({
+            identities: contact.identities,
+            chats: contact.chats,
+            phones: contact.phones,
+        })
+        : []
+    const canonicalIdentityCountByChannel = new Map<string, number>()
+    for (const identity of canonicalIdentities) {
+        canonicalIdentityCountByChannel.set(
+            identity.channel,
+            (canonicalIdentityCountByChannel.get(identity.channel) || 0) + 1,
+        )
+    }
     const phonesWithIdentities = contact ? contact.phones.map(phone => ({
         phone,
-        identities: contact.identities.filter(i => i.phoneId === phone.id),
+        identities: canonicalIdentities.filter(identity => identity.phoneId === phone.id),
     })) : []
-    const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
+    const orphanIdentities = canonicalIdentities.filter(identity => !identity.phoneId)
     return (
         <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
             {/* Header */}
@@ -813,7 +828,7 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                             // Channels that have identity for this phone
                             const existingChannels = new Set([
                                 ...identities.map(i => i.channel),
-                                ...contact.identities
+                                ...canonicalIdentities
                                     .filter(i => !i.phoneId && contact.chats.some(c => c.contactIdentityId === i.id))
                                     .map(i => i.channel),
                             ])
@@ -895,7 +910,9 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                                             const hasFailed = chStatus?.status === 'failed'
                                             const liveEntry = liveReachabilityFor(identity.channel, {
                                                 identityId: identity.id,
-                                            })
+                                            }) || ((canonicalIdentityCountByChannel.get(identity.channel) || 0) === 1
+                                                ? liveReachabilityFor(identity.channel)
+                                                : undefined)
                                             const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
                                             const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)
                                             const presentation = deriveChannelReachabilityPresentation({
@@ -913,7 +930,7 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                                                 },
                                                 ...(presentation.connectionBadge ? [presentation.connectionBadge] : []),
                                                 ...(presentation.routeBadge ? [presentation.routeBadge] : []),
-                                                ...getIdentitySourceBadges(identity, contact.identities.length),
+                                                ...getIdentitySourceBadges(identity, canonicalIdentities.length),
                                             ]
                                             return (
                                                 <ContactChannelRow
@@ -981,7 +998,9 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                             const hasFailed = chStatus?.status === 'failed'
                             const liveEntry = liveReachabilityFor(identity.channel, {
                                 identityId: identity.id,
-                            })
+                            }) || ((canonicalIdentityCountByChannel.get(identity.channel) || 0) === 1
+                                ? liveReachabilityFor(identity.channel)
+                                : undefined)
                             const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
                             const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)
                             const presentation = deriveChannelReachabilityPresentation({
@@ -999,7 +1018,7 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                                 },
                                 ...(presentation.connectionBadge ? [presentation.connectionBadge] : []),
                                 ...(presentation.routeBadge ? [presentation.routeBadge] : []),
-                                ...getIdentitySourceBadges(identity, contact.identities.length),
+                                ...getIdentitySourceBadges(identity, canonicalIdentities.length),
                             ]
                             return (
                                 <OrphanIdentityRow
