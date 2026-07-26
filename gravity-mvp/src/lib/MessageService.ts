@@ -3,6 +3,7 @@ import { sendMessage as sendWhatsAppMessage } from './whatsapp/WhatsAppService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
 import { ChatChannel, MessageStatus } from '@prisma/client'
+import { shouldMarkStuckOutboundFailed } from '@/lib/max-delivery-recovery'
 
 function serialize(obj: any): any {
     return JSON.parse(JSON.stringify(obj, (key, value) =>
@@ -363,22 +364,30 @@ export class MessageService {
      */
     static async recoverStuckMessages(maxAgeMinutes = 5): Promise<number> {
         const cutoff = new Date(Date.now() - maxAgeMinutes * 60_000)
-        const result = await (prisma.message as any).updateMany({
+        const candidates = await (prisma.message as any).findMany({
             where: {
                 direction: 'outbound',
                 status: 'sent',
-                externalId: null, // NEW — skip anything that already has a provider id
+                externalId: null, // skip anything that already has a provider id
                 sentAt: { lt: cutoff },
-                // Call-type messages are NOT outbound text we're trying to deliver —
-                // they're historical records of phone calls synced from FreeSWITCH.
-                // Recovery is for stuck text messages only; touching calls clobbers
-                // metadata.{callId,disposition,durationSec} which the chat timeline
-                // and call-card renderer rely on.
                 type: { not: 'call' },
             },
+            select: {
+                id: true,
+                channel: true,
+                metadata: true,
+            },
+        })
+        const recoverableIds = candidates
+            .filter(shouldMarkStuckOutboundFailed)
+            .map((candidate: { id: string }) => candidate.id)
+        if (recoverableIds.length === 0) return 0
+
+        const result = await (prisma.message as any).updateMany({
+            where: { id: { in: recoverableIds } },
             data: {
                 status: 'failed',
-                metadata: { error: `Message stuck in 'sent' for >${maxAgeMinutes}min — marked failed by recovery` },
+                metadata: { error: `Message stuck in 'sent' for >${maxAgeMinutes}min - marked failed by recovery` },
             },
         })
         if (result.count > 0) {

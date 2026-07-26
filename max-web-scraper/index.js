@@ -43,6 +43,7 @@ const {
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
 const { PerKeyTaskQueue }          = require('./lib/PerKeyTaskQueue')
+const { resolveOutboundProviderMessageId } = require('./lib/MaxOutboundConfirmation')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -1089,6 +1090,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
   const directUiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
   if (directUiRouteId && !replyToMessageId) {
     const directText = text
+    const directSentAt = Date.now()
     const ackPromise = waitForUiSendAck(transport, 15_000, {
       chatId,
       text: directText,
@@ -1098,7 +1100,14 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
       return false
     })
     if (uiSent) {
-      const ackId = await ackPromise
+      const storeId = await resolveOutboundProviderMessageId({
+        bridge: new MaxWebReplyBridge(page),
+        protocolChatId: String(chatId),
+        uiRouteId: String(directUiRouteId),
+        text: directText,
+        sentAt: directSentAt,
+      })
+      const ackId = storeId || await ackPromise
       if (ackId && isRealMaxMessageId(ackId)) {
         console.log(`[sendText] Direct UI sent chatId=${chatId} route=${directUiRouteId} msgId=${ackId}`)
         return ackId
@@ -1204,6 +1213,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         throw e
       }
       const uiRouteId = uiChatId || resolveUiRouteIdForChat(chatId).uiRouteId
+      const fallbackSentAt = Date.now()
       const ackPromise = waitForUiSendAck(transport, 15_000, {
         chatId,
         text,
@@ -1213,7 +1223,14 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         return false
       })
       if (uiSent) {
-        const ackId = await ackPromise
+        const storeId = await resolveOutboundProviderMessageId({
+          bridge: new MaxWebReplyBridge(page),
+          protocolChatId: String(chatId),
+          uiRouteId: String(uiRouteId),
+          text,
+          sentAt: fallbackSentAt,
+        })
+        const ackId = storeId || await ackPromise
         if (ackId && isRealMaxMessageId(ackId)) {
           console.log(`[sendText] UI fallback sent chatId=${chatId} msgId=${ackId}`)
           return ackId
