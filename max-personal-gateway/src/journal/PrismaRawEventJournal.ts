@@ -136,6 +136,10 @@ function isPrismaUniqueError(error: unknown): boolean {
   return error !== null && typeof error === 'object' && Reflect.get(error, 'code') === 'P2002'
 }
 
+function isPrismaTransactionConflict(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && Reflect.get(error, 'code') === 'P2034'
+}
+
 function replayAvailability(value: unknown): ReplayAvailability {
   if (value !== 'available' && value !== 'quarantined') {
     throw new JournalError('INVALID_INPUT', 'Replay availability is not supported')
@@ -426,6 +430,9 @@ export class PrismaRawEventJournal implements RawEventJournal {
         return mapProcessing(record)
       })
     } catch (error) {
+      if (isPrismaUniqueError(error) || isPrismaTransactionConflict(error)) {
+        throw new JournalError('CLAIM_CONFLICT', 'Processing state was claimed concurrently')
+      }
       throw asJournalDatabaseError(error)
     }
   }

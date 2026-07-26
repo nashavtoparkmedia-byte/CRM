@@ -159,6 +159,7 @@ model MaxRawTransportEvent {
   quarantineEligible    Boolean                     @default(true)
   processingStates      MaxRawTransportProcessing[]
   routeObservations     MaxRouteObservation[]
+  normalizationResults  MaxInboundNormalizationResult[]
 
   @@unique([accountId, observationId])
   @@index([accountId, journalSequence])
@@ -212,6 +213,70 @@ model MaxRawTransportCursor {
 
   @@unique([consumerId, accountId, parserVersion])
   @@index([accountId, lastJournalSequence])
+}
+
+/// Immutable terminal normalization outcome for one physical observation and
+/// parser version. Replaying with a new parserVersion creates another result;
+/// byte-identical physical observations are never collapsed.
+model MaxInboundNormalizationResult {
+  normalizationResultId String                        @id @default(cuid())
+  accountId              String
+  sourceObservationId    String
+  sourceJournalSequence  BigInt
+  parserVersion          String
+  envelopeVersion        String
+  status                 String
+  eventCount             Int
+  issueCode              String?
+  safeIssueSummary       String?
+  startedAt              DateTime
+  completedAt            DateTime
+  createdAt              DateTime                      @default(now())
+  sourceObservation      MaxRawTransportEvent           @relation(fields: [accountId, sourceObservationId], references: [accountId, observationId], onDelete: Restrict, map: "MaxInboundNormalizationResult_account_source_fkey")
+  events                 MaxInboundNormalizedEvent[]
+
+  @@unique([accountId, sourceObservationId, parserVersion], map: "MaxInboundNormalizationResult_account_source_parser_key")
+  @@unique([accountId, normalizationResultId], map: "MaxInboundNormalizationResult_account_result_key")
+  @@unique([accountId, normalizationResultId, sourceObservationId, parserVersion], map: "MaxInboundNormalizationResult_account_result_source_parser_key")
+  @@index([accountId, sourceJournalSequence], map: "MaxInboundNormalizationResult_account_sequence_idx")
+  @@index([accountId, parserVersion, sourceJournalSequence], map: "MaxInboundNormalizationResult_account_parser_sequence_idx")
+  @@index([status], map: "MaxInboundNormalizationResult_status_idx")
+}
+
+/// Immutable semantic event emitted by a completed normalization result.
+/// Provider and semantic hashes are correlation evidence, never dedup keys.
+model MaxInboundNormalizedEvent {
+  normalizedEventId     String                        @id @default(cuid())
+  normalizationResultId String
+  accountId             String
+  sourceObservationId   String
+  sourceJournalSequence BigInt
+  parserVersion         String
+  envelopeVersion       String
+  eventOrdinal          Int
+  eventKind             String
+  direction             String
+  origin                String
+  providerMessageId     String?
+  providerUserId        String?
+  protocolChatId        String?
+  webRouteId            String?
+  clientMessageId       String?
+  targetProviderMessageId String?
+  providerOccurredAt    DateTime?
+  normalizedPayload     Json
+  semanticSha256        String
+  createdAt             DateTime                      @default(now())
+  normalizationResult   MaxInboundNormalizationResult @relation(fields: [accountId, normalizationResultId, sourceObservationId, parserVersion], references: [accountId, normalizationResultId, sourceObservationId, parserVersion], onDelete: Restrict, map: "MaxInboundNormalizedEvent_result_account_source_parser_fkey")
+
+  @@unique([normalizationResultId, eventOrdinal], map: "MaxInboundNormalizedEvent_result_ordinal_key")
+  @@index([accountId, sourceJournalSequence], map: "MaxInboundNormalizedEvent_account_sequence_idx")
+  @@index([accountId, parserVersion, sourceJournalSequence], map: "MaxInboundNormalizedEvent_account_parser_sequence_idx")
+  @@index([accountId, providerMessageId], map: "MaxInboundNormalizedEvent_account_provider_message_idx")
+  @@index([accountId, protocolChatId], map: "MaxInboundNormalizedEvent_account_protocol_chat_idx")
+  @@index([accountId, providerUserId], map: "MaxInboundNormalizedEvent_account_provider_user_idx")
+  @@index([targetProviderMessageId], map: "MaxInboundNormalizedEvent_target_provider_message_idx")
+  @@index([eventKind], map: "MaxInboundNormalizedEvent_kind_idx")
 }
 
 /// Stable internal route anchor. Provider identifiers are projections and may

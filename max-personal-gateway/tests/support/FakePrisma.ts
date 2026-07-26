@@ -1,5 +1,9 @@
 import type { JsonValue, RedactionEvidence } from '../../src/journal/types.ts'
 import type { RawJournalPrismaClient, RawJournalPrismaTransaction } from '../../src/journal/PrismaRawEventJournal.ts'
+import type {
+  InboundNormalizationPrismaClient,
+  InboundNormalizationPrismaTransaction,
+} from '../../src/inbound/PrismaShadowInboundNormalizationProcessor.ts'
 
 interface RawRow {
   observationId: string
@@ -57,16 +61,62 @@ interface CursorRow {
   updatedAt: Date
 }
 
+interface NormalizationResultRow {
+  normalizationResultId: string
+  accountId: string
+  sourceObservationId: string
+  sourceJournalSequence: bigint
+  parserVersion: string
+  envelopeVersion: string
+  status: string
+  eventCount: number
+  issueCode: string | null
+  safeIssueSummary: string | null
+  startedAt: Date
+  completedAt: Date
+  createdAt: Date
+}
+
+interface NormalizedEventRow {
+  normalizedEventId: string
+  normalizationResultId: string
+  accountId: string
+  sourceObservationId: string
+  sourceJournalSequence: bigint
+  parserVersion: string
+  envelopeVersion: string
+  eventOrdinal: number
+  eventKind: string
+  direction: string
+  origin: string
+  providerMessageId: string | null
+  providerUserId: string | null
+  protocolChatId: string | null
+  webRouteId: string | null
+  clientMessageId: string | null
+  targetProviderMessageId: string | null
+  providerOccurredAt: Date | null
+  normalizedPayload: JsonValue
+  semanticSha256: string
+  createdAt: Date
+}
+
 interface Store {
   raw: RawRow[]
   processing: ProcessingRow[]
   cursors: CursorRow[]
+  normalizationResults: NormalizationResultRow[]
+  normalizedEvents: NormalizedEventRow[]
   sequence: bigint
 }
 
 interface FailurePlan {
   failRawCreate: boolean
   failProcessingCreate: boolean
+  failNormalizationResultCreate: boolean
+  failNormalizedEventCreateAt: number | null
+  failTerminalProcessingUpdate: boolean
+  normalizedEventCreates: number
 }
 
 function clone<T>(value: T): T {
@@ -85,7 +135,15 @@ function composite(where: Record<string, unknown>, key: string): Record<string, 
   return where[key] as Record<string, unknown>
 }
 
-function makeTransaction(store: Store, failures: FailurePlan): RawJournalPrismaTransaction {
+function prismaUnique(message: string): Error {
+  const error = new Error(message)
+  Object.assign(error, { code: 'P2002' })
+  return error
+}
+
+type FakeTransaction = RawJournalPrismaTransaction & InboundNormalizationPrismaTransaction
+
+function makeTransaction(store: Store, failures: FailurePlan): FakeTransaction {
   return {
     maxRawTransportEvent: {
       async create({ data }) {
@@ -132,8 +190,11 @@ function makeTransaction(store: Store, failures: FailurePlan): RawJournalPrismaT
           .map(clone)
       },
       async findUnique({ where }) {
-        const observationId = String(where.observationId)
-        return clone(store.raw.find(row => row.observationId === observationId) ?? null)
+        const key = where.accountId_observationId as Record<string, unknown> | undefined
+        const observationId = String(key?.observationId ?? where.observationId)
+        const accountId = key?.accountId === undefined ? undefined : String(key.accountId)
+        return clone(store.raw.find(row => row.observationId === observationId
+          && (accountId === undefined || row.accountId === accountId)) ?? null)
       },
     },
     maxRawTransportProcessing: {
@@ -169,6 +230,9 @@ function makeTransaction(store: Store, failures: FailurePlan): RawJournalPrismaT
         return this.create({ data: create })
       },
       async updateMany({ where, data }) {
+        if (failures.failTerminalProcessingUpdate && where.leaseVersion !== undefined) {
+          throw new Error('synthetic terminal processing failure')
+        }
         const rawAccount = (where.rawObservation as Record<string, unknown> | undefined)?.accountId
         const now = ((where.OR as Array<Record<string, unknown>> | undefined)?.find(condition => condition.leaseUntil)?.leaseUntil as Record<string, Date> | undefined)?.lt
         const allowedWorker = (where.OR as Array<Record<string, unknown>> | undefined)?.find(condition => condition.claimedBy)?.claimedBy
@@ -236,18 +300,120 @@ function makeTransaction(store: Store, failures: FailurePlan): RawJournalPrismaT
           && row.parserVersion === String(key.parserVersion)) ?? null)
       },
     },
+    maxInboundNormalizationResult: {
+      async create({ data }) {
+        if (failures.failNormalizationResultCreate) throw new Error('synthetic normalization result failure')
+        const duplicate = store.normalizationResults.some(row => row.accountId === String(data.accountId)
+          && row.sourceObservationId === String(data.sourceObservationId)
+          && row.parserVersion === String(data.parserVersion))
+        if (duplicate) throw prismaUnique('synthetic normalization result unique constraint')
+        const row: NormalizationResultRow = {
+          normalizationResultId: stringValue(data, 'normalizationResultId'),
+          accountId: stringValue(data, 'accountId'),
+          sourceObservationId: stringValue(data, 'sourceObservationId'),
+          sourceJournalSequence: data.sourceJournalSequence as bigint,
+          parserVersion: stringValue(data, 'parserVersion'),
+          envelopeVersion: stringValue(data, 'envelopeVersion'),
+          status: stringValue(data, 'status'),
+          eventCount: Number(data.eventCount),
+          issueCode: nullableString(data, 'issueCode'),
+          safeIssueSummary: nullableString(data, 'safeIssueSummary'),
+          startedAt: data.startedAt as Date,
+          completedAt: data.completedAt as Date,
+          createdAt: new Date('2026-07-26T00:00:02.000Z'),
+        }
+        store.normalizationResults.push(row)
+        return clone(row)
+      },
+      async findUnique({ where }) {
+        const key = composite(where, 'accountId_sourceObservationId_parserVersion')
+        return clone(store.normalizationResults.find(row => row.accountId === String(key.accountId)
+          && row.sourceObservationId === String(key.sourceObservationId)
+          && row.parserVersion === String(key.parserVersion)) ?? null)
+      },
+    },
+    maxInboundNormalizedEvent: {
+      async create({ data }) {
+        failures.normalizedEventCreates += 1
+        if (failures.failNormalizedEventCreateAt === failures.normalizedEventCreates) {
+          throw new Error('synthetic normalized event failure')
+        }
+        const duplicate = store.normalizedEvents.some(row => row.normalizationResultId === String(data.normalizationResultId)
+          && row.eventOrdinal === Number(data.eventOrdinal))
+        if (duplicate) throw prismaUnique('synthetic normalized event ordinal constraint')
+        const row: NormalizedEventRow = {
+          normalizedEventId: stringValue(data, 'normalizedEventId'),
+          normalizationResultId: stringValue(data, 'normalizationResultId'),
+          accountId: stringValue(data, 'accountId'),
+          sourceObservationId: stringValue(data, 'sourceObservationId'),
+          sourceJournalSequence: data.sourceJournalSequence as bigint,
+          parserVersion: stringValue(data, 'parserVersion'),
+          envelopeVersion: stringValue(data, 'envelopeVersion'),
+          eventOrdinal: Number(data.eventOrdinal),
+          eventKind: stringValue(data, 'eventKind'),
+          direction: stringValue(data, 'direction'),
+          origin: stringValue(data, 'origin'),
+          providerMessageId: nullableString(data, 'providerMessageId'),
+          providerUserId: nullableString(data, 'providerUserId'),
+          protocolChatId: nullableString(data, 'protocolChatId'),
+          webRouteId: nullableString(data, 'webRouteId'),
+          clientMessageId: nullableString(data, 'clientMessageId'),
+          targetProviderMessageId: nullableString(data, 'targetProviderMessageId'),
+          providerOccurredAt: data.providerOccurredAt === undefined || data.providerOccurredAt === null ? null : data.providerOccurredAt as Date,
+          normalizedPayload: clone(data.normalizedPayload as JsonValue),
+          semanticSha256: stringValue(data, 'semanticSha256'),
+          createdAt: new Date('2026-07-26T00:00:03.000Z'),
+        }
+        store.normalizedEvents.push(row)
+        return clone(row)
+      },
+      async findMany({ where, take }) {
+        let rows = store.normalizedEvents.filter(row => row.accountId === String(where.accountId))
+        if (where.normalizationResultId !== undefined) {
+          rows = rows.filter(row => row.normalizationResultId === String(where.normalizationResultId))
+        }
+        if (where.parserVersion !== undefined) rows = rows.filter(row => row.parserVersion === String(where.parserVersion))
+        if (where.OR !== undefined) {
+          const alternatives = where.OR as Array<Record<string, unknown>>
+          rows = rows.filter(row => alternatives.some(alternative => {
+            const sequence = alternative.sourceJournalSequence
+            if (typeof sequence === 'object' && sequence !== null) {
+              return row.sourceJournalSequence > ((sequence as Record<string, bigint>).gt)
+            }
+            if (sequence !== row.sourceJournalSequence) return false
+            const ordinal = alternative.eventOrdinal as Record<string, number>
+            return row.eventOrdinal > ordinal.gt
+          }))
+        }
+        rows.sort((left, right) => left.sourceJournalSequence === right.sourceJournalSequence
+          ? left.eventOrdinal - right.eventOrdinal
+          : left.sourceJournalSequence < right.sourceJournalSequence ? -1 : 1)
+        return rows.slice(0, take ?? rows.length).map(clone)
+      },
+    },
   }
 }
 
-export class FakePrismaClient implements RawJournalPrismaClient {
-  #store: Store = { raw: [], processing: [], cursors: [], sequence: 0n }
-  readonly #failures: FailurePlan = { failRawCreate: false, failProcessingCreate: false }
+export class FakePrismaClient implements RawJournalPrismaClient, InboundNormalizationPrismaClient {
+  #store: Store = {
+    raw: [], processing: [], cursors: [], normalizationResults: [], normalizedEvents: [], sequence: 0n,
+  }
+  readonly #failures: FailurePlan = {
+    failRawCreate: false,
+    failProcessingCreate: false,
+    failNormalizationResultCreate: false,
+    failNormalizedEventCreateAt: null,
+    failTerminalProcessingUpdate: false,
+    normalizedEventCreates: 0,
+  }
 
   get maxRawTransportEvent() { return makeTransaction(this.#store, this.#failures).maxRawTransportEvent }
   get maxRawTransportProcessing() { return makeTransaction(this.#store, this.#failures).maxRawTransportProcessing }
   get maxRawTransportCursor() { return makeTransaction(this.#store, this.#failures).maxRawTransportCursor }
+  get maxInboundNormalizationResult() { return makeTransaction(this.#store, this.#failures).maxInboundNormalizationResult }
+  get maxInboundNormalizedEvent() { return makeTransaction(this.#store, this.#failures).maxInboundNormalizedEvent }
 
-  async $transaction<T>(operation: (transaction: RawJournalPrismaTransaction) => Promise<T>): Promise<T> {
+  async $transaction<T>(operation: (transaction: FakeTransaction) => Promise<T>): Promise<T> {
     const candidate = clone(this.#store)
     const result = await operation(makeTransaction(candidate, this.#failures))
     this.#store = candidate
@@ -265,6 +431,10 @@ export class FakePrismaClient implements RawJournalPrismaClient {
   clearFailures(): void {
     this.#failures.failRawCreate = false
     this.#failures.failProcessingCreate = false
+    this.#failures.failNormalizationResultCreate = false
+    this.#failures.failNormalizedEventCreateAt = null
+    this.#failures.failTerminalProcessingUpdate = false
+    this.#failures.normalizedEventCreates = 0
   }
 
   rawRows(): readonly RawRow[] {
@@ -273,5 +443,26 @@ export class FakePrismaClient implements RawJournalPrismaClient {
 
   processingRows(): readonly ProcessingRow[] {
     return clone(this.#store.processing)
+  }
+
+  normalizationResultRows(): readonly NormalizationResultRow[] {
+    return clone(this.#store.normalizationResults)
+  }
+
+  normalizedEventRows(): readonly NormalizedEventRow[] {
+    return clone(this.#store.normalizedEvents)
+  }
+
+  failNextNormalizationResultCreate(): void {
+    this.#failures.failNormalizationResultCreate = true
+  }
+
+  failNormalizedEventCreateAt(attempt: number): void {
+    this.#failures.failNormalizedEventCreateAt = attempt
+    this.#failures.normalizedEventCreates = 0
+  }
+
+  failNextTerminalProcessingUpdate(): void {
+    this.#failures.failTerminalProcessingUpdate = true
   }
 }
