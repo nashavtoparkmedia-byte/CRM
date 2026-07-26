@@ -275,6 +275,19 @@ async function seedCanonicalContacts() {
     '900000100001',
     'remezov_driver',
   )
+  await prisma.contactIdentity.create({
+    data: {
+      id: 'browser-contact-remezov-max-phone-placeholder',
+      contactId: ids.remezov,
+      channel: 'max',
+      externalId: '79222155750',
+      phoneId: remezov.phone.id,
+      source: 'auto',
+      reachabilityStatus: 'confirmed',
+      reachabilityCheckedAt: freshAt,
+      metadata: { sourceKind: 'phone_reachability' },
+    },
+  })
   const remezovProfiles = []
   for (const park of parks) {
     remezovProfiles.push(await createDriverProfile({
