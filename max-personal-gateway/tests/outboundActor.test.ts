@@ -219,7 +219,7 @@ test('expired lease takeover increments epoch once and fences every stale-owner 
   }), 'STALE_ACTOR_LEASE')
 })
 
-test('reservation enforces FIFO, exclusive active head, release retry, and atomic handoff', async () => {
+test('reservation enforces FIFO and standalone handoff is forbidden without Dispatch Ledger', async () => {
   const { actor, client } = harness()
   await actor.enqueueCommand(command('fifo-1'))
   await actor.enqueueCommand(command('fifo-2'))
@@ -248,24 +248,17 @@ test('reservation enforces FIFO, exclusive active head, release retry, and atomi
   })
   assert.equal(retried.status === 'reserved' && retried.command.commandSequence, 1)
   if (retried.status !== 'reserved') return
-  const handed = await actor.markReservationHandedOff({
+  await rejectsCode(actor.markReservationHandedOff({
     accountId: 'account-a', conversationKey: 'conversation-a', reservationId: retried.reservation.reservationId,
     ownerId: 'owner-a', leaseEpoch: lease.leaseEpoch, expectedActorVersion: lease.optimisticVersion,
     expectedReservationVersion: 0, handoffReference: 'future-dispatch-boundary-1', now: new Date(now.valueOf() + 2),
-  })
-  assert.equal(handed.actor.nextHandoffSequence, 2)
-  assert.equal(handed.physicalSendAuthorized, false)
-  await rejectsCode(actor.markReservationHandedOff({
-    accountId: 'account-a', conversationKey: 'conversation-a', reservationId: retried.reservation.reservationId,
-    ownerId: 'owner-a', leaseEpoch: lease.leaseEpoch, expectedActorVersion: handed.actor.optimisticVersion,
-    expectedReservationVersion: handed.reservation.reservationVersion, handoffReference: 'future-dispatch-boundary-1',
-    now: new Date(now.valueOf() + 3),
-  }), 'ALREADY_HANDED_OFF')
+  }), 'DISPATCH_LEDGER_REQUIRED')
   assert.equal(client.commandRows().length, 2)
-  assert.equal(client.reservationRows().some(row => row.reservationState === 'handed_off'), true)
+  assert.equal(client.reservationRows().some(row => row.reservationState === 'handed_off'), false)
+  assert.equal(client.actorRows()[0]?.nextHandoffSequence, 1)
 })
 
-test('handoff transaction rollback leaves reservation active and FIFO head unchanged', async () => {
+test('standalone handoff guard performs no reservation or actor mutation', async () => {
   const { actor, client } = harness()
   await actor.enqueueCommand(command('atomic-handoff'))
   const lease = await acquire(actor)
@@ -274,12 +267,11 @@ test('handoff transaction rollback leaves reservation active and FIFO head uncha
     expectedActorVersion: lease.optimisticVersion, now,
   })
   if (reserved.status !== 'reserved') throw new Error('expected reservation')
-  client.failNextActorUpdate()
   await rejectsCode(actor.markReservationHandedOff({
     accountId: 'account-a', conversationKey: 'conversation-a', reservationId: reserved.reservation.reservationId,
     ownerId: 'owner-a', leaseEpoch: lease.leaseEpoch, expectedActorVersion: lease.optimisticVersion,
     expectedReservationVersion: 0, handoffReference: 'future-boundary', now: new Date(now.valueOf() + 1),
-  }), 'DATABASE_FAILURE')
+  }), 'DISPATCH_LEDGER_REQUIRED')
   assert.equal(client.reservationRows()[0]?.reservationState, 'reserved')
   assert.equal(client.actorRows()[0]?.nextHandoffSequence, 1)
 })

@@ -299,6 +299,8 @@ model MaxRouteConversation {
   candidateConflicts  MaxRouteConflict[]        @relation("RouteConflictCandidate")
   outboundCommands    MaxOutboundCommand[]
   outboundActor       MaxOutboundConversationActor?
+  outboundDispatches  MaxOutboundDispatch[]
+  outboundDispatchLane MaxOutboundDispatchLane?
 
   @@unique([accountId, conversationKey])
   @@index([accountId, state])
@@ -321,6 +323,7 @@ model MaxOutboundCommand {
   createdAt          DateTime                        @default(now())
   conversation       MaxRouteConversation            @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundCommand_account_conversation_fkey")
   reservations       MaxOutboundCommandReservation[]
+  dispatch           MaxOutboundDispatch?
 
   @@unique([accountId, conversationKey, commandSequence], map: "MaxOutboundCommand_account_conversation_sequence_key")
   @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundCommand_account_conversation_command_sequence_key")
@@ -366,13 +369,164 @@ model MaxOutboundCommandReservation {
   releasedAt        DateTime?
   handoffReference  String?
   handedOffAt       DateTime?
+  dispatchId        String?
   createdAt         DateTime                     @default(now())
   updatedAt         DateTime                     @updatedAt
   command           MaxOutboundCommand           @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundCommandReservation_command_fkey")
   actor             MaxOutboundConversationActor @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundCommandReservation_actor_fkey")
+  sourceDispatch    MaxOutboundDispatch?         @relation("DispatchReservationSource")
+  linkedDispatch    MaxOutboundDispatch?         @relation("ReservationDispatchLink", fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundCommandReservation_dispatch_fkey")
 
+  @@unique([accountId, conversationKey, reservationId, commandId, commandSequence], map: "MaxOutboundCommandReservation_dispatch_source_key")
+  @@unique([accountId, conversationKey, dispatchId], map: "MaxOutboundCommandReservation_dispatch_key")
   @@index([reservationState, leaseUntil], map: "MaxOutboundCommandReservation_state_lease_idx")
   @@index([accountId, conversationKey, commandSequence], map: "MaxOutboundCommandReservation_account_conversation_sequence_idx")
+}
+
+/// Durable identity and honest state of one immutable outbound command execution.
+/// Provider confirmation proves MAX acceptance only, never recipient delivery/read.
+model MaxOutboundDispatch {
+  dispatchId                  String                              @id
+  accountId                   String
+  conversationKey             String
+  commandId                   String                              @unique(map: "MaxOutboundDispatch_command_key")
+  commandSequence             Int
+  reservationId               String                              @unique(map: "MaxOutboundDispatch_reservation_key")
+  state                       String
+  stateVersion                Int
+  initialRouteVersion         Int
+  initialProtocolChatId       String
+  initialProviderUserId       String?
+  initialWebRouteId           String?
+  initialRouteEvidence        Json
+  initialRouteSnapshotSha256  String
+  currentAttemptId            String?
+  attemptCount                Int                                 @default(0)
+  providerMessageId           String?
+  providerConfirmedAt         DateTime?
+  reconciliationRequiredAt    DateTime?
+  terminalAt                  DateTime?
+  createdAt                   DateTime                            @default(now())
+  updatedAt                   DateTime                            @updatedAt
+  conversation                MaxRouteConversation                @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundDispatch_account_conversation_fkey")
+  command                     MaxOutboundCommand                  @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundDispatch_command_fkey")
+  reservation                 MaxOutboundCommandReservation       @relation("DispatchReservationSource", fields: [accountId, conversationKey, reservationId, commandId, commandSequence], references: [accountId, conversationKey, reservationId, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundDispatch_reservation_fkey")
+  handedOffReservation        MaxOutboundCommandReservation?      @relation("ReservationDispatchLink")
+  attempts                    MaxOutboundDispatchAttempt[]
+  transitions                 MaxOutboundDispatchTransition[]
+  reconciliationTasks         MaxOutboundReconciliationTask[]
+
+  @@unique([accountId, conversationKey, commandSequence], map: "MaxOutboundDispatch_account_conversation_sequence_key")
+  @@unique([accountId, conversationKey, dispatchId], map: "MaxOutboundDispatch_account_conversation_dispatch_key")
+  @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundDispatch_command_identity_key")
+  @@unique([accountId, conversationKey, reservationId, commandId, commandSequence], map: "MaxOutboundDispatch_reservation_identity_key")
+  @@index([accountId, conversationKey, state, commandSequence], map: "MaxOutboundDispatch_account_conversation_state_sequence_idx")
+  @@index([state, reconciliationRequiredAt], map: "MaxOutboundDispatch_state_reconciliation_idx")
+}
+
+/// Independent physical-order cursor for one account-scoped conversation.
+model MaxOutboundDispatchLane {
+  accountId             String
+  conversationKey       String
+  nextPhysicalSequence  Int                   @default(1)
+  optimisticVersion     Int                   @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  conversation          MaxRouteConversation  @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundDispatchLane_account_conversation_fkey")
+
+  @@id([accountId, conversationKey])
+}
+
+/// One durable, fenced and route-pinned physical-action opportunity.
+model MaxOutboundDispatchAttempt {
+  attemptId                 String                           @id
+  dispatchId                String
+  accountId                 String
+  conversationKey           String
+  attemptNumber             Int
+  attemptState              String
+  attemptVersion            Int                              @default(0)
+  senderOwnerId             String
+  senderFencingEpoch        Int
+  senderAuthorityVerifiedAt DateTime
+  attemptCorrelationId      String
+  routeVersion              Int
+  protocolChatId            String
+  providerUserId            String?
+  webRouteId                String?
+  routeSnapshotSha256       String
+  preparedAt                DateTime
+  claimUntil                DateTime
+  physicalActionStartedAt   DateTime?
+  clientActionAcceptedAt    DateTime?
+  awaitingConfirmationAt    DateTime?
+  outcomeUnknownAt          DateTime?
+  completedAt               DateTime?
+  safeErrorCode             String?
+  createdAt                 DateTime                         @default(now())
+  updatedAt                 DateTime                         @updatedAt
+  dispatch                  MaxOutboundDispatch              @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundDispatchAttempt_dispatch_fkey")
+  transitions               MaxOutboundDispatchTransition[]
+  reconciliationTasks       MaxOutboundReconciliationTask[]
+
+  @@unique([dispatchId, attemptNumber], map: "MaxOutboundDispatchAttempt_dispatch_number_key")
+  @@unique([accountId, dispatchId, attemptCorrelationId], map: "MaxOutboundDispatchAttempt_account_dispatch_correlation_key")
+  @@unique([accountId, conversationKey, attemptId], map: "MaxOutboundDispatchAttempt_account_conversation_attempt_key")
+  @@index([attemptState, claimUntil], map: "MaxOutboundDispatchAttempt_state_claim_idx")
+  @@index([accountId, conversationKey, attemptState], map: "MaxOutboundDispatchAttempt_account_conversation_state_idx")
+}
+
+/// Append-only auditable state-machine event. It never stores command text.
+model MaxOutboundDispatchTransition {
+  transitionId             String                       @id
+  dispatchId               String
+  attemptId                String?
+  accountId                String
+  conversationKey          String
+  transitionSequence       Int
+  transitionIdempotencyKey String
+  fromState                String?
+  toState                  String
+  eventType                String
+  evidenceKind             String
+  evidenceReference        String?
+  evidenceSha256           String
+  safeEvidenceMetadata     Json
+  stateVersionBefore       Int
+  stateVersionAfter        Int
+  occurredAt               DateTime
+  createdAt                DateTime                     @default(now())
+  dispatch                 MaxOutboundDispatch          @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundDispatchTransition_dispatch_fkey")
+  attempt                  MaxOutboundDispatchAttempt?  @relation(fields: [accountId, conversationKey, attemptId], references: [accountId, conversationKey, attemptId], onDelete: Restrict, map: "MaxOutboundDispatchTransition_attempt_fkey")
+
+  @@unique([dispatchId, transitionSequence], map: "MaxOutboundDispatchTransition_dispatch_sequence_key")
+  @@unique([accountId, dispatchId, transitionIdempotencyKey], map: "MaxOutboundDispatchTransition_idempotency_key")
+  @@index([accountId, conversationKey, occurredAt], map: "MaxOutboundDispatchTransition_account_conversation_occurred_idx")
+  @@index([attemptId], map: "MaxOutboundDispatchTransition_attempt_idx")
+}
+
+/// Durable investigation task for a potentially completed provider action.
+model MaxOutboundReconciliationTask {
+  reconciliationId           String                      @id
+  dispatchId                 String
+  attemptId                  String
+  accountId                  String
+  conversationKey            String
+  reason                     String
+  state                      String
+  taskVersion                Int                         @default(0)
+  openedAt                   DateTime
+  notBefore                  DateTime?
+  resolvedAt                 DateTime?
+  resolutionType             String?
+  resolutionEvidenceReference String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  dispatch                   MaxOutboundDispatch         @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundReconciliationTask_dispatch_fkey")
+  attempt                    MaxOutboundDispatchAttempt  @relation(fields: [accountId, conversationKey, attemptId], references: [accountId, conversationKey, attemptId], onDelete: Restrict, map: "MaxOutboundReconciliationTask_attempt_fkey")
+
+  @@index([state, notBefore, openedAt], map: "MaxOutboundReconciliationTask_state_not_before_idx")
+  @@index([accountId, conversationKey, state], map: "MaxOutboundReconciliationTask_account_conversation_state_idx")
 }
 
 /// Current exact/provisional identity projection. The account-scoped unique

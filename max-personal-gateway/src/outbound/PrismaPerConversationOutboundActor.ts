@@ -715,56 +715,10 @@ export class PrismaPerConversationOutboundActor implements PerConversationOutbou
   }
 
   async markReservationHandedOff(input: MarkReservationHandedOffInput): Promise<HandoffResult> {
-    required(input.handoffReference, 'handoffReference', 512)
-    const now = input.now ?? this.#clock()
-    validDate(now, 'now')
-    try {
-      return await this.#client.$transaction(async transaction => {
-        const selected = await this.#activeReservation(transaction, input, now)
-        if (selected.actor.nextHandoffSequence !== selected.command.commandSequence) {
-          throw new OutboundActorError('RESERVATION_CONFLICT', 'Reservation is not the current FIFO head')
-        }
-        const reservationChanged = await transaction.maxOutboundCommandReservation.updateMany({
-          where: {
-            reservationId: input.reservationId,
-            accountId: input.accountId,
-            conversationKey: input.conversationKey,
-            leaseOwnerId: input.ownerId,
-            leaseEpoch: input.leaseEpoch,
-            reservationState: 'reserved',
-            reservationVersion: input.expectedReservationVersion,
-            leaseUntil: { gt: now },
-          },
-          data: {
-            reservationState: 'handed_off',
-            handoffReference: input.handoffReference,
-            handedOffAt: now,
-            reservationVersion: { increment: 1 },
-          },
-        })
-        if (reservationChanged.count !== 1) throw new OutboundActorError('STALE_RESERVATION_VERSION', 'Reservation changed concurrently')
-        const actorChanged = await transaction.maxOutboundConversationActor.updateMany({
-          where: {
-            accountId: input.accountId,
-            conversationKey: input.conversationKey,
-            leaseOwnerId: input.ownerId,
-            leaseEpoch: input.leaseEpoch,
-            optimisticVersion: input.expectedActorVersion,
-            nextHandoffSequence: selected.command.commandSequence,
-            leaseUntil: { gt: now },
-          },
-          data: { nextHandoffSequence: { increment: 1 }, optimisticVersion: { increment: 1 } },
-        })
-        if (actorChanged.count !== 1) throw new OutboundActorError('STALE_ACTOR_VERSION', 'Actor changed before handoff')
-        const [reservation, actor] = await Promise.all([
-          transaction.maxOutboundCommandReservation.findUnique({ where: { reservationId: input.reservationId } }),
-          transaction.maxOutboundConversationActor.findUnique({ where: commandKey(input.accountId, input.conversationKey) }),
-        ])
-        if (reservation === null || actor === null) throw new OutboundActorError('DATABASE_FAILURE', 'Handoff state disappeared')
-        return deepFreeze({ reservation: asReservation(reservation), actor: asActor(actor), physicalSendAuthorized: false as const })
-      })
-    } catch (error) {
-      throw asOutboundDatabaseError(error)
-    }
+    void input
+    throw new OutboundActorError(
+      'DISPATCH_LEDGER_REQUIRED',
+      'Standalone reservation handoff is forbidden; create a Dispatch atomically',
+    )
   }
 }

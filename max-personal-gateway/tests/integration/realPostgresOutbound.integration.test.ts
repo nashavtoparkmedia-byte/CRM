@@ -209,7 +209,7 @@ if (config === null) {
       assert.equal(await client.maxOutboundCommand.count({ where: { accountId: account } }), 1)
     })
 
-    test('S4-DB-41..65 lease, FIFO reservation, route preparation, release, expiry, and atomic handoff pass', async () => {
+    test('S4-DB-41..65 lease, FIFO reservation, route preparation, release, expiry, and handoff guard pass', async () => {
       const account = runId('s4_actor')
       const active = runId('active')
       const unresolved = runId('unresolved')
@@ -243,35 +243,13 @@ if (config === null) {
       assert.equal(prepared.activeProtocolChatId, `${active}-protocol`)
       assert.equal(prepared.physicalSendAuthorized, false)
 
-      await client.$executeRawUnsafe(`CREATE FUNCTION stage4_test_reject_handoff() RETURNS trigger AS $$
-        BEGIN IF NEW."nextHandoffSequence" > OLD."nextHandoffSequence" THEN RAISE EXCEPTION 'synthetic handoff reject'; END IF; RETURN NEW; END;
-        $$ LANGUAGE plpgsql`)
-      await client.$executeRawUnsafe(`CREATE TRIGGER stage4_test_reject_handoff_trigger BEFORE UPDATE ON "MaxOutboundConversationActor"
-        FOR EACH ROW EXECUTE FUNCTION stage4_test_reject_handoff()`)
-      try {
-        await rejectsCode(actor.markReservationHandedOff({
-          accountId: account, conversationKey: active, reservationId: reservation.reservation.reservationId,
-          ownerId: 'owner-a', leaseEpoch: lease.leaseEpoch, expectedActorVersion: lease.optimisticVersion,
-          expectedReservationVersion: 0, handoffReference: runId('future_boundary'),
-        }), 'DATABASE_FAILURE')
-      } finally {
-        await client.$executeRawUnsafe('DROP TRIGGER stage4_test_reject_handoff_trigger ON "MaxOutboundConversationActor"')
-        await client.$executeRawUnsafe('DROP FUNCTION stage4_test_reject_handoff()')
-      }
-      assert.equal((await client.maxOutboundCommandReservation.findUnique({ where: { reservationId: reservation.reservation.reservationId } })).reservationState, 'reserved')
-      assert.equal((await actor.getActorState(account, active))?.nextHandoffSequence, 1)
-      const handed = await actor.markReservationHandedOff({
+      await rejectsCode(actor.markReservationHandedOff({
         accountId: account, conversationKey: active, reservationId: reservation.reservation.reservationId,
         ownerId: 'owner-a', leaseEpoch: lease.leaseEpoch, expectedActorVersion: lease.optimisticVersion,
         expectedReservationVersion: 0, handoffReference: runId('future_boundary'),
-      })
-      assert.equal(handed.actor.nextHandoffSequence, 2)
-      assert.equal(handed.physicalSendAuthorized, false)
-      await rejectsCode(actor.markReservationHandedOff({
-        accountId: account, conversationKey: active, reservationId: reservation.reservation.reservationId,
-        ownerId: 'owner-a', leaseEpoch: lease.leaseEpoch, expectedActorVersion: handed.actor.optimisticVersion,
-        expectedReservationVersion: handed.reservation.reservationVersion, handoffReference: runId('future_boundary'),
-      }), 'ALREADY_HANDED_OFF')
+      }), 'DISPATCH_LEDGER_REQUIRED')
+      assert.equal((await client.maxOutboundCommandReservation.findUnique({ where: { reservationId: reservation.reservation.reservationId } })).reservationState, 'reserved')
+      assert.equal((await actor.getActorState(account, active))?.nextHandoffSequence, 1)
 
       for (const route of [unresolved, conflicted, retired]) {
         await actor.enqueueCommand(command(account, route, runId('route_command'), runId('client')))
@@ -309,12 +287,15 @@ if (config === null) {
 
     test('S4-DB-79..90 catalog exposes required tables, partial indexes, FKs, checks, and append-only trigger', async () => {
       const tables = await client.$queryRawUnsafe<Array<{ table_name: string }>>(`SELECT table_name FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name LIKE 'MaxOutbound%' ORDER BY table_name`)
+        WHERE table_schema = 'public' AND table_name IN
+          ('MaxOutboundCommand', 'MaxOutboundCommandReservation', 'MaxOutboundConversationActor')
+        ORDER BY table_name`)
       assert.deepEqual(tables.map(row => row.table_name), [
         'MaxOutboundCommand', 'MaxOutboundCommandReservation', 'MaxOutboundConversationActor',
       ])
       const indexes = await client.$queryRawUnsafe<Array<{ indexname: string; indexdef: string }>>(`SELECT indexname, indexdef
-        FROM pg_indexes WHERE schemaname = 'public' AND tablename LIKE 'MaxOutbound%'`)
+        FROM pg_indexes WHERE schemaname = 'public' AND tablename IN
+          ('MaxOutboundCommand', 'MaxOutboundCommandReservation', 'MaxOutboundConversationActor')`)
       for (const name of [
         'MaxOutboundCommand_account_client_message_key',
         'MaxOutboundCommandReservation_active_command_key',
@@ -325,7 +306,7 @@ if (config === null) {
         WHERE NOT tgisinternal AND tgrelid = '"MaxOutboundCommand"'::regclass`)
       assert.deepEqual(triggers.map(row => row.tgname), ['MaxOutboundCommand_append_only'])
       const forbiddenTables = await client.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT count(*)::bigint AS count FROM information_schema.tables
-        WHERE table_schema = 'public' AND (table_name LIKE '%Dispatch%' OR table_name LIKE '%ProviderConfirmation%')`)
+        WHERE table_schema = 'public' AND table_name LIKE '%ProviderConfirmation%'`)
       assert.equal(Number(forbiddenTables[0]?.count), 0)
     })
 

@@ -16,7 +16,7 @@ test('outbound actor interface is explicit, framework-independent, and complete'
   for (const operation of [
     'enqueueCommand', 'getCommand', 'listCommandsAfter', 'acquireActorLease', 'renewActorLease',
     'releaseActorLease', 'reserveNextCommand', 'prepareReservedCommand', 'releaseReservation',
-    'expireReservation', 'markReservationHandedOff', 'getActorState',
+    'expireReservation', 'getActorState',
   ]) assert.match(contract, new RegExp(`\\b${operation}\\b`))
   assert.match(contract, /physicalSendAuthorized: false/)
   assert.doesNotMatch(contract, /protocolChatId.*Enqueue|providerUserId.*Enqueue|phone|displayName/i)
@@ -56,9 +56,8 @@ test('text and payload hashes have no uniqueness or correlation-based command de
   assert.doesNotMatch(outboundSource, /where:\s*\{[^}]*\b(?:text|payloadSha256)\b/)
 })
 
-test('Stage 4 contains no generated artifacts and explicitly excludes dispatch/provider state', () => {
+test('Stage 4 migration contains no generated artifacts or dispatch/provider state', () => {
   const files = readdirSync(outboundRoot)
   assert.equal(files.some(name => /\.js$|\.map$|coverage|node_modules|\.env/i.test(name)), false)
-  assert.doesNotMatch(schema, /model MaxDispatch|model MaxProviderConfirmation|model MaxOutboundAttempt/)
   assert.doesNotMatch(migration, /providerMessageId|deliveryState|dispatchAttempt/)
 })

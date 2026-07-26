@@ -175,5 +175,4 @@ export interface PerConversationOutboundActor {
   prepareReservedCommand(input: PrepareReservedCommandInput): Promise<PreparedOutboundCommand>
   releaseReservation(input: ReservationMutationInput): Promise<OutboundCommandReservation>
   expireReservation(input: ExpireReservationInput): Promise<OutboundCommandReservation>
-  markReservationHandedOff(input: MarkReservationHandedOffInput): Promise<HandoffResult>
 }

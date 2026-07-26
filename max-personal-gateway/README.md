@@ -1,6 +1,6 @@
-# MAX Personal Gateway — Stages 1–4
+# MAX Personal Gateway — Stages 1–5
 
-This module implements the offline transport foundations through Stage 4: Raw Event Journal, durable Route Registry, shadow inbound normalization, and durable per-conversation outbound actors. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
+This module implements the offline transport foundations through Stage 5: Raw Event Journal, durable Route Registry, shadow inbound normalization, durable per-conversation outbound actors, and the dormant Dispatch Ledger. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
 
 Each physical observation is immutable and receives a distinct `observationId` and monotonically ordered journal position, even when payload, hash, provider event ID, or timestamp are identical. Mutable processing state is stored separately and unique per `(observationId, parserVersion)`. Consumer cursors are isolated by consumer, account, and parser version.
 
@@ -36,7 +36,17 @@ An immutable outbound text command is addressed only by `(accountId, conversatio
 
 Each actor has an account/conversation-scoped lease, monotonic `leaseEpoch`, optimistic version and durable reservation of only `nextHandoffSequence`. Release or expiry keeps the same FIFO head retryable. Preparation reads the current sendable Route Registry snapshot and returns `physicalSendAuthorized: false`; unresolved, conflicted, retired, missing-protocol, open-conflict, or cross-account routes fail closed. The actor never mutates Route Registry state and never uses an active DOM dialog, global promise tail, global queue, Redis counter, provider identity supplied by a caller, or text/time matching.
 
-Actor lease is not SessionOwner fencing and never authorizes physical provider action. `handed_off` is only an atomic future Dispatch Ledger boundary marker: it is not a send, MAX acceptance, provider message identity, delivery, or read receipt. Stage 4 contains no Dispatch Ledger, browser/provider operation, runtime sender/listener integration, retry after physical action, or CRM projection. `MAX_PER_CHAT_OUTBOUND_ACTOR_ENABLED` is a fail-closed account allowlist and defaults to false. PostgreSQL is authoritative and the additive migration is exercised only by the disposable real PostgreSQL gate. Stage 5 has not started.
+Actor lease is not SessionOwner fencing and never authorizes physical provider action. Stage 5 replaces the old standalone `handed_off` boundary with an atomic Dispatch creation/linkage transaction; it remains neither a send nor evidence of MAX acceptance, provider identity, delivery, or read. Stage 4 contains no browser/provider operation, runtime sender/listener integration, retry after physical action, or CRM projection. `MAX_PER_CHAT_OUTBOUND_ACTOR_ENABLED` is a fail-closed account allowlist and defaults to false. PostgreSQL is authoritative and the additive migration is exercised only by the disposable real PostgreSQL gate.
+
+## Stage 5: dormant Dispatch Ledger
+
+Stage 5 separates immutable command intent, one durable Dispatch, and its individually fenced Attempts. The only reservation handoff path is the atomic PostgreSQL `createDispatchFromReservation` transaction: it creates the Dispatch, initial `queued` transition and per-conversation physical FIFO lane, links the reservation by `dispatchId`, and advances the Stage 4 handoff head together. Standalone handoff now fails closed with `DISPATCH_LEDGER_REQUIRED`.
+
+The Dispatch preserves an immutable initial account-scoped route snapshot; every Attempt revalidates Route Registry and pins its own current route and verified sender owner/fencing epoch. Actor lease is not SessionOwner fencing. The default sender-authority verifier denies every Attempt, and even a test-verified prepared Attempt reports `physicalSendAuthorized=false` because this stage has no sender or provider action.
+
+The durable state machine distinguishes queued work, physical dispatch preparation, local-client acceptance, provider-confirmation waiting, reconciliation, exact MAX acceptance, safe retry, hard failure and dead letter. The append-only transition journal and reconciliation tasks contain bounded synthetic identifiers/evidence only, never command text. Unknown or timed-out post-action outcomes require reconciliation and cannot be blindly retried; a late exact provider confirmation updates the same Dispatch. `provider_confirmed` maps to `accepted_by_max`, not recipient delivery or read.
+
+Independent `(accountId, conversationKey)` physical lanes preserve FIFO without a global queue or active-DOM dependency. PostgreSQL is authoritative for Dispatches, Attempts, transitions, reconciliation, restart recovery and provider identity. Redis is not required. `MAX_DISPATCH_LEDGER_ENABLED` is account-scoped and defaults false; it is not wired into existing runtime. Real PostgreSQL migration, state-machine, concurrency, load and recovery gates are required. Stage 6 confirmation matching has not started.
 
 ## Disposable real PostgreSQL gate
 
@@ -44,7 +54,7 @@ The opt-in integration suite never reads generic `DATABASE_URL`. It requires
 `PERSONAL_MAX_REAL_POSTGRES_URL`, rejects non-local hosts and the default
 PostgreSQL port, and requires a database name containing the
 `personal_max_...gate` disposable marker. The database must already contain the
-Stage 1, Stage 2, Stage 3, and Stage 4 migrations. A normal unit run therefore never opens a
+Stage 1 through Stage 5 migrations. A normal unit run therefore never opens a
 database connection.
 
 When the generated client is not installed at the normal Gravity package
