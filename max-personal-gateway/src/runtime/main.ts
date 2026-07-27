@@ -31,10 +31,10 @@ async function start(): Promise<void> {
     },
     checkMigration: async migration => {
       if (client === null) return false
-      const rows = await client.$queryRawUnsafe<Array<{ present: boolean }>>(
+      const rows = await client.$queryRawUnsafe(
         'SELECT EXISTS (SELECT 1 FROM "_prisma_migrations" WHERE migration_name = $1 AND finished_at IS NOT NULL AND rolled_back_at IS NULL) AS present',
         migration,
-      )
+      ) as Array<{ present: boolean }>
       return rows[0]?.present === true
     },
     log: structured,
