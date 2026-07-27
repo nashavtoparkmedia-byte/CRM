@@ -71,6 +71,9 @@ test('actual producer HMAC drain ACKs durable records and mount survives produce
     assert.equal(adapter.getCaptureHealth().spoolPendingCount, 0)
     capture(adapter, 26)
     assert.equal(adapter.getCaptureHealth().spoolPendingCount, 1)
+    const recoveredSequence = adapter.spool.readPending(10)
+    assert.equal(recoveredSequence.length, 1)
+    assert.equal(recoveredSequence[0].sequence, 26)
   } finally {
     adapter.close()
     await runtime.stop()
