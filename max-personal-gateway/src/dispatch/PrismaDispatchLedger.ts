@@ -11,6 +11,10 @@ import {
 } from './constants.ts'
 import { asDispatchDatabaseError, DispatchLedgerError, dispatchErrorCode } from './errors.ts'
 import { FailClosedSenderAuthorityVerifier, validateSenderAuthorityProof } from './SenderAuthority.ts'
+import {
+  recordExactProviderConfirmationInTransaction,
+  recordProviderAbsenceInTransaction,
+} from './transactionalConfirmation.ts'
 import type {
   AttemptTransitionInput,
   BeginAttemptInput,
@@ -830,71 +834,12 @@ export class PrismaDispatchLedger implements DispatchLedger {
     validDate(now, 'now')
     try {
       return await this.#client.$transaction(async transaction => {
-        const [dispatch, attempt] = await Promise.all([
-          transaction.maxOutboundDispatch.findUnique({ where: { dispatchId: input.dispatchId } }),
-          transaction.maxOutboundDispatchAttempt.findUnique({ where: { attemptId: input.attemptId } }),
-        ])
-        if (dispatch === null || attempt === null || dispatch.accountId !== input.accountId
-          || dispatch.conversationKey !== input.conversationKey || attempt.dispatchId !== input.dispatchId) {
-          throw new DispatchLedgerError('NOT_FOUND', 'Account-scoped Dispatch Attempt was not found')
-        }
-        if (dispatch.state === 'provider_confirmed') {
-          if (dispatch.providerMessageId !== input.providerMessageId) {
-            throw new DispatchLedgerError('PROVIDER_MESSAGE_ID_CONFLICT', 'Dispatch already has another exact provider identity')
-          }
-          const existing = await transaction.maxOutboundDispatchTransition.findFirst({
-            where: { dispatchId: input.dispatchId, eventType: 'provider_confirmed' },
-          })
-          if (existing === null) throw new DispatchLedgerError('DATABASE_FAILURE', 'Confirmation transition is missing')
-          return this.#resultForTransition(transaction, existing, true)
-        }
-        const spec: TransitionSpec = {
-          attemptId: input.attemptId, fromState: dispatch.state, toState: 'provider_confirmed',
-          eventType: 'provider_confirmed', evidenceKind: 'exact_provider_confirmation',
-          evidenceReference: reference, metadata: { providerMessageId: input.providerMessageId },
-          idempotencyKey: input.transitionIdempotencyKey, occurredAt: now,
-        }
-        const repeated = await this.#existingTransition(transaction, input.accountId, input.dispatchId, spec)
-        if (repeated !== null) return this.#resultForTransition(transaction, repeated, true)
-        if (!['awaiting_confirmation', 'reconciliation_required'].includes(dispatch.state)
-          || !['awaiting_confirmation', 'outcome_unknown'].includes(attempt.attemptState)) {
-          throw new DispatchLedgerError('INVALID_TRANSITION', 'Exact confirmation is not valid from the current state')
-        }
-        if (dispatch.stateVersion !== input.expectedStateVersion) throw new DispatchLedgerError('STALE_DISPATCH_VERSION', 'Dispatch state version is stale')
-        if (attempt.attemptVersion !== input.expectedAttemptVersion) throw new DispatchLedgerError('STALE_ATTEMPT_VERSION', 'Attempt version is stale')
-        const lane = await transaction.maxOutboundDispatchLane.findUnique({ where: conversationKey(input.accountId, input.conversationKey) })
-        if (lane === null || lane.nextPhysicalSequence !== dispatch.commandSequence) {
-          throw new DispatchLedgerError('FIFO_BLOCKED', 'Confirmation is not the exact physical FIFO head')
-        }
-        if (dispatch.state === 'reconciliation_required') {
-          const task = await transaction.maxOutboundReconciliationTask.findFirst({ where: { dispatchId: input.dispatchId, state: 'open' } })
-          if (task === null) throw new DispatchLedgerError('DATABASE_FAILURE', 'Open reconciliation task is missing')
-          const taskChanged = await transaction.maxOutboundReconciliationTask.updateMany({
-            where: { reconciliationId: task.reconciliationId, state: 'open', taskVersion: task.taskVersion },
-            data: { state: 'resolved', taskVersion: { increment: 1 }, resolvedAt: now, resolutionType: 'exact_provider_confirmation', resolutionEvidenceReference: reference },
-          })
-          if (taskChanged.count !== 1) throw new DispatchLedgerError('STALE_DISPATCH_VERSION', 'Reconciliation task changed concurrently')
-        }
-        const attemptChanged = await transaction.maxOutboundDispatchAttempt.updateMany({
-          where: { attemptId: input.attemptId, attemptVersion: input.expectedAttemptVersion, attemptState: attempt.attemptState },
-          data: { attemptState: 'provider_confirmed', attemptVersion: { increment: 1 }, completedAt: now },
-        })
-        if (attemptChanged.count !== 1) throw new DispatchLedgerError('STALE_ATTEMPT_VERSION', 'Attempt changed concurrently')
-        const dispatchChanged = await transaction.maxOutboundDispatch.updateMany({
-          where: { dispatchId: input.dispatchId, state: dispatch.state, stateVersion: input.expectedStateVersion, providerMessageId: null },
-          data: {
-            state: 'provider_confirmed', stateVersion: { increment: 1 }, providerMessageId: input.providerMessageId,
-            providerConfirmedAt: now, reconciliationRequiredAt: null, terminalAt: now,
-          },
-        })
-        if (dispatchChanged.count !== 1) throw new DispatchLedgerError('STALE_DISPATCH_VERSION', 'Dispatch changed concurrently')
-        const laneChanged = await transaction.maxOutboundDispatchLane.updateMany({
-          where: { accountId: input.accountId, conversationKey: input.conversationKey, nextPhysicalSequence: dispatch.commandSequence, optimisticVersion: lane.optimisticVersion },
-          data: { nextPhysicalSequence: { increment: 1 }, optimisticVersion: { increment: 1 } },
-        })
-        if (laneChanged.count !== 1) throw new DispatchLedgerError('FIFO_BLOCKED', 'Physical lane changed concurrently')
-        const transition = await this.#insertTransition(transaction, dispatch, spec)
-        return this.#resultForTransition(transaction, transition, false)
+        const mutation = await recordExactProviderConfirmationInTransaction(
+          transaction,
+          { ...input, evidenceReference: reference, now },
+          this.#idGenerator,
+        )
+        return this.#resultForTransition(transaction, mutation.transition, mutation.idempotent)
       })
     } catch (error) {
       const confirmed = await this.#client.maxOutboundDispatch.findUnique({ where: { dispatchId: input.dispatchId } })
@@ -929,44 +874,12 @@ export class PrismaDispatchLedger implements DispatchLedger {
     validDate(now, 'now')
     try {
       return await this.#client.$transaction(async transaction => {
-        const [dispatch, attempt, task] = await Promise.all([
-          transaction.maxOutboundDispatch.findUnique({ where: { dispatchId: input.dispatchId } }),
-          transaction.maxOutboundDispatchAttempt.findUnique({ where: { attemptId: input.attemptId } }),
-          transaction.maxOutboundReconciliationTask.findFirst({ where: { dispatchId: input.dispatchId, state: 'open' } }),
-        ])
-        if (dispatch === null || attempt === null || task === null || dispatch.accountId !== input.accountId
-          || dispatch.conversationKey !== input.conversationKey || attempt.dispatchId !== input.dispatchId) {
-          throw new DispatchLedgerError('NOT_FOUND', 'Open account-scoped reconciliation was not found')
-        }
-        const spec: TransitionSpec = {
-          attemptId: input.attemptId, fromState: dispatch.state, toState: 'retryable_failed',
-          eventType: 'provider_absence_proven', evidenceKind: 'provider_absence', evidenceReference: reference,
-          metadata: { exactNegativeEvidence: true }, idempotencyKey: input.transitionIdempotencyKey, occurredAt: now,
-        }
-        const repeated = await this.#existingTransition(transaction, input.accountId, input.dispatchId, spec)
-        if (repeated !== null) return this.#resultForTransition(transaction, repeated, true)
-        if (dispatch.state !== 'reconciliation_required' || attempt.attemptState !== 'outcome_unknown') {
-          throw new DispatchLedgerError('INVALID_TRANSITION', 'Provider absence proof is not valid from the current state')
-        }
-        if (dispatch.stateVersion !== input.expectedStateVersion) throw new DispatchLedgerError('STALE_DISPATCH_VERSION', 'Dispatch state version is stale')
-        if (attempt.attemptVersion !== input.expectedAttemptVersion) throw new DispatchLedgerError('STALE_ATTEMPT_VERSION', 'Attempt version is stale')
-        const taskChanged = await transaction.maxOutboundReconciliationTask.updateMany({
-          where: { reconciliationId: task.reconciliationId, state: 'open', taskVersion: task.taskVersion },
-          data: { state: 'resolved', taskVersion: { increment: 1 }, resolvedAt: now, resolutionType: 'provider_absence_proven', resolutionEvidenceReference: reference },
-        })
-        const attemptChanged = await transaction.maxOutboundDispatchAttempt.updateMany({
-          where: { attemptId: input.attemptId, attemptState: 'outcome_unknown', attemptVersion: input.expectedAttemptVersion },
-          data: { attemptVersion: { increment: 1 }, completedAt: now, safeErrorCode: 'PROVIDER_ABSENCE_PROVEN' },
-        })
-        const dispatchChanged = await transaction.maxOutboundDispatch.updateMany({
-          where: { dispatchId: input.dispatchId, state: 'reconciliation_required', stateVersion: input.expectedStateVersion },
-          data: { state: 'retryable_failed', stateVersion: { increment: 1 }, reconciliationRequiredAt: null },
-        })
-        if (taskChanged.count !== 1 || attemptChanged.count !== 1 || dispatchChanged.count !== 1) {
-          throw new DispatchLedgerError('STALE_DISPATCH_VERSION', 'Absence proof raced another transition')
-        }
-        const transition = await this.#insertTransition(transaction, dispatch, spec)
-        return this.#resultForTransition(transaction, transition, false)
+        const mutation = await recordProviderAbsenceInTransaction(
+          transaction,
+          { ...input, evidenceReference: reference, now },
+          this.#idGenerator,
+        )
+        return this.#resultForTransition(transaction, mutation.transition, mutation.idempotent)
       })
     } catch (error) {
       const existing = await this.#client.maxOutboundDispatchTransition.findFirst({

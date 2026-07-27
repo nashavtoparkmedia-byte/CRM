@@ -305,9 +305,11 @@ if (config === null) {
       const triggers = await client.$queryRawUnsafe<Array<{ tgname: string }>>(`SELECT tgname FROM pg_trigger
         WHERE NOT tgisinternal AND tgrelid = '"MaxOutboundCommand"'::regclass`)
       assert.deepEqual(triggers.map(row => row.tgname), ['MaxOutboundCommand_append_only'])
-      const forbiddenTables = await client.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT count(*)::bigint AS count FROM information_schema.tables
-        WHERE table_schema = 'public' AND table_name LIKE '%ProviderConfirmation%'`)
-      assert.equal(Number(forbiddenTables[0]?.count), 0)
+      const forbiddenColumns = await client.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT count(*)::bigint AS count FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name IN ('MaxOutboundCommand', 'MaxOutboundCommandReservation', 'MaxOutboundConversationActor')
+          AND column_name ILIKE '%confirmation%'`)
+      assert.equal(Number(forbiddenColumns[0]?.count), 0)
     })
 
     test('S4-LOAD 1000 FIFO, 1000 interleaved A/B, 100 identical, and new-client restart have zero loss', async () => {

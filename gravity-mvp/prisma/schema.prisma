@@ -268,8 +268,10 @@ model MaxInboundNormalizedEvent {
   semanticSha256        String
   createdAt             DateTime                      @default(now())
   normalizationResult   MaxInboundNormalizationResult @relation(fields: [accountId, normalizationResultId, sourceObservationId, parserVersion], references: [accountId, normalizationResultId, sourceObservationId, parserVersion], onDelete: Restrict, map: "MaxInboundNormalizedEvent_result_account_source_parser_fkey")
+  confirmationEvidence  MaxProviderConfirmationEvidence[]
 
   @@unique([normalizationResultId, eventOrdinal], map: "MaxInboundNormalizedEvent_result_ordinal_key")
+  @@unique([accountId, normalizedEventId], map: "MaxInboundNormalizedEvent_account_event_key")
   @@index([accountId, sourceJournalSequence], map: "MaxInboundNormalizedEvent_account_sequence_idx")
   @@index([accountId, parserVersion, sourceJournalSequence], map: "MaxInboundNormalizedEvent_account_parser_sequence_idx")
   @@index([accountId, providerMessageId], map: "MaxInboundNormalizedEvent_account_provider_message_idx")
@@ -415,6 +417,8 @@ model MaxOutboundDispatch {
   attempts                    MaxOutboundDispatchAttempt[]
   transitions                 MaxOutboundDispatchTransition[]
   reconciliationTasks         MaxOutboundReconciliationTask[]
+  confirmationResolutions     MaxProviderConfirmationResolution[]
+  confirmationDecisions       MaxProviderConfirmationDecision[]
 
   @@unique([accountId, conversationKey, commandSequence], map: "MaxOutboundDispatch_account_conversation_sequence_key")
   @@unique([accountId, conversationKey, dispatchId], map: "MaxOutboundDispatch_account_conversation_dispatch_key")
@@ -468,6 +472,8 @@ model MaxOutboundDispatchAttempt {
   dispatch                  MaxOutboundDispatch              @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundDispatchAttempt_dispatch_fkey")
   transitions               MaxOutboundDispatchTransition[]
   reconciliationTasks       MaxOutboundReconciliationTask[]
+  confirmationResolutions   MaxProviderConfirmationResolution[]
+  confirmationDecisions     MaxProviderConfirmationDecision[]
 
   @@unique([dispatchId, attemptNumber], map: "MaxOutboundDispatchAttempt_dispatch_number_key")
   @@unique([accountId, dispatchId, attemptCorrelationId], map: "MaxOutboundDispatchAttempt_account_dispatch_correlation_key")
@@ -498,6 +504,8 @@ model MaxOutboundDispatchTransition {
   createdAt                DateTime                     @default(now())
   dispatch                 MaxOutboundDispatch          @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundDispatchTransition_dispatch_fkey")
   attempt                  MaxOutboundDispatchAttempt?  @relation(fields: [accountId, conversationKey, attemptId], references: [accountId, conversationKey, attemptId], onDelete: Restrict, map: "MaxOutboundDispatchTransition_attempt_fkey")
+  confirmationResolutions MaxProviderConfirmationResolution[]
+  confirmationDecisions   MaxProviderConfirmationDecision[]
 
   @@unique([dispatchId, transitionSequence], map: "MaxOutboundDispatchTransition_dispatch_sequence_key")
   @@unique([accountId, dispatchId, transitionIdempotencyKey], map: "MaxOutboundDispatchTransition_idempotency_key")
@@ -527,6 +535,127 @@ model MaxOutboundReconciliationTask {
 
   @@index([state, notBefore, openedAt], map: "MaxOutboundReconciliationTask_state_not_before_idx")
   @@index([accountId, conversationKey, state], map: "MaxOutboundReconciliationTask_account_conversation_state_idx")
+}
+
+/// One immutable row per physically normalized provider-confirmation event and
+/// matcher version. Provider identifiers are deliberately non-unique evidence.
+model MaxProviderConfirmationEvidence {
+  evidenceId               String                              @id
+  accountId                String
+  sourceNormalizedEventId  String
+  sourceObservationId      String
+  sourceJournalSequence    BigInt
+  sourceEventOrdinal       Int
+  matcherVersion           String
+  evidenceVersion          String
+  evidenceKind             String
+  providerMessageId        String?
+  attemptCorrelationId     String?
+  clientMessageId          String?
+  protocolChatId           String?
+  providerUserId           String?
+  webRouteId               String?
+  providerOccurredAt       DateTime?
+  evidenceSha256           String
+  safeMetadata             Json
+  createdAt                DateTime                            @default(now())
+  sourceEvent              MaxInboundNormalizedEvent           @relation(fields: [accountId, sourceNormalizedEventId], references: [accountId, normalizedEventId], onDelete: Restrict, map: "MaxProviderConfirmationEvidence_account_event_fkey")
+  resolution               MaxProviderConfirmationResolution?
+  canonicalForResolutions  MaxProviderConfirmationResolution[] @relation("MaxProviderConfirmationCanonicalEvidence")
+  decisions                MaxProviderConfirmationDecision[]
+
+  @@unique([accountId, sourceNormalizedEventId, matcherVersion], map: "MaxProviderConfirmationEvidence_account_event_matcher_key")
+  @@index([accountId, sourceJournalSequence, sourceEventOrdinal], map: "MaxProviderConfirmationEvidence_account_source_order_idx")
+  @@index([accountId, providerMessageId], map: "MaxProviderConfirmationEvidence_account_provider_message_idx")
+  @@index([accountId, attemptCorrelationId], map: "MaxProviderConfirmationEvidence_account_attempt_correlation_idx")
+  @@index([accountId, clientMessageId], map: "MaxProviderConfirmationEvidence_account_client_message_idx")
+  @@index([evidenceKind, createdAt], map: "MaxProviderConfirmationEvidence_kind_created_idx")
+}
+
+/// Mutable, optimistic projection of the decision for one immutable evidence
+/// row. Every mutation has a corresponding append-only Decision row.
+model MaxProviderConfirmationResolution {
+  resolutionId         String                           @id
+  evidenceId           String                           @unique(map: "MaxProviderConfirmationResolution_evidence_key")
+  accountId            String
+  matcherVersion       String
+  status               String
+  matchMethod          String
+  dispatchId           String?
+  attemptId            String?
+  transitionId         String?
+  canonicalEvidenceId  String?
+  issueCode            String?
+  safeIssueSummary     String?
+  candidateDispatchIds Json
+  candidateAttemptIds  Json
+  resolutionVersion    Int                              @default(0)
+  retryCount           Int                              @default(0)
+  nextRetryAt          DateTime?
+  resolvedAt           DateTime?
+  resolvedBy           String?
+  resolutionReason     String?
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+  evidence             MaxProviderConfirmationEvidence @relation(fields: [evidenceId], references: [evidenceId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_evidence_fkey")
+  canonicalEvidence    MaxProviderConfirmationEvidence? @relation("MaxProviderConfirmationCanonicalEvidence", fields: [canonicalEvidenceId], references: [evidenceId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_canonical_evidence_fkey")
+  dispatch             MaxOutboundDispatch?             @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_dispatch_fkey")
+  attempt              MaxOutboundDispatchAttempt?      @relation(fields: [attemptId], references: [attemptId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_attempt_fkey")
+  transition           MaxOutboundDispatchTransition?   @relation(fields: [transitionId], references: [transitionId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_transition_fkey")
+  decisions            MaxProviderConfirmationDecision[]
+
+  @@index([accountId, matcherVersion, status, createdAt], map: "MaxProviderConfirmationResolution_account_matcher_status_idx")
+  @@index([dispatchId, status], map: "MaxProviderConfirmationResolution_dispatch_status_idx")
+  @@index([canonicalEvidenceId], map: "MaxProviderConfirmationResolution_canonical_evidence_idx")
+}
+
+/// Append-only audit for all automatic and manual matcher decisions.
+model MaxProviderConfirmationDecision {
+  decisionId          String                            @id
+  resolutionId        String
+  evidenceId          String
+  accountId           String
+  decisionSequence    Int
+  matcherVersion      String
+  decisionType        String
+  fromStatus          String?
+  toStatus            String
+  dispatchId          String?
+  attemptId           String?
+  transitionId        String?
+  actor                String
+  reason               String
+  decisionSha256       String
+  safeMetadata         Json
+  resolutionVersionBefore Int
+  resolutionVersionAfter  Int
+  createdAt            DateTime                          @default(now())
+  resolution           MaxProviderConfirmationResolution @relation(fields: [resolutionId], references: [resolutionId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_resolution_fkey")
+  evidence             MaxProviderConfirmationEvidence  @relation(fields: [evidenceId], references: [evidenceId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_evidence_fkey")
+  dispatch             MaxOutboundDispatch?              @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_dispatch_fkey")
+  attempt              MaxOutboundDispatchAttempt?       @relation(fields: [attemptId], references: [attemptId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_attempt_fkey")
+  transition           MaxOutboundDispatchTransition?    @relation(fields: [transitionId], references: [transitionId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_transition_fkey")
+
+  @@unique([resolutionId, decisionSequence], map: "MaxProviderConfirmationDecision_resolution_sequence_key")
+  @@index([accountId, createdAt], map: "MaxProviderConfirmationDecision_account_created_idx")
+  @@index([evidenceId, createdAt], map: "MaxProviderConfirmationDecision_evidence_idx")
+  @@index([dispatchId, createdAt], map: "MaxProviderConfirmationDecision_dispatch_idx")
+}
+
+/// Durable account/consumer/version checkpoint in normalized journal order.
+model MaxProviderConfirmationCursor {
+  cursorId             String   @id
+  consumerId           String
+  accountId            String
+  matcherVersion       String
+  lastJournalSequence  BigInt   @default(0)
+  lastEventOrdinal     Int      @default(0)
+  optimisticVersion    Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([consumerId, accountId, matcherVersion], map: "MaxProviderConfirmationCursor_consumer_account_matcher_key")
+  @@index([accountId, lastJournalSequence, lastEventOrdinal], map: "MaxProviderConfirmationCursor_account_source_order_idx")
 }
 
 /// Current exact/provisional identity projection. The account-scoped unique

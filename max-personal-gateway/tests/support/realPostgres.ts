@@ -30,6 +30,10 @@ export interface RealPrismaClient {
   readonly maxOutboundDispatchAttempt: Record<string, (...args: any[]) => Promise<any>>
   readonly maxOutboundDispatchTransition: Record<string, (...args: any[]) => Promise<any>>
   readonly maxOutboundReconciliationTask: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxProviderConfirmationEvidence: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxProviderConfirmationResolution: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxProviderConfirmationDecision: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxProviderConfirmationCursor: Record<string, (...args: any[]) => Promise<any>>
   $connect(): Promise<void>
   $disconnect(): Promise<void>
   $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>

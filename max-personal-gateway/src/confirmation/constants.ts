@@ -1,0 +1,5 @@
+export const MAX_PROVIDER_CONFIRMATION_MATCHER_VERSION = 'max-provider-confirmation-matcher-v1' as const
+export const MAX_PROVIDER_CONFIRMATION_EVIDENCE_VERSION = 'max-provider-confirmation-evidence-v1' as const
+export const MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED = 'MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED' as const
+export const MAX_PROVIDER_CONFIRMATION_BATCH_LIMIT = 500
+export const MAX_PROVIDER_CONFIRMATION_PAGE_LIMIT = 200
