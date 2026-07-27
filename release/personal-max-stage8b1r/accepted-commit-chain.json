@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "originalBaseline": "e150f3fc781e8c960b5f3010b8788dfba6d6be99",
+  "acceptedStages": {
+    "stage1": "2da33a12b5f5b95b708cc8975dd36c6fd0aab903",
+    "stage2": "66e73aaf73d8a9aa695c10c03f2eee9a1b5a8814",
+    "stage3": "83d41e8853098469546ec9b754e95beef8fa4036",
+    "stage4": "9f129a4d4e3d7f3d23f6a96ba52196329311f921",
+    "stage5": "77276ebd88905ee08365d5d7c083d5e6f33b53f2",
+    "stage6": "e68eda9f42a7e29ac1ce98afdb0c316786d2a44f",
+    "stage7": "dc008e983fc220dc9505e7418e7b7e36ea090652",
+    "stage8A": "6d994070b1d56b1eaafa5fd5b495b6564a430c3c",
+    "stage8B1": "ecd6814e888944dc2b27758e4e711bb9a7ebe081"
+  },
+  "stage8B1R": {
+    "commit": "SELF",
+    "meaning": "the single direct child of stage8B1 containing this manifest",
+    "expectedParent": "ecd6814e888944dc2b27758e4e711bb9a7ebe081",
+    "expectedCommitsAboveOriginalBaseline": 11,
+    "expectedCommitsAboveStage8B1": 1
+  },
+  "historyRewriteAllowed": false
+}
