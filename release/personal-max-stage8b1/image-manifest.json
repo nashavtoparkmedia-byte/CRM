@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1",
+  "buildTimestamp": "20260727T171432Z",
+  "sourceCommit": "resolved to the exact Stage 8B1 commit in external build-manifest.json",
+  "artifactFormat": "OCI image layout",
+  "artifactBuilder": "rootless OCI-equivalent assembly because the production Docker daemon is not available to codexbot",
+  "equivalenceChecks": [
+    "exact Dockerfile base image and architecture",
+    "npm ci --omit=dev from committed lockfile",
+    "application source byte parity",
+    "non-root runtime user and Dockerfile-equivalent entrypoint",
+    "OCI manifest, config, layer gzip and tar validation"
+  ],
+  "images": [
+    {
+      "component": "max-personal-gateway",
+      "referencePattern": "crm/max-personal-gateway:stage8b1-<short-stage8b1-sha>-20260727T171432Z",
+      "dockerfile": "max-personal-gateway/Dockerfile",
+      "context": ".",
+      "browserDependenciesAllowed": false
+    },
+    {
+      "component": "max-web-scraper",
+      "referencePattern": "crm/max-web-scraper:stage8b1-<short-stage8b1-sha>-20260727T171432Z",
+      "dockerfile": "max-web-scraper/Dockerfile",
+      "context": "max-web-scraper",
+      "browserOwner": true
+    }
+  ],
+  "mutableTagsAllowed": false,
+  "registryPublication": "pending explicit authenticated registry evidence"
+}

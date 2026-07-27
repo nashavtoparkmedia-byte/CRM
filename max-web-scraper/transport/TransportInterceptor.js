@@ -2421,6 +2421,11 @@ class TransportInterceptor {
     console.log('[Transport] Перехват отключён')
   }
 
+  async stopCaptureAndFlush(timeoutMs = 2000) {
+    if (typeof this._captureAdapter.stopAndFlush !== 'function') return null
+    return this._captureAdapter.stopAndFlush(timeoutMs)
+  }
+
   // ─── Внутренние ─────────────────────────────────────────────────────────
 
   _emit(msg) {

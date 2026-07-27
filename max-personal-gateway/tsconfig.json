@@ -7,7 +7,7 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "types": ["node"],
-    "typeRoots": ["../gravity-mvp/node_modules/@types"],
+    "typeRoots": ["./node_modules/@types", "../gravity-mvp/node_modules/@types"],
     "skipLibCheck": true
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]

@@ -1,0 +1,66 @@
+services:
+  max-web-scraper:
+    image: ${MAX_WEB_SCRAPER_STAGE8B1_IMAGE:?immutable Stage 8B1 scraper image required}
+    environment:
+      MAX_PERSONAL_ACCOUNT_ID: ${MAX_PERSONAL_ACCOUNT_ID:-}
+      MAX_PERSONAL_LIVE_CAPTURE_ENABLED: ${MAX_PERSONAL_LIVE_CAPTURE_ENABLED:-}
+      MAX_PERSONAL_CAPTURE_SPOOL_PATH: /var/lib/max-personal-capture
+      MAX_PERSONAL_CAPTURE_SPOOL_MAX_BYTES: ${MAX_PERSONAL_CAPTURE_SPOOL_MAX_BYTES:-268435456}
+      MAX_PERSONAL_CAPTURE_SPOOL_WARNING_RATIO: ${MAX_PERSONAL_CAPTURE_SPOOL_WARNING_RATIO:-0.70}
+      MAX_PERSONAL_CAPTURE_SPOOL_CRITICAL_RATIO: ${MAX_PERSONAL_CAPTURE_SPOOL_CRITICAL_RATIO:-0.90}
+      MAX_PERSONAL_CAPTURE_INGRESS_URL: http://max-personal-gateway:8080/v1/capture
+      MAX_PERSONAL_CAPTURE_HMAC_KEY_ID: ${MAX_PERSONAL_CAPTURE_HMAC_KEY_ID:-}
+      MAX_PERSONAL_CAPTURE_HMAC_SECRET: ${MAX_PERSONAL_CAPTURE_HMAC_SECRET:-}
+      MAX_PERSONAL_CAPTURE_DRAIN_INTERVAL_MS: ${MAX_PERSONAL_CAPTURE_DRAIN_INTERVAL_MS:-1000}
+      MAX_PERSONAL_CAPTURE_REQUEST_TIMEOUT_MS: ${MAX_PERSONAL_CAPTURE_REQUEST_TIMEOUT_MS:-5000}
+      MAX_PERSONAL_CAPTURE_DRAIN_BATCH_SIZE: ${MAX_PERSONAL_CAPTURE_DRAIN_BATCH_SIZE:-100}
+    volumes:
+      - /var/lib/crm/max-personal-capture:/var/lib/max-personal-capture
+
+  max-personal-gateway:
+    image: ${MAX_PERSONAL_GATEWAY_STAGE8B1_IMAGE:?immutable Stage 8B1 gateway image required}
+    container_name: crm-max-personal-gateway
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=1000,gid=1000
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MAX_RAW_JOURNAL_ENABLED: ${MAX_RAW_JOURNAL_ENABLED:-}
+      MAX_INBOUND_NORMALIZER_ENABLED: ${MAX_INBOUND_NORMALIZER_ENABLED:-}
+      MAX_SHADOW_COMPARISON_ENABLED: ${MAX_SHADOW_COMPARISON_ENABLED:-}
+      MAX_PERSONAL_LIVE_CAPTURE_ENABLED: ${MAX_PERSONAL_LIVE_CAPTURE_ENABLED:-}
+      MAX_PERSONAL_GATEWAY_DATABASE_URL: ${MAX_PERSONAL_GATEWAY_DATABASE_URL:-}
+      MAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON: ${MAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON:-}
+      MAX_PERSONAL_GATEWAY_BIND_HOST: 0.0.0.0
+      MAX_PERSONAL_GATEWAY_PORT: 8080
+      MAX_PERSONAL_GATEWAY_PRIVATE_NETWORK: required
+      MAX_PERSONAL_GATEWAY_REQUIRED_MIGRATION: 20260727154647_add_max_capture_ingress
+      MAX_PERSONAL_BROWSER_OWNERS_EXPECTED: 1
+      MAX_PERSONAL_CAPTURE_REQUEST_MAX_BYTES: ${MAX_PERSONAL_CAPTURE_REQUEST_MAX_BYTES:-1200000}
+      MAX_PERSONAL_CAPTURE_BODY_TIMEOUT_MS: ${MAX_PERSONAL_CAPTURE_BODY_TIMEOUT_MS:-5000}
+      MAX_PERSONAL_CAPTURE_HEADER_TIMEOUT_MS: ${MAX_PERSONAL_CAPTURE_HEADER_TIMEOUT_MS:-5000}
+      MAX_PERSONAL_CAPTURE_AUTH_CLOCK_SKEW_MS: ${MAX_PERSONAL_CAPTURE_AUTH_CLOCK_SKEW_MS:-30000}
+      MAX_PERSONAL_GATEWAY_WORKER_BATCH_SIZE: ${MAX_PERSONAL_GATEWAY_WORKER_BATCH_SIZE:-100}
+      MAX_PERSONAL_GATEWAY_WORKER_POLL_MS: ${MAX_PERSONAL_GATEWAY_WORKER_POLL_MS:-1000}
+    expose:
+      - "8080"
+    networks:
+      - crm_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"

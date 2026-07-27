@@ -3,6 +3,7 @@
 const crypto = require('crypto')
 const fs = require('fs')
 const path = require('path')
+const { AuthenticatedCaptureDrain } = require('./AuthenticatedCaptureDrain')
 
 const CAPTURE_ENVELOPE_VERSION = 1
 const CAPTURE_ADAPTER_VERSION = 'max-live-capture-adapter-v1'
@@ -10,12 +11,15 @@ const SANITIZER_VERSION = 'max-raw-sanitizer-v1'
 const MAX_RECORD_BYTES = 1024 * 1024
 const SEGMENT_BYTES = 4 * 1024 * 1024
 
-const validAccount = value => /^(?!true$|false$)[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/i.test(String(value || ''))
+const validAccount = value => /^(?!true$|false$|1$|0$|all$)[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/i.test(String(value || ''))
 
 function isLiveCaptureEnabled(raw, accountId) {
   if (!validAccount(accountId)) return false
-  const values = String(raw || '').split(',').map(value => value.trim()).filter(Boolean)
-  return values.length > 0 && values.every(validAccount) && new Set(values).has(accountId)
+  const value = String(raw || '')
+  if (value === '') return false
+  const values = value.split(',')
+  return values.every(candidate => candidate !== '' && candidate === candidate.trim() && validAccount(candidate))
+    && new Set(values).has(accountId)
 }
 
 function hash(value) {
@@ -141,18 +145,23 @@ class RuntimeCaptureSpool {
     if (!path.isAbsolute(directory)) throw new Error('capture spool path must be absolute')
     this.directory = directory
     this.maxTotalBytes = maxTotalBytes
-    this.records = 0
-    this.bytes = 0
+    this.recordMap = new Map()
     this.oldestCapturedAt = null
     this.quarantinedCount = 0
     this.critical = false
     this.lastErrorCode = null
+    this.retryCount = 0
+    this.acknowledgedCount = 0
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 })
     fs.chmodSync(directory, 0o700)
     fs.mkdirSync(path.join(directory, 'quarantine'), { recursive: true, mode: 0o700 })
     fs.chmodSync(path.join(directory, 'quarantine'), 0o700)
+    this.acknowledgedWatermark = this._readWatermark()
     this.nextSequence = this._recoverNextSequence()
   }
+
+  get records() { return this.recordMap.size }
+  get bytes() { return [...this.recordMap.values()].reduce((sum, record) => sum + record.bytes, 0) }
 
   append(envelope) {
     const sequence = this.nextSequence
@@ -173,11 +182,51 @@ class RuntimeCaptureSpool {
     const directoryDescriptor = fs.openSync(this.directory, 'r')
     try { fs.fsyncSync(directoryDescriptor) } finally { fs.closeSync(directoryDescriptor) }
     this.nextSequence += 1
-    this.records += 1
-    this.bytes += size
+    this.recordMap.set(sequence, { sequence, envelope, bytes: size })
     const capturedAt = Date.parse(envelope.capturedAt)
     if (Number.isFinite(capturedAt)) this.oldestCapturedAt = Math.min(this.oldestCapturedAt ?? capturedAt, capturedAt)
     return { sequence, bytes: size }
+  }
+
+  readPending(limit) {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000) throw new Error('capture drain limit invalid')
+    return [...this.recordMap.values()]
+      .filter(record => record.sequence > this.acknowledgedWatermark)
+      .sort((left, right) => left.sequence - right.sequence)
+      .slice(0, limit)
+  }
+
+  markAcknowledged(sequence) {
+    if (sequence !== this.acknowledgedWatermark + 1 || !this.recordMap.has(sequence)) {
+      throw Object.assign(new Error('non-contiguous capture acknowledgement'), { code: 'SPOOL_CORRUPT' })
+    }
+    this.acknowledgedWatermark = sequence
+    this.acknowledgedCount += 1
+    this._writeWatermark()
+    this.recordMap.delete(sequence)
+    if (this.recordMap.size === 0) {
+      this.retryCount = 0
+      this.lastErrorCode = null
+    }
+  }
+
+  noteRetry(errorCode) {
+    this.retryCount += 1
+    this.lastErrorCode = String(errorCode || 'INGRESS_UNAVAILABLE').slice(0, 80)
+  }
+
+  compactAcknowledged() {
+    let removed = 0
+    for (const name of this._segments()) {
+      const file = path.join(this.directory, name)
+      const sequences = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).sequence)
+      if (sequences.length > 0 && sequences.every(sequence => sequence <= this.acknowledgedWatermark)) {
+        fs.unlinkSync(file)
+        removed += 1
+      }
+    }
+    if (removed > 0) this._syncDirectory(this.directory)
+    return removed
   }
 
   _segments() {
@@ -201,6 +250,13 @@ class RuntimeCaptureSpool {
           sequences.add(parsed.sequence)
           maximum = Math.max(maximum, parsed.sequence)
           valid.push(`${line}\n`)
+          if (parsed.sequence > this.acknowledgedWatermark) {
+            this.recordMap.set(parsed.sequence, {
+              sequence: parsed.sequence,
+              envelope: parsed.envelope,
+              bytes: Buffer.byteLength(`${line}\n`),
+            })
+          }
           const capturedAt = Date.parse(parsed.envelope && parsed.envelope.capturedAt)
           if (Number.isFinite(capturedAt)) this.oldestCapturedAt = Math.min(this.oldestCapturedAt ?? capturedAt, capturedAt)
         } catch {
@@ -225,10 +281,44 @@ class RuntimeCaptureSpool {
           try { fs.fsyncSync(descriptor) } finally { fs.closeSync(descriptor) }
         }
       }
-      this.records += valid.length
-      this.bytes += valid.reduce((sum, line) => sum + Buffer.byteLength(line), 0)
     }
     return maximum + 1
+  }
+
+  _readWatermark() {
+    const file = path.join(this.directory, 'ack-watermark.json')
+    if (!fs.existsSync(file)) return 0
+    try {
+      const value = JSON.parse(fs.readFileSync(file, 'utf8'))
+      const body = JSON.stringify({ version: 1, acknowledgedWatermark: value.acknowledgedWatermark })
+      if (value.version !== 1 || !Number.isSafeInteger(value.acknowledgedWatermark)
+        || value.acknowledgedWatermark < 0 || value.checksum !== hash(body)) throw new Error('watermark')
+      return value.acknowledgedWatermark
+    } catch {
+      this.critical = true
+      this.lastErrorCode = 'SPOOL_CORRUPT'
+      return 0
+    }
+  }
+
+  _writeWatermark() {
+    const body = JSON.stringify({ version: 1, acknowledgedWatermark: this.acknowledgedWatermark })
+    const value = JSON.stringify({ ...JSON.parse(body), checksum: hash(body) })
+    const temporary = path.join(this.directory, `.ack-watermark-${crypto.randomUUID()}.tmp`)
+    const target = path.join(this.directory, 'ack-watermark.json')
+    const descriptor = fs.openSync(temporary, 'wx', 0o600)
+    try {
+      fs.writeSync(descriptor, value, null, 'utf8')
+      fs.fsyncSync(descriptor)
+    } finally { fs.closeSync(descriptor) }
+    fs.renameSync(temporary, target)
+    fs.chmodSync(target, 0o600)
+    this._syncDirectory(this.directory)
+  }
+
+  _syncDirectory(directory) {
+    const descriptor = fs.openSync(directory, 'r')
+    try { fs.fsyncSync(descriptor) } finally { fs.closeSync(descriptor) }
   }
 
   _activeSegment(sequence, size) {
@@ -286,15 +376,41 @@ class CriticalCaptureAdapter {
 }
 
 class LiveCaptureAdapter {
-  constructor({ accountId, spoolPath, maxSpoolBytes = 256 * 1024 * 1024, clock = () => new Date(), idGenerator = () => crypto.randomUUID() }) {
+  constructor({
+    accountId,
+    spoolPath,
+    maxSpoolBytes = 256 * 1024 * 1024,
+    warningRatio = 0.7,
+    criticalRatio = 0.9,
+    ingress = null,
+    autoStartDrain = false,
+    clock = () => new Date(),
+    idGenerator = () => crypto.randomUUID(),
+  }) {
+    if (!(warningRatio > 0 && warningRatio < criticalRatio && criticalRatio <= 1)) {
+      throw Object.assign(new Error('capture spool thresholds invalid'), { code: 'INGRESS_CONFIG_INVALID' })
+    }
     this.enabled = true
     this.accountId = accountId
     this.clock = clock
     this.idGenerator = idGenerator
     this.sessionGeneration = crypto.randomUUID()
     this.spool = new RuntimeCaptureSpool(spoolPath, maxSpoolBytes)
+    this.warningRatio = warningRatio
+    this.criticalRatio = criticalRatio
     this.lostBeforeSpoolCount = 0
     this.lastDrainErrorCode = null
+    this.drain = ingress ? new AuthenticatedCaptureDrain({
+      spool: this.spool,
+      endpoint: ingress.endpoint,
+      keyId: ingress.keyId,
+      secret: ingress.secret,
+      intervalMs: ingress.intervalMs,
+      requestTimeoutMs: ingress.requestTimeoutMs,
+      batchSize: ingress.batchSize,
+      healthSnapshot: () => this._producerHealth(),
+    }) : null
+    if (autoStartDrain) this.drain?.start()
   }
 
   capturePhysicalFrame({ raw, metadata }) {
@@ -339,9 +455,10 @@ class LiveCaptureAdapter {
 
   getCaptureHealth() {
     const diskRatio = this.spool._diskBytes() / this.spool.maxTotalBytes
-    const adapterState = this.lostBeforeSpoolCount > 0 || this.spool.critical || diskRatio >= 0.9
+    const adapterState = this.lostBeforeSpoolCount > 0 || this.spool.critical
+      || this.lastDrainErrorCode === 'INGRESS_CONFIG_INVALID' || diskRatio >= this.criticalRatio
       ? 'critical'
-      : diskRatio >= 0.7 ? 'degraded' : 'healthy'
+      : this.spool.retryCount > 0 || diskRatio >= this.warningRatio ? 'degraded' : 'healthy'
     return {
       enabled: true,
       adapterState,
@@ -350,19 +467,37 @@ class LiveCaptureAdapter {
       oldestPendingAgeMs: this.spool.oldestCapturedAt === null
         ? null
         : Math.max(0, this.clock().valueOf() - this.spool.oldestCapturedAt),
-      acknowledgedCount: 0,
-      retryCount: 0,
-      rejectedCount: 0,
+      acknowledgedCount: this.spool.acknowledgedCount,
+      retryCount: this.spool.retryCount,
+      rejectedCount: this.drain?.rejectedCount || 0,
       quarantinedCount: this.spool.quarantinedCount,
       lostBeforeSpoolCount: this.lostBeforeSpoolCount,
-      lastSuccessfulJournalAck: null,
-      lastDrainErrorCode: this.lastDrainErrorCode || this.spool.lastErrorCode,
+      lastSuccessfulJournalAck: this.drain?.lastSuccessfulJournalAck || null,
+      lastDrainErrorCode: this.lastDrainErrorCode || this.drain?.lastErrorCode || this.spool.lastErrorCode,
       captureEnvelopeIdCollisionCount: 0,
       ingressIdempotentRetryCount: 0,
     }
   }
 
-  close() {}
+  _producerHealth() {
+    const health = this.getCaptureHealth()
+    return {
+      adapterState: health.adapterState,
+      spoolPendingCount: health.spoolPendingCount,
+      spoolPendingBytes: health.spoolPendingBytes,
+      oldestPendingAgeMs: health.oldestPendingAgeMs,
+      lostBeforeSpoolCount: health.lostBeforeSpoolCount,
+      captureEnvelopeIdCollisionCount: health.captureEnvelopeIdCollisionCount,
+    }
+  }
+
+  markIngressConfigInvalid() { this.lastDrainErrorCode = 'INGRESS_CONFIG_INVALID' }
+
+  async stopAndFlush(timeoutMs = 2000) {
+    return this.drain ? this.drain.stopAndFlush(timeoutMs) : null
+  }
+
+  close() { this.drain?.close() }
 }
 
 function createLiveCaptureAdapterFromEnvironment(environment = process.env) {
@@ -371,10 +506,37 @@ function createLiveCaptureAdapterFromEnvironment(environment = process.env) {
     return new NoopCaptureAdapter()
   }
   const spoolPath = String(environment.MAX_PERSONAL_CAPTURE_SPOOL_PATH || '')
-  if (!path.isAbsolute(spoolPath)) return new NoopCaptureAdapter()
+  if (!path.isAbsolute(spoolPath)) return new CriticalCaptureAdapter('SPOOL_CONFIG_INVALID')
   const configuredBytes = Number(environment.MAX_PERSONAL_CAPTURE_SPOOL_MAX_BYTES || 256 * 1024 * 1024)
-  if (!Number.isSafeInteger(configuredBytes) || configuredBytes < MAX_RECORD_BYTES) return new NoopCaptureAdapter()
-  try { return new LiveCaptureAdapter({ accountId, spoolPath, maxSpoolBytes: configuredBytes }) }
+  if (!Number.isSafeInteger(configuredBytes) || configuredBytes < MAX_RECORD_BYTES) return new CriticalCaptureAdapter('SPOOL_CONFIG_INVALID')
+  const warningRatio = Number(environment.MAX_PERSONAL_CAPTURE_SPOOL_WARNING_RATIO || 0.7)
+  const criticalRatio = Number(environment.MAX_PERSONAL_CAPTURE_SPOOL_CRITICAL_RATIO || 0.9)
+  try {
+    const ingressValues = [
+      environment.MAX_PERSONAL_CAPTURE_INGRESS_URL,
+      environment.MAX_PERSONAL_CAPTURE_HMAC_KEY_ID,
+      environment.MAX_PERSONAL_CAPTURE_HMAC_SECRET,
+    ]
+    const completeIngress = ingressValues.every(value => typeof value === 'string' && value.length > 0)
+    const adapter = new LiveCaptureAdapter({
+      accountId,
+      spoolPath,
+      maxSpoolBytes: configuredBytes,
+      warningRatio,
+      criticalRatio,
+      ingress: completeIngress ? {
+        endpoint: environment.MAX_PERSONAL_CAPTURE_INGRESS_URL,
+        keyId: environment.MAX_PERSONAL_CAPTURE_HMAC_KEY_ID,
+        secret: environment.MAX_PERSONAL_CAPTURE_HMAC_SECRET,
+        intervalMs: Number(environment.MAX_PERSONAL_CAPTURE_DRAIN_INTERVAL_MS || 1000),
+        requestTimeoutMs: Number(environment.MAX_PERSONAL_CAPTURE_REQUEST_TIMEOUT_MS || 5000),
+        batchSize: Number(environment.MAX_PERSONAL_CAPTURE_DRAIN_BATCH_SIZE || 100),
+      } : null,
+      autoStartDrain: completeIngress,
+    })
+    if (!completeIngress) adapter.markIngressConfigInvalid()
+    return adapter
+  }
   catch (error) { return new CriticalCaptureAdapter(error && error.code ? error.code : 'SPOOL_IO_FAILURE') }
 }
 
@@ -382,6 +544,7 @@ module.exports = {
   CAPTURE_ADAPTER_VERSION,
   CAPTURE_ENVELOPE_VERSION,
   SANITIZER_VERSION,
+  RuntimeCaptureSpool,
   LiveCaptureAdapter,
   CriticalCaptureAdapter,
   NoopCaptureAdapter,

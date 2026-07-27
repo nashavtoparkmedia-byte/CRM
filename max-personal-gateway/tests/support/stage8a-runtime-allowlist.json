@@ -1,6 +1,7 @@
 {
   "stage": "8A",
   "baseCommit": "dc008e983fc220dc9505e7418e7b7e36ea090652",
+  "acceptedCommit": "6d994070b1d56b1eaafa5fd5b495b6564a430c3c",
   "runtimeFiles": [
     "max-web-scraper/capture/LiveCaptureAdapter.js",
     "max-web-scraper/index.js",

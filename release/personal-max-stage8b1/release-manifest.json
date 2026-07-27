@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1",
+  "releaseId": "personal-max-shadow-capture-20260727T171432Z",
+  "baseCommit": "6d994070b1d56b1eaafa5fd5b495b6564a430c3c",
+  "sourceCommitPolicy": "exact atomic Stage 8B1 commit recorded in the external immutable artifact manifest after commit",
+  "productionDeployPerformed": false,
+  "productionMigrationPerformed": false,
+  "featureActivationPerformed": false,
+  "providerEffectsAllowed": false,
+  "stage8B2RequiresOwnerApproval": true,
+  "artifacts": [
+    "max-personal-gateway OCI image/archive",
+    "max-web-scraper OCI image/archive",
+    "deploy/docker-compose.stage8b1.shadow.yml",
+    "release/personal-max-stage8b1"
+  ]
+}

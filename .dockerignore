@@ -1,0 +1,9 @@
+**
+!max-personal-gateway/
+!max-personal-gateway/package.json
+!max-personal-gateway/package-lock.json
+!max-personal-gateway/src/
+!max-personal-gateway/src/**
+!gravity-mvp/
+!gravity-mvp/prisma/
+!gravity-mvp/prisma/**

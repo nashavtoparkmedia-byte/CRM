@@ -110,6 +110,18 @@ The spool path must be absolute, owned by the runtime account, directory mode `0
 
 Readiness gates are: exactly one browser/profile owner and receive listener; migration present; disabled zero-side-effect proof; capture/journal loss and collision counters zero; spool below warning threshold; recent journal ACK; no drain error; synthetic hook-to-comparison pass; and rollback rehearsal. Rollback is `disable flag → stop drain → preserve spool → existing runtime continues`; it must not delete pending segments. A second browser owner is prohibited. No Stage 8B deploy occurs without a separate approval.
 
+## Stage 8B1 shadow release candidate
+
+Stage 8B1 adds a browserless production entrypoint under `src/runtime/`. It binds loopback by default; the release Compose overlay may bind `0.0.0.0` only while declaring the private-network requirement and exposing no host port or nginx route. Capture ingress is `POST /v1/capture` over `crm_internal`, authenticated with versioned HMAC covering method, exact path, millisecond timestamp and body hash. Missing, invalid, expired and unknown credentials are denied; verification is constant-time and retry replay remains idempotent through `(accountId, captureEnvelopeId)`.
+
+The existing scraper remains the only browser/profile owner. Its Stage 8A fsync spool now has an authenticated bounded background drain, durable ACK watermark, restart recovery and post-ACK compaction. The producer accepts only loopback or the exact `max-personal-gateway` service hostname, follows no redirects and preserves pending records through gateway, network or database outages. Capture remains fail-open for legacy processing while health/readiness reports loss and unsafe configuration honestly.
+
+All four allowlists—`MAX_RAW_JOURNAL_ENABLED`, `MAX_INBOUND_NORMALIZER_ENABLED`, `MAX_SHADOW_COMPARISON_ENABLED` and `MAX_PERSONAL_LIVE_CAPTURE_ENABLED`—default empty. Wildcards, booleans, whitespace and malformed values fail closed. The dormant gateway does not connect to PostgreSQL, construct workers or accept capture. Active mode requires `MAX_PERSONAL_GATEWAY_DATABASE_URL` explicitly and never falls back to generic `DATABASE_URL`; startup checks migration readiness but never applies a migration.
+
+Operational endpoints are `/health`, `/ready` and `/metrics`. They contain bounded counters, anonymous counts and latency summaries only—never messages, captions, payloads, credentials or full provider identifiers. Readiness requires migration 53, HMAC, authenticated producer evidence, recent journal ACK, safe spool, zero loss/collision/wrong-account/critical-regression counts, bounded worker lag, one expected browser owner, and inactive sender/provider modules.
+
+The committed deployment and rollback package is in `release/personal-max-stage8b1/`, with the Compose overlay at `deploy/docker-compose.stage8b1.shadow.yml`. Stage 8B1 does not create the production spool, migrate production, build Gravity, deploy, restart, launch Chromium, contact MAX or activate any feature. Stage 8B2 remains a separate owner-approval gate.
+
 ## Disposable real PostgreSQL gate
 
 The opt-in integration suite never reads generic `DATABASE_URL`. It requires

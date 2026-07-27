@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "expectedMigrationCount": 53,
+  "requiredMigration": "20260727154647_add_max_capture_ingress",
+  "sqlPath": "gravity-mvp/prisma/migrations/20260727154647_add_max_capture_ingress/migration.sql",
+  "additive": true,
+  "historicalNullCaptureEnvelopeIdAllowed": true,
+  "accountScopedPartialUniqueIndex": "MaxRawTransportEvent_accountId_captureEnvelopeId_key",
+  "autoMigrateAtGatewayStartup": false,
+  "rollbackRemovesMigration": false,
+  "productionApplied": false
+}

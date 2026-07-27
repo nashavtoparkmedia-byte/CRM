@@ -5344,8 +5344,10 @@ async function shutdown(signal) {
   }
   if (isSending) console.warn('[App] Очередь отправки не завершена — принудительный выход')
 
-  // Stage 8A capture appends are fsync'd before returning. detach() performs
-  // the bounded no-buffer close without contacting the journal or provider.
+  // Capture appends are fsync'd before returning. Stage 8B1 gives the private
+  // journal drain one bounded final attempt, then detach preserves any pending
+  // spool records for the next owner-process start.
+  try { await transport.stopCaptureAndFlush(2000) } catch {}
   try { transport.detach() } catch {}
 
   // Close Playwright context so Chromium child processes don't linger

@@ -14,6 +14,14 @@ RUN npm ci --omit=dev --no-audit --no-fund
 FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS runner
 WORKDIR /app
 
+ARG SOURCE_COMMIT=uncommitted
+ARG BUILD_TIMESTAMP=unknown
+LABEL org.opencontainers.image.title="max-web-scraper" \
+      org.opencontainers.image.description="Single-owner MAX scraper with default-off durable shadow capture" \
+      org.opencontainers.image.stage="8B1" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIMESTAMP}"
+
 RUN apt-get update && apt-get install -y --no-install-recommends tini \
     && rm -rf /var/lib/apt/lists/*
 

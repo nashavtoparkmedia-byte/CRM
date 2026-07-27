@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node --experimental-strip-types src/runtime/main.ts",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:journal": "node --experimental-strip-types --test tests/*.test.ts",
     "test:stage3": "node --experimental-strip-types --test tests/inbound*.test.ts tests/shadowInboundProcessor.test.ts",
@@ -15,7 +16,17 @@
     "test:stage7:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresComparison*.integration.test.ts",
     "test:stage8a": "node --experimental-strip-types --test tests/capture*.test.ts",
     "test:stage8a:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresCapture*.integration.test.ts",
+    "test:stage8b1": "node --experimental-strip-types --test tests/runtime*.test.ts tests/ingressAuth.test.ts tests/producerDrain.test.ts tests/releaseCandidate.test.ts",
+    "test:stage8b1:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresReleaseCandidate.integration.test.ts",
     "test:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.2",
+    "prisma": "6.19.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.0",
+    "typescript": "5.9.2"
   }
 }

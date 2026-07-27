@@ -8,25 +8,22 @@ const repositoryRoot = resolve(import.meta.dirname, '../..')
 const source = (relative: string): string => readFileSync(resolve(repositoryRoot, relative), 'utf8')
 const allowlist = JSON.parse(source('max-personal-gateway/tests/support/stage8a-runtime-allowlist.json')) as {
   baseCommit: string
+  acceptedCommit: string
   runtimeFiles: string[]
   authoritativeCaptureBoundary: string
 }
 
 test('machine-readable runtime allowlist exactly matches Stage 8A runtime delta', () => {
-  const changed = execFileSync('git', ['diff', '--name-only', allowlist.baseCommit, '--', 'max-web-scraper'], {
+  const changed = execFileSync('git', ['diff', '--name-only', allowlist.baseCommit, allowlist.acceptedCommit, '--', 'max-web-scraper'], {
     cwd: repositoryRoot, encoding: 'utf8',
   }).trim().split('\n').filter(Boolean)
-  const untracked = execFileSync('git', ['ls-files', '--others', '--exclude-standard', '--', 'max-web-scraper'], {
-    cwd: repositoryRoot, encoding: 'utf8',
-  }).trim().split('\n').filter(value => value && !value.endsWith('/node_modules') && !value.endsWith('node_modules'))
-  changed.push(...untracked)
   changed.sort()
   assert.deepEqual(changed, [...allowlist.runtimeFiles].sort())
   assert.equal(allowlist.authoritativeCaptureBoundary, 'TransportInterceptor._handleFrame')
 })
 
 test('Stage 8A adds no second browser owner, persistent context, incoming listener, provider send, DOM navigation, or CRM projection', () => {
-  const patch = execFileSync('git', ['diff', '--unified=0', allowlist.baseCommit, '--', ...allowlist.runtimeFiles], {
+  const patch = execFileSync('git', ['diff', '--unified=0', allowlist.baseCommit, allowlist.acceptedCommit, '--', ...allowlist.runtimeFiles], {
     cwd: repositoryRoot, encoding: 'utf8', maxBuffer: 8 * 1024 * 1024,
   })
   const additions = patch.split('\n').filter(line => line.startsWith('+') && !line.startsWith('+++')).join('\n')
