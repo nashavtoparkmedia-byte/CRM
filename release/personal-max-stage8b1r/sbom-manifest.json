@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "generator": {
+    "name": "Syft",
+    "version": "1.49.0",
+    "archiveSha256": "7aa2f03ee92739cf643279ba3990548b9925d4e22cae13f46831ee62821147fe",
+    "binarySha256ObservedOnVps": "6368bf376b578991192e2e94f5e276e6c70d313d6368ad8c249866f020a86cb0"
+  },
+  "formats": ["SPDX JSON", "CycloneDX JSON"],
+  "requiredContent": ["OS packages", "Node runtime", "npm production dependencies", "application files", "image config", "source commit", "build timestamp", "architecture", "base image digest"],
+  "finalGateway": {
+    "spdxPath": "stage8b1r-evidence/gateway.spdx.json",
+    "cycloneDxPath": "stage8b1r-evidence/gateway.cdx.json",
+    "sha256": "recorded in stage8b1r-evidence/SHA256SUMS"
+  },
+  "finalScraper": {
+    "spdxPath": "stage8b1r-evidence/scraper.spdx.json",
+    "cycloneDxPath": "stage8b1r-evidence/scraper.cdx.json",
+    "sha256": "recorded in stage8b1r-evidence/SHA256SUMS"
+  },
+  "validation": ["JSON parse", "non-empty SPDX packages", "non-empty CycloneDX components", "source image scanned by exact local Docker reference"]
+}
