@@ -1,0 +1,51 @@
+name: Personal MAX Stage 8B1R executable security proof
+
+on:
+  push:
+    branches:
+      - feature/personal-max-stage8b1r-release-hardening-20260727T211731Z
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: personal-max-stage8b1r-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-security:
+    if: github.repository == 'nashavtoparkmedia-byte/CRM'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out the exact commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Verify immutable workflow scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = nashavtoparkmedia-byte/CRM
+          test "$GITHUB_REF_NAME" = feature/personal-max-stage8b1r-release-hardening-20260727T211731Z
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Build, execute, scan, and publish immutable images
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: release/personal-max-stage8b1r/executable/ci-image-proof.sh
+
+      - name: Upload machine-readable evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: personal-max-stage8b1r-${{ github.sha }}
+          path: stage8b1r-evidence/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 6
