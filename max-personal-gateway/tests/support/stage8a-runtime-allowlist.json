@@ -1,0 +1,10 @@
+{
+  "stage": "8A",
+  "baseCommit": "dc008e983fc220dc9505e7418e7b7e36ea090652",
+  "runtimeFiles": [
+    "max-web-scraper/capture/LiveCaptureAdapter.js",
+    "max-web-scraper/index.js",
+    "max-web-scraper/transport/TransportInterceptor.js"
+  ],
+  "authoritativeCaptureBoundary": "TransportInterceptor._handleFrame"
+}

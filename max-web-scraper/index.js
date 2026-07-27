@@ -45,6 +45,7 @@ const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
 const { PerKeyTaskQueue }          = require('./lib/PerKeyTaskQueue')
 const { SerializedOutboundQueue }  = require('./lib/SerializedOutboundQueue')
 const { resolveOutboundProviderMessageId } = require('./lib/MaxOutboundConfirmation')
+const { createLiveCaptureAdapterFromEnvironment } = require('./capture/LiveCaptureAdapter')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -5343,6 +5344,10 @@ async function shutdown(signal) {
   }
   if (isSending) console.warn('[App] Очередь отправки не завершена — принудительный выход')
 
+  // Stage 8A capture appends are fsync'd before returning. detach() performs
+  // the bounded no-buffer close without contacting the journal or provider.
+  try { transport.detach() } catch {}
+
   // Close Playwright context so Chromium child processes don't linger
   // and hold user_data file locks after we exit. Cap at 5s.
   if (context) {
@@ -5391,7 +5396,8 @@ process.on('unhandledRejection', (reason) => {
 // ─── Инициализация ───────────────────────────────────────────────────────────
 
 const session      = new SessionController()
-const transport    = new TransportInterceptor()
+const captureAdapter = createLiveCaptureAdapterFromEnvironment(process.env)
+const transport    = new TransportInterceptor(captureAdapter)
 const sync         = new MessageSync()
 const contactStore = new ContactStore()
 const inboundMessageQueue = new PerKeyTaskQueue()

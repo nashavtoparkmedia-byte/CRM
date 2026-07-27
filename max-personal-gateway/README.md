@@ -1,4 +1,4 @@
-# MAX Personal Gateway — Stages 1–7
+# MAX Personal Gateway — Stages 1–8A
 
 This module implements the offline transport foundations through Stage 7: Raw Event Journal, durable Route Registry, shadow inbound normalization, durable per-conversation outbound actors, dormant Dispatch Ledger, exact provider-confirmation matcher, and shadow semantic comparison/replay. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
 
@@ -76,7 +76,39 @@ The versioned expected-difference policy contains narrow rules with exact path, 
 
 PostgreSQL stores `MaxShadowComparisonRun`, one immutable `MaxShadowComparisonResult` per run/version/observation, append-only `MaxShadowSemanticDiff` rows, and a run/account/version-scoped monotonic cursor. Result, all diffs, and exact run counters commit in one transaction. Cursor progress follows only a durable result. Restart uses PostgreSQL without Redis or process-global state. Readiness metrics expose coverage, classification counts, critical routing/provider/reply/reaction/media mismatches and deterministic replay, but never claim production readiness.
 
-`MAX_SHADOW_COMPARISON_ENABLED` is an exact account allowlist and defaults false. No existing runtime imports the flag or comparison module. Stage 7 performs no listener wiring, browser/profile action, provider request/send, Route Registry mutation, CRM projection, media download, deploy, or production database access. Stage 8 live raw capture has not started.
+`MAX_SHADOW_COMPARISON_ENABLED` is an exact account allowlist and defaults false. No existing runtime imports the flag or comparison module. Stage 7 performs no listener wiring, browser/profile action, provider request/send, Route Registry mutation, CRM projection, media download, deploy, or production database access.
+
+## Stage 8A: durable live raw capture bridge foundation
+
+The authoritative physical boundary is the existing `TransportInterceptor._handleFrame` call reached from the one existing `window.__maxWsReceive` bridge. Capture runs once there, before msgpack/JSON semantic handling. Internal bridge diagnostics are excluded; binary, malformed, unknown, history, and live frames are still represented. `onRawFrame`, `MessageSync`, and `InitialHistorySync` are downstream and are deliberately not capture hooks. The existing CDP incoming listener remains disabled, no second WebSocket listener or browser context is added, and the gateway never opens MAX Web.
+
+Every physical observation receives a random `captureEnvelopeId` at that boundary. It is persisted unchanged through retry and is not derived from content, `payloadSha256`, provider ID, frame ID, sequence, or time. The envelope is immutable and versioned (`captureEnvelopeVersion=1`, `max-live-capture-adapter-v1`). Session generation is created at enabled adapter startup; socket generation advances on the existing bridge's `ws_created` diagnostic. Opcode 49/71 is classified as history, known other opcodes as live, and malformed frames as unknown.
+
+Sanitization precedes every durable append and follows the Stage 1 `max-raw-sanitizer-v1` contract. JSON payloads retain deterministic sanitized content; Authorization, Cookie, credential keys, bearer values, private keys, and signed URL query secrets are redacted. Binary/msgpack bytes are never written: the spool stores metadata-only quarantine evidence with byte length and SHA-256. A sanitizer/shape failure becomes a quarantine envelope rather than silently destroying the observation.
+
+The local spool uses owner-only directories (`0700`) and files (`0600`), append-only JSONL segments, per-record SHA-256 checksums, bounded records/total bytes, synchronous write plus `fsync` before return, deterministic sequence order, an atomically replaced acknowledged watermark, corrupt-segment quarantine, and compaction only after contiguous journal ACK. Restart scans the segments and resumes unacknowledged records. PostgreSQL becomes authoritative only after ingress ACK; the spool is temporary delivery state, not a second permanent journal.
+
+`PrismaRawCaptureIngress` writes the raw row and initial parser processing row transactionally. The additive nullable `captureEnvelopeId` field has a partial unique index on `(accountId, captureEnvelopeId)` only. A retry returns the existing `observationId`; a distinct envelope with identical content/provider identity creates another raw row. Historical Stage 1 rows remain valid. No uniqueness exists on payload hash, provider ID, frame ID, sequence, timestamp, or text.
+
+`CaptureDrainWorker` has bounded batches/concurrency, exponential retry with bounded jitter, no busy loop, and contiguous ACK ordering. Later successes behind a failed record may be retried; ingress idempotency makes that safe. Health reports disabled/healthy/degraded/critical plus pending count/bytes/age, ACKs, retries, rejects, quarantines, loss before spool, last ACK/error, envelope collisions, and idempotent retries without message text or provider-ID labels.
+
+Legacy behavior is intentionally fail-open: a capture exception never blocks or reorders existing message processing. The honest boundary is that a full or failed disk can lose a physical observation while legacy processing continues. That failure increments `lostBeforeSpoolCount`, marks capture critical, and must fail a Stage 8B canary. No implementation may claim absolute no-loss under total disk failure. Stage 8B acceptance requires this counter to remain zero.
+
+`MAX_PERSONAL_LIVE_CAPTURE_ENABLED` is an exact account allowlist and defaults false; boolean values, wildcard, malformed lists, missing account, or invalid configuration remain disabled. Disabled construction is a Noop adapter with no directory, filesystem write, timer, network, database connection, or log. Stage 8A does not enable the flag, apply the migration, build an image, deploy, restart, launch Chromium, contact MAX, send a provider action, or modify CRM projection.
+
+### Stage 8B deployment contract (not executed)
+
+Stage 8B requires reviewed immutable image digests, the 53-migration chain including `20260727154647_add_max_capture_ingress`, a dedicated owner-readable spool mount, authenticated internal ingress wiring, and explicit user approval. Required environment names (values are never committed) are:
+
+- `MAX_PERSONAL_ACCOUNT_ID`
+- `MAX_PERSONAL_LIVE_CAPTURE_ENABLED`
+- `MAX_PERSONAL_CAPTURE_SPOOL_PATH`
+- `MAX_PERSONAL_CAPTURE_SPOOL_MAX_BYTES`
+- the separately reviewed internal ingress address and authentication-secret variables selected by Stage 8B
+
+The spool path must be absolute, owned by the runtime account, directory mode `0700`, files `0600`, capacity-monitored, and preserved across capture-owner restart. The ingress must be internal-only and authenticated; Stage 8A deliberately chooses an injected direct-DB interface for isolated tests and contains no generic database URL fallback or production secret. Stage 8B must bind that interface through the reviewed deployment topology without opening an external unauthenticated endpoint.
+
+Readiness gates are: exactly one browser/profile owner and receive listener; migration present; disabled zero-side-effect proof; capture/journal loss and collision counters zero; spool below warning threshold; recent journal ACK; no drain error; synthetic hook-to-comparison pass; and rollback rehearsal. Rollback is `disable flag → stop drain → preserve spool → existing runtime continues`; it must not delete pending segments. A second browser owner is prohibited. No Stage 8B deploy occurs without a separate approval.
 
 ## Disposable real PostgreSQL gate
 
@@ -84,7 +116,7 @@ The opt-in integration suite never reads generic `DATABASE_URL`. It requires
 `PERSONAL_MAX_REAL_POSTGRES_URL`, rejects non-local hosts and the default
 PostgreSQL port, and requires a database name containing the
 `personal_max_...gate` disposable marker. The database must already contain the
-Stage 1 through Stage 6 migrations. A normal unit run therefore never opens a
+Stage 1 through Stage 8A migrations. A normal unit run therefore never opens a
 database connection.
 
 When the generated client is not installed at the normal Gravity package

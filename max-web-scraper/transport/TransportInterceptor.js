@@ -2,10 +2,14 @@
 
 const fs   = require('fs')
 const path = require('path')
+const { createHash } = require('crypto')
+const { TextDecoder } = require('util')
+const { NoopCaptureAdapter } = require('../capture/LiveCaptureAdapter')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
 const LAST_MSG_IDS_PATH = path.join(__dirname, '..', 'user_data', 'last-msg-ids.json')
+const UTF8_FATAL_DECODER = new TextDecoder('utf-8', { fatal: true })
 
 function cleanMaxString(value) {
   if (value == null) return null
@@ -208,7 +212,7 @@ function cleanMaxFilename(rawName, previewTitle, rawType = '') {
 // @msgpack/msgpack throws "key must be string or number" when Timestamp or
 // binary-type values are used as map keys (MAX does this for some internal maps).
 // This hand-rolled decoder is lenient about key types — it stringifies any key.
-function maxMsgpackDecodeAll(buf) {
+function maxMsgpackDecodeAll(buf, options = {}) {
   const view  = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
   let   pos   = 0
 
@@ -226,9 +230,20 @@ function maxMsgpackDecodeAll(buf) {
   function readF32()     { const v = view.getFloat32(pos); pos += 4; return v }
   function readF64()     { const v = view.getFloat64(pos); pos += 8; return v }
   function readStr(len)  {
+    const byteOffset = pos
     const s = buf.slice(pos, pos + len)
     pos += len
-    return Buffer.from(s).toString('utf8')
+    try {
+      return UTF8_FATAL_DECODER.decode(s)
+    } catch {
+      options.onDiagnostic?.({
+        kind: 'invalid_utf8_string',
+        byteOffset,
+        byteLength: s.length,
+        sha256: createHash('sha256').update(s).digest('hex'),
+      })
+      return Buffer.from(s).toString('utf8')
+    }
   }
   function readBin(len)  { const s = buf.slice(pos, pos + len); pos += len; return s }
 
@@ -511,7 +526,7 @@ const OP = {
 }
 
 class TransportInterceptor {
-  constructor() {
+  constructor(captureAdapter = new NoopCaptureAdapter()) {
     this._messageHandlers      = []
     this._rawHandlers          = []  // для перехвата опкодов (32, 48 и т.д.)
     this._sentReactionHandlers = []  // срабатывают когда пользователь ставит реакцию в MAX веб
@@ -541,6 +556,9 @@ class TransportInterceptor {
     this._pendingOp71ChatIds   = []
     this._pendingLooseMedia    = []
     this._activeUiChatId       = null
+    this._captureAdapter       = captureAdapter
+    this._captureSocketGeneration = 0
+    this._captureHookFailureCount = 0
 
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
@@ -748,12 +766,19 @@ class TransportInterceptor {
   _handleFrame(raw) {
     // Binary frames from new api.oneme.ru endpoint arrive base64-encoded
     if (raw.startsWith('b64:')) {
-      this._handleBinaryFrame(Buffer.from(raw.slice(4), 'base64'))
+      const buffer = Buffer.from(raw.slice(4), 'base64')
+      this._capturePhysicalFrame(raw, buffer.length >= 9 ? {
+        opcode: buffer[5],
+        frameId: String((buffer[3] << 8) | buffer[4]),
+        transportSequence: String((buffer[7] << 8) | buffer[8]),
+      } : {})
+      this._handleBinaryFrame(buffer)
       return
     }
 
     let data
     try { data = JSON.parse(raw) } catch {
+      this._capturePhysicalFrame(raw, {})
       console.log('[Transport PARSE_FAIL] not base64 and not JSON, len:', raw.length)
       return
     }
@@ -761,6 +786,7 @@ class TransportInterceptor {
     // Diagnostic frames from WS_INIT_SCRIPT
     if (data.__diag) {
       if (data.__diag === 'ws_created') {
+        this._captureSocketGeneration += 1
         console.log('[Transport DIAG] WS создан:', data.url)
       } else if (data.__diag === 'msg_arrived') {
         console.log('[Transport DIAG] message event СРАБОТАЛ — тип:', data.type, 'ab:', data.ab)
@@ -772,7 +798,39 @@ class TransportInterceptor {
       return
     }
 
+    this._capturePhysicalFrame(raw, {
+      opcode: Number.isInteger(data.opcode) ? data.opcode : null,
+      eventType: typeof data.eventType === 'string' ? data.eventType : null,
+      frameId: data.frameId ?? null,
+      providerEventId: data.payload?.message?.id ?? data.providerEventId ?? null,
+      transportSequence: data.seq ?? null,
+    })
     this._processDecodedFrame(data)
+  }
+
+  _capturePhysicalFrame(raw, metadata) {
+    const opcode = Number.isInteger(metadata.opcode) ? metadata.opcode : null
+    try {
+      this._captureAdapter.capturePhysicalFrame({
+        raw,
+        metadata: {
+          ...metadata,
+          opcode,
+          observedAt: new Date().toISOString(),
+          sourceOrigin: opcode === OP.GET_HISTORY || opcode === 71 ? 'history' : (opcode === null ? 'unknown' : 'live'),
+          socketGeneration: `socket-${this._captureSocketGeneration || 1}`,
+        },
+      })
+    } catch {
+      this._captureHookFailureCount += 1
+    }
+  }
+
+  getCaptureHealth() {
+    return {
+      ...this._captureAdapter.getCaptureHealth(),
+      hookFailureCount: this._captureHookFailureCount,
+    }
   }
 
   _isEmptyObject(value) {
@@ -2359,6 +2417,7 @@ class TransportInterceptor {
       this._cdpClient.detach().catch(() => {})
       this._cdpClient = null
     }
+    try { this._captureAdapter.close() } catch {}
     console.log('[Transport] Перехват отключён')
   }
 
@@ -2393,6 +2452,7 @@ class TransportInterceptor {
 module.exports = {
   TransportInterceptor,
   OP,
+  maxMsgpackDecodeAll,
   maxReplyTargetId,
   selectPendingLiveDomCandidates,
 }

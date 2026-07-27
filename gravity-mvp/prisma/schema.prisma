@@ -134,6 +134,7 @@ model MaxRawTransportEvent {
   observationId        String                      @id @default(cuid())
   journalSequence      BigInt                      @unique @default(autoincrement())
   accountId            String
+  captureEnvelopeId    String?
   observedAt           DateTime
   persistedAt          DateTime                    @default(now())
   sourceTransport      String
@@ -163,6 +164,7 @@ model MaxRawTransportEvent {
   shadowComparisonResults MaxShadowComparisonResult[]
 
   @@unique([accountId, observationId])
+  @@index([accountId, captureEnvelopeId])
   @@index([accountId, journalSequence])
   @@index([accountId, observedAt])
   @@index([accountId, providerEventId])

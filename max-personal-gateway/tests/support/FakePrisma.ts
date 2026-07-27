@@ -9,6 +9,7 @@ interface RawRow {
   observationId: string
   journalSequence: bigint
   accountId: string
+  captureEnvelopeId: string | null
   observedAt: Date
   persistedAt: Date
   sourceTransport: string
@@ -148,11 +149,17 @@ function makeTransaction(store: Store, failures: FailurePlan): FakeTransaction {
     maxRawTransportEvent: {
       async create({ data }) {
         if (failures.failRawCreate) throw new Error('synthetic raw insert failure')
+        const captureEnvelopeId = nullableString(data, 'captureEnvelopeId')
+        if (captureEnvelopeId !== null && store.raw.some(row =>
+          row.accountId === String(data.accountId) && row.captureEnvelopeId === captureEnvelopeId)) {
+          throw prismaUnique('synthetic capture envelope unique constraint')
+        }
         store.sequence += 1n
         const row: RawRow = {
           observationId: stringValue(data, 'observationId'),
           journalSequence: store.sequence,
           accountId: stringValue(data, 'accountId'),
+          captureEnvelopeId,
           observedAt: data.observedAt as Date,
           persistedAt: new Date('2026-07-26T00:00:00.000Z'),
           sourceTransport: stringValue(data, 'sourceTransport'),
@@ -195,6 +202,12 @@ function makeTransaction(store: Store, failures: FailurePlan): FakeTransaction {
         const accountId = key?.accountId === undefined ? undefined : String(key.accountId)
         return clone(store.raw.find(row => row.observationId === observationId
           && (accountId === undefined || row.accountId === accountId)) ?? null)
+      },
+      async findFirst({ where }) {
+        return clone(store.raw.find(row =>
+          (where.accountId === undefined || row.accountId === String(where.accountId))
+          && (where.captureEnvelopeId === undefined || row.captureEnvelopeId === String(where.captureEnvelopeId))
+          && (where.observationId === undefined || row.observationId === String(where.observationId))) ?? null)
       },
     },
     maxRawTransportProcessing: {

@@ -24,6 +24,7 @@ export interface RedactionEvidence {
 
 export interface SanitizedObservationInput {
   readonly accountId: string
+  readonly captureEnvelopeId?: string
   readonly observedAt: Date
   readonly sourceTransport: string
   readonly sourceOrigin: string

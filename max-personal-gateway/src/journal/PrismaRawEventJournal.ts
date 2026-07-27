@@ -24,6 +24,7 @@ interface RawRecord {
   observationId: string
   journalSequence: bigint
   accountId: string
+  captureEnvelopeId: string | null
   observedAt: Date
   persistedAt: Date
   sourceTransport: string
@@ -80,6 +81,7 @@ interface RawDelegate {
   create(args: { data: Record<string, unknown> }): Promise<RawRecord>
   findMany(args: { where: Record<string, unknown>; orderBy: Record<string, 'asc'>; take: number }): Promise<RawRecord[]>
   findUnique(args: { where: Record<string, unknown> }): Promise<RawRecord | null>
+  findFirst(args: { where: Record<string, unknown> }): Promise<RawRecord | null>
 }
 
 interface ProcessingDelegate {
@@ -140,6 +142,25 @@ function isPrismaTransactionConflict(error: unknown): boolean {
   return error !== null && typeof error === 'object' && Reflect.get(error, 'code') === 'P2034'
 }
 
+function sameCaptureObservation(record: RawRecord, observation: SanitizedObservationInput): boolean {
+  return record.accountId === observation.accountId
+    && record.payloadSha256 === observation.payloadSha256
+    && record.observedAt.valueOf() === observation.observedAt.valueOf()
+    && record.sourceTransport === observation.sourceTransport
+    && record.sourceOrigin === observation.sourceOrigin
+    && record.historyLive === observation.historyLive
+    && record.socketGeneration === (observation.socketGeneration ?? null)
+    && record.frameId === (observation.frameId ?? null)
+    && record.providerEventId === (observation.providerEventId ?? null)
+    && record.transportSequence === (observation.transportSequence ?? null)
+    && record.opcode === (observation.opcode ?? null)
+    && record.eventType === (observation.eventType ?? null)
+    && record.payloadEncoding === observation.payloadEncoding
+    && record.sanitizerVersion === observation.sanitizerVersion
+    && record.captureAdapterVersion === observation.captureAdapterVersion
+    && record.schemaVersion === observation.schemaVersion
+}
+
 function replayAvailability(value: unknown): ReplayAvailability {
   if (value !== 'available' && value !== 'quarantined') {
     throw new JournalError('INVALID_INPUT', 'Replay availability is not supported')
@@ -182,6 +203,7 @@ function mapRaw(record: RawRecord): RawTransportObservation {
     observationId: record.observationId,
     journalSequence: record.journalSequence,
     accountId: record.accountId,
+    captureEnvelopeId: optional(record.captureEnvelopeId),
     observedAt: record.observedAt,
     persistedAt: record.persistedAt,
     sourceTransport: record.sourceTransport,
@@ -253,7 +275,21 @@ export class PrismaRawEventJournal implements RawEventJournal {
   }
 
   async append(observation: SanitizedObservationInput): Promise<string> {
+    return (await this.appendCapture(observation)).observationId
+  }
+
+  async appendCapture(observation: SanitizedObservationInput): Promise<{
+    observationId: string
+    created: boolean
+    captureEnvelopeCollision?: boolean
+  }> {
     required(observation.accountId, 'accountId')
+    if (observation.captureEnvelopeId !== undefined) {
+      required(observation.captureEnvelopeId, 'captureEnvelopeId')
+      if (observation.captureEnvelopeId.length > 128) {
+        throw new JournalError('INVALID_INPUT', 'captureEnvelopeId exceeds the safe bound')
+      }
+    }
     required(observation.parserVersion, 'parserVersion')
     required(observation.payloadSha256, 'payloadSha256')
     if (!/^[a-f0-9]{64}$/i.test(observation.payloadSha256)) {
@@ -314,6 +350,7 @@ export class PrismaRawEventJournal implements RawEventJournal {
           data: {
             observationId,
             accountId: observation.accountId,
+            captureEnvelopeId: observation.captureEnvelopeId,
             observedAt: observation.observedAt,
             sourceTransport: observation.sourceTransport,
             sourceOrigin: observation.sourceOrigin,
@@ -355,8 +392,27 @@ export class PrismaRawEventJournal implements RawEventJournal {
           },
         })
       })
-      return observationId
+      return { observationId, created: true }
     } catch (error) {
+      if (observation.captureEnvelopeId !== undefined && isPrismaUniqueError(error)) {
+        try {
+          const existing = await this.#client.maxRawTransportEvent.findFirst({
+            where: {
+              accountId: observation.accountId,
+              captureEnvelopeId: observation.captureEnvelopeId,
+            },
+          })
+          if (existing !== null) {
+            return {
+              observationId: existing.observationId,
+              created: false,
+              captureEnvelopeCollision: !sameCaptureObservation(existing, observation),
+            }
+          }
+        } catch {
+          // Fall through to the stable database error below. Never disclose SQL.
+        }
+      }
       throw asJournalDatabaseError(error)
     }
   }
