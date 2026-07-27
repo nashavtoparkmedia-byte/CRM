@@ -282,7 +282,7 @@ class RuntimeCaptureSpool {
         }
       }
     }
-    return maximum + 1
+    return Math.max(maximum, this.acknowledgedWatermark) + 1
   }
 
   _readWatermark() {
