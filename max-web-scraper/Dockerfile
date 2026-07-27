@@ -6,23 +6,30 @@
 # Профиль браузера монтируется как volume для сохранения сессии между рестартами.
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS deps
+FROM mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07 AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --no-audit --no-fund
 
-FROM mcr.microsoft.com/playwright:v1.58.2-jammy AS runner
+FROM mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07 AS runner
 WORKDIR /app
 
 ARG SOURCE_COMMIT=uncommitted
 ARG BUILD_TIMESTAMP=unknown
 LABEL org.opencontainers.image.title="max-web-scraper" \
       org.opencontainers.image.description="Single-owner MAX scraper with default-off durable shadow capture" \
-      org.opencontainers.image.stage="8B1" \
+      org.opencontainers.image.stage="8B1R" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 
-RUN apt-get update && apt-get install -y --no-install-recommends tini \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tini=0.19.0-1 \
+    && apt-get purge -y gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-0 \
+    && rm -rf /ms-playwright/firefox-* /ms-playwright/webkit-* \
+        /root/.npm /usr/lib/node_modules/npm \
+    && rm -f /usr/bin/npm /usr/bin/npx \
+    && test ! -e /usr/lib/node_modules/npm \
+    && test "$(find /ms-playwright -maxdepth 4 -type f -name chrome -perm /111 | wc -l)" -ge 1 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production

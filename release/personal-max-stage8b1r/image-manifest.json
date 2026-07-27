@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "architecture": "linux/amd64",
+  "sourceCommit": "resolved by executable workflow from exact GITHUB_SHA",
+  "gateway": {
+    "repository": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway",
+    "immutableTag": "stage8b1r-20260727t215241z",
+    "finalDigest": "resolved in final-image-manifest.json produced by executable workflow",
+    "dockerfile": "max-personal-gateway/Dockerfile",
+    "base": "node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f",
+    "expectedConfigUser": "node",
+    "expectedRuntimeUidGid": "1000:1000"
+  },
+  "scraper": {
+    "repository": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper",
+    "immutableTag": "stage8b1r-20260727t215241z",
+    "finalDigest": "resolved in final-image-manifest.json produced by executable workflow",
+    "dockerfile": "max-web-scraper/Dockerfile",
+    "base": "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07",
+    "linuxAmd64Manifest": "sha256:02bbb2155cd7109e3e9c741941097ed1608cf8b6fa44ee2595896da2bdc1f471",
+    "initPackage": "tini=0.19.0-1",
+    "playwright": "1.62.0",
+    "chromium": "151.0.7922.34",
+    "unusedBrowserPayload": "Firefox and WebKit assets removed; application imports Chromium only",
+    "expectedConfigUser": "pwuser",
+    "expectedRuntimeUidGid": "1001:1001"
+  },
+  "mutableTagsAllowed": false,
+  "overwriteAllowed": false,
+  "pullByDigestRequired": true
+}
