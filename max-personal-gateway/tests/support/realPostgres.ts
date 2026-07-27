@@ -34,6 +34,10 @@ export interface RealPrismaClient {
   readonly maxProviderConfirmationResolution: Record<string, (...args: any[]) => Promise<any>>
   readonly maxProviderConfirmationDecision: Record<string, (...args: any[]) => Promise<any>>
   readonly maxProviderConfirmationCursor: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxShadowComparisonRun: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxShadowComparisonResult: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxShadowSemanticDiff: Record<string, (...args: any[]) => Promise<any>>
+  readonly maxShadowComparisonCursor: Record<string, (...args: any[]) => Promise<any>>
   $connect(): Promise<void>
   $disconnect(): Promise<void>
   $executeRawUnsafe(query: string, ...values: unknown[]): Promise<number>

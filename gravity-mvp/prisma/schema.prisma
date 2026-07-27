@@ -160,6 +160,7 @@ model MaxRawTransportEvent {
   processingStates      MaxRawTransportProcessing[]
   routeObservations     MaxRouteObservation[]
   normalizationResults  MaxInboundNormalizationResult[]
+  shadowComparisonResults MaxShadowComparisonResult[]
 
   @@unique([accountId, observationId])
   @@index([accountId, journalSequence])
@@ -656,6 +657,109 @@ model MaxProviderConfirmationCursor {
 
   @@unique([consumerId, accountId, matcherVersion], map: "MaxProviderConfirmationCursor_consumer_account_matcher_key")
   @@index([accountId, lastJournalSequence, lastEventOrdinal], map: "MaxProviderConfirmationCursor_account_source_order_idx")
+}
+
+/// One offline/shadow semantic-comparison execution. Counters are durable and
+/// must equal the immutable Result rows committed for this exact run/version.
+model MaxShadowComparisonRun {
+  runId                       String                      @id
+  accountId                   String
+  comparisonVersion           String
+  legacyAdapterVersion        String
+  newNormalizerVersion        String
+  state                       String                      @default("running")
+  sourceFromJournalSequence   BigInt?
+  sourceToJournalSequence     BigInt?
+  processedCount              Int                         @default(0)
+  matchedCount                Int                         @default(0)
+  expectedDifferenceCount     Int                         @default(0)
+  regressionCount             Int                         @default(0)
+  legacyOnlyCount             Int                         @default(0)
+  newOnlyCount                Int                         @default(0)
+  unsupportedCount            Int                         @default(0)
+  quarantinedCount            Int                         @default(0)
+  startedAt                   DateTime
+  completedAt                 DateTime?
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  results                     MaxShadowComparisonResult[]
+  cursor                      MaxShadowComparisonCursor?
+
+  @@unique([accountId, runId, comparisonVersion], map: "MaxShadowComparisonRun_account_run_version_key")
+  @@index([accountId, comparisonVersion, state, startedAt], map: "MaxShadowComparisonRun_account_version_state_idx")
+}
+
+/// Immutable terminal comparison result for one physical raw observation.
+/// Repeated physical observations remain distinct because sourceObservationId
+/// is the journal identity; only exact run/version replay is idempotent.
+model MaxShadowComparisonResult {
+  resultId               String                    @id
+  runId                  String
+  accountId              String
+  sourceObservationId    String
+  sourceJournalSequence  BigInt
+  comparisonVersion      String
+  classification         String
+  legacyStatus           String
+  newStatus              String
+  legacySemanticSha256   String
+  newSemanticSha256      String
+  diffCount              Int
+  highestSeverity        String
+  issueCode              String?
+  safeSummary            String?
+  createdAt              DateTime                  @default(now())
+  run                    MaxShadowComparisonRun    @relation(fields: [accountId, runId, comparisonVersion], references: [accountId, runId, comparisonVersion], onDelete: Restrict, map: "MaxShadowComparisonResult_account_run_version_fkey")
+  sourceObservation      MaxRawTransportEvent      @relation(fields: [accountId, sourceObservationId], references: [accountId, observationId], onDelete: Restrict, map: "MaxShadowComparisonResult_account_source_fkey")
+  diffs                  MaxShadowSemanticDiff[]
+
+  @@unique([runId, sourceObservationId, comparisonVersion], map: "MaxShadowComparisonResult_run_source_version_key")
+  @@unique([accountId, resultId], map: "MaxShadowComparisonResult_account_result_key")
+  @@index([accountId, sourceJournalSequence], map: "MaxShadowComparisonResult_account_sequence_idx")
+  @@index([accountId, comparisonVersion, classification, sourceJournalSequence], map: "MaxShadowComparisonResult_account_version_class_idx")
+  @@index([runId, classification], map: "MaxShadowComparisonResult_run_class_idx")
+}
+
+/// Append-only field-level semantic difference. Raw text, caption, cookies,
+/// tokens and signed URLs are never stored; values are represented by bounded
+/// hashes and safe typed metadata only.
+model MaxShadowSemanticDiff {
+  diffId             String                    @id
+  resultId           String
+  accountId          String
+  diffOrdinal        Int
+  path               String
+  differenceKind     String
+  severity           String
+  legacyValueType    String
+  newValueType       String
+  legacyValueHash    String?
+  newValueHash       String?
+  safeMetadata       Json
+  createdAt          DateTime                  @default(now())
+  result             MaxShadowComparisonResult @relation(fields: [accountId, resultId], references: [accountId, resultId], onDelete: Restrict, map: "MaxShadowSemanticDiff_account_result_fkey")
+
+  @@unique([resultId, diffOrdinal], map: "MaxShadowSemanticDiff_result_ordinal_key")
+  @@index([accountId, severity, createdAt], map: "MaxShadowSemanticDiff_account_severity_idx")
+  @@index([resultId, path], map: "MaxShadowSemanticDiff_result_path_idx")
+  @@index([differenceKind], map: "MaxShadowSemanticDiff_kind_idx")
+}
+
+/// Monotonic progress for one comparison run. It is deliberately run-scoped,
+/// account-scoped and comparisonVersion-scoped to make restart deterministic.
+model MaxShadowComparisonCursor {
+  cursorId             String                 @id
+  runId                String                 @unique(map: "MaxShadowComparisonCursor_run_key")
+  accountId            String
+  comparisonVersion    String
+  lastJournalSequence  BigInt                 @default(0)
+  optimisticVersion    Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  run                  MaxShadowComparisonRun @relation(fields: [accountId, runId, comparisonVersion], references: [accountId, runId, comparisonVersion], onDelete: Restrict, map: "MaxShadowComparisonCursor_account_run_version_fkey")
+
+  @@unique([accountId, runId, comparisonVersion], map: "MaxShadowComparisonCursor_account_run_version_key")
+  @@index([accountId, comparisonVersion, lastJournalSequence], map: "MaxShadowComparisonCursor_account_version_sequence_idx")
 }
 
 /// Current exact/provisional identity projection. The account-scoped unique

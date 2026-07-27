@@ -11,6 +11,8 @@
     "test:stage5": "node --experimental-strip-types --test tests/dispatch*.test.ts",
     "test:stage6": "node --experimental-strip-types --test tests/confirmation*.test.ts",
     "test:stage6:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresConfirmation*.integration.test.ts",
+    "test:stage7": "node --experimental-strip-types --test tests/comparison*.test.ts",
+    "test:stage7:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresComparison*.integration.test.ts",
     "test:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   }

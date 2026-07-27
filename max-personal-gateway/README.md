@@ -1,6 +1,6 @@
-# MAX Personal Gateway — Stages 1–6
+# MAX Personal Gateway — Stages 1–7
 
-This module implements the offline transport foundations through Stage 6: Raw Event Journal, durable Route Registry, shadow inbound normalization, durable per-conversation outbound actors, dormant Dispatch Ledger, and exact provider-confirmation matcher. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
+This module implements the offline transport foundations through Stage 7: Raw Event Journal, durable Route Registry, shadow inbound normalization, durable per-conversation outbound actors, dormant Dispatch Ledger, exact provider-confirmation matcher, and shadow semantic comparison/replay. PostgreSQL is authoritative; Redis, browser state, and MAX authorization are not dependencies.
 
 Each physical observation is immutable and receives a distinct `observationId` and monotonically ordered journal position, even when payload, hash, provider event ID, or timestamp are identical. Mutable processing state is stored separately and unique per `(observationId, parserVersion)`. Consumer cursors are isolated by consumer, account, and parser version.
 
@@ -62,9 +62,21 @@ Provider absence is not inferred from timeout, missing echo, empty cache, DOM ab
 
 The resolution states are `pending`, `deferred`, `matched`, `duplicate`, `unmatched`, `ambiguous`, `ignored` and `quarantined`; every automatic or manual mutation has append-only `MaxProviderConfirmationDecision` audit. `MaxProviderConfirmationCursor` orders by `(sourceJournalSequence, eventOrdinal)` and is isolated by `(consumerId, accountId, matcherVersion)` with monotonic optimistic updates. PostgreSQL remains authoritative; Redis is not imported.
 
-`MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED` is a fail-closed exact account allowlist and defaults false. No existing runtime imports the matcher. Stage 6 contains no listener, sender, browser, Chromium, provider network call, live integration or provider action. Stage 7 has not started.
+`MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED` is a fail-closed exact account allowlist and defaults false. No existing runtime imports the matcher. Stage 6 contains no listener, sender, browser, Chromium, provider network call, live integration or provider action. Stage 7 remains an independent offline layer described below.
 
 Stage 6 acceptance semantics 1–131 are explicitly mapped to executable proof: evidence preservation 1–9 → `S6-DB-02`, `S6-DB-03`, `S6-DB-11`, `S6-DB-13`; eligibility 10–20 → `confirmationEvidence.test.ts`; exact correlation 21–31 → `S6-DB-01`, `S6-DB-05`, `S6-LOAD-02`; account/route isolation 32–42 → `S6-DB-06`, `S6-CONC-04`, `S6-LOAD-03`; normal/late/early/terminal effects 43–70 → `S6-DB-01`, `S6-DB-04`, `S6-DB-15`, `S6-CONC-02`, `S6-CONC-03`; duplicate evidence 71–75 → `S6-DB-03`; deferred processing 76–81 → `S6-DB-07`; ambiguity 82–88 → `S6-DB-05`, `S6-DB-14`, `S6-CONC-01`; absence 89–98 → absence unit proof and `S6-DB-09`; receipts 99–104 → receipt unit proof, `S6-DB-08`, `S6-DB-18`; transaction safety 105–112 → `S6-DB-16` plus Stage 5 transaction regression; cursor/restart 113–121 → `S6-DB-10`, `S6-DB-17`, `S6-CONC-05`; feature/independence 122–131 → feature and source-contract unit proofs. The load gates are `S6-LOAD-01` through `S6-LOAD-04`.
+
+## Stage 7: shadow semantic comparison and deterministic replay
+
+Stage 7 is an offline harness over immutable Raw Event Journal observations. A side-effect-free legacy semantic adapter and the exact Stage 3 `max-inbound-normalizer-v1` process the same sanitized observation independently. Their outputs are converted into `max-shadow-comparison-v1`, a comparison-only canonical form containing exact semantic identities, presence flags, ordered media descriptors, and SHA-256 values for text/caption—never the text, caption, signed URL, cookie, token, or authorization value itself.
+
+Alignment is deterministic by source `eventOrdinal` and exact ordered attachment/route ordinals. Text similarity, timestamp proximity, DOM position, previous-event fallback, identifier coercion, and missing-ID approximation are forbidden. Ambiguous alignment remains an explicit regression. Physical history/live/reconnect duplicates remain separate results because the durable key uses the raw `sourceObservationId`.
+
+The versioned expected-difference policy contains narrow rules with exact path, input predicate, legacy value, new value, rationale, and severity downgrade. It covers arbitrary ACK correction, unresolved reply targets, null missing provider IDs, secret-reference redaction, metadata-only media, durable unsupported/quarantine outcomes, and rejection of name/phone route authority. Unknown value pairs are regressions; the policy cannot auto-accept a false provider confirmation.
+
+PostgreSQL stores `MaxShadowComparisonRun`, one immutable `MaxShadowComparisonResult` per run/version/observation, append-only `MaxShadowSemanticDiff` rows, and a run/account/version-scoped monotonic cursor. Result, all diffs, and exact run counters commit in one transaction. Cursor progress follows only a durable result. Restart uses PostgreSQL without Redis or process-global state. Readiness metrics expose coverage, classification counts, critical routing/provider/reply/reaction/media mismatches and deterministic replay, but never claim production readiness.
+
+`MAX_SHADOW_COMPARISON_ENABLED` is an exact account allowlist and defaults false. No existing runtime imports the flag or comparison module. Stage 7 performs no listener wiring, browser/profile action, provider request/send, Route Registry mutation, CRM projection, media download, deploy, or production database access. Stage 8 live raw capture has not started.
 
 ## Disposable real PostgreSQL gate
 
