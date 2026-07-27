@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "acceptedStage8B1Artifacts": {
+    "directory": "/opt/codex-work/personal-max-stage8b1-artifacts-20260727T171432Z",
+    "bytes": 1038658341,
+    "fileCount": 27,
+    "checksumManifestSha256": "bec86a7524c00bc7f5bf67ca4f4b9d04f58cc22a3403fc96cdf8b193530584b3",
+    "verification": "PASS"
+  },
+  "stage8B1RPreRemediationEvidence": {
+    "directory": "/opt/codex-work/personal-max-stage8b1r-evidence-20260727T190947Z",
+    "bytes": 40727221,
+    "fileCount": 15,
+    "checksumManifestSha256": "cb8ba31fe8c3d62238b10da3eb12369125eb7f5fe2a241e909d510be5f01f994",
+    "verification": "PASS"
+  },
+  "finalEvidence": {
+    "location": "GitHub Actions artifact personal-max-stage8b1r-${GITHUB_SHA}",
+    "checksumManifest": "stage8b1r-evidence/SHA256SUMS",
+    "checksumManifestSha256": "printed as STAGE8B1R_CHECKSUMS by the executable workflow"
+  }
+}

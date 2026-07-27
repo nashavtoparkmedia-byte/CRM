@@ -9,7 +9,8 @@ const source = (path: string) => readFileSync(resolve(root, path), 'utf8')
 
 test('gateway image and runtime are browserless and contain no sender/provider/projection imports', () => {
   const dockerfile = source('max-personal-gateway/Dockerfile')
-  assert.match(dockerfile, /^FROM node:22\.18\.0-bookworm-slim/m)
+  assert.match(dockerfile, /^FROM node:22\.22\.2-alpine3\.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS runtime$/m)
+  assert.match(dockerfile, /^USER node$/m)
   assert.doesNotMatch(dockerfile, /playwright|puppeteer|chromium/i)
   const runtime = execFileSync('bash', ['-lc', 'find max-personal-gateway/src/runtime -type f -print0 | sort -z | xargs -0 cat'], { cwd: root, encoding: 'utf8' })
   assert.doesNotMatch(runtime, /(?:from|require\()[^\n]*(?:\/outbound|\/dispatch|\/route|puppeteer|playwright)/i)
