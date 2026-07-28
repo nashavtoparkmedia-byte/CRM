@@ -1,23 +1,72 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "personal-max-stage8b1i-isolated-release-proof.schema.json",
-  "title": "Personal MAX Stage 8B1I isolated release proof",
+  "title": "Personal MAX Stage 8B1I bounded isolated release proof",
   "type": "object",
-  "required": ["schemaVersion", "mode", "script", "bindings", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage", "safety"],
+  "required": ["schemaVersion", "mode", "script", "safety"],
   "properties": {
     "schemaVersion": {"const": 1},
     "mode": {"enum": ["ISOLATED_RELEASE_PROOF", "ISOLATED_RELEASE_PROOF_FAILURE"]},
-    "script": {"type": "object", "required": ["sha256", "checksumBound"]},
-    "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
-    "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "catalogIntegrity"]},
-    "migration": {"type": "object", "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty"]},
-    "images": {"type": "object", "required": ["gateway", "scraper", "postgresql"]},
-    "executable": {"type": "object", "required": ["dormant", "invalidConfigFailsClosed", "missingHmacFailsClosed", "authenticatedIngress", "authDenied", "requestSizeLimit"]},
-    "e2e": {"type": "object", "required": ["actualHook", "frames", "identicalFrames", "captureLoss", "accidentalDuplicateRawRows", "wrongAccount", "criticalSemanticRegressions"]},
-    "cleanup": {"type": "object", "required": ["containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
-    "productionImmutability": {"type": "object", "required": ["before", "after", "unchanged"]},
-    "storage": {"type": "object", "required": ["freeBytesBefore", "freeBytesAfter"]},
-    "safety": {"type": "object", "required": ["productionDDL", "productionDML", "productionMigration", "restart", "deploy", "browserLaunched", "maxContacted", "providerAction"]}
+    "script": {
+      "type": "object",
+      "required": ["sha256", "checksumBound"],
+      "properties": {
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "checksumBound": {"const": true}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "required": ["productionDDL", "productionDML", "productionMigration", "restart", "deploy", "browserLaunched", "maxContacted", "providerAction"],
+      "properties": {
+        "productionDDL": {"const": false},
+        "productionDML": {"const": false},
+        "productionMigration": {"const": false},
+        "restart": {"const": false},
+        "deploy": {"const": false},
+        "browserLaunched": {"const": false},
+        "maxContacted": {"const": false},
+        "providerAction": {"const": false},
+        "productionNetworkAttached": {"const": false},
+        "productionVolumeMounted": {"const": false},
+        "profileMounted": {"const": false}
+      }
+    }
   },
+  "allOf": [
+    {
+      "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF"}}},
+      "then": {
+        "required": ["bindings", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
+        "properties": {
+          "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
+          "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "catalogIntegrity"]},
+          "migration": {"type": "object", "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty"]},
+          "images": {"type": "object", "required": ["gateway", "scraper", "postgresql", "retained"]},
+          "executable": {"type": "object", "required": ["dormant", "invalidConfigFailsClosed", "missingHmacFailsClosed", "authenticatedIngress", "authDenied", "requestSizeLimit"]},
+          "e2e": {"type": "object", "required": ["actualHook", "frames", "identicalFrames", "captureLoss", "accidentalDuplicateRawRows", "wrongAccount", "criticalSemanticRegressions"]},
+          "cleanup": {"type": "object", "required": ["containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
+          "productionImmutability": {"type": "object", "required": ["before", "after", "unchanged", "productionDatabaseConnections", "productionMigrationLedgerSource"]},
+          "storage": {"type": "object", "required": ["freeBytesBeforePull", "freeBytesAfterPull", "freeBytesAfterCleanup", "postPullRequiredBytes", "finalRequiredBytes"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
+      "then": {
+        "required": ["phase", "safeCommandClass", "classification", "exitCode", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "properties": {
+          "phase": {"type": "string"},
+          "classification": {"type": "string"},
+          "exitCode": {"type": "integer", "minimum": 1},
+          "cleanup": {"type": "object", "required": ["completed", "errorClassification", "containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
+          "images": {"type": "object", "required": ["gateway", "scraper", "acceptedImagesRetained"]},
+          "storage": {"type": "object", "required": ["freeBytesBeforePull", "freeBytesAfterPull", "freeBytesAfterCleanup", "postPullDeficitBytes", "finalDeficitBytes"]},
+          "diagnostics": {"type": "object", "required": ["rawCommandCaptured", "rawSqlCaptured", "rawStderrCaptured", "credentialsCaptured"]},
+          "productionImmutability": {"type": "object", "required": ["productionDatabaseConnections", "productionMigrationLedgerSource", "productionMutationAuthorized"]}
+        }
+      }
+    }
+  ],
   "additionalProperties": true
 }

@@ -7,6 +7,8 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
 readonly PROBE="$SCRIPT_DIR/isolated-release-probe.sh"
 readonly DIAGNOSTICS="$SCRIPT_DIR/failure-diagnostics.sh"
+readonly BOUNDED="$SCRIPT_DIR/bounded-operations.sh"
+readonly FAULTS="$SCRIPT_DIR/test-bounded-faults.sh"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
@@ -28,16 +30,54 @@ free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 4323469515 - 2172240240)) -ge 12500000000 && $((free - 4323469515 - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
 
-bash -n "$PROBE" "$DIAGNOSTICS" "$SCRIPT_DIR/test-package.sh"
+bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$FAULTS" "$SCRIPT_DIR/test-package.sh"
 pass bash_syntax
 [[ -x $SHELLCHECK_BIN ]]
-"$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$SCRIPT_DIR/test-package.sh"
+"$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$FAULTS" "$SCRIPT_DIR/test-package.sh"
 pass shellcheck
+for evidence in 'pm_run_bounded()' 'pm_capture_bounded()' 'pm_write_bounded()' \
+  '"$PM_TIMEOUT_BIN" --signal=TERM --kill-after=10s "${seconds}s"'; do require_fixed "$BOUNDED" "$evidence"; done
+pass timeout_wrapper_contract
+require_fixed "$PROBE" 'docker_metadata 60 METADATA_TIMEOUT'
+require_fixed "$BOUNDED" '900s docker pull'
+require_fixed "$PROBE" 'backup_validation 120 RESTORE_LIST_TIMEOUT'
+require_fixed "$PROBE" 'backup_validation 1200 FULL_RESTORE_TIMEOUT'
+require_fixed "$PROBE" 'disposable_migration 900 MIGRATE_DEPLOY_TIMEOUT'
+require_fixed "$PROBE" 'disposable_migration 600 PRISMA_DIFF_TIMEOUT'
+require_fixed "$PROBE" 'synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT'
+pass long_operation_timeout_guards
+require_fixed "$BOUNDED" 'pm_poll_until()'
+require_fixed "$PROBE" 'pm_poll_until 180 240 POLLING_DEADLINE_EXCEEDED'
+require_fixed "$PROBE" 'pm_poll_until 60 90 GATEWAY_STARTUP_TIMEOUT'
+pass polling_deadline_guards
+require_fixed "$PROBE" 'CLEANUP_GLOBAL_DEADLINE=$((SECONDS + 300))'
+for evidence in CONTAINER_REMOVAL_TIMEOUT NETWORK_REMOVAL_TIMEOUT VOLUME_REMOVAL_TIMEOUT TEMP_REMOVAL_TIMEOUT CLEANUP_GLOBAL_DEADLINE_EXCEEDED; do
+  rg -F "$evidence" "$PROBE" "$BOUNDED" >/dev/null
+done
+pass cleanup_deadline_guards
+for evidence in GATEWAY_PULL_TIMEOUT SCRAPER_PULL_TIMEOUT REGISTRY_AUTHENTICATION_DENIED REGISTRY_MANIFEST_NOT_FOUND REGISTRY_DIGEST_MISMATCH REGISTRY_ACCESS_UNAVAILABLE; do
+  require_fixed "$BOUNDED" "$evidence"
+done
+pass registry_failure_classifications
+for evidence in FREE_BYTES_AFTER_GATEWAY_PULL FREE_BYTES_AFTER_SCRAPER_PULL POST_PULL_DISK_GATE_FAILED FINAL_DISK_GATE_FAILED; do require_fixed "$PROBE" "$evidence"; done
+pass disk_gate_contract
+require_fixed "$PROBE" 'pm_validate_success_report "$TMP_REPORT"'
+require_fixed "$BOUNDED" 'SUCCESS_REPORT_MALFORMED'
+pass success_report_validation
+require_fixed "$BOUNDED" 'SUCCESS_REPORT_SAFETY_VIOLATION'
+require_fixed "$BOUNDED" '.safety.productionDDL'
+pass safety_field_validation
+fault_output=$("$FAULTS")
+[[ $fault_output == *'FAULT_TEST_COUNT=20'* && $fault_output == *'ERR_TRAP_BOUNDARY=VERIFIED'* && \
+  $fault_output == *'ROOT_PROBE_EXECUTED=NO'* && $fault_output == *'DOCKER_EXECUTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$fault_output") -eq 20 ]]
+pass no_silent_failure_matrix
 require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 require_fixed "$PROBE" "$BACKUP_SHA"
-require_fixed "$PROBE" '[[ $(sha_of "$DUMP_PATH") == "$DUMP_SHA256" ]]'
+require_fixed "$PROBE" 'sha_of observed_sha "$DUMP_PATH"'
+require_fixed "$PROBE" '[[ $observed_sha == "$DUMP_SHA256" ]]'
 pass backup_sha_binding
 jq -e '.images.gateway.digest=="sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de" and .images.scraper.digest=="sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768" and .images.postgresql.digest=="sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"' "$SCRIPT_DIR/accepted-images.json" >/dev/null
 pass image_digest_binding
@@ -54,8 +94,8 @@ pass profile_mount_refusal
 refuse_pattern "$PROBE" '(^|[[:space:]])(-p|--publish)([=[:space:]]|$)|--publish-all'
 pass public_port_refusal
 require_fixed "$PROBE" 'PREFIX="personal-max-stage8b1i-$RUN_ID"'
-require_fixed "$PROBE" '[[ -z $(docker ps -aq --no-trunc --filter "name=^/${name}$") ]]'
-require_fixed "$PROBE" '! docker network inspect "$NETWORK"'
+require_fixed "$PROBE" 'docker ps -aq --no-trunc --filter "name=^/${name}$"'
+require_fixed "$PROBE" 'docker network inspect "$NETWORK"'
 pass name_collision_guards
 require_fixed "$PROBE" '--filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID"'
 require_fixed "$PROBE" 'cleanup_docker_objects'
@@ -119,4 +159,4 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nTEST_COUNT=34\n'
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nPACKAGE_TEST_COUNT=43\nFAULT_SCENARIO_COUNT=20\n'

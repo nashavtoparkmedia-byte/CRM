@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "stage": "8B1I",
   "mode": "PREPARED_NOT_EXECUTED",
-  "preparedAt": "2026-07-28T10:22:47Z",
+  "preparedAt": "2026-07-28T11:07:57Z",
   "source": {
     "worktree": "/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z",
     "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
-    "baseCommit": "78bd216eb5a7ebe611e6b374d0a1ecc080d57ddc",
+    "baseCommit": "19cfe4ee613dae917888d77d93ff913d50513d48",
     "acceptedGatewayAndMigrationArtifact": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"
   },
   "backupAcceptance": {
@@ -31,20 +31,33 @@
   },
   "rootProbe": {
     "path": "isolated-release-probe.sh",
-    "sha256": "7d28be58f2f9815d5d349c32775e51e5d1e72bff9c0fd9b61b9fc2e00fd89219",
+    "sha256": "57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38",
     "checksumBound": true,
     "packageChecksumValidation": true,
     "rootRequired": true,
     "executed": false,
     "successReport": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.json",
     "successReportOwnerGroupMode": "root:codexbot:0640",
-    "noClobber": true
+    "noClobber": true,
+    "safePhaseOutput": true,
+    "metadataTimeoutSeconds": 60,
+    "pullTimeoutSecondsPerImage": 900,
+    "restoreListTimeoutSeconds": 120,
+    "fullRestoreTimeoutSeconds": 1200,
+    "migrationDeployTimeoutSeconds": 900,
+    "prismaDiffTimeoutSeconds": 600,
+    "harnessTimeoutSeconds": 600,
+    "cleanupGlobalDeadlineSeconds": 300,
+    "successReportValidatedBeforeHandoff": true,
+    "acceptedImagesRetained": true
   },
   "support": {
-    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "bda334d220b57a762b9cb74fc4636707b421c4978587ada56035fa795b54087e"},
+    "boundedOperations": {"path": "bounded-operations.sh", "sha256": "a55b9da39f9b241a0ba87bb519d4fac555a18394b5889badc85e391c10aebd29"},
+    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "eb68447b9ba021beeb9c5ebe0672b8f7ba32766419c12e0c73e057dab1544bb6"},
     "scraperHarness": {"path": "synthetic-scraper-harness.js", "sha256": "85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e"},
     "gatewayClientHarness": {"path": "gateway-client-harness.js", "sha256": "f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428"},
-    "nonRootTests": {"path": "test-package.sh", "sha256": "4346d5c39de212911a334cea2c539ec60d099d6cedd5556bcb4c3917748dbeec", "requiredCount": 34}
+    "faultTests": {"path": "test-bounded-faults.sh", "sha256": "e4b147d71b649cffe568221742ac20a6fee4fff664a30ec581ba7081e778c790", "scenarioCount": 20},
+    "nonRootTests": {"path": "test-package.sh", "sha256": "1338fa6cf8e8729077cc0024abf10a46a4530c3b63925ce6ada748576698da83", "requiredCount": 43}
   },
   "supersedes": {
     "path": "release/personal-max-stage8b1r/root-preflight/probe-isolated-images.sh",
