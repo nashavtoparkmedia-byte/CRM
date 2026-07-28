@@ -18,6 +18,7 @@
     "test:stage8a:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresCapture*.integration.test.ts",
     "test:stage8b1": "node --experimental-strip-types --test tests/runtime*.test.ts tests/ingressAuth.test.ts tests/producerDrain.test.ts tests/releaseCandidate.test.ts",
     "test:session-owner": "node --experimental-strip-types --test tests/sessionOwner*.test.ts",
+    "test:shadow-planner": "node --experimental-strip-types --test tests/outboundShadow*.test.ts",
     "test:stage8b1:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/realPostgresReleaseCandidate.integration.test.ts",
     "test:real-postgres": "node --experimental-strip-types --test --test-concurrency=1 tests/integration/*.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
