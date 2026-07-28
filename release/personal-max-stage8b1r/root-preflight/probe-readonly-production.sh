@@ -4,6 +4,8 @@ umask 077
 
 readonly COMPOSE_FILE='/opt/crm/deploy/docker-compose.production.yml'
 readonly PROJECT='crm'
+readonly PROJECT_LABEL='com.docker.compose.project'
+readonly SERVICE_LABEL='com.docker.compose.service'
 readonly GATEWAY_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
 readonly SCRAPER_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
 readonly GATEWAY_COMPRESSED_BYTES=150067770
@@ -46,7 +48,6 @@ if ! timeout 5 getent group codexbot >/dev/null; then
 fi
 test -r "$COMPOSE_FILE"
 test -d "$RELEASE_ROOT/gravity-mvp/prisma/migrations"
-docker compose version >/dev/null
 
 TMP_RESULT=$(mktemp /var/tmp/personal-max-stage8b1r-production-readonly-preflight.tmp.XXXXXX)
 chmod 600 "$TMP_RESULT"
@@ -60,16 +61,71 @@ hash_text() {
   sha256sum | awk '{print $1}'
 }
 
+read_container_labels() {
+  local container_id=$1
+  docker_read inspect --format '{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.service"}}' "$container_id"
+}
+
+validate_project_container() {
+  local container_id=$1 expected_service=${2:-} labels observed_project observed_service
+  labels=$(read_container_labels "$container_id") || return
+  IFS='|' read -r observed_project observed_service <<<"$labels"
+  if [[ "$observed_project" != "$PROJECT" ]]; then
+    echo "PROJECT_LABEL_MISMATCH: container=$container_id expected=$PROJECT observed=$observed_project" >&2
+    return 90
+  fi
+  if [[ -n "$expected_service" && "$observed_service" != "$expected_service" ]]; then
+    echo "SERVICE_LABEL_MISMATCH: container=$container_id expected=$expected_service observed=$observed_service" >&2
+    return 91
+  fi
+}
+
+list_project_containers() {
+  docker_read ps -aq --no-trunc --filter "label=$PROJECT_LABEL=$PROJECT" | LC_ALL=C sort -u
+}
+
 snapshot_containers() {
-  docker_read compose -p "$PROJECT" -f "$COMPOSE_FILE" ps -aq | sort
+  local container_id container_list
+  container_list=$(list_project_containers) || return
+  while IFS= read -r container_id; do
+    [[ -n "$container_id" ]] || continue
+    validate_project_container "$container_id" || return
+    printf '%s\n' "$container_id"
+  done <<<"$container_list"
+}
+
+get_running_service_container() {
+  local service=$1 container_list docker_status=0
+  local -a container_ids=()
+  container_list=$(docker_read ps -q --no-trunc \
+    --filter "label=$PROJECT_LABEL=$PROJECT" \
+    --filter "label=$SERVICE_LABEL=$service" | LC_ALL=C sort -u) || docker_status=$?
+  (( docker_status == 0 )) || return "$docker_status"
+  if [[ -n "$container_list" ]]; then
+    mapfile -t container_ids <<<"$container_list"
+  fi
+  case ${#container_ids[@]} in
+    0)
+      return 3
+      ;;
+    1)
+      validate_project_container "${container_ids[0]}" "$service" || return
+      printf '%s\n' "${container_ids[0]}"
+      ;;
+    *)
+      echo "SERVICE_CARDINALITY_CONFLICT: service=$service runningContainers=${#container_ids[@]}" >&2
+      return 92
+      ;;
+  esac
 }
 
 snapshot_services() {
-  local container_id
+  local container_id container_list
+  container_list=$(snapshot_containers) || return
   while IFS= read -r container_id; do
     [[ -n "$container_id" ]] || continue
     docker_read inspect --format '{{.Id}}|{{.State.Status}}|{{.RestartCount}}|{{.State.StartedAt}}|{{.Config.Image}}' "$container_id"
-  done < <(snapshot_containers)
+  done <<<"$container_list"
 }
 
 snapshot_volumes() {
@@ -92,10 +148,13 @@ disk_row() {
 }
 
 image_fact() {
-  local ref=$1 compressed_bytes=$2 inspect
-  if inspect=$(docker_read image inspect "$ref" 2>/dev/null); then
-    jq -nc --arg ref "$ref" --argjson compressedBytes "$compressed_bytes" --argjson inspect "$inspect" \
-      '{ref:$ref,presentLocally:true,compressedRegistryBytes:$compressedBytes,imageId:$inspect[0].Id,localUnpackedBytes:$inspect[0].Size,repoDigests:($inspect[0].RepoDigests//[])}'
+  local ref=$1 compressed_bytes=$2 image_id image_size repo_digests
+  if image_id=$(docker_read image inspect --format '{{.Id}}' "$ref" 2>/dev/null); then
+    image_size=$(docker_read image inspect --format '{{.Size}}' "$ref")
+    repo_digests=$(docker_read image inspect --format '{{json .RepoDigests}}' "$ref")
+    jq -nc --arg ref "$ref" --argjson compressedBytes "$compressed_bytes" --arg imageId "$image_id" \
+      --argjson localUnpackedBytes "$image_size" --argjson repoDigests "$repo_digests" \
+      '{ref:$ref,presentLocally:true,compressedRegistryBytes:$compressedBytes,imageId:$imageId,localUnpackedBytes:$localUnpackedBytes,repoDigests:($repoDigests//[])}'
   else
     jq -nc --arg ref "$ref" --argjson compressedBytes "$compressed_bytes" \
       '{ref:$ref,presentLocally:false,compressedRegistryBytes:$compressedBytes,imageId:null,localUnpackedBytes:null,repoDigests:[]}'
@@ -115,55 +174,78 @@ os_version=$(awk -F= '$1=="VERSION_ID"{gsub(/"/,"",$2);print $2}' /etc/os-releas
 kernel=$(uname -sr)
 architecture=$(uname -m)
 docker_server_version=$(docker_read version --format '{{.Server.Version}}')
-docker_compose_version=$(docker compose version --short)
 docker_root=$(docker_read info --format '{{.DockerRootDir}}')
 docker_driver=$(docker_read info --format '{{.Driver}}')
 docker_runtime=$(docker_read info --format '{{json .Runtimes}}' | jq 'keys|sort')
+compose_file_sha256=$(sha256sum -- "$COMPOSE_FILE" | awk '{print $1}')
+compose_file_size=$(stat -Lc '%s' "$COMPOSE_FILE")
+compose_file_mode=$(stat -Lc '%a' "$COMPOSE_FILE")
 
 service_rows='[]'
 postgres_data_path=''
 while IFS= read -r id; do
   [[ -n "$id" ]] || continue
-  inspect=$(docker_read inspect "$id")
-  service=$(jq -r '.[0].Config.Labels["com.docker.compose.service"] // "unlabelled"' <<<"$inspect")
-  image_id=$(jq -r '.[0].Image' <<<"$inspect")
-  repo_digests=$(docker_read image inspect "$image_id" | jq '.[0].RepoDigests // [] | sort')
-  pid=$(jq -r '.[0].State.Pid' <<<"$inspect")
+  labels=$(read_container_labels "$id")
+  IFS='|' read -r _ service <<<"$labels"
+  [[ -n "$service" && "$service" != '<no value>' ]] || service='unlabelled'
+  container_id=$(docker_read inspect --format '{{.Id}}' "$id")
+  container_name=$(docker_read inspect --format '{{.Name}}' "$id")
+  container_name=${container_name#/}
+  image_id=$(docker_read inspect --format '{{.Image}}' "$id")
+  configured_image=$(docker_read inspect --format '{{.Config.Image}}' "$id")
+  configured_user=$(docker_read inspect --format '{{.Config.User}}' "$id")
+  repo_digests=$(docker_read image inspect --format '{{json .RepoDigests}}' "$image_id" | jq '(.//[])|sort')
+  pid=$(docker_read inspect --format '{{.State.Pid}}' "$id")
+  mounts=$(docker_read inspect --format '{{json .Mounts}}' "$id" | jq '[.[]|{type:.Type,name:(.Name//null),source:.Source,destination:.Destination,readWrite:.RW}]')
+  networks=$(docker_read inspect --format '{{json .NetworkSettings.Networks}}' "$id" | jq 'keys|sort')
+  ports=$(docker_read inspect --format '{{json .NetworkSettings.Ports}}' "$id" | jq './/{}')
+  restart_policy=$(docker_read inspect --format '{{.HostConfig.RestartPolicy.Name}}' "$id")
+  health=$(docker_read inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}not-configured{{end}}' "$id")
+  status=$(docker_read inspect --format '{{.State.Status}}' "$id")
+  running=$(docker_read inspect --format '{{.State.Running}}' "$id")
+  restart_count=$(docker_read inspect --format '{{.RestartCount}}' "$id")
+  started_at=$(docker_read inspect --format '{{.State.StartedAt}}' "$id")
   runtime_uid='unavailable'
   runtime_gid='unavailable'
   if [[ "$pid" =~ ^[1-9][0-9]*$ && -r "/proc/$pid/status" ]]; then
     runtime_uid=$(awk '/^Uid:/{print $2}' "/proc/$pid/status")
     runtime_gid=$(awk '/^Gid:/{print $2}' "/proc/$pid/status")
   fi
-  metadata=$(jq --argjson repoDigests "$repo_digests" '.[0] | {
-    id:.Id,name:(.Name|ltrimstr("/")),imageId:.Image,repoDigests:$repoDigests,
-    configuredImage:.Config.Image,configuredUser:(.Config.User//""),
-    mounts:[.Mounts[]|{type:.Type,name:(.Name//null),source:.Source,destination:.Destination,readWrite:.RW}],
-    networks:(.NetworkSettings.Networks|keys|sort),ports:(.NetworkSettings.Ports//{}),
-    restartPolicy:.HostConfig.RestartPolicy.Name,health:(.State.Health.Status//"not-configured"),
-    status:.State.Status,running:.State.Running,restartCount:.RestartCount,startedAt:.State.StartedAt
-  }' <<<"$inspect")
+  metadata=$(jq -nc --arg id "$container_id" --arg name "$container_name" --arg imageId "$image_id" --argjson repoDigests "$repo_digests" \
+    --arg configuredImage "$configured_image" --arg configuredUser "$configured_user" --argjson mounts "$mounts" --argjson networks "$networks" \
+    --argjson ports "$ports" --arg restartPolicy "$restart_policy" --arg health "$health" --arg status "$status" --argjson running "$running" \
+    --argjson restartCount "$restart_count" --arg startedAt "$started_at" \
+    '{id:$id,name:$name,imageId:$imageId,repoDigests:$repoDigests,configuredImage:$configuredImage,configuredUser:$configuredUser,mounts:$mounts,networks:$networks,ports:$ports,restartPolicy:$restartPolicy,health:$health,status:$status,running:$running,restartCount:$restartCount,startedAt:$startedAt}')
   service_rows=$(jq -c --arg service "$service" --arg runtimeUid "$runtime_uid" --arg runtimeGid "$runtime_gid" --argjson metadata "$metadata" \
     '. + [{service:$service,runtimeUid:$runtimeUid,runtimeGid:$runtimeGid,metadata:$metadata}]' <<<"$service_rows")
-  if [[ "$service" == postgres && $(jq -r '.[0].State.Running' <<<"$inspect") == true ]]; then
-    postgres_data_path=$(jq -r '.[0].Mounts[]?|select(.Destination=="/var/lib/postgresql/data")|.Source' <<<"$inspect" | head -n1)
+  if [[ "$service" == postgres && "$running" == true ]]; then
+    postgres_data_path=$(jq -r '.[]?|select(.destination=="/var/lib/postgresql/data")|.source' <<<"$mounts" | head -n1)
   fi
 done <<<"$containers_before"
 dependencies=$(jq '[.[] as $service | $service.metadata.networks[]? | {network:.,service:$service.service}] | group_by(.network) | map({network:.[0].network,services:(map(.service)|sort)})' <<<"$service_rows")
 
-scraper='{"observable":false,"reason":"max-web-scraper service not running"}'
-scraper_id=$(docker_read compose -p "$PROJECT" -f "$COMPOSE_FILE" ps -q max-web-scraper 2>/dev/null || true)
-if [[ -n "$scraper_id" ]]; then
-  process_rows=$(docker_read top "$scraper_id" -eo uid,gid,comm 2>/dev/null | tail -n +2 || true)
+scraper='{"observable":false,"status":"SERVICE_NOT_RUNNING","reason":"max-web-scraper has no running project-labeled container"}'
+scraper_id=''
+if scraper_id=$(get_running_service_container max-web-scraper); then
+  process_rows=$(docker_read top "$scraper_id" -eo uid,gid,comm 2>/dev/null | tail -n +2)
   node_count=$(awk '$3=="node" || $3=="tini"{count++} END{print count+0}' <<<"$process_rows")
   browser_count=$(awk 'tolower($3) ~ /^(chromium|chrome|chrome_crashpad|headless_shell)$/{count++} END{print count+0}' <<<"$process_rows")
-  profile_mount=$(docker_read inspect "$scraper_id" | jq '.[0].Mounts | map(select(.Destination=="/app/user_data" or .Destination=="/app/userData")|{type:.Type,name:(.Name//null),source:.Source,destination:.Destination,readWrite:.RW})')
+  profile_mount=$(docker_read inspect --format '{{json .Mounts}}' "$scraper_id" | jq 'map(select(.Destination=="/app/user_data" or .Destination=="/app/userData")|{type:.Type,name:(.Name//null),source:.Source,destination:.Destination,readWrite:.RW})')
   scraper=$(jq -nc --argjson nodeCount "$node_count" --argjson browserCount "$browser_count" --argjson profileMount "$profile_mount" \
     '{observable:true,nodeOrTiniProcessCount:$nodeCount,browserProcessCount:$browserCount,profileMount:$profileMount,listenerOwnership:{observable:false,status:"NOT_EXECUTED",reason:"listener inspection could expose browser/profile details"}}')
+else
+  scraper_discovery_status=$?
+  [[ $scraper_discovery_status -eq 3 ]] || exit "$scraper_discovery_status"
 fi
 
-database='{"observable":false,"reason":"postgres service not running or bounded read-only psql unavailable","queriesNotExecuted":["exact MaxRawTransportEvent count","duplicate full scan","exact NULL full scans","EXPLAIN ANALYZE"],"queryRisk":"full-table scans excluded"}'
-postgres_id=$(docker_read compose -p "$PROJECT" -f "$COMPOSE_FILE" ps -q postgres 2>/dev/null || true)
+database='{"observable":false,"status":"SERVICE_NOT_RUNNING","reason":"postgres has no running project-labeled container","queriesNotExecuted":["exact MaxRawTransportEvent count","duplicate full scan","exact NULL full scans","EXPLAIN ANALYZE"],"queryRisk":"full-table scans excluded"}'
+postgres_id=''
+if postgres_id=$(get_running_service_container postgres); then
+  :
+else
+  postgres_discovery_status=$?
+  [[ $postgres_discovery_status -eq 3 ]] || exit "$postgres_discovery_status"
+fi
 migration_ledger_hash_before='unavailable'
 migration_ledger_hash_after='unavailable'
 database_size_bytes=0
@@ -323,7 +405,8 @@ fi
 jq -n \
   --arg scriptSha256 "$ACTUAL_SHA256" --arg resultPath "$RESULT_PATH" --arg composeFile "$COMPOSE_FILE" --arg project "$PROJECT" \
   --arg osId "$os_id" --arg osVersion "$os_version" --arg kernel "$kernel" --arg architecture "$architecture" \
-  --arg dockerVersion "$docker_server_version" --arg composeVersion "$docker_compose_version" --arg dockerRoot "$docker_root" --arg dockerDriver "$docker_driver" \
+  --arg dockerVersion "$docker_server_version" --arg dockerRoot "$docker_root" --arg dockerDriver "$docker_driver" \
+  --arg composeFileSha256 "$compose_file_sha256" --argjson composeFileSize "$compose_file_size" --arg composeFileMode "$compose_file_mode" \
   --argjson dockerRuntimes "$docker_runtime" --argjson services "$service_rows" --argjson dependencies "$dependencies" --argjson scraper "$scraper" --argjson database "$database" \
   --argjson gatewayImage "$gateway_image" --argjson scraperImage "$scraper_image" --argjson disk "$disk" --argjson backup "$backup" \
   --argjson existingRelevantImageBytes "$existing_relevant_image_bytes" --argjson missingCompressedBytes "$missing_compressed_bytes" --argjson pullUnpackMinBytes "$pull_unpack_min_bytes" --argjson pullUnpackMaxBytes "$pull_unpack_max_bytes" \
@@ -334,8 +417,8 @@ jq -n \
   --arg migrationLedgerHashBefore "$migration_ledger_hash_before" --arg migrationLedgerHashAfter "$migration_ledger_hash_after" \
   --argjson diskBefore "$disk_before" --argjson diskAfter "$disk_after" --arg unexpectedChanges "$unexpected_changes" --arg rootGateComplete "$root_gate_complete" \
   '{schemaVersion:2,mode:"READ_ONLY_PRODUCTION_PREFLIGHT",generatedAt:(now|todate),script:{sha256:$scriptSha256,checksumBound:true,resultPath:$resultPath},
-    host:{os:{id:$osId,version:$osVersion},kernel:$kernel,architecture:$architecture,docker:{serverVersion:$dockerVersion,composeVersion:$composeVersion,dataRoot:$dockerRoot,storageDriver:$dockerDriver,runtimes:$dockerRuntimes}},
-    production:{composeFile:$composeFile,project:$project,services:$services,dependenciesByNetwork:$dependencies,scraper:$scraper,environment:{valuesInspected:false,namesInspected:false,reason:"docker environment omitted to prevent value exposure"}},
+    host:{os:{id:$osId,version:$osVersion},kernel:$kernel,architecture:$architecture,docker:{serverVersion:$dockerVersion,composeCliExecuted:false,dataRoot:$dockerRoot,storageDriver:$dockerDriver,runtimes:$dockerRuntimes}},
+    production:{composeFile:$composeFile,composeFileEvidence:{sha256:$composeFileSha256,sizeBytes:$composeFileSize,mode:$composeFileMode,contentsPrinted:false,rendered:false,environmentInterpolated:false},project:$project,discovery:{source:"Docker Engine labels",projectLabel:"com.docker.compose.project=crm",composeCliUsed:false},services:$services,dependenciesByNetwork:$dependencies,scraper:$scraper,environment:{valuesInspected:false,namesInspected:false,configEnvInspected:false,envFilesRead:false,reason:"narrow Docker inspect projections exclude container environment"}},
     acceptedImages:{gateway:$gatewayImage,scraper:$scraperImage,registryManifestProvenance:"immutable digest manifests observed without pull on 2026-07-28"},database:$database,
     storage:{filesystems:$disk,budget:{existingRelevantImageBytes:$existingRelevantImageBytes,missingCompressedImageBytes:$missingCompressedBytes,pullAndUnpackEstimateBytes:{minimum:$pullUnpackMinBytes,conservativeMaximum:$pullUnpackMaxBytes,method:"3x to 5x immutable compressed layer bytes"},backupEstimateBytes:$backupEstimateBytes,migrationTemporaryEstimateBytes:$migrationTempEstimateBytes,minimumRollbackOperationalReserveBytes:$reserveBytes,requiredBytes:{minimum:$requiredMinBytes,conservativeMaximum:$requiredMaxBytes},projectedRemainingAtConservativeMaximum:$projectedMinRemaining,verdict:$diskVerdict}},backup:$backup,
     immutability:{before:{containerIdsHash:$containersBeforeHash,serviceStatesHash:$servicesBeforeHash,volumesHash:$volumesBeforeHash,migrationLedgerHash:$migrationLedgerHashBefore,disk:$diskBefore},after:{containerIdsHash:$containersAfterHash,serviceStatesHash:$servicesAfterHash,volumesHash:$volumesAfterHash,migrationLedgerHash:$migrationLedgerHashAfter,disk:$diskAfter},unexpectedChanges:($unexpectedChanges=="true")},

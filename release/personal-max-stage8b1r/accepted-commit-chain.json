@@ -29,11 +29,20 @@
     "releaseImagesChanged": false
   },
   "productionReadOnlyPreflightHandoffPatch": {
-    "commit": "SELF",
+    "commit": "ee890b28973302ef035e9c02654f978aec995dd9",
     "meaning": "root-owned root:codexbot mode 0640 sanitized-report handoff with atomic no-clobber move; application and image contents unchanged",
     "expectedParent": "9a6fdd46a545874299d2cc2aca1c5d54d07da48e",
     "expectedCommitsAboveOriginalBaseline": 13,
     "expectedCommitsAboveStage8B1": 3,
+    "applicationBehaviorChanged": false,
+    "releaseImagesChanged": false
+  },
+  "productionReadOnlyPreflightComposeIndependentPatch": {
+    "commit": "SELF",
+    "meaning": "Docker Engine label discovery with narrow non-environment inspect projections; no Compose parsing or production secret interpolation",
+    "expectedParent": "ee890b28973302ef035e9c02654f978aec995dd9",
+    "expectedCommitsAboveOriginalBaseline": 14,
+    "expectedCommitsAboveStage8B1": 4,
     "applicationBehaviorChanged": false,
     "releaseImagesChanged": false
   },

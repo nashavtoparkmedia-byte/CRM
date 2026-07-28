@@ -14,13 +14,24 @@
     "releaseImagesChanged": false
   },
   "productionReadOnlyPreflightHandoffPatch": {
-    "commit": "SELF",
+    "commit": "ee890b28973302ef035e9c02654f978aec995dd9",
     "expectedParent": "9a6fdd46a545874299d2cc2aca1c5d54d07da48e",
     "temporaryReportMode": "0600",
     "finalReportOwner": "root",
     "finalReportGroup": "codexbot",
     "finalReportMode": "0640",
     "atomicNoClobberMove": true,
+    "applicationBehaviorChanged": false,
+    "migrationChanged": false,
+    "releaseImagesChanged": false
+  },
+  "productionReadOnlyPreflightComposeIndependentPatch": {
+    "commit": "SELF",
+    "expectedParent": "ee890b28973302ef035e9c02654f978aec995dd9",
+    "containerDiscovery": "Docker Engine exact Compose project/service labels",
+    "dockerComposeCliUsed": false,
+    "composeEnvironmentInterpolation": false,
+    "containerEnvironmentValuesRead": false,
     "applicationBehaviorChanged": false,
     "migrationChanged": false,
     "releaseImagesChanged": false
@@ -35,6 +46,8 @@
   "executableEvidenceWorkflow": ".github/workflows/personal-max-stage8b1r-security.yml",
   "executableEvidenceArtifact": "personal-max-stage8b1r-${GITHUB_SHA}",
   "releaseGate": "CI final-image security, execution, registry digest, and pull-by-digest evidence must pass before architect review",
+  "fileCount": 24,
+  "checksumEntryCount": 23,
   "files": [
     "SHA256SUMS",
     "accepted-commit-chain.json",
@@ -58,6 +71,7 @@
     "executable/synthetic-scraper-harness.js",
     "root-preflight/manifest.json",
     "root-preflight/probe-isolated-images.sh",
-    "root-preflight/probe-readonly-production.sh"
+    "root-preflight/probe-readonly-production.sh",
+    "root-preflight/static-safety-report.json"
   ]
 }

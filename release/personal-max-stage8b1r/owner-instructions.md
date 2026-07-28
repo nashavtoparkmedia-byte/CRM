@@ -1,12 +1,14 @@
 # Root preflight owner instruction
 
-The previous production-probe checksum `f5546c8974cfbb0247de992ea4a1d4c0a9029bea54537574a41bc2865e1df429` is obsolete and MUST NOT be used. Any owner command bound to that checksum is invalid.
+The production-probe checksum `bacd74af185a371ca641ef8f262286c424e51bd3737dd81c1b7382ffb5fdc336` is `OBSOLETE_DUE_TO_COMPOSE_INTERPOLATION` and MUST NOT be used. It could invoke Docker Compose parsing and fail on absent production secrets. The earlier checksum `f5546c8974cfbb0247de992ea4a1d4c0a9029bea54537574a41bc2865e1df429` also remains obsolete. Any owner command bound to either checksum is invalid.
 
 The only approved root command for the production read-only preflight is checksum-bound:
 
-`sudo env PERSONAL_MAX_PREFLIGHT_SCRIPT_SHA256=bacd74af185a371ca641ef8f262286c424e51bd3737dd81c1b7382ffb5fdc336 PERSONAL_MAX_PREFLIGHT_RESULT_PATH=/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json /opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z/release/personal-max-stage8b1r/root-preflight/probe-readonly-production.sh`
+`sudo env PERSONAL_MAX_PREFLIGHT_SCRIPT_SHA256=b154c731586dd34739dc611ebcfa8daffa75c2e7b14cb27dd8733b0d48e28063 PERSONAL_MAX_PREFLIGHT_RESULT_PATH=/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json /opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z/release/personal-max-stage8b1r/root-preflight/probe-readonly-production.sh`
 
-The command refuses a checksum mismatch, a different result path, or an existing result path. It reads OS/kernel and filesystem metadata, Docker service/image/network/volume/process metadata without environment values, `/proc` UID/GID metadata, bounded backup-file metadata, and bounded PostgreSQL catalogs/statistics in a `default_transaction_read_only` session with statement and lock timeouts. It excludes exact raw-table counts, duplicate scans, exact NULL scans, `EXPLAIN ANALYZE`, DDL, DML and migrations.
+The command refuses a checksum mismatch, a different result path, or an existing result path. It never invokes Docker Compose or renders the Compose file. Existing production containers are discovered only through Docker Engine filters for the exact `com.docker.compose.project=crm` and service labels; every selected ID is revalidated with narrow inspect projections that exclude `.Config.Env`. No production secret or env file is required. The Compose file contributes only readable-path, SHA-256, size and mode evidence.
+
+The command reads OS/kernel and filesystem metadata, Docker service/image/network/volume/process metadata without environment values, `/proc` UID/GID metadata, bounded backup-file metadata, and bounded PostgreSQL catalogs/statistics in a `default_transaction_read_only` session with statement and lock timeouts. It excludes exact raw-table counts, duplicate scans, exact NULL scans, `EXPLAIN ANALYZE`, DDL, DML and migrations.
 
 The temporary report remains root-owned mode `0600` while JSON is formed and validated. Before an atomic no-clobber move, the script changes only that temporary file to group `codexbot` and mode `0640`. It then verifies that the final path is a non-symlink regular file owned by `root:codexbot`, readable but not writable by `codexbot`, and inaccessible to the world. The final sanitized report is `/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json`; successful output contains its path, SHA-256, owner, group, mode, and the two Codex readability fields.
 
