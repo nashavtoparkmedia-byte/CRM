@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1I",
+  "mode": "PREPARED_NOT_EXECUTED",
+  "preparedAt": "2026-07-28T10:22:47Z",
+  "source": {
+    "worktree": "/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z",
+    "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
+    "baseCommit": "78bd216eb5a7ebe611e6b374d0a1ecc080d57ddc",
+    "acceptedGatewayAndMigrationArtifact": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"
+  },
+  "backupAcceptance": {
+    "verdict": "BACKUP_ARTIFACT_ACCEPTED_FOR_ISOLATED_RESTORE",
+    "reportSha256": "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566",
+    "dumpSha256": "c76bda794cc053d32a42f41209d55252d90d02d3806f45c5b16a275544262a3f",
+    "dumpBytes": 45284314,
+    "objectCount": 581,
+    "structuralValidation": "PASS",
+    "fullRestoreProof": "PENDING_ISOLATED_ROOT_PROBE"
+  },
+  "storageGate": {
+    "observedTotalBytes": 83053432832,
+    "observedUsedBytes": 60960952320,
+    "observedFreeBytes": 22075703296,
+    "targetFreeBytes": 12500000000,
+    "imageExpansionBudgetBytes": 4323469515,
+    "restoreProbeBudgetBytes": 2172240240,
+    "cleanupReserveBytes": 5368709120,
+    "projectedRemainingBytes": 15580193541,
+    "fits": true
+  },
+  "rootProbe": {
+    "path": "isolated-release-probe.sh",
+    "sha256": "7d28be58f2f9815d5d349c32775e51e5d1e72bff9c0fd9b61b9fc2e00fd89219",
+    "checksumBound": true,
+    "packageChecksumValidation": true,
+    "rootRequired": true,
+    "executed": false,
+    "successReport": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.json",
+    "successReportOwnerGroupMode": "root:codexbot:0640",
+    "noClobber": true
+  },
+  "support": {
+    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "bda334d220b57a762b9cb74fc4636707b421c4978587ada56035fa795b54087e"},
+    "scraperHarness": {"path": "synthetic-scraper-harness.js", "sha256": "85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e"},
+    "gatewayClientHarness": {"path": "gateway-client-harness.js", "sha256": "f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428"},
+    "nonRootTests": {"path": "test-package.sh", "sha256": "4346d5c39de212911a334cea2c539ec60d099d6cedd5556bcb4c3917748dbeec", "requiredCount": 34}
+  },
+  "supersedes": {
+    "path": "release/personal-max-stage8b1r/root-preflight/probe-isolated-images.sh",
+    "sha256": "931878d6280f56469c5e42d95917cf58d92d09ec895f7ebf5286b98290e363e4",
+    "reasons": [
+      "no full restore of the accepted backup",
+      "no exact eight-migration set proof",
+      "fixed disposable names without a unique Stage 8B1I prefix",
+      "incomplete production immutability hashes",
+      "no fixed root:codexbot 0640 no-clobber report handoff",
+      "insufficient 1000-frame A/B failure-recovery E2E proof"
+    ]
+  },
+  "isolation": {
+    "stageLabel": "personal-max.stage=8b1i",
+    "uniqueRunLabel": "personal-max.run-id",
+    "network": "internal bridge only",
+    "publicPorts": false,
+    "composeProjectCrmUsed": false,
+    "productionNetworkUsed": false,
+    "productionVolumeUsed": false,
+    "profileMounted": false,
+    "productionDatabaseConnected": false,
+    "maxContacted": false,
+    "providerAction": false,
+    "browserLaunched": false
+  },
+  "safety": {
+    "rootActionExecutedNow": false,
+    "dockerMutationNow": false,
+    "imagePullNow": false,
+    "productionDbConnectedNow": false,
+    "productionMigrationNow": false,
+    "deploy": false,
+    "restart": false,
+    "browser": false,
+    "max": false,
+    "providerAction": false,
+    "stage8B2Started": false
+  }
+}

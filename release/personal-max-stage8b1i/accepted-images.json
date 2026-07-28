@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1I",
+  "architecture": "linux/amd64",
+  "images": {
+    "gateway": {
+      "ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+      "digest": "sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+      "expectedRuntimeUser": "1000:1000",
+      "mutableTagAllowed": false
+    },
+    "scraper": {
+      "ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+      "digest": "sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+      "expectedRuntimeUser": "1001:1001",
+      "mutableTagAllowed": false
+    },
+    "postgresql": {
+      "ref": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+      "digest": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+      "distributionEvidence": "postgres@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+      "requiredServerVersion": "16.14",
+      "productionImageIdEvidence": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+      "selection": "exact current production image ID from the accepted root preflight; probe requires it locally and proves PostgreSQL 16.14 before restore",
+      "pullAllowed": false,
+      "mutableTagAllowed": false
+    }
+  },
+  "pullNow": false,
+  "retainAcceptedGatewayAndScraperAfterPass": true
+}

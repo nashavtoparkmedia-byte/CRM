@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1I",
+  "sanitizedReport": {
+    "path": "/var/tmp/personal-max-stage8b1s-production-backup.json",
+    "sha256": "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566",
+    "ownerGroupMode": "root:codexbot:0640",
+    "mode": "PRODUCTION_BACKUP_METADATA"
+  },
+  "sourcePreflight": {
+    "path": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json",
+    "sha256": "d6a6e4764c90a6f64af9c11b2b0c4eeb08b82c377b58990f939bd559688ac63b"
+  },
+  "dump": {
+    "path": "/var/backups/personal-max-stage8b1s-production-backup/database.dump",
+    "sha256": "c76bda794cc053d32a42f41209d55252d90d02d3806f45c5b16a275544262a3f",
+    "bytes": 45284314,
+    "format": "custom",
+    "ownerGroupMode": "root:root:0600",
+    "objectCount": 581,
+    "noOwner": true,
+    "noAcl": true
+  },
+  "configArchive": {
+    "path": "/var/backups/personal-max-stage8b1s-production-backup/production-config.tar.gz",
+    "sha256": "70dfc5ac328abef679a63a7b4b6917de3e24454642e2e36dccd2ce5557b2ef73",
+    "bytes": 12421,
+    "ownerGroupMode": "root:root:0600",
+    "sourceFileCount": 6,
+    "usedByProbe": false
+  },
+  "sourceMigrationLedger": {
+    "total": 46,
+    "finished": 46,
+    "failed": 0
+  },
+  "fullRestoreProof": "PENDING_ISOLATED_ROOT_PROBE"
+}
