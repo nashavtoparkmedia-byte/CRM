@@ -29,7 +29,24 @@ personal_max_stage8b1i_safe_error() {
       PRODUCTION_GIT_BASELINE_MISMATCH | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
+      RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
+      RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
+      RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+personal_max_stage8b1i_safe_check_id() {
+  case ${1:-} in
+    NONE | RESTORE_LEDGER_FINISHED_CHECK | RESTORE_LEDGER_FAILED_CHECK | \
+      RESTORE_LEDGER_NAMES_CHECK | RESTORE_CATALOG_TABLES_CHECK | \
+      RESTORE_CATALOG_INDEXES_CHECK | RESTORE_CATALOG_CONSTRAINTS_CHECK | \
+      RESTORE_REQUIRED_PRISMA_MIGRATIONS_RELATION_CHECK | \
+      RESTORE_REQUIRED_USERS_RELATION_CHECK | RESTORE_REQUIRED_CONTACT_RELATION_CHECK | \
+      RESTORE_REQUIRED_CHAT_RELATION_CHECK | RESTORE_REPRESENTATIVE_MIGRATIONS_CHECK | \
+      RESTORE_REPRESENTATIVE_USER_CHECK | RESTORE_REPRESENTATIVE_CONTACT_CHECK | \
+      RESTORE_REPRESENTATIVE_CHAT_CHECK | RESTORE_REPORT_RENDER_CHECK) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -54,7 +71,7 @@ personal_max_stage8b1i_cleanup_primary_temp() {
 
 personal_max_stage8b1i_render_failure() {
   local original_exit=${1:-1} source_line=${2:-0} cleanup_ok=${3:-false}
-  local safe_phase safe_class safe_error cleanup_error generated temporary identity final_identity permissions report_sha
+  local safe_phase safe_class safe_error safe_check_id cleanup_error generated temporary identity final_identity permissions report_sha
   local post_pull_required post_pull_observed post_pull_deficit final_observed final_deficit cleanup_containers cleanup_networks cleanup_volumes cleanup_temp
   local cleanup_containers_json cleanup_networks_json cleanup_volumes_json cleanup_temp_json
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
@@ -65,6 +82,8 @@ personal_max_stage8b1i_render_failure() {
   personal_max_stage8b1i_safe_class "$safe_class" || safe_class=unknown
   safe_error=${PROBE_ERROR_CLASSIFICATION:-UNEXPECTED_COMMAND_FAILURE}
   personal_max_stage8b1i_safe_error "$safe_error" || safe_error=UNEXPECTED_COMMAND_FAILURE
+  safe_check_id=${RESTORE_CHECK_ID:-NONE}
+  personal_max_stage8b1i_safe_check_id "$safe_check_id" || safe_check_id=NONE
   cleanup_error=${CLEANUP_ERROR_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$cleanup_error" || cleanup_error=CLEANUP_INCOMPLETE
   [[ $cleanup_ok == true ]] || cleanup_ok=false
@@ -104,6 +123,7 @@ personal_max_stage8b1i_render_failure() {
   pm_write_bounded "$temporary" report_render 60 METADATA_TIMEOUT METADATA_FAILED jq -n \
     --arg generatedAt "$generated" --arg scriptSha256 "$PM_SCRIPT_SHA256" \
     --arg phase "$safe_phase" --arg safeCommandClass "$safe_class" --arg classification "$safe_error" \
+    --arg checkId "$safe_check_id" \
     --arg cleanupErrorClassification "$cleanup_error" \
     --argjson exitCode "$original_exit" --argjson sourceLine "$source_line" \
     --argjson cleanupCompleted "$cleanup_ok" \
@@ -121,7 +141,7 @@ personal_max_stage8b1i_render_failure() {
     --argjson postPullDeficit "$post_pull_deficit" --argjson finalRequired "$REQUIRED_FREE_BYTES" --argjson finalDeficit "$final_deficit" \
     '{schemaVersion:1,mode:"ISOLATED_RELEASE_PROOF_FAILURE",generatedAt:$generatedAt,
       script:{sha256:$scriptSha256,checksumBound:true},phase:$phase,safeCommandClass:$safeCommandClass,
-      classification:$classification,exitCode:$exitCode,sourceLine:$sourceLine,
+      classification:$classification,checkId:$checkId,exitCode:$exitCode,sourceLine:$sourceLine,
       cleanup:{completed:$cleanupCompleted,errorClassification:$cleanupErrorClassification,
         containersRemaining:$cleanupContainers,networksRemaining:$cleanupNetworks,
         volumesRemaining:$cleanupVolumes,tempFilesRemaining:$cleanupTemp,labelScoped:true,globalPrune:false},
@@ -152,21 +172,23 @@ personal_max_stage8b1i_render_failure() {
   pm_capture_bounded final_identity report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%d:%i' "$PM_FAILURE_PATH" || return 74
   [[ $identity == "$final_identity" ]]
   sha_of report_sha "$PM_FAILURE_PATH" || return 74
-  printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nSAFE_COMMAND_CLASS=%s\nCLASSIFICATION=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH=%s\nFAILURE_REPORT_SHA256=%s\nREPORT_OWNER=root\nREPORT_GROUP=codexbot\nREPORT_MODE=0640\n' \
-    "$safe_phase" "$safe_class" "$safe_error" "$original_exit" "$PM_FAILURE_PATH" "$report_sha"
+  printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nSAFE_COMMAND_CLASS=%s\nCLASSIFICATION=%s\nCHECK_ID=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH=%s\nFAILURE_REPORT_SHA256=%s\nREPORT_OWNER=root\nREPORT_GROUP=codexbot\nREPORT_MODE=0640\n' \
+    "$safe_phase" "$safe_class" "$safe_error" "$safe_check_id" "$original_exit" "$PM_FAILURE_PATH" "$report_sha"
   return 0
 }
 
 personal_max_stage8b1i_write_emergency_json() {
   local __pm_path=${1:?path required} __pm_exit=${2:-1} __pm_phase=${3:-bootstrap_complete}
   local __pm_classification=${4:-UNEXPECTED_COMMAND_FAILURE} __pm_script_sha=${PM_SCRIPT_SHA256:-}
+  local __pm_check_id=${RESTORE_CHECK_ID:-NONE}
   [[ $__pm_exit =~ ^[1-9][0-9]*$ && $__pm_exit -le 255 ]] || __pm_exit=1
   personal_max_stage8b1i_safe_phase "$__pm_phase" || __pm_phase=bootstrap_complete
   personal_max_stage8b1i_safe_error "$__pm_classification" || __pm_classification=UNEXPECTED_COMMAND_FAILURE
+  personal_max_stage8b1i_safe_check_id "$__pm_check_id" || __pm_check_id=NONE
   [[ $__pm_script_sha =~ ^[0-9a-f]{64}$ ]] || __pm_script_sha=0000000000000000000000000000000000000000000000000000000000000000
   (set -o noclobber; : >"$__pm_path") 2>/dev/null || return 74
-  printf '{"schemaVersion":1,"mode":"ISOLATED_RELEASE_PROOF_EMERGENCY_FAILURE","script":{"sha256":"%s","checksumBound":true},"phase":"%s","classification":"%s","exitCode":%s,"diagnostics":{"rawCommandCaptured":false,"rawSqlCaptured":false,"rawStderrCaptured":false,"environmentValuesCaptured":false,"credentialsCaptured":false,"messageDataCaptured":false,"providerPayloadCaptured":false},"safety":{"productionDDL":false,"productionDML":false,"productionMigration":false,"restart":false,"deploy":false,"browserLaunched":false,"maxContacted":false,"providerAction":false}}\n' \
-    "$__pm_script_sha" "$__pm_phase" "$__pm_classification" "$__pm_exit" >"$__pm_path" || return 74
+  printf '{"schemaVersion":1,"mode":"ISOLATED_RELEASE_PROOF_EMERGENCY_FAILURE","script":{"sha256":"%s","checksumBound":true},"phase":"%s","classification":"%s","checkId":"%s","exitCode":%s,"diagnostics":{"rawCommandCaptured":false,"rawSqlCaptured":false,"rawStderrCaptured":false,"environmentValuesCaptured":false,"credentialsCaptured":false,"messageDataCaptured":false,"providerPayloadCaptured":false},"safety":{"productionDDL":false,"productionDML":false,"productionMigration":false,"restart":false,"deploy":false,"browserLaunched":false,"maxContacted":false,"providerAction":false}}\n' \
+    "$__pm_script_sha" "$__pm_phase" "$__pm_classification" "$__pm_check_id" "$__pm_exit" >"$__pm_path" || return 74
 }
 
 personal_max_stage8b1i_emergency_diagnostics() {

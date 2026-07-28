@@ -35,6 +35,9 @@ pm_error_classification_is_safe() {
       PRODUCTION_GIT_BASELINE_MISMATCH | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
+      RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
+      RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
+      RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
     *) return 1 ;;
   esac
@@ -274,6 +277,9 @@ pm_validate_success_report() {
     (.bindings.backupReportSha256|test("^[0-9a-f]{64}$")) and
     (.bindings.dumpSha256|test("^[0-9a-f]{64}$")) and .bindings.dumpBytes==45284314 and
     .restore.FULL_RESTORE_PROOF=="PASS" and .restore.objectCount==581 and
+    .restore.requiredRelations==["_prisma_migrations","users","Contact","Chat"] and
+    .restore.representativeCounts.user.physicalRelation=="users" and
+    .restore.representativeCounts.user.available==true and
     .migration.DISPOSABLE_MIGRATION_PROOF=="PASS" and .migration.beforeFinished==46 and
     .migration.afterFinished==54 and .migration.failed==0 and .migration.prismaDiffEmpty==false and
     .migration.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and

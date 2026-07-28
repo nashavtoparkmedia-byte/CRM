@@ -27,9 +27,10 @@ readonly CLEANUP_RESERVE_BYTES=5368709120
 readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc110d97b13f8b506e7723459766a4c3'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='ce22f062a1454b86ecbabab6b2ba389569f4a285cf6648b8fd13c5946b11ef25'
-readonly BOUNDED_OPERATIONS_SHA256='37d59c59b33f1936153b4de1db68c8d157c0a191e17ccccecffde564eed76482'
+readonly FAILURE_DIAGNOSTICS_SHA256='d2a2c28c62e4fb14de86616c0bce828cb63d7623bfdffd6fd78736e9503be3c6'
+readonly BOUNDED_OPERATIONS_SHA256='5974cc7aa27edffb5e8dd833b89518e2f90cd2e10421dda9d8430eecf69728ee'
 readonly PROBE_OUTPUT_HELPERS_SHA256='da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11'
+readonly RESTORE_VERIFICATION_SHA256='b88fc68b0181c1dbcb862709afb72cf72f0b69e2ebe1eeba026237875b5abf68'
 readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -52,6 +53,7 @@ readonly EXPECTED_MIGRATIONS=(
 PROBE_PHASE='bootstrap_complete'
 PROBE_SAFE_COMMAND_CLASS='package_validation'
 PROBE_ERROR_CLASSIFICATION='NONE'
+RESTORE_CHECK_ID='NONE'
 PM_SCRIPT_SHA256=''
 PM_FAILURE_PATH=''
 PM_DIAGNOSTIC_TMP=''
@@ -80,6 +82,7 @@ FREE_BYTES_AFTER_GATEWAY_PULL=0
 FREE_BYTES_AFTER_SCRAPER_PULL=0
 FREE_BYTES_AFTER_PULL=0
 FREE_BYTES_AFTER_CLEANUP=0
+IMAGE_EXPANSION_REQUIRED_BYTES=$IMAGE_EXPANSION_BYTES
 CLEANUP_CONTAINERS_REMAINING=unknown
 CLEANUP_NETWORKS_REMAINING=unknown
 CLEANUP_VOLUMES_REMAINING=unknown
@@ -198,8 +201,11 @@ cleanup_docker_objects() {
   if [[ $volumes == unknown ]]; then CLEANUP_VOLUMES_REMAINING=unknown; else
     CLEANUP_VOLUMES_REMAINING=0; for object in $volumes; do CLEANUP_VOLUMES_REMAINING=$((CLEANUP_VOLUMES_REMAINING + 1)); done
   fi
+  # Temporary paths are removed later by cleanup_disposable. Validate only the
+  # Docker inventory here so an as-yet-unobserved temp count cannot turn a
+  # successful cleanup into CLEANUP_INCOMPLETE.
   pm_assert_cleanup_zero "$CLEANUP_CONTAINERS_REMAINING" "$CLEANUP_NETWORKS_REMAINING" \
-    "$CLEANUP_VOLUMES_REMAINING" "$CLEANUP_TEMP_FILES_REMAINING" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=CLEANUP_INCOMPLETE; }; }
+    "$CLEANUP_VOLUMES_REMAINING" 0 || { status=$?; (( failed != 0 )) || { failed=$status; first_class=CLEANUP_INCOMPLETE; }; }
   if (( failed != 0 )); then PROBE_ERROR_CLASSIFICATION=$first_class; return "$failed"; fi
 }
 
@@ -307,7 +313,7 @@ bootstrap_verify_runtime_path() {
   local __pm_name=${1:-} __pm_path pm_result_real_path
   case $__pm_name in
     isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
-      probe-output-helpers.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
+      probe-output-helpers.sh | restore-verification.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
       prisma-legacy-diff-gate.sh | synthetic-scraper-harness.js | gateway-client-harness.js) ;;
     *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
   esac
@@ -361,6 +367,7 @@ done
 bootstrap_verify_runtime_artifact failure-diagnostics.sh "$FAILURE_DIAGNOSTICS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact bounded-operations.sh "$BOUNDED_OPERATIONS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact probe-output-helpers.sh "$PROBE_OUTPUT_HELPERS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact restore-verification.sh "$RESTORE_VERIFICATION_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-gate.sh "$MIGRATION_SQL_GATE_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-bindings.txt "$MIGRATION_SQL_BINDINGS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh "$PRISMA_LEGACY_DIFF_GATE_SHA256" || exit $?
@@ -379,6 +386,8 @@ DIAGNOSTICS_LOADED=true
 source "$PACKAGE_ROOT/bounded-operations.sh"
 # shellcheck source=release/personal-max-stage8b1i/probe-output-helpers.sh
 source "$PACKAGE_ROOT/probe-output-helpers.sh"
+# shellcheck source=release/personal-max-stage8b1i/restore-verification.sh
+source "$PACKAGE_ROOT/restore-verification.sh"
 
 pm_enter_phase source_binding package_validation
 sha_of observed_sha "$BACKUP_REPORT"
@@ -412,10 +421,15 @@ GATEWAY_CONTAINER="$PREFIX-gateway"
 pm_capture_bounded TMP filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp -d "/var/tmp/personal-max-stage8b1i.$RUN_ID.XXXXXX"
 pm_run_bounded filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED chmod 0700 "$TMP"
 
-pm_enter_phase storage_gate filesystem_metadata
+pm_enter_phase storage_gate docker_metadata
+image_presence GATEWAY_PREEXISTING_BEFORE_PULL GATEWAY_IMAGE_ID_BEFORE "$GATEWAY_IMAGE"
+image_presence SCRAPER_PREEXISTING_BEFORE_PULL SCRAPER_IMAGE_ID_BEFORE "$SCRAPER_IMAGE"
+if [[ $GATEWAY_PREEXISTING_BEFORE_PULL == true && $SCRAPER_PREEXISTING_BEFORE_PULL == true ]]; then
+  IMAGE_EXPANSION_REQUIRED_BYTES=0
+fi
 free_bytes_at FREE_BYTES_BEFORE_PULL /var/lib/docker
-pm_check_disk_gate "$FREE_BYTES_BEFORE_PULL" "$((REQUIRED_FREE_BYTES + IMAGE_EXPANSION_BYTES + PROBE_BUDGET_BYTES))" PRE_PULL_DISK_GATE_FAILED
-(( FREE_BYTES_BEFORE_PULL - IMAGE_EXPANSION_BYTES - PROBE_BUDGET_BYTES - CLEANUP_RESERVE_BYTES >= 0 )) || {
+pm_check_disk_gate "$FREE_BYTES_BEFORE_PULL" "$((REQUIRED_FREE_BYTES + IMAGE_EXPANSION_REQUIRED_BYTES + PROBE_BUDGET_BYTES))" PRE_PULL_DISK_GATE_FAILED
+(( FREE_BYTES_BEFORE_PULL - IMAGE_EXPANSION_REQUIRED_BYTES - PROBE_BUDGET_BYTES - CLEANUP_RESERVE_BYTES >= 0 )) || {
   PROBE_ERROR_CLASSIFICATION=PRE_PULL_DISK_GATE_FAILED; exit 90;
 }
 
@@ -451,8 +465,6 @@ verify_image() {
 }
 
 pm_enter_phase image_acquisition docker_pull
-image_presence GATEWAY_PREEXISTING_BEFORE_PULL GATEWAY_IMAGE_ID_BEFORE "$GATEWAY_IMAGE"
-image_presence SCRAPER_PREEXISTING_BEFORE_PULL SCRAPER_IMAGE_ID_BEFORE "$SCRAPER_IMAGE"
 if [[ $GATEWAY_PREEXISTING_BEFORE_PULL == false ]]; then
   pm_pull_exact gateway "$GATEWAY_IMAGE" "$TMP/gateway-pull.log" "$TMP/gateway-pull.stderr"
   GATEWAY_ACQUIRED_DURING_PROBE=true
@@ -545,23 +557,8 @@ pm_write_bounded "$TMP/restore.log" backup_validation 1200 FULL_RESTORE_TIMEOUT 
 restore_seconds=$(( $(date +%s) - restore_started ))
 
 pm_enter_phase restore_verification disposable_postgresql
-psql_value ledger_before_finished 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
-psql_value ledger_before_failed 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL'
-[[ $ledger_before_finished -eq 46 && $ledger_before_failed -eq 0 ]]
-psql_value ledger_before "SELECT migration_name FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name"
-printf '%s\n' "$ledger_before" >"$TMP/ledger-before"
-psql_value catalog_tables "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r'"
-psql_value catalog_indexes "SELECT count(*) FROM pg_indexes WHERE schemaname='public'"
-psql_value catalog_constraints "SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public'"
-[[ $catalog_tables -gt 0 && $catalog_indexes -gt 0 && $catalog_constraints -gt 0 ]]
-psql_value representative_migrations 'SELECT count(*) FROM "_prisma_migrations"'
-psql_value representative_users 'SELECT count(*) FROM "User"'
-psql_value representative_contacts 'SELECT count(*) FROM "Contact"'
-psql_value representative_chats 'SELECT count(*) FROM "Chat"'
-pm_write_bounded "$TMP/representative-counts.json" report_render 60 METADATA_TIMEOUT METADATA_FAILED jq -n \
-  --argjson migrations "$representative_migrations" --argjson users "$representative_users" \
-  --argjson contacts "$representative_contacts" --argjson chats "$representative_chats" \
-  '{migrations:$migrations,users:$users,contacts:$contacts,chats:$chats,contentPrinted:false}'
+pm_restore_verify_database
+RESTORE_CHECK_ID=NONE
 
 pm_enter_phase migration_preflight disposable_migration
 pm_write_bounded "$TMP/repository-migrations" disposable_migration 120 MIGRATION_INVENTORY_TIMEOUT DISPOSABLE_DOCKER_FAILED \
@@ -792,7 +789,8 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   '{schemaVersion:1,mode:"ISOLATED_RELEASE_PROOF",generatedAt:$generatedAt,script:{sha256:$scriptSha256,checksumBound:true},
     bindings:{backupReportSha256:$backupReportSha256,dumpSha256:$dumpSha256,dumpBytes:$dumpBytes},
     restore:{FULL_RESTORE_PROOF:"PASS",objectCount:$objectCount,ledgerFinished:$beforeFinished,ledgerFailed:0,
-      catalogIntegrity:true,representativeCounts:$representativeCounts,durationSeconds:$restoreSeconds,userDataPrinted:false},
+      catalogIntegrity:true,requiredRelations:["_prisma_migrations","users","Contact","Chat"],
+      representativeCounts:$representativeCounts,durationSeconds:$restoreSeconds,userDataPrinted:false},
     migration:{DISPOSABLE_MIGRATION_PROOF:"PASS",appliedNames:$appliedNames,beforeFinished:$beforeFinished,
       afterFinished:$afterFinished,failed:$failed,prismaDiffEmpty:$prismaDiffEmpty,
       prismaDiffStatus:$prismaDiffStatus,durationSeconds:$migrationSeconds,
@@ -816,7 +814,8 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
       freeBytesAfterScraperPull:$freeBytesAfterScraperPull,freeBytesAfterPull:$freeBytesAfterPull,
       freeBytesAfterCleanup:$freeBytesAfterCleanup,postPullRequiredBytes:'"$((REQUIRED_FREE_BYTES + PROBE_BUDGET_BYTES))"',
       finalRequiredBytes:'"$REQUIRED_FREE_BYTES"',postPullDeficitBytes:0,finalDeficitBytes:0,
-      imageExpansionBudgetBytes:'"$IMAGE_EXPANSION_BYTES"',restoreProbeBudgetBytes:'"$PROBE_BUDGET_BYTES"',cleanupReserveBytes:'"$CLEANUP_RESERVE_BYTES"'},
+      imageExpansionBudgetBytes:'"$IMAGE_EXPANSION_BYTES"',imageExpansionRequiredBytes:'"$IMAGE_EXPANSION_REQUIRED_BYTES"',
+      restoreProbeBudgetBytes:'"$PROBE_BUDGET_BYTES"',cleanupReserveBytes:'"$CLEANUP_RESERVE_BYTES"'},
     safety:{productionDDL:false,productionDML:false,productionMigration:false,restart:false,deploy:false,browserLaunched:false,
       maxContacted:false,providerAction:false,productionNetworkAttached:false,productionVolumeMounted:false,profileMounted:false}}'
 

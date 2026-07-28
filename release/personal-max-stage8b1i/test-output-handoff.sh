@@ -315,9 +315,10 @@ bash -c 'set -Eeuo pipefail; eval "$1"; for name in output status line data sour
 pass actual_bootstrap_collision_matrix
 
 PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
-  bootstrap_verify_runtime_artifact failure-diagnostics.sh ce22f062a1454b86ecbabab6b2ba389569f4a285cf6648b8fd13c5946b11ef25
-  bootstrap_verify_runtime_artifact bounded-operations.sh 37d59c59b33f1936153b4de1db68c8d157c0a191e17ccccecffde564eed76482
+  bootstrap_verify_runtime_artifact failure-diagnostics.sh d2a2c28c62e4fb14de86616c0bce828cb63d7623bfdffd6fd78736e9503be3c6
+  bootstrap_verify_runtime_artifact bounded-operations.sh 5974cc7aa27edffb5e8dd833b89518e2f90cd2e10421dda9d8430eecf69728ee
   bootstrap_verify_runtime_artifact probe-output-helpers.sh da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11
+  bootstrap_verify_runtime_artifact restore-verification.sh b88fc68b0181c1dbcb862709afb72cf72f0b69e2ebe1eeba026237875b5abf68
   bootstrap_verify_runtime_artifact migration-sql-gate.sh 25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f
   bootstrap_verify_runtime_artifact migration-sql-bindings.txt 9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f
   bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh 552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8

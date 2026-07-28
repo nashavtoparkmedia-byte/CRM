@@ -9,15 +9,19 @@ readonly PROBE="$SCRIPT_DIR/isolated-release-probe.sh"
 readonly DIAGNOSTICS="$SCRIPT_DIR/failure-diagnostics.sh"
 readonly BOUNDED="$SCRIPT_DIR/bounded-operations.sh"
 readonly OUTPUT_HELPERS="$SCRIPT_DIR/probe-output-helpers.sh"
+readonly RESTORE_VERIFICATION="$SCRIPT_DIR/restore-verification.sh"
 readonly MIGRATION_SQL_GATE="$SCRIPT_DIR/migration-sql-gate.sh"
 readonly MIGRATION_SQL_BINDINGS="$SCRIPT_DIR/migration-sql-bindings.txt"
 readonly PRISMA_LEGACY_DIFF_GATE="$SCRIPT_DIR/prisma-legacy-diff-gate.sh"
 readonly FAULTS="$SCRIPT_DIR/test-bounded-faults.sh"
 readonly OUTPUT_HANDOFF="$SCRIPT_DIR/test-output-handoff.sh"
+readonly RESTORE_TESTS="$SCRIPT_DIR/test-restore-verification.sh"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
 readonly BACKUP_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
+readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053.json'
+readonly FAILURE_REPORT_SHA='c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly REPOSITORY_MIGRATIONS="$SCRIPT_DIR/../../gravity-mvp/prisma/migrations"
@@ -35,17 +39,32 @@ jq -e '.mode=="PRODUCTION_BACKUP_METADATA" and .dump.structuralValidation=="PASS
 pass backup_acceptance
 [[ $(stat -Lc '%U:%G:%a' "$BACKUP_REPORT") == root:codexbot:640 && -r $BACKUP_REPORT && ! -w $BACKUP_REPORT ]]
 pass backup_permission_contract
+[[ -f $FAILURE_REPORT && ! -L $FAILURE_REPORT && -r $FAILURE_REPORT && ! -w $FAILURE_REPORT ]]
+[[ $(stat -Lc '%U:%G:%a' "$FAILURE_REPORT") == root:codexbot:640 ]]
+[[ $(sha256sum -- "$FAILURE_REPORT" | awk '{print $1}') == "$FAILURE_REPORT_SHA" ]]
+jq -e '.script.sha256=="dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053" and
+  .phase=="restore_verification" and .sourceLine==558 and .images.acceptedImagesRetained==true and
+  .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and .cleanup.volumesRemaining==0 and
+  .cleanup.tempFilesRemaining==0 and .productionImmutability.productionDatabaseConnections==0 and
+  ([.diagnostics.rawCommandCaptured,.diagnostics.rawSqlCaptured,.diagnostics.rawStderrCaptured,
+    .diagnostics.environmentValuesCaptured,.diagnostics.credentialsCaptured,.diagnostics.messageDataCaptured,
+    .diagnostics.providerPayloadCaptured]|all(.==false)) and
+  ([.safety.productionDDL,.safety.productionDML,.safety.productionMigration,.safety.restart,.safety.deploy,
+    .safety.browserLaunched,.safety.maxContacted,.safety.providerAction,.safety.productionNetworkAttached,
+    .safety.productionVolumeMounted,.safety.profileMounted]|all(.==false))' "$FAILURE_REPORT" >/dev/null
+pass failure_report_acceptance
 free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
-[[ $free =~ ^[0-9]+$ && $((free - 4323469515 - 2172240240)) -ge 12500000000 && $((free - 4323469515 - 2172240240 - 5368709120)) -ge 0 ]]
+[[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
 
-bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$FAULTS" "$OUTPUT_HANDOFF" "$SCRIPT_DIR/test-package.sh"
+bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" \
+  "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$SCRIPT_DIR/test-package.sh"
 sh -n "$MIGRATION_SQL_GATE"
 sh -n "$PRISMA_LEGACY_DIFF_GATE"
 pass bash_syntax
 [[ -x $SHELLCHECK_BIN ]]
-"$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" \
-  "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$SCRIPT_DIR/test-package.sh"
+"$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" \
+  "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$SCRIPT_DIR/test-package.sh"
 pass shellcheck
 for evidence in 'pm_run_bounded()' 'pm_capture_bounded()' 'pm_write_bounded()' \
   '"$PM_TIMEOUT_BIN" --signal=TERM --kill-after=10s "${seconds}s"'; do require_fixed "$BOUNDED" "$evidence"; done
@@ -72,6 +91,8 @@ for evidence in GATEWAY_PULL_TIMEOUT SCRAPER_PULL_TIMEOUT REGISTRY_AUTHENTICATIO
 done
 pass registry_failure_classifications
 for evidence in FREE_BYTES_AFTER_GATEWAY_PULL FREE_BYTES_AFTER_SCRAPER_PULL POST_PULL_DISK_GATE_FAILED FINAL_DISK_GATE_FAILED; do require_fixed "$PROBE" "$evidence"; done
+require_fixed "$PROBE" 'IMAGE_EXPANSION_REQUIRED_BYTES=0'
+require_fixed "$PROBE" 'GATEWAY_PREEXISTING_BEFORE_PULL == true && $SCRAPER_PREEXISTING_BEFORE_PULL == true'
 pass disk_gate_contract
 require_fixed "$PROBE" 'pm_validate_success_report "$TMP_REPORT"'
 require_fixed "$BOUNDED" 'SUCCESS_REPORT_MALFORMED'
@@ -96,6 +117,12 @@ refuse_pattern "$PROBE" 'pm_capture_bounded[[:space:]]+__pm_'
 refuse_pattern "$OUTPUT_HELPERS" 'pm_capture_bounded[[:space:]]+__pm_'
 require_fixed "$OUTPUT_HELPERS" 'pm_result_'
 pass output_handoff_regression
+restore_output=$("$RESTORE_TESTS")
+[[ $restore_output == *'RESTORE_REGRESSION_TEST_COUNT=25'* && \
+  $restore_output == *'OLD_FAILURE=REPRODUCED'* && $restore_output == *'FIXED_PATH=PASS'* && \
+  $restore_output == *'ROOT_PROBE_EXECUTED=NO'* && $restore_output == *'DOCKER_EXECUTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$restore_output") -eq 26 ]]
+pass restore_verification_regression
 
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
 [[ $migration_gate_output == MIGRATION_SQL_GATE=PASS && $(wc -l <"$MIGRATION_SQL_BINDINGS") -eq 8 ]]
@@ -129,9 +156,10 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:ce22f062a1454b86ecbabab6b2ba389569f4a285cf6648b8fd13c5946b11ef25" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:37d59c59b33f1936153b4de1db68c8d157c0a191e17ccccecffde564eed76482" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:d2a2c28c62e4fb14de86616c0bce828cb63d7623bfdffd6fd78736e9503be3c6" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:5974cc7aa27edffb5e8dd833b89518e2f90cd2e10421dda9d8430eecf69728ee" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11" \
+  "restore-verification.sh:RESTORE_VERIFICATION_SHA256:b88fc68b0181c1dbcb862709afb72cf72f0b69e2ebe1eeba026237875b5abf68" \
   "migration-sql-gate.sh:MIGRATION_SQL_GATE_SHA256:25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f" \
   "migration-sql-bindings.txt:MIGRATION_SQL_BINDINGS_SHA256:9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f" \
   "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8" \
@@ -183,7 +211,10 @@ require_fixed "$PROBE" 'productionDatabaseConnections:0'
 refuse_pattern "$PROBE" 'docker[[:space:]]+exec[[:space:]]+[^ ]*(crm-postgres|postgres_id)|postgresql://[^ ]*@crm-postgres'
 pass no_production_db_connection
 
-for evidence in 'pg_restore --list' 'pg_restore --exit-on-error --no-owner --no-acl' 'ledger_before_finished -eq 46' 'catalog_tables -gt 0' 'FULL_RESTORE_PROOF:"PASS"'; do require_fixed "$PROBE" "$evidence"; done
+for evidence in 'pg_restore --list' 'pg_restore --exit-on-error --no-owner --no-acl' 'FULL_RESTORE_PROOF:"PASS"'; do require_fixed "$PROBE" "$evidence"; done
+for evidence in 'pm_restore_assert_uint_equal "$ledger_before_finished" 46' \
+  'pm_restore_assert_uint_positive "$catalog_tables"' 'RESTORE_REQUIRED_USERS_RELATION_CHECK' \
+  'SELECT count(*) FROM "users"'; do require_fixed "$RESTORE_VERIFICATION" "$evidence"; done
 pass disposable_restore_contract
 for migration in 20260726162043_add_max_raw_transport_journal 20260726190658_add_max_route_registry \
   20260726205437_add_max_inbound_normalization 20260726215715_add_max_per_chat_outbound_actor \
@@ -210,6 +241,11 @@ require_fixed "$PROBE" "trap 'on_error \$LINENO' ERR"
 require_fixed "$PROBE" 'trap on_exit EXIT'
 require_fixed "$DIAGNOSTICS" 'rawCommandCaptured:false'
 require_fixed "$DIAGNOSTICS" 'credentialsCaptured:false'
+require_fixed "$DIAGNOSTICS" 'checkId:$checkId'
+for evidence in RESTORE_LEDGER_MISMATCH RESTORE_REQUIRED_RELATION_MISSING RESTORE_CATALOG_INTEGRITY_FAILED \
+  RESTORE_REPRESENTATIVE_CHECK_FAILED RESTORE_QUERY_FAILED DISPOSABLE_CONTAINER_UNAVAILABLE; do
+  require_fixed "$DIAGNOSTICS" "$evidence"
+done
 pass failure_diagnostics
 require_fixed "$DIAGNOSTICS" 'ISOLATED_PROBE_FAILED'
 require_fixed "$PROBE" 'DIAGNOSTICS_LOADED=true'
@@ -239,12 +275,15 @@ pass accepted_production_git_pre_gate
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053" and
-  .rootProbe.runtimeArtifactBindingCount==8 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
+  .rootProbe.sha256=="4e9fcc90d20a8ae967a8a26dd0d9cf1634b1ef2d2e7edab79e1033ab1639c0d8" and
+  .rootProbe.runtimeArtifactBindingCount==9 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
-  (.runtimeArtifactBindings|length)==8 and
+  (.runtimeArtifactBindings|length)==9 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11" and
+  .runtimeArtifactBindings["restore-verification.sh"]=="b88fc68b0181c1dbcb862709afb72cf72f0b69e2ebe1eeba026237875b5abf68" and
+  .restoreVerification.failureReportSha256=="c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de" and
+  .restoreVerification.exactCause=="PRISMA_USER_MODEL_MAPPED_TO_USERS" and
   .migrationValidation.exactSqlBindingCount==8 and
   .migrationValidation.prismaDiffEmpty==false and
   .migrationValidation.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
@@ -263,4 +302,4 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nPACKAGE_TEST_COUNT=50\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\n'
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nPACKAGE_TEST_COUNT=52\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nRESTORE_REGRESSION_TEST_COUNT=25\n'

@@ -85,10 +85,22 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "exitCode", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string"},
+          "checkId": {
+            "enum": [
+              "NONE", "RESTORE_LEDGER_FINISHED_CHECK", "RESTORE_LEDGER_FAILED_CHECK",
+              "RESTORE_LEDGER_NAMES_CHECK", "RESTORE_CATALOG_TABLES_CHECK",
+              "RESTORE_CATALOG_INDEXES_CHECK", "RESTORE_CATALOG_CONSTRAINTS_CHECK",
+              "RESTORE_REQUIRED_PRISMA_MIGRATIONS_RELATION_CHECK",
+              "RESTORE_REQUIRED_USERS_RELATION_CHECK", "RESTORE_REQUIRED_CONTACT_RELATION_CHECK",
+              "RESTORE_REQUIRED_CHAT_RELATION_CHECK", "RESTORE_REPRESENTATIVE_MIGRATIONS_CHECK",
+              "RESTORE_REPRESENTATIVE_USER_CHECK", "RESTORE_REPRESENTATIVE_CONTACT_CHECK",
+              "RESTORE_REPRESENTATIVE_CHAT_CHECK", "RESTORE_REPORT_RENDER_CHECK"
+            ]
+          },
           "exitCode": {"type": "integer", "minimum": 1},
           "cleanup": {"type": "object", "required": ["completed", "errorClassification", "containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
           "images": {"type": "object", "required": ["gateway", "scraper", "acceptedImagesRetained"]},
@@ -101,10 +113,11 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_EMERGENCY_FAILURE"}}},
       "then": {
-        "required": ["phase", "classification", "exitCode", "diagnostics"],
+        "required": ["phase", "classification", "checkId", "exitCode", "diagnostics"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string"},
+          "checkId": {"type": "string"},
           "exitCode": {"type": "integer", "minimum": 1},
           "diagnostics": {"type": "object", "required": ["rawCommandCaptured", "rawSqlCaptured", "rawStderrCaptured", "credentialsCaptured"]}
         }
