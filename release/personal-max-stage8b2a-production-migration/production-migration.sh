@@ -3,13 +3,15 @@
 set -Eeuo pipefail
 umask 077
 
-readonly PACKAGE_ROOT='/opt/codex-work/crm-personal-max-stage8b2-autonomous-20260728T122700Z/release/personal-max-stage8b2a-production-migration'
+readonly PACKAGE_ROOT='/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2a-production-migration'
 readonly FAILURE_DIAGNOSTICS="$PACKAGE_ROOT/failure-diagnostics.sh"
 readonly FAILURE_DIAGNOSTICS_SHA='c720b22f0cf6644c5202f3daa4ccc9ae7de3d0e2ab6e8a3ebfb4bffa0d9be322'
 readonly REPORT_SUCCESS_FILTER="$PACKAGE_ROOT/report-success.jq"
-readonly REPORT_SUCCESS_FILTER_SHA='fa194be07d80e742a0d64c2af783f76cdad8012b9dbe996e3c8cf84a55c29e2c'
+readonly REPORT_SUCCESS_FILTER_SHA='74ba29e22d8a52dce7b00d53ecb4b8a692489d25928cca974f56898433d0c8b5'
 readonly PRISMA_DRIFT_VALIDATOR="$PACKAGE_ROOT/validate-accepted-prisma-drift.awk"
 readonly PRISMA_DRIFT_VALIDATOR_SHA='eeeee2d4cb3e46d5b89e5f8d0601c6a7d8b160a3ef8d95fc0a722447967ca4f4'
+readonly DATABASE_URL_HELPER="$PACKAGE_ROOT/postgres-database-url.py"
+readonly DATABASE_URL_HELPER_SHA='b0b447ac536a8d31936c6e9476de6f7cda74e791c0b6678869ac1467a17090b6'
 readonly ISOLATED_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.json'
 readonly ACCEPTED_BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
 readonly ACCEPTED_BACKUP_REPORT_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
@@ -33,7 +35,8 @@ readonly MIGRATION_STATEMENT_TIMEOUT_MS=840000
 readonly PRISMA_DIFF_STATEMENT_TIMEOUT_MS=540000
 readonly PROJECT_LABEL='com.docker.compose.project=crm'
 readonly POSTGRES_LABEL='com.docker.compose.service=postgres'
-readonly GRAVITY_LABEL='com.docker.compose.service=gravity-mvp'
+readonly NETWORK_PROJECT_LABEL='com.docker.compose.project=crm'
+readonly NETWORK_INTERNAL_LABEL='com.docker.compose.network=internal'
 readonly RUNNER_STAGE_LABEL='personal-max.stage=8b2a'
 readonly RUNNER_SCRIPT_LABEL_KEY='personal-max.script-sha'
 readonly RUNNER_TOKEN_LABEL_KEY='personal-max.run-token'
@@ -67,11 +70,12 @@ FRESH_BACKUP_CONFIG_SHA=''
 BACKUP_DIRECTORY=''
 TMP=''
 POSTGRES_ID=''
-GRAVITY_ID=''
 NETWORK_NAME=''
 pg_ids=''
-gravity_ids=''
 network_json=''
+network_inspect_json=''
+POSTGRES_INSPECT_JSON=''
+MIGRATION_ENV=''
 PROJECT_HASH_BEFORE=''
 RESTART_HASH_BEFORE=''
 SCRIPT_SHA=''
@@ -94,7 +98,7 @@ verify_subordinate() {
 (( EUID == 0 )) || bootstrap_fail ROOT_REQUIRED 77
 [[ ${1:-} =~ ^[0-9a-f]{64}$ ]] || bootstrap_fail CHECKSUM_BINDING_REQUIRED 78
 [[ ${PERSONAL_MAX_ISOLATED_REPORT_SHA256:-} =~ ^[0-9a-f]{64}$ ]] || bootstrap_fail ISOLATED_REPORT_SHA_BINDING_REQUIRED 78
-for binary in awk chgrp chmod chown cmp date df docker getent git grep jq mktemp mv readlink realpath rm runuser sha256sum sort stat tar timeout wc; do
+for binary in awk chgrp chmod chown cmp date df docker getent git grep jq mktemp mv python3 readlink realpath rm runuser sha256sum sort stat tar timeout wc; do
   command -v "$binary" >/dev/null || bootstrap_fail "MANDATORY_BINARY_MISSING:$binary" 76
 done
 SCRIPT_PATH=$(realpath -- "${BASH_SOURCE[0]}") || bootstrap_fail SCRIPT_UNREADABLE 75
@@ -104,6 +108,7 @@ SCRIPT_SHA=$(sha256sum -- "$SCRIPT_PATH" | awk '{print $1}')
 verify_subordinate "$FAILURE_DIAGNOSTICS" "$PACKAGE_ROOT/failure-diagnostics.sh" "$FAILURE_DIAGNOSTICS_SHA"
 verify_subordinate "$REPORT_SUCCESS_FILTER" "$PACKAGE_ROOT/report-success.jq" "$REPORT_SUCCESS_FILTER_SHA"
 verify_subordinate "$PRISMA_DRIFT_VALIDATOR" "$PACKAGE_ROOT/validate-accepted-prisma-drift.awk" "$PRISMA_DRIFT_VALIDATOR_SHA"
+verify_subordinate "$DATABASE_URL_HELPER" "$PACKAGE_ROOT/postgres-database-url.py" "$DATABASE_URL_HELPER_SHA"
 FAILURE_REPORT="$FAILURE_REPORT_PREFIX.$SCRIPT_SHA.json"
 [[ ! -e $SUCCESS_REPORT && ! -L $SUCCESS_REPORT && ! -e $FAILURE_REPORT && ! -L $FAILURE_REPORT ]] || bootstrap_fail REPORT_PATH_EXISTS 80
 [[ -d $BACKUP_PARENT && ! -L $BACKUP_PARENT ]] || bootstrap_fail BACKUP_PARENT_UNSAFE 80
@@ -115,7 +120,11 @@ cleanup() {
   local original=${1:-0}
   trap - ERR EXIT
   set +e
-  if [[ -n ${TMP:-} && -d ${TMP:-} && ! -L ${TMP:-} ]]; then rm -rf -- "$TMP" >/dev/null 2>&1; fi
+  if [[ -n ${TMP:-} && $TMP =~ ^/var/tmp/personal-max-stage8b2a\.[A-Za-z0-9]{8}$ &&
+        -d ${TMP:-} && ! -L ${TMP:-} &&
+        $(stat -Lc '%u:%g:%a' "$TMP" 2>/dev/null) == 0:0:700 ]]; then
+    timeout --signal=TERM --kill-after=5s 30s rm -rf --one-file-system -- "$TMP" >/dev/null 2>&1
+  fi
   return "$original"
 }
 runner_cleanup() {
@@ -178,6 +187,46 @@ run() { local seconds=$1; shift; timeout --signal=TERM --kill-after=10 "$seconds
 capture() { local -n __out=$1; local seconds=$2; shift 2; __out=$(run "$seconds" "$@"); }
 sha_file() { sha256sum -- "$1" | awk '{print $1}'; }
 hash_sorted() { LC_ALL=C sort | sha256sum | awk '{print $1}'; }
+capture_to_new_root_file() {
+  local destination=$1 seconds=$2
+  shift 2
+  [[ $destination == "$TMP/"* && ! -e $destination && ! -L $destination ]]
+  (umask 077; set -o noclobber; run "$seconds" "$@" >"$destination")
+  chmod 0600 "$destination"
+  chown root:root "$destination"
+  [[ -f $destination && ! -L $destination && $(stat -Lc '%u:%g:%a' "$destination") == 0:0:600 ]]
+}
+assert_postgres_identity() {
+  local candidates='' state='' image='' id=''
+  local -a candidate_set=()
+  if ! capture candidates "$COMMAND_TIMEOUT" docker ps -aq --no-trunc \
+      --filter "label=$PROJECT_LABEL" --filter "label=$POSTGRES_LABEL"; then
+    MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IDENTITY_CHANGED'
+    return 1
+  fi
+  mapfile -t candidate_set < <(printf '%s\n' "$candidates" | awk 'NF' | sort -u)
+  if (( ${#candidate_set[@]} != 1 )); then
+    MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IDENTITY_CHANGED'
+    return 1
+  fi
+  id=${candidate_set[0]}
+  if [[ $id != "$POSTGRES_ID" ]]; then
+    MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IDENTITY_CHANGED'
+    return 1
+  fi
+  if ! capture state "$COMMAND_TIMEOUT" docker inspect --format '{{.State.Status}}' "$id"; then
+    MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IDENTITY_CHANGED'
+    return 1
+  fi
+  if ! capture image "$COMMAND_TIMEOUT" docker inspect --format '{{.Image}}' "$id"; then
+    MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IDENTITY_CHANGED'
+    return 1
+  fi
+  if [[ $state != running || $image != "$POSTGRES_IMAGE_ID" ]]; then
+    MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IDENTITY_CHANGED'
+    return 1
+  fi
+}
 psql_read() {
   run "$COMMAND_TIMEOUT" docker exec "$POSTGRES_ID" sh -ceu \
     'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000"; exec psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "$1"' sh "$1"
@@ -232,17 +281,63 @@ phase storage_gate STORAGE_REFUSAL
 free_before=$(df -B1 --output=avail "$BACKUP_PARENT" | awk 'NR==2{print $1}')
 [[ $free_before =~ ^[0-9]+$ ]] && (( free_before >= MINIMUM_FREE_BYTES ))
 
-phase runtime_discovery RUNTIME_DISCOVERY_FAILED
-capture pg_ids "$COMMAND_TIMEOUT" docker ps -q --no-trunc --filter "label=$PROJECT_LABEL" --filter "label=$POSTGRES_LABEL"
+phase credential_workspace CREDENTIAL_WORKSPACE_FAILED
+TMP=$(mktemp -d /var/tmp/personal-max-stage8b2a.XXXXXXXX)
+chmod 0700 "$TMP"
+chown root:root "$TMP"
+[[ -d $TMP && ! -L $TMP && $(stat -Lc '%u:%g:%a' "$TMP") == 0:0:700 ]]
+RUNNER_TOKEN=${TMP##*.}
+[[ $RUNNER_TOKEN =~ ^[A-Za-z0-9]{8}$ ]]
+POSTGRES_INSPECT_JSON="$TMP/postgres-inspect.json"
+MIGRATION_ENV="$TMP/migration.env"
+
+phase runtime_discovery POSTGRES_CONTAINER_DISCOVERY_FAILED
+capture pg_ids "$COMMAND_TIMEOUT" docker ps -aq --no-trunc --filter "label=$PROJECT_LABEL" --filter "label=$POSTGRES_LABEL"
 mapfile -t pg_set < <(printf '%s\n' "$pg_ids" | awk 'NF' | sort -u)
-(( ${#pg_set[@]} == 1 )); POSTGRES_ID=${pg_set[0]}
-capture gravity_ids "$COMMAND_TIMEOUT" docker ps -q --no-trunc --filter "label=$PROJECT_LABEL" --filter "label=$GRAVITY_LABEL"
-mapfile -t gravity_set < <(printf '%s\n' "$gravity_ids" | awk 'NF' | sort -u)
-(( ${#gravity_set[@]} == 1 )); GRAVITY_ID=${gravity_set[0]}
-[[ $(run "$COMMAND_TIMEOUT" docker inspect --format '{{.State.Status}}|{{.Image}}' "$POSTGRES_ID") == "running|$POSTGRES_IMAGE_ID" ]]
-capture network_json "$COMMAND_TIMEOUT" docker inspect --format '{{json .NetworkSettings.Networks}}' "$POSTGRES_ID"
+if (( ${#pg_set[@]} == 0 )); then MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_MISSING'; false; fi
+if (( ${#pg_set[@]} != 1 )); then MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_MULTIPLE'; false; fi
+POSTGRES_ID=${pg_set[0]}
+postgres_state=$(run "$COMMAND_TIMEOUT" docker inspect --format '{{.State.Status}}' "$POSTGRES_ID")
+if [[ $postgres_state != running ]]; then MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_NOT_RUNNING'; false; fi
+postgres_image=$(run "$COMMAND_TIMEOUT" docker inspect --format '{{.Image}}' "$POSTGRES_ID")
+if [[ $postgres_image != "$POSTGRES_IMAGE_ID" ]]; then MIGRATION_CLASSIFICATION='POSTGRES_CONTAINER_IMAGE_MISMATCH'; false; fi
+assert_postgres_identity
+
+phase postgres_inspect POSTGRES_INSPECT_FAILED
+capture_to_new_root_file "$POSTGRES_INSPECT_JSON" "$COMMAND_TIMEOUT" docker inspect "$POSTGRES_ID"
+assert_postgres_identity
+jq -e --arg id "$POSTGRES_ID" --arg image "$POSTGRES_IMAGE_ID" '
+  length==1 and .[0].Id==$id and .[0].State.Status=="running" and .[0].Image==$image and
+  (.[0].Config.Env|type=="array") and (.[0].NetworkSettings.Networks|type=="object")
+' "$POSTGRES_INSPECT_JSON" >/dev/null
+network_json=$(jq -c '.[0].NetworkSettings.Networks' "$POSTGRES_INSPECT_JSON")
 mapfile -t networks < <(jq -r 'keys[]' <<<"$network_json")
-(( ${#networks[@]} == 1 )); NETWORK_NAME=${networks[0]}; [[ $NETWORK_NAME == crm_internal ]]
+if (( ${#networks[@]} != 1 )); then MIGRATION_CLASSIFICATION='POSTGRES_NETWORK_IDENTITY_MISMATCH'; false; fi
+NETWORK_NAME=${networks[0]}
+capture network_inspect_json "$COMMAND_TIMEOUT" docker network inspect "$NETWORK_NAME"
+jq -e '
+  length==1 and
+  .[0].Labels["com.docker.compose.project"]=="crm" and
+  .[0].Labels["com.docker.compose.network"]=="internal"
+' <<<"$network_inspect_json" >/dev/null || {
+  MIGRATION_CLASSIFICATION='POSTGRES_NETWORK_IDENTITY_MISMATCH'
+  false
+}
+jq -e --arg network "$NETWORK_NAME" '
+  .[0].NetworkSettings.Networks[$network].Aliases as $aliases |
+  ($aliases|type=="array") and (($aliases|index("postgres")) != null)
+' "$POSTGRES_INSPECT_JSON" >/dev/null || {
+  MIGRATION_CLASSIFICATION='POSTGRES_NETWORK_ALIAS_MISSING'
+  false
+}
+
+phase secret_binding POSTGRES_CREDENTIAL_BINDING_FAILED
+verify_subordinate "$DATABASE_URL_HELPER" "$PACKAGE_ROOT/postgres-database-url.py" "$DATABASE_URL_HELPER_SHA"
+run "$COMMAND_TIMEOUT" python3 "$DATABASE_URL_HELPER" "$POSTGRES_INSPECT_JSON" "$MIGRATION_ENV"
+[[ -f $MIGRATION_ENV && ! -L $MIGRATION_ENV && $(stat -Lc '%u:%g:%a' "$MIGRATION_ENV") == 0:0:600 ]]
+[[ $(grep -c '^DATABASE_URL=' "$MIGRATION_ENV") == 1 ]]
+assert_postgres_identity
+
 PROJECT_HASH_BEFORE=$(project_hash); RESTART_HASH_BEFORE=$(restart_hash)
 pg_version=$(psql_read 'SHOW server_version' | awk 'NF{gsub(/^[[:space:]]+|[[:space:]]+$/,""); print; exit}')
 [[ $pg_version == 16.14 ]]
@@ -262,8 +357,6 @@ ledger_before=$(psql_read 'SELECT migration_name FROM "_prisma_migrations" WHERE
 phase accepted_image_gate IMAGE_GATE_FAILED
 [[ $(run "$COMMAND_TIMEOUT" docker image inspect --format '{{join .RepoDigests "\n"}}' "$GATEWAY_IMAGE" | grep -Fx "$GATEWAY_IMAGE") == "$GATEWAY_IMAGE" ]]
 [[ $(run "$COMMAND_TIMEOUT" docker image inspect --format '{{.Architecture}}|{{.Os}}|{{.Config.User}}' "$GATEWAY_IMAGE") == 'amd64|linux|1000:1000' ]]
-TMP=$(mktemp -d /var/tmp/personal-max-stage8b2a.XXXXXXXX); chmod 0700 "$TMP"; chown root:root "$TMP"
-RUNNER_TOKEN=${TMP##*.}; [[ $RUNNER_TOKEN =~ ^[A-Za-z0-9]{8}$ ]]
 run "$COMMAND_TIMEOUT" docker run --rm --network none --entrypoint sh "$GATEWAY_IMAGE" -ceu '
   for d in /app/prisma/migrations/*; do test -d "$d" && basename "$d"; done | sort' >"$TMP/repository-migrations"
 comm -23 "$TMP/repository-migrations" <(printf '%s\n' "$ledger_before") >"$TMP/pending"
@@ -281,6 +374,7 @@ MIGRATION_RUNNER_CLEANUP_STATE='READY'
 PRISMA_DIFF_RUNNER_CLEANUP_STATE='READY'
 
 phase fresh_backup FRESH_BACKUP_FAILED
+assert_postgres_identity
 timestamp=$(date -u +'%Y%m%dT%H%M%SZ'); BACKUP_DIRECTORY="$BACKUP_PREFIX$timestamp"
 [[ ! -e $BACKUP_DIRECTORY && ! -L $BACKUP_DIRECTORY ]]
 mkdir -m 0700 -- "$BACKUP_DIRECTORY"; chown root:root "$BACKUP_DIRECTORY"; FRESH_BACKUP_CREATED=true
@@ -291,7 +385,7 @@ chmod 0600 "$dump_tmp"; chown root:root "$dump_tmp"; [[ -s $dump_tmp && ! -L $du
 run "$COMMAND_TIMEOUT" docker exec -i "$POSTGRES_ID" pg_restore --list <"$dump_tmp" >"$BACKUP_DIRECTORY/database.list.partial"
 object_count=$(awk 'NF && substr($0,1,1)!=";"{n++} END{print n+0}' "$BACKUP_DIRECTORY/database.list.partial"); (( object_count > 0 ))
 chmod 0600 "$BACKUP_DIRECTORY/database.list.partial"; chown root:root "$BACKUP_DIRECTORY/database.list.partial"
-tar --create --gzip --absolute-names --file="$BACKUP_DIRECTORY/production-config.tar.gz.partial" -- /opt/crm/deploy/docker-compose.production.yml /opt/crm/.env.production
+tar --create --gzip --absolute-names --file="$BACKUP_DIRECTORY/production-config.tar.gz.partial" -- /opt/crm/deploy/docker-compose.production.yml
 chmod 0600 "$BACKUP_DIRECTORY/production-config.tar.gz.partial"; chown root:root "$BACKUP_DIRECTORY/production-config.tar.gz.partial"
 tar --list --gzip --file="$BACKUP_DIRECTORY/production-config.tar.gz.partial" >/dev/null
 mv --no-clobber "$dump_tmp" "$dump_path"; mv --no-clobber "$BACKUP_DIRECTORY/database.list.partial" "$BACKUP_DIRECTORY/database.list"
@@ -304,21 +398,19 @@ FRESH_BACKUP_CONFIG_SHA=$(sha_file "$BACKUP_DIRECTORY/production-config.tar.gz")
 [[ $FRESH_BACKUP_DUMP_BYTES =~ ^[1-9][0-9]*$ && $FRESH_BACKUP_OBJECT_COUNT =~ ^[1-9][0-9]*$ ]]
 FRESH_BACKUP_STATUS='VALIDATED'
 
-phase secret_binding SECRET_BINDING_FAILED
-run "$COMMAND_TIMEOUT" docker exec "$GRAVITY_ID" sh -ceu 'test -n "${DATABASE_URL:-}"; printf "DATABASE_URL=%s\n" "$DATABASE_URL"' >"$TMP/migration.env"
-chmod 0600 "$TMP/migration.env"; chown root:root "$TMP/migration.env"; [[ $(grep -c '^DATABASE_URL=' "$TMP/migration.env") == 1 ]]
-
 phase migration_apply MIGRATION_PARTIAL_FAILURE
+assert_postgres_identity
 MIGRATION_STARTED=true
 MIGRATION_RUNNER_CLEANUP_STATE='STARTING'
 run "$MIGRATION_TIMEOUT" docker run --rm --name "$MIGRATION_RUNNER" --label "$RUNNER_STAGE_LABEL" \
   --label "personal-max.role=$MIGRATION_RUNNER_ROLE" --label "$RUNNER_SCRIPT_LABEL_KEY=$SCRIPT_SHA" \
-  --label "$RUNNER_TOKEN_LABEL_KEY=$RUNNER_TOKEN" --network "$NETWORK_NAME" --env-file "$TMP/migration.env" \
+  --label "$RUNNER_TOKEN_LABEL_KEY=$RUNNER_TOKEN" --network "$NETWORK_NAME" --env-file "$MIGRATION_ENV" \
   --env "PGOPTIONS=-c lock_timeout=$MIGRATION_LOCK_TIMEOUT_MS -c statement_timeout=$MIGRATION_STATEMENT_TIMEOUT_MS" \
   --entrypoint sh "$GATEWAY_IMAGE" -ceu \
   'exec /app/node_modules/.bin/prisma migrate deploy --schema /app/prisma/schema.prisma' >"$TMP/migration.log" 2>&1
 if run 15 docker container inspect "$MIGRATION_RUNNER" >/dev/null 2>&1; then false; fi
 MIGRATION_RUNNER_CLEANUP_STATE='ABSENT_AFTER_SUCCESS'
+assert_postgres_identity
 
 phase migration_verification MIGRATION_VERIFICATION_FAILED
 ledger_after_state=$(psql_read "SELECT count(*)::text||'|'||count(*) FILTER (WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL)::text||'|'||count(*) FILTER (WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL)::text FROM \"_prisma_migrations\"")
@@ -339,7 +431,7 @@ append_only_function_count=$(psql_read "SELECT count(*) FROM pg_proc p JOIN pg_n
 PRISMA_DIFF_RUNNER_CLEANUP_STATE='STARTING'
 if run "$PRISMA_DIFF_TIMEOUT" docker run --rm --name "$PRISMA_DIFF_RUNNER" --label "$RUNNER_STAGE_LABEL" \
   --label "personal-max.role=$PRISMA_DIFF_RUNNER_ROLE" --label "$RUNNER_SCRIPT_LABEL_KEY=$SCRIPT_SHA" \
-  --label "$RUNNER_TOKEN_LABEL_KEY=$RUNNER_TOKEN" --network "$NETWORK_NAME" --env-file "$TMP/migration.env" \
+  --label "$RUNNER_TOKEN_LABEL_KEY=$RUNNER_TOKEN" --network "$NETWORK_NAME" --env-file "$MIGRATION_ENV" \
   --env "PGOPTIONS=-c lock_timeout=$MIGRATION_LOCK_TIMEOUT_MS -c statement_timeout=$PRISMA_DIFF_STATEMENT_TIMEOUT_MS" \
   --entrypoint sh "$GATEWAY_IMAGE" -ceu \
   'exec /app/node_modules/.bin/prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel /app/prisma/schema.prisma --script --exit-code' \
@@ -355,6 +447,7 @@ verify_subordinate "$PRISMA_DRIFT_VALIDATOR" "$PACKAGE_ROOT/validate-accepted-pr
 PRISMA_DIFF_STATUS=$(awk -f "$PRISMA_DRIFT_VALIDATOR" "$TMP/prisma-diff.sql")
 [[ $PRISMA_DIFF_STATUS == "$ACCEPTED_PRISMA_DIFF_STATUS" ]]
 PRISMA_DIFF_RUNNER_CLEANUP_STATE='ABSENT_AFTER_SUCCESS'
+assert_postgres_identity
 
 phase production_immutability PRODUCTION_DRIFT
 PROJECT_HASH_AFTER=$(project_hash); RESTART_HASH_AFTER=$(restart_hash)
@@ -365,8 +458,10 @@ status_after=$(git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha
 free_after=$(df -B1 --output=avail "$BACKUP_PARENT" | awk 'NR==2{print $1}'); (( free_after >= ROLLBACK_RESERVE_BYTES ))
 
 phase report_handoff REPORT_HANDOFF_FAILED
+assert_postgres_identity
 report_tmp=$(mktemp "/var/tmp/personal-max-stage8b2a-production-migration.$SCRIPT_SHA.XXXXXX")
 jq -n --arg scriptSha "$SCRIPT_SHA" --arg isolatedSha "$PERSONAL_MAX_ISOLATED_REPORT_SHA256" --arg image "$GATEWAY_IMAGE" \
+  --arg network "$NETWORK_NAME" \
   --arg backupDirectory "$BACKUP_DIRECTORY" --arg dumpSha "$FRESH_BACKUP_DUMP_SHA" --arg configSha "$FRESH_BACKUP_CONFIG_SHA" \
   --arg beforeHash "$PROJECT_HASH_BEFORE" --arg afterHash "$PROJECT_HASH_AFTER" --arg diffStatus "$PRISMA_DIFF_STATUS" \
   --arg migrationRunnerState "$MIGRATION_RUNNER_CLEANUP_STATE" --arg diffRunnerState "$PRISMA_DIFF_RUNNER_CLEANUP_STATE" \
@@ -375,6 +470,10 @@ jq -n --arg scriptSha "$SCRIPT_SHA" --arg isolatedSha "$PERSONAL_MAX_ISOLATED_RE
   --argjson applied "$(jq -Rsc 'split("\n")[:-1]' "$TMP/applied-now")" '
   {schemaVersion:1,mode:"PRODUCTION_MIGRATION_EVIDENCE",script:{sha256:$scriptSha,checksumBound:true},
    bindings:{isolatedReportSha256:$isolatedSha,acceptedBackupReportSha256:"f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"},
+   databaseBinding:{source:"postgres-container-env",projectLabel:"crm",serviceLabel:"postgres",
+    envKeys:["POSTGRES_USER","POSTGRES_PASSWORD","POSTGRES_DB"],urlHost:"postgres",urlPort:5432,urlSchema:"public",
+    inspectMode:"0600",envMode:"0600",networkName:$network,networkProjectLabel:"crm",networkComposeLabel:"internal",
+    alias:"postgres",runnerNetworkCount:1,containerIdentityStable:true,credentialsPrinted:false,credentialsInArguments:false},
    image:{ref:$image,digestBound:true},freshBackup:{directory:$backupDirectory,dumpSha256:$dumpSha,dumpBytes:$dumpBytes,objectCount:$objectCount,configArchiveSha256:$configSha,status:"VALIDATED",structuralValidation:"PASS"},
    migration:{before:{total:46,finished:46,failed:0},after:{total:54,finished:54,failed:0},appliedNames:$applied,
     acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"],rawRows:0,prismaDiffEmpty:false,

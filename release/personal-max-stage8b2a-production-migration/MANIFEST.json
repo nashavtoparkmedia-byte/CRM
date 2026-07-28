@@ -2,21 +2,31 @@
   "schemaVersion": 1,
   "stage": "8B2A",
   "status": "PREPARED_NOT_EXECUTED",
-  "sourceCommit": "cedca468784dc59411fb6a5b01f650fb6fc96636",
-  "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
+  "sourceCommit": "228ec7087cff56cac0f834e1f8e40e870da1be80",
+  "branch": "feature/personal-max-stage8b2-consolidated-20260728T194422Z",
   "productionMutationPerformed": false,
   "productionStatusHashMode": "RAW_PORCELAIN_V2_STREAM",
   "acceptedIsolatedProbeScriptSha256": "dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053",
-  "productionMigrationScriptSha256": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740",
+  "productionMigrationScriptSha256": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560",
   "hardBoundRuntimeArtifacts": {
     "failure-diagnostics.sh": "c720b22f0cf6644c5202f3daa4ccc9ae7de3d0e2ab6e8a3ebfb4bffa0d9be322",
-    "report-success.jq": "fa194be07d80e742a0d64c2af783f76cdad8012b9dbe996e3c8cf84a55c29e2c",
-    "validate-accepted-prisma-drift.awk": "eeeee2d4cb3e46d5b89e5f8d0601c6a7d8b160a3ef8d95fc0a722447967ca4f4"
+    "report-success.jq": "74ba29e22d8a52dce7b00d53ecb4b8a692489d25928cca974f56898433d0c8b5",
+    "validate-accepted-prisma-drift.awk": "eeeee2d4cb3e46d5b89e5f8d0601c6a7d8b160a3ef8d95fc0a722447967ca4f4",
+    "postgres-database-url.py": "b0b447ac536a8d31936c6e9476de6f7cda74e791c0b6678869ac1467a17090b6"
   },
   "secretBinding": {
-    "sourceService": "gravity-mvp",
+    "sourceService": "postgres",
+    "sourceProject": "crm",
     "variableName": "DATABASE_URL",
+    "sourceKeys": ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"],
+    "helper": "postgres-database-url.py",
+    "urlHost": "postgres",
+    "urlPort": 5432,
+    "urlSchema": "public",
+    "percentEncoded": true,
     "valuesPrinted": false,
+    "valuesInArguments": false,
+    "inspectMode": "0600",
     "temporaryMode": "0600"
   },
   "acceptedGatewayImage": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
@@ -45,6 +55,11 @@
     "lockTimeoutMs": 5000,
     "migrationStatementTimeoutMs": 840000,
     "prismaDiffStatementTimeoutMs": 540000,
+    "networkProjectLabel": "crm",
+    "networkComposeLabel": "internal",
+    "requiredPostgresAlias": "postgres",
+    "runnerNetworkCount": 1,
+    "postgresIdentityFenced": true,
     "labelVerifiedFailureCleanup": true,
     "cleanupOwnershipLabels": ["personal-max.stage", "personal-max.role", "personal-max.script-sha", "personal-max.run-token"]
   },
@@ -56,6 +71,7 @@
     "migration-contract.md",
     "owner-instructions.md",
     "partial-failure-contract.md",
+    "postgres-database-url.py",
     "production-immutability-contract.md",
     "production-migration.sh",
     "report-schema.json",
@@ -63,6 +79,7 @@
     "secret-binding-contract.md",
     "test-faults.sh",
     "test-package.sh",
+    "test-postgres-binding.py",
     "validate-accepted-prisma-drift.awk"
   ]
 }

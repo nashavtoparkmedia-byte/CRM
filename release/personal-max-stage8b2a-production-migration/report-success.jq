@@ -3,6 +3,17 @@
 .bindings.acceptedBackupReportSha256 == "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566" and
 (.bindings|keys|sort)==(["acceptedBackupReportSha256","isolatedReportSha256"]|sort) and
 (.bindings.isolatedReportSha256|test("^[0-9a-f]{64}$")) and .freshBackup.status == "VALIDATED" and
+.databaseBinding.source == "postgres-container-env" and
+.databaseBinding.projectLabel == "crm" and .databaseBinding.serviceLabel == "postgres" and
+.databaseBinding.envKeys == ["POSTGRES_USER","POSTGRES_PASSWORD","POSTGRES_DB"] and
+.databaseBinding.urlHost == "postgres" and .databaseBinding.urlPort == 5432 and .databaseBinding.urlSchema == "public" and
+.databaseBinding.inspectMode == "0600" and .databaseBinding.envMode == "0600" and
+(.databaseBinding.networkName|type) == "string" and (.databaseBinding.networkName|length) > 0 and
+.databaseBinding.networkProjectLabel == "crm" and .databaseBinding.networkComposeLabel == "internal" and
+.databaseBinding.alias == "postgres" and .databaseBinding.runnerNetworkCount == 1 and
+.databaseBinding.containerIdentityStable == true and .databaseBinding.credentialsPrinted == false and
+.databaseBinding.credentialsInArguments == false and
+(.databaseBinding|keys|sort)==(["source","projectLabel","serviceLabel","envKeys","urlHost","urlPort","urlSchema","inspectMode","envMode","networkName","networkProjectLabel","networkComposeLabel","alias","runnerNetworkCount","containerIdentityStable","credentialsPrinted","credentialsInArguments"]|sort) and
 .freshBackup.structuralValidation == "PASS" and (.freshBackup.dumpSha256|test("^[0-9a-f]{64}$")) and
 (.freshBackup.configArchiveSha256|test("^[0-9a-f]{64}$")) and
 (.freshBackup.directory|test("^/var/backups/personal-max-stage8b2a-pre-migration-[0-9]{8}T[0-9]{6}Z$")) and

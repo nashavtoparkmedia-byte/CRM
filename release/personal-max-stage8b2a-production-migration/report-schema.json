@@ -4,7 +4,7 @@
   "type": "object",
   "oneOf": [
     {
-      "required": ["schemaVersion", "mode", "script", "bindings", "image", "freshBackup", "migration", "schema", "runners", "production", "storage", "safety"],
+      "required": ["schemaVersion", "mode", "script", "bindings", "databaseBinding", "image", "freshBackup", "migration", "schema", "runners", "production", "storage", "safety"],
       "properties": {
         "schemaVersion": {"const": 1},
         "mode": {"const": "PRODUCTION_MIGRATION_EVIDENCE"},
@@ -20,6 +20,30 @@
           "properties": {
             "isolatedReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "acceptedBackupReportSha256": {"const": "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"}
+          },
+          "additionalProperties": false
+        },
+        "databaseBinding": {
+          "type": "object",
+          "required": ["source", "projectLabel", "serviceLabel", "envKeys", "urlHost", "urlPort", "urlSchema", "inspectMode", "envMode", "networkName", "networkProjectLabel", "networkComposeLabel", "alias", "runnerNetworkCount", "containerIdentityStable", "credentialsPrinted", "credentialsInArguments"],
+          "properties": {
+            "source": {"const": "postgres-container-env"},
+            "projectLabel": {"const": "crm"},
+            "serviceLabel": {"const": "postgres"},
+            "envKeys": {"const": ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]},
+            "urlHost": {"const": "postgres"},
+            "urlPort": {"const": 5432},
+            "urlSchema": {"const": "public"},
+            "inspectMode": {"const": "0600"},
+            "envMode": {"const": "0600"},
+            "networkName": {"type": "string", "minLength": 1},
+            "networkProjectLabel": {"const": "crm"},
+            "networkComposeLabel": {"const": "internal"},
+            "alias": {"const": "postgres"},
+            "runnerNetworkCount": {"const": 1},
+            "containerIdentityStable": {"const": true},
+            "credentialsPrinted": {"const": false},
+            "credentialsInArguments": {"const": false}
           },
           "additionalProperties": false
         },
