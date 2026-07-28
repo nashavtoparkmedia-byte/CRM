@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "stage": "TEXT_CANARY_SCRAPER_RUNTIME_METADATA",
+  "status": "READY_NOT_AUTHORIZED",
+  "sourceBaseCommit": "a086a2626e1d64dccafbe958be7aff59c933bbb0",
+  "productionExpectedHead": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+  "productionExpectedStatusSha256": "2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b",
+  "acceptedScraperImage": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+  "discovery": {
+    "composeProject": "crm",
+    "composeService": "max-web-scraper",
+    "requiresExactlyOneContainer": true,
+    "requiresRunningContainer": true,
+    "sources": [
+      "release/personal-max-stage8b1r/root-preflight/manifest.json",
+      "release/personal-max-stage8b2c-scraper-default-off/runtime-evidence.json",
+      "deploy/docker-compose.production.yml"
+    ]
+  },
+  "result": {
+    "path": "/var/tmp/personal-max-scraper-runtime-metadata.json",
+    "owner": "root",
+    "group": "codexbot",
+    "mode": "0640",
+    "noClobber": true
+  },
+  "execution": {
+    "performed": false,
+    "rootCommandStatus": "READY_NOT_AUTHORIZED",
+    "productionMutationAuthorized": false
+  },
+  "files": [
+    "MANIFEST.json",
+    "SHA256SUMS",
+    "browser-ownership-contract.md",
+    "failure-diagnostics.sh",
+    "listener-ownership-contract.md",
+    "owner-instructions.md",
+    "privacy-contract.md",
+    "profile-ownership-contract.md",
+    "recreation-evidence-contract.md",
+    "report-schema.json",
+    "scraper-runtime-metadata.sh",
+    "test-faults.sh",
+    "test-package.sh"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "personal-max-scraper-runtime-metadata-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mode", "generatedAt", "script", "identity", "container", "browser", "listener", "profile", "recreation", "immutability", "gate", "safety"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "mode": {"const": "READ_ONLY_SCRAPER_RUNTIME_METADATA"},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "script": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "checksumBound"],
+      "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "checksumBound": {"const": true}}
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "service", "matchingContainers", "runningContainers", "stable"],
+      "properties": {
+        "project": {"const": "crm"}, "service": {"const": "max-web-scraper"},
+        "matchingContainers": {"const": 1}, "runningContainers": {"const": 1}, "stable": {"type": "boolean"}
+      }
+    },
+    "container": {
+      "type": "object",
+      "required": ["idSha256", "imageId", "repoTags", "repoDigests", "state", "health", "restartCount", "startedAt", "configuredUser", "runtimeUid", "runtimeGid", "entrypoint", "command", "workingDirectory", "environmentNames", "mounts", "networks", "ports", "restartPolicy", "healthcheckSha256", "securityOptions", "capAdd", "capDrop", "privileged", "readOnlyRootFilesystem", "pidMode", "ipcMode"],
+      "properties": {
+        "idSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "imageId": {"type": "string"},
+        "repoTags": {"type": "array", "items": {"type": "string"}}, "repoDigests": {"type": "array", "items": {"type": "string"}},
+        "state": {"type": "string"}, "health": {"type": ["string", "null"]}, "restartCount": {"type": "integer", "minimum": 0}, "startedAt": {"type": "string"},
+        "configuredUser": {"type": "string"}, "runtimeUid": {"type": "integer", "minimum": 0}, "runtimeGid": {"type": "integer", "minimum": 0},
+        "entrypoint": {"type": "array", "items": {"type": "string"}}, "command": {"type": "array", "items": {"type": "string"}}, "workingDirectory": {"type": "string"},
+        "environmentNames": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}},
+        "mounts": {"type": "array"}, "networks": {"type": "array"}, "ports": {"type": "object"}, "restartPolicy": {"type": "object"},
+        "healthcheckSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "securityOptions": {"type": "array"}, "capAdd": {"type": "array"}, "capDrop": {"type": "array"},
+        "privileged": {"type": "boolean"}, "readOnlyRootFilesystem": {"type": "boolean"}, "pidMode": {"type": "string"}, "ipcMode": {"type": "string"}
+      }
+    },
+    "browser": {"type": "object", "required": ["rootProcessCount", "rendererProcessCount", "ownerUid", "ownerGid", "decision"]},
+    "listener": {"type": "object", "required": ["owningNodeProcessCount", "instanceCount", "decision"]},
+    "profile": {"type": "object", "required": ["path", "mountCount", "mountedReadWrite", "exists", "symlink", "uid", "gid", "mode", "device", "inode", "currentRuntimeWritable", "acceptedUid", "acceptedUidWritable", "groupCompatibility", "aclAvailable", "aclPresent", "lockCount", "uidTransitionDecision"]},
+    "recreation": {"type": "object", "required": ["environmentSourceProvenance", "evidenceDecision"]},
+    "immutability": {"type": "object", "required": ["before", "after", "unexpectedChanges"]},
+    "gate": {"type": "object", "required": ["complete", "reason", "incompleteFacts"]},
+    "safety": {
+      "type": "object",
+      "required": ["containersChanged", "containersRestarted", "imagesPulled", "profileContentRead", "environmentValuesReported", "browserLaunched", "maxContacted", "providerAction", "sanitizedReportWritten"],
+      "properties": {
+        "containersChanged": {"const": false}, "containersRestarted": {"const": false}, "imagesPulled": {"const": false}, "profileContentRead": {"const": false},
+        "environmentValuesReported": {"const": false}, "browserLaunched": {"const": false}, "maxContacted": {"const": false}, "providerAction": {"const": false}, "sanitizedReportWritten": {"const": true}
+      }
+    }
+  }
+}
