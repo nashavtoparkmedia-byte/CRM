@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B2B",
+  "status": "PREPARED_NOT_EXECUTED",
+  "sourceCommit": "22c413bd0ec885bdf9b0f0b8f29dbefee67529dc",
+  "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
+  "image": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+  "runtimeUser": "1000:1000",
+  "lifecycle": "separate checksum-bound Compose project",
+  "network": {"name": "personal-max-stage8b2b-dormant", "internal": true},
+  "publicPorts": 0,
+  "productionEffectsPerformed": false,
+  "files": [
+    "MANIFEST.json",
+    "SHA256SUMS",
+    "dormant-contract.md",
+    "dormant-gateway.compose.yml",
+    "dormant-rollback.sh",
+    "dormant-rollout.sh",
+    "failure-diagnostics.sh",
+    "lifecycle-contract.md",
+    "owner-instructions.md",
+    "production-immutability-contract.md",
+    "report-schema.json",
+    "rollback-contract.md",
+    "security-evidence.md",
+    "test-package.sh"
+  ]
+}
