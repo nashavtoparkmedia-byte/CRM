@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 from copy import deepcopy
+import json
+from pathlib import Path
+
+import jsonschema
 
 from evaluate import (
     EXACT_MIGRATION_SAFETY,
@@ -64,6 +68,25 @@ def migration_binding():
             'mode': 'PRODUCTION_MIGRATION_EVIDENCE',
             'script': {'sha256': EXPECTED_MIGRATION_SCRIPT_SHA, 'checksumBound': True},
             'bindings': {'isolatedReportSha256': '8' * 64, 'acceptedBackupReportSha256': EXPECTED_BACKUP_REPORT_SHA},
+            'databaseBinding': {
+                'source': 'postgres-container-env',
+                'projectLabel': 'crm',
+                'serviceLabel': 'postgres',
+                'envKeys': ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB'],
+                'urlHost': 'postgres',
+                'urlPort': 5432,
+                'urlSchema': 'public',
+                'inspectMode': '0600',
+                'envMode': '0600',
+                'networkName': 'crm_internal',
+                'networkProjectLabel': 'crm',
+                'networkComposeLabel': 'internal',
+                'alias': 'postgres',
+                'runnerNetworkCount': 1,
+                'containerIdentityStable': True,
+                'credentialsPrinted': False,
+                'credentialsInArguments': False,
+            },
             'image': {'ref': EXPECTED_GATEWAY_REF, 'digestBound': True},
             'freshBackup': {
                 'directory': '/var/backups/personal-max-stage8b2a-pre-migration-20260728T120000Z',
@@ -131,6 +154,7 @@ def dormant_binding(migration):
                 'appliedCount': len(EXPECTED_MIGRATIONS),
                 'runnerCleanup': 'PASS',
                 'safety': 'PASS',
+                'databaseBinding': 'POSTGRES_IDENTITY_FENCED',
                 'prismaDiffEmpty': False,
                 'prismaDiffStatus': 'ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS',
                 'prismaDiffRawSqlIncluded': False,
@@ -379,6 +403,9 @@ def mutation(target='dormant'):
     add(('action', 'rollbackExecuted'), True)
     add(('bindings', 'migrationReport', 'evidence', 'script', 'sha256'), '0' * 64)
     add(('bindings', 'migrationReport', 'evidence', 'bindings', 'acceptedBackupReportSha256'), '0' * 64)
+    add(('bindings', 'migrationReport', 'evidence', 'databaseBinding', 'containerIdentityStable'), False)
+    add(('bindings', 'migrationReport', 'evidence', 'databaseBinding', 'credentialsInArguments'), True)
+    add(('bindings', 'migrationReport', 'evidence', 'databaseBinding', 'networkComposeLabel'), 'public')
     add(('bindings', 'migrationReport', 'evidence', 'migration', 'appliedNames'), EXPECTED_MIGRATIONS[:-1])
     add(('bindings', 'migrationReport', 'evidence', 'migration', 'acceptedLedgerOnlyMigrations'), [])
     add(('bindings', 'migrationReport', 'evidence', 'migration', 'prismaDiffRawSqlIncluded'), True)
@@ -399,6 +426,7 @@ def mutation(target='dormant'):
     add(('bindings', 'dormantRolloutReport', 'evidence', 'acceptedMigration', 'appliedCount'), 7)
     add(('bindings', 'dormantRolloutReport', 'evidence', 'acceptedMigration', 'runnerCleanup'), 'FAIL')
     add(('bindings', 'dormantRolloutReport', 'evidence', 'acceptedMigration', 'safety'), 'FAIL')
+    add(('bindings', 'dormantRolloutReport', 'evidence', 'acceptedMigration', 'databaseBinding'), 'UNTRUSTED')
     add(('bindings', 'dormantRolloutReport', 'evidence', 'acceptedMigration', 'prismaDiffRawSqlIncluded'), True)
     add(('bindings', 'dormantRolloutReport', 'evidence', 'acceptedMigration', 'acceptedLedgerOnlyMigrations'), [])
     add(('bindings', 'dormantRolloutReport', 'evidence', 'image', 'ref'), 'mutable:latest')
@@ -540,6 +568,18 @@ final_extra = deepcopy(clean_final)
 final_extra['evaluation']['unexpected'] = True
 assert not validate_final_report(final_extra, 'dormant')
 checks += 1
+
+report_schema = json.loads((Path(__file__).resolve().parent / 'report-schema.json').read_text(encoding='utf-8'))
+jsonschema.validate(clean_final, report_schema)
+checks += 1
+schema_binding_lie = deepcopy(clean_final)
+schema_binding_lie['bindings']['migrationReport']['evidence']['databaseBinding']['credentialsPrinted'] = True
+try:
+    jsonschema.validate(schema_binding_lie, report_schema)
+except jsonschema.ValidationError:
+    checks += 1
+else:
+    raise AssertionError('report schema accepted unsafe database binding')
 
 expect({}, 'one-account', 'MALFORMED_REPORT', 'malformed_report')
 expect(base('one-account', [account(rows=10, comparisons=10)]), 'ab', 'MALFORMED_REPORT', 'malformed_report')

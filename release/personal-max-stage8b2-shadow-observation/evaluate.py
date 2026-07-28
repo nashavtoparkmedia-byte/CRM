@@ -17,9 +17,9 @@ EXPECTED_COMPOSE_IDENTITY = {
     'stage': '8b2b',
     'mode': 'dormant',
 }
-EXPECTED_MIGRATION_SCRIPT_SHA = 'bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740'
-EXPECTED_DORMANT_SCRIPT_SHA = 'b911aadacba8d3d6226dfd6b6a9e0445da02cc560d36e2be8b14984fb7dc35f5'
-EXPECTED_DORMANT_ROLLBACK_SHA = 'd1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090'
+EXPECTED_MIGRATION_SCRIPT_SHA = 'f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560'
+EXPECTED_DORMANT_SCRIPT_SHA = 'bc8ee9ac2012f04d66113db604ea13ce204bd3400fa6eedb7f22531be25cb6f3'
+EXPECTED_DORMANT_ROLLBACK_SHA = '41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d'
 EXPECTED_DORMANT_COMPOSE_SHA = '3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2'
 EXPECTED_BACKUP_REPORT_SHA = 'f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
 EXPECTED_LEDGER_ONLY = ['20260717000000_add_driver_telegram_submitted_phone']
@@ -124,11 +124,40 @@ def valid_image(image, expected_ref):
     )
 
 
+def valid_database_binding(binding):
+    keys = {
+        'source', 'projectLabel', 'serviceLabel', 'envKeys', 'urlHost', 'urlPort',
+        'urlSchema', 'inspectMode', 'envMode', 'networkName', 'networkProjectLabel',
+        'networkComposeLabel', 'alias', 'runnerNetworkCount', 'containerIdentityStable',
+        'credentialsPrinted', 'credentialsInArguments',
+    }
+    return (
+        exact_keys(binding, keys)
+        and binding['source'] == 'postgres-container-env'
+        and binding['projectLabel'] == 'crm'
+        and binding['serviceLabel'] == 'postgres'
+        and binding['envKeys'] == ['POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB']
+        and binding['urlHost'] == 'postgres'
+        and binding['urlPort'] == 5432
+        and binding['urlSchema'] == 'public'
+        and binding['inspectMode'] == '0600'
+        and binding['envMode'] == '0600'
+        and isinstance(binding['networkName'], str) and len(binding['networkName']) > 0
+        and binding['networkProjectLabel'] == 'crm'
+        and binding['networkComposeLabel'] == 'internal'
+        and binding['alias'] == 'postgres'
+        and binding['runnerNetworkCount'] == 1
+        and binding['containerIdentityStable'] is True
+        and binding['credentialsPrinted'] is False
+        and binding['credentialsInArguments'] is False
+    )
+
+
 def valid_migration_evidence(binding):
     if not exact_keys(binding, {'sha256', 'evidence'}) or not sha256(binding['sha256']):
         return False
     evidence = binding['evidence']
-    if not exact_keys(evidence, {'schemaVersion', 'mode', 'script', 'bindings', 'image', 'freshBackup', 'migration', 'schema', 'runners', 'production', 'storage', 'safety'}):
+    if not exact_keys(evidence, {'schemaVersion', 'mode', 'script', 'bindings', 'databaseBinding', 'image', 'freshBackup', 'migration', 'schema', 'runners', 'production', 'storage', 'safety'}):
         return False
     if evidence['schemaVersion'] != 1 or evidence['mode'] != 'PRODUCTION_MIGRATION_EVIDENCE':
         return False
@@ -138,6 +167,8 @@ def valid_migration_evidence(binding):
     if not exact_keys(bindings, {'isolatedReportSha256', 'acceptedBackupReportSha256'}):
         return False
     if not sha256(bindings['isolatedReportSha256']) or bindings['acceptedBackupReportSha256'] != EXPECTED_BACKUP_REPORT_SHA:
+        return False
+    if not valid_database_binding(evidence['databaseBinding']):
         return False
     if evidence['image'] != {'ref': EXPECTED_GATEWAY_REF, 'digestBound': True}:
         return False
@@ -220,6 +251,7 @@ def valid_dormant_evidence(binding, migration_binding):
         'appliedCount': len(EXPECTED_MIGRATIONS),
         'runnerCleanup': 'PASS',
         'safety': 'PASS',
+        'databaseBinding': 'POSTGRES_IDENTITY_FENCED',
         'prismaDiffEmpty': False,
         'prismaDiffStatus': 'ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS',
         'prismaDiffRawSqlIncluded': False,

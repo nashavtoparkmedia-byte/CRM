@@ -8,11 +8,11 @@ sudo env \
   PERSONAL_MAX_DORMANT_REPORT_SHA256='<accepted-dormant-rollout-report-sha256>' \
   PERSONAL_MAX_OBSERVATION_ACCOUNT_IDS='<empty-or-exact-one/two-account-ids>' \
   PERSONAL_MAX_OBSERVATION_SPOOL_LIMIT_BYTES='<active-target-only-expected-limit-or-empty>' \
-  PERSONAL_MAX_OBSERVER_SHA256='<observer-script-sha256>' \
+  PERSONAL_MAX_OBSERVER_SHA256='a1e754f7ccde6d639c8e3df0f9624ea37f629a0c7d8deac3b998313acd91ef17' \
   PERSONAL_MAX_OBSERVER_TARGET='<dormant|default-off|one-account|ab>' \
   PERSONAL_MAX_OBSERVER_WINDOW='<5m|30m|2h|24h>' \
   /bin/bash -ceu '
-observer_source=/opt/codex-work/crm-personal-max-stage8b2-autonomous-20260728T122700Z/release/personal-max-stage8b2-shadow-observation/observe-readonly.sh
+observer_source=/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2-shadow-observation/observe-readonly.sh
 snapshot=$(mktemp /var/tmp/personal-max-shadow-observer.snapshot.XXXXXXXX)
 trap '"'"'rm -f -- "$snapshot"'"'"' EXIT
 test -f "$observer_source"
@@ -30,4 +30,4 @@ This is a template, not an authorized next command. Direct root execution from t
 
 The accepted migration binding is intentionally `prismaDiffEmpty=false` with `prismaDiffStatus=ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS`. Replacing that accepted legacy-drift fact with a false empty-diff claim fails closed.
 
-The supplied Stage 8B2A/8B2B report SHAs are not sufficient by themselves: the observer also requires their embedded checksum-bound script SHAs and complete sanitized evidence contracts to match exact package constants, and requires the dormant report to cross-bind the supplied migration SHA and the same isolated-proof SHA. Any mismatch produces an explicit failure report before production observation.
+The supplied Stage 8B2A/8B2B report SHAs are not sufficient by themselves: the observer also requires their embedded checksum-bound script SHAs and complete sanitized evidence contracts to match exact package constants, including the PostgreSQL identity-fenced credential binding, and requires the dormant report to cross-bind the supplied migration SHA and the same isolated-proof SHA. Any mismatch produces an explicit failure report before production observation.

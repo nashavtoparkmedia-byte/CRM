@@ -2,27 +2,29 @@
   "schemaVersion": 1,
   "stage": "8B2_OBSERVATION",
   "status": "PREPARED_NOT_EXECUTED",
-  "packagePreparedFromCommit": "14706862a890563a01a2651a4782df58dfa55df4",
-  "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
+  "packagePreparedFromCommit": "1c1c46ce47b99790bca53c89749db76e3591ea54",
+  "branch": "feature/personal-max-stage8b2-consolidated-20260728T194422Z",
   "reportSchemaVersion": 2,
   "acceptedImageSourceCommit": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
   "hardBoundPackageArtifacts": {
     "observations.sql": "cf8c35c396281b2d9e3f440cf514c99aedf21aa7e32bfb549470f08d7f57c17d",
-    "evaluate.py": "617d84e617b63a76730baec3bf6217118abb0eec0b70fa6348625d52cfe8ae21"
+    "evaluate.py": "f00d215503a3990d462d9782896f4f4723f8df242e2546f04a18ac5100852846"
   },
   "acceptedEvidenceScripts": {
-    "productionMigration": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740",
-    "dormantRollout": "b911aadacba8d3d6226dfd6b6a9e0445da02cc560d36e2be8b14984fb7dc35f5",
-    "dormantRollback": "d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090"
+    "productionMigration": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560",
+    "dormantRollout": "bc8ee9ac2012f04d66113db604ea13ce204bd3400fa6eedb7f22531be25cb6f3",
+    "dormantRollback": "41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d"
   },
   "acceptedEvidenceCompose": {
     "dormantGateway": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"
   },
+  "observerScriptSha256": "a1e754f7ccde6d639c8e3df0f9624ea37f629a0c7d8deac3b998313acd91ef17",
+  "acceptedDatabaseBinding": "POSTGRES_IDENTITY_FENCED",
   "finalReportValidation": "EXACT_FAIL_CLOSED_PYTHON_VALIDATOR_BEFORE_HANDOFF",
   "rootObserverExecutionMode": "ROOT_OWNED_0700_CHECKSUM_VERIFIED_SNAPSHOT_ONLY",
   "currentSchemaRevalidation": "SAME_READ_ONLY_DATABASE_SNAPSHOT",
   "nonDormantAcceptance": "FROZEN_UNTIL_CRYPTOGRAPHICALLY_BOUND_EXTERNAL_EVIDENCE_EXISTS",
-  "adversarialEvaluatorCases": 102,
+  "adversarialEvaluatorCases": 108,
   "acceptedImages": {
     "gateway": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
     "scraper": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768"

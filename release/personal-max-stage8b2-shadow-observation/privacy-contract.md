@@ -6,6 +6,6 @@ Queries select no message text, payload, sanitized payload, caption, phone, disp
 
 Runtime inspection uses narrow Docker templates and never reads `.Config.Env`, Compose interpolation, profile contents, logs, or provider data. Image references, image IDs, repository digests, source revisions, container start time, health, restart counts, sanitized network/port/mount/user/restart/security settings, Compose identity labels, and a sanitized profile mount destination/count/RW flag are non-secret operational evidence.
 
-The complete embedded Stage 8B2A/8B2B reports are already sanitized evidence: they contain hashes, bounded counts, backup metadata, runtime topology, and safety booleans, but no database URL, environment values, message/profile content, raw account ID, HMAC, or provider credential.
+The complete embedded Stage 8B2A/8B2B reports are already sanitized evidence: they contain hashes, bounded counts, backup metadata, runtime topology, non-secret PostgreSQL binding metadata, and safety booleans, but no database URL, environment values, message/profile content, raw account ID, HMAC, or provider credential.
 
 `rawJournalRows` means durable rows in `MaxRawTransportEvent`. It is never renamed or copied into a physical-frame field. Physical-frame count remains explicit unknown until a privacy-safe, window-aligned source is separately authorized.

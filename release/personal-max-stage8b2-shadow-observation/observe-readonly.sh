@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 umask 077
 
-readonly PACKAGE_ROOT='/opt/codex-work/crm-personal-max-stage8b2-autonomous-20260728T122700Z/release/personal-max-stage8b2-shadow-observation'
+readonly PACKAGE_ROOT='/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2-shadow-observation'
 readonly MIGRATION_REPORT='/var/tmp/personal-max-stage8b2a-production-migration.json'
 readonly DORMANT_REPORT='/var/tmp/personal-max-stage8b2b-dormant-gateway.json'
 readonly GATEWAY_CONTAINER='personal-max-dormant-gateway'
@@ -12,12 +12,12 @@ readonly ACCEPTED_GATEWAY_REF='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-g
 readonly ACCEPTED_SCRAPER_REF='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
 readonly ACCEPTED_IMAGE_SOURCE_COMMIT='33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a'
 readonly ACCEPTED_BACKUP_REPORT_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
-readonly ACCEPTED_MIGRATION_SCRIPT_SHA='bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740'
-readonly ACCEPTED_DORMANT_SCRIPT_SHA='b911aadacba8d3d6226dfd6b6a9e0445da02cc560d36e2be8b14984fb7dc35f5'
-readonly ACCEPTED_DORMANT_ROLLBACK_SHA='d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090'
+readonly ACCEPTED_MIGRATION_SCRIPT_SHA='f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560'
+readonly ACCEPTED_DORMANT_SCRIPT_SHA='bc8ee9ac2012f04d66113db604ea13ce204bd3400fa6eedb7f22531be25cb6f3'
+readonly ACCEPTED_DORMANT_ROLLBACK_SHA='41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d'
 readonly ACCEPTED_DORMANT_COMPOSE_SHA='3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2'
 readonly OBSERVATIONS_SQL_SHA='cf8c35c396281b2d9e3f440cf514c99aedf21aa7e32bfb549470f08d7f57c17d'
-readonly EVALUATOR_SHA='617d84e617b63a76730baec3bf6217118abb0eec0b70fa6348625d52cfe8ae21'
+readonly EVALUATOR_SHA='f00d215503a3990d462d9782896f4f4723f8df242e2546f04a18ac5100852846'
 readonly EXPECTED_MIGRATIONS_JSON='["20260726162043_add_max_raw_transport_journal","20260726190658_add_max_route_registry","20260726205437_add_max_inbound_normalization","20260726215715_add_max_per_chat_outbound_actor","20260726225737_add_max_dispatch_ledger","20260727053744_add_max_provider_confirmation_matcher","20260727141925_add_max_shadow_semantic_comparison","20260727154647_add_max_capture_ingress"]'
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly PROJECT_LABEL='com.docker.compose.project=crm'
@@ -177,11 +177,17 @@ done
 jq -e --arg scriptSha "$ACCEPTED_MIGRATION_SCRIPT_SHA" --arg image "$ACCEPTED_GATEWAY_REF" \
   --arg backupSha "$ACCEPTED_BACKUP_REPORT_SHA" --arg ledgerOnly "$ACCEPTED_LEDGER_ONLY_MIGRATION" \
   --argjson migrations "$EXPECTED_MIGRATIONS_JSON" '
-  (keys|sort)==(["bindings","freshBackup","image","migration","mode","production","runners","safety","schema","schemaVersion","script","storage"]|sort) and
+  (keys|sort)==(["bindings","databaseBinding","freshBackup","image","migration","mode","production","runners","safety","schema","schemaVersion","script","storage"]|sort) and
   .schemaVersion==1 and .mode=="PRODUCTION_MIGRATION_EVIDENCE" and
   .script=={sha256:$scriptSha,checksumBound:true} and
   .bindings=={isolatedReportSha256:.bindings.isolatedReportSha256,acceptedBackupReportSha256:$backupSha} and
   (.bindings.isolatedReportSha256|type)=="string" and (.bindings.isolatedReportSha256|test("^[0-9a-f]{64}$")) and
+  .databaseBinding=={source:"postgres-container-env",projectLabel:"crm",serviceLabel:"postgres",
+    envKeys:["POSTGRES_USER","POSTGRES_PASSWORD","POSTGRES_DB"],urlHost:"postgres",urlPort:5432,urlSchema:"public",
+    inspectMode:"0600",envMode:"0600",networkName:.databaseBinding.networkName,networkProjectLabel:"crm",
+    networkComposeLabel:"internal",alias:"postgres",runnerNetworkCount:1,containerIdentityStable:true,
+    credentialsPrinted:false,credentialsInArguments:false} and
+  (.databaseBinding.networkName|type)=="string" and (.databaseBinding.networkName|length)>0 and
   .image=={ref:$image,digestBound:true} and
   (.freshBackup|keys|sort)==(["configArchiveSha256","directory","dumpBytes","dumpSha256","objectCount","status","structuralValidation"]|sort) and
   .freshBackup.status=="VALIDATED" and .freshBackup.structuralValidation=="PASS" and
@@ -212,7 +218,7 @@ jq -e --arg scriptSha "$ACCEPTED_DORMANT_SCRIPT_SHA" --arg image "$ACCEPTED_GATE
   .script=={sha256:$scriptSha,checksumBound:true} and
   .bindings=={isolatedReportSha256:$isolatedSha,migrationReportSha256:$migrationSha,migrationScriptSha256:$migrationScriptSha} and
   .acceptedMigration=={reportValidated:true,productionMigrationScriptSha256:$migrationScriptSha,gatewayImage:$image,isolatedReportShaCrossBound:true,
-    freshBackupStatus:"VALIDATED",appliedCount:8,runnerCleanup:"PASS",safety:"PASS",prismaDiffEmpty:false,
+    freshBackupStatus:"VALIDATED",appliedCount:8,runnerCleanup:"PASS",safety:"PASS",databaseBinding:"POSTGRES_IDENTITY_FENCED",prismaDiffEmpty:false,
     prismaDiffStatus:"ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS",prismaDiffRawSqlIncluded:false,acceptedLedgerOnlyMigrations:[$ledgerOnly]} and
   .image=={ref:$image,runtimeUser:"1000:1000"} and
   .runtime=={container:"personal-max-dormant-gateway",network:"personal-max-stage8b2b-dormant",networkInternal:true,publicPorts:0,mounts:0,health:"PASS",readiness:"dormant-ready",restartPolicy:"unless-stopped"} and

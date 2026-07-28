@@ -228,17 +228,41 @@
     },
     "migrationEvidence": {
       "type": "object",
-      "required": ["schemaVersion", "mode", "script", "bindings", "image", "freshBackup", "migration", "schema", "runners", "production", "storage", "safety"],
+      "required": ["schemaVersion", "mode", "script", "bindings", "databaseBinding", "image", "freshBackup", "migration", "schema", "runners", "production", "storage", "safety"],
       "properties": {
         "schemaVersion": {"const": 1},
         "mode": {"const": "PRODUCTION_MIGRATION_EVIDENCE"},
-        "script": {"const": {"sha256": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740", "checksumBound": true}},
+        "script": {"const": {"sha256": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560", "checksumBound": true}},
         "bindings": {
           "type": "object",
           "required": ["isolatedReportSha256", "acceptedBackupReportSha256"],
           "properties": {
             "isolatedReportSha256": {"$ref": "#/$defs/sha256"},
             "acceptedBackupReportSha256": {"const": "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"}
+          },
+          "additionalProperties": false
+        },
+        "databaseBinding": {
+          "type": "object",
+          "required": ["source", "projectLabel", "serviceLabel", "envKeys", "urlHost", "urlPort", "urlSchema", "inspectMode", "envMode", "networkName", "networkProjectLabel", "networkComposeLabel", "alias", "runnerNetworkCount", "containerIdentityStable", "credentialsPrinted", "credentialsInArguments"],
+          "properties": {
+            "source": {"const": "postgres-container-env"},
+            "projectLabel": {"const": "crm"},
+            "serviceLabel": {"const": "postgres"},
+            "envKeys": {"const": ["POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB"]},
+            "urlHost": {"const": "postgres"},
+            "urlPort": {"const": 5432},
+            "urlSchema": {"const": "public"},
+            "inspectMode": {"const": "0600"},
+            "envMode": {"const": "0600"},
+            "networkName": {"type": "string", "minLength": 1},
+            "networkProjectLabel": {"const": "crm"},
+            "networkComposeLabel": {"const": "internal"},
+            "alias": {"const": "postgres"},
+            "runnerNetworkCount": {"const": 1},
+            "containerIdentityStable": {"const": true},
+            "credentialsPrinted": {"const": false},
+            "credentialsInArguments": {"const": false}
           },
           "additionalProperties": false
         },
@@ -368,29 +392,30 @@
       "properties": {
         "schemaVersion": {"const": 1},
         "mode": {"const": "DORMANT_GATEWAY_ROLLOUT"},
-        "script": {"const": {"sha256": "b911aadacba8d3d6226dfd6b6a9e0445da02cc560d36e2be8b14984fb7dc35f5", "checksumBound": true}},
+        "script": {"const": {"sha256": "bc8ee9ac2012f04d66113db604ea13ce204bd3400fa6eedb7f22531be25cb6f3", "checksumBound": true}},
         "bindings": {
           "type": "object",
           "required": ["isolatedReportSha256", "migrationReportSha256", "migrationScriptSha256"],
           "properties": {
             "isolatedReportSha256": {"$ref": "#/$defs/sha256"},
             "migrationReportSha256": {"$ref": "#/$defs/sha256"},
-            "migrationScriptSha256": {"const": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740"}
+            "migrationScriptSha256": {"const": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560"}
           },
           "additionalProperties": false
         },
         "acceptedMigration": {
           "type": "object",
-          "required": ["reportValidated", "productionMigrationScriptSha256", "gatewayImage", "isolatedReportShaCrossBound", "freshBackupStatus", "appliedCount", "runnerCleanup", "safety", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded", "acceptedLedgerOnlyMigrations"],
+          "required": ["reportValidated", "productionMigrationScriptSha256", "gatewayImage", "isolatedReportShaCrossBound", "freshBackupStatus", "appliedCount", "runnerCleanup", "safety", "databaseBinding", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded", "acceptedLedgerOnlyMigrations"],
           "properties": {
             "reportValidated": {"const": true},
-            "productionMigrationScriptSha256": {"const": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740"},
+            "productionMigrationScriptSha256": {"const": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560"},
             "gatewayImage": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
             "isolatedReportShaCrossBound": {"const": true},
             "freshBackupStatus": {"const": "VALIDATED"},
             "appliedCount": {"const": 8},
             "runnerCleanup": {"const": "PASS"},
             "safety": {"const": "PASS"},
+            "databaseBinding": {"const": "POSTGRES_IDENTITY_FENCED"},
             "prismaDiffEmpty": {"const": false},
             "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
             "prismaDiffRawSqlIncluded": {"const": false},
@@ -455,7 +480,7 @@
           "properties": {
             "available": {"const": true},
             "automatic": {"const": false},
-            "scriptSha256": {"const": "d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090"},
+            "scriptSha256": {"const": "41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d"},
             "composeSha256": {"const": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"}
           },
           "additionalProperties": false

@@ -30,7 +30,7 @@ evaluator_output=$(PYTHONDONTWRITEBYTECODE=1 python3 test-evaluator.py)
 printf '%s\n' "$evaluator_output"
 [[ $evaluator_output =~ ^PHASE_E_EVALUATOR_PASS=([0-9]+)$ ]]
 evaluator_count=${BASH_REMATCH[1]}
-(( evaluator_count >= 50 ))
+(( evaluator_count >= 102 ))
 
 observations_bound_sha=$(sed -n "s/^readonly OBSERVATIONS_SQL_SHA='\([0-9a-f]\{64\}\)'$/\1/p" observe-readonly.sh)
 evaluator_bound_sha=$(sed -n "s/^readonly EVALUATOR_SHA='\([0-9a-f]\{64\}\)'$/\1/p" observe-readonly.sh)
@@ -55,6 +55,8 @@ test "$dormant_rollback_bound_sha" = "$(PYTHONDONTWRITEBYTECODE=1 python3 -c 'im
 test "$dormant_compose_bound_sha" = "$(PYTHONDONTWRITEBYTECODE=1 python3 -c 'import evaluate; print(evaluate.EXPECTED_DORMANT_COMPOSE_SHA)')"
 test "$(jq -r '.hardBoundPackageArtifacts["observations.sql"]' MANIFEST.json)" = "$observations_bound_sha"
 test "$(jq -r '.hardBoundPackageArtifacts["evaluate.py"]' MANIFEST.json)" = "$evaluator_bound_sha"
+test "$(jq -r '.observerScriptSha256' MANIFEST.json)" = "$(sha256sum observe-readonly.sh | awk '{print $1}')"
+test "$(jq -r '.acceptedDatabaseBinding' MANIFEST.json)" = POSTGRES_IDENTITY_FENCED
 test "$(jq -r '.acceptedEvidenceScripts.productionMigration' MANIFEST.json)" = "$migration_script_bound_sha"
 test "$(jq -r '.acceptedEvidenceScripts.dormantRollout' MANIFEST.json)" = "$dormant_script_bound_sha"
 test "$(jq -r '.acceptedEvidenceScripts.dormantRollback' MANIFEST.json)" = "$dormant_rollback_bound_sha"
@@ -90,6 +92,8 @@ grep -Fq 'python3 "$TMP/evaluate.py" --validate-final "$TMP/report.json" "$targe
 grep -Fq 'SCRIPT_SNAPSHOT_OWNERSHIP_INVALID' observe-readonly.sh
 grep -Fq 'gateway_security_config_mismatch' evaluate.py
 grep -Fq 'current_schema_contract_mismatch' evaluate.py
+grep -Fq 'valid_database_binding' evaluate.py
+grep -Fq 'POSTGRES_IDENTITY_FENCED' observe-readonly.sh
 grep -Fq 'active_external_evidence_binding_missing' evaluate.py
 grep -Fq 'default_off_external_evidence_binding_missing' evaluate.py
 grep -Fq 'expectedConstraintDefinitionsExact' observations.sql
@@ -111,7 +115,7 @@ grep -Fq 'chmod 0640 "$TMP/report.json"' observe-readonly.sh
 if rg -n 'if\s*\(!?found\)\s*print\s+0|listenerOwnersObserved:1|browserOwnersObserved:1|projectionDisabled:true' observe-readonly.sh; then exit 1; fi
 if rg -n 'sha256sum -c SHA256SUMS' observe-readonly.sh; then exit 1; fi
 if rg -n '\.Config\.Env|docker[[:space:]]+(compose|restart|stop|rm|start|run|create|pull|build)|systemctl|/opt/crm' observe-readonly.sh; then exit 1; fi
-if rg -n '(POSTGRES_PASSWORD|DATABASE_URL=|MAX_PERSONAL_CAPTURE_HMAC_SECRET=|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' . --glob '!SHA256SUMS' --glob '!test-package.sh'; then exit 1; fi
+if rg -n '(POSTGRES_PASSWORD=[^$"{]|DATABASE_URL=postgresql://[A-Za-z0-9]|MAX_PERSONAL_CAPTURE_HMAC_SECRET=[^$"{]|BEGIN (RSA|OPENSSH|EC) PRIVATE KEY)' . --glob '!SHA256SUMS' --glob '!test-package.sh'; then exit 1; fi
 
 set +e
 observer_output=$(/bin/bash observe-readonly.sh "$(printf '0%.0s' {1..64})" dormant 5m 2>&1)
