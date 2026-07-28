@@ -32,6 +32,7 @@ pm_error_classification_is_safe() {
       CONTAINER_REMOVAL_TIMEOUT | NETWORK_REMOVAL_TIMEOUT | VOLUME_REMOVAL_TIMEOUT | \
       TEMP_REMOVAL_TIMEOUT | CLEANUP_GLOBAL_DEADLINE_EXCEEDED | CLEANUP_INCOMPLETE | \
       PRE_PULL_DISK_GATE_FAILED | POST_PULL_DISK_GATE_FAILED | FINAL_DISK_GATE_FAILED | \
+      PRODUCTION_GIT_BASELINE_MISMATCH | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -235,6 +236,16 @@ pm_assert_cleanup_zero() {
   fi
 }
 
+pm_assert_production_git_baseline() {
+  local observed_head=${1:-} observed_status=${2:-} expected_head=${3:-} expected_status=${4:-}
+  if [[ ! $observed_head =~ ^[0-9a-f]{40}$ || ! $observed_status =~ ^[0-9a-f]{64}$ ||
+        ! $expected_head =~ ^[0-9a-f]{40}$ || ! $expected_status =~ ^[0-9a-f]{64}$ ||
+        $observed_head != "$expected_head" || $observed_status != "$expected_status" ]]; then
+    PROBE_ERROR_CLASSIFICATION=PRODUCTION_GIT_BASELINE_MISMATCH
+    return 67
+  fi
+}
+
 pm_preserve_original_exit() {
   local original=$1 cleanup=$2
   pm_safe_uint "$original" && pm_safe_uint "$cleanup" || return 65
@@ -264,7 +275,9 @@ pm_validate_success_report() {
     (.bindings.dumpSha256|test("^[0-9a-f]{64}$")) and .bindings.dumpBytes==45284314 and
     .restore.FULL_RESTORE_PROOF=="PASS" and .restore.objectCount==581 and
     .migration.DISPOSABLE_MIGRATION_PROOF=="PASS" and .migration.beforeFinished==46 and
-    .migration.afterFinished==54 and .migration.failed==0 and .migration.prismaDiffEmpty==true and
+    .migration.afterFinished==54 and .migration.failed==0 and .migration.prismaDiffEmpty==false and
+    .migration.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
+    .migration.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
     (.migration.appliedNames|sort)==(["20260726162043_add_max_raw_transport_journal",
       "20260726190658_add_max_route_registry","20260726205437_add_max_inbound_normalization",
       "20260726215715_add_max_per_chat_outbound_actor","20260726225737_add_max_dispatch_ledger",
@@ -282,6 +295,12 @@ pm_validate_success_report() {
     .e2e.accidentalDuplicateRawRows==0 and .e2e.wrongAccount==0 and .e2e.criticalSemanticRegressions==0 and
     .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and
     .cleanup.volumesRemaining==0 and .cleanup.tempFilesRemaining==0 and
+    .productionImmutability.before.productionHead=="e6a0a833fbb756216b058bfe326f9f9c77c4cc6d" and
+    .productionImmutability.after.productionHead=="e6a0a833fbb756216b058bfe326f9f9c77c4cc6d" and
+    .productionImmutability.before.productionStatusV2RawSha256=="2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b" and
+    .productionImmutability.after.productionStatusV2RawSha256=="2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b" and
+    .productionImmutability.before.acceptedProductionGitBaseline==true and
+    .productionImmutability.after.acceptedProductionGitBaseline==true and
     .productionImmutability.unchanged==true and .productionImmutability.productionDatabaseConnections==0 and
     .productionImmutability.productionMigrationLedgerSource=="accepted_preflight_attestation" and
     (.storage.freeBytesBeforePull|type)=="number" and (.storage.freeBytesAfterPull|type)=="number" and

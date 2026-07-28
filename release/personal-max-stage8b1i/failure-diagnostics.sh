@@ -26,6 +26,7 @@ personal_max_stage8b1i_safe_error() {
       POLLING_DEADLINE_EXCEEDED | CONTAINER_REMOVAL_TIMEOUT | NETWORK_REMOVAL_TIMEOUT | \
       VOLUME_REMOVAL_TIMEOUT | TEMP_REMOVAL_TIMEOUT | CLEANUP_GLOBAL_DEADLINE_EXCEEDED | \
       CLEANUP_INCOMPLETE | PRE_PULL_DISK_GATE_FAILED | POST_PULL_DISK_GATE_FAILED | FINAL_DISK_GATE_FAILED | \
+      PRODUCTION_GIT_BASELINE_MISMATCH | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -40,6 +41,15 @@ personal_max_stage8b1i_safe_class() {
       cleanup | report_render | report_handoff | unknown) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+personal_max_stage8b1i_cleanup_primary_temp() {
+  local __pm_path=${PM_DIAGNOSTIC_TMP:-}
+  PM_DIAGNOSTIC_TMP=''
+  [[ -n $__pm_path ]] || return 0
+  [[ $__pm_path =~ ^/var/tmp/personal-max-stage8b1i-isolated-release-proof\.failure\.tmp\.[A-Za-z0-9]{6}$ ]] || return 0
+  [[ -f $__pm_path && ! -L $__pm_path ]] || return 0
+  timeout 10 rm -f -- "$__pm_path" >/dev/null 2>&1
 }
 
 personal_max_stage8b1i_render_failure() {
@@ -89,6 +99,7 @@ personal_max_stage8b1i_render_failure() {
   fi
   pm_capture_bounded temporary filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
     mktemp /var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.tmp.XXXXXX || return 74
+  PM_DIAGNOSTIC_TMP=$temporary
   pm_run_bounded report_handoff 60 METADATA_TIMEOUT METADATA_FAILED chmod 0600 "$temporary" || return 74
   pm_write_bounded "$temporary" report_render 60 METADATA_TIMEOUT METADATA_FAILED jq -n \
     --arg generatedAt "$generated" --arg scriptSha256 "$PM_SCRIPT_SHA256" \
@@ -137,6 +148,7 @@ personal_max_stage8b1i_render_failure() {
   pm_capture_bounded identity report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%d:%i' "$temporary" || return 74
   pm_run_bounded report_handoff 60 METADATA_TIMEOUT METADATA_FAILED \
     mv --no-clobber --no-target-directory -- "$temporary" "$PM_FAILURE_PATH" || return 74
+  PM_DIAGNOSTIC_TMP=''
   pm_capture_bounded final_identity report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%d:%i' "$PM_FAILURE_PATH" || return 74
   [[ $identity == "$final_identity" ]]
   sha_of report_sha "$PM_FAILURE_PATH" || return 74
@@ -164,6 +176,7 @@ personal_max_stage8b1i_emergency_diagnostics() {
   [[ $__pm_original_exit =~ ^[1-9][0-9]*$ && $__pm_original_exit -le 255 ]] || __pm_original_exit=1
   personal_max_stage8b1i_safe_phase "$__pm_phase" || __pm_phase=bootstrap_complete
   personal_max_stage8b1i_safe_error "$__pm_classification" || __pm_classification=UNEXPECTED_COMMAND_FAILURE
+  personal_max_stage8b1i_cleanup_primary_temp || true
   if [[ ! $__pm_target =~ ^/var/tmp/personal-max-stage8b1i-isolated-release-proof\.failure\.[0-9a-f]{64}\.json$ || -e $__pm_target || -L $__pm_target ]]; then
     printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nCLASSIFICATION=%s\nEXIT_CODE=%s\nFAILURE_REPORT_UNAVAILABLE\n' \
       "$__pm_phase" "$__pm_classification" "$__pm_original_exit" >&2

@@ -25,6 +25,16 @@ readonly IMAGE_EXPANSION_BYTES=4323469515
 readonly PROBE_BUDGET_BYTES=2172240240
 readonly CLEANUP_RESERVE_BYTES=5368709120
 readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc110d97b13f8b506e7723459766a4c3'
+readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
+readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
+readonly FAILURE_DIAGNOSTICS_SHA256='ce22f062a1454b86ecbabab6b2ba389569f4a285cf6648b8fd13c5946b11ef25'
+readonly BOUNDED_OPERATIONS_SHA256='37d59c59b33f1936153b4de1db68c8d157c0a191e17ccccecffde564eed76482'
+readonly PROBE_OUTPUT_HELPERS_SHA256='da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11'
+readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
+readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
+readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
+readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e'
+readonly GATEWAY_CLIENT_HARNESS_SHA256='f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428'
 readonly PRODUCTION_PROJECT_LABEL='com.docker.compose.project=crm'
 readonly STAGE_LABEL='personal-max.stage=8b1i'
 readonly RUN_LABEL_KEY='personal-max.run-id'
@@ -44,6 +54,7 @@ PROBE_SAFE_COMMAND_CLASS='package_validation'
 PROBE_ERROR_CLASSIFICATION='NONE'
 PM_SCRIPT_SHA256=''
 PM_FAILURE_PATH=''
+PM_DIAGNOSTIC_TMP=''
 RUN_ID=''
 PREFIX=''
 TMP=''
@@ -85,36 +96,9 @@ fail() {
 
 uint() { [[ ${1:-} =~ ^[0-9]+$ ]]; }
 
-sha_of() {
-  local __pm_target_name=$1 __pm_path=$2 __pm_checksum_line
-  pm_capture_bounded __pm_checksum_line filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED sha256sum -- "$__pm_path" || return
-  pm_assign_out "$__pm_target_name" "${__pm_checksum_line%% *}"
-}
-
-free_bytes_at() {
-  local __pm_target_name=$1 __pm_path=$2 __pm_df_output __pm_header __pm_data
-  local __pm_filesystem __pm_blocks __pm_used __pm_available __pm_capacity __pm_mountpoint
-  pm_capture_bounded __pm_df_output filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED df -B1 -P "$__pm_path" || return
-  IFS=$'\n' read -r __pm_header __pm_data <<<"$__pm_df_output"
-  read -r __pm_filesystem __pm_blocks __pm_used __pm_available __pm_capacity __pm_mountpoint <<<"$__pm_data"
-  uint "$__pm_available" || return 65
-  pm_assign_out "$__pm_target_name" "$__pm_available"
-}
-
-hash_sorted_text() {
-  local __pm_target_name=$1 __pm_value=$2 __pm_source_path __pm_sorted_path __pm_digest
-  pm_capture_bounded __pm_source_path filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp "$TMP/hash-source.XXXXXX" || return
-  pm_capture_bounded __pm_sorted_path filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp "$TMP/hash-sorted.XXXXXX" || return
-  printf '%s\n' "$__pm_value" >"$__pm_source_path"
-  pm_write_bounded "$__pm_sorted_path" filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED env LC_ALL=C sort "$__pm_source_path" || return
-  sha_of __pm_digest "$__pm_sorted_path" || return
-  pm_run_bounded temp_cleanup 60 TEMP_REMOVAL_TIMEOUT TEMP_REMOVAL_TIMEOUT rm -f -- "$__pm_source_path" "$__pm_sorted_path" || return
-  pm_assign_out "$__pm_target_name" "$__pm_digest"
-}
-
 production_snapshot() {
   local target=$1 container_list id inspect_line states_text='' restarts_text='' volume_list network_list
-  local ids_hash states_hash restarts_hash volumes_hash networks_hash git_head git_status_text git_status_hash git_text git_hash free_bytes
+  local ids_hash states_hash restarts_hash volumes_hash networks_hash git_head git_status_hash git_text git_hash free_bytes
   pm_capture_bounded container_list docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
     docker ps -aq --no-trunc --filter "label=$PRODUCTION_PROJECT_LABEL" || return
   for id in $container_list; do
@@ -136,9 +120,10 @@ production_snapshot() {
   hash_sorted_text networks_hash "$network_list" || return
   pm_capture_bounded git_head filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
     env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm rev-parse HEAD || return
-  pm_capture_bounded git_status_text filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+  hash_raw_command git_status_hash filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
     env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all || return
-  hash_sorted_text git_status_hash "$git_status_text" || return
+  pm_assert_production_git_baseline "$git_head" "$git_status_hash" \
+    "$ACCEPTED_PRODUCTION_HEAD" "$ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256" || return
   git_text="$git_head|$git_status_hash"
   hash_sorted_text git_hash "$git_text" || return
   free_bytes_at free_bytes /var/lib/docker || return
@@ -146,26 +131,19 @@ production_snapshot() {
     --arg containerIdsHash "$ids_hash" --arg serviceStatesHash "$states_hash" --arg restartCountsHash "$restarts_hash" \
     --arg volumeInventoryHash "$volumes_hash" --arg networkInventoryHash "$networks_hash" \
     --arg productionGitHash "$git_hash" --arg productionHead "$git_head" --arg productionStatusHash "$git_status_hash" \
+    --arg productionStatusV2RawSha256 "$git_status_hash" \
+    --arg acceptedProductionHead "$ACCEPTED_PRODUCTION_HEAD" \
+    --arg acceptedProductionStatusV2RawSha256 "$ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256" \
     --arg migrationLedgerAttestedHash "$ATTESTED_PRODUCTION_LEDGER_SHA256" --argjson freeBytes "$free_bytes" \
     '{containerIdsHash:$containerIdsHash,serviceStatesHash:$serviceStatesHash,restartCountsHash:$restartCountsHash,
       volumeInventoryHash:$volumeInventoryHash,networkInventoryHash:$networkInventoryHash,
       productionGitHash:$productionGitHash,productionHead:$productionHead,productionStatusHash:$productionStatusHash,
+      productionStatusV2RawSha256:$productionStatusV2RawSha256,
+      acceptedProductionHead:$acceptedProductionHead,
+      acceptedProductionStatusV2RawSha256:$acceptedProductionStatusV2RawSha256,acceptedProductionGitBaseline:true,
       migrationLedger:{hash:$migrationLedgerAttestedHash,source:"accepted_preflight_attestation",liveConnection:false},freeBytes:$freeBytes}'
 }
 
-cleanup_inventory() {
-  local __pm_target_name=$1 __pm_kind=$2 __pm_seconds=$3 __pm_inventory_output
-  case $__pm_kind in
-    containers) pm_capture_bounded __pm_inventory_output cleanup "$__pm_seconds" CONTAINER_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
-      docker ps -aq --no-trunc --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID" ;;
-    networks) pm_capture_bounded __pm_inventory_output cleanup "$__pm_seconds" NETWORK_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
-      docker network ls -q --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID" ;;
-    volumes) pm_capture_bounded __pm_inventory_output cleanup "$__pm_seconds" VOLUME_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
-      docker volume ls -q --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID" ;;
-    *) return 64 ;;
-  esac || return
-  pm_assign_out "$__pm_target_name" "$__pm_inventory_output"
-}
 
 cleanup_remove_kind() {
   local kind=$1 objects=$2 deadline=$3 object remaining timeout_class command
@@ -234,18 +212,29 @@ cleanup_temp_path() {
 }
 
 cleanup_disposable() {
-  local failed=0 deadline
+  local failed=0 deadline status first_class=NONE
   if (( CLEANUP_GLOBAL_DEADLINE <= SECONDS )); then CLEANUP_GLOBAL_DEADLINE=$((SECONDS + 300)); fi
   deadline=$CLEANUP_GLOBAL_DEADLINE
-  cleanup_docker_objects || failed=$?
-  cleanup_temp_path "${TMP:-}" "/var/tmp/personal-max-stage8b1i.${RUN_ID}.*" "$deadline" || failed=$?
-  cleanup_temp_path "${TMP_REPORT:-}" '/var/tmp/personal-max-stage8b1i-success.tmp.*' "$deadline" || failed=$?
-  cleanup_temp_path "${TMP_AFTER:-}" '/var/tmp/personal-max-stage8b1i-after.tmp.*' "$deadline" || failed=$?
+  cleanup_docker_objects || {
+    status=$?; failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE};
+  }
+  cleanup_temp_path "${TMP:-}" "/var/tmp/personal-max-stage8b1i.${RUN_ID}.*" "$deadline" || {
+    status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }
+  }
+  cleanup_temp_path "${TMP_REPORT:-}" '/var/tmp/personal-max-stage8b1i-success.tmp.*' "$deadline" || {
+    status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }
+  }
+  cleanup_temp_path "${TMP_AFTER:-}" '/var/tmp/personal-max-stage8b1i-after.tmp.*' "$deadline" || {
+    status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }
+  }
   CLEANUP_TEMP_FILES_REMAINING=0
   [[ -n ${TMP:-} && ( -e $TMP || -L $TMP ) ]] && CLEANUP_TEMP_FILES_REMAINING=$((CLEANUP_TEMP_FILES_REMAINING + 1))
   [[ -n ${TMP_REPORT:-} && ( -e $TMP_REPORT || -L $TMP_REPORT ) ]] && CLEANUP_TEMP_FILES_REMAINING=$((CLEANUP_TEMP_FILES_REMAINING + 1))
   [[ -n ${TMP_AFTER:-} && ( -e $TMP_AFTER || -L $TMP_AFTER ) ]] && CLEANUP_TEMP_FILES_REMAINING=$((CLEANUP_TEMP_FILES_REMAINING + 1))
-  (( CLEANUP_TEMP_FILES_REMAINING == 0 )) || { PROBE_ERROR_CLASSIFICATION=CLEANUP_INCOMPLETE; failed=70; }
+  (( CLEANUP_TEMP_FILES_REMAINING == 0 )) || {
+    (( failed != 0 )) || { failed=70; first_class=CLEANUP_INCOMPLETE; }
+  }
+  (( failed == 0 )) || PROBE_ERROR_CLASSIFICATION=$first_class
   return "$failed"
 }
 
@@ -261,6 +250,7 @@ on_error() {
 on_exit() {
   local status=$? cleanup_status=0 cleanup_ok=false original_class=${PROBE_ERROR_CLASSIFICATION:-UNEXPECTED_COMMAND_FAILURE}
   local original_phase=${PROBE_PHASE:-bootstrap_complete} original_safe_class=${PROBE_SAFE_COMMAND_CLASS:-unknown}
+  local preserved_status
   trap - ERR EXIT
   set +e
   (( FAILURE_EXIT != 0 )) && status=$FAILURE_EXIT
@@ -280,7 +270,10 @@ on_exit() {
     if ! personal_max_stage8b1i_render_failure "$status" "$FAILURE_SOURCE_LINE" "$cleanup_ok"; then
       personal_max_stage8b1i_emergency_diagnostics "$status" || true
     fi
-    status=$(pm_preserve_original_exit "$status" "$cleanup_status")
+    if declare -F pm_preserve_original_exit >/dev/null; then
+      preserved_status=$(pm_preserve_original_exit "$status" "$cleanup_status")
+      uint "$preserved_status" && status=$preserved_status
+    fi
   elif (( status == 0 && cleanup_status != 0 )); then
     status=$cleanup_status
   fi
@@ -310,6 +303,41 @@ bootstrap_capture() {
   bootstrap_assign_out "$__pm_target_name" "$__pm_captured"
 }
 
+bootstrap_verify_runtime_path() {
+  local __pm_name=${1:-} __pm_path pm_result_real_path
+  case $__pm_name in
+    isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
+      probe-output-helpers.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
+      prisma-legacy-diff-gate.sh | synthetic-scraper-harness.js | gateway-client-harness.js) ;;
+    *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
+  esac
+  __pm_path="$PACKAGE_ROOT/$__pm_name"
+  [[ -f $__pm_path && ! -L $__pm_path ]] || {
+    printf 'RUNTIME_ARTIFACT_PATH_REFUSED=%s\n' "$__pm_name" >&2
+    return 65
+  }
+  bootstrap_capture pm_result_real_path 30 realpath -- "$__pm_path" || return
+  [[ $pm_result_real_path == "$__pm_path" ]] || {
+    printf 'RUNTIME_ARTIFACT_PATH_REFUSED=%s\n' "$__pm_name" >&2
+    return 65
+  }
+}
+
+bootstrap_verify_runtime_artifact() {
+  local __pm_name=${1:-} __pm_expected=${2:-} pm_result_checksum_line __pm_observed
+  [[ $__pm_expected =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'RUNTIME_ARTIFACT_EXPECTED_SHA_REFUSED=%s\n' "$__pm_name" >&2
+    return 64
+  }
+  bootstrap_verify_runtime_path "$__pm_name" || return
+  bootstrap_capture pm_result_checksum_line 60 sha256sum -- "$PACKAGE_ROOT/$__pm_name" || return
+  __pm_observed=${pm_result_checksum_line%% *}
+  [[ $__pm_observed == "$__pm_expected" ]] || {
+    printf 'RUNTIME_ARTIFACT_CHECKSUM_MISMATCH=%s\n' "$__pm_name" >&2
+    return 66
+  }
+}
+
 printf 'STAGE8B1I_PHASE=bootstrap_complete\n'
 bootstrap_capture root_uid 30 id -u
 [[ $root_uid -eq 0 ]] || { printf 'ROOT_REQUIRED\n' >&2; exit 77; }
@@ -317,6 +345,7 @@ bootstrap_capture root_uid 30 id -u
 PACKAGE_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly PACKAGE_ROOT
 [[ $PACKAGE_ROOT == "$EXPECTED_PACKAGE_ROOT" ]] || { printf 'PACKAGE_PATH_REFUSED\n' >&2; exit 65; }
+bootstrap_verify_runtime_path isolated-release-probe.sh || exit $?
 bootstrap_capture checksum_line 60 sha256sum -- "$PACKAGE_ROOT/isolated-release-probe.sh"
 PM_SCRIPT_SHA256=${checksum_line%% *}
 [[ $PM_SCRIPT_SHA256 == "$1" ]] || { printf 'SCRIPT_CHECKSUM_MISMATCH\n' >&2; exit 66; }
@@ -327,12 +356,29 @@ PM_FAILURE_PATH="/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.
 for command in docker jq sha256sum stat realpath df git awk sed grep comm cmp timeout openssl find sort seq runuser; do
   command -v "$command" >/dev/null || { printf 'REQUIRED_COMMAND_MISSING=%s\n' "$command" >&2; exit 69; }
 done
+# The checksum argument anchors this script; these constants transitively anchor
+# every package file that can be sourced, executed, mounted, or decide success.
+bootstrap_verify_runtime_artifact failure-diagnostics.sh "$FAILURE_DIAGNOSTICS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact bounded-operations.sh "$BOUNDED_OPERATIONS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact probe-output-helpers.sh "$PROBE_OUTPUT_HELPERS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact migration-sql-gate.sh "$MIGRATION_SQL_GATE_SHA256" || exit $?
+bootstrap_verify_runtime_artifact migration-sql-bindings.txt "$MIGRATION_SQL_BINDINGS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh "$PRISMA_LEGACY_DIFF_GATE_SHA256" || exit $?
+bootstrap_verify_runtime_artifact synthetic-scraper-harness.js "$SYNTHETIC_SCRAPER_HARNESS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact gateway-client-harness.js "$GATEWAY_CLIENT_HARNESS_SHA256" || exit $?
+# SHA256SUMS remains a complete package-integrity ledger, but is deliberately
+# not a trust anchor because binding it here would create a circular hash.
+bootstrap_verify_runtime_path SHA256SUMS || exit $?
 timeout --signal=TERM --kill-after=10s 60s sh -c 'cd -- "$1" && sha256sum -c SHA256SUMS >/dev/null' sh "$PACKAGE_ROOT"
-# shellcheck source=release/personal-max-stage8b1i/bounded-operations.sh
-source "$PACKAGE_ROOT/bounded-operations.sh"
 # shellcheck source=release/personal-max-stage8b1i/failure-diagnostics.sh
 source "$PACKAGE_ROOT/failure-diagnostics.sh"
 DIAGNOSTICS_LOADED=true
+# Diagnostics load first so the emergency fallback remains available if either
+# wrapper library fails while being sourced after checksum validation.
+# shellcheck source=release/personal-max-stage8b1i/bounded-operations.sh
+source "$PACKAGE_ROOT/bounded-operations.sh"
+# shellcheck source=release/personal-max-stage8b1i/probe-output-helpers.sh
+source "$PACKAGE_ROOT/probe-output-helpers.sh"
 
 pm_enter_phase source_binding package_validation
 sha_of observed_sha "$BACKUP_REPORT"
@@ -385,24 +431,6 @@ done
 pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker network inspect "$NETWORK" >/dev/null 2>&1
 pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker volume inspect "$PG_VOLUME" >/dev/null 2>&1
 pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker volume inspect "$SPOOL_VOLUME" >/dev/null 2>&1
-
-image_presence() {
-  local __pm_boolean_target=$1 __pm_id_target=$2 __pm_ref=$3 __pm_image_id='' __pm_status __pm_had_errexit=false
-  [[ $- == *e* ]] && __pm_had_errexit=true
-  set +e
-  if pm_capture_bounded __pm_image_id docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
-    docker image inspect --format '{{.Id}}' "$__pm_ref"; then __pm_status=0; else __pm_status=$?; fi
-  pm_restore_errexit "$__pm_had_errexit"
-  if (( __pm_status == 124 )); then return 124; fi
-  if (( __pm_status == 0 )); then
-    pm_assign_out "$__pm_boolean_target" true
-    pm_assign_out "$__pm_id_target" "$__pm_image_id"
-  else
-    PROBE_ERROR_CLASSIFICATION=NONE
-    pm_assign_out "$__pm_boolean_target" false
-    pm_assign_out "$__pm_id_target" absent
-  fi
-}
 
 verify_image() {
   local ref=$1 digest=$2 role=$3 os architecture digests
@@ -516,13 +544,6 @@ pm_write_bounded "$TMP/restore.log" backup_validation 1200 FULL_RESTORE_TIMEOUT 
   docker exec "$PG_CONTAINER" pg_restore --exit-on-error --no-owner --no-acl -U "$PG_USER" -d "$PG_DB" /backup/database.dump
 restore_seconds=$(( $(date +%s) - restore_started ))
 
-psql_value() {
-  local __pm_target_name=$1 __pm_query=$2 __pm_psql_output
-  pm_capture_bounded __pm_psql_output disposable_postgresql 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
-    docker exec "$PG_CONTAINER" psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" -c "$__pm_query" || return
-  pm_assign_out "$__pm_target_name" "$__pm_psql_output"
-}
-
 pm_enter_phase restore_verification disposable_postgresql
 psql_value ledger_before_finished 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
 psql_value ledger_before_failed 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL'
@@ -554,8 +575,10 @@ comm -13 "$TMP/repository-migrations" "$TMP/ledger-before" >"$TMP/applied-only"
 [[ $(<"$TMP/applied-only") == 20260717000000_add_driver_telegram_submitted_phone ]]
 pm_run_bounded disposable_migration 120 MIGRATION_SCAN_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker run --rm --name "$PREFIX-migration-scan" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
-  --entrypoint sh "$GATEWAY_IMAGE" -ceu 'for name in "$@"; do file="/app/prisma/migrations/$name/migration.sql"; test -f "$file"; if grep -Eiq "^[[:space:]]*(DROP|TRUNCATE|DELETE|UPDATE|INSERT)[[:space:]]|^[[:space:]]*ALTER[[:space:]].*[[:space:]]DROP[[:space:]]" "$file"; then exit 67; fi; done' \
-  sh "${EXPECTED_MIGRATIONS[@]}"
+  -v "$PACKAGE_ROOT/migration-sql-gate.sh:/tmp/stage8b1i-migration-sql-gate.sh:ro" \
+  -v "$PACKAGE_ROOT/migration-sql-bindings.txt:/tmp/stage8b1i-migration-sql-bindings.txt:ro" \
+  --entrypoint sh "$GATEWAY_IMAGE" /tmp/stage8b1i-migration-sql-gate.sh \
+  /app/prisma/migrations /tmp/stage8b1i-migration-sql-bindings.txt
 pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker exec "$PG_CONTAINER" createdb -U "$PG_USER" "$PG_SHADOW_DB"
 
@@ -588,7 +611,11 @@ psql_value envelope_key_present "SELECT to_regclass('public.\"MaxRawTransportEve
 pm_write_bounded "$TMP/prisma-diff.log" disposable_migration 600 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
   docker run --rm --name "$PREFIX-prisma-diff" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/migration.env" --entrypoint sh "$GATEWAY_IMAGE" -ceu \
-  'exec /app/node_modules/.bin/prisma migrate diff --from-migrations /app/prisma/migrations --to-url "$DATABASE_URL" --shadow-database-url "$SHADOW_DATABASE_URL" --exit-code'
+  'exec /app/node_modules/.bin/prisma migrate diff --from-migrations /app/prisma/migrations --to-url "$DATABASE_URL" --shadow-database-url "$SHADOW_DATABASE_URL" --script'
+pm_run_bounded disposable_migration 60 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
+  sh "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh" "$TMP/prisma-diff.log" >/dev/null
+prisma_diff_empty=false
+prisma_diff_status=ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS
 
 pm_enter_phase gateway_negative docker_disposable
 pm_expect_failure_bounded docker_disposable 120 GATEWAY_NEGATIVE_TIMEOUT \
@@ -749,6 +776,7 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   --argjson objectCount "$object_count" --argjson restoreSeconds "$restore_seconds" \
   --argjson beforeFinished "$ledger_before_finished" --argjson afterFinished "$ledger_after_finished" \
   --argjson failed "$ledger_after_failed" --argjson appliedNames "$applied_names" \
+  --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
   --argjson migrationSeconds "$migration_seconds" --argjson migrationDurations "$migration_durations" \
   --argjson representativeCounts "$(<"$TMP/representative-counts.json")" \
   --argjson physicalFrames "$physical_frames" --argjson identicalFrames "$identical_frames" \
@@ -766,7 +794,9 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
     restore:{FULL_RESTORE_PROOF:"PASS",objectCount:$objectCount,ledgerFinished:$beforeFinished,ledgerFailed:0,
       catalogIntegrity:true,representativeCounts:$representativeCounts,durationSeconds:$restoreSeconds,userDataPrinted:false},
     migration:{DISPOSABLE_MIGRATION_PROOF:"PASS",appliedNames:$appliedNames,beforeFinished:$beforeFinished,
-      afterFinished:$afterFinished,failed:$failed,prismaDiffEmpty:true,durationSeconds:$migrationSeconds,
+      afterFinished:$afterFinished,failed:$failed,prismaDiffEmpty:$prismaDiffEmpty,
+      prismaDiffStatus:$prismaDiffStatus,durationSeconds:$migrationSeconds,
+      acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"],
       perMigrationDurations:$migrationDurations,repositoryDirectoryCount:53,appliedOnlyLegacyCount:1,productionMigration:false},
     images:{gateway:{ref:$gatewayRef,runtimeUser:$gatewayUser,digestVerified:true,preexistingBeforePull:$gatewayPreexisting,
         imageIdBeforePull:$gatewayImageIdBefore,acquiredDuringProbe:$gatewayAcquired},

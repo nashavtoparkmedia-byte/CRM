@@ -41,12 +41,43 @@
         "properties": {
           "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
           "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "catalogIntegrity"]},
-          "migration": {"type": "object", "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty"]},
+          "migration": {
+            "type": "object",
+            "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty", "prismaDiffStatus", "acceptedLedgerOnlyMigrations"],
+            "properties": {
+              "prismaDiffEmpty": {"const": false},
+              "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
+              "acceptedLedgerOnlyMigrations": {"const": ["20260717000000_add_driver_telegram_submitted_phone"]}
+            }
+          },
           "images": {"type": "object", "required": ["gateway", "scraper", "postgresql", "retained"]},
           "executable": {"type": "object", "required": ["dormant", "invalidConfigFailsClosed", "missingHmacFailsClosed", "authenticatedIngress", "authDenied", "requestSizeLimit"]},
           "e2e": {"type": "object", "required": ["actualHook", "frames", "identicalFrames", "captureLoss", "accidentalDuplicateRawRows", "wrongAccount", "criticalSemanticRegressions"]},
           "cleanup": {"type": "object", "required": ["containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
-          "productionImmutability": {"type": "object", "required": ["before", "after", "unchanged", "productionDatabaseConnections", "productionMigrationLedgerSource"]},
+          "productionImmutability": {
+            "type": "object",
+            "required": ["before", "after", "unchanged", "productionDatabaseConnections", "productionMigrationLedgerSource"],
+            "properties": {
+              "before": {
+                "type": "object",
+                "required": ["productionHead", "productionStatusV2RawSha256", "acceptedProductionGitBaseline"],
+                "properties": {
+                  "productionHead": {"const": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d"},
+                  "productionStatusV2RawSha256": {"const": "2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"},
+                  "acceptedProductionGitBaseline": {"const": true}
+                }
+              },
+              "after": {
+                "type": "object",
+                "required": ["productionHead", "productionStatusV2RawSha256", "acceptedProductionGitBaseline"],
+                "properties": {
+                  "productionHead": {"const": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d"},
+                  "productionStatusV2RawSha256": {"const": "2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"},
+                  "acceptedProductionGitBaseline": {"const": true}
+                }
+              }
+            }
+          },
           "storage": {"type": "object", "required": ["freeBytesBeforePull", "freeBytesAfterPull", "freeBytesAfterCleanup", "postPullRequiredBytes", "finalRequiredBytes"]}
         }
       }

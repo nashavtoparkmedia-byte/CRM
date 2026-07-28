@@ -5,30 +5,31 @@
   "mechanism": {
     "assignment": "validated Bash nameref",
     "targetPattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
-    "reservedPrefix": "__pm_",
-    "internalPrefix": "__pm_",
+    "wrapperReservedPrefix": "__pm_",
+    "helperBridgePrefix": "pm_result_",
+    "helperPublicTargetsRefuseBridgePrefix": true,
     "evalUsed": false,
     "callerInitializationRequired": false,
     "trailingNewlineSemantics": "Bash command substitution strips trailing newlines deterministically"
   },
   "functions": [
     {"function":"pm_assign_out","file":"bounded-operations.sh","outParameters":["target name"],"localNames":["__pm_target_name","__pm_value","__pm_out_ref"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"collision_matrix"},
-    {"function":"pm_capture_bounded","file":"bounded-operations.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_command_class","__pm_seconds","__pm_timeout_class","__pm_failure_class","__pm_captured","__pm_status","__pm_had_errexit"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"fixed_exact_caller"},
-    {"function":"bootstrap_assign_out","file":"isolated-release-probe.sh","outParameters":["target name"],"localNames":["__pm_target_name","__pm_value","__pm_out_ref"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"static_bootstrap_contract"},
-    {"function":"bootstrap_capture","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_seconds","__pm_captured","__pm_status"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"static_bootstrap_contract"},
-    {"function":"sha_of","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_path","__pm_checksum_line"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"collision_matrix"},
-    {"function":"free_bytes_at","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_path","__pm_df_output","__pm_header","__pm_data","__pm_filesystem","__pm_blocks","__pm_used","__pm_available","__pm_capacity","__pm_mountpoint"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"old_defect_reproduction_and_fixed_exact_caller"},
-    {"function":"hash_sorted_text","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_value","__pm_source_path","__pm_sorted_path","__pm_digest"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"static_internal_prefix_contract"},
-    {"function":"cleanup_inventory","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_kind","__pm_seconds","__pm_inventory_output"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"cleanup_empty_inventory_and_cleanup_inventory_failure"},
-    {"function":"image_presence","file":"isolated-release-probe.sh","outParameters":["arguments 1 and 2"],"localNames":["__pm_boolean_target","__pm_id_target","__pm_ref","__pm_image_id","__pm_status","__pm_had_errexit"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"static_dual_output_contract"},
-    {"function":"psql_value","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_query","__pm_psql_output"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"static_internal_prefix_contract"}
+    {"function":"pm_capture_bounded","file":"bounded-operations.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_command_class","__pm_seconds","__pm_timeout_class","__pm_failure_class","__pm_captured","__pm_status","__pm_had_errexit"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"fixed_exact_caller_and_collision_matrix"},
+    {"function":"bootstrap_assign_out","file":"isolated-release-probe.sh","outParameters":["target name"],"localNames":["__pm_target_name","__pm_value","__pm_out_ref"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_bootstrap_collision_matrix"},
+    {"function":"bootstrap_capture","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_seconds","__pm_captured","__pm_status"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_bootstrap_collision_matrix"},
+    {"function":"sha_of","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_path","pm_result_checksum_line"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_sha_helper_collision_matrix"},
+    {"function":"free_bytes_at","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_path","pm_result_df_output","__pm_header","__pm_data","__pm_filesystem","__pm_blocks","__pm_used","__pm_available","__pm_capacity","__pm_mountpoint"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_free_bytes_helper"},
+    {"function":"hash_sorted_text","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_value","pm_result_source_path","pm_result_sorted_path","pm_result_checksum_line","__pm_digest"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_hash_sorted_helper"},
+    {"function":"hash_raw_command","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_command_class","__pm_seconds","__pm_timeout_class","__pm_failure_class","pm_result_raw_path","pm_result_checksum_line","__pm_digest","__pm_status","__pm_original_class"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_hash_raw_command_helper"},
+    {"function":"cleanup_inventory","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_kind","__pm_seconds","pm_result_inventory_output","__pm_run_id"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_cleanup_inventory_outputs_and_failure"},
+    {"function":"image_presence","file":"probe-output-helpers.sh","outParameters":["arguments 1 and 2"],"localNames":["__pm_boolean_target","__pm_id_target","__pm_ref","pm_result_image_id"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_image_presence_outputs_and_failure"},
+    {"function":"psql_value","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_query","pm_result_psql_output"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_psql_value_helper"}
   ],
   "scans": {
     "printfVProductionOccurrences": 0,
-    "evalOccurrences": 0,
-    "declareNOccurrences": 0,
-    "localNOccurrences": 3,
+    "evalProductionOccurrences": 0,
+    "reservedWrapperTargetCalls": 0,
     "oldImplementationRetainedOnlyAsTestFixture": true
   },
-  "verdict": "OUT_PARAMETER_COLLISION_ARCHITECTURALLY_REPAIRED"
+  "verdict": "OUT_PARAMETER_COLLISION_ARCHITECTURALLY_REPAIRED_AND_EXECUTABLY_TESTED"
 }
