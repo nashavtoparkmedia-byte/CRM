@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1R-P1",
+  "mode": "PRODUCTION_READ_ONLY_PREFLIGHT",
+  "productionProbe": {
+    "path": "root-preflight/probe-readonly-production.sh",
+    "sha256": "bacd74af185a371ca641ef8f262286c424e51bd3737dd81c1b7382ffb5fdc336",
+    "obsoleteSha256": "f5546c8974cfbb0247de992ea4a1d4c0a9029bea54537574a41bc2865e1df429",
+    "checksumBindingRequired": true,
+    "rootRequired": true,
+    "resultPath": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json"
+  },
+  "reportHandoff": {
+    "temporaryOwner": "root",
+    "temporaryMode": "0600",
+    "finalType": "regular",
+    "symlinkAllowed": false,
+    "finalOwner": "root",
+    "finalGroup": "codexbot",
+    "finalMode": "0640",
+    "codexbotReadable": true,
+    "codexbotWritable": false,
+    "worldReadable": false,
+    "worldWritable": false,
+    "atomicNoClobberMove": true,
+    "additionalOwnerCommandRequired": false
+  },
+  "safety": {
+    "environmentValuesIncluded": false,
+    "secretsIncluded": false,
+    "messageContentsIncluded": false,
+    "chromiumProfileContentsIncluded": false,
+    "postgresqlReadOnly": true,
+    "boundedTimeouts": true,
+    "unboundedFullTableScans": false,
+    "dockerMutation": false,
+    "productionMutation": false,
+    "browserLaunch": false,
+    "maxContact": false,
+    "providerAction": false
+  },
+  "isolatedProbe": {
+    "path": "root-preflight/probe-isolated-images.sh",
+    "sha256": "931878d6280f56469c5e42d95917cf58d92d09ec895f7ebf5286b98290e363e4",
+    "separateRootApprovalRequired": true,
+    "authorizedByProductionProbeCommand": false
+  }
+}

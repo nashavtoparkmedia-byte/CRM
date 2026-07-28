@@ -6,9 +6,21 @@
   "baseCommit": "ecd6814e888944dc2b27758e4e711bb9a7ebe081",
   "acceptedReleaseCommit": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
   "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
-  "sourceCommitResolution": "acceptedReleaseCommit is the immutable-image source; the later SELF commit is a release-package-only production preflight safety patch",
+  "sourceCommitResolution": "acceptedReleaseCommit is the immutable-image source; later production preflight commits change only release-package safety and report handoff",
   "productionReadOnlyPreflightSafetyPatch": {
+    "commit": "9a6fdd46a545874299d2cc2aca1c5d54d07da48e",
+    "applicationBehaviorChanged": false,
+    "migrationChanged": false,
+    "releaseImagesChanged": false
+  },
+  "productionReadOnlyPreflightHandoffPatch": {
     "commit": "SELF",
+    "expectedParent": "9a6fdd46a545874299d2cc2aca1c5d54d07da48e",
+    "temporaryReportMode": "0600",
+    "finalReportOwner": "root",
+    "finalReportGroup": "codexbot",
+    "finalReportMode": "0640",
+    "atomicNoClobberMove": true,
     "applicationBehaviorChanged": false,
     "migrationChanged": false,
     "releaseImagesChanged": false
@@ -44,6 +56,7 @@
     "vulnerability-report.json",
     "executable/ci-image-proof.sh",
     "executable/synthetic-scraper-harness.js",
+    "root-preflight/manifest.json",
     "root-preflight/probe-isolated-images.sh",
     "root-preflight/probe-readonly-production.sh"
   ]

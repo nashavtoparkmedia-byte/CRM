@@ -37,9 +37,13 @@ if [[ "$RESULT_PATH" != "$RESULT_PATH_EXPECTED" || -e "$RESULT_PATH" || -L "$RES
   exit 80
 fi
 
-for command in awk chmod date df dirname docker find findmnt head jq mktemp mv realpath sha256sum sort stat timeout uname; do
+for command in awk chgrp chmod date df dirname docker find findmnt getent head jq mktemp mv realpath runuser sha256sum sort stat timeout uname; do
   command -v "$command" >/dev/null
 done
+if ! timeout 5 getent group codexbot >/dev/null; then
+  echo 'HANDOFF_GROUP_MISSING: required group codexbot does not exist; final report was not created' >&2
+  exit 84
+fi
 test -r "$COMPOSE_FILE"
 test -d "$RELEASE_ROOT/gravity-mvp/prisma/migrations"
 docker compose version >/dev/null
@@ -341,10 +345,33 @@ jq -e '.safety.secretsPrinted==false and .safety.ddl==false and .safety.dml==fal
   echo 'SAFETY_CONDITION_FAILED: sanitized report validation failed' >&2
   exit 81
 }
-chmod 600 "$TMP_RESULT"
-mv -- "$TMP_RESULT" "$RESULT_PATH"
+chgrp codexbot "$TMP_RESULT"
+chmod 0640 "$TMP_RESULT"
+tmp_identity=$(stat -Lc '%d:%i' "$TMP_RESULT")
+if [[ ! -f "$TMP_RESULT" || -L "$TMP_RESULT" || $(stat -Lc '%U:%G:%a' "$TMP_RESULT") != root:codexbot:640 ]]; then
+  echo 'TEMP_RESULT_HANDOFF_UNSAFE: expected a regular root:codexbot mode 0640 file' >&2
+  exit 85
+fi
+mv --no-clobber --no-target-directory -- "$TMP_RESULT" "$RESULT_PATH"
+if [[ -e "$TMP_RESULT" || -L "$TMP_RESULT" ]]; then
+  echo 'RESULT_PATH_RACE_DETECTED: final path appeared before atomic move; existing path was not changed' >&2
+  exit 86
+fi
 trap - EXIT
-printf 'SANITIZED_RESULT_PATH=%s\nSANITIZED_RESULT_SHA256=%s\n' "$RESULT_PATH" "$(sha256sum -- "$RESULT_PATH" | awk '{print $1}')"
+if [[ ! -f "$RESULT_PATH" || -L "$RESULT_PATH" || $(stat -Lc '%d:%i' "$RESULT_PATH") != "$tmp_identity" || $(stat -Lc '%U:%G:%a' "$RESULT_PATH") != root:codexbot:640 ]]; then
+  echo 'FINAL_RESULT_HANDOFF_UNSAFE: expected the atomically moved regular root:codexbot mode 0640 file' >&2
+  exit 87
+fi
+if ! timeout 5 runuser -u codexbot -- test -r "$RESULT_PATH"; then
+  echo 'CODEXBOT_READABILITY_FAILED: sanitized report is not readable by codexbot' >&2
+  exit 88
+fi
+if timeout 5 runuser -u codexbot -- test -w "$RESULT_PATH"; then
+  echo 'CODEXBOT_WRITABILITY_FAILED: sanitized report must not be writable by codexbot' >&2
+  exit 89
+fi
+printf 'SANITIZED_RESULT_PATH=%s\nSANITIZED_RESULT_SHA256=%s\nRESULT_OWNER=root\nRESULT_GROUP=codexbot\nRESULT_MODE=0640\nCODEXBOT_READABLE=YES\nCODEXBOT_WRITABLE=NO\n' \
+  "$RESULT_PATH" "$(sha256sum -- "$RESULT_PATH" | awk '{print $1}')"
 if [[ "$unexpected_changes" == true ]]; then
   echo 'PRODUCTION_DRIFT_DETECTED: inspect the sanitized report; no automatic remediation was attempted' >&2
   exit 82
