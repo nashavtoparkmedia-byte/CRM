@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B2C",
+  "decision": "SCRAPER_DEFAULT_OFF_PACKAGE_BLOCKED",
+  "sourceReport": {
+    "path": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json",
+    "sha256": "d6a6e4764c90a6f64af9c11b2b0c4eeb08b82c377b58990f939bd559688ac63b"
+  },
+  "currentProduction": {
+    "containerId": "0b6013448a7ce753e24a48c76e870cab3c83c0a45f2ae4a70066762b41c600fe",
+    "containerName": "crm-max-scraper",
+    "imageId": "sha256:d99e23b706028185016db797ad840acf29a5926ec00564199d0b986ea5502450",
+    "repoDigests": ["crm/max-web-scraper@sha256:d99e23b706028185016db797ad840acf29a5926ec00564199d0b986ea5502450"],
+    "configuredImage": "crm/max-web-scraper:max-basic-messaging-e150f3fc-20260726T083150Z",
+    "configuredUser": "pwuser",
+    "runtimeUidGid": "1000:1000",
+    "mounts": [{"type":"volume","name":"crm_max_user_data","destination":"/app/user_data","readWrite":true}],
+    "networks": ["crm_internal"],
+    "ports": {},
+    "restartPolicy": "unless-stopped",
+    "health": "healthy",
+    "status": "running",
+    "restartCount": 0,
+    "workingDirectory": "UNKNOWN_NOT_COLLECTED",
+    "entrypoint": "UNKNOWN_NOT_COLLECTED",
+    "command": "UNKNOWN_NOT_COLLECTED",
+    "environmentVariableNames": "UNKNOWN_NOT_COLLECTED",
+    "labels": "PARTIAL_DISCOVERY_LABELS_ONLY",
+    "dependencies": "UNKNOWN_AT_RUNTIME",
+    "profileFilesystemUidGid": "UNKNOWN_NOT_COLLECTED",
+    "processInventory": "UNKNOWN_OPTIONAL_DOCKER_TOP_UNAVAILABLE",
+    "browserProcessCount": "UNKNOWN_NOT_ZERO",
+    "listenerOwnership": "UNKNOWN_NOT_EXECUTED"
+  },
+  "trackedComposeEvidence": {
+    "note": "source evidence only; production is dirty and this is not a substitute for runtime inspect",
+    "service": "max-web-scraper",
+    "profileDestination": "/app/user_data",
+    "network": "crm_internal",
+    "restartPolicy": "unless-stopped",
+    "declaredDependency": "gravity-mvp:service_started",
+    "declaredEnvironmentNames": ["CRM_WEBHOOK_URL"],
+    "envFilePresent": true
+  },
+  "acceptedImage": {
+    "ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+    "runtimeUidGid": "1001:1001",
+    "workingDirectory": "/app",
+    "entrypoint": ["/usr/bin/tini", "--"],
+    "command": ["node", "index.js"],
+    "profilePath": "/app/user_data",
+    "healthcheck": "pgrep -f node.*index",
+    "captureDefaultOff": true,
+    "spoolCreatedWhenOff": false
+  },
+  "blockingMismatches": [
+    "CURRENT_RUNTIME_UID_1000_ACCEPTED_RUNTIME_UID_1001",
+    "PROFILE_FILESYSTEM_OWNERSHIP_UNKNOWN",
+    "CURRENT_ENTRYPOINT_COMMAND_WORKDIR_UNKNOWN",
+    "CURRENT_ENVIRONMENT_NAME_SET_UNKNOWN",
+    "CURRENT_PROCESS_AND_LISTENER_OWNERSHIP_UNKNOWN",
+    "EXACT_RECREATION_AND_ROLLBACK_SPEC_INCOMPLETE"
+  ],
+  "productionMutationPerformed": false
+}
