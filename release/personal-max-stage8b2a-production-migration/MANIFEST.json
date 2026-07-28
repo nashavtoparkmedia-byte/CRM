@@ -5,6 +5,14 @@
   "sourceCommit": "cedca468784dc59411fb6a5b01f650fb6fc96636",
   "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
   "productionMutationPerformed": false,
+  "productionStatusHashMode": "RAW_PORCELAIN_V2_STREAM",
+  "acceptedIsolatedProbeScriptSha256": "dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053",
+  "productionMigrationScriptSha256": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740",
+  "hardBoundRuntimeArtifacts": {
+    "failure-diagnostics.sh": "c720b22f0cf6644c5202f3daa4ccc9ae7de3d0e2ab6e8a3ebfb4bffa0d9be322",
+    "report-success.jq": "fa194be07d80e742a0d64c2af783f76cdad8012b9dbe996e3c8cf84a55c29e2c",
+    "validate-accepted-prisma-drift.awk": "eeeee2d4cb3e46d5b89e5f8d0601c6a7d8b160a3ef8d95fc0a722447967ca4f4"
+  },
   "secretBinding": {
     "sourceService": "gravity-mvp",
     "variableName": "DATABASE_URL",
@@ -22,6 +30,24 @@
     "20260727141925_add_max_shadow_semantic_comparison",
     "20260727154647_add_max_capture_ingress"
   ],
+  "acceptedLedgerOnlyMigrations": [
+    "20260717000000_add_driver_telegram_submitted_phone"
+  ],
+  "acceptedPrismaDiff": {
+    "empty": false,
+    "status": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS",
+    "columns": ["DriverTelegram.submittedPhone", "DriverTelegram.submittedPhoneAt"],
+    "rawSqlIncludedInReport": false
+  },
+  "runnerPolicy": {
+    "migration": "personal-max-stage8b2a-migration-runner",
+    "prismaDiff": "personal-max-stage8b2a-prisma-diff-runner",
+    "lockTimeoutMs": 5000,
+    "migrationStatementTimeoutMs": 840000,
+    "prismaDiffStatementTimeoutMs": 540000,
+    "labelVerifiedFailureCleanup": true,
+    "cleanupOwnershipLabels": ["personal-max.stage", "personal-max.role", "personal-max.script-sha", "personal-max.run-token"]
+  },
   "files": [
     "MANIFEST.json",
     "SHA256SUMS",
@@ -36,6 +62,7 @@
     "report-success.jq",
     "secret-binding-contract.md",
     "test-faults.sh",
-    "test-package.sh"
+    "test-package.sh",
+    "validate-accepted-prisma-drift.awk"
   ]
 }
