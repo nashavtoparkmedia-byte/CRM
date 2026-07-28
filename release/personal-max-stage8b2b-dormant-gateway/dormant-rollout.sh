@@ -2,16 +2,16 @@
 # shellcheck disable=SC1091,SC2016
 set -Eeuo pipefail
 umask 077
-readonly PACKAGE_ROOT='/opt/codex-work/crm-personal-max-stage8b2-autonomous-20260728T122700Z/release/personal-max-stage8b2b-dormant-gateway'
+readonly PACKAGE_ROOT='/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2b-dormant-gateway'
 readonly COMPOSE_SOURCE="$PACKAGE_ROOT/dormant-gateway.compose.yml"
 readonly COMPOSE_SOURCE_SHA='3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2'
 readonly FAILURE_DIAGNOSTICS="$PACKAGE_ROOT/failure-diagnostics.sh"
 readonly FAILURE_DIAGNOSTICS_SHA='99250892456a7c5f308234a66bb65be1ad762665a0eef97d78d18477a7f9fa25'
 readonly ACCEPTED_MIGRATION_FILTER="$PACKAGE_ROOT/accepted-migration-report.jq"
-readonly ACCEPTED_MIGRATION_FILTER_SHA='9bf656c8570f10bb5ca2142419f35014a7174e472fad1018615b5e0d51cb3b03'
+readonly ACCEPTED_MIGRATION_FILTER_SHA='1289ec47accdcf726de01de5969a0c1433d5c7f787c83efb064c6e1f9b309ea8'
 readonly ROLLBACK_SCRIPT="$PACKAGE_ROOT/dormant-rollback.sh"
-readonly ROLLBACK_SCRIPT_SHA='d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090'
-readonly ACCEPTED_MIGRATION_SCRIPT_SHA='bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740'
+readonly ROLLBACK_SCRIPT_SHA='41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d'
+readonly ACCEPTED_MIGRATION_SCRIPT_SHA='f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560'
 readonly STATE_DIR='/var/lib/personal-max-stage8b2b'
 readonly COMPOSE_RUNTIME="$STATE_DIR/dormant-gateway.compose.yml"
 readonly ISOLATED_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.json'
@@ -206,7 +206,7 @@ jq -n --arg scriptSha "$SCRIPT_SHA" --arg image "$IMAGE" --arg isolatedSha "$PER
   --arg before "$production_hash_before" --arg after "$production_hash_after" --argjson freeBefore "$free_before" '
   {schemaVersion:1,mode:"DORMANT_GATEWAY_ROLLOUT",script:{sha256:$scriptSha,checksumBound:true},bindings:{isolatedReportSha256:$isolatedSha,migrationReportSha256:$migrationSha,migrationScriptSha256:$migrationScriptSha},
    acceptedMigration:{reportValidated:true,productionMigrationScriptSha256:$migrationScriptSha,gatewayImage:$image,isolatedReportShaCrossBound:true,
-    freshBackupStatus:"VALIDATED",appliedCount:8,runnerCleanup:"PASS",safety:"PASS",prismaDiffEmpty:false,
+    freshBackupStatus:"VALIDATED",appliedCount:8,runnerCleanup:"PASS",safety:"PASS",databaseBinding:"POSTGRES_IDENTITY_FENCED",prismaDiffEmpty:false,
     prismaDiffStatus:"ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS",prismaDiffRawSqlIncluded:false,
     acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"]},
    image:{ref:$image,runtimeUser:"1000:1000"},runtime:{container:"personal-max-dormant-gateway",network:"personal-max-stage8b2b-dormant",networkInternal:true,publicPorts:0,mounts:0,health:"PASS",readiness:"dormant-ready",restartPolicy:"unless-stopped"},
@@ -219,6 +219,7 @@ jq -e --arg migrationScriptSha "$ACCEPTED_MIGRATION_SCRIPT_SHA" --arg rollbackSc
   .acceptedMigration.gatewayImage==.image.ref and .acceptedMigration.isolatedReportShaCrossBound==true and
   .acceptedMigration.freshBackupStatus=="VALIDATED" and .acceptedMigration.appliedCount==8 and
   .acceptedMigration.runnerCleanup=="PASS" and .acceptedMigration.safety=="PASS" and
+  .acceptedMigration.databaseBinding=="POSTGRES_IDENTITY_FENCED" and
   .runtime.health=="PASS" and .runtime.readiness=="dormant-ready" and .runtime.publicPorts==0 and .runtime.mounts==0 and
   .behavior.databaseWrites==0 and .behavior.captureEnabled==false and .behavior.senderActive==false and
   .behavior.browserLaunched==false and .behavior.maxContacted==false and .behavior.providerAction==false and

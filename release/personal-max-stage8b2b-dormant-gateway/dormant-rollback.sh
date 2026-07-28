@@ -3,7 +3,7 @@
 set -Eeuo pipefail
 umask 077
 
-readonly PACKAGE_ROOT='/opt/codex-work/crm-personal-max-stage8b2-autonomous-20260728T122700Z/release/personal-max-stage8b2b-dormant-gateway'
+readonly PACKAGE_ROOT='/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2b-dormant-gateway'
 readonly COMPOSE_SOURCE="$PACKAGE_ROOT/dormant-gateway.compose.yml"
 readonly COMPOSE_SOURCE_SHA='3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2'
 readonly FAILURE_DIAGNOSTICS="$PACKAGE_ROOT/failure-diagnostics.sh"

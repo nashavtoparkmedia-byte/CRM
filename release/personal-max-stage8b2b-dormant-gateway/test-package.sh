@@ -20,7 +20,7 @@ cmp <(jq -r '.files[]|select(.!="SHA256SUMS")' MANIFEST.json | LC_ALL=C sort) <(
 jq -e '.stage=="8B2B" and (.files|length)==15 and .status=="PREPARED_NOT_EXECUTED" and
   .productionStatusHashMode=="RAW_PORCELAIN_V2_STREAM" and .acceptedMigrationBinding.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
   .acceptedMigrationBinding.isolatedReportShaCrossBound==true and .acceptedMigrationBinding.exactEightNames==true and
-  .acceptedMigrationBinding.runnerCleanupRequired==true' MANIFEST.json >/dev/null
+  .acceptedMigrationBinding.runnerCleanupRequired==true and .acceptedMigrationBinding.databaseBinding=="POSTGRES_IDENTITY_FENCED"' MANIFEST.json >/dev/null
 rollout_sha=$(sha256sum "$rollout" | awk '{print $1}')
 rollback_sha=$(sha256sum "$rollback" | awk '{print $1}')
 jq -e --arg rollout "$rollout_sha" --arg rollback "$rollback_sha" '.rolloutScriptSha256==$rollout and .rollbackScriptSha256==$rollback' MANIFEST.json >/dev/null
@@ -95,6 +95,7 @@ expected_image='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:d
 migration_fixture=$(jq -n --arg isolated "$isolated_sha" --arg migrationScript "$migration_script_sha" --arg image "$expected_image" '
   {schemaVersion:1,mode:"PRODUCTION_MIGRATION_EVIDENCE",script:{sha256:$migrationScript,checksumBound:true},
    bindings:{isolatedReportSha256:$isolated,acceptedBackupReportSha256:"f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"},
+   databaseBinding:{source:"postgres-container-env",projectLabel:"crm",serviceLabel:"postgres",envKeys:["POSTGRES_USER","POSTGRES_PASSWORD","POSTGRES_DB"],urlHost:"postgres",urlPort:5432,urlSchema:"public",inspectMode:"0600",envMode:"0600",networkName:"crm_internal",networkProjectLabel:"crm",networkComposeLabel:"internal",alias:"postgres",runnerNetworkCount:1,containerIdentityStable:true,credentialsPrinted:false,credentialsInArguments:false},
    image:{ref:$image,digestBound:true},freshBackup:{directory:"/var/backups/personal-max-stage8b2a-pre-migration-20260728T120000Z",status:"VALIDATED",structuralValidation:"PASS",dumpSha256:("b"*64),configArchiveSha256:("c"*64),dumpBytes:1,objectCount:1},
    migration:{before:{total:46,finished:46,failed:0},after:{total:54,finished:54,failed:0},appliedNames:["20260726162043_add_max_raw_transport_journal","20260726190658_add_max_route_registry","20260726205437_add_max_inbound_normalization","20260726215715_add_max_per_chat_outbound_actor","20260726225737_add_max_dispatch_ledger","20260727053744_add_max_provider_confirmation_matcher","20260727141925_add_max_shadow_semantic_comparison","20260727154647_add_max_capture_ingress"],acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"],rawRows:0,prismaDiffEmpty:false,prismaDiffStatus:"ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS",prismaDiffRawSqlIncluded:false},
    schema:{rawJournalConstraints:["MaxRawTransportEvent_payloadSizeBytes_check","MaxRawTransportEvent_quarantineConsistency_check","MaxRawTransportEvent_replayAvailability_check"],appendOnlyTrigger:"MaxRawTransportEvent_append_only",appendOnlyFunction:"max_raw_transport_event_append_only_guard"},
@@ -113,6 +114,8 @@ if "${migration_gate[@]}" <<<"$(jq '.migration.appliedNames += ["unexpected_migr
 if "${migration_gate[@]}" <<<"$(jq '.runners.migration.cleanupState="STILL_PRESENT"' <<<"$migration_fixture")" >/dev/null; then exit 1; fi
 if "${migration_gate[@]}" <<<"$(jq '.schema.rawJournalConstraints=[]' <<<"$migration_fixture")" >/dev/null; then exit 1; fi
 if "${migration_gate[@]}" <<<"$(jq '.safety.providerAction=true' <<<"$migration_fixture")" >/dev/null; then exit 1; fi
+if "${migration_gate[@]}" <<<"$(jq '.databaseBinding.containerIdentityStable=false' <<<"$migration_fixture")" >/dev/null; then exit 1; fi
+if "${migration_gate[@]}" <<<"$(jq '.databaseBinding.credentialsInArguments=true' <<<"$migration_fixture")" >/dev/null; then exit 1; fi
 
 compose_sha=$(sha256sum dormant-gateway.compose.yml | awk '{print $1}')
 migration_report_sha=$(printf accepted-migration-report | sha256sum | awk '{print $1}')
@@ -121,7 +124,7 @@ rollout_fixture=$(jq -n --arg scriptSha "$rollout_sha" --arg rollbackSha "$rollb
   {schemaVersion:1,mode:"DORMANT_GATEWAY_ROLLOUT",script:{sha256:$scriptSha,checksumBound:true},
    bindings:{isolatedReportSha256:$isolatedSha,migrationReportSha256:$migrationReportSha,migrationScriptSha256:$migrationScriptSha},
    acceptedMigration:{reportValidated:true,productionMigrationScriptSha256:$migrationScriptSha,gatewayImage:$image,isolatedReportShaCrossBound:true,
-    freshBackupStatus:"VALIDATED",appliedCount:8,runnerCleanup:"PASS",safety:"PASS",prismaDiffEmpty:false,
+    freshBackupStatus:"VALIDATED",appliedCount:8,runnerCleanup:"PASS",safety:"PASS",databaseBinding:"POSTGRES_IDENTITY_FENCED",prismaDiffEmpty:false,
     prismaDiffStatus:"ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS",prismaDiffRawSqlIncluded:false,
     acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"]},
    image:{ref:$image,runtimeUser:"1000:1000"},
@@ -134,6 +137,7 @@ schema_reject "$(jq '.unexpected=true' <<<"$rollout_fixture")"
 schema_reject "$(jq 'del(.bindings.migrationReportSha256)' <<<"$rollout_fixture")"
 schema_reject "$(jq '.behavior.providerAction=true' <<<"$rollout_fixture")"
 schema_reject "$(jq '.runtime.publicPorts=1' <<<"$rollout_fixture")"
+schema_reject "$(jq '.acceptedMigration.databaseBinding="UNTRUSTED"' <<<"$rollout_fixture")"
 
 rollout_failure_fixture=$(jq -n --arg scriptSha "$rollout_sha" '
   {schemaVersion:1,mode:"DORMANT_GATEWAY_ROLLOUT_FAILURE",phase:"dormant_start",classification:"DORMANT_START_FAILED",exitCode:70,sourceLine:200,scriptSha256:$scriptSha,
