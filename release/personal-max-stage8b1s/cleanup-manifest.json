@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1S",
+  "phase": "AFTER_CLEANUP",
+  "filesystem": "/dev/vda1",
+  "targetFreeBytes": 12500000000,
+  "before": {
+    "totalBytes": 67444793344,
+    "usedBytes": 63989260288,
+    "freeBytes": 3438755840,
+    "percentUsed": 95
+  },
+  "acceptedRemote": {
+    "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
+    "sha": "f78259001a2a8b1dfce088344216877f5dd64cf2",
+    "remoteExactShaVerified": true,
+    "ancestorProof": "Every PASS_REMOVE HEAD is an ancestor of the exact accepted remote branch SHA. Git reachability therefore proves the commit object is in that published history."
+  },
+  "worktrees": [
+    {"path":"/opt/codex-work/crm-personal-max-stage1-raw-event-journal-20260726T162043Z","branch":"feature/personal-max-stage1-raw-event-journal-20260726T162043Z","head":"2da33a12b5f5b95b708cc8975dd36c6fd0aab903","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":1377411072,"result":"REMOVED","bytesReclaimed":1377411072},
+    {"path":"/opt/codex-work/crm-personal-max-stage8b1-shadow-release-20260727T171432Z","branch":"feature/personal-max-stage8b1-shadow-release-20260727T171432Z","head":"ecd6814e888944dc2b27758e4e711bb9a7ebe081","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":259223552,"result":"REMOVED","bytesReclaimed":259223552},
+    {"path":"/opt/codex-work/crm-messages-complete-clean","branch":"dev/messages-complete-consolidated","head":"aa5c20315270c69acbee5055e99e83ea0c0cdb32","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":158474240,"result":"PARTIAL_OS_PERMISSION_FAILURE_UNREGISTERED_RESIDUE_PRESERVED","bytesAfter":143093760,"bytesReclaimed":15380480,"failure":"git worktree remove returned Permission denied on root-owned .next output; no sudo, force, or rm was used"},
+    {"path":"/opt/codex-work/crm-contact-search-clean","branch":"release/contact-search-clean-20260716","head":"25c8107198c1ff90e9c48bd8aa65eff7c53350dc","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":157609984,"result":"SKIPPED","reason":"3740 root-owned build/cache objects"},
+    {"path":"/opt/codex-work/crm-yandex-refresh-clean","branch":"fix/yandex-profile-refresh-clean","head":"8a95307d19a22a086794328496630962eae1b113","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":157523968,"result":"SKIPPED","reason":"3739 root-owned build/cache objects"},
+    {"path":"/opt/codex-work/crm-personal-max-stage8a-live-capture-20260727T154647Z","branch":"feature/personal-max-stage8a-live-capture-20260727T154647Z","head":"6d994070b1d56b1eaafa5fd5b495b6564a430c3c","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":43704320,"result":"REMOVED","bytesReclaimed":43704320},
+    {"path":"/opt/codex-work/crm-personal-max-stage7-shadow-comparison-20260727T141925Z","branch":"feature/personal-max-stage7-shadow-comparison-20260727T141925Z","head":"dc008e983fc220dc9505e7418e7b7e36ea090652","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":43540480,"result":"REMOVED","bytesReclaimed":43540480},
+    {"path":"/opt/codex-work/crm-personal-max-stage6-provider-confirmation-20260727T053744Z","branch":"feature/personal-max-stage6-provider-confirmation-20260727T053744Z","head":"e68eda9f42a7e29ac1ce98afdb0c316786d2a44f","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":43327488,"result":"REMOVED","bytesReclaimed":43327488},
+    {"path":"/opt/codex-work/crm-personal-max-stage5-dispatch-ledger-20260726T225737Z","branch":"feature/personal-max-stage5-dispatch-ledger-20260726T225737Z","head":"77276ebd88905ee08365d5d7c083d5e6f33b53f2","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":43089920,"result":"REMOVED","bytesReclaimed":43089920},
+    {"path":"/opt/codex-work/crm-personal-max-stage4-per-chat-outbound-20260726T215715Z","branch":"feature/personal-max-stage4-per-chat-outbound-20260726T215715Z","head":"9f129a4d4e3d7f3d23f6a96ba52196329311f921","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":42872832,"result":"REMOVED","bytesReclaimed":42872832},
+    {"path":"/opt/codex-work/crm-personal-max-stage2-route-registry-20260726T190658Z","branch":"feature/personal-max-stage2-route-registry-20260726T190658Z","head":"66e73aaf73d8a9aa695c10c03f2eee9a1b5a8814","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":42700800,"result":"REMOVED","bytesReclaimed":42700800},
+    {"path":"/opt/codex-work/crm-personal-max-stage3-shadow-inbound-20260726T205437Z","branch":"feature/personal-max-stage3-shadow-inbound-20260726T205437Z","head":"83d41e8853098469546ec9b754e95beef8fa4036","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":42688512,"result":"REMOVED","bytesReclaimed":42688512},
+    {"path":"/opt/codex-work/crm-messages-baseline-check","branch":"DETACHED","head":"8a95307d19a22a086794328496630962eae1b113","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":41250816,"result":"SKIPPED","reason":"2 root-owned ignored build/cache objects"},
+    {"path":"/opt/codex-work/crm-canonical-title-clean","branch":"release/canonical-title-clean-20260715","head":"d228fb466ae01b793b46248236a817083be11b61","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":41148416,"result":"SKIPPED","reason":"2 root-owned ignored build/cache objects"},
+    {"path":"/opt/codex-work/crm-canonical-title-baseline-check","branch":"DETACHED","head":"ab7d30f5b979dbdfd51f149d7e8afe8d47619120","status":"clean","untrackedFiles":0,"remoteReachable":true,"processReferences":0,"activeLock":false,"localArchives":0,"bytesBefore":41123840,"result":"SKIPPED","reason":"2 root-owned ignored build/cache objects"}
+  ],
+  "skippedClasses": [
+    "current Stage 8B1R worktree and designated baseline are protected",
+    "root-owned worktrees are not safely inspectable/removable as codexbot",
+    "non-ancestor worktree commits are not in the accepted remote history",
+    "dirty or process-referenced worktrees are excluded",
+    "release artifacts lack all required Personal MAX digest and registry provenance",
+    "generic npm, Prisma, Node, Codex, browser, and user caches are excluded",
+    "production, Docker, PostgreSQL, Chromium, Git refs, and architecture package are excluded"
+  ],
+  "temporaryArtifacts": {
+    "removedCount": 26,
+    "allocatedBytesReclaimed": 12066816,
+    "selection": "Exact top-level /tmp paths prefixed max-stage8b1r-, personal-max-stage8b1r-, or stage8b1r-; all were codexbot-owned, non-symlink, process-unreferenced, non-runtime and reproducible.",
+    "removedPaths": [
+      "/tmp/max-stage8b1r-audit",
+      "/tmp/max-stage8b1r-final-gateway-real.log",
+      "/tmp/max-stage8b1r-final-gateway-rerun.log",
+      "/tmp/max-stage8b1r-final-gateway.log",
+      "/tmp/max-stage8b1r-final-real-pg.log",
+      "/tmp/max-stage8b1r-gateway-lock-final.log",
+      "/tmp/max-stage8b1r-gateway-remediation.log",
+      "/tmp/max-stage8b1r-initdb.log",
+      "/tmp/max-stage8b1r-mcr-v1.62.0-jammy.json",
+      "/tmp/max-stage8b1r-mcr-v1.62.0-noble.json",
+      "/tmp/max-stage8b1r-pg-download.log",
+      "/tmp/max-stage8b1r-playwright-remediation.log",
+      "/tmp/max-stage8b1r-postgres.log",
+      "/tmp/max-stage8b1r-repo-api.json",
+      "/tmp/max-stage8b1r-root-a.err",
+      "/tmp/max-stage8b1r-root-a.out",
+      "/tmp/max-stage8b1r-root-b.err",
+      "/tmp/max-stage8b1r-root-b.out",
+      "/tmp/max-stage8b1r-scraper-remediation.log",
+      "/tmp/max-stage8b1r-stage8a-broader-max.log",
+      "/tmp/max-stage8b1r-stage8b1-broader-max.log",
+      "/tmp/personal-max-stage8b1r-p2-cleanup.EUJV8p",
+      "/tmp/stage8b1r-212744-gateway-audit.json",
+      "/tmp/stage8b1r-212744-scraper-audit.json",
+      "/tmp/stage8b1r-ci-evidence-30306614907.zip",
+      "/tmp/stage8b1r-ci-evidence-30307647310.zip"
+    ],
+    "associatedPort": null,
+    "disposablePostgresqlRootsFound": 0
+  },
+  "releaseArtifacts": {
+    "removedCount": 0,
+    "bytesReclaimed": 0,
+    "reason": "No local Personal MAX OCI/archive candidate satisfied immutable digest, registry availability, committed checksum, and reconstructibility gates."
+  },
+  "after": {
+    "totalBytes": 67444793344,
+    "usedBytes": 62020710400,
+    "freeBytes": 5407305728,
+    "percentUsed": 92,
+    "targetReached": false,
+    "remainingDeficitBytes": 7092694272,
+    "minimumAdditionalOperationalMarginBytes": 5368709120,
+    "minimumRecommendedExpansionBytes": 12461403392,
+    "minimumRecommendedFinalFilesystemBytes": 79906196736,
+    "successfullyRemovedWorktrees": 9,
+    "successfulWorktreeLogicalBytes": 1938558976,
+    "partialWorktreeBytes": 15380480,
+    "branchesDeleted": 0,
+    "refsDeleted": 0,
+    "productionPathsTouched": 0,
+    "dockerPathsTouched": 0
+  }
+}

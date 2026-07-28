@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1S",
+  "mode": "PREPARED_NOT_EXECUTED",
+  "script": {
+    "path": "root-backup/create-production-backup.sh",
+    "sha256": "84afa57ae20f2b0e09f1f275e38b9aea74da9fdc6de4570a26663e45cff98f60",
+    "rootRequired": true,
+    "checksumBindingRequired": true,
+    "executed": false
+  },
+  "sourceReport": {
+    "path": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json",
+    "sha256": "d6a6e4764c90a6f64af9c11b2b0c4eeb08b82c377b58990f939bd559688ac63b",
+    "schemaVersion": 3,
+    "databaseSizeBytes": 135765015,
+    "backupEstimateBytes": 169706269
+  },
+  "containerDiscovery": {
+    "projectLabel": "com.docker.compose.project=crm",
+    "serviceLabel": "com.docker.compose.service=postgres",
+    "requiredRunningCount": 1,
+    "inspectLabelRevalidation": true,
+    "dockerComposeCliUsed": false,
+    "containerEnvironmentPrinted": false
+  },
+  "backup": {
+    "directory": "/var/backups/personal-max-stage8b1s-production-backup",
+    "directoryOwnerGroupMode": "root:root:0700",
+    "dumpFormat": "custom",
+    "dumpFlags": ["--no-owner", "--no-acl"],
+    "fileOwnerGroupMode": "root:root:0600",
+    "structuralVerification": ["pg_restore --list", "nonempty object count", "dump SHA-256"],
+    "overwriteAllowed": false
+  },
+  "configurationArchive": {
+    "ownerGroupMode": "root:root:0600",
+    "sourceFileCount": 6,
+    "sourcePathsProvenBy": ["root preflight compose evidence", "exact regular-file stat", "Git tracked-path check for non-secret configs"],
+    "contentsPrinted": false
+  },
+  "metadataReport": {
+    "path": "/var/tmp/personal-max-stage8b1s-production-backup.json",
+    "ownerGroupMode": "root:codexbot:0640",
+    "codexbotReadable": true,
+    "codexbotWritable": false,
+    "secretsIncluded": false,
+    "messageDataIncluded": false
+  },
+  "storageGate": {
+    "minimumFreeBeforeBytes": 12500000000,
+    "minimumFreeAfterBytes": 5368709120,
+    "estimateDerivedFromSourceReport": true,
+    "currentGateSatisfied": false
+  },
+  "restore": {
+    "BACKUP_STRUCTURAL_VALIDATION": "PENDING_ROOT_BACKUP",
+    "FULL_RESTORE_PROOF": "PENDING_ISOLATED_ROOT_PROBE"
+  },
+  "diagnostics": {
+    "path": "root-backup/failure-diagnostics.sh",
+    "sha256": "dc94d28fc134a6473d7880e744068cfa536f837e0f745cc6ff969eb4c01c18fd",
+    "testHarness": "root-backup/test-backup-contract.sh",
+    "testHarnessSha256": "d2f6d2e243eb8a9ea32fa7f8a47391f2febf8b110aba156a17a825ea2d21f961",
+    "noSilentFailure": true
+  },
+  "safety": {
+    "productionDbConnectedByCodex": false,
+    "backupExecuted": false,
+    "dockerMutation": false,
+    "imagePull": false,
+    "imageLoad": false,
+    "migration": false,
+    "deploy": false,
+    "restart": false,
+    "browser": false,
+    "max": false,
+    "providerAction": false,
+    "stage8B2Started": false
+  }
+}

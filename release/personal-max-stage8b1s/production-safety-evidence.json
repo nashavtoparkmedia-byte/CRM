@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1S",
+  "productionPath": "/opt/crm",
+  "before": {
+    "head": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "porcelainV1DefaultCommand": "git -C /opt/crm status --porcelain=v1",
+    "porcelainV1DefaultCount": 105,
+    "porcelainV1AllCommand": "git -C /opt/crm status --porcelain=v1 --untracked-files=all",
+    "porcelainV1AllCount": 134,
+    "porcelainV2DefaultCommand": "git -C /opt/crm status --porcelain=v2 -z",
+    "porcelainV2DefaultSha256": "db808bb6d53ed8229a583786e5eb0011238a6aacaf45219293ce2a9fa6bae879",
+    "defaultClasses": {"modified":56,"deleted":4,"untrackedCollapsed":45}
+  },
+  "after": {
+    "head": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "porcelainV1DefaultCount": 105,
+    "porcelainV1AllCount": 134,
+    "porcelainV2DefaultSha256": "db808bb6d53ed8229a583786e5eb0011238a6aacaf45219293ce2a9fa6bae879",
+    "defaultClasses": {"modified":56,"deleted":4,"untrackedCollapsed":45}
+  },
+  "statusCountDiscrepancy": {
+    "earlierCount": 134,
+    "laterCount": 105,
+    "difference": 29,
+    "reason": "The 134 command expands every untracked file with --untracked-files=all; the default 105 command collapses untracked directories. The normalized default porcelain-v2 byte stream is unchanged.",
+    "realDrift": false
+  },
+  "rootReport": {
+    "path": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json",
+    "sha256": "d6a6e4764c90a6f64af9c11b2b0c4eeb08b82c377b58990f939bd559688ac63b",
+    "ownerGroupMode": "root:codexbot:0640"
+  },
+  "architecture": {
+    "path": "/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z",
+    "fileCount": 22,
+    "checksumEntries": 21,
+    "sha256sumsSha256": "23246eb4952643b83097a0152c3a40542a245db656304a4b2309fe7dc7df2637",
+    "verification": "PASS"
+  },
+  "productionChanged": false,
+  "productionDbConnected": false,
+  "dockerMutation": false,
+  "backupCreated": false,
+  "migration": false,
+  "deploy": false,
+  "restart": false,
+  "browser": false,
+  "max": false,
+  "providerAction": false,
+  "stage8B2Started": false
+}

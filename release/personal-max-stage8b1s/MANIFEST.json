@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1S",
+  "title": "SAFE STORAGE RECOVERY AND PRODUCTION BACKUP GATE PREPARATION",
+  "baseCommit": "f78259001a2a8b1dfce088344216877f5dd64cf2",
+  "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
+  "storageTargetBytes": 12500000000,
+  "storageTargetReached": false,
+  "remainingDeficitBytes": 7092694272,
+  "files": [
+    "MANIFEST.json",
+    "cleanup-manifest.json",
+    "inventory.md",
+    "owner-instructions.md",
+    "production-safety-evidence.json",
+    "root-backup/create-production-backup.sh",
+    "root-backup/failure-diagnostics.sh",
+    "root-backup/failure-report-schema.md",
+    "root-backup/manifest.json",
+    "root-backup/test-backup-contract.sh",
+    "static-safety-report.json",
+    "storage-gate.md",
+    "SHA256SUMS"
+  ],
+  "cleanup": {
+    "successfulWorktreeRemovals": 9,
+    "partialWorktreeRemovalFailures": 1,
+    "removedTemporaryArtifacts": 26,
+    "removedReleaseArtifacts": 0,
+    "branchesDeleted": 0,
+    "refsDeleted": 0
+  },
+  "backupPackage": {
+    "prepared": true,
+    "executed": false,
+    "storagePreconditionSatisfied": false,
+    "structuralValidation": "PENDING_ROOT_BACKUP",
+    "fullRestoreProof": "PENDING_ISOLATED_ROOT_PROBE"
+  },
+  "prohibitedActions": {
+    "productionChanged": false,
+    "productionDbConnection": false,
+    "dockerRootAction": false,
+    "imagePullOrLoad": false,
+    "migration": false,
+    "deploy": false,
+    "restart": false,
+    "browser": false,
+    "max": false,
+    "providerAction": false,
+    "stage8B2": false
+  }
+}
