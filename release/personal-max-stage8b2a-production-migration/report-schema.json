@@ -1,1 +1,128 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Personal MAX Stage 8B2A production migration evidence","type":"object","required":["schemaVersion","mode","script","bindings","freshBackup","migration","production","safety"],"properties":{"schemaVersion":{"const":1},"mode":{"enum":["PRODUCTION_MIGRATION_EVIDENCE","PRODUCTION_MIGRATION_FAILURE"]},"script":{"type":"object"},"bindings":{"type":"object"},"freshBackup":{"type":"object"},"migration":{"type":"object"},"production":{"type":"object"},"safety":{"type":"object"}},"additionalProperties":true}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Personal MAX Stage 8B2A production migration report",
+  "type": "object",
+  "oneOf": [
+    {
+      "required": ["schemaVersion", "mode", "script", "bindings", "image", "freshBackup", "migration", "schema", "runners", "production", "storage", "safety"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "mode": {"const": "PRODUCTION_MIGRATION_EVIDENCE"},
+        "script": {
+          "type": "object",
+          "required": ["sha256", "checksumBound"],
+          "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "checksumBound": {"const": true}},
+          "additionalProperties": false
+        },
+        "bindings": {
+          "type": "object",
+          "required": ["isolatedReportSha256", "acceptedBackupReportSha256"],
+          "properties": {
+            "isolatedReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "acceptedBackupReportSha256": {"const": "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"}
+          },
+          "additionalProperties": false
+        },
+        "image": {
+          "type": "object",
+          "required": ["ref", "digestBound"],
+          "properties": {
+            "ref": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
+            "digestBound": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "freshBackup": {
+          "type": "object",
+          "required": ["directory", "dumpSha256", "dumpBytes", "objectCount", "configArchiveSha256", "status", "structuralValidation"],
+          "properties": {
+            "directory": {"type": "string", "pattern": "^/var/backups/personal-max-stage8b2a-pre-migration-[0-9]{8}T[0-9]{6}Z$"},
+            "dumpSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "dumpBytes": {"type": "integer", "minimum": 1},
+            "objectCount": {"type": "integer", "minimum": 1},
+            "configArchiveSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "status": {"const": "VALIDATED"},
+            "structuralValidation": {"const": "PASS"}
+          },
+          "additionalProperties": false
+        },
+        "migration": {
+          "type": "object",
+          "required": ["before", "after", "appliedNames", "acceptedLedgerOnlyMigrations", "rawRows", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded"],
+          "properties": {
+            "before": {"const": {"total": 46, "finished": 46, "failed": 0}},
+            "after": {"const": {"total": 54, "finished": 54, "failed": 0}},
+            "appliedNames": {"const": ["20260726162043_add_max_raw_transport_journal", "20260726190658_add_max_route_registry", "20260726205437_add_max_inbound_normalization", "20260726215715_add_max_per_chat_outbound_actor", "20260726225737_add_max_dispatch_ledger", "20260727053744_add_max_provider_confirmation_matcher", "20260727141925_add_max_shadow_semantic_comparison", "20260727154647_add_max_capture_ingress"]},
+            "acceptedLedgerOnlyMigrations": {"const": ["20260717000000_add_driver_telegram_submitted_phone"]},
+            "rawRows": {"const": 0},
+            "prismaDiffEmpty": {"const": false},
+            "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
+            "prismaDiffRawSqlIncluded": {"const": false}
+          },
+          "additionalProperties": false
+        },
+        "schema": {"const": {"rawJournalConstraints": ["MaxRawTransportEvent_payloadSizeBytes_check", "MaxRawTransportEvent_quarantineConsistency_check", "MaxRawTransportEvent_replayAvailability_check"], "appendOnlyTrigger": "MaxRawTransportEvent_append_only", "appendOnlyFunction": "max_raw_transport_event_append_only_guard"}},
+        "runners": {"const": {"migration": {"name": "personal-max-stage8b2a-migration-runner", "cleanupState": "ABSENT_AFTER_SUCCESS"}, "prismaDiff": {"name": "personal-max-stage8b2a-prisma-diff-runner", "cleanupState": "ABSENT_AFTER_SUCCESS"}, "allOwnedRunnersAbsent": true}},
+        "production": {
+          "type": "object",
+          "required": ["containerHashBefore", "containerHashAfter", "restartCountsUnchanged", "gitUnchanged"],
+          "properties": {
+            "containerHashBefore": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "containerHashAfter": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "restartCountsUnchanged": {"const": true},
+            "gitUnchanged": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "storage": {
+          "type": "object",
+          "required": ["freeBytesBefore", "freeBytesAfter", "rollbackReserveBytes"],
+          "properties": {
+            "freeBytesBefore": {"type": "integer", "minimum": 1},
+            "freeBytesAfter": {"type": "integer", "minimum": 5368709120},
+            "rollbackReserveBytes": {"const": 5368709120}
+          },
+          "additionalProperties": false
+        },
+        "safety": {"const": {"deploy": false, "restart": false, "captureEnabled": false, "gatewayStarted": false, "scraperChanged": false, "destructiveRollback": false, "secretsPrinted": false, "providerAction": false, "maxContacted": false}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "required": ["schemaVersion", "mode", "phase", "classification", "exitCode", "sourceLine", "script", "freshBackup", "migration", "runners", "diagnostics"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "mode": {"const": "PRODUCTION_MIGRATION_FAILURE"},
+        "phase": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+        "classification": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+        "exitCode": {"type": "integer", "minimum": 1},
+        "sourceLine": {"type": "integer", "minimum": 0},
+        "script": {"type": "object", "required": ["sha256"], "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}, "additionalProperties": false},
+        "freshBackup": {
+          "type": "object",
+          "required": ["created", "directory", "status", "dumpSha256", "dumpBytes", "objectCount", "configArchiveSha256", "validated", "preserve"],
+          "properties": {
+            "created": {"type": "boolean"}, "directory": {"type": "string"},
+            "status": {"enum": ["NOT_CREATED", "CREATED_UNVALIDATED", "VALIDATED"]},
+            "dumpSha256": {"type": "string", "pattern": "^$|^[0-9a-f]{64}$"}, "dumpBytes": {"type": "integer", "minimum": 0},
+            "objectCount": {"type": "integer", "minimum": 0}, "configArchiveSha256": {"type": "string", "pattern": "^$|^[0-9a-f]{64}$"},
+            "validated": {"type": "boolean"}, "preserve": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "migration": {"type": "object", "required": ["started", "appliedNamesObserved", "destructiveRollback", "deployBlocked"], "properties": {"started": {"type": "boolean"}, "appliedNamesObserved": {"type": "array", "items": {"type": "string"}}, "destructiveRollback": {"const": false}, "deployBlocked": {"const": true}}, "additionalProperties": false},
+        "runners": {
+          "type": "object", "required": ["migration", "prismaDiff", "cleanupComplete"],
+          "properties": {
+            "migration": {"type": "object", "required": ["name", "cleanupState"], "properties": {"name": {"const": "personal-max-stage8b2a-migration-runner"}, "cleanupState": {"type": "string", "pattern": "^[A-Z_]+$"}}, "additionalProperties": false},
+            "prismaDiff": {"type": "object", "required": ["name", "cleanupState"], "properties": {"name": {"const": "personal-max-stage8b2a-prisma-diff-runner"}, "cleanupState": {"type": "string", "pattern": "^[A-Z_]+$"}}, "additionalProperties": false},
+            "cleanupComplete": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        },
+        "diagnostics": {"const": {"commandCaptured": false, "sqlCaptured": false, "stderrCaptured": false, "environmentCaptured": false, "credentialsCaptured": false}}
+      },
+      "additionalProperties": false
+    }
+  ]
+}
