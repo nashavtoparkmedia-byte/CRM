@@ -1,1 +1,115 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"Personal MAX Stage 8B2B dormant rollout evidence","type":"object","required":["schemaVersion","mode","script","bindings","image","runtime","behavior","production","rollback"],"properties":{"schemaVersion":{"const":1},"mode":{"enum":["DORMANT_GATEWAY_ROLLOUT","DORMANT_GATEWAY_ROLLOUT_FAILURE","DORMANT_GATEWAY_ROLLBACK"]},"runtime":{"type":"object"},"behavior":{"type":"object"},"production":{"type":"object"}},"additionalProperties":true}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Personal MAX Stage 8B2B lifecycle report",
+  "type": "object",
+  "oneOf": [
+    {
+      "required": ["schemaVersion", "mode", "script", "bindings", "acceptedMigration", "image", "runtime", "behavior", "production", "storage", "rollback"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "mode": {"const": "DORMANT_GATEWAY_ROLLOUT"},
+        "script": {"type": "object", "required": ["sha256", "checksumBound"], "properties": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "checksumBound": {"const": true}}, "additionalProperties": false},
+        "bindings": {
+          "type": "object",
+          "required": ["isolatedReportSha256", "migrationReportSha256", "migrationScriptSha256"],
+          "properties": {
+            "isolatedReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "migrationReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "migrationScriptSha256": {"const": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740"}
+          },
+          "additionalProperties": false
+        },
+        "acceptedMigration": {
+          "type": "object",
+          "required": ["reportValidated", "productionMigrationScriptSha256", "gatewayImage", "isolatedReportShaCrossBound", "freshBackupStatus", "appliedCount", "runnerCleanup", "safety", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded", "acceptedLedgerOnlyMigrations"],
+          "properties": {
+            "reportValidated": {"const": true},
+            "productionMigrationScriptSha256": {"const": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740"},
+            "gatewayImage": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
+            "isolatedReportShaCrossBound": {"const": true},
+            "freshBackupStatus": {"const": "VALIDATED"},
+            "appliedCount": {"const": 8},
+            "runnerCleanup": {"const": "PASS"},
+            "safety": {"const": "PASS"},
+            "prismaDiffEmpty": {"const": false},
+            "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
+            "prismaDiffRawSqlIncluded": {"const": false},
+            "acceptedLedgerOnlyMigrations": {"const": ["20260717000000_add_driver_telegram_submitted_phone"]}
+          },
+          "additionalProperties": false
+        },
+        "image": {"const": {"ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de", "runtimeUser": "1000:1000"}},
+        "runtime": {"const": {"container": "personal-max-dormant-gateway", "network": "personal-max-stage8b2b-dormant", "networkInternal": true, "publicPorts": 0, "mounts": 0, "health": "PASS", "readiness": "dormant-ready", "restartPolicy": "unless-stopped"}},
+        "behavior": {"const": {"databaseConfigured": false, "databaseWrites": 0, "captureEnabled": false, "senderActive": false, "browserLaunched": false, "maxContacted": false, "providerAction": false}},
+        "production": {
+          "type": "object", "required": ["hashBefore", "hashAfter", "unchanged", "restartCountsUnchanged"],
+          "properties": {"hashBefore": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "hashAfter": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "unchanged": {"const": true}, "restartCountsUnchanged": {"const": true}},
+          "additionalProperties": false
+        },
+        "storage": {"type": "object", "required": ["freeBytesBefore"], "properties": {"freeBytesBefore": {"type": "integer", "minimum": 12500000000}}, "additionalProperties": false},
+        "rollback": {"const": {"available": true, "automatic": false, "scriptSha256": "d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090", "composeSha256": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "required": ["schemaVersion", "mode", "phase", "classification", "exitCode", "sourceLine", "scriptSha256", "resources", "safety"],
+      "properties": {
+        "schemaVersion": {"const": 1}, "mode": {"const": "DORMANT_GATEWAY_ROLLOUT_FAILURE"},
+        "phase": {"type": "string", "pattern": "^[a-z0-9_]+$"}, "classification": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+        "exitCode": {"type": "integer", "minimum": 1}, "sourceLine": {"type": "integer", "minimum": 0},
+        "scriptSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "resources": {
+          "type": "object", "required": ["observation", "container", "network", "runtimeConfig", "stateDirectory", "cleanupAutomatic"],
+          "properties": {
+            "observation": {"enum": ["NOT_ATTEMPTED", "DOCKER_AVAILABLE", "DOCKER_UNAVAILABLE"]},
+            "container": {"type": "object", "required": ["name", "state"], "properties": {"name": {"const": "personal-max-dormant-gateway"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "network": {"type": "object", "required": ["name", "state"], "properties": {"name": {"const": "personal-max-stage8b2b-dormant"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "runtimeConfig": {"type": "object", "required": ["path", "state"], "properties": {"path": {"const": "/var/lib/personal-max-stage8b2b/dormant-gateway.compose.yml"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "stateDirectory": {"type": "object", "required": ["path", "state"], "properties": {"path": {"const": "/var/lib/personal-max-stage8b2b"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "cleanupAutomatic": {"const": false}
+          },
+          "additionalProperties": false
+        },
+        "safety": {"const": {"productionDatabaseChanged": false, "scraperChanged": false, "profileChanged": false, "maxContacted": false, "providerAction": false}}
+      },
+      "additionalProperties": false
+    },
+    {
+      "required": ["schemaVersion", "mode", "scriptSha256", "composeSha256", "logSha256", "verifiedTarget", "containerRemoved", "networkRemoved", "runtimeConfigRemoved", "stateDirectoryRemoved", "production", "databaseChanged", "scraperChanged", "profileChanged", "globalPrune"],
+      "properties": {
+        "schemaVersion": {"const": 1}, "mode": {"const": "DORMANT_GATEWAY_ROLLBACK"},
+        "scriptSha256": {"const": "d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090"},
+        "composeSha256": {"const": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"},
+        "logSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "verifiedTarget": {"const": {"container": "personal-max-dormant-gateway", "network": "personal-max-stage8b2b-dormant", "stage": "8b2b", "mode": "dormant", "mounts": 0, "publicPorts": 0}},
+        "containerRemoved": {"const": true}, "networkRemoved": {"const": true}, "runtimeConfigRemoved": {"const": true}, "stateDirectoryRemoved": {"const": true},
+        "production": {"type": "object", "required": ["hashBefore", "hashAfter", "unchanged"], "properties": {"hashBefore": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "hashAfter": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "unchanged": {"const": true}}, "additionalProperties": false},
+        "databaseChanged": {"const": false}, "scraperChanged": {"const": false}, "profileChanged": {"const": false}, "globalPrune": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    {
+      "required": ["schemaVersion", "mode", "phase", "classification", "exitCode", "sourceLine", "scriptSha256", "resources", "scope"],
+      "properties": {
+        "schemaVersion": {"const": 1}, "mode": {"const": "DORMANT_GATEWAY_ROLLBACK_FAILURE"},
+        "phase": {"type": "string", "pattern": "^[a-z0-9_]+$"}, "classification": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+        "exitCode": {"type": "integer", "minimum": 1}, "sourceLine": {"type": "integer", "minimum": 0},
+        "scriptSha256": {"const": "d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090"},
+        "resources": {
+          "type": "object", "required": ["observation", "container", "network", "runtimeConfig", "stateDirectory", "cleanupAutomatic"],
+          "properties": {
+            "observation": {"enum": ["NOT_ATTEMPTED", "DOCKER_AVAILABLE", "DOCKER_UNAVAILABLE"]},
+            "container": {"type": "object", "required": ["name", "state"], "properties": {"name": {"const": "personal-max-dormant-gateway"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "network": {"type": "object", "required": ["name", "state"], "properties": {"name": {"const": "personal-max-stage8b2b-dormant"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "runtimeConfig": {"type": "object", "required": ["path", "state"], "properties": {"path": {"const": "/var/lib/personal-max-stage8b2b/dormant-gateway.compose.yml"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "stateDirectory": {"type": "object", "required": ["path", "state"], "properties": {"path": {"const": "/var/lib/personal-max-stage8b2b"}, "state": {"enum": ["UNKNOWN", "ABSENT", "PRESENT_OWNED", "PRESENT_MISMATCH"]}}, "additionalProperties": false},
+            "cleanupAutomatic": {"const": false}
+          },
+          "additionalProperties": false
+        },
+        "scope": {"const": {"databaseMutationAttempted": false, "scraperMutationAttempted": false, "profileMutationAttempted": false, "globalPruneAttempted": false, "automaticRetry": false}}
+      },
+      "additionalProperties": false
+    }
+  ]
+}
