@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "personal-max-text-sender-v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "accountId", "conversationKey", "route", "commandId", "attemptId", "attemptCorrelationId", "clientMessageId", "idempotencyKey", "ownerInstanceId", "fencingToken", "payload", "requestedAt", "deadlineAt"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "accountId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "conversationKey": {"type": "string", "minLength": 1, "maxLength": 256},
+    "route": {
+      "type": "object", "additionalProperties": false,
+      "required": ["routeVersion", "protocolChatId", "providerUserId", "webRouteId"],
+      "properties": {
+        "routeVersion": {"type": "integer", "minimum": 1},
+        "protocolChatId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "providerUserId": {"type": ["string", "null"]},
+        "webRouteId": {"type": ["string", "null"]}
+      }
+    },
+    "commandId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "attemptId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "attemptCorrelationId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "clientMessageId": {"type": ["string", "null"]},
+    "idempotencyKey": {"type": "string", "minLength": 1, "maxLength": 256},
+    "ownerInstanceId": {"type": "string", "minLength": 1, "maxLength": 256},
+    "fencingToken": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+    "payload": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "text"],
+      "properties": {"kind": {"const": "text"}, "text": {"type": "string", "minLength": 1, "maxLength": 65536}}
+    },
+    "requestedAt": {"type": "string", "format": "date-time"},
+    "deadlineAt": {"type": "string", "format": "date-time"}
+  }
+}

@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:sender-contract": "node --test test/fenced-text-sender-contract.test.js test/fenced-text-sender-source.test.js"
   },
   "keywords": [],
   "author": "",
