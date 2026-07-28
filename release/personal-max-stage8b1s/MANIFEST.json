@@ -1,17 +1,19 @@
 {
   "schemaVersion": 1,
-  "stage": "8B1S",
+  "stage": "8B1S-P1",
   "title": "SAFE STORAGE RECOVERY AND PRODUCTION BACKUP GATE PREPARATION",
   "baseCommit": "f78259001a2a8b1dfce088344216877f5dd64cf2",
+  "postExpansionVerificationBaseCommit": "bbd1231af82d81207f20d64e3f611c6dc65074ca",
   "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
   "storageTargetBytes": 12500000000,
-  "storageTargetReached": false,
-  "remainingDeficitBytes": 7092694272,
+  "storageTargetReached": true,
+  "remainingDeficitBytes": 0,
   "files": [
     "MANIFEST.json",
     "cleanup-manifest.json",
     "inventory.md",
     "owner-instructions.md",
+    "post-expansion-storage-evidence.json",
     "production-safety-evidence.json",
     "root-backup/create-production-backup.sh",
     "root-backup/failure-diagnostics.sh",
@@ -33,7 +35,7 @@
   "backupPackage": {
     "prepared": true,
     "executed": false,
-    "storagePreconditionSatisfied": false,
+    "storagePreconditionSatisfied": true,
     "structuralValidation": "PENDING_ROOT_BACKUP",
     "fullRestoreProof": "PENDING_ISOLATED_ROOT_PROBE"
   },

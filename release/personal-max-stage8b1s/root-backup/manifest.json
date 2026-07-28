@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "stage": "8B1S",
+  "stage": "8B1S-P1",
   "mode": "PREPARED_NOT_EXECUTED",
   "script": {
     "path": "root-backup/create-production-backup.sh",
-    "sha256": "84afa57ae20f2b0e09f1f275e38b9aea74da9fdc6de4570a26663e45cff98f60",
+    "sha256": "586ec575978bc8d059cef7b1b6a472d733c22fb4baa73738151b00e76f2ca930",
     "rootRequired": true,
     "checksumBindingRequired": true,
     "executed": false
@@ -33,8 +33,15 @@
     "structuralVerification": ["pg_restore --list", "nonempty object count", "dump SHA-256"],
     "overwriteAllowed": false
   },
+  "migrationLedger": {
+    "boundedReadRequired": true,
+    "sourceReportCountMatchRequired": true,
+    "unreadableOrChangedFailsClosed": true,
+    "rawRowsPrinted": false
+  },
   "configurationArchive": {
     "ownerGroupMode": "root:root:0600",
+    "tarListValidationRequired": true,
     "sourceFileCount": 6,
     "sourcePathsProvenBy": ["root preflight compose evidence", "exact regular-file stat", "Git tracked-path check for non-secret configs"],
     "contentsPrinted": false
@@ -47,11 +54,27 @@
     "secretsIncluded": false,
     "messageDataIncluded": false
   },
+  "sanitizedSuccessOutput": [
+    "result path and SHA-256",
+    "dump path, SHA-256, and bytes",
+    "config archive path, SHA-256, and bytes",
+    "object count",
+    "report owner, group, and mode",
+    "structural validation status",
+    "codexbot readable and non-writable",
+    "no production restart",
+    "no migration",
+    "no deploy"
+  ],
   "storageGate": {
     "minimumFreeBeforeBytes": 12500000000,
     "minimumFreeAfterBytes": 5368709120,
+    "estimatedDumpBytes": 169706269,
+    "temporaryDumpBudgetBytes": 169706269,
+    "configSourceBudgetBytes": 43495,
+    "calculatedMinimumBytes": 5708165153,
     "estimateDerivedFromSourceReport": true,
-    "currentGateSatisfied": false
+    "currentGateSatisfied": true
   },
   "restore": {
     "BACKUP_STRUCTURAL_VALIDATION": "PENDING_ROOT_BACKUP",
@@ -59,9 +82,9 @@
   },
   "diagnostics": {
     "path": "root-backup/failure-diagnostics.sh",
-    "sha256": "dc94d28fc134a6473d7880e744068cfa536f837e0f745cc6ff969eb4c01c18fd",
+    "sha256": "6d367992812301783f7118fc72f1820fdb6884c98409a6dfff127eb0614dab28",
     "testHarness": "root-backup/test-backup-contract.sh",
-    "testHarnessSha256": "d2f6d2e243eb8a9ea32fa7f8a47391f2febf8b110aba156a17a825ea2d21f961",
+    "testHarnessSha256": "3387df2fbb81a9f6db91e0fa51c08bdeef5b552b353e9827b8bb218b936a2eb3",
     "noSilentFailure": true
   },
   "safety": {

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1S-P1",
+  "capturedAt": "2026-07-28T09:41:14Z",
+  "classification": "CASE_A_FULLY_EXPANDED",
+  "rootMount": "/",
+  "filesystem": {
+    "type": "ext4",
+    "source": "/dev/vda1",
+    "totalBytes": 83053432832,
+    "usedBytes": 60932882432,
+    "freeBytes": 22103773184,
+    "totalGiB": 77.349536896,
+    "usedGiB": 56.748168945,
+    "freeGiB": 20.585742950,
+    "mountOptions": "rw,relatime,discard,errors=remount-ro",
+    "inodesTotal": 10321920,
+    "inodesUsed": 1171787,
+    "inodesFree": 9150133,
+    "inodesUsedPercent": 12
+  },
+  "blockDevice": {
+    "path": "/dev/vda",
+    "type": "disk",
+    "logicalSectorBytes": 512,
+    "physicalSectorBytes": 512,
+    "sysfsSectors": 167772160,
+    "bytes": 85899345920,
+    "GiB": 80.0,
+    "kernelObservesProviderExpansion": true
+  },
+  "partition": {
+    "path": "/dev/vda1",
+    "parent": "/dev/vda",
+    "number": 1,
+    "type": "part",
+    "startSector": 227328,
+    "sysfsSectors": 167544799,
+    "bytes": 85782937088,
+    "GiB": 79.891585827,
+    "occupiesExpandedDeviceSpace": true
+  },
+  "topology": {
+    "lvm": false,
+    "raid": false,
+    "dmCrypt": false,
+    "loop": false,
+    "networkBlockDevice": false,
+    "cloudInitGrowpartConfigured": true,
+    "cloudInitResizefsConfigured": true,
+    "automaticExpansionInference": "The fully expanded direct-partition topology and enabled cloud-init growpart/resizefs modules are consistent with automatic expansion; the exact historical execution event was not inspected.",
+    "rebootRequiredNow": false
+  },
+  "comparison": {
+    "previousFilesystemTotalBytes": 67444793344,
+    "previousFilesystemFreeBytes": 5396639744,
+    "filesystemTotalIncreaseBytes": 15608639488,
+    "filesystemFreeIncreaseBytes": 16707133440,
+    "previousBlockDeviceBytes": null,
+    "previousPartitionBytes": null,
+    "blockDeviceDifferenceReason": "Previous exact block-device and partition byte counts were not captured; no value was inferred."
+  },
+  "storageGate": {
+    "targetFreeBytes": 12500000000,
+    "targetReached": true,
+    "remainingDeficitBytes": 0,
+    "marginAboveTargetBytes": 9603773184
+  },
+  "inspection": {
+    "commands": ["df -B1", "df -T", "findmnt", "lsblk -b", "sysfs block size reads", "/proc/partitions", "/proc/mdstat", "stat"],
+    "rootCommandExecuted": false,
+    "filesystemMutation": false,
+    "productionMutation": false
+  }
+}

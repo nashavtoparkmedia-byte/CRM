@@ -18,7 +18,7 @@ readonly MINIMUM_FREE_BEFORE_BYTES=12500000000
 readonly ROLLBACK_RESERVE_BYTES=5368709120
 readonly COMMAND_TIMEOUT_SECONDS=30
 readonly DUMP_TIMEOUT_SECONDS=1800
-readonly DIAGNOSTICS_SHA256='dc94d28fc134a6473d7880e744068cfa536f837e0f745cc6ff969eb4c01c18fd'
+readonly DIAGNOSTICS_SHA256='6d367992812301783f7118fc72f1820fdb6884c98409a6dfff127eb0614dab28'
 readonly EXPECTED_SHA256=${PERSONAL_MAX_BACKUP_SCRIPT_SHA256:-}
 readonly -a CONFIG_SOURCE_FILES=(
   '/opt/crm/deploy/docker-compose.production.yml'
@@ -166,8 +166,13 @@ observed_source_sha=${observed_source_sha%% *}
 run_capture source_schema report_validation SOURCE_REPORT_INVALID jq -er '.schemaVersion' "$SOURCE_REPORT"
 run_capture database_size_bytes report_validation SOURCE_REPORT_INVALID jq -er '.database.databaseSizeBytes' "$SOURCE_REPORT"
 run_capture report_backup_estimate_bytes report_validation SOURCE_REPORT_INVALID jq -er '.storage.budget.backupEstimateBytes' "$SOURCE_REPORT"
+run_capture source_migration_total report_validation SOURCE_REPORT_INVALID jq -er '.database.migration.total' "$SOURCE_REPORT"
+run_capture source_migration_finished report_validation SOURCE_REPORT_INVALID jq -er '.database.migration.finished' "$SOURCE_REPORT"
+run_capture source_migration_failed report_validation SOURCE_REPORT_INVALID jq -er '.database.migration.failed' "$SOURCE_REPORT"
 [[ $source_schema == 3 && $database_size_bytes =~ ^[1-9][0-9]*$ && \
-  $report_backup_estimate_bytes =~ ^[1-9][0-9]*$ ]] || fail_backup 81 report_validation SOURCE_REPORT_INVALID
+  $report_backup_estimate_bytes =~ ^[1-9][0-9]*$ && $source_migration_total =~ ^[0-9]+$ && \
+  $source_migration_finished =~ ^[0-9]+$ && $source_migration_failed =~ ^[0-9]+$ ]] || \
+  fail_backup 81 report_validation SOURCE_REPORT_INVALID
 (( report_backup_estimate_bytes >= database_size_bytes )) || fail_backup 81 report_validation SOURCE_REPORT_INVALID
 
 config_source_bytes=0
@@ -182,7 +187,8 @@ done
 calculated_estimate_bytes=$(((database_size_bytes * 5 + 3) / 4))
 backup_estimate_bytes=$report_backup_estimate_bytes
 (( calculated_estimate_bytes > backup_estimate_bytes )) && backup_estimate_bytes=$calculated_estimate_bytes
-minimum_required_free_bytes=$((backup_estimate_bytes + config_source_bytes + ROLLBACK_RESERVE_BYTES))
+temporary_dump_budget_bytes=$backup_estimate_bytes
+minimum_required_free_bytes=$((backup_estimate_bytes + temporary_dump_budget_bytes + config_source_bytes + ROLLBACK_RESERVE_BYTES))
 free_gate_bytes=$MINIMUM_FREE_BEFORE_BYTES
 (( minimum_required_free_bytes > free_gate_bytes )) && free_gate_bytes=$minimum_required_free_bytes
 
@@ -247,6 +253,21 @@ run_capture postgresql_version docker_exec_read DATABASE_DUMP_FAILED docker_read
   sh -ceu 'test -n "${POSTGRES_USER:-}" && test -n "${POSTGRES_DB:-}"; export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000"; exec psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --tuples-only --no-align --command "SHOW server_version"'
 postgresql_version=$(awk 'NF{gsub(/^[[:space:]]+|[[:space:]]+$/,""); print; exit}' <<<"$postgresql_version")
 [[ $postgresql_version =~ ^[0-9]+([.][0-9]+)+ ]] || fail_backup 65 docker_exec_read DATABASE_DUMP_FAILED
+
+BACKUP_PHASE='migration_ledger_validation'
+BACKUP_SAFE_COMMAND_CLASS='migration_ledger_read'
+BACKUP_ERROR_CLASSIFICATION='MIGRATION_LEDGER_UNREADABLE'
+run_capture migration_ledger_state migration_ledger_read MIGRATION_LEDGER_UNREADABLE docker_read exec "$POSTGRES_CONTAINER_ID" \
+  sh -ceu 'test -n "${POSTGRES_USER:-}" && test -n "${POSTGRES_DB:-}"; export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=5000 -c lock_timeout=1000"; exec psql --no-psqlrc --set=ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --tuples-only --no-align --field-separator=\| --command "SELECT count(*), count(*) FILTER (WHERE finished_at IS NOT NULL), count(*) FILTER (WHERE finished_at IS NULL AND rolled_back_at IS NULL) FROM \"_prisma_migrations\""'
+migration_ledger_state=$(awk 'NF{gsub(/[[:space:]\r]/,""); print; exit}' <<<"$migration_ledger_state")
+IFS='|' read -r migration_total migration_finished migration_failed <<<"$migration_ledger_state"
+[[ $migration_total =~ ^[0-9]+$ && $migration_finished =~ ^[0-9]+$ && $migration_failed =~ ^[0-9]+$ && \
+  $migration_total == "$source_migration_total" && $migration_finished == "$source_migration_finished" && \
+  $migration_failed == "$source_migration_failed" ]] || fail_backup 98 migration_ledger_read MIGRATION_LEDGER_UNREADABLE
+
+BACKUP_PHASE='database_dump'
+BACKUP_SAFE_COMMAND_CLASS='docker_exec_read'
+BACKUP_ERROR_CLASSIFICATION='DATABASE_DUMP_FAILED'
 PM_DUMP_STARTED=true
 BACKUP_SAFE_COMMAND_CLASS='pg_dump_read'
 BACKUP_ERROR_CLASSIFICATION='DATABASE_DUMP_FAILED'
@@ -301,9 +322,13 @@ chown root:root "$CONFIG_ARCHIVE_TMP"
 [[ -s $CONFIG_ARCHIVE_TMP && ! -L $CONFIG_ARCHIVE_TMP && \
   $(stat -Lc '%U:%G:%a' "$CONFIG_ARCHIVE_TMP") == root:root:600 ]] || \
   fail_backup 94 config_archive CONFIG_ARCHIVE_FAILED
+tar --list --gzip --file="$CONFIG_ARCHIVE_TMP" >/dev/null 2>&1 || \
+  fail_backup 94 config_archive CONFIG_ARCHIVE_FAILED
 run_capture config_archive_sha256 filesystem_metadata CONFIG_ARCHIVE_FAILED sha256sum -- "$CONFIG_ARCHIVE_TMP"
 config_archive_sha256=${config_archive_sha256%% *}
-[[ $config_archive_sha256 =~ ^[0-9a-f]{64}$ ]] || fail_backup 94 filesystem_metadata CONFIG_ARCHIVE_FAILED
+run_capture config_archive_bytes filesystem_metadata CONFIG_ARCHIVE_FAILED stat -Lc '%s' "$CONFIG_ARCHIVE_TMP"
+[[ $config_archive_sha256 =~ ^[0-9a-f]{64}$ && $config_archive_bytes =~ ^[1-9][0-9]*$ ]] || \
+  fail_backup 94 filesystem_metadata CONFIG_ARCHIVE_FAILED
 mv --no-clobber --no-target-directory -- "$CONFIG_ARCHIVE_TMP" "$CONFIG_ARCHIVE_PATH"
 [[ ! -e $CONFIG_ARCHIVE_TMP && ! -L $CONFIG_ARCHIVE_TMP && \
   -f $CONFIG_ARCHIVE_PATH && ! -L $CONFIG_ARCHIVE_PATH ]] || \
@@ -327,6 +352,8 @@ run_capture free_bytes_after filesystem_metadata FREE_SPACE_GATE_FAILED df -B1 -
 free_bytes_after=$(awk 'NR==2{print $1}' <<<"$free_bytes_after")
 [[ $free_bytes_after =~ ^[0-9]+$ ]] || fail_backup 83 filesystem_metadata FREE_SPACE_GATE_FAILED
 (( free_bytes_after >= ROLLBACK_RESERVE_BYTES )) || fail_backup 83 filesystem_metadata FREE_SPACE_GATE_FAILED
+projected_free_after_estimate=$((free_bytes_before - backup_estimate_bytes - temporary_dump_budget_bytes - config_source_bytes))
+(( projected_free_after_estimate >= ROLLBACK_RESERVE_BYTES )) || fail_backup 83 filesystem_metadata FREE_SPACE_GATE_FAILED
 for backup_file in "$DUMP_PATH" "$DUMP_LIST_PATH" "$CONFIG_ARCHIVE_PATH"; do
   [[ -f $backup_file && ! -L $backup_file && $(stat -Lc '%U:%G:%a' "$backup_file") == root:root:600 ]] || \
     fail_backup 85 filesystem_metadata BACKUP_PATH_UNSAFE
@@ -355,31 +382,42 @@ jq -n \
   --arg projectHashBefore "$project_snapshot_hash_before" \
   --arg projectHashAfter "$project_snapshot_hash_after" \
   --argjson dumpBytes "$dump_bytes" \
+  --argjson configArchiveBytes "$config_archive_bytes" \
   --argjson objectCount "$object_count" \
   --argjson sourceFileCount "${#CONFIG_SOURCE_FILES[@]}" \
   --argjson restartCountBefore "$restart_count_before" \
   --argjson restartCountAfter "$restart_count_after" \
   --argjson databaseSizeEstimateBytes "$database_size_bytes" \
+  --argjson migrationTotal "$migration_total" \
+  --argjson migrationFinished "$migration_finished" \
+  --argjson migrationFailed "$migration_failed" \
   --argjson backupEstimateBytes "$backup_estimate_bytes" \
+  --argjson temporaryDumpBudgetBytes "$temporary_dump_budget_bytes" \
   --argjson minimumFreeGateBytes "$free_gate_bytes" \
   --argjson freeBytesBefore "$free_bytes_before" \
   --argjson freeBytesAfter "$free_bytes_after" \
+  --argjson projectedFreeAfterEstimate "$projected_free_after_estimate" \
   '{schemaVersion:1,mode:"PRODUCTION_BACKUP_METADATA",scriptSha256:$scriptSha256,
     sourceReportSha256:$sourceReportSha256,database:{nameHash:$databaseNameHash,
     postgresqlVersion:$postgresqlVersion,sizeEstimateBytes:$databaseSizeEstimateBytes},
     dump:{path:$dumpPath,bytes:$dumpBytes,sha256:$dumpSha256,format:"custom",
     noOwner:true,noAcl:true,objectCount:$objectCount,structuralValidation:"PASS"},
-    configArchive:{path:$configArchivePath,sha256:$configArchiveSha256,
+    migrationLedger:{readable:true,total:$migrationTotal,finished:$migrationFinished,
+    failed:$migrationFailed,sourceReportMatched:true},
+    configArchive:{path:$configArchivePath,bytes:$configArchiveBytes,sha256:$configArchiveSha256,
     sourceFileCount:$sourceFileCount,contentsPrinted:false},time:{startedAt:$startedAt,endedAt:$endedAt},
     production:{containerIdHash:$containerIdHash,containerHashes:{before:$projectHashBefore,
     after:$projectHashAfter},restartCount:{before:$restartCountBefore,after:$restartCountAfter}},
-    storage:{backupEstimateBytes:$backupEstimateBytes,minimumFreeGateBytes:$minimumFreeGateBytes,
-    freeBytesBefore:$freeBytesBefore,freeBytesAfter:$freeBytesAfter,rollbackReserveBytes:5368709120},
+    storage:{backupEstimateBytes:$backupEstimateBytes,temporaryDumpBudgetBytes:$temporaryDumpBudgetBytes,
+    minimumFreeGateBytes:$minimumFreeGateBytes,freeBytesBefore:$freeBytesBefore,
+    freeBytesAfter:$freeBytesAfter,projectedFreeAfterEstimate:$projectedFreeAfterEstimate,
+    rollbackReserveBytes:5368709120},
     restore:{BACKUP_STRUCTURAL_VALIDATION:"PASS",FULL_RESTORE_PROOF:"PENDING_ISOLATED_ROOT_PROBE"},
     safety:{DockerMutation:false,DDL:false,DML:false,migration:false,restart:false,deploy:false,
     imagePull:false,imageLoad:false,browserLaunched:false,maxContacted:false,providerAction:false,
     secretsPrinted:false,messageDataPrinted:false}}' >"$PM_METADATA_TMP"
 jq -e '.mode=="PRODUCTION_BACKUP_METADATA" and .dump.structuralValidation=="PASS" and
+  .migrationLedger.readable==true and .migrationLedger.sourceReportMatched==true and
   .restore.FULL_RESTORE_PROOF=="PENDING_ISOLATED_ROOT_PROBE" and .safety.DDL==false and
   .safety.DML==false and .safety.migration==false and .safety.restart==false and
   .safety.deploy==false and .safety.secretsPrinted==false' "$PM_METADATA_TMP" >/dev/null || \
@@ -409,5 +447,6 @@ success_report_sha=$(sha256sum -- "$SUCCESS_REPORT" | awk '{print $1}')
 BACKUP_PHASE='completed'
 trap - ERR
 trap - EXIT
-printf 'BACKUP_COMPLETED\nSANITIZED_RESULT_PATH=%s\nSANITIZED_RESULT_SHA256=%s\nBACKUP_STRUCTURAL_VALIDATION=PASS\nFULL_RESTORE_PROOF=PENDING_ISOLATED_ROOT_PROBE\nDDL=NO\nDML=NO\nMIGRATION=NO\nRESTART=NO\nDEPLOY=NO\n' \
-  "$SUCCESS_REPORT" "$success_report_sha"
+printf 'BACKUP_COMPLETED\nSANITIZED_RESULT_PATH=%s\nSANITIZED_RESULT_SHA256=%s\nDB_DUMP_PATH=%s\nDB_DUMP_SHA256=%s\nDB_DUMP_BYTES=%s\nCONFIG_ARCHIVE_PATH=%s\nCONFIG_ARCHIVE_SHA256=%s\nCONFIG_ARCHIVE_BYTES=%s\nOBJECT_COUNT=%s\nREPORT_OWNER=root\nREPORT_GROUP=codexbot\nREPORT_MODE=0640\nBACKUP_STRUCTURAL_VALIDATION=PASS\nFULL_RESTORE_PROOF=PENDING_ISOLATED_ROOT_PROBE\nCODEXBOT_READABLE=YES\nCODEXBOT_WRITABLE=NO\nPRODUCTION_RESTARTED=NO\nDDL=NO\nDML=NO\nMIGRATION=NO\nDEPLOY=NO\n' \
+  "$SUCCESS_REPORT" "$success_report_sha" "$DUMP_PATH" "$dump_sha256" "$dump_bytes" \
+  "$CONFIG_ARCHIVE_PATH" "$config_archive_sha256" "$config_archive_bytes" "$object_count"

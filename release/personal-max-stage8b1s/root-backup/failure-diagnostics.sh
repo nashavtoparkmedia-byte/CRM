@@ -7,7 +7,7 @@
 personal_max_backup_phase_is_safe() {
   case ${1:-} in
     bootstrap_complete | source_report_validation | free_space_gate | container_discovery | \
-      production_snapshot_before | backup_directory | database_dump | dump_verification | \
+      production_snapshot_before | backup_directory | migration_ledger_validation | database_dump | dump_verification | \
       config_archive | production_snapshot_after | immutability_comparison | metadata_render | \
       report_handoff | completed)
       return 0
@@ -18,7 +18,7 @@ personal_max_backup_phase_is_safe() {
 
 personal_max_backup_command_class_is_safe() {
   case ${1:-} in
-    filesystem_metadata | report_validation | docker_ps | docker_inspect | docker_exec_read | \
+    filesystem_metadata | report_validation | docker_ps | docker_inspect | docker_exec_read | migration_ledger_read | \
       pg_dump_read | pg_restore_list | config_archive | metadata_render | report_handoff | unknown)
       return 0
       ;;
@@ -30,7 +30,7 @@ personal_max_backup_error_class_is_safe() {
   case ${1:-} in
     UNEXPECTED_COMMAND_FAILURE | SOURCE_REPORT_INVALID | FREE_SPACE_GATE_FAILED | \
       DOCKER_SERVER_UNAVAILABLE | SERVICE_CARDINALITY_CONFLICT | LABEL_MISMATCH | \
-      PRODUCTION_SNAPSHOT_FAILED | BACKUP_PATH_UNSAFE | DATABASE_DUMP_FAILED | \
+      PRODUCTION_SNAPSHOT_FAILED | BACKUP_PATH_UNSAFE | MIGRATION_LEDGER_UNREADABLE | DATABASE_DUMP_FAILED | \
       DUMP_VERIFICATION_FAILED | CONFIG_ARCHIVE_FAILED | PRODUCTION_DRIFT_DETECTED | \
       METADATA_RENDER_FAILED | REPORT_HANDOFF_FAILED)
       return 0

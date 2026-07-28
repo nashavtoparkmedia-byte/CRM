@@ -18,6 +18,10 @@ Safe cleanup is exhausted. The minimum recommended expansion is the exact defici
 - minimum resulting filesystem size: 79,906,196,736 bytes;
 - practical provisioned target: at least 80,000,000,000 bytes total.
 
-The prepared backup script independently fails closed unless free space is at least 12,500,000,000 bytes and at least the calculated backup estimate plus a 5 GiB reserve. It rechecks that reserve after backup creation. With the current storage boundary, the root action must not be started because its free-space gate would intentionally fail.
+## Post-expansion verification
+
+The provider expansion is now fully visible through every required layer. `/dev/vda` is 85,899,345,920 bytes (80 GiB), `/dev/vda1` is 85,782,937,088 bytes, and the mounted ext4 filesystem is 83,053,432,832 bytes. Free space was 22,103,773,184 bytes, 9,603,773,184 bytes above the target. This is `CASE_A_FULLY_EXPANDED`; no grow/resize package or root filesystem action is required.
+
+The prepared backup script independently fails closed unless free space is at least 12,500,000,000 bytes and at least the dump estimate, a second conservative temporary-dump allowance, config budget, and a 5 GiB reserve. The calculated minimum is 5,708,165,153 bytes, so the controlling gate remains 12,500,000,000 bytes. It rechecks the 5 GiB reserve after backup creation.
 
 No disk expansion, Docker cleanup, image pull/load, production write, backup, migration, deploy, restart, browser action, MAX action, or provider action was performed.

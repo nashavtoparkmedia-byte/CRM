@@ -8,7 +8,7 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 readonly SCRIPT_DIR
 readonly BACKUP_SCRIPT="$SCRIPT_DIR/create-production-backup.sh"
 readonly DIAGNOSTICS="$SCRIPT_DIR/failure-diagnostics.sh"
-readonly EXPECTED_DIAGNOSTICS_SHA256='dc94d28fc134a6473d7880e744068cfa536f837e0f745cc6ff969eb4c01c18fd'
+readonly EXPECTED_DIAGNOSTICS_SHA256='6d367992812301783f7118fc72f1820fdb6884c98409a6dfff127eb0614dab28'
 readonly FAKE_SCRIPT_SHA256='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 [[ $(sha256sum -- "$DIAGNOSTICS" | awk '{print $1}') == "$EXPECTED_DIAGNOSTICS_SHA256" ]]
@@ -60,9 +60,10 @@ report_estimate=169706269
 calculated_estimate=$(((database_size * 5 + 3) / 4))
 backup_estimate=$report_estimate
 (( calculated_estimate > backup_estimate )) && backup_estimate=$calculated_estimate
-minimum_required=$((backup_estimate + 43495 + 5368709120))
+temporary_dump_budget=$backup_estimate
+minimum_required=$((backup_estimate + temporary_dump_budget + 43495 + 5368709120))
 [[ $backup_estimate -eq 169706269 ]]
-[[ $minimum_required -eq 5538458884 ]]
+[[ $minimum_required -eq 5708165153 ]]
 (( 12500000000 > minimum_required ))
 
 grep -F -- '--filter "label=$PROJECT_LABEL=$PROJECT" --filter "label=$SERVICE_LABEL=$SERVICE"' "$BACKUP_SCRIPT" >/dev/null
@@ -71,6 +72,10 @@ grep -F -- '(( ${#postgres_ids[@]} == 1 ))' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'pg_dump --format=custom --compress=6 --no-owner --no-acl' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'pg_restore --list' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'object_count=$(awk' "$BACKUP_SCRIPT" >/dev/null
+grep -F -- "BACKUP_PHASE='migration_ledger_validation'" "$BACKUP_SCRIPT" >/dev/null
+grep -F -- 'MIGRATION_LEDGER_UNREADABLE' "$BACKUP_SCRIPT" >/dev/null
+grep -F -- 'FROM \"_prisma_migrations\"' "$BACKUP_SCRIPT" >/dev/null
+grep -F -- 'migrationLedger:{readable:true' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'BACKUP_PATH_ALREADY_EXISTS' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'mv --no-clobber --no-target-directory' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- "readonly MINIMUM_FREE_BEFORE_BYTES=12500000000" "$BACKUP_SCRIPT" >/dev/null
@@ -79,8 +84,14 @@ grep -F -- "chmod 0600 \"\$DUMP_TMP\"" "$BACKUP_SCRIPT" >/dev/null
 grep -F -- "chmod 0600 \"\$CONFIG_ARCHIVE_TMP\"" "$BACKUP_SCRIPT" >/dev/null
 grep -F -- "chmod 0640 \"\$PM_METADATA_TMP\"" "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'contentsPrinted:false' "$BACKUP_SCRIPT" >/dev/null
+grep -F -- 'tar --list --gzip' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'FULL_RESTORE_PROOF:"PENDING_ISOLATED_ROOT_PROBE"' "$BACKUP_SCRIPT" >/dev/null
 grep -F -- 'DDL:false,DML:false,migration:false,restart:false,deploy:false' "$BACKUP_SCRIPT" >/dev/null
+for expected_output in DB_DUMP_PATH DB_DUMP_SHA256 DB_DUMP_BYTES CONFIG_ARCHIVE_PATH \
+  CONFIG_ARCHIVE_SHA256 CONFIG_ARCHIVE_BYTES OBJECT_COUNT REPORT_OWNER REPORT_GROUP \
+  REPORT_MODE CODEXBOT_READABLE CODEXBOT_WRITABLE PRODUCTION_RESTARTED MIGRATION DEPLOY; do
+  grep -F -- "$expected_output=" "$BACKUP_SCRIPT" >/dev/null
+done
 
 if grep -E 'docker[[:space:]]+compose|docker-compose([[:space:]]|$)|\.Config\.Env|source[[:space:]]+.*\.env\.production|cat[[:space:]]+.*\.env\.production' "$BACKUP_SCRIPT" >/dev/null; then
   printf 'FORBIDDEN_COMPOSE_OR_ENV_ACCESS\n' >&2
@@ -101,12 +112,12 @@ secret_sentinel='BACKUP_TEST_SECRET_MUST_NOT_APPEAR'
 export PERSONAL_MAX_BACKUP_TEST_SECRET="$secret_sentinel"
 set +e
 (
-  BACKUP_PHASE='database_dump'
-  BACKUP_SAFE_COMMAND_CLASS='pg_dump_read'
-  BACKUP_ERROR_CLASSIFICATION='DATABASE_DUMP_FAILED'
+  BACKUP_PHASE='migration_ledger_validation'
+  BACKUP_SAFE_COMMAND_CLASS='migration_ledger_read'
+  BACKUP_ERROR_CLASSIFICATION='MIGRATION_LEDGER_UNREADABLE'
   PM_FAILURE_HANDLER_ACTIVE=false
   PM_BACKUP_DIRECTORY_CREATED=true
-  PM_DUMP_STARTED=true
+  PM_DUMP_STARTED=false
   PM_DUMP_COMPLETED=false
   PM_STRUCTURAL_VALIDATION_COMPLETED=false
   PM_CONFIG_ARCHIVE_COMPLETED=false
@@ -119,25 +130,25 @@ set +e
   PM_REPORT_GROUP=$test_group
   PM_REPORT_READER=$test_owner
   PM_VERIFY_PRINCIPAL_ACCESS=false
-  personal_max_backup_handle_failure 92 321
+  personal_max_backup_handle_failure 98 321
 ) >"$output_path" 2>&1
 failure_status=$?
 set -e
-[[ $failure_status -eq 92 ]]
+[[ $failure_status -eq 98 ]]
 [[ -f $failure_path && ! -L $failure_path ]]
 [[ $(stat -Lc '%U:%G:%a' "$failure_path") == "$test_owner:$test_group:640" ]]
-jq -e '.mode=="PRODUCTION_BACKUP_FAILURE" and .phase=="database_dump" and
-  .safeCommandClass=="pg_dump_read" and .safeErrorClassification=="DATABASE_DUMP_FAILED" and
-  .exitCode==92 and .backupDirectoryCreated==true and .dumpStarted==true and
+jq -e '.mode=="PRODUCTION_BACKUP_FAILURE" and .phase=="migration_ledger_validation" and
+  .safeCommandClass=="migration_ledger_read" and .safeErrorClassification=="MIGRATION_LEDGER_UNREADABLE" and
+  .exitCode==98 and .backupDirectoryCreated==true and .dumpStarted==false and
   .dumpCompleted==false and .structuralValidationCompleted==false and
   .configArchiveCompleted==false and .DockerMutation==false and .DDL==false and
   .DML==false and .migration==false and .restart==false and .deploy==false and
   .secretsPrinted==false and .rawCommandCaptured==false and .rawSqlCaptured==false and
   .rawStderrCaptured==false' "$failure_path" >/dev/null
 grep -Fx 'BACKUP_FAILED' "$output_path" >/dev/null
-grep -Fx 'BACKUP_PHASE=database_dump' "$output_path" >/dev/null
-grep -Fx 'BACKUP_SAFE_COMMAND_CLASS=pg_dump_read' "$output_path" >/dev/null
-grep -Fx 'BACKUP_EXIT_CODE=92' "$output_path" >/dev/null
+grep -Fx 'BACKUP_PHASE=migration_ledger_validation' "$output_path" >/dev/null
+grep -Fx 'BACKUP_SAFE_COMMAND_CLASS=migration_ledger_read' "$output_path" >/dev/null
+grep -Fx 'BACKUP_EXIT_CODE=98' "$output_path" >/dev/null
 if grep -F "$secret_sentinel" "$failure_path" "$output_path" >/dev/null || \
   grep -E 'BASH_COMMAND|POSTGRES_(USER|DB|PASSWORD)|SELECT |SHOW server_version|\.Config\.Env' "$failure_path" "$output_path" >/dev/null; then
   printf 'UNSAFE_FAILURE_DIAGNOSTIC_CONTENT\n' >&2
@@ -148,12 +159,12 @@ failure_hash=$(sha256sum -- "$failure_path" | awk '{print $1}')
 rerun_output="$scenario_dir/rerun.txt"
 set +e
 (
-  BACKUP_PHASE='database_dump'
-  BACKUP_SAFE_COMMAND_CLASS='pg_dump_read'
-  BACKUP_ERROR_CLASSIFICATION='DATABASE_DUMP_FAILED'
+  BACKUP_PHASE='migration_ledger_validation'
+  BACKUP_SAFE_COMMAND_CLASS='migration_ledger_read'
+  BACKUP_ERROR_CLASSIFICATION='MIGRATION_LEDGER_UNREADABLE'
   PM_FAILURE_HANDLER_ACTIVE=false
   PM_BACKUP_DIRECTORY_CREATED=true
-  PM_DUMP_STARTED=true
+  PM_DUMP_STARTED=false
   PM_DUMP_COMPLETED=false
   PM_STRUCTURAL_VALIDATION_COMPLETED=false
   PM_CONFIG_ARCHIVE_COMPLETED=false
@@ -166,21 +177,23 @@ set +e
   PM_REPORT_GROUP=$test_group
   PM_REPORT_READER=$test_owner
   PM_VERIFY_PRINCIPAL_ACCESS=false
-  personal_max_backup_handle_failure 92 322
+  personal_max_backup_handle_failure 98 322
 ) >"$rerun_output" 2>&1
 rerun_status=$?
 set -e
-[[ $rerun_status -eq 92 ]]
+[[ $rerun_status -eq 98 ]]
 grep -Fx 'FAILURE_REPORT_PATH_UNSAFE' "$rerun_output" >/dev/null
 [[ $(sha256sum -- "$failure_path" | awk '{print $1}') == "$failure_hash" ]]
 
 printf 'LABEL_DISCOVERY=PASS\n'
 printf 'SERVICE_CARDINALITY=PASS zero,one,multiple,project,service,state\n'
-printf 'FREE_SPACE_GATE=PASS estimate=%s minimumRequired=%s target=12500000000 reserve=5368709120\n' "$backup_estimate" "$minimum_required"
+printf 'FREE_SPACE_GATE=PASS estimate=%s temporary=%s minimumRequired=%s target=12500000000 reserve=5368709120\n' "$backup_estimate" "$temporary_dump_budget" "$minimum_required"
 printf 'NO_OVERWRITE=PASS\n'
 printf 'PERMISSION_CONTRACT=PASS backup=root:root:0600 metadata=root:codexbot:0640\n'
 printf 'DUMP_VERIFICATION_CONTRACT=PASS custom,pg_restore-list,nonempty-count,sha256\n'
 printf 'CONFIG_ARCHIVE_SECRECY=PASS exact-paths,no-content-output,0600\n'
 printf 'FAILURE_DIAGNOSTICS=PASS\n'
+printf 'MIGRATION_LEDGER_READ_CONTRACT=PASS\n'
+printf 'SANITIZED_SUCCESS_OUTPUT_CONTRACT=PASS\n'
 printf 'NO_SILENT_FAILURE=PASS\n'
 printf 'BACKUP_SCRIPT_EXECUTED=NO\n'
