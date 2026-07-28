@@ -26,12 +26,27 @@
     "releaseImagesChanged": false
   },
   "productionReadOnlyPreflightComposeIndependentPatch": {
-    "commit": "SELF",
+    "commit": "d5145fa081536205eb16737cb01a19f26e8b904c",
     "expectedParent": "ee890b28973302ef035e9c02654f978aec995dd9",
     "containerDiscovery": "Docker Engine exact Compose project/service labels",
     "dockerComposeCliUsed": false,
     "composeEnvironmentInterpolation": false,
     "containerEnvironmentValuesRead": false,
+    "applicationBehaviorChanged": false,
+    "migrationChanged": false,
+    "releaseImagesChanged": false
+  },
+  "productionReadOnlyPreflightFailureDiagnosticsPatch": {
+    "commit": "SELF",
+    "expectedParent": "d5145fa081536205eb16737cb01a19f26e8b904c",
+    "obsoleteScriptSha256": "b154c731586dd34739dc611ebcfa8daffa75c2e7b14cb27dd8733b0d48e28063",
+    "obsoleteReason": "OBSOLETE_DUE_TO_SILENT_INTERNAL_FAILURE",
+    "currentScriptSha256": "19f04bed9c25e4b015c60bf12a72f97830d33561baa2dd088a00b43fcf368136",
+    "failureResultPathPattern": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.failure.<actual-script-sha256>.json",
+    "phaseCount": 25,
+    "safeCommandClassCount": 12,
+    "faultScenarioCount": 15,
+    "noSilentPostBootstrapFailure": true,
     "applicationBehaviorChanged": false,
     "migrationChanged": false,
     "releaseImagesChanged": false
@@ -46,8 +61,8 @@
   "executableEvidenceWorkflow": ".github/workflows/personal-max-stage8b1r-security.yml",
   "executableEvidenceArtifact": "personal-max-stage8b1r-${GITHUB_SHA}",
   "releaseGate": "CI final-image security, execution, registry digest, and pull-by-digest evidence must pass before architect review",
-  "fileCount": 24,
-  "checksumEntryCount": 23,
+  "fileCount": 27,
+  "checksumEntryCount": 26,
   "files": [
     "SHA256SUMS",
     "accepted-commit-chain.json",
@@ -70,8 +85,11 @@
     "executable/ci-image-proof.sh",
     "executable/synthetic-scraper-harness.js",
     "root-preflight/manifest.json",
+    "root-preflight/failure-diagnostics.sh",
+    "root-preflight/failure-report-schema.md",
     "root-preflight/probe-isolated-images.sh",
     "root-preflight/probe-readonly-production.sh",
-    "root-preflight/static-safety-report.json"
+    "root-preflight/static-safety-report.json",
+    "root-preflight/test-failure-diagnostics.sh"
   ]
 }

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "stage": "8B1R-P2",
+  "stage": "8B1R-P3",
   "mode": "PRODUCTION_READ_ONLY_PREFLIGHT",
   "productionProbe": {
     "path": "root-preflight/probe-readonly-production.sh",
-    "sha256": "b154c731586dd34739dc611ebcfa8daffa75c2e7b14cb27dd8733b0d48e28063",
+    "sha256": "19f04bed9c25e4b015c60bf12a72f97830d33561baa2dd088a00b43fcf368136",
     "obsoleteSha256": [
       {
         "sha256": "bacd74af185a371ca641ef8f262286c424e51bd3737dd81c1b7382ffb5fdc336",
@@ -13,11 +13,36 @@
       {
         "sha256": "f5546c8974cfbb0247de992ea4a1d4c0a9029bea54537574a41bc2865e1df429",
         "reason": "OBSOLETE_DUE_TO_UNREADABLE_ROOT_HANDOFF"
+      },
+      {
+        "sha256": "b154c731586dd34739dc611ebcfa8daffa75c2e7b14cb27dd8733b0d48e28063",
+        "reason": "OBSOLETE_DUE_TO_SILENT_INTERNAL_FAILURE"
       }
     ],
     "checksumBindingRequired": true,
     "rootRequired": true,
-    "resultPath": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json"
+    "successResultPath": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json",
+    "failureResultPathPattern": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.failure.<actual-script-sha256>.json",
+    "errTrapInstalledAfterTrustBootstrap": true,
+    "phaseCount": 25,
+    "safeCommandClassCount": 12,
+    "silentPostBootstrapFailureAllowed": false
+  },
+  "failureDiagnostics": {
+    "helperPath": "root-preflight/failure-diagnostics.sh",
+    "helperSha256": "0fd3e8a5b9c2c9df1762cb8ecb6ab3210dffc2cd645c25a8aa4c4a5270634d49",
+    "helperChecksumVerifiedBeforeSource": true,
+    "schemaDocumentation": "root-preflight/failure-report-schema.md",
+    "faultInjectionHarness": "root-preflight/test-failure-diagnostics.sh",
+    "faultInjectionHarnessSha256": "8406fe1b908681c1a279cf14c403d426d3eaf82e35462b4be2433ed18ab6be41",
+    "faultScenarioCount": 15,
+    "productionDockerRequiredByHarness": false,
+    "productionPostgresqlRequiredByHarness": false,
+    "noSilentFailure": true,
+    "rawCommandCaptured": false,
+    "rawSqlCaptured": false,
+    "rawStderrCaptured": false,
+    "environmentValuesCaptured": false
   },
   "containerDiscovery": {
     "source": "Docker Engine labels",
@@ -33,18 +58,32 @@
     "composeEnvironmentInterpolation": false
   },
   "reportHandoff": {
-    "temporaryOwner": "root",
-    "temporaryMode": "0600",
+    "success": {
+      "path": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json",
+      "temporaryOwner": "root",
+      "temporaryMode": "0600",
+      "finalOwner": "root",
+      "finalGroup": "codexbot",
+      "finalMode": "0640",
+      "codexbotReadable": true,
+      "codexbotWritable": false
+    },
+    "failure": {
+      "pathPattern": "/var/tmp/personal-max-stage8b1r-production-readonly-preflight.failure.<actual-script-sha256>.json",
+      "temporaryOwner": "root",
+      "temporaryMode": "0600",
+      "finalOwner": "root",
+      "finalGroup": "codexbot",
+      "finalMode": "0640",
+      "codexbotReadable": true,
+      "codexbotWritable": false
+    },
     "finalType": "regular",
     "symlinkAllowed": false,
-    "finalOwner": "root",
-    "finalGroup": "codexbot",
-    "finalMode": "0640",
-    "codexbotReadable": true,
-    "codexbotWritable": false,
     "worldReadable": false,
     "worldWritable": false,
     "atomicNoClobberMove": true,
+    "existingPathsOverwritten": false,
     "additionalOwnerCommandRequired": false
   },
   "safety": {
@@ -55,6 +94,13 @@
     "messageContentsIncluded": false,
     "chromiumProfileContentsIncluded": false,
     "postgresqlReadOnly": true,
+    "postgresqlQueryResultStates": [
+      "success",
+      "unavailable",
+      "timeout",
+      "permission_denied",
+      "malformed_output"
+    ],
     "boundedTimeouts": true,
     "unboundedFullTableScans": false,
     "dockerMutation": false,
