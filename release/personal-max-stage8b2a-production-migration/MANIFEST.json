@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B2A",
+  "status": "PREPARED_NOT_EXECUTED",
+  "sourceCommit": "cedca468784dc59411fb6a5b01f650fb6fc96636",
+  "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
+  "productionMutationPerformed": false,
+  "secretBinding": {
+    "sourceService": "gravity-mvp",
+    "variableName": "DATABASE_URL",
+    "valuesPrinted": false,
+    "temporaryMode": "0600"
+  },
+  "acceptedGatewayImage": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+  "expectedMigrations": [
+    "20260726162043_add_max_raw_transport_journal",
+    "20260726190658_add_max_route_registry",
+    "20260726205437_add_max_inbound_normalization",
+    "20260726215715_add_max_per_chat_outbound_actor",
+    "20260726225737_add_max_dispatch_ledger",
+    "20260727053744_add_max_provider_confirmation_matcher",
+    "20260727141925_add_max_shadow_semantic_comparison",
+    "20260727154647_add_max_capture_ingress"
+  ],
+  "files": [
+    "MANIFEST.json",
+    "SHA256SUMS",
+    "backup-contract.md",
+    "failure-diagnostics.sh",
+    "migration-contract.md",
+    "owner-instructions.md",
+    "partial-failure-contract.md",
+    "production-immutability-contract.md",
+    "production-migration.sh",
+    "report-schema.json",
+    "report-success.jq",
+    "secret-binding-contract.md",
+    "test-faults.sh",
+    "test-package.sh"
+  ]
+}

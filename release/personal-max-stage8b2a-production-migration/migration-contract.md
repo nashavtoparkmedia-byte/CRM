@@ -1,0 +1,3 @@
+# Exact-eight migration contract
+
+Preconditions are 46 total, 46 finished, zero failed or rolled back, no long transaction, no active non-idle session, absent exact target relations/functions, accepted PostgreSQL 16.14, accepted gateway digest, and an exact repository-to-ledger difference of the eight Personal MAX migrations. `prisma migrate deploy` runs once with a 900-second bound. Success is 54 total, 54 finished, zero failed, only those eight new names, empty raw journal, capture column and indexes present, and an empty live-database-to-datamodel Prisma diff that needs no shadow database. No deployment, service restart, capture activation, gateway start, scraper change, MAX access, or provider action is part of this package.
