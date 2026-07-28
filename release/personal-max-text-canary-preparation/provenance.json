@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "branch": "feature/personal-max-text-canary-autonomous-20260728T211316Z",
+    "implementationCommit": "7b67faa73c458c1c3e8de1eab70b207a6ee61811",
+    "baseCommit": "a086a2626e1d64dccafbe958be7aff59c933bbb0"
+  },
+  "acceptedTrustChain": {
+    "stageAIsolatedProbeScriptSha256": "dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053",
+    "stageBMigrationScriptSha256": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560",
+    "stageCDormantRolloutSha256": "bc8ee9ac2012f04d66113db604ea13ce204bd3400fa6eedb7f22531be25cb6f3",
+    "stageCDormantRollbackSha256": "41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d",
+    "stageCComposeSha256": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2",
+    "stageEObserverSha256": "a1e754f7ccde6d639c8e3df0f9624ea37f629a0c7d8deac3b998313acd91ef17",
+    "stageEEvaluatorSha256": "f00d215503a3990d462d9782896f4f4723f8df242e2546f04a18ac5100852846"
+  },
+  "newPreparation": {
+    "scraperMetadataProbeSha256": "ab0a6249f58a02e827b407351df73ca05d3074feee621c16729b0bc68500538f",
+    "sessionOwnerMigrationSha256": "a541540b9093e8532c3f4b0e13f2a1136b770830d880b648e87cd2bb9b88991c",
+    "shadowPlanMigrationSha256": "6f0b5bd2a62580159a71626a15c072fbe5887330f1b739d9ee29c555fc6cccae",
+    "sessionOwnerMigrationExecuted": false,
+    "shadowPlanMigrationExecuted": false,
+    "metadataProbeExecuted": false,
+    "senderRuntimeWired": false
+  },
+  "acceptedCurrentImages": {
+    "gateway": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+    "scraper": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768"
+  },
+  "futureImages": {"gateway": "NOT_BUILT", "scraper": "NOT_BUILT"},
+  "production": {
+    "expectedHead": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "expectedRawPorcelainV2Sha256": "2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b",
+    "mutatedByPreparation": false
+  }
+}

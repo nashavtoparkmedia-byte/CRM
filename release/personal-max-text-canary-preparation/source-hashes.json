@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "algorithm": "SHA-256",
+  "files": {
+    "contracts/personal-max-text-sender-v1.schema.json": "a9953383cab317b119124113510cc814816d0107ec98ca9b07e89a33269aeaaa",
+    "gravity-mvp/prisma/migrations/20260728213000_add_max_account_session_owner/migration.sql": "a541540b9093e8532c3f4b0e13f2a1136b770830d880b648e87cd2bb9b88991c",
+    "gravity-mvp/prisma/migrations/20260728214000_add_max_outbound_shadow_plan/migration.sql": "6f0b5bd2a62580159a71626a15c072fbe5887330f1b739d9ee29c555fc6cccae",
+    "gravity-mvp/prisma/schema.prisma": "fe06b5b1b9820d42783041dc80605a5f1d98142c5f05ceb707b68302ad884339",
+    "max-personal-gateway/src/sender/GatewayTextSenderRequest.ts": "8e323cc582c4c8b3efcc7e88cd0bbb4780e50ef0a93c9fe66ab13c21a45e5f1a",
+    "max-personal-gateway/src/sender/featureFlag.ts": "32a0a31156bf1961395934bdc7af67939a01105d4c69ee3c5bb61e67647acb31",
+    "max-personal-gateway/src/sender/types.ts": "6cc784197402c85dfd973e07a0045957b2ba17b20aa3642f1d2878d39535b6db",
+    "max-personal-gateway/src/session/AccountSessionOwner.ts": "0eeedbbe40bcee1db97699f158ca05ebf40fe714d43733192fa72f1c84c90f3d",
+    "max-personal-gateway/src/session/PrismaSessionOwnerRepository.ts": "194f767eddd7328c2e4d7690861c289098c720e21f45a3b2033079d2e7a109f9",
+    "max-personal-gateway/src/session/featureFlag.ts": "f2d4cbbd71b34570e35f964e872497935f0e2d2b647a028be3d9b7e0a9ad6127",
+    "max-personal-gateway/src/session/types.ts": "a4b312328abcd9dbaeaed7885ab049d59053cd66610ae7de157eba5e935fcae8",
+    "max-personal-gateway/src/shadow/OutboundShadowPlanner.ts": "c10a9c0c409c883993d2f14f0f5092c01b2af0a3283b968aea36cf3387350e63",
+    "max-personal-gateway/src/shadow/PrismaShadowPlanRepository.ts": "3c5d66cdc5b78b73f05b95089a8c1094d3bdc2bcbf417f0fbe5e88d45b5f4913",
+    "max-personal-gateway/src/shadow/featureFlag.ts": "90f2c1c490d6a8566d4ee3d1b09d8967090b7cda0ae9e42d379a9cce887f48b9",
+    "max-personal-gateway/src/shadow/types.ts": "1a43970071f95891b4302daf3612429a228fb6d769e06badf1db9c4b9908d39e",
+    "max-web-scraper/sender-v1/FencedTextSenderBoundary.js": "792974a4e2bfd18a96516a75d382290fd44c03dc3044663883df68586b7d240a",
+    "max-web-scraper/sender-v1/SyntheticTextSenderAdapter.js": "34281b0655a43a2fcbacac28c2ba7be5948558b4fd64e11822ddbbdaa6adfa89",
+    "max-web-scraper/sender-v1/authentication.js": "fdd3174a2de0929b6e801e3ecd0e7b8555bede5be38967c962a33d8247737d46",
+    "max-web-scraper/sender-v1/canaryPolicy.js": "c2d3f2d7a82d0e73e3a6a1b1f2f34176f4a59500aefe67cb87548a48e79e8d30",
+    "release/personal-max-scraper-runtime-metadata/scraper-runtime-metadata.sh": "ab0a6249f58a02e827b407351df73ca05d3074feee621c16729b0bc68500538f"
+  }
+}

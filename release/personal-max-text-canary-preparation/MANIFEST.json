@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "stage": "PERSONAL_MAX_TEXT_CANARY_PREPARATION",
+  "status": "PREPARED_NOT_EXECUTED",
+  "sourceBranch": "feature/personal-max-text-canary-autonomous-20260728T211316Z",
+  "sourceCommit": "7b67faa73c458c1c3e8de1eab70b207a6ee61811",
+  "physicalSenderEnabled": false,
+  "productionActionPerformed": false,
+  "authorizedProductionCommands": [],
+  "metadataRootCommandStatus": "READY_NOT_AUTHORIZED",
+  "futureImages": {"gateway": "NOT_BUILT", "scraper": "NOT_BUILT"},
+  "files": [
+    "MANIFEST.json",
+    "SHA256SUMS",
+    "canary-safety-contract.md",
+    "metadata-root-command.md",
+    "observation-metrics.md",
+    "provenance.json",
+    "release-gates.md",
+    "rollback-boundaries.md",
+    "source-hashes.json",
+    "staged-rollout-plan.md",
+    "test-faults.sh",
+    "test-package.sh",
+    "uat-contact-a-b.md",
+    "uat-contact-a.md"
+  ]
+}
