@@ -1,0 +1,3 @@
+# Production database secret binding
+
+Repository evidence proves that Compose service `gravity-mvp` receives the production `DATABASE_URL` and shares only `crm_internal` with PostgreSQL. The future root script discovers exactly one running service by Compose labels, executes a fixed in-container shell fragment that emits only the named `DATABASE_URL` assignment into a root-owned `0600` temporary env file, and never stores the value in an argument, report, log, or terminal output. The accepted gateway digest is run only as a disposable Prisma migration process with overridden entrypoint, no host port, and only `crm_internal`. The temporary file is deleted by the EXIT trap.
