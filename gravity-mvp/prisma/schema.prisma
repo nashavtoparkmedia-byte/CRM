@@ -335,6 +335,24 @@ model MaxOutboundCommand {
   @@index([accountId, conversationKey, createdAt], map: "MaxOutboundCommand_account_conversation_created_idx")
 }
 
+/// Durable, account-scoped authority for the single physical MAX session.
+/// This fence is independent from per-conversation FIFO actor leases.
+model MaxAccountSessionOwner {
+  accountId       String   @id
+  ownerInstanceId String
+  fencingToken   BigInt
+  acquiredAt     DateTime
+  heartbeatAt    DateTime
+  leaseUntil     DateTime
+  lastReleasedAt DateTime?
+  state           String
+  version         Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([state, leaseUntil], map: "MaxAccountSessionOwner_state_lease_idx")
+}
+
 /// Mutable coordination state for exactly one account-scoped conversation.
 /// Its lease epoch is not the SessionOwner fencing epoch and cannot authorize
 /// any physical provider action.
