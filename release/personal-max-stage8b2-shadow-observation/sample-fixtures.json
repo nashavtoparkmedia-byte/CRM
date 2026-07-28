@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "fixtures": [
+    {
+      "name": "dormant-empty-no-scraper-scope",
+      "target": "dormant",
+      "accountCount": 0,
+      "rawJournalRows": 0,
+      "browserOwnersObserved": null,
+      "listenerOwnersObserved": null,
+      "expected": "ACCEPT"
+    },
+    {
+      "name": "default-off-ownership-unknown",
+      "target": "default-off",
+      "accountCount": 1,
+      "rawJournalRows": 0,
+      "listenerOwnersObserved": null,
+      "expected": "FREEZE_ENABLEMENT"
+    },
+    {
+      "name": "one-account-physical-frames-unknown",
+      "target": "one-account",
+      "accountCount": 1,
+      "rawJournalRows": 25,
+      "physicalFrames": null,
+      "expected": "FREEZE_ENABLEMENT"
+    },
+    {
+      "name": "ab-clean-but-external-evidence-unbound",
+      "target": "ab",
+      "accountCount": 2,
+      "rawJournalRowsPerAccount": [25, 25],
+      "expected": "FREEZE_ENABLEMENT"
+    },
+    {
+      "name": "missing-required-metric",
+      "target": "one-account",
+      "lostBeforeSpool": null,
+      "expected": "FREEZE_ENABLEMENT"
+    },
+    {
+      "name": "critical-regression",
+      "target": "one-account",
+      "criticalRegressions": 1,
+      "expected": "FREEZE_ENABLEMENT"
+    },
+    {
+      "name": "wrong-account",
+      "target": "ab",
+      "wrongAccount": 1,
+      "expected": "FREEZE_ENABLEMENT"
+    }
+  ],
+  "containsMessageData": false,
+  "containsPayload": false,
+  "containsPhone": false,
+  "containsRawAccountIds": false,
+  "containsCredentials": false
+}

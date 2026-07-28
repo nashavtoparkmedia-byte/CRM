@@ -1,0 +1,673 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "personal-max-stage8b2-shadow-observation-report-v2",
+  "title": "Personal MAX bounded shadow observation",
+  "type": "object",
+  "required": [
+    "schemaVersion", "mode", "target", "script", "bindings", "window",
+    "release", "database", "runtime", "runtimeCounters", "ownership",
+    "observability", "disk", "sourceContracts", "recoveryEvidence",
+    "privacy", "safety", "action", "evaluation"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 2},
+    "mode": {"const": "SHADOW_OBSERVATION"},
+    "target": {"enum": ["dormant", "default-off", "one-account", "ab"]},
+    "script": {
+      "type": "object",
+      "required": ["sha256", "checksumBound"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "checksumBound": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "bindings": {
+      "type": "object",
+      "required": ["migrationReport", "dormantRolloutReport"],
+      "properties": {
+        "migrationReport": {
+          "type": "object",
+          "required": ["sha256", "evidence"],
+          "properties": {
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "evidence": {"$ref": "#/$defs/migrationEvidence"}
+          },
+          "additionalProperties": false
+        },
+        "dormantRolloutReport": {
+          "type": "object",
+          "required": ["sha256", "evidence"],
+          "properties": {
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "evidence": {"$ref": "#/$defs/dormantEvidence"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "window": {
+      "type": "object",
+      "required": ["mode", "startEpoch", "endEpoch", "seconds"],
+      "properties": {
+        "mode": {"enum": ["5m", "30m", "2h", "24h"]},
+        "startEpoch": {"$ref": "#/$defs/nonnegative"},
+        "endEpoch": {"$ref": "#/$defs/nonnegative"},
+        "seconds": {"enum": [300, 1800, 7200, 86400]}
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "required": ["expectedImageSourceCommit", "gatewaySourceRevision", "scraperSourceRevision"],
+      "properties": {
+        "expectedImageSourceCommit": {"const": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a"},
+        "gatewaySourceRevision": {"type": "string"},
+        "scraperSourceRevision": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "database": {"$ref": "#/$defs/database"},
+    "runtime": {
+      "type": "object",
+      "required": ["gateway", "scraper"],
+      "properties": {
+        "gateway": {"$ref": "#/$defs/gateway"},
+        "scraper": {"$ref": "#/$defs/scraper"}
+      },
+      "additionalProperties": false
+    },
+    "runtimeCounters": {
+      "type": "object",
+      "required": [
+        "scope", "metricsComplete", "captureAcceptedEnvelopes", "idempotentRetries",
+        "lostBeforeSpool", "wrongAccount", "criticalRegressions", "drainFailures",
+        "spoolPending", "spoolBytes", "oldestSpoolAgeMs", "spoolLimitBytes",
+        "spoolLimitEvidence"
+      ],
+      "properties": {
+        "scope": {"const": "gateway_process_lifetime"},
+        "metricsComplete": {"type": "boolean"},
+        "captureAcceptedEnvelopes": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "idempotentRetries": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "lostBeforeSpool": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "wrongAccount": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "criticalRegressions": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "drainFailures": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "spoolPending": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "spoolBytes": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "oldestSpoolAgeMs": {"$ref": "#/$defs/nullableNonnegativeInteger"},
+        "spoolLimitBytes": {"type": "integer", "minimum": 0},
+        "spoolLimitEvidence": {"enum": ["NOT_REQUIRED_FOR_TARGET", "OPERATOR_BOUND_NOT_RUNTIME_OBSERVED", "SOURCE_BOUND_CONTRACT", "RUNTIME_OBSERVED"]}
+      },
+      "additionalProperties": false
+    },
+    "ownership": {
+      "type": "object",
+      "required": ["browserOwnersObserved", "browserOwnershipStatus", "listenerOwnersObserved", "listenerOwnershipStatus"],
+      "properties": {
+        "browserOwnersObserved": {"type": ["integer", "null"], "minimum": 0},
+        "browserOwnershipStatus": {"type": "string"},
+        "listenerOwnersObserved": {"type": ["integer", "null"], "minimum": 0},
+        "listenerOwnershipStatus": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "observability": {
+      "type": "object",
+      "required": ["physicalFrames"],
+      "properties": {
+        "physicalFrames": {
+          "type": "object",
+          "required": ["count", "status", "rawJournalRowsAreNotPhysicalFrames"],
+          "properties": {
+            "count": {"type": ["integer", "null"], "minimum": 0},
+            "status": {"enum": ["UNKNOWN_NO_WINDOW_ALIGNED_PHYSICAL_FRAME_SOURCE", "OBSERVED_WINDOW_ALIGNED"]},
+            "rawJournalRowsAreNotPhysicalFrames": {"const": true}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "disk": {
+      "type": "object",
+      "required": ["dockerRoot", "freeBytes", "rollbackReserveBytes", "belowReserve"],
+      "properties": {
+        "dockerRoot": {"type": "string", "pattern": "^/"},
+        "freeBytes": {"$ref": "#/$defs/nonnegative"},
+        "rollbackReserveBytes": {"const": 5368709120},
+        "belowReserve": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "sourceContracts": {
+      "type": "object",
+      "required": ["projectionDisabled", "senderDisabled", "providerActionsInactive"],
+      "properties": {
+        "projectionDisabled": {"type": "object"},
+        "senderDisabled": {"type": "object"},
+        "providerActionsInactive": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "recoveryEvidence": {
+      "type": "object",
+      "required": ["reconnectRecovery", "restartRecovery", "status"],
+      "properties": {
+        "reconnectRecovery": {"type": ["boolean", "null"]},
+        "restartRecovery": {"type": ["boolean", "null"]},
+        "status": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["messageText", "payload", "phone", "displayName", "contactData", "providerPayload", "credentials", "hmac", "rawAccountId"],
+      "properties": {
+        "messageText": {"const": false}, "payload": {"const": false},
+        "phone": {"const": false}, "displayName": {"const": false},
+        "contactData": {"const": false}, "providerPayload": {"const": false},
+        "credentials": {"const": false}, "hmac": {"const": false},
+        "rawAccountId": {"const": false}
+      },
+      "additionalProperties": false
+    },
+    "safety": {
+      "const": {
+        "databaseReadOnly": true,
+        "statementTimeoutMs": 5000,
+        "lockTimeoutMs": 1000,
+        "ddl": false,
+        "dml": false,
+        "dockerMutation": false,
+        "deploy": false,
+        "restart": false,
+        "browserLaunched": false,
+        "maxContacted": false,
+        "providerAction": false,
+        "secretsPrinted": false,
+        "environmentValuesInspected": false,
+        "rawAccountIdPrinted": false
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["rollbackExecuted", "enablementFrozen"],
+      "properties": {"rollbackExecuted": {"const": false}, "enablementFrozen": {"type": "boolean"}},
+      "additionalProperties": false
+    },
+    "evaluation": {
+      "type": "object",
+      "required": ["verdict", "freezeEnablement", "triggers", "recommendedAction", "rollbackExecuted"],
+      "properties": {
+        "verdict": {"enum": ["ACCEPT", "FREEZE_ENABLEMENT"]},
+        "freezeEnablement": {"type": "boolean"},
+        "triggers": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "recommendedAction": {"type": "string"},
+        "rollbackExecuted": {"const": false}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonnegative": {"type": "number", "minimum": 0},
+    "nullableNonnegative": {"type": ["number", "null"], "minimum": 0},
+    "nullableNonnegativeInteger": {"type": ["integer", "null"], "minimum": 0},
+    "checksumBoundScript": {
+      "type": "object",
+      "required": ["sha256", "checksumBound"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "checksumBound": {"const": true}
+      },
+      "additionalProperties": false
+    },
+    "migrationEvidence": {
+      "type": "object",
+      "required": ["schemaVersion", "mode", "script", "bindings", "image", "freshBackup", "migration", "schema", "runners", "production", "storage", "safety"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "mode": {"const": "PRODUCTION_MIGRATION_EVIDENCE"},
+        "script": {"const": {"sha256": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740", "checksumBound": true}},
+        "bindings": {
+          "type": "object",
+          "required": ["isolatedReportSha256", "acceptedBackupReportSha256"],
+          "properties": {
+            "isolatedReportSha256": {"$ref": "#/$defs/sha256"},
+            "acceptedBackupReportSha256": {"const": "f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"}
+          },
+          "additionalProperties": false
+        },
+        "image": {
+          "type": "object",
+          "required": ["ref", "digestBound"],
+          "properties": {
+            "ref": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
+            "digestBound": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "freshBackup": {
+          "type": "object",
+          "required": ["directory", "dumpSha256", "dumpBytes", "objectCount", "configArchiveSha256", "status", "structuralValidation"],
+          "properties": {
+            "directory": {"type": "string", "pattern": "^/var/backups/personal-max-stage8b2a-pre-migration-[0-9]{8}T[0-9]{6}Z$"},
+            "dumpSha256": {"$ref": "#/$defs/sha256"},
+            "dumpBytes": {"type": "integer", "minimum": 1},
+            "objectCount": {"type": "integer", "minimum": 1},
+            "configArchiveSha256": {"$ref": "#/$defs/sha256"},
+            "status": {"const": "VALIDATED"},
+            "structuralValidation": {"const": "PASS"}
+          },
+          "additionalProperties": false
+        },
+        "migration": {
+          "type": "object",
+          "required": ["before", "after", "appliedNames", "acceptedLedgerOnlyMigrations", "rawRows", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded"],
+          "properties": {
+            "before": {"const": {"total": 46, "finished": 46, "failed": 0}},
+            "after": {"const": {"total": 54, "finished": 54, "failed": 0}},
+            "appliedNames": {
+              "type": "array",
+              "prefixItems": [
+                {"const": "20260726162043_add_max_raw_transport_journal"},
+                {"const": "20260726190658_add_max_route_registry"},
+                {"const": "20260726205437_add_max_inbound_normalization"},
+                {"const": "20260726215715_add_max_per_chat_outbound_actor"},
+                {"const": "20260726225737_add_max_dispatch_ledger"},
+                {"const": "20260727053744_add_max_provider_confirmation_matcher"},
+                {"const": "20260727141925_add_max_shadow_semantic_comparison"},
+                {"const": "20260727154647_add_max_capture_ingress"}
+              ],
+              "minItems": 8,
+              "maxItems": 8
+            },
+            "acceptedLedgerOnlyMigrations": {
+              "type": "array",
+              "prefixItems": [{"const": "20260717000000_add_driver_telegram_submitted_phone"}],
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "rawRows": {"const": 0},
+            "prismaDiffEmpty": {"const": false},
+            "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
+            "prismaDiffRawSqlIncluded": {"const": false}
+          },
+          "additionalProperties": false
+        },
+        "schema": {
+          "type": "object",
+          "required": ["rawJournalConstraints", "appendOnlyTrigger", "appendOnlyFunction"],
+          "properties": {
+            "rawJournalConstraints": {
+              "type": "array",
+              "prefixItems": [
+                {"const": "MaxRawTransportEvent_payloadSizeBytes_check"},
+                {"const": "MaxRawTransportEvent_quarantineConsistency_check"},
+                {"const": "MaxRawTransportEvent_replayAvailability_check"}
+              ],
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "appendOnlyTrigger": {"const": "MaxRawTransportEvent_append_only"},
+            "appendOnlyFunction": {"const": "max_raw_transport_event_append_only_guard"}
+          },
+          "additionalProperties": false
+        },
+        "runners": {
+          "const": {
+            "migration": {"name": "personal-max-stage8b2a-migration-runner", "cleanupState": "ABSENT_AFTER_SUCCESS"},
+            "prismaDiff": {"name": "personal-max-stage8b2a-prisma-diff-runner", "cleanupState": "ABSENT_AFTER_SUCCESS"},
+            "allOwnedRunnersAbsent": true
+          }
+        },
+        "production": {
+          "type": "object",
+          "required": ["containerHashBefore", "containerHashAfter", "restartCountsUnchanged", "gitUnchanged"],
+          "properties": {
+            "containerHashBefore": {"$ref": "#/$defs/sha256"},
+            "containerHashAfter": {"$ref": "#/$defs/sha256"},
+            "restartCountsUnchanged": {"const": true},
+            "gitUnchanged": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "storage": {
+          "type": "object",
+          "required": ["freeBytesBefore", "freeBytesAfter", "rollbackReserveBytes"],
+          "properties": {
+            "freeBytesBefore": {"type": "integer", "minimum": 1},
+            "freeBytesAfter": {"type": "integer", "minimum": 5368709120},
+            "rollbackReserveBytes": {"const": 5368709120}
+          },
+          "additionalProperties": false
+        },
+        "safety": {
+          "const": {
+            "deploy": false,
+            "restart": false,
+            "captureEnabled": false,
+            "gatewayStarted": false,
+            "scraperChanged": false,
+            "destructiveRollback": false,
+            "secretsPrinted": false,
+            "providerAction": false,
+            "maxContacted": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "dormantEvidence": {
+      "type": "object",
+      "required": ["schemaVersion", "mode", "script", "bindings", "acceptedMigration", "image", "runtime", "behavior", "production", "storage", "rollback"],
+      "properties": {
+        "schemaVersion": {"const": 1},
+        "mode": {"const": "DORMANT_GATEWAY_ROLLOUT"},
+        "script": {"const": {"sha256": "b911aadacba8d3d6226dfd6b6a9e0445da02cc560d36e2be8b14984fb7dc35f5", "checksumBound": true}},
+        "bindings": {
+          "type": "object",
+          "required": ["isolatedReportSha256", "migrationReportSha256", "migrationScriptSha256"],
+          "properties": {
+            "isolatedReportSha256": {"$ref": "#/$defs/sha256"},
+            "migrationReportSha256": {"$ref": "#/$defs/sha256"},
+            "migrationScriptSha256": {"const": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740"}
+          },
+          "additionalProperties": false
+        },
+        "acceptedMigration": {
+          "type": "object",
+          "required": ["reportValidated", "productionMigrationScriptSha256", "gatewayImage", "isolatedReportShaCrossBound", "freshBackupStatus", "appliedCount", "runnerCleanup", "safety", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded", "acceptedLedgerOnlyMigrations"],
+          "properties": {
+            "reportValidated": {"const": true},
+            "productionMigrationScriptSha256": {"const": "bf707cca672b350317717c2f611a371ca705fcc58c8eba8d6d0830e3715fe740"},
+            "gatewayImage": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
+            "isolatedReportShaCrossBound": {"const": true},
+            "freshBackupStatus": {"const": "VALIDATED"},
+            "appliedCount": {"const": 8},
+            "runnerCleanup": {"const": "PASS"},
+            "safety": {"const": "PASS"},
+            "prismaDiffEmpty": {"const": false},
+            "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
+            "prismaDiffRawSqlIncluded": {"const": false},
+            "acceptedLedgerOnlyMigrations": {
+              "type": "array",
+              "prefixItems": [{"const": "20260717000000_add_driver_telegram_submitted_phone"}],
+              "minItems": 1,
+              "maxItems": 1
+            }
+          },
+          "additionalProperties": false
+        },
+        "image": {
+          "const": {
+            "ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+            "runtimeUser": "1000:1000"
+          }
+        },
+        "runtime": {
+          "const": {
+            "container": "personal-max-dormant-gateway",
+            "network": "personal-max-stage8b2b-dormant",
+            "networkInternal": true,
+            "publicPorts": 0,
+            "mounts": 0,
+            "health": "PASS",
+            "readiness": "dormant-ready",
+            "restartPolicy": "unless-stopped"
+          }
+        },
+        "behavior": {
+          "const": {
+            "databaseConfigured": false,
+            "databaseWrites": 0,
+            "captureEnabled": false,
+            "senderActive": false,
+            "browserLaunched": false,
+            "maxContacted": false,
+            "providerAction": false
+          }
+        },
+        "production": {
+          "type": "object",
+          "required": ["hashBefore", "hashAfter", "unchanged", "restartCountsUnchanged"],
+          "properties": {
+            "hashBefore": {"$ref": "#/$defs/sha256"},
+            "hashAfter": {"$ref": "#/$defs/sha256"},
+            "unchanged": {"const": true},
+            "restartCountsUnchanged": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "storage": {
+          "type": "object",
+          "required": ["freeBytesBefore"],
+          "properties": {"freeBytesBefore": {"type": "integer", "minimum": 1}},
+          "additionalProperties": false
+        },
+        "rollback": {
+          "type": "object",
+          "required": ["available", "automatic", "scriptSha256", "composeSha256"],
+          "properties": {
+            "available": {"const": true},
+            "automatic": {"const": false},
+            "scriptSha256": {"const": "d1260c5ad1eda416607ad87e0972d37d2cfaacb61117312a75c017e829a6f090"},
+            "composeSha256": {"const": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "image": {
+      "type": "object",
+      "required": ["acceptedRef", "configuredRef", "imageId", "repoDigests", "acceptedDigestPresent"],
+      "properties": {
+        "acceptedRef": {"type": "string"}, "configuredRef": {"type": "string"},
+        "imageId": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "repoDigests": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "acceptedDigestPresent": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "gateway": {
+      "type": "object",
+      "required": ["containerId", "containerState", "dockerHealth", "restartCount", "image", "sourceRevision", "lifecycle", "startedAtEpoch", "runtimeUser", "restartPolicy", "publicPortBindings", "mountCount", "networkNames", "expectedNetworkInternal", "composeIdentity", "securityConfig", "http"],
+      "properties": {
+        "containerId": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "containerState": {"type": "string"},
+        "dockerHealth": {"type": "string"},
+        "restartCount": {"type": "integer", "minimum": 0},
+        "image": {"$ref": "#/$defs/image"},
+        "sourceRevision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "lifecycle": {"const": "checksum-bound-compose"},
+        "startedAtEpoch": {"type": "integer", "minimum": 0},
+        "runtimeUser": {"type": "string"},
+        "restartPolicy": {"type": "string"},
+        "publicPortBindings": {"type": "integer", "minimum": 0},
+        "mountCount": {"type": "integer", "minimum": 0},
+        "networkNames": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "expectedNetworkInternal": {"type": ["boolean", "null"]},
+        "composeIdentity": {
+          "type": "object",
+          "required": ["project", "service", "stage", "mode"],
+          "properties": {
+            "project": {"type": "string"},
+            "service": {"type": "string"},
+            "stage": {"type": "string"},
+            "mode": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "securityConfig": {
+          "type": "object",
+          "required": ["readonlyRootfs", "privileged", "capDrop", "capAdd", "securityOpt", "init", "pidsLimit"],
+          "properties": {
+            "readonlyRootfs": {"type": "boolean"},
+            "privileged": {"type": "boolean"},
+            "capDrop": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "capAdd": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "securityOpt": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+            "init": {"type": "boolean"},
+            "pidsLimit": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "http": {
+          "type": "object",
+          "required": ["healthStatus", "mode", "enabledAccountCount", "enabledAccountAliases", "accountIdentityStatus", "readinessStatus", "readinessState", "senderModulesInactive", "providerActionsInactive"],
+          "properties": {
+            "healthStatus": {"type": "integer", "minimum": 0},
+            "mode": {"enum": ["dormant", "active"]},
+            "enabledAccountCount": {"type": "integer", "minimum": 0},
+            "enabledAccountAliases": {
+              "anyOf": [
+                {"type": "array", "items": {"$ref": "#/$defs/sha256"}, "uniqueItems": true},
+                {"type": "null"}
+              ]
+            },
+            "accountIdentityStatus": {"enum": ["EMPTY_SCOPE_CONFIRMED", "OBSERVED_HASHED_RUNTIME_ACCOUNT_SCOPE", "UNKNOWN_RUNTIME_DOES_NOT_EXPOSE_HASHED_ACCOUNT_SCOPE"]},
+            "readinessStatus": {"type": "integer", "minimum": 0},
+            "readinessState": {"enum": ["dormant-ready", "ready", "not-ready"]},
+            "senderModulesInactive": {"type": "boolean"},
+            "providerActionsInactive": {"type": "boolean"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "scraper": {
+      "type": "object",
+      "required": ["requiredForTarget", "observed", "observationStatus", "containerCount", "containerState", "dockerHealth", "restartCount", "startedAtEpoch", "image", "sourceRevision", "profileMount", "existingFlowHealthy"],
+      "properties": {
+        "requiredForTarget": {"type": "boolean"}, "observed": {"type": "boolean"},
+        "observationStatus": {"type": "string"}, "containerCount": {"type": ["integer", "null"], "minimum": 0},
+        "containerId": {"type": "string"}, "containerState": {"type": ["string", "null"]},
+        "dockerHealth": {"type": ["string", "null"]}, "restartCount": {"type": ["integer", "null"], "minimum": 0},
+        "startedAtEpoch": {"type": ["integer", "null"], "minimum": 0},
+        "image": {"anyOf": [{"$ref": "#/$defs/image"}, {"type": "null"}]},
+        "sourceRevision": {"type": ["string", "null"]},
+        "profileMount": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["destination", "exactCount", "readWrite"],
+              "properties": {
+                "destination": {"const": "/app/user_data"},
+                "exactCount": {"type": "integer", "minimum": 0},
+                "readWrite": {"type": "boolean"}
+              },
+              "additionalProperties": false
+            },
+            {"type": "null"}
+          ]
+        },
+        "existingFlowHealthy": {"type": ["boolean", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "database": {
+      "type": "object",
+      "required": ["schemaVersion", "databaseSnapshotIdentity", "window", "accountCount", "accounts", "totals", "activity", "locks", "schemaState"],
+      "properties": {
+        "schemaVersion": {"const": 2},
+        "databaseSnapshotIdentity": {"type": "string"},
+        "window": {
+          "type": "object",
+          "required": ["startEpoch", "endEpoch", "seconds"],
+          "properties": {
+            "startEpoch": {"type": "integer", "minimum": 0},
+            "endEpoch": {"type": "integer", "minimum": 0},
+            "seconds": {"enum": [300, 1800, 7200, 86400]}
+          },
+          "additionalProperties": false
+        },
+        "accountCount": {"type": "integer", "minimum": 0, "maximum": 2},
+        "accounts": {"type": "array", "maxItems": 2, "items": {"$ref": "#/$defs/account"}},
+        "totals": {
+          "type": "object",
+          "required": ["rawJournalRows", "rawJournalRowsPerSecond"],
+          "properties": {"rawJournalRows": {"type": "integer", "minimum": 0}, "rawJournalRowsPerSecond": {"$ref": "#/$defs/nonnegative"}},
+          "additionalProperties": false
+        },
+        "activity": {
+          "type": "object",
+          "required": ["active_sessions", "long_transactions"],
+          "properties": {
+            "active_sessions": {"type": "integer", "minimum": 0},
+            "long_transactions": {"type": "integer", "minimum": 0}
+          },
+          "additionalProperties": false
+        },
+        "locks": {
+          "type": "object",
+          "required": ["waiting_locks"],
+          "properties": {"waiting_locks": {"type": "integer", "minimum": 0}},
+          "additionalProperties": false
+        },
+        "schemaState": {
+          "type": "object",
+          "required": ["migrationLedger", "rawJournal"],
+          "properties": {
+            "migrationLedger": {
+              "type": "object",
+              "required": ["total", "finished", "failed", "appliedExpectedMigrations"],
+              "properties": {
+                "total": {"type": "integer", "minimum": 0},
+                "finished": {"type": "integer", "minimum": 0},
+                "failed": {"type": "integer", "minimum": 0},
+                "appliedExpectedMigrations": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+              },
+              "additionalProperties": false
+            },
+            "rawJournal": {
+              "type": "object",
+              "required": ["relationKind", "constraints", "expectedConstraintDefinitionsExact", "appendOnlyTriggerPresent", "appendOnlyContractExact"],
+              "properties": {
+                "relationKind": {"type": "string"},
+                "constraints": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+                "expectedConstraintDefinitionsExact": {"type": "boolean"},
+                "appendOnlyTriggerPresent": {"type": "boolean"},
+                "appendOnlyContractExact": {"type": "boolean"}
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "account": {
+      "type": "object",
+      "required": ["alias", "rawJournalRows", "rawJournalRowsPerSecond", "accidentalDuplicateEnvelopes", "rawQuarantined", "normalizationResults", "normalizationQuarantined", "normalizationUnsupported", "semanticComparisons", "semanticRegressions", "criticalRegressions", "criticalDiffs", "routeIdentityCritical", "openRouteConflicts", "unprocessedRows", "oldestUnprocessedSeconds", "journalLatencyMs"],
+      "properties": {
+        "alias": {"$ref": "#/$defs/sha256"},
+        "rawJournalRows": {"$ref": "#/$defs/nonnegative"}, "rawJournalRowsPerSecond": {"$ref": "#/$defs/nonnegative"},
+        "accidentalDuplicateEnvelopes": {"$ref": "#/$defs/nonnegative"}, "rawQuarantined": {"$ref": "#/$defs/nonnegative"},
+        "normalizationResults": {"$ref": "#/$defs/nonnegative"}, "normalizationQuarantined": {"$ref": "#/$defs/nonnegative"},
+        "normalizationUnsupported": {"$ref": "#/$defs/nonnegative"}, "semanticComparisons": {"$ref": "#/$defs/nonnegative"},
+        "semanticRegressions": {"$ref": "#/$defs/nonnegative"}, "criticalRegressions": {"$ref": "#/$defs/nonnegative"},
+        "criticalDiffs": {"$ref": "#/$defs/nonnegative"}, "routeIdentityCritical": {"$ref": "#/$defs/nonnegative"},
+        "openRouteConflicts": {"$ref": "#/$defs/nonnegative"}, "unprocessedRows": {"$ref": "#/$defs/nonnegative"},
+        "oldestUnprocessedSeconds": {"$ref": "#/$defs/nonnegative"},
+        "journalLatencyMs": {
+          "type": "object",
+          "required": ["p50", "p95", "p99"],
+          "properties": {
+            "p50": {"$ref": "#/$defs/nonnegative"},
+            "p95": {"$ref": "#/$defs/nonnegative"},
+            "p99": {"$ref": "#/$defs/nonnegative"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
