@@ -1,0 +1,3 @@
+# Recreation contract — intentionally incomplete
+
+A valid future replacement must preserve exactly one scraper, one browser/profile owner, the current profile volume at `/app/user_data`, complete environment-name/value binding through an approved protected mechanism, current network/dependencies/health/logging/restart semantics, and zero public ports. Capture flags, gateway URL, HMAC and spool mount remain absent. The old container must never run in parallel with the accepted image. Because current runtime metadata and profile ownership are incomplete, no executable recreation definition is emitted now.

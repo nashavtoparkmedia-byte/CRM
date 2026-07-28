@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B2C",
+  "status": "SCRAPER_DEFAULT_OFF_PACKAGE_BLOCKED",
+  "sourceCommit": "29c0f45d9aa1c63bb1e74ecec2abba476d7b22a4",
+  "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
+  "acceptedImage": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+  "rolloutScript": null,
+  "rootCommandTemplate": null,
+  "productionEffectsPerformed": false,
+  "files": [
+    "MANIFEST.json",
+    "SHA256SUMS",
+    "accepted-image-compatibility.md",
+    "blockers.md",
+    "future-root-metadata-contract.md",
+    "recreation-contract.md",
+    "rollback-contract.md",
+    "runtime-evidence.json",
+    "test-package.sh"
+  ]
+}
