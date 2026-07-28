@@ -4,8 +4,19 @@
   "title": "Personal MAX shadow release security and executable-image preflight",
   "generatedAt": "2026-07-27T22:09:05Z",
   "baseCommit": "ecd6814e888944dc2b27758e4e711bb9a7ebe081",
+  "acceptedReleaseCommit": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
   "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
-  "sourceCommitResolution": "the single commit containing this manifest; CI verifies GITHUB_SHA equals checked-out HEAD",
+  "sourceCommitResolution": "acceptedReleaseCommit is the immutable-image source; the later SELF commit is a release-package-only production preflight safety patch",
+  "productionReadOnlyPreflightSafetyPatch": {
+    "commit": "SELF",
+    "applicationBehaviorChanged": false,
+    "migrationChanged": false,
+    "releaseImagesChanged": false
+  },
+  "acceptedImages": {
+    "gateway": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de",
+    "scraper": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768"
+  },
   "productionEffects": false,
   "stage8B2Started": false,
   "distributionMethod": "GHCR_BY_DIGEST",

@@ -10,10 +10,14 @@ if [[ $# -ne 2 ]]; then
   echo 'usage: probe-isolated-images.sh <gateway-ref-by-digest> <scraper-ref-by-digest>' >&2
   exit 64
 fi
+readonly EXPECTED_GATEWAY_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
+readonly EXPECTED_SCRAPER_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
 GATEWAY_IMAGE=$1
 SCRAPER_IMAGE=$2
-[[ "$GATEWAY_IMAGE" =~ ^ghcr\.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:[0-9a-f]{64}$ ]]
-[[ "$SCRAPER_IMAGE" =~ ^ghcr\.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:[0-9a-f]{64}$ ]]
+if [[ "$GATEWAY_IMAGE" != "$EXPECTED_GATEWAY_IMAGE" || "$SCRAPER_IMAGE" != "$EXPECTED_SCRAPER_IMAGE" ]]; then
+  echo 'ACCEPTED_DIGEST_REQUIRED: refusing any image references other than the two accepted immutable digests' >&2
+  exit 66
+fi
 
 for command in docker jq realpath; do command -v "$command" >/dev/null; done
 POSTGRES_IMAGE='postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777'

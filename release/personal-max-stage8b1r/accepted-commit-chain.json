@@ -13,11 +13,20 @@
     "stage8B1": "ecd6814e888944dc2b27758e4e711bb9a7ebe081"
   },
   "stage8B1R": {
-    "commit": "SELF",
-    "meaning": "the single direct child of stage8B1 containing this manifest",
+    "commit": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
+    "meaning": "accepted release hardening commit and immutable image source commit",
     "expectedParent": "ecd6814e888944dc2b27758e4e711bb9a7ebe081",
     "expectedCommitsAboveOriginalBaseline": 11,
     "expectedCommitsAboveStage8B1": 1
+  },
+  "productionReadOnlyPreflightSafetyPatch": {
+    "commit": "SELF",
+    "meaning": "release-package-only checksum binding, bounded metadata probes, sanitization and owner gate; application and image contents unchanged",
+    "expectedParent": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
+    "expectedCommitsAboveOriginalBaseline": 12,
+    "expectedCommitsAboveStage8B1": 2,
+    "applicationBehaviorChanged": false,
+    "releaseImagesChanged": false
   },
   "historyRewriteAllowed": false
 }
