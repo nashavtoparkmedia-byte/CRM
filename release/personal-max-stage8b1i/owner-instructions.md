@@ -6,6 +6,6 @@ The command below contains the prepared script SHA-256. The one separately appro
 
 Exact command (prepared, not authorized):
 
-`sudo /bin/bash /opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z/release/personal-max-stage8b1i/isolated-release-probe.sh 57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38`
+`sudo /bin/bash /opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z/release/personal-max-stage8b1i/isolated-release-probe.sh 952ed86f90152dbdd58253fc87bccf65c0ee0e27f6de3bfbb4f471e15c63a538`
 
-Expected success marker: `ISOLATED_RELEASE_PROOF_COMPLETED`. Any nonzero result must be reviewed through the sanitized failure report before another attempt; fixed report paths are no-clobber.
+Expected success marker: `ISOLATED_RELEASE_PROOF_COMPLETED`. Any nonzero result must be reviewed through the sanitized primary or emergency failure report before another attempt; fixed report paths are no-clobber. The prior failed attempt left the exact root-owned temporary directory documented in `failed-run-residual-cleanup-contract.md`; this corrected command does not implicitly delete that unrelated run.

@@ -69,10 +69,10 @@ FREE_BYTES_AFTER_GATEWAY_PULL=0
 FREE_BYTES_AFTER_SCRAPER_PULL=0
 FREE_BYTES_AFTER_PULL=0
 FREE_BYTES_AFTER_CLEANUP=0
-CLEANUP_CONTAINERS_REMAINING=0
-CLEANUP_NETWORKS_REMAINING=0
-CLEANUP_VOLUMES_REMAINING=0
-CLEANUP_TEMP_FILES_REMAINING=0
+CLEANUP_CONTAINERS_REMAINING=unknown
+CLEANUP_NETWORKS_REMAINING=unknown
+CLEANUP_VOLUMES_REMAINING=unknown
+CLEANUP_TEMP_FILES_REMAINING=unknown
 CLEANUP_ERROR_CLASSIFICATION='NONE'
 CLEANUP_GLOBAL_DEADLINE=0
 
@@ -86,29 +86,30 @@ fail() {
 uint() { [[ ${1:-} =~ ^[0-9]+$ ]]; }
 
 sha_of() {
-  local target_name=$1 path=$2 line
-  pm_capture_bounded line filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED sha256sum -- "$path" || return
-  printf -v "$target_name" '%s' "${line%% *}"
+  local __pm_target_name=$1 __pm_path=$2 __pm_checksum_line
+  pm_capture_bounded __pm_checksum_line filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED sha256sum -- "$__pm_path" || return
+  pm_assign_out "$__pm_target_name" "${__pm_checksum_line%% *}"
 }
 
 free_bytes_at() {
-  local target_name=$1 path=$2 output header data filesystem blocks used available capacity mountpoint
-  pm_capture_bounded output filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED df -B1 -P "$path" || return
-  IFS=$'\n' read -r header data <<<"$output"
-  read -r filesystem blocks used available capacity mountpoint <<<"$data"
-  uint "$available" || return 65
-  printf -v "$target_name" '%s' "$available"
+  local __pm_target_name=$1 __pm_path=$2 __pm_df_output __pm_header __pm_data
+  local __pm_filesystem __pm_blocks __pm_used __pm_available __pm_capacity __pm_mountpoint
+  pm_capture_bounded __pm_df_output filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED df -B1 -P "$__pm_path" || return
+  IFS=$'\n' read -r __pm_header __pm_data <<<"$__pm_df_output"
+  read -r __pm_filesystem __pm_blocks __pm_used __pm_available __pm_capacity __pm_mountpoint <<<"$__pm_data"
+  uint "$__pm_available" || return 65
+  pm_assign_out "$__pm_target_name" "$__pm_available"
 }
 
 hash_sorted_text() {
-  local target_name=$1 value=$2 source sorted digest
-  pm_capture_bounded source filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp "$TMP/hash-source.XXXXXX" || return
-  pm_capture_bounded sorted filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp "$TMP/hash-sorted.XXXXXX" || return
-  printf '%s\n' "$value" >"$source"
-  pm_write_bounded "$sorted" filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED env LC_ALL=C sort "$source" || return
-  sha_of digest "$sorted" || return
-  pm_run_bounded temp_cleanup 60 TEMP_REMOVAL_TIMEOUT TEMP_REMOVAL_TIMEOUT rm -f -- "$source" "$sorted" || return
-  printf -v "$target_name" '%s' "$digest"
+  local __pm_target_name=$1 __pm_value=$2 __pm_source_path __pm_sorted_path __pm_digest
+  pm_capture_bounded __pm_source_path filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp "$TMP/hash-source.XXXXXX" || return
+  pm_capture_bounded __pm_sorted_path filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp "$TMP/hash-sorted.XXXXXX" || return
+  printf '%s\n' "$__pm_value" >"$__pm_source_path"
+  pm_write_bounded "$__pm_sorted_path" filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED env LC_ALL=C sort "$__pm_source_path" || return
+  sha_of __pm_digest "$__pm_sorted_path" || return
+  pm_run_bounded temp_cleanup 60 TEMP_REMOVAL_TIMEOUT TEMP_REMOVAL_TIMEOUT rm -f -- "$__pm_source_path" "$__pm_sorted_path" || return
+  pm_assign_out "$__pm_target_name" "$__pm_digest"
 }
 
 production_snapshot() {
@@ -153,17 +154,17 @@ production_snapshot() {
 }
 
 cleanup_inventory() {
-  local target_name=$1 kind=$2 seconds=$3 output
-  case $kind in
-    containers) pm_capture_bounded output cleanup "$seconds" CONTAINER_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
+  local __pm_target_name=$1 __pm_kind=$2 __pm_seconds=$3 __pm_inventory_output
+  case $__pm_kind in
+    containers) pm_capture_bounded __pm_inventory_output cleanup "$__pm_seconds" CONTAINER_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
       docker ps -aq --no-trunc --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID" ;;
-    networks) pm_capture_bounded output cleanup "$seconds" NETWORK_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
+    networks) pm_capture_bounded __pm_inventory_output cleanup "$__pm_seconds" NETWORK_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
       docker network ls -q --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID" ;;
-    volumes) pm_capture_bounded output cleanup "$seconds" VOLUME_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
+    volumes) pm_capture_bounded __pm_inventory_output cleanup "$__pm_seconds" VOLUME_REMOVAL_TIMEOUT CLEANUP_INCOMPLETE \
       docker volume ls -q --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$RUN_ID" ;;
     *) return 64 ;;
   esac || return
-  printf -v "$target_name" '%s' "$output"
+  pm_assign_out "$__pm_target_name" "$__pm_inventory_output"
 }
 
 cleanup_remove_kind() {
@@ -181,22 +182,25 @@ cleanup_remove_kind() {
 }
 
 cleanup_docker_objects() {
-  local deadline containers='' networks='' volumes='' remaining object failed=0 status first_class=NONE
+  local deadline containers=unknown networks=unknown volumes=unknown remaining object failed=0 status first_class=NONE
   [[ -n ${RUN_ID:-} ]] || return 0
   pm_enter_phase cleanup cleanup || return
   if (( CLEANUP_GLOBAL_DEADLINE <= SECONDS )); then CLEANUP_GLOBAL_DEADLINE=$((SECONDS + 300)); fi
   deadline=$CLEANUP_GLOBAL_DEADLINE
   if remaining=$(pm_deadline_remaining "$deadline"); then
-    cleanup_inventory containers containers "$remaining" || { status=$?; failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }
-    if (( failed == 0 )); then cleanup_remove_kind containers "$containers" "$deadline" || { status=$?; failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; fi
+    if cleanup_inventory containers containers "$remaining"; then
+      cleanup_remove_kind containers "$containers" "$deadline" || { status=$?; failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }
+    else status=$?; failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; fi
   else failed=124; first_class=CLEANUP_GLOBAL_DEADLINE_EXCEEDED; fi
   if remaining=$(pm_deadline_remaining "$deadline"); then
-    cleanup_inventory networks networks "$remaining" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; }
-    cleanup_remove_kind networks "$networks" "$deadline" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; }
+    if cleanup_inventory networks networks "$remaining"; then
+      cleanup_remove_kind networks "$networks" "$deadline" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; }
+    else status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; fi
   else (( failed != 0 )) || { failed=124; first_class=CLEANUP_GLOBAL_DEADLINE_EXCEEDED; }; fi
   if remaining=$(pm_deadline_remaining "$deadline"); then
-    cleanup_inventory volumes volumes "$remaining" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; }
-    cleanup_remove_kind volumes "$volumes" "$deadline" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; }
+    if cleanup_inventory volumes volumes "$remaining"; then
+      cleanup_remove_kind volumes "$volumes" "$deadline" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; }
+    else status=$?; (( failed != 0 )) || { failed=$status; first_class=${PROBE_ERROR_CLASSIFICATION:-CLEANUP_INCOMPLETE}; }; fi
   else (( failed != 0 )) || { failed=124; first_class=CLEANUP_GLOBAL_DEADLINE_EXCEEDED; }; fi
 
   if remaining=$(pm_deadline_remaining "$deadline"); then
@@ -207,9 +211,15 @@ cleanup_docker_objects() {
     containers=unknown; networks=unknown; volumes=unknown
     (( failed != 0 )) || { failed=124; first_class=CLEANUP_GLOBAL_DEADLINE_EXCEEDED; }
   fi
-  CLEANUP_CONTAINERS_REMAINING=0; for object in $containers; do CLEANUP_CONTAINERS_REMAINING=$((CLEANUP_CONTAINERS_REMAINING + 1)); done
-  CLEANUP_NETWORKS_REMAINING=0; for object in $networks; do CLEANUP_NETWORKS_REMAINING=$((CLEANUP_NETWORKS_REMAINING + 1)); done
-  CLEANUP_VOLUMES_REMAINING=0; for object in $volumes; do CLEANUP_VOLUMES_REMAINING=$((CLEANUP_VOLUMES_REMAINING + 1)); done
+  if [[ $containers == unknown ]]; then CLEANUP_CONTAINERS_REMAINING=unknown; else
+    CLEANUP_CONTAINERS_REMAINING=0; for object in $containers; do CLEANUP_CONTAINERS_REMAINING=$((CLEANUP_CONTAINERS_REMAINING + 1)); done
+  fi
+  if [[ $networks == unknown ]]; then CLEANUP_NETWORKS_REMAINING=unknown; else
+    CLEANUP_NETWORKS_REMAINING=0; for object in $networks; do CLEANUP_NETWORKS_REMAINING=$((CLEANUP_NETWORKS_REMAINING + 1)); done
+  fi
+  if [[ $volumes == unknown ]]; then CLEANUP_VOLUMES_REMAINING=unknown; else
+    CLEANUP_VOLUMES_REMAINING=0; for object in $volumes; do CLEANUP_VOLUMES_REMAINING=$((CLEANUP_VOLUMES_REMAINING + 1)); done
+  fi
   pm_assert_cleanup_zero "$CLEANUP_CONTAINERS_REMAINING" "$CLEANUP_NETWORKS_REMAINING" \
     "$CLEANUP_VOLUMES_REMAINING" "$CLEANUP_TEMP_FILES_REMAINING" || { status=$?; (( failed != 0 )) || { failed=$status; first_class=CLEANUP_INCOMPLETE; }; }
   if (( failed != 0 )); then PROBE_ERROR_CLASSIFICATION=$first_class; return "$failed"; fi
@@ -267,7 +277,9 @@ on_exit() {
   PROBE_PHASE=$original_phase
   PROBE_SAFE_COMMAND_CLASS=$original_safe_class
   if (( status != 0 )) && [[ $DIAGNOSTICS_LOADED == true ]]; then
-    personal_max_stage8b1i_render_failure "$status" "$FAILURE_SOURCE_LINE" "$cleanup_ok"
+    if ! personal_max_stage8b1i_render_failure "$status" "$FAILURE_SOURCE_LINE" "$cleanup_ok"; then
+      personal_max_stage8b1i_emergency_diagnostics "$status" || true
+    fi
     status=$(pm_preserve_original_exit "$status" "$cleanup_status")
   elif (( status == 0 && cleanup_status != 0 )); then
     status=$cleanup_status
@@ -278,14 +290,24 @@ on_exit() {
 trap 'on_error $LINENO' ERR
 trap on_exit EXIT
 
+bootstrap_validate_out_name() { [[ ${1:-} =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ && $1 != __pm_* ]]; }
+
+bootstrap_assign_out() {
+  local __pm_target_name=${1:-} __pm_value=${2-}
+  bootstrap_validate_out_name "$__pm_target_name" || return 64
+  local -n __pm_out_ref="$__pm_target_name"
+  __pm_out_ref=$__pm_value
+}
+
 bootstrap_capture() {
-  local target=$1 seconds=$2 output status
+  local __pm_target_name=$1 __pm_seconds=$2 __pm_captured='' __pm_status
+  bootstrap_validate_out_name "$__pm_target_name" || return 64
   shift 2
   set +e
-  if output=$(timeout --signal=TERM --kill-after=10s "${seconds}s" "$@"); then status=0; else status=$?; fi
+  if __pm_captured=$(timeout --signal=TERM --kill-after=10s "${__pm_seconds}s" "$@"); then __pm_status=0; else __pm_status=$?; fi
   set -e
-  (( status == 0 )) || return "$status"
-  printf -v "$target" '%s' "$output"
+  (( __pm_status == 0 )) || return "$__pm_status"
+  bootstrap_assign_out "$__pm_target_name" "$__pm_captured"
 }
 
 printf 'STAGE8B1I_PHASE=bootstrap_complete\n'
@@ -365,20 +387,20 @@ pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker volume insp
 pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker volume inspect "$SPOOL_VOLUME" >/dev/null 2>&1
 
 image_presence() {
-  local boolean_target=$1 id_target=$2 ref=$3 image_id='' status had_errexit=false
-  [[ $- == *e* ]] && had_errexit=true
+  local __pm_boolean_target=$1 __pm_id_target=$2 __pm_ref=$3 __pm_image_id='' __pm_status __pm_had_errexit=false
+  [[ $- == *e* ]] && __pm_had_errexit=true
   set +e
-  if pm_capture_bounded image_id docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
-    docker image inspect --format '{{.Id}}' "$ref"; then status=0; else status=$?; fi
-  pm_restore_errexit "$had_errexit"
-  if (( status == 124 )); then return 124; fi
-  if (( status == 0 )); then
-    printf -v "$boolean_target" '%s' true
-    printf -v "$id_target" '%s' "$image_id"
+  if pm_capture_bounded __pm_image_id docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+    docker image inspect --format '{{.Id}}' "$__pm_ref"; then __pm_status=0; else __pm_status=$?; fi
+  pm_restore_errexit "$__pm_had_errexit"
+  if (( __pm_status == 124 )); then return 124; fi
+  if (( __pm_status == 0 )); then
+    pm_assign_out "$__pm_boolean_target" true
+    pm_assign_out "$__pm_id_target" "$__pm_image_id"
   else
     PROBE_ERROR_CLASSIFICATION=NONE
-    printf -v "$boolean_target" '%s' false
-    printf -v "$id_target" '%s' absent
+    pm_assign_out "$__pm_boolean_target" false
+    pm_assign_out "$__pm_id_target" absent
   fi
 }
 
@@ -495,10 +517,10 @@ pm_write_bounded "$TMP/restore.log" backup_validation 1200 FULL_RESTORE_TIMEOUT 
 restore_seconds=$(( $(date +%s) - restore_started ))
 
 psql_value() {
-  local target_name=$1 query=$2 output
-  pm_capture_bounded output disposable_postgresql 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
-    docker exec "$PG_CONTAINER" psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" -c "$query" || return
-  printf -v "$target_name" '%s' "$output"
+  local __pm_target_name=$1 __pm_query=$2 __pm_psql_output
+  pm_capture_bounded __pm_psql_output disposable_postgresql 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+    docker exec "$PG_CONTAINER" psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" -c "$__pm_query" || return
+  pm_assign_out "$__pm_target_name" "$__pm_psql_output"
 }
 
 pm_enter_phase restore_verification disposable_postgresql

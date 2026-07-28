@@ -33,7 +33,8 @@ pm_error_classification_is_safe() {
       TEMP_REMOVAL_TIMEOUT | CLEANUP_GLOBAL_DEADLINE_EXCEEDED | CLEANUP_INCOMPLETE | \
       PRE_PULL_DISK_GATE_FAILED | POST_PULL_DISK_GATE_FAILED | FINAL_DISK_GATE_FAILED | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
-      EXPECTED_FAILURE_NOT_OBSERVED) return 0 ;;
+      EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
+      EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -47,6 +48,20 @@ pm_enter_phase() {
 }
 
 pm_safe_uint() { [[ ${1:-} =~ ^[0-9]+$ ]]; }
+
+pm_validate_out_name() {
+  [[ ${1:-} =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ && $1 != __pm_* ]]
+}
+
+pm_assign_out() {
+  local __pm_target_name=${1:-} __pm_value=${2-}
+  pm_validate_out_name "$__pm_target_name" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  local -n __pm_out_ref="$__pm_target_name"
+  __pm_out_ref=$__pm_value
+}
 
 pm_restore_errexit() { [[ $1 == true ]] && set -e || set +e; }
 
@@ -70,22 +85,34 @@ pm_run_bounded() {
 }
 
 pm_capture_bounded() {
-  local target_name=$1 command_class=$2 seconds=$3 timeout_class=$4 failure_class=$5 output status had_errexit=false
+  local __pm_target_name=${1:-} __pm_command_class=${2:-} __pm_seconds=${3:-}
+  local __pm_timeout_class=${4:-} __pm_failure_class=${5:-}
+  local __pm_captured='' __pm_status __pm_had_errexit=false
+  pm_validate_out_name "$__pm_target_name" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
   shift 5
-  [[ $- == *e* ]] && had_errexit=true
-  PROBE_SAFE_COMMAND_CLASS=$command_class
+  [[ $- == *e* ]] && __pm_had_errexit=true
+  PROBE_SAFE_COMMAND_CLASS=$__pm_command_class
   set +e
-  if output=$("$PM_TIMEOUT_BIN" --signal=TERM --kill-after=10s "${seconds}s" "$@" 2>/dev/null); then status=0; else status=$?; fi
-  pm_restore_errexit "$had_errexit"
-  if (( status == 124 )); then
-    PROBE_ERROR_CLASSIFICATION=$timeout_class
+  if __pm_captured=$("$PM_TIMEOUT_BIN" --signal=TERM --kill-after=10s "${__pm_seconds}s" "$@" 2>/dev/null); then
+    __pm_status=0
+  else
+    __pm_status=$?
+  fi
+  pm_restore_errexit "$__pm_had_errexit"
+  if (( __pm_status == 124 )); then
+    PROBE_ERROR_CLASSIFICATION=$__pm_timeout_class
     return 124
   fi
-  if (( status != 0 )); then
-    PROBE_ERROR_CLASSIFICATION=$failure_class
-    return "$status"
+  if (( __pm_status != 0 )); then
+    PROBE_ERROR_CLASSIFICATION=$__pm_failure_class
+    return "$__pm_status"
   fi
-  printf -v "$target_name" '%s' "$output"
+  # Bash command substitution intentionally strips trailing newlines. Empty,
+  # one-line, and multiline output otherwise remain byte-for-byte unchanged.
+  pm_assign_out "$__pm_target_name" "$__pm_captured"
 }
 
 pm_write_bounded() {

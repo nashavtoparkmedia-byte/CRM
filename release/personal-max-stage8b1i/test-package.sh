@@ -9,6 +9,7 @@ readonly PROBE="$SCRIPT_DIR/isolated-release-probe.sh"
 readonly DIAGNOSTICS="$SCRIPT_DIR/failure-diagnostics.sh"
 readonly BOUNDED="$SCRIPT_DIR/bounded-operations.sh"
 readonly FAULTS="$SCRIPT_DIR/test-bounded-faults.sh"
+readonly OUTPUT_HANDOFF="$SCRIPT_DIR/test-output-handoff.sh"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
@@ -30,10 +31,10 @@ free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 4323469515 - 2172240240)) -ge 12500000000 && $((free - 4323469515 - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
 
-bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$FAULTS" "$SCRIPT_DIR/test-package.sh"
+bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$FAULTS" "$OUTPUT_HANDOFF" "$SCRIPT_DIR/test-package.sh"
 pass bash_syntax
 [[ -x $SHELLCHECK_BIN ]]
-"$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$FAULTS" "$SCRIPT_DIR/test-package.sh"
+"$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$FAULTS" "$OUTPUT_HANDOFF" "$SCRIPT_DIR/test-package.sh"
 pass shellcheck
 for evidence in 'pm_run_bounded()' 'pm_capture_bounded()' 'pm_write_bounded()' \
   '"$PM_TIMEOUT_BIN" --signal=TERM --kill-after=10s "${seconds}s"'; do require_fixed "$BOUNDED" "$evidence"; done
@@ -72,6 +73,15 @@ fault_output=$("$FAULTS")
   $fault_output == *'ROOT_PROBE_EXECUTED=NO'* && $fault_output == *'DOCKER_EXECUTED=NO'* ]]
 [[ $(grep -c '=PASS$' <<<"$fault_output") -eq 20 ]]
 pass no_silent_failure_matrix
+handoff_output=$("$OUTPUT_HANDOFF")
+[[ $handoff_output == *'OLD_FIXTURE=FAIL_AS_EXPECTED'* && $handoff_output == *'FIXED_IMPLEMENTATION=PASS'* && \
+  $handoff_output == *'EXECUTABLE_TEST_COUNT=22'* && $handoff_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $handoff_output == *'DOCKER_EXECUTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$handoff_output") -eq 23 ]]
+require_fixed "$BOUNDED" 'local -n __pm_out_ref="$__pm_target_name"'
+require_fixed "$BOUNDED" '^[a-zA-Z_][a-zA-Z0-9_]*$'
+refuse_pattern "$PROBE" '(^|[[:space:]])eval([[:space:]]|$)'
+pass output_handoff_regression
 require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
@@ -159,4 +169,4 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nPACKAGE_TEST_COUNT=43\nFAULT_SCENARIO_COUNT=20\n'
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nPACKAGE_TEST_COUNT=44\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=22\n'

@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1I-F",
+  "mode": "FAILED_ROOT_ATTEMPT_FORENSIC",
+  "failedScriptSha256": "57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38",
+  "observedFailure": {
+    "phase": "storage_gate",
+    "line": 97,
+    "errorClass": "BASH_NOUNSET_OUT_PARAMETER_COLLISION",
+    "cleanupFailureLine": 166,
+    "shellReturned": true
+  },
+  "controlFlowProof": {
+    "temporaryDirectoryCreatedBeforeFailure": true,
+    "firstDockerMutationPhase": "image_acquisition",
+    "failurePrecededProductionSnapshot": true,
+    "failurePrecededImageAcquisition": true,
+    "failurePrecededDisposableTopology": true,
+    "acceptedImagesAcquiredByFailedAttempt": false,
+    "dockerMutationReachableBeforeFailure": false
+  },
+  "reports": {
+    "success": {"path": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.json", "state": "absent"},
+    "failure": {"path": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38.json", "state": "absent"}
+  },
+  "residuals": {
+    "temporaryPaths": [
+      {"path": "/var/tmp/personal-max-stage8b1i.fee32e594eba.NKiRfY", "owner": "root", "group": "root", "mode": "0700", "type": "directory", "removed": false}
+    ],
+    "containers": "unknown",
+    "networks": "unknown",
+    "volumes": "unknown",
+    "dockerMetadataReason": "codexbot permission denied on /var/run/docker.sock",
+    "automaticCleanupAttemptedByCodex": false
+  },
+  "production": {
+    "head": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "statusV1Sha256": "892d3321489316f1cfb6feae8fb800fee060ac420eecb8d8876d431b173d1225",
+    "statusV2Sha256": "2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b",
+    "gitStateMatchedAcceptedPreflight": true,
+    "databaseConnectedByCodex": false,
+    "mutationPerformedByCodex": false
+  },
+  "storage": {
+    "filesystemBytes": 83053432832,
+    "availableBytesObserved": 22054072320,
+    "requiredReserveBytes": 12500000000,
+    "gate": "PASS"
+  },
+  "classifications": [
+    "ROOT_ATTEMPT_FAILED_BEFORE_DOCKER_MUTATION",
+    "ROOT_ATTEMPT_LEFT_DISPOSABLE_RESIDUALS",
+    "ROOT_ATTEMPT_PRODUCTION_UNCHANGED",
+    "FORENSIC_DOCKER_INVENTORY_UNKNOWN"
+  ]
+}

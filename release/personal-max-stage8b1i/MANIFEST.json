@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "stage": "8B1I",
   "mode": "PREPARED_NOT_EXECUTED",
-  "preparedAt": "2026-07-28T11:07:57Z",
+  "preparedAt": "2026-07-28T12:22:52Z",
   "source": {
     "worktree": "/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z",
     "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
-    "baseCommit": "19cfe4ee613dae917888d77d93ff913d50513d48",
+    "baseCommit": "a5696e32b753b36c474e1659c9575883ab3f897a",
     "acceptedGatewayAndMigrationArtifact": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"
   },
   "backupAcceptance": {
@@ -20,18 +20,18 @@
   },
   "storageGate": {
     "observedTotalBytes": 83053432832,
-    "observedUsedBytes": 60960952320,
-    "observedFreeBytes": 22075703296,
+    "observedUsedBytes": 60982583296,
+    "observedFreeBytes": 22054072320,
     "targetFreeBytes": 12500000000,
     "imageExpansionBudgetBytes": 4323469515,
     "restoreProbeBudgetBytes": 2172240240,
     "cleanupReserveBytes": 5368709120,
-    "projectedRemainingBytes": 15580193541,
+    "projectedRemainingBytes": 15558562565,
     "fits": true
   },
   "rootProbe": {
     "path": "isolated-release-probe.sh",
-    "sha256": "57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38",
+    "sha256": "952ed86f90152dbdd58253fc87bccf65c0ee0e27f6de3bfbb4f471e15c63a538",
     "checksumBound": true,
     "packageChecksumValidation": true,
     "rootRequired": true,
@@ -51,13 +51,28 @@
     "successReportValidatedBeforeHandoff": true,
     "acceptedImagesRetained": true
   },
+  "incidentRepair": {
+    "failedScriptSha256": "57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38",
+    "rootCause": "caller/wrapper dynamic-scope output name collision under nounset",
+    "repair": "validated Bash nameref with reserved __pm_ internal prefix",
+    "callerInitializationRequired": false,
+    "evalUsed": false,
+    "emergencyDiagnosticsIndependent": true,
+    "oldFixture": "FAIL_AS_EXPECTED",
+    "fixedImplementation": "PASS",
+    "rootAttemptRerun": false
+  },
   "support": {
-    "boundedOperations": {"path": "bounded-operations.sh", "sha256": "a55b9da39f9b241a0ba87bb519d4fac555a18394b5889badc85e391c10aebd29"},
-    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "eb68447b9ba021beeb9c5ebe0672b8f7ba32766419c12e0c73e057dab1544bb6"},
+    "boundedOperations": {"path": "bounded-operations.sh", "sha256": "574a41944934ac15f3e15767e1dadcfe08b00c541eea87045a73b86242bf78eb"},
+    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "6293d3e96ae9f428340c2d3733108f7db8db6f1f1592d7e47dc3574c9b8ad80e"},
     "scraperHarness": {"path": "synthetic-scraper-harness.js", "sha256": "85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e"},
     "gatewayClientHarness": {"path": "gateway-client-harness.js", "sha256": "f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428"},
     "faultTests": {"path": "test-bounded-faults.sh", "sha256": "e4b147d71b649cffe568221742ac20a6fee4fff664a30ec581ba7081e778c790", "scenarioCount": 20},
-    "nonRootTests": {"path": "test-package.sh", "sha256": "1338fa6cf8e8729077cc0024abf10a46a4530c3b63925ce6ada748576698da83", "requiredCount": 43}
+    "outputHandoffTests": {"path": "test-output-handoff.sh", "sha256": "95b4fb821d01b74220db2dccbb43401a8f47293f1809856ce398522011df06da", "executableCount": 22, "requiredMatrixCount": 25},
+    "nonRootTests": {"path": "test-package.sh", "sha256": "2890b0df6f207e81de23250bc18c8051ea83a90d0837aa269aaf43bf53ec57dc", "requiredCount": 44},
+    "forensicReport": {"path": "forensic-report.json", "sha256": "5ef9a8f43c2cf82f7d6e34b8c7cd631046034552c1f0d28cec191c44920aadff"},
+    "outParameterAudit": {"path": "out-parameter-audit.json", "sha256": "af7d1da913703266ade5014c205def583fc0ca639d559cc7df737f0f93e4e8f4"},
+    "residualCleanupContract": {"path": "failed-run-residual-cleanup-contract.md", "sha256": "1d152c58422cd6d7b63b5fa2ae4bd4fac62c81b8f67763e929a6f1d17b96f5ff"}
   },
   "supersedes": {
     "path": "release/personal-max-stage8b1r/root-preflight/probe-isolated-images.sh",

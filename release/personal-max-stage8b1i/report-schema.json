@@ -6,7 +6,7 @@
   "required": ["schemaVersion", "mode", "script", "safety"],
   "properties": {
     "schemaVersion": {"const": 1},
-    "mode": {"enum": ["ISOLATED_RELEASE_PROOF", "ISOLATED_RELEASE_PROOF_FAILURE"]},
+    "mode": {"enum": ["ISOLATED_RELEASE_PROOF", "ISOLATED_RELEASE_PROOF_FAILURE", "ISOLATED_RELEASE_PROOF_EMERGENCY_FAILURE"]},
     "script": {
       "type": "object",
       "required": ["sha256", "checksumBound"],
@@ -64,6 +64,18 @@
           "storage": {"type": "object", "required": ["freeBytesBeforePull", "freeBytesAfterPull", "freeBytesAfterCleanup", "postPullDeficitBytes", "finalDeficitBytes"]},
           "diagnostics": {"type": "object", "required": ["rawCommandCaptured", "rawSqlCaptured", "rawStderrCaptured", "credentialsCaptured"]},
           "productionImmutability": {"type": "object", "required": ["productionDatabaseConnections", "productionMigrationLedgerSource", "productionMutationAuthorized"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_EMERGENCY_FAILURE"}}},
+      "then": {
+        "required": ["phase", "classification", "exitCode", "diagnostics"],
+        "properties": {
+          "phase": {"type": "string"},
+          "classification": {"type": "string"},
+          "exitCode": {"type": "integer", "minimum": 1},
+          "diagnostics": {"type": "object", "required": ["rawCommandCaptured", "rawSqlCaptured", "rawStderrCaptured", "credentialsCaptured"]}
         }
       }
     }
