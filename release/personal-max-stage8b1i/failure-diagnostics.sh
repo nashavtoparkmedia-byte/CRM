@@ -3,20 +3,31 @@
 # Sourced only after package checksum validation. This helper never records a
 # failed command, arguments, SQL, stderr, environment values, or data content.
 
+readonly -a PERSONAL_MAX_STAGE8B1I_REGISTERED_PHASES=(
+  bootstrap_complete source_binding storage_gate production_snapshot_before image_acquisition
+  image_verification post_pull_storage_gate disposable_topology postgresql_start backup_restore
+  restore_verification migration_preflight disposable_migration migration_verification
+  gateway_negative gateway_dormant gateway_active scraper_runtime_contract scraper_default_off
+  e2e_outage e2e_recovery e2e_verification prior_residual_cleanup cleanup final_storage_gate
+  production_snapshot_after report_render report_validation report_handoff completed
+)
+
+personal_max_stage8b1i_registered_phases() {
+  printf '%s\n' "${PERSONAL_MAX_STAGE8B1I_REGISTERED_PHASES[@]}"
+}
+
 personal_max_stage8b1i_safe_phase() {
-  case ${1:-} in
-    bootstrap_complete | source_binding | storage_gate | production_snapshot_before | image_acquisition | \
-      image_verification | post_pull_storage_gate | disposable_topology | postgresql_start | backup_restore | restore_verification | \
-      migration_preflight | disposable_migration | migration_verification | gateway_negative | gateway_dormant | \
-      gateway_active | scraper_runtime_contract | scraper_default_off | e2e_outage | e2e_recovery | e2e_verification | \
-      production_snapshot_after | prior_residual_cleanup | cleanup | final_storage_gate | report_render | report_validation | report_handoff | completed) return 0 ;;
-    *) return 1 ;;
-  esac
+  local candidate=${1-} registered
+  [[ -n $candidate ]] || return 1
+  for registered in "${PERSONAL_MAX_STAGE8B1I_REGISTERED_PHASES[@]}"; do
+    [[ $candidate == "$registered" ]] && return 0
+  done
+  return 1
 }
 
 personal_max_stage8b1i_safe_error() {
   case ${1:-} in
-    NONE | UNEXPECTED_COMMAND_FAILURE | METADATA_TIMEOUT | METADATA_FAILED | GATEWAY_PULL_TIMEOUT | \
+    NONE | UNEXPECTED_COMMAND_FAILURE | PHASE_REGISTRY_MISMATCH | METADATA_TIMEOUT | METADATA_FAILED | GATEWAY_PULL_TIMEOUT | \
       SCRAPER_PULL_TIMEOUT | REGISTRY_AUTHENTICATION_DENIED | REGISTRY_MANIFEST_NOT_FOUND | \
       REGISTRY_DIGEST_MISMATCH | REGISTRY_ACCESS_UNAVAILABLE | DISPOSABLE_DOCKER_TIMEOUT | \
       DISPOSABLE_DOCKER_FAILED | RESTORE_LIST_TIMEOUT | RESTORE_LIST_FAILED | FULL_RESTORE_TIMEOUT | \
@@ -75,7 +86,7 @@ personal_max_stage8b1i_safe_error() {
       PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
       GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
       GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | \
-      SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
+      SCRAPER_RUNTIME_CONTRACT_REQUIRED | SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
       SCRAPER_RUNTIME_MODULE_MISSING | SCRAPER_RUNTIME_MODULE_SYMLINK | \
       SCRAPER_RUNTIME_EXPORT_MISSING | SCRAPER_RUNTIME_DISABLED_ADAPTER_INVALID | \
       SCRAPER_RUNTIME_INTERCEPTOR_INVALID | SCRAPER_RUNTIME_NODE_UNSUPPORTED | \
@@ -814,8 +825,8 @@ personal_max_stage8b1i_write_emergency_json() {
 }
 
 personal_max_stage8b1i_emergency_diagnostics() {
-  local __pm_original_exit=${1:-1} __pm_phase=${PROBE_PHASE:-bootstrap_complete}
-  local __pm_classification=${PROBE_ERROR_CLASSIFICATION:-UNEXPECTED_COMMAND_FAILURE}
+  local __pm_original_exit=${1:-1} __pm_phase=${2:-${PROBE_PHASE:-bootstrap_complete}}
+  local __pm_classification=${3:-${PROBE_ERROR_CLASSIFICATION:-UNEXPECTED_COMMAND_FAILURE}}
   local __pm_target=${PM_FAILURE_PATH:-} __pm_temporary
   [[ $__pm_original_exit =~ ^[1-9][0-9]*$ && $__pm_original_exit -le 255 ]] || __pm_original_exit=1
   personal_max_stage8b1i_safe_phase "$__pm_phase" || __pm_phase=bootstrap_complete

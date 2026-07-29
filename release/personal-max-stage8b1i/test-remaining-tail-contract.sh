@@ -249,6 +249,28 @@ for forbidden in MAX_PERSONAL_ACCOUNT_ID MAX_PERSONAL_LIVE_CAPTURE_ENABLED \
 done
 pass scraper_runtime_contract_runner_contract
 
+mapfile -t runtime_gate_lines < <(rg -n '^pm_require_scraper_runtime_contract$' "$PROBE" | cut -d: -f1)
+mapfile -t scraper_runner_lines < <(rg -n 'pm_write_bounded "\$TMP/(default-off|capture-a|retry-a|capture-b|drain-a)\.json"' "$PROBE" | cut -d: -f1)
+[[ ${#runtime_gate_lines[@]} -eq 5 && ${#scraper_runner_lines[@]} -eq 5 ]]
+for index in 0 1 2 3 4; do
+  [[ ${runtime_gate_lines[$index]} -lt ${scraper_runner_lines[$index]} ]]
+  if (( index > 0 )); then
+    [[ ${runtime_gate_lines[$index]} -gt ${scraper_runner_lines[$((index - 1))]} ]]
+  fi
+done
+pass runtime_contract_gate_precedes_every_scraper_runner
+
+SCRAPER_RUNTIME_CONTRACT_VERIFIED=false
+set +e
+pm_require_scraper_runtime_contract
+runtime_gate_status=$?
+set -e
+[[ $runtime_gate_status -eq 65 && $PROBE_ERROR_CLASSIFICATION == SCRAPER_RUNTIME_CONTRACT_REQUIRED ]]
+SCRAPER_RUNTIME_CONTRACT_VERIFIED=true
+pm_require_scraper_runtime_contract
+[[ $PROBE_ERROR_CLASSIFICATION == NONE ]]
+pass runtime_contract_gate_blocks_then_permits
+
 default_off_block=$(phase_block scraper_default_off e2e_outage)
 for evidence in 'SCRAPER_DEFAULT_OFF_RUN_CHECK' \
   '-e STAGE8B1I_HARNESS_MODE="$DEFAULT_OFF_HARNESS_MODE"' '--network none' \
@@ -335,5 +357,5 @@ pass final_storage_production_report_contract
 [[ -z $(env GIT_OPTIONAL_LOCKS=0 git -C "$TEXT_CANARY_REPOSITORY" status --porcelain=v1 --untracked-files=all) ]]
 pass text_canary_unchanged
 
-[[ $PASS_COUNT -eq 31 ]]
-printf 'REMAINING_TAIL_TEST_COUNT=31\nREQUIRED_REGRESSION_CASES_COVERED=21\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
+[[ $PASS_COUNT -eq 33 ]]
+printf 'REMAINING_TAIL_TEST_COUNT=33\nREQUIRED_REGRESSION_CASES_COVERED=23\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'

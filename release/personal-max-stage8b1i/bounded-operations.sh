@@ -7,21 +7,31 @@
 : "${PM_TIMEOUT_BIN:=timeout}"
 : "${PROBE_ERROR_CLASSIFICATION:=NONE}"
 
+readonly -a PM_STAGE8B1I_REGISTERED_PHASES=(
+  bootstrap_complete source_binding storage_gate production_snapshot_before image_acquisition
+  image_verification post_pull_storage_gate disposable_topology postgresql_start backup_restore
+  restore_verification migration_preflight disposable_migration migration_verification
+  gateway_negative gateway_dormant gateway_active scraper_runtime_contract scraper_default_off
+  e2e_outage e2e_recovery e2e_verification prior_residual_cleanup cleanup final_storage_gate
+  production_snapshot_after report_render report_validation report_handoff completed
+)
+
+pm_registered_phases() {
+  printf '%s\n' "${PM_STAGE8B1I_REGISTERED_PHASES[@]}"
+}
+
 pm_phase_is_safe() {
-  case ${1:-} in
-    bootstrap_complete | source_binding | storage_gate | production_snapshot_before | image_acquisition | \
-      image_verification | post_pull_storage_gate | disposable_topology | postgresql_start | backup_restore | \
-      restore_verification | migration_preflight | disposable_migration | migration_verification | \
-      gateway_negative | gateway_dormant | gateway_active | scraper_default_off | e2e_outage | \
-      e2e_recovery | e2e_verification | prior_residual_cleanup | cleanup | final_storage_gate | production_snapshot_after | \
-      report_render | report_validation | report_handoff | completed) return 0 ;;
-    *) return 1 ;;
-  esac
+  local candidate=${1-} registered
+  [[ -n $candidate ]] || return 1
+  for registered in "${PM_STAGE8B1I_REGISTERED_PHASES[@]}"; do
+    [[ $candidate == "$registered" ]] && return 0
+  done
+  return 1
 }
 
 pm_error_classification_is_safe() {
   case ${1:-} in
-    NONE | UNEXPECTED_COMMAND_FAILURE | METADATA_TIMEOUT | METADATA_FAILED | \
+    NONE | UNEXPECTED_COMMAND_FAILURE | PHASE_REGISTRY_MISMATCH | METADATA_TIMEOUT | METADATA_FAILED | \
       GATEWAY_PULL_TIMEOUT | SCRAPER_PULL_TIMEOUT | REGISTRY_AUTHENTICATION_DENIED | \
       REGISTRY_MANIFEST_NOT_FOUND | REGISTRY_DIGEST_MISMATCH | REGISTRY_ACCESS_UNAVAILABLE | \
       DISPOSABLE_DOCKER_TIMEOUT | DISPOSABLE_DOCKER_FAILED | RESTORE_LIST_TIMEOUT | \
@@ -70,7 +80,7 @@ pm_error_classification_is_safe() {
       PRIOR_RESIDUAL_REPORT_REFUSED | PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
       GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
       GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | \
-      SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
+      SCRAPER_RUNTIME_CONTRACT_REQUIRED | SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
       SCRAPER_RUNTIME_MODULE_MISSING | SCRAPER_RUNTIME_MODULE_SYMLINK | \
       SCRAPER_RUNTIME_EXPORT_MISSING | SCRAPER_RUNTIME_DISABLED_ADAPTER_INVALID | \
       SCRAPER_RUNTIME_INTERCEPTOR_INVALID | SCRAPER_RUNTIME_NODE_UNSUPPORTED | \
@@ -108,8 +118,12 @@ pm_error_classification_is_safe() {
 }
 
 pm_enter_phase() {
-  local phase=${1:?phase required} command_class=${2:?command class required}
-  pm_phase_is_safe "$phase" || return 64
+  local phase=${1-} command_class=${2-}
+  if ! pm_phase_is_safe "$phase"; then
+    PROBE_ERROR_CLASSIFICATION=PHASE_REGISTRY_MISMATCH
+    return 64
+  fi
+  PROBE_ERROR_CLASSIFICATION=NONE
   PROBE_PHASE=$phase
   PROBE_SAFE_COMMAND_CLASS=$command_class
   printf 'STAGE8B1I_PHASE=%s\n' "$phase"
@@ -179,6 +193,7 @@ pm_run_bounded() {
     PROBE_ERROR_CLASSIFICATION=$failure_class
     return "$status"
   fi
+  PROBE_ERROR_CLASSIFICATION=NONE
   return 0
 }
 
@@ -210,7 +225,8 @@ pm_capture_bounded() {
   fi
   # Bash command substitution intentionally strips trailing newlines. Empty,
   # one-line, and multiline output otherwise remain byte-for-byte unchanged.
-  pm_assign_out "$__pm_target_name" "$__pm_captured"
+  pm_assign_out "$__pm_target_name" "$__pm_captured" || return
+  PROBE_ERROR_CLASSIFICATION=NONE
 }
 
 pm_capture_bounded_internal() {
@@ -244,7 +260,8 @@ pm_capture_bounded_internal() {
     PROBE_ERROR_CLASSIFICATION=$__pm_capture_failure_class
     return "$__pm_capture_status"
   fi
-  pm_assign_internal_out "$__pm_capture_target" "$__pm_capture_value"
+  pm_assign_internal_out "$__pm_capture_target" "$__pm_capture_value" || return
+  PROBE_ERROR_CLASSIFICATION=NONE
 }
 
 pm_write_bounded() {
@@ -263,6 +280,7 @@ pm_write_bounded() {
     PROBE_ERROR_CLASSIFICATION=$failure_class
     return "$status"
   fi
+  PROBE_ERROR_CLASSIFICATION=NONE
 }
 
 pm_scraper_check_id_is_safe() {
@@ -601,6 +619,7 @@ pm_expect_failure_bounded() {
     PROBE_ERROR_CLASSIFICATION=EXPECTED_FAILURE_NOT_OBSERVED
     return 1
   fi
+  PROBE_ERROR_CLASSIFICATION=NONE
   return 0
 }
 
@@ -635,6 +654,7 @@ pm_pull_exact() {
     pm_classify_registry_failure "$stderr_path"
     return "$status"
   fi
+  PROBE_ERROR_CLASSIFICATION=NONE
 }
 
 pm_poll_until() {
@@ -646,7 +666,10 @@ pm_poll_until() {
     set +e
     if "$@"; then status=0; else status=$?; fi
     pm_restore_errexit "$had_errexit"
-    (( status == 0 )) && return 0
+    if (( status == 0 )); then
+      PROBE_ERROR_CLASSIFICATION=NONE
+      return 0
+    fi
     (( status == 124 )) && return 124
     if (( SECONDS - started >= elapsed_limit )); then
       PROBE_ERROR_CLASSIFICATION=$timeout_class
@@ -665,6 +688,15 @@ pm_check_disk_gate() {
     PROBE_ERROR_CLASSIFICATION=$classification
     return 90
   fi
+  PROBE_ERROR_CLASSIFICATION=NONE
+}
+
+pm_require_scraper_runtime_contract() {
+  if [[ ${SCRAPER_RUNTIME_CONTRACT_VERIFIED:-false} != true ]]; then
+    PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_CONTRACT_REQUIRED
+    return 65
+  fi
+  PROBE_ERROR_CLASSIFICATION=NONE
 }
 
 pm_deadline_remaining() {

@@ -39,8 +39,8 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='85bfc6c3d3fcfe0c1d8c90cf718dff80843330f806750479adc03e83901c9755'
-readonly BOUNDED_OPERATIONS_SHA256='e20cd9e85926c9eebb0108cdc7306dab4b7fe8989d0c3f93dbd6e7877152a891'
+readonly FAILURE_DIAGNOSTICS_SHA256='bbe8ff3e4afd429b3d59ef0fc1d219139266611fcbeafca91657ae3e57eeddec'
+readonly BOUNDED_OPERATIONS_SHA256='c731452d3ea5d987c0e0318223b08a6e4a55b8b19dc1f8a265c5c8353b04a88b'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
@@ -374,7 +374,7 @@ on_exit() {
     if [[ $PM_FAILURE_HANDOFF_ATTEMPTED == false ]]; then
       PM_FAILURE_HANDOFF_ATTEMPTED=true
       if ! personal_max_stage8b1i_render_failure "$status" "$FAILURE_SOURCE_LINE" "$cleanup_ok"; then
-        personal_max_stage8b1i_emergency_diagnostics "$status" || true
+        personal_max_stage8b1i_emergency_diagnostics "$status" "$original_phase" "$original_class" || true
       fi
       if [[ $PM_FAILURE_HANDOFF_COMPLETED != true ]]; then
         personal_max_stage8b1i_emit_unavailable "$status" "$original_phase" "$original_class" \
@@ -931,6 +931,7 @@ SCRAPER_RUNTIME_OCI_REVISION=$scraper_oci_revision
 SCRAPER_CHECK_ID=NONE
 
 pm_enter_phase scraper_default_off synthetic_harness
+pm_require_scraper_runtime_contract
 pm_scraper_begin_operation SCRAPER_DEFAULT_OFF_RUN_CHECK default_off_mode_binding invocation_contract shell_builtin command_not_started
 if [[ -z $DEFAULT_OFF_HARNESS_MODE ]]; then
   pm_scraper_finish_operation 64 SCRAPER_DEFAULT_OFF_MODE_MISSING command_not_started
@@ -979,6 +980,7 @@ pm_run_bounded synthetic_http 120 GATEWAY_CLIENT_TIMEOUT E2E_OUTAGE_FAILED \
 pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT E2E_OUTAGE_FAILED docker start "$PG_CONTAINER" >/dev/null
 pm_poll_until 60 90 E2E_OUTAGE_FAILED postgres_ready
 pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT E2E_OUTAGE_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
+pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/capture-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_OUTAGE_FAILED \
   docker run --rm --name "$PREFIX-scraper-capture-a" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
@@ -986,6 +988,7 @@ pm_write_bounded "$TMP/capture-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_T
   -e STAGE8B1I_FRAME_COUNT=500 -e STAGE8B1I_IDENTICAL_COUNT=100 \
   -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
+pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/retry-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_OUTAGE_FAILED \
   docker run --rm --name "$PREFIX-scraper-retry-a" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
@@ -999,6 +1002,7 @@ jq -e '.retryCount>0 and .pendingAfter>0 and .lostBeforeSpoolCount==0' "$TMP/ret
 
 pm_enter_phase e2e_recovery synthetic_harness
 start_gateway E2E_RECOVERY_FAILED
+pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/capture-b.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
   docker run --rm --name "$PREFIX-scraper-capture-b" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_B" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_B" \
@@ -1006,6 +1010,7 @@ pm_write_bounded "$TMP/capture-b.json" synthetic_harness 600 SYNTHETIC_HARNESS_T
   -e STAGE8B1I_HARNESS_MODE=capture-and-drain -e STAGE8B1I_FRAME_COUNT=500 -e STAGE8B1I_IDENTICAL_COUNT=0 \
   -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
+pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/drain-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
   docker run --rm --name "$PREFIX-scraper-drain-a" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \

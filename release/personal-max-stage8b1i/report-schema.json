@@ -177,7 +177,16 @@
       "then": {
         "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "scraperOperation", "scraperRuntimeContract", "scraperHarnessEnvelope", "prismaDiffEvidence", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
-          "phase": {"type": "string"},
+          "phase": {"enum": [
+            "bootstrap_complete", "source_binding", "storage_gate", "production_snapshot_before",
+            "image_acquisition", "image_verification", "post_pull_storage_gate", "disposable_topology",
+            "postgresql_start", "backup_restore", "restore_verification", "migration_preflight",
+            "disposable_migration", "migration_verification", "gateway_negative", "gateway_dormant",
+            "gateway_active", "scraper_runtime_contract", "scraper_default_off", "e2e_outage",
+            "e2e_recovery", "e2e_verification", "prior_residual_cleanup", "cleanup",
+            "final_storage_gate", "production_snapshot_after", "report_render", "report_validation",
+            "report_handoff", "completed"
+          ]},
           "classification": {"type": "string", "description": "Privacy-safe output-contract or migration-preflight classification; raw commands, stderr, URLs, credentials, SQL, and business data are excluded."},
           "checkId": {
             "enum": [
@@ -401,7 +410,16 @@
       "then": {
         "required": ["phase", "classification", "checkId", "exitCode", "diagnostics"],
         "properties": {
-          "phase": {"type": "string"},
+          "phase": {"enum": [
+            "bootstrap_complete", "source_binding", "storage_gate", "production_snapshot_before",
+            "image_acquisition", "image_verification", "post_pull_storage_gate", "disposable_topology",
+            "postgresql_start", "backup_restore", "restore_verification", "migration_preflight",
+            "disposable_migration", "migration_verification", "gateway_negative", "gateway_dormant",
+            "gateway_active", "scraper_runtime_contract", "scraper_default_off", "e2e_outage",
+            "e2e_recovery", "e2e_verification", "prior_residual_cleanup", "cleanup",
+            "final_storage_gate", "production_snapshot_after", "report_render", "report_validation",
+            "report_handoff", "completed"
+          ]},
           "classification": {"type": "string"},
           "checkId": {"type": "string"},
           "exitCode": {"type": "integer", "minimum": 1},
