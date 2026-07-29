@@ -20,6 +20,7 @@ readonly GATEWAY_DIGEST='sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351
 readonly SCRAPER_DIGEST='sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
 readonly POSTGRES_DIGEST='sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229'
 readonly POSTGRES_VERSION='16.14'
+readonly POSTGRES_VERSION_NUM=160014
 readonly REQUIRED_FREE_BYTES=12500000000
 readonly IMAGE_EXPANSION_BYTES=4323469515
 readonly PROBE_BUDGET_BYTES=2172240240
@@ -28,11 +29,11 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='e490cf4aadeb4e3471dd6fe846ade5cd1981a9bae5a0ac6edd3d8cc2de7b5288'
-readonly BOUNDED_OPERATIONS_SHA256='5bfaeac3722b8187f83db2bb0b9eabf48eae4b2d67cdae9b63f8e861affb1a30'
+readonly FAILURE_DIAGNOSTICS_SHA256='2b896fec056035bf7d94e14423a87d43606a1e6addff8d27959a42ba54d04b94'
+readonly BOUNDED_OPERATIONS_SHA256='e8376b7c771f35a3adc1308240292ec67662c8a7a1b432d71893f3bbec493576'
 readonly PROBE_OUTPUT_HELPERS_SHA256='da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11'
 readonly RESTORE_VERIFICATION_SHA256='0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f'
-readonly POSTGRES_STARTUP_SHA256='4c48fc4158bb571a53d82418c80bd08a4a1ebc66ba9ab73bed8478d518095df2'
+readonly POSTGRES_STARTUP_SHA256='0470150c782f37c8bda99a10d6f62638f6d2f2b10331c4775b199046d2915e76'
 readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -559,7 +560,8 @@ pm_postgres_start_container \
   docker run -d --name "$PG_CONTAINER" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/postgres.env" -v "$PG_VOLUME:/var/lib/postgresql/data" -v "$DUMP_PATH:/backup/database.dump:ro" "$POSTGRES_IMAGE"
 pm_postgres_wait_readiness 90 120
-pm_postgres_wait_version server_version "$POSTGRES_VERSION" 30 60
+pm_postgres_wait_version server_version_num "$POSTGRES_VERSION_NUM" 30 60
+server_version="${POSTGRES_OBSERVED_VERSION_MAJOR}.${POSTGRES_OBSERVED_VERSION_MINOR}"
 RESTORE_CHECK_ID=NONE
 
 pm_enter_phase backup_restore backup_validation
@@ -809,6 +811,13 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   --argjson postgresVersionTransientCount "$POSTGRES_VERSION_TRANSIENT_COUNT" \
   --argjson postgresVersionLastExit "$POSTGRES_VERSION_LAST_EXIT" \
   --argjson postgresVersionMatched "$POSTGRES_VERSION_MATCHED" \
+  --arg postgresExpectedVersionText "$POSTGRES_VERSION" --argjson postgresExpectedVersionNum "$POSTGRES_VERSION_NUM" \
+  --argjson postgresObservedVersionNum "$POSTGRES_OBSERVED_VERSION_NUM" \
+  --argjson postgresObservedMajor "$POSTGRES_OBSERVED_VERSION_MAJOR" \
+  --argjson postgresObservedMinor "$POSTGRES_OBSERVED_VERSION_MINOR" \
+  --argjson postgresObservedPatch "$POSTGRES_OBSERVED_VERSION_PATCH" \
+  --arg postgresVersionClassification "$POSTGRES_VERSION_CLASSIFICATION" \
+  --arg postgresVersionOutputCategory "$POSTGRES_VERSION_OUTPUT_CATEGORY" \
   --argjson postgresStartupElapsedSeconds "$POSTGRES_STARTUP_ELAPSED_SECONDS" \
   --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
   --argjson migrationSeconds "$migration_seconds" --argjson migrationDurations "$migration_durations" \
@@ -830,6 +839,10 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
       readinessAttempts:$postgresReadinessAttempts,readinessTransientCount:$postgresReadinessTransientCount,
       readinessLastExit:$postgresReadinessLastExit,versionQueryAttempts:$postgresVersionQueryAttempts,
       versionTransientCount:$postgresVersionTransientCount,versionLastExit:$postgresVersionLastExit,
+      expectedVersionText:$postgresExpectedVersionText,expectedVersionNum:$postgresExpectedVersionNum,
+      observedVersionNum:$postgresObservedVersionNum,observedMajor:$postgresObservedMajor,
+      observedMinor:$postgresObservedMinor,observedPatch:$postgresObservedPatch,
+      versionClassification:$postgresVersionClassification,versionOutputCategory:$postgresVersionOutputCategory,
       versionMatched:$postgresVersionMatched,elapsedSeconds:$postgresStartupElapsedSeconds,
       rawLogsCaptured:false,environmentValuesCaptured:false,credentialsCaptured:false},
     restore:{FULL_RESTORE_PROOF:"PASS",objectCount:$objectCount,ledgerFinished:$beforeFinished,ledgerFailed:0,

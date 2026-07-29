@@ -16,6 +16,12 @@
 : "${POSTGRES_VERSION_TRANSIENT_COUNT:=0}"
 : "${POSTGRES_VERSION_LAST_EXIT:=not_observed}"
 : "${POSTGRES_VERSION_MATCHED:=false}"
+: "${POSTGRES_VERSION_CLASSIFICATION:=NOT_OBSERVED}"
+: "${POSTGRES_VERSION_OUTPUT_CATEGORY:=NOT_OBSERVED}"
+: "${POSTGRES_OBSERVED_VERSION_NUM:=not_observed}"
+: "${POSTGRES_OBSERVED_VERSION_MAJOR:=not_observed}"
+: "${POSTGRES_OBSERVED_VERSION_MINOR:=not_observed}"
+: "${POSTGRES_OBSERVED_VERSION_PATCH:=not_observed}"
 : "${POSTGRES_STARTUP_ELAPSED_SECONDS:=0}"
 
 pm_postgres_check_id_is_safe() {
@@ -151,8 +157,56 @@ pm_postgres_execute_version() {
   pm_capture_bounded pm_result_postgres_version disposable_postgresql 30 \
     POSTGRES_VERSION_QUERY_FAILED POSTGRES_VERSION_QUERY_FAILED \
     docker exec "$PG_CONTAINER" psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 \
-    -U "$PG_USER" -d "$PG_DB" -c 'SHOW server_version' || return
+    -U "$PG_USER" -d "$PG_DB" -c 'SHOW server_version_num' || return
   pm_assign_out "$__pm_target_name" "$pm_result_postgres_version"
+}
+
+pm_postgres_validate_version_num() {
+  local __pm_target_name=${1:-} __pm_raw=${2-} __pm_expected=${3:-} __pm_normalized
+  pm_validate_out_name "$__pm_target_name" || return
+  pm_postgres_set_check POSTGRES_SERVER_VERSION_MATCH_CHECK || return
+  POSTGRES_VERSION_MATCHED=false
+  POSTGRES_VERSION_CLASSIFICATION=NOT_OBSERVED
+  POSTGRES_VERSION_OUTPUT_CATEGORY=NOT_OBSERVED
+  POSTGRES_OBSERVED_VERSION_NUM=not_observed
+  POSTGRES_OBSERVED_VERSION_MAJOR=not_observed
+  POSTGRES_OBSERVED_VERSION_MINOR=not_observed
+  POSTGRES_OBSERVED_VERSION_PATCH=not_observed
+  if [[ $__pm_raw == *$'\n'* || $__pm_raw == *$'\r'* || \
+        ! $__pm_raw =~ ^[[:blank:]]*([0-9]+)[[:blank:]]*$ ]]; then
+    POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_OUTPUT_MALFORMED
+    POSTGRES_VERSION_OUTPUT_CATEGORY=MALFORMED
+    PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_OUTPUT_MALFORMED
+    POSTGRES_STARTUP_STATUS=VERSION_OUTPUT_MALFORMED
+    return 65
+  fi
+  __pm_normalized=${BASH_REMATCH[1]}
+  if [[ ! $__pm_normalized =~ ^[0-9]{6}$ || ! $__pm_expected =~ ^[0-9]{6}$ ]]; then
+    POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_OUTPUT_MALFORMED
+    POSTGRES_VERSION_OUTPUT_CATEGORY=MALFORMED
+    PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_OUTPUT_MALFORMED
+    POSTGRES_STARTUP_STATUS=VERSION_OUTPUT_MALFORMED
+    return 65
+  fi
+  POSTGRES_OBSERVED_VERSION_NUM=$__pm_normalized
+  POSTGRES_OBSERVED_VERSION_MAJOR=$((10#$__pm_normalized / 10000))
+  POSTGRES_OBSERVED_VERSION_MINOR=$((10#$__pm_normalized % 10000))
+  POSTGRES_OBSERVED_VERSION_PATCH=0
+  if [[ $__pm_raw == "$__pm_normalized" ]]; then
+    POSTGRES_VERSION_OUTPUT_CATEGORY=CANONICAL_NUMERIC
+  else
+    POSTGRES_VERSION_OUTPUT_CATEGORY=WHITESPACE_NORMALIZED
+  fi
+  if [[ $__pm_normalized != "$__pm_expected" ]]; then
+    POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_MISMATCH
+    PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_MISMATCH
+    POSTGRES_STARTUP_STATUS=VERSION_MISMATCH
+    return 67
+  fi
+  pm_assign_out "$__pm_target_name" "$__pm_normalized" || return
+  POSTGRES_VERSION_MATCHED=true
+  POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_MATCHED
+  PROBE_ERROR_CLASSIFICATION=NONE
 }
 
 pm_postgres_wait_version() {
@@ -164,10 +218,12 @@ pm_postgres_wait_version() {
   pm_postgres_set_check POSTGRES_SERVER_VERSION_QUERY_CHECK || return
   POSTGRES_STARTUP_LAST_OPERATION=server_version_query
   POSTGRES_STARTUP_STATUS=VERSION_QUERY_POLLING
+  POSTGRES_VERSION_CLASSIFICATION=NOT_OBSERVED
   for (( __pm_attempt=1; __pm_attempt<=__pm_max_attempts; __pm_attempt++ )); do
     POSTGRES_VERSION_QUERY_ATTEMPTS=$__pm_attempt
     if ! pm_postgres_observe_container; then
       PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_QUERY_FAILED
+      POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_QUERY_FAILED
       POSTGRES_STARTUP_STATUS=VERSION_OBSERVATION_FAILED
       return 69
     fi
@@ -182,16 +238,7 @@ pm_postgres_wait_version() {
         POSTGRES_VERSION_LAST_EXIT=$__pm_status
         case $__pm_status in
           0)
-            pm_postgres_set_check POSTGRES_SERVER_VERSION_MATCH_CHECK || return
-            if [[ $pm_result_postgres_version != "$__pm_expected" ]]; then
-              POSTGRES_VERSION_MATCHED=false
-              PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_MISMATCH
-              POSTGRES_STARTUP_STATUS=VERSION_MISMATCH
-              return 67
-            fi
-            pm_assign_out "$__pm_target_name" "$pm_result_postgres_version" || return
-            POSTGRES_VERSION_MATCHED=true
-            PROBE_ERROR_CLASSIFICATION=NONE
+            pm_postgres_validate_version_num "$__pm_target_name" "$pm_result_postgres_version" "$__pm_expected" || return
             POSTGRES_STARTUP_STATUS=READY
             POSTGRES_STARTUP_ELAPSED_SECONDS=$((POSTGRES_STARTUP_ELAPSED_SECONDS + SECONDS - __pm_started))
             return 0
@@ -202,6 +249,7 @@ pm_postgres_wait_version() {
             ;;
           *)
             PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_QUERY_FAILED
+            POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_QUERY_FAILED
             POSTGRES_STARTUP_STATUS=VERSION_QUERY_FAILED
             return "$__pm_status"
             ;;
@@ -216,6 +264,7 @@ pm_postgres_wait_version() {
     __pm_elapsed=$((SECONDS - __pm_started))
     if (( __pm_attempt == __pm_max_attempts || __pm_elapsed >= __pm_elapsed_limit )); then
       PROBE_ERROR_CLASSIFICATION=POSTGRES_VERSION_QUERY_FAILED
+      POSTGRES_VERSION_CLASSIFICATION=POSTGRES_VERSION_QUERY_FAILED
       POSTGRES_STARTUP_STATUS=VERSION_QUERY_FAILED
       return "$__pm_status"
     fi

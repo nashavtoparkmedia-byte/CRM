@@ -40,7 +40,7 @@
         "required": ["bindings", "postgresStartup", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
         "properties": {
           "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
-          "postgresStartup": {"type": "object", "required": ["status", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured"]},
+          "postgresStartup": {"type": "object", "required": ["status", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "expectedVersionText", "expectedVersionNum", "observedVersionNum", "observedMajor", "observedMinor", "observedPatch", "versionClassification", "versionOutputCategory", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured"]},
           "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "ledgerNamingClassification", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "catalogIntegrity"]},
           "migration": {
             "type": "object",
@@ -107,7 +107,7 @@
           "exitCode": {"type": "integer", "minimum": 1},
           "postgresStartup": {
             "type": "object",
-            "required": ["status", "lastOperation", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured", "commandArgumentsCaptured"]
+            "required": ["status", "lastOperation", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "expectedVersionText", "expectedVersionNum", "observedVersionNum", "observedMajor", "observedMinor", "observedPatch", "versionClassification", "versionOutputCategory", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured", "commandArgumentsCaptured"]
           },
           "ledgerDiagnostics": {
             "type": "object",

@@ -41,7 +41,7 @@ pm_error_classification_is_safe() {
       RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | \
       POSTGRES_CONTAINER_START_FAILED | POSTGRES_CONTAINER_EXITED_DURING_STARTUP | \
       POSTGRES_READINESS_TIMEOUT | POSTGRES_READINESS_COMMAND_FAILED | \
-      POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_MISMATCH | \
+      POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_OUTPUT_MALFORMED | POSTGRES_VERSION_MISMATCH | \
       RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
       RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -286,6 +286,12 @@ pm_validate_success_report() {
     .postgresStartup.containerExitCode==0 and .postgresStartup.readinessAttempts>0 and
     .postgresStartup.readinessLastExit==0 and .postgresStartup.versionQueryAttempts>0 and
     .postgresStartup.versionLastExit==0 and .postgresStartup.versionMatched==true and
+    .postgresStartup.expectedVersionText=="16.14" and .postgresStartup.expectedVersionNum==160014 and
+    .postgresStartup.observedVersionNum==160014 and .postgresStartup.observedMajor==16 and
+    .postgresStartup.observedMinor==14 and .postgresStartup.observedPatch==0 and
+    .postgresStartup.versionClassification=="POSTGRES_VERSION_MATCHED" and
+    (.postgresStartup.versionOutputCategory=="CANONICAL_NUMERIC" or
+      .postgresStartup.versionOutputCategory=="WHITESPACE_NORMALIZED") and
     .postgresStartup.rawLogsCaptured==false and .postgresStartup.environmentValuesCaptured==false and
     .postgresStartup.credentialsCaptured==false and
     .restore.FULL_RESTORE_PROOF=="PASS" and .restore.objectCount==581 and

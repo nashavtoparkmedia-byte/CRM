@@ -35,7 +35,7 @@ personal_max_stage8b1i_safe_error() {
       RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | \
       POSTGRES_CONTAINER_START_FAILED | POSTGRES_CONTAINER_EXITED_DURING_STARTUP | \
       POSTGRES_READINESS_TIMEOUT | POSTGRES_READINESS_COMMAND_FAILED | \
-      POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_MISMATCH | \
+      POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_OUTPUT_MALFORMED | POSTGRES_VERSION_MISMATCH | \
       RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
       RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -89,6 +89,9 @@ personal_max_stage8b1i_render_failure() {
   local postgres_readiness_attempts postgres_readiness_transient postgres_readiness_last_json
   local postgres_version_attempts postgres_version_transient postgres_version_last_json
   local postgres_version_matched postgres_elapsed
+  local postgres_expected_version_text postgres_expected_version_num
+  local postgres_observed_version_num_json postgres_observed_major_json postgres_observed_minor_json postgres_observed_patch_json
+  local postgres_version_classification postgres_version_output_category
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
   [[ $source_line =~ ^[0-9]+$ ]] || source_line=0
   safe_phase=${PROBE_PHASE:-bootstrap_complete}
@@ -157,7 +160,7 @@ personal_max_stage8b1i_render_failure() {
       READINESS_POLLING | READINESS_CONFIRMED | READINESS_OBSERVATION_FAILED | \
       READINESS_COMMAND_FAILED | READINESS_TIMEOUT | CONTAINER_EXITED_DURING_STARTUP | \
       VERSION_QUERY_POLLING | VERSION_OBSERVATION_FAILED | VERSION_QUERY_FAILED | \
-      VERSION_MISMATCH | READY) ;;
+      VERSION_OUTPUT_MALFORMED | VERSION_MISMATCH | READY) ;;
     *) postgres_status=NOT_OBSERVED ;;
   esac
   postgres_operation=${POSTGRES_STARTUP_LAST_OPERATION:-NOT_OBSERVED}
@@ -179,6 +182,18 @@ personal_max_stage8b1i_render_failure() {
   if [[ ${POSTGRES_VERSION_LAST_EXIT:-} =~ ^[0-9]+$ ]]; then postgres_version_last_json=${POSTGRES_VERSION_LAST_EXIT}; else postgres_version_last_json='"not_observed"'; fi
   postgres_version_matched=${POSTGRES_VERSION_MATCHED:-false}
   [[ $postgres_version_matched == true ]] || postgres_version_matched=false
+  postgres_expected_version_text=${POSTGRES_VERSION:-16.14}
+  [[ $postgres_expected_version_text == 16.14 ]] || postgres_expected_version_text=16.14
+  postgres_expected_version_num=${POSTGRES_VERSION_NUM:-160014}
+  [[ $postgres_expected_version_num == 160014 ]] || postgres_expected_version_num=160014
+  if [[ ${POSTGRES_OBSERVED_VERSION_NUM:-} =~ ^[0-9]{6}$ ]]; then postgres_observed_version_num_json=${POSTGRES_OBSERVED_VERSION_NUM}; else postgres_observed_version_num_json='"not_observed"'; fi
+  if [[ ${POSTGRES_OBSERVED_VERSION_MAJOR:-} =~ ^[0-9]+$ ]]; then postgres_observed_major_json=${POSTGRES_OBSERVED_VERSION_MAJOR}; else postgres_observed_major_json='"not_observed"'; fi
+  if [[ ${POSTGRES_OBSERVED_VERSION_MINOR:-} =~ ^[0-9]+$ ]]; then postgres_observed_minor_json=${POSTGRES_OBSERVED_VERSION_MINOR}; else postgres_observed_minor_json='"not_observed"'; fi
+  if [[ ${POSTGRES_OBSERVED_VERSION_PATCH:-} =~ ^[0-9]+$ ]]; then postgres_observed_patch_json=${POSTGRES_OBSERVED_VERSION_PATCH}; else postgres_observed_patch_json='"not_observed"'; fi
+  postgres_version_classification=${POSTGRES_VERSION_CLASSIFICATION:-NOT_OBSERVED}
+  case $postgres_version_classification in NOT_OBSERVED | POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_OUTPUT_MALFORMED | POSTGRES_VERSION_MISMATCH | POSTGRES_VERSION_MATCHED) ;; *) postgres_version_classification=NOT_OBSERVED ;; esac
+  postgres_version_output_category=${POSTGRES_VERSION_OUTPUT_CATEGORY:-NOT_OBSERVED}
+  case $postgres_version_output_category in NOT_OBSERVED | CANONICAL_NUMERIC | WHITESPACE_NORMALIZED | MALFORMED) ;; *) postgres_version_output_category=NOT_OBSERVED ;; esac
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
     printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH_UNSAFE\n' "$safe_phase" "$original_exit" >&2
@@ -208,6 +223,14 @@ personal_max_stage8b1i_render_failure() {
     --argjson postgresVersionTransientCount "$postgres_version_transient" \
     --argjson postgresVersionLastExit "$postgres_version_last_json" \
     --argjson postgresVersionMatched "$postgres_version_matched" --argjson postgresElapsedSeconds "$postgres_elapsed" \
+    --arg postgresExpectedVersionText "$postgres_expected_version_text" \
+    --argjson postgresExpectedVersionNum "$postgres_expected_version_num" \
+    --argjson postgresObservedVersionNum "$postgres_observed_version_num_json" \
+    --argjson postgresObservedMajor "$postgres_observed_major_json" \
+    --argjson postgresObservedMinor "$postgres_observed_minor_json" \
+    --argjson postgresObservedPatch "$postgres_observed_patch_json" \
+    --arg postgresVersionClassification "$postgres_version_classification" \
+    --arg postgresVersionOutputCategory "$postgres_version_output_category" \
     --argjson ledgerNameCount "$ledger_name_count" --argjson ledgerUniqueCount "$ledger_unique_count" \
     --argjson ledgerDuplicateCount "$ledger_duplicate_count" --argjson ledgerEmptyCount "$ledger_empty_count" \
     --argjson ledgerInvalidFormatCount "$ledger_invalid_format_count" --argjson ledgerUnsafeCount "$ledger_unsafe_count" \
@@ -238,6 +261,10 @@ personal_max_stage8b1i_render_failure() {
         readinessTransientCount:$postgresReadinessTransientCount,readinessLastExit:$postgresReadinessLastExit,
         versionQueryAttempts:$postgresVersionQueryAttempts,versionTransientCount:$postgresVersionTransientCount,
         versionLastExit:$postgresVersionLastExit,versionMatched:$postgresVersionMatched,
+        expectedVersionText:$postgresExpectedVersionText,expectedVersionNum:$postgresExpectedVersionNum,
+        observedVersionNum:$postgresObservedVersionNum,observedMajor:$postgresObservedMajor,
+        observedMinor:$postgresObservedMinor,observedPatch:$postgresObservedPatch,
+        versionClassification:$postgresVersionClassification,versionOutputCategory:$postgresVersionOutputCategory,
         elapsedSeconds:$postgresElapsedSeconds,rawLogsCaptured:false,environmentValuesCaptured:false,
         credentialsCaptured:false,commandArgumentsCaptured:false},
       ledgerDiagnostics:{ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,
