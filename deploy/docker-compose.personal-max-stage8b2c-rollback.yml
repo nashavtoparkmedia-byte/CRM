@@ -1,0 +1,5 @@
+services:
+  max-web-scraper:
+    image: crm/max-web-scraper:max-basic-messaging-e150f3fc-20260726T083150Z
+    pull_policy: never
+    user: "pwuser"
