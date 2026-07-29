@@ -37,9 +37,10 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF"}}},
       "then": {
-        "required": ["bindings", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
+        "required": ["bindings", "postgresStartup", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
         "properties": {
           "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
+          "postgresStartup": {"type": "object", "required": ["status", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured"]},
           "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "ledgerNamingClassification", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "catalogIntegrity"]},
           "migration": {
             "type": "object",
@@ -85,13 +86,15 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string"},
           "checkId": {
             "enum": [
-              "NONE", "RESTORE_LEDGER_FINISHED_CHECK", "RESTORE_LEDGER_FAILED_CHECK",
+              "NONE", "POSTGRES_CONTAINER_START_CHECK", "POSTGRES_READINESS_CHECK",
+              "POSTGRES_SERVER_VERSION_QUERY_CHECK", "POSTGRES_SERVER_VERSION_MATCH_CHECK",
+              "RESTORE_LEDGER_FINISHED_CHECK", "RESTORE_LEDGER_FAILED_CHECK",
               "RESTORE_LEDGER_NAMES_CHECK", "RESTORE_CATALOG_TABLES_CHECK",
               "RESTORE_CATALOG_INDEXES_CHECK", "RESTORE_CATALOG_CONSTRAINTS_CHECK",
               "RESTORE_REQUIRED_PRISMA_MIGRATIONS_RELATION_CHECK",
@@ -102,6 +105,10 @@
             ]
           },
           "exitCode": {"type": "integer", "minimum": 1},
+          "postgresStartup": {
+            "type": "object",
+            "required": ["status", "lastOperation", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured", "commandArgumentsCaptured"]
+          },
           "ledgerDiagnostics": {
             "type": "object",
             "required": ["ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerEmptyNameCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "namingClassification", "invalidNamingCategories", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "sqlCaptured", "queryResultsCaptured"]

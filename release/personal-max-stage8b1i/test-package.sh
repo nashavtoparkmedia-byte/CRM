@@ -10,6 +10,7 @@ readonly DIAGNOSTICS="$SCRIPT_DIR/failure-diagnostics.sh"
 readonly BOUNDED="$SCRIPT_DIR/bounded-operations.sh"
 readonly OUTPUT_HELPERS="$SCRIPT_DIR/probe-output-helpers.sh"
 readonly RESTORE_VERIFICATION="$SCRIPT_DIR/restore-verification.sh"
+readonly POSTGRES_STARTUP="$SCRIPT_DIR/postgres-startup.sh"
 readonly MIGRATION_SQL_GATE="$SCRIPT_DIR/migration-sql-gate.sh"
 readonly MIGRATION_SQL_BINDINGS="$SCRIPT_DIR/migration-sql-bindings.txt"
 readonly PRISMA_LEGACY_DIFF_GATE="$SCRIPT_DIR/prisma-legacy-diff-gate.sh"
@@ -17,12 +18,13 @@ readonly FAULTS="$SCRIPT_DIR/test-bounded-faults.sh"
 readonly OUTPUT_HANDOFF="$SCRIPT_DIR/test-output-handoff.sh"
 readonly RESTORE_TESTS="$SCRIPT_DIR/test-restore-verification.sh"
 readonly LEDGER_TESTS="$SCRIPT_DIR/test-ledger-verification.sh"
+readonly POSTGRES_STARTUP_TESTS="$SCRIPT_DIR/test-postgres-startup.sh"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
 readonly BACKUP_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
-readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.4e9fcc90d20a8ae967a8a26dd0d9cf1634b1ef2d2e7edab79e1033ab1639c0d8.json'
-readonly FAILURE_REPORT_SHA='9197be647171a35553189a0526a2d6e205442f15965f5ce0ae1c8a1934bd73bd'
+readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0.json'
+readonly FAILURE_REPORT_SHA='4645c6aa3810c574b602a0c8d2e7df12cbcfd701f5292a04ed022782013fdcbd'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly REPOSITORY_MIGRATIONS="$SCRIPT_DIR/../../gravity-mvp/prisma/migrations"
@@ -45,9 +47,9 @@ pass backup_permission_contract
 [[ -f $FAILURE_REPORT && ! -L $FAILURE_REPORT && -r $FAILURE_REPORT && ! -w $FAILURE_REPORT ]]
 [[ $(stat -Lc '%U:%G:%a' "$FAILURE_REPORT") == root:codexbot:640 ]]
 [[ $(sha256sum -- "$FAILURE_REPORT" | awk '{print $1}') == "$FAILURE_REPORT_SHA" ]]
-jq -e '.script.sha256=="4e9fcc90d20a8ae967a8a26dd0d9cf1634b1ef2d2e7edab79e1033ab1639c0d8" and
-  .phase=="restore_verification" and .classification=="RESTORE_LEDGER_MISMATCH" and
-  .checkId=="RESTORE_LEDGER_NAMES_CHECK" and .exitCode==67 and .sourceLine==560 and
+jq -e '.script.sha256=="2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0" and
+  .phase=="postgresql_start" and .classification=="DISPOSABLE_DOCKER_FAILED" and
+  .checkId=="NONE" and .exitCode==2 and .sourceLine==563 and
   .images.acceptedImagesRetained==true and .cleanup.completed==true and
   .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and .cleanup.volumesRemaining==0 and
   .cleanup.tempFilesRemaining==0 and .productionImmutability.productionDatabaseConnections==0 and
@@ -62,14 +64,14 @@ free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
 
-bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" \
-  "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$LEDGER_TESTS" "$SCRIPT_DIR/test-package.sh"
+bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" \
+  "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$SCRIPT_DIR/test-package.sh"
 sh -n "$MIGRATION_SQL_GATE"
 sh -n "$PRISMA_LEGACY_DIFF_GATE"
 pass bash_syntax
 if command -v "$SHELLCHECK_BIN" >/dev/null 2>&1; then
-  "$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" \
-    "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$LEDGER_TESTS" "$SCRIPT_DIR/test-package.sh"
+  "$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" \
+    "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$SCRIPT_DIR/test-package.sh"
   pass shellcheck
 else
   PACKAGE_SKIP_COUNT=$((PACKAGE_SKIP_COUNT + 1))
@@ -90,6 +92,19 @@ require_fixed "$BOUNDED" 'pm_poll_until()'
 require_fixed "$PROBE" 'pm_poll_until 180 240 POLLING_DEADLINE_EXCEEDED'
 require_fixed "$PROBE" 'pm_poll_until 60 90 GATEWAY_STARTUP_TIMEOUT'
 pass polling_deadline_guards
+for evidence in POSTGRES_CONTAINER_START_CHECK POSTGRES_READINESS_CHECK \
+  POSTGRES_SERVER_VERSION_QUERY_CHECK POSTGRES_SERVER_VERSION_MATCH_CHECK \
+  POSTGRES_CONTAINER_START_FAILED POSTGRES_CONTAINER_EXITED_DURING_STARTUP \
+  POSTGRES_READINESS_TIMEOUT POSTGRES_READINESS_COMMAND_FAILED \
+  POSTGRES_VERSION_QUERY_FAILED POSTGRES_VERSION_MISMATCH; do
+  require_fixed "$POSTGRES_STARTUP" "$evidence"
+done
+require_fixed "$POSTGRES_STARTUP" '1 | 2)'
+require_fixed "$POSTGRES_STARTUP" 'PROBE_ERROR_CLASSIFICATION=NONE'
+require_fixed "$POSTGRES_STARTUP" 'Raw logs, command output, environment values, credentials, and SQL results'
+require_fixed "$PROBE" 'pm_postgres_wait_readiness 90 120'
+require_fixed "$PROBE" 'pm_postgres_wait_version server_version "$POSTGRES_VERSION" 30 60'
+pass postgres_startup_state_machine
 require_fixed "$PROBE" 'CLEANUP_GLOBAL_DEADLINE=$((SECONDS + 300))'
 for evidence in CONTAINER_REMOVAL_TIMEOUT NETWORK_REMOVAL_TIMEOUT VOLUME_REMOVAL_TIMEOUT TEMP_REMOVAL_TIMEOUT CLEANUP_GLOBAL_DEADLINE_EXCEEDED; do
   rg -F "$evidence" "$PROBE" "$BOUNDED" >/dev/null
@@ -140,6 +155,15 @@ ledger_output=$("$LEDGER_TESTS")
   $ledger_output == *'DATABASE_CONNECTED=NO'* ]]
 [[ $(grep -c '=PASS$' <<<"$ledger_output") -eq 23 ]]
 pass ledger_verification_regression
+postgres_startup_output=$("$POSTGRES_STARTUP_TESTS")
+[[ $postgres_startup_output == *'POSTGRES_STARTUP_TEST_COUNT=22'* && \
+  $postgres_startup_output == *'PREVIOUS_FAILURE=REPRODUCED'* && \
+  $postgres_startup_output == *'CORRECTED_FIXTURE=PASS'* && \
+  $postgres_startup_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $postgres_startup_output == *'DOCKER_EXECUTED=NO'* && \
+  $postgres_startup_output == *'DATABASE_CONNECTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$postgres_startup_output") -eq 23 ]]
+pass postgres_startup_regression
 
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
 [[ $migration_gate_output == MIGRATION_SQL_GATE=PASS && $(wc -l <"$MIGRATION_SQL_BINDINGS") -eq 8 ]]
@@ -173,10 +197,11 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:3b19b9a50c1e5165336e901ee0c3b5c657f588eebb29a3dca77c1d55359992d0" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:4429c3673183ea54090cb65c1c4b30104e5071648c136abaa6db54405f55aaa8" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:e490cf4aadeb4e3471dd6fe846ade5cd1981a9bae5a0ac6edd3d8cc2de7b5288" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:5bfaeac3722b8187f83db2bb0b9eabf48eae4b2d67cdae9b63f8e861affb1a30" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f" \
+  "postgres-startup.sh:POSTGRES_STARTUP_SHA256:4c48fc4158bb571a53d82418c80bd08a4a1ebc66ba9ab73bed8478d518095df2" \
   "migration-sql-gate.sh:MIGRATION_SQL_GATE_SHA256:25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f" \
   "migration-sql-bindings.txt:MIGRATION_SQL_BINDINGS_SHA256:9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f" \
   "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8" \
@@ -264,6 +289,16 @@ for evidence in RESTORE_LEDGER_COUNT_MISMATCH RESTORE_LEDGER_DUPLICATE_NAME REST
   RESTORE_REPRESENTATIVE_CHECK_FAILED RESTORE_QUERY_FAILED DISPOSABLE_CONTAINER_UNAVAILABLE; do
   require_fixed "$DIAGNOSTICS" "$evidence"
 done
+for evidence in POSTGRES_CONTAINER_START_FAILED POSTGRES_CONTAINER_EXITED_DURING_STARTUP \
+  POSTGRES_READINESS_TIMEOUT POSTGRES_READINESS_COMMAND_FAILED POSTGRES_VERSION_QUERY_FAILED \
+  POSTGRES_VERSION_MISMATCH POSTGRES_CONTAINER_START_CHECK POSTGRES_READINESS_CHECK \
+  POSTGRES_SERVER_VERSION_QUERY_CHECK POSTGRES_SERVER_VERSION_MATCH_CHECK; do
+  require_fixed "$DIAGNOSTICS" "$evidence"
+done
+for evidence in 'postgresStartup:{status:$postgresStatus' 'rawLogsCaptured:false' \
+  'environmentValuesCaptured:false' 'credentialsCaptured:false' 'commandArgumentsCaptured:false'; do
+  require_fixed "$DIAGNOSTICS" "$evidence"
+done
 pass failure_diagnostics
 require_fixed "$DIAGNOSTICS" 'ISOLATED_PROBE_FAILED'
 require_fixed "$PROBE" 'DIAGNOSTICS_LOADED=true'
@@ -301,18 +336,31 @@ jq -e '.schemaVersion==1 and .incident=="RESTORE_LEDGER_NAMES_CHECK" and
   .repair.preparedScriptSha256=="2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0" and
   .repair.rootProbeRerun==false and .safety.productionMutationNow==false' \
   "$SCRIPT_DIR/ledger-failure-forensic.json" >/dev/null
+jq -e '.schemaVersion==1 and .incident=="POSTGRESQL_START_FAILURE" and
+  .failedAttempt.failureReportSha256=="4645c6aa3810c574b602a0c8d2e7df12cbcfd701f5292a04ed022782013fdcbd" and
+  .failedAttempt.sourceLine==563 and .failedAttempt.exitCode==2 and
+  .sourceMapping.exactFirstFailedOperation=="SERVER_VERSION_QUERY" and
+  .sourceMapping.containerStartReturnedSuccess==true and
+  .sourceMapping.readinessPollReturnedSuccess==true and
+  .sourceMapping.containerStateRecorded==false and
+  .sourceMapping.underlyingCauseProvable==false and
+  .repair.preparedScriptSha256=="0aeb46c3f285c680a23c368e1bc95071bd26758bbcb3d6f7b301c6b82f7c49ee" and
+  .repair.rootProbeRerun==false and .safety.dockerExecutionNow==false and
+  .safety.productionDatabaseConnectedNow==false' \
+  "$SCRIPT_DIR/postgres-startup-forensic.json" >/dev/null
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0" and
-  .rootProbe.runtimeArtifactBindingCount==9 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
+  .rootProbe.sha256=="0aeb46c3f285c680a23c368e1bc95071bd26758bbcb3d6f7b301c6b82f7c49ee" and
+  .rootProbe.runtimeArtifactBindingCount==10 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
-  (.runtimeArtifactBindings|length)==9 and
+  (.runtimeArtifactBindings|length)==10 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="3b19b9a50c1e5165336e901ee0c3b5c657f588eebb29a3dca77c1d55359992d0" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="4429c3673183ea54090cb65c1c4b30104e5071648c136abaa6db54405f55aaa8" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="e490cf4aadeb4e3471dd6fe846ade5cd1981a9bae5a0ac6edd3d8cc2de7b5288" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="5bfaeac3722b8187f83db2bb0b9eabf48eae4b2d67cdae9b63f8e861affb1a30" and
   .runtimeArtifactBindings["restore-verification.sh"]=="0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f" and
+  .runtimeArtifactBindings["postgres-startup.sh"]=="4c48fc4158bb571a53d82418c80bd08a4a1ebc66ba9ab73bed8478d518095df2" and
   .restoreVerification.failureReportSha256=="c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de" and
   .restoreVerification.exactCause=="PRISMA_USER_MODEL_MAPPED_TO_USERS" and
   .ledgerVerificationRepair.failureReportSha256=="9197be647171a35553189a0526a2d6e205442f15965f5ce0ae1c8a1934bd73bd" and
@@ -325,6 +373,15 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .ledgerVerificationRepair.canonicalSortedLedgerNamesSha256=="d879288b3d8f4d38c1de8565987c231db32ddb322c20a6329519028d8b5a8114" and
   .ledgerVerificationRepair.repositoryToLedgerCount==8 and .ledgerVerificationRepair.ledgerToRepositoryCount==1 and
   .ledgerVerificationRepair.rootProbeRerun==false and
+  .postgresStartupRepair.failureReportSha256=="4645c6aa3810c574b602a0c8d2e7df12cbcfd701f5292a04ed022782013fdcbd" and
+  .postgresStartupRepair.sourceLine==563 and .postgresStartupRepair.exitCode==2 and
+  .postgresStartupRepair.exactFirstFailedOperation=="SERVER_VERSION_QUERY" and
+  .postgresStartupRepair.containerStartReturnedSuccess==true and
+  .postgresStartupRepair.readinessPollReturnedSuccess==true and
+  .postgresStartupRepair.containerStateEvidence=="NOT_RECORDED" and
+  .postgresStartupRepair.underlyingCause=="INSUFFICIENT_SAFE_EVIDENCE" and
+  .postgresStartupRepair.regressionScenarioCount==22 and
+  .postgresStartupRepair.rootProbeRerun==false and
   .migrationValidation.exactSqlBindingCount==8 and
   .migrationValidation.prismaDiffEmpty==false and
   .migrationValidation.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
@@ -343,5 +400,5 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\n' \
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=22\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"

@@ -33,6 +33,9 @@ personal_max_stage8b1i_safe_error() {
       RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
       RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
       RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | \
+      POSTGRES_CONTAINER_START_FAILED | POSTGRES_CONTAINER_EXITED_DURING_STARTUP | \
+      POSTGRES_READINESS_TIMEOUT | POSTGRES_READINESS_COMMAND_FAILED | \
+      POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_MISMATCH | \
       RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
       RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -42,7 +45,9 @@ personal_max_stage8b1i_safe_error() {
 
 personal_max_stage8b1i_safe_check_id() {
   case ${1:-} in
-    NONE | RESTORE_LEDGER_FINISHED_CHECK | RESTORE_LEDGER_FAILED_CHECK | \
+    NONE | POSTGRES_CONTAINER_START_CHECK | POSTGRES_READINESS_CHECK | \
+      POSTGRES_SERVER_VERSION_QUERY_CHECK | POSTGRES_SERVER_VERSION_MATCH_CHECK | \
+      RESTORE_LEDGER_FINISHED_CHECK | RESTORE_LEDGER_FAILED_CHECK | \
       RESTORE_LEDGER_NAMES_CHECK | RESTORE_CATALOG_TABLES_CHECK | \
       RESTORE_CATALOG_INDEXES_CHECK | RESTORE_CATALOG_CONSTRAINTS_CHECK | \
       RESTORE_REQUIRED_PRISMA_MIGRATIONS_RELATION_CHECK | \
@@ -80,6 +85,10 @@ personal_max_stage8b1i_render_failure() {
   local ledger_name_count ledger_unique_count ledger_duplicate_count ledger_empty_count ledger_invalid_format_count ledger_unsafe_count
   local ledger_repository_to_count ledger_to_repository_count ledger_names_sha ledger_attestation_sha ledger_naming_classification value
   local observed_production_head observed_production_status_sha
+  local postgres_status postgres_operation postgres_state postgres_health postgres_exit_json
+  local postgres_readiness_attempts postgres_readiness_transient postgres_readiness_last_json
+  local postgres_version_attempts postgres_version_transient postgres_version_last_json
+  local postgres_version_matched postgres_elapsed
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
   [[ $source_line =~ ^[0-9]+$ ]] || source_line=0
   safe_phase=${PROBE_PHASE:-bootstrap_complete}
@@ -142,6 +151,34 @@ personal_max_stage8b1i_render_failure() {
   [[ $observed_production_head =~ ^[0-9a-f]{40}$ ]] || observed_production_head=not_observed
   observed_production_status_sha=${OBSERVED_PRODUCTION_STATUS_V2_RAW_SHA256:-not_observed}
   [[ $observed_production_status_sha =~ ^[0-9a-f]{64}$ ]] || observed_production_status_sha=not_observed
+  postgres_status=${POSTGRES_STARTUP_STATUS:-NOT_OBSERVED}
+  case $postgres_status in
+    NOT_OBSERVED | CONTAINER_STARTING | CONTAINER_STARTED | CONTAINER_START_FAILED | \
+      READINESS_POLLING | READINESS_CONFIRMED | READINESS_OBSERVATION_FAILED | \
+      READINESS_COMMAND_FAILED | READINESS_TIMEOUT | CONTAINER_EXITED_DURING_STARTUP | \
+      VERSION_QUERY_POLLING | VERSION_OBSERVATION_FAILED | VERSION_QUERY_FAILED | \
+      VERSION_MISMATCH | READY) ;;
+    *) postgres_status=NOT_OBSERVED ;;
+  esac
+  postgres_operation=${POSTGRES_STARTUP_LAST_OPERATION:-NOT_OBSERVED}
+  case $postgres_operation in NOT_OBSERVED | container_start | readiness_poll | server_version_query) ;; *) postgres_operation=NOT_OBSERVED ;; esac
+  postgres_state=${POSTGRES_CONTAINER_STATE:-not_observed}
+  case $postgres_state in not_observed | created | running | restarting | removing | paused | exited | dead) ;; *) postgres_state=not_observed ;; esac
+  postgres_health=${POSTGRES_CONTAINER_HEALTH:-not_observed}
+  case $postgres_health in not_observed | none | starting | healthy | unhealthy) ;; *) postgres_health=not_observed ;; esac
+  if [[ ${POSTGRES_CONTAINER_EXIT_CODE:-} =~ ^[0-9]+$ ]]; then postgres_exit_json=${POSTGRES_CONTAINER_EXIT_CODE}; else postgres_exit_json='"not_observed"'; fi
+  postgres_readiness_attempts=${POSTGRES_READINESS_ATTEMPTS:-0}
+  postgres_readiness_transient=${POSTGRES_READINESS_TRANSIENT_COUNT:-0}
+  postgres_version_attempts=${POSTGRES_VERSION_QUERY_ATTEMPTS:-0}
+  postgres_version_transient=${POSTGRES_VERSION_TRANSIENT_COUNT:-0}
+  postgres_elapsed=${POSTGRES_STARTUP_ELAPSED_SECONDS:-0}
+  for value in postgres_readiness_attempts postgres_readiness_transient postgres_version_attempts postgres_version_transient postgres_elapsed; do
+    [[ ${!value} =~ ^[0-9]+$ ]] || printf -v "$value" '%s' 0
+  done
+  if [[ ${POSTGRES_READINESS_LAST_EXIT:-} =~ ^[0-9]+$ ]]; then postgres_readiness_last_json=${POSTGRES_READINESS_LAST_EXIT}; else postgres_readiness_last_json='"not_observed"'; fi
+  if [[ ${POSTGRES_VERSION_LAST_EXIT:-} =~ ^[0-9]+$ ]]; then postgres_version_last_json=${POSTGRES_VERSION_LAST_EXIT}; else postgres_version_last_json='"not_observed"'; fi
+  postgres_version_matched=${POSTGRES_VERSION_MATCHED:-false}
+  [[ $postgres_version_matched == true ]] || postgres_version_matched=false
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
     printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH_UNSAFE\n' "$safe_phase" "$original_exit" >&2
@@ -161,6 +198,16 @@ personal_max_stage8b1i_render_failure() {
     --arg acceptedProductionStatusV2RawSha256 "$ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256" \
     --arg observedProductionHead "$observed_production_head" \
     --arg observedProductionStatusV2RawSha256 "$observed_production_status_sha" \
+    --arg postgresStatus "$postgres_status" --arg postgresOperation "$postgres_operation" \
+    --arg postgresContainerState "$postgres_state" --arg postgresContainerHealth "$postgres_health" \
+    --argjson postgresContainerExitCode "$postgres_exit_json" \
+    --argjson postgresReadinessAttempts "$postgres_readiness_attempts" \
+    --argjson postgresReadinessTransientCount "$postgres_readiness_transient" \
+    --argjson postgresReadinessLastExit "$postgres_readiness_last_json" \
+    --argjson postgresVersionQueryAttempts "$postgres_version_attempts" \
+    --argjson postgresVersionTransientCount "$postgres_version_transient" \
+    --argjson postgresVersionLastExit "$postgres_version_last_json" \
+    --argjson postgresVersionMatched "$postgres_version_matched" --argjson postgresElapsedSeconds "$postgres_elapsed" \
     --argjson ledgerNameCount "$ledger_name_count" --argjson ledgerUniqueCount "$ledger_unique_count" \
     --argjson ledgerDuplicateCount "$ledger_duplicate_count" --argjson ledgerEmptyCount "$ledger_empty_count" \
     --argjson ledgerInvalidFormatCount "$ledger_invalid_format_count" --argjson ledgerUnsafeCount "$ledger_unsafe_count" \
@@ -185,6 +232,14 @@ personal_max_stage8b1i_render_failure() {
     '{schemaVersion:1,mode:"ISOLATED_RELEASE_PROOF_FAILURE",generatedAt:$generatedAt,
       script:{sha256:$scriptSha256,checksumBound:true},phase:$phase,safeCommandClass:$safeCommandClass,
       classification:$classification,checkId:$checkId,exitCode:$exitCode,sourceLine:$sourceLine,
+      postgresStartup:{status:$postgresStatus,lastOperation:$postgresOperation,
+        containerState:$postgresContainerState,containerExitCode:$postgresContainerExitCode,
+        healthStatus:$postgresContainerHealth,readinessAttempts:$postgresReadinessAttempts,
+        readinessTransientCount:$postgresReadinessTransientCount,readinessLastExit:$postgresReadinessLastExit,
+        versionQueryAttempts:$postgresVersionQueryAttempts,versionTransientCount:$postgresVersionTransientCount,
+        versionLastExit:$postgresVersionLastExit,versionMatched:$postgresVersionMatched,
+        elapsedSeconds:$postgresElapsedSeconds,rawLogsCaptured:false,environmentValuesCaptured:false,
+        credentialsCaptured:false,commandArgumentsCaptured:false},
       ledgerDiagnostics:{ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,
         ledgerDuplicateCount:$ledgerDuplicateCount,ledgerEmptyNameCount:$ledgerEmptyCount,
         ledgerInvalidFormatCount:$ledgerInvalidFormatCount,ledgerUnsafeNameCount:$ledgerUnsafeCount,

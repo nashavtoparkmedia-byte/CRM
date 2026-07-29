@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "stage": "8B1I",
+  "incident": "POSTGRESQL_START_FAILURE",
+  "failedAttempt": {
+    "scriptSha256": "2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0",
+    "failureReport": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0.json",
+    "failureReportSha256": "4645c6aa3810c574b602a0c8d2e7df12cbcfd701f5292a04ed022782013fdcbd",
+    "phase": "postgresql_start",
+    "safeCommandClass": "disposable_postgresql",
+    "classification": "DISPOSABLE_DOCKER_FAILED",
+    "checkId": "NONE",
+    "exitCode": 2,
+    "sourceLine": 563,
+    "cleanupCompleted": true,
+    "residualObjects": {"containers": 0, "networks": 0, "volumes": 0, "tempFiles": 0},
+    "acceptedImagesRetained": true
+  },
+  "sourceMapping": {
+    "exactFirstFailedOperation": "SERVER_VERSION_QUERY",
+    "operationClass": "docker_exec_psql",
+    "containerStartReturnedSuccess": true,
+    "readinessPollReturnedSuccess": true,
+    "serverVersionQueryExitCode": 2,
+    "versionMatchAssertionReached": false,
+    "containerStateRecorded": false,
+    "containerExitCodeRecorded": false,
+    "containerHealthRecorded": false,
+    "underlyingCauseProvable": false,
+    "transientOrDeterministicProvable": false,
+    "evidenceBoundary": "The report proves the first failed operation and exit code, but contains no container state, health, or per-attempt readiness evidence."
+  },
+  "diagnosis": {
+    "dockerRunFailure": false,
+    "readinessPollFailure": false,
+    "serverVersionQueryFailure": true,
+    "wrapperErrexitDefectProven": false,
+    "insufficientSafeDiagnostics": true,
+    "staleTransientClassificationPossibleInOldImplementation": true,
+    "previousClassificationWasGeneric": true,
+    "previousCheckIdWasNone": true,
+    "rawLogsNeededForRepair": false
+  },
+  "repair": {
+    "preparedScriptSha256": "0aeb46c3f285c680a23c368e1bc95071bd26758bbcb3d6f7b301c6b82f7c49ee",
+    "runtimeHelper": "postgres-startup.sh",
+    "readinessExitOneAndTwoAreTransient": true,
+    "readinessRequiresExitZero": true,
+    "readinessBoundedByAttemptsAndElapsedDeadline": true,
+    "containerExitDetectedDuringPolling": true,
+    "serverVersionExitOneAndTwoRetriedWithinBound": true,
+    "transientClassificationClearedAfterSuccess": true,
+    "sanitizedContainerStateRecorded": true,
+    "rawLogsCaptured": false,
+    "environmentValuesCaptured": false,
+    "credentialsCaptured": false,
+    "commandArgumentsCaptured": false,
+    "rootProbeRerun": false
+  },
+  "safety": {
+    "rootExecutionNow": false,
+    "dockerExecutionNow": false,
+    "productionDatabaseConnectedNow": false,
+    "productionMutationNow": false,
+    "migration": false,
+    "deploy": false,
+    "restart": false,
+    "maxContacted": false,
+    "providerAction": false,
+    "stage8B2Started": false
+  }
+}

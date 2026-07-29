@@ -39,6 +39,9 @@ pm_error_classification_is_safe() {
       RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
       RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
       RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | \
+      POSTGRES_CONTAINER_START_FAILED | POSTGRES_CONTAINER_EXITED_DURING_STARTUP | \
+      POSTGRES_READINESS_TIMEOUT | POSTGRES_READINESS_COMMAND_FAILED | \
+      POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_MISMATCH | \
       RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
       RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -279,6 +282,12 @@ pm_validate_success_report() {
     (.script.sha256|test("^[0-9a-f]{64}$")) and .script.checksumBound==true and
     (.bindings.backupReportSha256|test("^[0-9a-f]{64}$")) and
     (.bindings.dumpSha256|test("^[0-9a-f]{64}$")) and .bindings.dumpBytes==45284314 and
+    .postgresStartup.status=="READY" and .postgresStartup.containerState=="running" and
+    .postgresStartup.containerExitCode==0 and .postgresStartup.readinessAttempts>0 and
+    .postgresStartup.readinessLastExit==0 and .postgresStartup.versionQueryAttempts>0 and
+    .postgresStartup.versionLastExit==0 and .postgresStartup.versionMatched==true and
+    .postgresStartup.rawLogsCaptured==false and .postgresStartup.environmentValuesCaptured==false and
+    .postgresStartup.credentialsCaptured==false and
     .restore.FULL_RESTORE_PROOF=="PASS" and .restore.objectCount==581 and
     .restore.requiredRelations==["_prisma_migrations","users","Contact","Chat"] and
     .restore.ledgerNameCount==46 and .restore.ledgerUniqueCount==46 and

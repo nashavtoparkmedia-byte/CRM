@@ -28,10 +28,11 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='3b19b9a50c1e5165336e901ee0c3b5c657f588eebb29a3dca77c1d55359992d0'
-readonly BOUNDED_OPERATIONS_SHA256='4429c3673183ea54090cb65c1c4b30104e5071648c136abaa6db54405f55aaa8'
+readonly FAILURE_DIAGNOSTICS_SHA256='e490cf4aadeb4e3471dd6fe846ade5cd1981a9bae5a0ac6edd3d8cc2de7b5288'
+readonly BOUNDED_OPERATIONS_SHA256='5bfaeac3722b8187f83db2bb0b9eabf48eae4b2d67cdae9b63f8e861affb1a30'
 readonly PROBE_OUTPUT_HELPERS_SHA256='da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11'
 readonly RESTORE_VERIFICATION_SHA256='0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f'
+readonly POSTGRES_STARTUP_SHA256='4c48fc4158bb571a53d82418c80bd08a4a1ebc66ba9ab73bed8478d518095df2'
 readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -331,7 +332,7 @@ bootstrap_verify_runtime_path() {
   local __pm_name=${1:-} __pm_path pm_result_real_path
   case $__pm_name in
     isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
-      probe-output-helpers.sh | restore-verification.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
+      probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
       prisma-legacy-diff-gate.sh | synthetic-scraper-harness.js | gateway-client-harness.js) ;;
     *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
   esac
@@ -386,6 +387,7 @@ bootstrap_verify_runtime_artifact failure-diagnostics.sh "$FAILURE_DIAGNOSTICS_S
 bootstrap_verify_runtime_artifact bounded-operations.sh "$BOUNDED_OPERATIONS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact probe-output-helpers.sh "$PROBE_OUTPUT_HELPERS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact restore-verification.sh "$RESTORE_VERIFICATION_SHA256" || exit $?
+bootstrap_verify_runtime_artifact postgres-startup.sh "$POSTGRES_STARTUP_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-gate.sh "$MIGRATION_SQL_GATE_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-bindings.txt "$MIGRATION_SQL_BINDINGS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh "$PRISMA_LEGACY_DIFF_GATE_SHA256" || exit $?
@@ -404,6 +406,8 @@ DIAGNOSTICS_LOADED=true
 source "$PACKAGE_ROOT/bounded-operations.sh"
 # shellcheck source=release/personal-max-stage8b1i/probe-output-helpers.sh
 source "$PACKAGE_ROOT/probe-output-helpers.sh"
+# shellcheck source=release/personal-max-stage8b1i/postgres-startup.sh
+source "$PACKAGE_ROOT/postgres-startup.sh"
 # shellcheck source=release/personal-max-stage8b1i/restore-verification.sh
 source "$PACKAGE_ROOT/restore-verification.sh"
 
@@ -550,19 +554,13 @@ pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER
 pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker volume create --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" "$SPOOL_VOLUME" >/dev/null
 
-postgres_ready() {
-  pm_run_bounded docker_disposable 30 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
-    docker exec "$PG_CONTAINER" pg_isready -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1
-}
-
 pm_enter_phase postgresql_start docker_disposable
-pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_postgres_start_container \
   docker run -d --name "$PG_CONTAINER" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
-  --env-file "$TMP/postgres.env" -v "$PG_VOLUME:/var/lib/postgresql/data" -v "$DUMP_PATH:/backup/database.dump:ro" "$POSTGRES_IMAGE" >/dev/null
-pm_poll_until 90 120 POLLING_DEADLINE_EXCEEDED postgres_ready
-pm_capture_bounded server_version disposable_postgresql 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
-  docker exec "$PG_CONTAINER" psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" -c 'SHOW server_version'
-[[ $server_version == "$POSTGRES_VERSION" ]]
+  --env-file "$TMP/postgres.env" -v "$PG_VOLUME:/var/lib/postgresql/data" -v "$DUMP_PATH:/backup/database.dump:ro" "$POSTGRES_IMAGE"
+pm_postgres_wait_readiness 90 120
+pm_postgres_wait_version server_version "$POSTGRES_VERSION" 30 60
+RESTORE_CHECK_ID=NONE
 
 pm_enter_phase backup_restore backup_validation
 pm_write_bounded "$TMP/dump.list" backup_validation 120 RESTORE_LIST_TIMEOUT RESTORE_LIST_FAILED \
@@ -801,6 +799,17 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   --argjson repositoryToLedgerCount "$LEDGER_REPOSITORY_TO_LEDGER_COUNT" \
   --argjson ledgerToRepositoryCount "$LEDGER_TO_REPOSITORY_COUNT" \
   --argjson acceptedHistoricalNames "$LEDGER_ACCEPTED_HISTORICAL_NAMES_JSON" \
+  --arg postgresStartupStatus "$POSTGRES_STARTUP_STATUS" --arg postgresContainerState "$POSTGRES_CONTAINER_STATE" \
+  --arg postgresContainerHealth "$POSTGRES_CONTAINER_HEALTH" \
+  --argjson postgresContainerExitCode "$POSTGRES_CONTAINER_EXIT_CODE" \
+  --argjson postgresReadinessAttempts "$POSTGRES_READINESS_ATTEMPTS" \
+  --argjson postgresReadinessTransientCount "$POSTGRES_READINESS_TRANSIENT_COUNT" \
+  --argjson postgresReadinessLastExit "$POSTGRES_READINESS_LAST_EXIT" \
+  --argjson postgresVersionQueryAttempts "$POSTGRES_VERSION_QUERY_ATTEMPTS" \
+  --argjson postgresVersionTransientCount "$POSTGRES_VERSION_TRANSIENT_COUNT" \
+  --argjson postgresVersionLastExit "$POSTGRES_VERSION_LAST_EXIT" \
+  --argjson postgresVersionMatched "$POSTGRES_VERSION_MATCHED" \
+  --argjson postgresStartupElapsedSeconds "$POSTGRES_STARTUP_ELAPSED_SECONDS" \
   --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
   --argjson migrationSeconds "$migration_seconds" --argjson migrationDurations "$migration_durations" \
   --argjson representativeCounts "$(<"$TMP/representative-counts.json")" \
@@ -816,6 +825,13 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   --argjson freeBytesAfterCleanup "$FREE_BYTES_AFTER_CLEANUP" \
   '{schemaVersion:1,mode:"ISOLATED_RELEASE_PROOF",generatedAt:$generatedAt,script:{sha256:$scriptSha256,checksumBound:true},
     bindings:{backupReportSha256:$backupReportSha256,dumpSha256:$dumpSha256,dumpBytes:$dumpBytes},
+    postgresStartup:{status:$postgresStartupStatus,containerState:$postgresContainerState,
+      containerExitCode:$postgresContainerExitCode,healthStatus:$postgresContainerHealth,
+      readinessAttempts:$postgresReadinessAttempts,readinessTransientCount:$postgresReadinessTransientCount,
+      readinessLastExit:$postgresReadinessLastExit,versionQueryAttempts:$postgresVersionQueryAttempts,
+      versionTransientCount:$postgresVersionTransientCount,versionLastExit:$postgresVersionLastExit,
+      versionMatched:$postgresVersionMatched,elapsedSeconds:$postgresStartupElapsedSeconds,
+      rawLogsCaptured:false,environmentValuesCaptured:false,credentialsCaptured:false},
     restore:{FULL_RESTORE_PROOF:"PASS",objectCount:$objectCount,ledgerFinished:$beforeFinished,ledgerFailed:0,
       ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,ledgerDuplicateCount:$ledgerDuplicateCount,
       ledgerInvalidFormatCount:$ledgerInvalidFormatCount,ledgerUnsafeNameCount:$ledgerUnsafeNameCount,
