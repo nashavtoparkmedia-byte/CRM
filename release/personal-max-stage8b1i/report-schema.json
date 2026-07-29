@@ -86,10 +86,10 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
-          "classification": {"type": "string", "description": "Privacy-safe failure classification, including INVALID_OUT_PARAMETER or OUTPUT_TARGET_SCOPE_COLLISION for output-contract failures."},
+          "classification": {"type": "string", "description": "Privacy-safe output-contract or migration-preflight classification; raw commands, stderr, URLs, credentials, SQL, and business data are excluded."},
           "checkId": {
             "enum": [
               "NONE", "POSTGRES_CONTAINER_START_CHECK", "POSTGRES_READINESS_CHECK",
@@ -101,13 +101,46 @@
               "RESTORE_REQUIRED_USERS_RELATION_CHECK", "RESTORE_REQUIRED_CONTACT_RELATION_CHECK",
               "RESTORE_REQUIRED_CHAT_RELATION_CHECK", "RESTORE_REPRESENTATIVE_MIGRATIONS_CHECK",
               "RESTORE_REPRESENTATIVE_USER_CHECK", "RESTORE_REPRESENTATIVE_CONTACT_CHECK",
-              "RESTORE_REPRESENTATIVE_CHAT_CHECK", "RESTORE_REPORT_RENDER_CHECK"
+              "RESTORE_REPRESENTATIVE_CHAT_CHECK", "RESTORE_REPORT_RENDER_CHECK",
+              "MIGRATION_DATABASE_URL_CONSTRUCTION_CHECK", "MIGRATION_INVENTORY_CHECK",
+              "MIGRATION_PENDING_SET_CHECK", "MIGRATION_REPOSITORY_COUNT_CHECK",
+              "MIGRATION_APPLIED_ONLY_CHECK", "MIGRATION_RUNTIME_BINDING_CHECK",
+              "MIGRATION_SQL_RUNNER_CREATE_CHECK", "MIGRATION_SQL_RUNNER_IDENTITY_CHECK",
+              "MIGRATION_SQL_RUNNER_START_CHECK", "MIGRATION_POSTGRES_ALIAS_CHECK",
+              "MIGRATION_SHADOW_DATABASE_CREATE_CHECK", "MIGRATION_PRISMA_RUNNER_CREATE_CHECK",
+              "MIGRATION_PRISMA_RUNNER_IDENTITY_CHECK", "MIGRATION_PRISMA_EXECUTABLE_CHECK",
+              "MIGRATION_PRISMA_DEPLOY_CHECK", "MIGRATION_POST_LEDGER_CHECK",
+              "MIGRATION_POST_SCHEMA_CHECK", "MIGRATION_PRISMA_DIFF_CHECK"
             ]
           },
           "exitCode": {"type": "integer", "minimum": 1},
           "postgresStartup": {
             "type": "object",
             "required": ["status", "lastOperation", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "expectedVersionText", "expectedVersionNum", "observedVersionNum", "observedMajor", "observedMinor", "observedPatch", "versionClassification", "versionOutputCategory", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured", "commandArgumentsCaptured"]
+          },
+          "migrationPreflight": {
+            "type": "object",
+            "required": ["checkId", "substep", "runnerRole", "commandCategory", "executableCategory", "commandStarted", "attemptCount", "elapsedSeconds", "originalExitCode", "containerStateCategory", "primaryClassification", "rawStderrCaptured", "rawCommandCaptured", "environmentValuesCaptured", "databaseUrlCaptured", "credentialsCaptured", "sqlCaptured", "businessDataCaptured"],
+            "properties": {
+              "checkId": {"oneOf": [{"const": "NONE"}, {"type": "string", "pattern": "^MIGRATION_[A-Z0-9_]+_CHECK$"}]},
+              "substep": {"type": "string"},
+              "runnerRole": {"enum": ["not_observed", "host_validator", "migration_inventory", "sql_gate", "postgres", "prisma_deploy", "prisma_diff"]},
+              "commandCategory": {"enum": ["not_observed", "internal_validator", "filesystem_binding", "docker_create", "docker_start", "docker_inspect", "docker_exec", "prisma", "sql_gate"]},
+              "executableCategory": {"enum": ["not_observed", "shell_builtin", "coreutils", "docker_cli", "posix_shell", "prisma_cli", "postgres_client"]},
+              "commandStarted": {"type": "boolean"},
+              "attemptCount": {"type": "integer", "minimum": 0},
+              "elapsedSeconds": {"type": "integer", "minimum": 0},
+              "originalExitCode": {"oneOf": [{"type": "integer", "minimum": 0, "maximum": 255}, {"const": "not_observed"}]},
+              "containerStateCategory": {"enum": ["not_observed", "command_not_started", "created", "running", "exited", "unavailable"]},
+              "primaryClassification": {"type": "string", "pattern": "^(NONE|MIGRATION_[A-Z0-9_]+|PRISMA_DIFF_(TIMEOUT|FAILED))$"},
+              "rawStderrCaptured": {"const": false},
+              "rawCommandCaptured": {"const": false},
+              "environmentValuesCaptured": {"const": false},
+              "databaseUrlCaptured": {"const": false},
+              "credentialsCaptured": {"const": false},
+              "sqlCaptured": {"const": false},
+              "businessDataCaptured": {"const": false}
+            }
           },
           "ledgerDiagnostics": {
             "type": "object",

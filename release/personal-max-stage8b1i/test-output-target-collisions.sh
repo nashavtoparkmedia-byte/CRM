@@ -219,7 +219,7 @@ pass report_render_handoff
 
 RUNTIME_FILES=(
   isolated-release-probe.sh bounded-operations.sh probe-output-helpers.sh postgres-startup.sh
-  restore-verification.sh failure-diagnostics.sh migration-sql-gate.sh prisma-legacy-diff-gate.sh
+  restore-verification.sh migration-preflight.sh failure-diagnostics.sh migration-sql-gate.sh prisma-legacy-diff-gate.sh
 )
 runtime_paths=()
 for runtime_file in "${RUNTIME_FILES[@]}"; do runtime_paths+=("$SCRIPT_DIR/$runtime_file"); done
@@ -257,6 +257,7 @@ OUTPUT_LAYER_FILES=(
   "$SCRIPT_DIR/probe-output-helpers.sh"
   "$SCRIPT_DIR/postgres-startup.sh"
   "$SCRIPT_DIR/restore-verification.sh"
+  "$SCRIPT_DIR/migration-preflight.sh"
 )
 if rg -n '\blocal\b[^\n]*(pm_result_|restore_result_)' "${OUTPUT_LAYER_FILES[@]}" >/dev/null; then exit 1; fi
 if rg -n 'pm_capture_bounded[[:space:]]+__pm_' "${OUTPUT_LAYER_FILES[@]}" >/dev/null; then exit 1; fi

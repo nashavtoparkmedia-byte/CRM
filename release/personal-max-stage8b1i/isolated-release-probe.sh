@@ -29,12 +29,13 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='5e77dd22afcb11ba94568ba725bbb6450f9458e098818498ad9c7e80731a06a2'
-readonly BOUNDED_OPERATIONS_SHA256='501f7c17db28ce3d435bcb34fc540b32ad9fcab382e434cbfcc8ef483364f30d'
+readonly FAILURE_DIAGNOSTICS_SHA256='781be69af6211b2911ca23ff293d6254d9af1ef53f89a186426f3c823469fe92'
+readonly BOUNDED_OPERATIONS_SHA256='257dd7834b6dc558428b7a2dd028006ff4098541fcc7481f6cc93d88edeee707'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
-readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
+readonly MIGRATION_PREFLIGHT_SHA256='08909328360f9ebea4b66716509f691334c601d58c1934ae32d3fdc26308f614'
+readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
 readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e'
@@ -366,7 +367,8 @@ bootstrap_verify_runtime_path() {
   local __pm_name=${1:-} __pm_path __pm_real_path
   case $__pm_name in
     isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
-      probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
+      probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-preflight.sh | \
+      migration-sql-gate.sh | migration-sql-bindings.txt | \
       prisma-legacy-diff-gate.sh | synthetic-scraper-harness.js | gateway-client-harness.js) ;;
     *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
   esac
@@ -422,6 +424,7 @@ bootstrap_verify_runtime_artifact bounded-operations.sh "$BOUNDED_OPERATIONS_SHA
 bootstrap_verify_runtime_artifact probe-output-helpers.sh "$PROBE_OUTPUT_HELPERS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact restore-verification.sh "$RESTORE_VERIFICATION_SHA256" || exit $?
 bootstrap_verify_runtime_artifact postgres-startup.sh "$POSTGRES_STARTUP_SHA256" || exit $?
+bootstrap_verify_runtime_artifact migration-preflight.sh "$MIGRATION_PREFLIGHT_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-gate.sh "$MIGRATION_SQL_GATE_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-bindings.txt "$MIGRATION_SQL_BINDINGS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh "$PRISMA_LEGACY_DIFF_GATE_SHA256" || exit $?
@@ -442,6 +445,8 @@ source "$PACKAGE_ROOT/bounded-operations.sh"
 source "$PACKAGE_ROOT/probe-output-helpers.sh"
 # shellcheck source=release/personal-max-stage8b1i/postgres-startup.sh
 source "$PACKAGE_ROOT/postgres-startup.sh"
+# shellcheck source=release/personal-max-stage8b1i/migration-preflight.sh
+source "$PACKAGE_ROOT/migration-preflight.sh"
 # shellcheck source=release/personal-max-stage8b1i/restore-verification.sh
 source "$PACKAGE_ROOT/restore-verification.sh"
 
@@ -552,13 +557,16 @@ pm_capture_bounded postgres_image_facts docker_metadata 60 METADATA_TIMEOUT META
 pm_capture_bounded gateway_user docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker run --rm --name "$PREFIX-gateway-usercheck" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" \
   --network none --entrypoint node "$GATEWAY_IMAGE" -e 'process.stdout.write(`${process.getuid()}:${process.getgid()}`)'
+pm_capture_bounded gateway_declared_user docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+  docker image inspect --format '{{.Config.User}}' "$GATEWAY_IMAGE"
 pm_capture_bounded scraper_user docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker run --rm --name "$PREFIX-scraper-usercheck" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" \
   --network none --entrypoint node "$SCRAPER_IMAGE" -e 'process.stdout.write(`${process.getuid()}:${process.getgid()}`)'
 pm_capture_bounded postgres_version_output docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker run --rm --name "$PREFIX-postgres-version" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" \
   --network none --entrypoint postgres "$POSTGRES_IMAGE" --version
-[[ $gateway_user == 1000:1000 && $scraper_user == 1001:1001 && $postgres_version_output == *"$POSTGRES_VERSION"* ]]
+[[ $gateway_user == 1000:1000 && $gateway_declared_user =~ ^[a-zA-Z0-9:_-]+$ && \
+  $scraper_user == 1001:1001 && $postgres_version_output == *"$POSTGRES_VERSION"* ]]
 
 PG_USER="pm_${RUN_ID}"
 PG_DB="pm_${RUN_ID}"
@@ -568,8 +576,8 @@ HMAC_KEY_ID="stage8b1i-$RUN_ID"
 pm_capture_bounded HMAC_SECRET filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED openssl rand -hex 48
 ACCOUNT_A="stage8b1i-a-$RUN_ID"
 ACCOUNT_B="stage8b1i-b-$RUN_ID"
-DATABASE_URL="postgresql://$PG_USER:$PG_PASSWORD@$PG_CONTAINER:5432/$PG_DB?schema=public"
-SHADOW_DATABASE_URL="postgresql://$PG_USER:$PG_PASSWORD@$PG_CONTAINER:5432/$PG_SHADOW_DB?schema=public"
+pm_migration_build_database_url DATABASE_URL "$PG_USER" "$PG_PASSWORD" "$PG_CONTAINER" "$PG_DB"
+pm_migration_build_database_url SHADOW_DATABASE_URL "$PG_USER" "$PG_PASSWORD" "$PG_CONTAINER" "$PG_SHADOW_DB"
 printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\n' "$PG_USER" "$PG_PASSWORD" "$PG_DB" >"$TMP/postgres.env"
 printf 'DATABASE_URL=%s\nMAX_PERSONAL_GATEWAY_DATABASE_URL=%s\nMAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON={"%s":"%s"}\nMAX_PERSONAL_GATEWAY_BIND_HOST=0.0.0.0\nMAX_PERSONAL_GATEWAY_PRIVATE_NETWORK=required\nMAX_RAW_JOURNAL_ENABLED=%s,%s\nMAX_INBOUND_NORMALIZER_ENABLED=%s,%s\nMAX_SHADOW_COMPARISON_ENABLED=%s,%s\nMAX_PERSONAL_LIVE_CAPTURE_ENABLED=%s,%s\nMAX_PERSONAL_GATEWAY_WORKER_POLL_MS=100\nMAX_PERSONAL_GATEWAY_WORKER_BATCH_SIZE=100\n' \
   "$DATABASE_URL" "$DATABASE_URL" "$HMAC_KEY_ID" "$HMAC_SECRET" "$ACCOUNT_A" "$ACCOUNT_B" "$ACCOUNT_A" "$ACCOUNT_B" \
@@ -608,66 +616,132 @@ pm_write_bounded "$TMP/restore.log" backup_validation 1200 FULL_RESTORE_TIMEOUT 
 restore_seconds=$(( $(date +%s) - restore_started ))
 
 pm_enter_phase migration_preflight disposable_migration
-pm_write_bounded "$TMP/repository-migrations" disposable_migration 120 MIGRATION_INVENTORY_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_migration_write_bounded "$TMP/repository-migrations" MIGRATION_INVENTORY_CHECK repository_inventory \
+  migration_inventory docker_start docker_cli 120 MIGRATION_INVENTORY_TIMEOUT MIGRATION_INVENTORY_FAILED \
   docker run --rm --name "$PREFIX-migration-inventory" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   --entrypoint sh "$GATEWAY_IMAGE" -ceu 'for directory in /app/prisma/migrations/*; do test -d "$directory" && basename "$directory"; done | sort'
 
 pm_enter_phase restore_verification disposable_postgresql
+MIGRATION_CHECK_ID=NONE
 pm_restore_verify_database
 RESTORE_CHECK_ID=NONE
 
 pm_enter_phase migration_preflight disposable_migration
-comm -23 "$TMP/repository-migrations" "$TMP/ledger-before" >"$TMP/pending-before"
-printf '%s\n' "${EXPECTED_MIGRATIONS[@]}" | sort >"$TMP/expected-migrations"
-cmp "$TMP/expected-migrations" "$TMP/pending-before"
-[[ $(wc -l <"$TMP/repository-migrations") -eq 53 ]]
-comm -13 "$TMP/repository-migrations" "$TMP/ledger-before" >"$TMP/applied-only"
-[[ $(<"$TMP/applied-only") == "$ACCEPTED_LEDGER_ONLY_MIGRATION" ]]
-pm_run_bounded disposable_migration 120 MIGRATION_SCAN_TIMEOUT DISPOSABLE_DOCKER_FAILED \
-  docker run --rm --name "$PREFIX-migration-scan" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
-  -v "$PACKAGE_ROOT/migration-sql-gate.sh:/tmp/stage8b1i-migration-sql-gate.sh:ro" \
-  -v "$PACKAGE_ROOT/migration-sql-bindings.txt:/tmp/stage8b1i-migration-sql-bindings.txt:ro" \
+pm_migration_write_bounded "$TMP/pending-before" MIGRATION_PENDING_SET_CHECK pending_set_validation \
+  host_validator internal_validator coreutils 60 MIGRATION_INTERNAL_VALIDATOR_FAILED MIGRATION_INTERNAL_VALIDATOR_FAILED \
+  comm -23 "$TMP/repository-migrations" "$TMP/ledger-before"
+pm_migration_write_bounded "$TMP/expected-migrations.unsorted" MIGRATION_PENDING_SET_CHECK pending_set_validation \
+  host_validator internal_validator shell_builtin 30 MIGRATION_INTERNAL_VALIDATOR_FAILED MIGRATION_INTERNAL_VALIDATOR_FAILED \
+  printf '%s\n' "${EXPECTED_MIGRATIONS[@]}"
+pm_migration_write_bounded "$TMP/expected-migrations" MIGRATION_PENDING_SET_CHECK pending_set_validation \
+  host_validator internal_validator coreutils 30 MIGRATION_INTERNAL_VALIDATOR_FAILED MIGRATION_INTERNAL_VALIDATOR_FAILED \
+  sort "$TMP/expected-migrations.unsorted"
+pm_migration_run_bounded MIGRATION_PENDING_SET_CHECK pending_set_validation host_validator internal_validator coreutils \
+  30 MIGRATION_INTERNAL_VALIDATOR_FAILED MIGRATION_INTERNAL_VALIDATOR_FAILED \
+  cmp "$TMP/expected-migrations" "$TMP/pending-before"
+pm_migration_capture_bounded repository_migration_count MIGRATION_REPOSITORY_COUNT_CHECK repository_count_validation \
+  host_validator internal_validator coreutils 30 MIGRATION_INTERNAL_VALIDATOR_FAILED MIGRATION_INTERNAL_VALIDATOR_FAILED \
+  sh -ceu 'wc -l <"$1" | tr -d " "' sh "$TMP/repository-migrations"
+if [[ $repository_migration_count != 53 ]]; then
+  pm_migration_reject_before_command MIGRATION_REPOSITORY_COUNT_CHECK repository_count_validation \
+    host_validator internal_validator shell_builtin MIGRATION_INTERNAL_VALIDATOR_FAILED 65
+fi
+pm_migration_write_bounded "$TMP/applied-only" MIGRATION_APPLIED_ONLY_CHECK applied_only_validation \
+  host_validator internal_validator coreutils 30 MIGRATION_INTERNAL_VALIDATOR_FAILED MIGRATION_INTERNAL_VALIDATOR_FAILED \
+  comm -13 "$TMP/repository-migrations" "$TMP/ledger-before"
+if [[ $(<"$TMP/applied-only") != "$ACCEPTED_LEDGER_ONLY_MIGRATION" ]]; then
+  pm_migration_reject_before_command MIGRATION_APPLIED_ONLY_CHECK applied_only_validation \
+    host_validator internal_validator shell_builtin MIGRATION_INTERNAL_VALIDATOR_FAILED 65
+fi
+
+pm_migration_run_bounded MIGRATION_RUNTIME_BINDING_CHECK runtime_file_binding sql_gate filesystem_binding coreutils \
+  30 MIGRATION_COMMAND_NOT_STARTED MIGRATION_COMMAND_NOT_STARTED mkdir -m 0755 "$TMP/migration-runtime"
+pm_migration_prepare_runtime_file "$PACKAGE_ROOT/migration-sql-gate.sh" \
+  "$TMP/migration-runtime/migration-sql-gate.sh" "$MIGRATION_SQL_GATE_SHA256" 1000 1000
+pm_migration_prepare_runtime_file "$PACKAGE_ROOT/migration-sql-bindings.txt" \
+  "$TMP/migration-runtime/migration-sql-bindings.txt" "$MIGRATION_SQL_BINDINGS_SHA256" 1000 1000
+pm_migration_create_runner migration_scan_id MIGRATION_SQL_RUNNER_CREATE_CHECK sql_runner_create sql_gate \
+  docker create --name "$PREFIX-migration-scan" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
+  -v "$TMP/migration-runtime/migration-sql-gate.sh:/tmp/stage8b1i-migration-sql-gate.sh:ro" \
+  -v "$TMP/migration-runtime/migration-sql-bindings.txt:/tmp/stage8b1i-migration-sql-bindings.txt:ro" \
   --entrypoint sh "$GATEWAY_IMAGE" /tmp/stage8b1i-migration-sql-gate.sh \
   /app/prisma/migrations /tmp/stage8b1i-migration-sql-bindings.txt
-pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_migration_capture_bounded migration_scan_identity MIGRATION_SQL_RUNNER_IDENTITY_CHECK sql_runner_identity \
+  sql_gate docker_inspect docker_cli 30 MIGRATION_CONTAINER_UNAVAILABLE MIGRATION_CONTAINER_UNAVAILABLE \
+  docker inspect --format '{{.Config.Image}}|{{.Config.User}}|{{.HostConfig.NetworkMode}}' "$PREFIX-migration-scan"
+pm_migration_validate_runner_identity "$migration_scan_identity" "$GATEWAY_IMAGE" "$gateway_declared_user" none sql_gate
+pm_migration_start_runner "$PREFIX-migration-scan" sql_gate "$TMP/migration-scan.log"
+
+pm_migration_capture_bounded postgres_alias_facts MIGRATION_POSTGRES_ALIAS_CHECK postgres_alias_validation \
+  postgres docker_inspect docker_cli 30 MIGRATION_CONTAINER_UNAVAILABLE MIGRATION_CONTAINER_UNAVAILABLE \
+  docker inspect --format '{{range $name,$network := .NetworkSettings.Networks}}{{$name}}|{{json $network.Aliases}}{{end}}' "$PG_CONTAINER"
+pm_migration_validate_alias_facts "$postgres_alias_facts" "$NETWORK" "$PG_CONTAINER"
+pm_migration_run_bounded MIGRATION_SHADOW_DATABASE_CREATE_CHECK shadow_database_create postgres docker_exec postgres_client \
+  120 MIGRATION_DOCKER_EXEC_FAILED MIGRATION_DOCKER_EXEC_FAILED \
   docker exec "$PG_CONTAINER" createdb -U "$PG_USER" "$PG_SHADOW_DB"
 
 pm_enter_phase disposable_migration disposable_migration
 migration_started=$(date +%s)
-pm_write_bounded "$TMP/migration.log" disposable_migration 900 MIGRATE_DEPLOY_TIMEOUT MIGRATE_DEPLOY_FAILED \
-  docker run --rm --name "$PREFIX-migration-apply" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
+pm_migration_create_runner migration_apply_id MIGRATION_PRISMA_RUNNER_CREATE_CHECK prisma_runner_create prisma_deploy \
+  docker create --name "$PREFIX-migration-apply" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/migration.env" --entrypoint sh "$GATEWAY_IMAGE" -ceu \
-  'exec /app/node_modules/.bin/prisma migrate deploy --schema /app/prisma/schema.prisma'
+  'test -x /app/node_modules/.bin/prisma || exit 127; exec /app/node_modules/.bin/prisma migrate deploy --schema /app/prisma/schema.prisma'
+pm_migration_capture_bounded migration_apply_identity MIGRATION_PRISMA_RUNNER_IDENTITY_CHECK prisma_runner_identity \
+  prisma_deploy docker_inspect docker_cli 30 MIGRATION_CONTAINER_UNAVAILABLE MIGRATION_CONTAINER_UNAVAILABLE \
+  docker inspect --format '{{.Config.Image}}|{{.Config.User}}|{{.HostConfig.NetworkMode}}' "$PREFIX-migration-apply"
+pm_migration_validate_runner_identity "$migration_apply_identity" "$GATEWAY_IMAGE" "$gateway_declared_user" "$NETWORK" prisma_deploy
+pm_migration_start_runner "$PREFIX-migration-apply" prisma_deploy "$TMP/migration.log"
 migration_seconds=$(( $(date +%s) - migration_started ))
 
 pm_enter_phase migration_verification disposable_migration
-psql_value ledger_after_finished 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
-psql_value ledger_after_failed 'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL'
-[[ $ledger_after_finished -eq 54 && $ledger_after_failed -eq 0 ]]
-psql_value ledger_after "SELECT migration_name FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name"
+pm_migration_psql_value ledger_after_finished MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
+  'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
+pm_migration_psql_value ledger_after_failed MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
+  'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL'
+pm_migration_run_bounded MIGRATION_POST_LEDGER_CHECK post_ledger_verification host_validator internal_validator shell_builtin \
+  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+  test "$ledger_after_finished" -eq 54 -a "$ledger_after_failed" -eq 0
+pm_migration_psql_value ledger_after MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
+  "SELECT migration_name FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name"
 printf '%s\n' "$ledger_after" >"$TMP/ledger-after"
-comm -13 "$TMP/ledger-before" "$TMP/ledger-after" >"$TMP/applied-now"
-cmp "$TMP/expected-migrations" "$TMP/applied-now"
+pm_migration_write_bounded "$TMP/applied-now" MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
+  host_validator internal_validator coreutils 30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+  comm -13 "$TMP/ledger-before" "$TMP/ledger-after"
+pm_migration_run_bounded MIGRATION_POST_LEDGER_CHECK post_ledger_verification host_validator internal_validator coreutils \
+  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+  cmp "$TMP/expected-migrations" "$TMP/applied-now"
 migration_names_sql=$(printf "'%s'," "${EXPECTED_MIGRATIONS[@]}")
 migration_names_sql=${migration_names_sql%,}
 migration_query="SELECT COALESCE(json_agg(json_build_object('name',migration_name,'durationMs',GREATEST(0,ROUND(EXTRACT(EPOCH FROM (finished_at-started_at))*1000)::bigint)) ORDER BY migration_name),'[]'::json)::text FROM \"_prisma_migrations\" WHERE migration_name IN ($migration_names_sql) AND finished_at IS NOT NULL AND rolled_back_at IS NULL"
-psql_value migration_durations "$migration_query"
-jq -e 'length==8 and all(.[]; (.name|type)=="string" and (.durationMs|type)=="number" and .durationMs>=0)' <<<"$migration_durations" >/dev/null
-psql_value raw_table_present "SELECT to_regclass('public.\"MaxRawTransportEvent\"') IS NOT NULL"
-psql_value envelope_column_present "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='MaxRawTransportEvent' AND column_name='captureEnvelopeId')"
-psql_value envelope_index_present "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_idx\"') IS NOT NULL"
-psql_value envelope_key_present "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_key\"') IS NOT NULL"
-[[ $raw_table_present == t && $envelope_column_present == t && $envelope_index_present == t && $envelope_key_present == t ]]
-pm_write_bounded "$TMP/prisma-diff.log" disposable_migration 600 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
+pm_migration_psql_value migration_durations MIGRATION_POST_LEDGER_CHECK post_ledger_verification "$migration_query"
+pm_migration_run_bounded MIGRATION_POST_LEDGER_CHECK post_ledger_verification host_validator internal_validator coreutils \
+  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+  jq -e 'length==8 and all(.[]; (.name|type)=="string" and (.durationMs|type)=="number" and .durationMs>=0)' \
+  <<<"$migration_durations" >/dev/null
+pm_migration_psql_value raw_table_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
+  "SELECT to_regclass('public.\"MaxRawTransportEvent\"') IS NOT NULL"
+pm_migration_psql_value envelope_column_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
+  "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='MaxRawTransportEvent' AND column_name='captureEnvelopeId')"
+pm_migration_psql_value envelope_index_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
+  "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_idx\"') IS NOT NULL"
+pm_migration_psql_value envelope_key_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
+  "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_key\"') IS NOT NULL"
+pm_migration_run_bounded MIGRATION_POST_SCHEMA_CHECK post_schema_verification host_validator internal_validator shell_builtin \
+  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+  test "$raw_table_present" = t -a "$envelope_column_present" = t -a "$envelope_index_present" = t -a "$envelope_key_present" = t
+pm_migration_write_bounded "$TMP/prisma-diff.log" MIGRATION_PRISMA_DIFF_CHECK prisma_diff \
+  prisma_diff prisma docker_cli 600 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
   docker run --rm --name "$PREFIX-prisma-diff" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/migration.env" --entrypoint sh "$GATEWAY_IMAGE" -ceu \
   'exec /app/node_modules/.bin/prisma migrate diff --from-migrations /app/prisma/migrations --to-url "$DATABASE_URL" --shadow-database-url "$SHADOW_DATABASE_URL" --script'
-pm_run_bounded disposable_migration 60 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
+pm_migration_run_bounded MIGRATION_PRISMA_DIFF_CHECK prisma_diff prisma_diff internal_validator posix_shell \
+  60 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
   sh "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh" "$TMP/prisma-diff.log" >/dev/null
 prisma_diff_empty=false
 prisma_diff_status=ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS
 
 pm_enter_phase gateway_negative docker_disposable
+MIGRATION_CHECK_ID=NONE
 pm_expect_failure_bounded docker_disposable 120 GATEWAY_NEGATIVE_TIMEOUT \
   docker run --rm --name "$PREFIX-gateway-missing-hmac" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" \
   --network "$NETWORK" --env-file "$TMP/missing-hmac.env" "$GATEWAY_IMAGE"

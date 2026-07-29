@@ -4,21 +4,21 @@ set -eu
 migration_root=${1:?migration root required}
 bindings_path=${2:?bindings path required}
 
-[ -d "$migration_root" ]
-[ -f "$bindings_path" ]
-[ ! -L "$bindings_path" ]
-[ "$(wc -l <"$bindings_path" | tr -d ' ')" = 8 ]
+[ -d "$migration_root" ] || exit 66
+[ -f "$bindings_path" ] || exit 64
+[ ! -L "$bindings_path" ] || exit 64
+[ "$(wc -l <"$bindings_path" | tr -d ' ')" = 8 ] || exit 64
 
 seen='|'
 count=0
 while IFS='  ' read -r expected_sha migration_name extra; do
-  [ -n "$expected_sha" ]
-  [ -n "$migration_name" ]
-  [ -z "${extra:-}" ]
+  [ -n "$expected_sha" ] || exit 64
+  [ -n "$migration_name" ] || exit 64
+  [ -z "${extra:-}" ] || exit 64
   case $expected_sha in
     *[!0-9a-f]*|'') exit 64 ;;
   esac
-  [ "${#expected_sha}" = 64 ]
+  [ "${#expected_sha}" = 64 ] || exit 64
   case $migration_name in
     20260726162043_add_max_raw_transport_journal | \
     20260726190658_add_max_route_registry | \
@@ -35,23 +35,23 @@ while IFS='  ' read -r expected_sha migration_name extra; do
   esac
   seen="${seen}${migration_name}|"
   migration_file="$migration_root/$migration_name/migration.sql"
-  [ -f "$migration_file" ]
-  [ ! -L "$migration_file" ]
+  [ -f "$migration_file" ] || exit 66
+  [ ! -L "$migration_file" ] || exit 66
   checksum_line=$(sha256sum -- "$migration_file")
   actual_sha=${checksum_line%% *}
-  [ "$actual_sha" = "$expected_sha" ]
+  [ "$actual_sha" = "$expected_sha" ] || exit 64
 
   if grep -Eiq '^[[:space:]]*(DROP[[:space:]]+(TABLE|SCHEMA|DATABASE|INDEX|TYPE|VIEW|MATERIALIZED)|TRUNCATE([[:space:]]|$)|DELETE[[:space:]]+FROM|UPDATE[[:space:]].*[[:space:]]SET([[:space:]]|$)|INSERT[[:space:]]+INTO)|^[[:space:]]*ALTER[[:space:]]+TABLE.*[[:space:]]DROP[[:space:]]+(COLUMN|CONSTRAINT)' "$migration_file"; then
     exit 67
   fi
   drop_constraints=$(sed -nE 's/^[[:space:]]*(DROP[[:space:]]+CONSTRAINT[[:space:]]+[^;]+;)[[:space:]]*$/\1/p' "$migration_file")
   if [ "$migration_name" = 20260726225737_add_max_dispatch_ledger ]; then
-    [ "$drop_constraints" = 'DROP CONSTRAINT "MaxOutboundCommandReservation_transition_fields_check";' ]
+    [ "$drop_constraints" = 'DROP CONSTRAINT "MaxOutboundCommandReservation_transition_fields_check";' ] || exit 67
   else
-    [ -z "$drop_constraints" ]
+    [ -z "$drop_constraints" ] || exit 67
   fi
   count=$((count + 1))
 done <"$bindings_path"
 
-[ "$count" = 8 ]
+[ "$count" = 8 ] || exit 64
 printf 'MIGRATION_SQL_GATE=PASS\n'

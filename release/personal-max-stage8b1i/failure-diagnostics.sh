@@ -30,6 +30,17 @@ personal_max_stage8b1i_safe_error() {
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | OUTPUT_TARGET_SCOPE_COLLISION | \
       EMERGENCY_DIAGNOSTICS_USED | \
+      MIGRATION_COMMAND_NOT_STARTED | MIGRATION_DOCKER_CLI_FAILED | \
+      MIGRATION_RUNNER_CREATE_FAILED | MIGRATION_RUNNER_START_FAILED | MIGRATION_RUNNER_EXITED | \
+      MIGRATION_DOCKER_EXEC_FAILED | MIGRATION_CONTAINER_UNAVAILABLE | \
+      MIGRATION_NETWORK_ALIAS_MISMATCH | MIGRATION_DATABASE_URL_CONSTRUCTION_FAILED | \
+      MIGRATION_PRISMA_EXECUTABLE_MISSING | MIGRATION_PRISMA_COMMAND_REJECTED | \
+      MIGRATION_PRISMA_EXIT_1 | MIGRATION_PRISMA_EXIT_2 | MIGRATION_PRISMA_TIMEOUT | \
+      MIGRATION_SQL_BINDING_MISMATCH | MIGRATION_SQL_GATE_EXIT_2 | MIGRATION_DIRECTORY_MISSING | \
+      MIGRATION_DEPLOY_FAILED | MIGRATION_POST_VERIFICATION_FAILED | MIGRATION_INTERNAL_VALIDATOR_FAILED | \
+      MIGRATION_RUNTIME_FILE_UNREADABLE | MIGRATION_RUNNER_IDENTITY_MISMATCH | \
+      MIGRATION_RUNNER_NETWORK_MISMATCH | MIGRATION_INVENTORY_FAILED | \
+      MIGRATION_SHADOW_DATABASE_CREATE_FAILED | \
       RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
       RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
       RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
@@ -55,7 +66,16 @@ personal_max_stage8b1i_safe_check_id() {
       RESTORE_REQUIRED_USERS_RELATION_CHECK | RESTORE_REQUIRED_CONTACT_RELATION_CHECK | \
       RESTORE_REQUIRED_CHAT_RELATION_CHECK | RESTORE_REPRESENTATIVE_MIGRATIONS_CHECK | \
       RESTORE_REPRESENTATIVE_USER_CHECK | RESTORE_REPRESENTATIVE_CONTACT_CHECK | \
-      RESTORE_REPRESENTATIVE_CHAT_CHECK | RESTORE_REPORT_RENDER_CHECK) return 0 ;;
+      RESTORE_REPRESENTATIVE_CHAT_CHECK | RESTORE_REPORT_RENDER_CHECK | \
+      MIGRATION_DATABASE_URL_CONSTRUCTION_CHECK | MIGRATION_INVENTORY_CHECK | \
+      MIGRATION_PENDING_SET_CHECK | MIGRATION_REPOSITORY_COUNT_CHECK | \
+      MIGRATION_APPLIED_ONLY_CHECK | MIGRATION_RUNTIME_BINDING_CHECK | \
+      MIGRATION_SQL_RUNNER_CREATE_CHECK | MIGRATION_SQL_RUNNER_IDENTITY_CHECK | \
+      MIGRATION_SQL_RUNNER_START_CHECK | MIGRATION_POSTGRES_ALIAS_CHECK | \
+      MIGRATION_SHADOW_DATABASE_CREATE_CHECK | MIGRATION_PRISMA_RUNNER_CREATE_CHECK | \
+      MIGRATION_PRISMA_RUNNER_IDENTITY_CHECK | MIGRATION_PRISMA_EXECUTABLE_CHECK | \
+      MIGRATION_PRISMA_DEPLOY_CHECK | MIGRATION_POST_LEDGER_CHECK | \
+      MIGRATION_POST_SCHEMA_CHECK | MIGRATION_PRISMA_DIFF_CHECK) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -93,6 +113,9 @@ personal_max_stage8b1i_render_failure() {
   local postgres_expected_version_text postgres_expected_version_num
   local postgres_observed_version_num_json postgres_observed_major_json postgres_observed_minor_json postgres_observed_patch_json
   local postgres_version_classification postgres_version_output_category
+  local migration_check_id migration_substep migration_role migration_command_category migration_executable_category
+  local migration_command_started migration_attempt_count migration_elapsed migration_original_exit_json
+  local migration_container_state migration_primary_classification
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
   [[ $source_line =~ ^[0-9]+$ ]] || source_line=0
   safe_phase=${PROBE_PHASE:-bootstrap_complete}
@@ -101,7 +124,7 @@ personal_max_stage8b1i_render_failure() {
   personal_max_stage8b1i_safe_class "$safe_class" || safe_class=unknown
   safe_error=${PROBE_ERROR_CLASSIFICATION:-UNEXPECTED_COMMAND_FAILURE}
   personal_max_stage8b1i_safe_error "$safe_error" || safe_error=UNEXPECTED_COMMAND_FAILURE
-  safe_check_id=${RESTORE_CHECK_ID:-NONE}
+  if [[ ${MIGRATION_CHECK_ID:-NONE} != NONE ]]; then safe_check_id=${MIGRATION_CHECK_ID}; else safe_check_id=${RESTORE_CHECK_ID:-NONE}; fi
   personal_max_stage8b1i_safe_check_id "$safe_check_id" || safe_check_id=NONE
   cleanup_error=${CLEANUP_ERROR_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$cleanup_error" || cleanup_error=CLEANUP_INCOMPLETE
@@ -201,6 +224,27 @@ personal_max_stage8b1i_render_failure() {
   case $postgres_version_classification in NOT_OBSERVED | POSTGRES_VERSION_QUERY_FAILED | POSTGRES_VERSION_OUTPUT_MALFORMED | POSTGRES_VERSION_MISMATCH | POSTGRES_VERSION_MATCHED) ;; *) postgres_version_classification=NOT_OBSERVED ;; esac
   postgres_version_output_category=${POSTGRES_VERSION_OUTPUT_CATEGORY:-NOT_OBSERVED}
   case $postgres_version_output_category in NOT_OBSERVED | CANONICAL_NUMERIC | WHITESPACE_NORMALIZED | MALFORMED) ;; *) postgres_version_output_category=NOT_OBSERVED ;; esac
+  migration_check_id=${MIGRATION_CHECK_ID:-NONE}
+  personal_max_stage8b1i_safe_check_id "$migration_check_id" || migration_check_id=NONE
+  migration_substep=${MIGRATION_SUBSTEP:-NOT_STARTED}
+  if ! declare -F pm_migration_substep_is_safe >/dev/null || ! pm_migration_substep_is_safe "$migration_substep"; then migration_substep=NOT_STARTED; fi
+  migration_role=${MIGRATION_RUNNER_ROLE:-not_observed}
+  if ! declare -F pm_migration_role_is_safe >/dev/null || ! pm_migration_role_is_safe "$migration_role"; then migration_role=not_observed; fi
+  migration_command_category=${MIGRATION_COMMAND_CATEGORY:-not_observed}
+  if ! declare -F pm_migration_command_category_is_safe >/dev/null || ! pm_migration_command_category_is_safe "$migration_command_category"; then migration_command_category=not_observed; fi
+  migration_executable_category=${MIGRATION_EXECUTABLE_CATEGORY:-not_observed}
+  if ! declare -F pm_migration_executable_category_is_safe >/dev/null || ! pm_migration_executable_category_is_safe "$migration_executable_category"; then migration_executable_category=not_observed; fi
+  migration_command_started=${MIGRATION_COMMAND_STARTED:-false}
+  [[ $migration_command_started == true ]] || migration_command_started=false
+  migration_attempt_count=${MIGRATION_ATTEMPT_COUNT:-0}
+  [[ $migration_attempt_count =~ ^[0-9]+$ ]] || migration_attempt_count=0
+  migration_elapsed=${MIGRATION_ELAPSED_SECONDS:-0}
+  [[ $migration_elapsed =~ ^[0-9]+$ ]] || migration_elapsed=0
+  if [[ ${MIGRATION_ORIGINAL_EXIT:-} =~ ^[0-9]+$ && ${MIGRATION_ORIGINAL_EXIT} -le 255 ]]; then migration_original_exit_json=${MIGRATION_ORIGINAL_EXIT}; else migration_original_exit_json='"not_observed"'; fi
+  migration_container_state=${MIGRATION_CONTAINER_STATE_CATEGORY:-not_observed}
+  if ! declare -F pm_migration_state_is_safe >/dev/null || ! pm_migration_state_is_safe "$migration_container_state"; then migration_container_state=not_observed; fi
+  migration_primary_classification=${MIGRATION_PRIMARY_CLASSIFICATION:-NONE}
+  personal_max_stage8b1i_safe_error "$migration_primary_classification" || migration_primary_classification=NONE
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
     printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH_UNSAFE\n' "$safe_phase" "$original_exit" >&2
@@ -238,6 +282,14 @@ personal_max_stage8b1i_render_failure() {
     --argjson postgresObservedPatch "$postgres_observed_patch_json" \
     --arg postgresVersionClassification "$postgres_version_classification" \
     --arg postgresVersionOutputCategory "$postgres_version_output_category" \
+    --arg migrationCheckId "$migration_check_id" --arg migrationSubstep "$migration_substep" --arg migrationRunnerRole "$migration_role" \
+    --arg migrationCommandCategory "$migration_command_category" \
+    --arg migrationExecutableCategory "$migration_executable_category" \
+    --argjson migrationCommandStarted "$migration_command_started" \
+    --argjson migrationAttemptCount "$migration_attempt_count" --argjson migrationElapsedSeconds "$migration_elapsed" \
+    --argjson migrationOriginalExit "$migration_original_exit_json" \
+    --arg migrationContainerState "$migration_container_state" \
+    --arg migrationPrimaryClassification "$migration_primary_classification" \
     --argjson ledgerNameCount "$ledger_name_count" --argjson ledgerUniqueCount "$ledger_unique_count" \
     --argjson ledgerDuplicateCount "$ledger_duplicate_count" --argjson ledgerEmptyCount "$ledger_empty_count" \
     --argjson ledgerInvalidFormatCount "$ledger_invalid_format_count" --argjson ledgerUnsafeCount "$ledger_unsafe_count" \
@@ -274,6 +326,13 @@ personal_max_stage8b1i_render_failure() {
         versionClassification:$postgresVersionClassification,versionOutputCategory:$postgresVersionOutputCategory,
         elapsedSeconds:$postgresElapsedSeconds,rawLogsCaptured:false,environmentValuesCaptured:false,
         credentialsCaptured:false,commandArgumentsCaptured:false},
+      migrationPreflight:{checkId:$migrationCheckId,substep:$migrationSubstep,runnerRole:$migrationRunnerRole,
+        commandCategory:$migrationCommandCategory,executableCategory:$migrationExecutableCategory,
+        commandStarted:$migrationCommandStarted,attemptCount:$migrationAttemptCount,
+        elapsedSeconds:$migrationElapsedSeconds,originalExitCode:$migrationOriginalExit,
+        containerStateCategory:$migrationContainerState,primaryClassification:$migrationPrimaryClassification,
+        rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
+        databaseUrlCaptured:false,credentialsCaptured:false,sqlCaptured:false,businessDataCaptured:false},
       ledgerDiagnostics:{ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,
         ledgerDuplicateCount:$ledgerDuplicateCount,ledgerEmptyNameCount:$ledgerEmptyCount,
         ledgerInvalidFormatCount:$ledgerInvalidFormatCount,ledgerUnsafeNameCount:$ledgerUnsafeCount,
@@ -323,7 +382,8 @@ personal_max_stage8b1i_render_failure() {
 personal_max_stage8b1i_write_emergency_json() {
   local __pm_path=${1:?path required} __pm_exit=${2:-1} __pm_phase=${3:-bootstrap_complete}
   local __pm_classification=${4:-UNEXPECTED_COMMAND_FAILURE} __pm_script_sha=${PM_SCRIPT_SHA256:-}
-  local __pm_check_id=${RESTORE_CHECK_ID:-NONE}
+  local __pm_check_id
+  if [[ ${MIGRATION_CHECK_ID:-NONE} != NONE ]]; then __pm_check_id=${MIGRATION_CHECK_ID}; else __pm_check_id=${RESTORE_CHECK_ID:-NONE}; fi
   [[ $__pm_exit =~ ^[1-9][0-9]*$ && $__pm_exit -le 255 ]] || __pm_exit=1
   personal_max_stage8b1i_safe_phase "$__pm_phase" || __pm_phase=bootstrap_complete
   personal_max_stage8b1i_safe_error "$__pm_classification" || __pm_classification=UNEXPECTED_COMMAND_FAILURE
