@@ -296,17 +296,19 @@ psql_value actual_psql 'SELECT 42'
 [[ $actual_psql == 42 ]]
 pass actual_psql_value_helper
 
-set +e
+pm_result_checksum_line=''
 sha_of pm_result_checksum_line "$SCRIPT_DIR/bounded-operations.sh"
-bridge_status=$?
-set -e
-[[ $bridge_status -eq 64 && $PROBE_ERROR_CLASSIFICATION == INVALID_OUT_PARAMETER ]]
-pass helper_bridge_namespace_refused
+[[ $pm_result_checksum_line == "$actual_sha" ]]
+pass approved_pm_result_destination
 
 bootstrap_functions=$(
   sed -n '/^bootstrap_validate_out_name()/p' "$SCRIPT_DIR/isolated-release-probe.sh"
+  sed -n '/^bootstrap_validate_internal_out_name()/p' "$SCRIPT_DIR/isolated-release-probe.sh"
+  sed -n '/^bootstrap_reject_out_collision()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
   sed -n '/^bootstrap_assign_out()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
+  sed -n '/^bootstrap_assign_internal_out()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
   sed -n '/^bootstrap_capture()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
+  sed -n '/^bootstrap_capture_internal()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
   sed -n '/^bootstrap_verify_runtime_path()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
   sed -n '/^bootstrap_verify_runtime_artifact()/,/^}/p' "$SCRIPT_DIR/isolated-release-probe.sh"
 )
@@ -315,11 +317,11 @@ bash -c 'set -Eeuo pipefail; eval "$1"; for name in output status line data sour
 pass actual_bootstrap_collision_matrix
 
 PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
-  bootstrap_verify_runtime_artifact failure-diagnostics.sh 2b896fec056035bf7d94e14423a87d43606a1e6addff8d27959a42ba54d04b94
-  bootstrap_verify_runtime_artifact bounded-operations.sh e8376b7c771f35a3adc1308240292ec67662c8a7a1b432d71893f3bbec493576
-  bootstrap_verify_runtime_artifact probe-output-helpers.sh da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11
-  bootstrap_verify_runtime_artifact restore-verification.sh 0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f
-  bootstrap_verify_runtime_artifact postgres-startup.sh 0470150c782f37c8bda99a10d6f62638f6d2f2b10331c4775b199046d2915e76
+  bootstrap_verify_runtime_artifact failure-diagnostics.sh 5e77dd22afcb11ba94568ba725bbb6450f9458e098818498ad9c7e80731a06a2
+  bootstrap_verify_runtime_artifact bounded-operations.sh 501f7c17db28ce3d435bcb34fc540b32ad9fcab382e434cbfcc8ef483364f30d
+  bootstrap_verify_runtime_artifact probe-output-helpers.sh 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7
+  bootstrap_verify_runtime_artifact restore-verification.sh 996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547
+  bootstrap_verify_runtime_artifact postgres-startup.sh 54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3
   bootstrap_verify_runtime_artifact migration-sql-gate.sh 25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f
   bootstrap_verify_runtime_artifact migration-sql-bindings.txt 9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f
   bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh 552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8
@@ -338,7 +340,7 @@ printf '%s  %s\n' "$tampered_helper_sha" probe-output-helpers.sh >"$tamper_root/
 set +e
 tamper_output=$(PACKAGE_ROOT="$tamper_root" TAMPER_SENTINEL="$tamper_sentinel" \
   bash -c 'set -Eeuo pipefail; eval "$1"; if bootstrap_verify_runtime_artifact probe-output-helpers.sh "$2"; then source "$PACKAGE_ROOT/probe-output-helpers.sh"; exit 0; else status=$?; [[ ! -e $TAMPER_SENTINEL ]]; exit "$status"; fi' \
-  sh "$bootstrap_functions" da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11 2>&1)
+  sh "$bootstrap_functions" 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7 2>&1)
 tamper_status=$?
 set -e
 [[ $tamper_status -eq 66 && $tamper_output == *'RUNTIME_ARTIFACT_CHECKSUM_MISMATCH=probe-output-helpers.sh'* && ! -e $tamper_sentinel ]]

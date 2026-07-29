@@ -16,6 +16,7 @@ readonly MIGRATION_SQL_BINDINGS="$SCRIPT_DIR/migration-sql-bindings.txt"
 readonly PRISMA_LEGACY_DIFF_GATE="$SCRIPT_DIR/prisma-legacy-diff-gate.sh"
 readonly FAULTS="$SCRIPT_DIR/test-bounded-faults.sh"
 readonly OUTPUT_HANDOFF="$SCRIPT_DIR/test-output-handoff.sh"
+readonly OUTPUT_COLLISIONS="$SCRIPT_DIR/test-output-target-collisions.sh"
 readonly RESTORE_TESTS="$SCRIPT_DIR/test-restore-verification.sh"
 readonly LEDGER_TESTS="$SCRIPT_DIR/test-ledger-verification.sh"
 readonly POSTGRES_STARTUP_TESTS="$SCRIPT_DIR/test-postgres-startup.sh"
@@ -23,8 +24,8 @@ readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
 readonly BACKUP_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
-readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.0aeb46c3f285c680a23c368e1bc95071bd26758bbcb3d6f7b301c6b82f7c49ee.json'
-readonly FAILURE_REPORT_SHA='b56ec34bd82255f603e0c34978eac07f386c94308aba191dd55a8cfb2a0376a5'
+readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.55e730aa6db59637e51c3b171af802e0d95e6ae6688a2481e450a5b72cb18597.json'
+readonly FAILURE_REPORT_SHA='48567af33cd50d6e8a5d996971b015ab98b753a32ab6811c9db6ff8fdfcd9bef'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly REPOSITORY_MIGRATIONS="$SCRIPT_DIR/../../gravity-mvp/prisma/migrations"
@@ -48,16 +49,19 @@ pass backup_permission_contract
 [[ $(stat -Lc '%U:%G:%a' "$FAILURE_REPORT") == root:codexbot:640 ]]
 [[ $(sha256sum -- "$FAILURE_REPORT" | awk '{print $1}') == "$FAILURE_REPORT_SHA" ]]
 jq -e '.schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
-  .script.sha256=="0aeb46c3f285c680a23c368e1bc95071bd26758bbcb3d6f7b301c6b82f7c49ee" and
+  .script.sha256=="55e730aa6db59637e51c3b171af802e0d95e6ae6688a2481e450a5b72cb18597" and
   .script.checksumBound==true and .phase=="postgresql_start" and
-  .safeCommandClass=="disposable_postgresql" and .classification=="POSTGRES_VERSION_MISMATCH" and
-  .checkId=="POSTGRES_SERVER_VERSION_MATCH_CHECK" and .exitCode==67 and .sourceLine==562 and
-  .postgresStartup.status=="VERSION_MISMATCH" and .postgresStartup.lastOperation=="server_version_query" and
+  .safeCommandClass=="disposable_postgresql" and .classification=="POSTGRES_VERSION_OUTPUT_MALFORMED" and
+  .checkId=="POSTGRES_SERVER_VERSION_MATCH_CHECK" and .exitCode==65 and .sourceLine==563 and
+  .postgresStartup.status=="VERSION_OUTPUT_MALFORMED" and .postgresStartup.lastOperation=="server_version_query" and
   .postgresStartup.containerState=="running" and .postgresStartup.containerExitCode==0 and
   .postgresStartup.healthStatus=="none" and .postgresStartup.readinessAttempts==2 and
   .postgresStartup.readinessTransientCount==1 and .postgresStartup.readinessLastExit==0 and
   .postgresStartup.versionQueryAttempts==2 and .postgresStartup.versionTransientCount==1 and
   .postgresStartup.versionLastExit==0 and .postgresStartup.versionMatched==false and
+  .postgresStartup.expectedVersionNum==160014 and .postgresStartup.observedVersionNum=="not_observed" and
+  .postgresStartup.versionClassification=="POSTGRES_VERSION_OUTPUT_MALFORMED" and
+  .postgresStartup.versionOutputCategory=="MALFORMED" and
   .images.acceptedImagesRetained==true and .cleanup.completed==true and
   .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and .cleanup.volumesRemaining==0 and
   .cleanup.tempFilesRemaining==0 and .productionImmutability.productionDatabaseConnections==0 and
@@ -75,13 +79,15 @@ free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 pass post_backup_storage_gate
 
 bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" \
-  "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$SCRIPT_DIR/test-package.sh"
+  "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" "$RESTORE_TESTS" "$LEDGER_TESTS" \
+  "$POSTGRES_STARTUP_TESTS" "$SCRIPT_DIR/test-package.sh"
 sh -n "$MIGRATION_SQL_GATE"
 sh -n "$PRISMA_LEGACY_DIFF_GATE"
 pass bash_syntax
 if command -v "$SHELLCHECK_BIN" >/dev/null 2>&1; then
   "$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" \
-    "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$SCRIPT_DIR/test-package.sh"
+    "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" \
+    "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$SCRIPT_DIR/test-package.sh"
   pass shellcheck
 else
   PACKAGE_SKIP_COUNT=$((PACKAGE_SKIP_COUNT + 1))
@@ -150,12 +156,22 @@ handoff_output=$("$OUTPUT_HANDOFF")
   $handoff_output == *'DOCKER_EXECUTED=NO'* ]]
 [[ $(grep -c '=PASS$' <<<"$handoff_output") -eq 37 ]]
 require_fixed "$BOUNDED" 'local -n __pm_out_ref="$__pm_target_name"'
+require_fixed "$BOUNDED" 'local -n __pm_assignment_ref="$__pm_assignment_target"'
 require_fixed "$BOUNDED" '^[a-zA-Z_][a-zA-Z0-9_]*$'
+require_fixed "$BOUNDED" 'OUTPUT_TARGET_SCOPE_COLLISION'
 refuse_pattern "$PROBE" '(^|[[:space:]])eval([[:space:]]|$)'
 refuse_pattern "$PROBE" 'pm_capture_bounded[[:space:]]+__pm_'
 refuse_pattern "$OUTPUT_HELPERS" 'pm_capture_bounded[[:space:]]+__pm_'
-require_fixed "$OUTPUT_HELPERS" 'pm_result_'
+require_fixed "$OUTPUT_HELPERS" 'pm_capture_bounded_internal'
 pass output_handoff_regression
+collision_output=$("$OUTPUT_COLLISIONS")
+[[ $collision_output == *'OUTPUT_TARGET_COLLISION_TEST_COUNT=30'* && \
+  $collision_output == *'DYNAMIC_SCOPE_COLLISION_PROVEN=YES'* && \
+  $collision_output == *'STATIC_SOURCE_AUDIT=PASS'* && \
+  $collision_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $collision_output == *'DOCKER_EXECUTED=NO'* && $collision_output == *'DATABASE_CONNECTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$collision_output") -eq 31 ]]
+pass output_target_collision_regression
 restore_output=$("$RESTORE_TESTS")
 [[ $restore_output == *'RESTORE_REGRESSION_TEST_COUNT=25'* && \
   $restore_output == *'OLD_FAILURE=REPRODUCED'* && $restore_output == *'FIXED_PATH=PASS'* && \
@@ -171,13 +187,13 @@ ledger_output=$("$LEDGER_TESTS")
 [[ $(grep -c '=PASS$' <<<"$ledger_output") -eq 23 ]]
 pass ledger_verification_regression
 postgres_startup_output=$("$POSTGRES_STARTUP_TESTS")
-[[ $postgres_startup_output == *'POSTGRES_STARTUP_TEST_COUNT=33'* && \
+[[ $postgres_startup_output == *'POSTGRES_STARTUP_TEST_COUNT=34'* && \
   $postgres_startup_output == *'PREVIOUS_FAILURE=REPRODUCED'* && \
   $postgres_startup_output == *'CORRECTED_FIXTURE=PASS'* && \
   $postgres_startup_output == *'ROOT_PROBE_EXECUTED=NO'* && \
   $postgres_startup_output == *'DOCKER_EXECUTED=NO'* && \
   $postgres_startup_output == *'DATABASE_CONNECTED=NO'* ]]
-[[ $(grep -c '=PASS$' <<<"$postgres_startup_output") -eq 34 ]]
+[[ $(grep -c '=PASS$' <<<"$postgres_startup_output") -eq 35 ]]
 pass postgres_startup_regression
 
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
@@ -212,11 +228,11 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:2b896fec056035bf7d94e14423a87d43606a1e6addff8d27959a42ba54d04b94" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:e8376b7c771f35a3adc1308240292ec67662c8a7a1b432d71893f3bbec493576" \
-  "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11" \
-  "restore-verification.sh:RESTORE_VERIFICATION_SHA256:0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f" \
-  "postgres-startup.sh:POSTGRES_STARTUP_SHA256:0470150c782f37c8bda99a10d6f62638f6d2f2b10331c4775b199046d2915e76" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:5e77dd22afcb11ba94568ba725bbb6450f9458e098818498ad9c7e80731a06a2" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:501f7c17db28ce3d435bcb34fc540b32ad9fcab382e434cbfcc8ef483364f30d" \
+  "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
+  "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
+  "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
   "migration-sql-gate.sh:MIGRATION_SQL_GATE_SHA256:25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f" \
   "migration-sql-bindings.txt:MIGRATION_SQL_BINDINGS_SHA256:9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f" \
   "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8" \
@@ -301,7 +317,8 @@ require_fixed "$DIAGNOSTICS" 'credentialsCaptured:false'
 require_fixed "$DIAGNOSTICS" 'checkId:$checkId'
 for evidence in RESTORE_LEDGER_COUNT_MISMATCH RESTORE_LEDGER_DUPLICATE_NAME RESTORE_LEDGER_UNSAFE_NAME \
   RESTORE_LEDGER_EXPECTED_SET_MISMATCH RESTORE_REQUIRED_RELATION_MISSING RESTORE_CATALOG_INTEGRITY_FAILED \
-  RESTORE_REPRESENTATIVE_CHECK_FAILED RESTORE_QUERY_FAILED DISPOSABLE_CONTAINER_UNAVAILABLE; do
+  RESTORE_REPRESENTATIVE_CHECK_FAILED RESTORE_QUERY_FAILED DISPOSABLE_CONTAINER_UNAVAILABLE \
+  OUTPUT_TARGET_SCOPE_COLLISION; do
   require_fixed "$DIAGNOSTICS" "$evidence"
 done
 for evidence in POSTGRES_CONTAINER_START_FAILED POSTGRES_CONTAINER_EXITED_DURING_STARTUP \
@@ -351,39 +368,47 @@ jq -e '.schemaVersion==1 and .incident=="RESTORE_LEDGER_NAMES_CHECK" and
   .repair.preparedScriptSha256=="2474859594be528910bd29c960ba2c37fe08d5f6bcccec67f596138d1bc3d3e0" and
   .repair.rootProbeRerun==false and .safety.productionMutationNow==false' \
   "$SCRIPT_DIR/ledger-failure-forensic.json" >/dev/null
-jq -e '.schemaVersion==1 and .incident=="POSTGRES_VERSION_VERIFICATION_FAILURE" and
-  .failedAttempt.failureReportSha256=="b56ec34bd82255f603e0c34978eac07f386c94308aba191dd55a8cfb2a0376a5" and
-  .failedAttempt.sourceLine==562 and .failedAttempt.exitCode==67 and
-  .failedAttempt.classification=="POSTGRES_VERSION_MISMATCH" and
+jq -e '.schemaVersion==2 and .incident=="POSTGRES_OUTPUT_PARAMETER_DYNAMIC_SCOPE_COLLISION" and
+  .failedAttempt.failureReportSha256=="48567af33cd50d6e8a5d996971b015ab98b753a32ab6811c9db6ff8fdfcd9bef" and
+  .failedAttempt.sourceLine==563 and .failedAttempt.exitCode==65 and
+  .failedAttempt.classification=="POSTGRES_VERSION_OUTPUT_MALFORMED" and
   .failedAttempt.checkId=="POSTGRES_SERVER_VERSION_MATCH_CHECK" and
-  .sourceMapping.exactFirstFailedOperation=="DISPLAY_VERSION_EXACT_MATCH" and
-  .sourceMapping.containerStartReturnedSuccess==true and
-  .sourceMapping.containerState=="running" and .sourceMapping.serverVersionQueryLastExit==0 and
-  .sourceMapping.rawObservedDisplayStringRecorded==false and
-  .sourceMapping.observedHumanReadableCategory=="FORMAT_VARIANT_NOT_RECORDED" and
-  .diagnosis.displayVariantSubtype=="INSUFFICIENT_EVIDENCE" and
-  .diagnosis.canonicalObservedVersionNumInFailedReport=="NOT_RECORDED" and
-  .diagnosis.expectedVersionNum==160014 and
-  .diagnosis.exactCause=="FRAGILE_HUMAN_READABLE_SERVER_VERSION_EQUALITY" and
-  .repair.authoritativeVersionSource=="SHOW server_version_num" and
-  .repair.preparedScriptSha256=="55e730aa6db59637e51c3b171af802e0d95e6ae6688a2481e450a5b72cb18597" and
-  .repair.regressionScenarioCount==33 and
-  .repair.rootProbeRerun==false and .safety.dockerExecutionNow==false and
+  .failedAttempt.queryLastExit==0 and .failedAttempt.versionOutputCategory=="MALFORMED" and
+  .sourceProof.callerLocal=="pm_result_postgres_version" and
+  .sourceProof.childLocal=="pm_result_postgres_version" and
+  .sourceProof.realChildCommandCapturedValue=="NOT_RECORDED_IN_SANITIZED_REPORT" and
+  .sourceProof.minimalFixtureChildCapturedValue=="160014" and
+  .sourceProof.callerObservedValue=="empty" and
+  .sourceProof.exactCause=="CHILD_LOCAL_SHADOWED_CALLER_OUTPUT_TARGET" and
+  .executableProof.classification=="DYNAMIC_SCOPE_COLLISION_PROVEN" and
+  .systematicRepair.preparedScriptSha256=="2c54907799dabee4c92eca40ebfd8176a8b8f4f61c70ed65f38a542cd0ea4b6e" and
+  .systematicRepair.functionsAudited==25 and .systematicRepair.remainingKnownCollisions==0 and
+  .systematicRepair.outputTargetRegressionScenarios==30 and
+  .systematicRepair.rootProbeRerun==false and .safety.dockerExecutionNow==false and
   .safety.productionDatabaseConnectedNow==false' \
   "$SCRIPT_DIR/postgres-startup-forensic.json" >/dev/null
+jq -e '.schemaVersion==2 and .incident.dynamicScopeCollisionProven==true and
+  .invariant.publicReservedPrefixRejected=="__pm_" and
+  .invariant.helperInternalPrefix=="__pm_" and .invariant.evalAllowed==false and
+  (.functions|length)==25 and .summary.confirmedCollisions==1 and
+  .summary.latentCollisionCapableFunctions==3 and .summary.remainingKnownCollisions==0 and
+  .summary.staticAudit=="PASS" and .summary.executableMatrix=="30/30 PASS" and
+  .summary.preparedScriptSha256=="2c54907799dabee4c92eca40ebfd8176a8b8f4f61c70ed65f38a542cd0ea4b6e" and
+  .verdict=="OUTPUT_PARAMETER_COLLISIONS_SYSTEMATICALLY_ELIMINATED"' \
+  "$SCRIPT_DIR/out-parameter-audit.json" >/dev/null
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="55e730aa6db59637e51c3b171af802e0d95e6ae6688a2481e450a5b72cb18597" and
+  .rootProbe.sha256=="2c54907799dabee4c92eca40ebfd8176a8b8f4f61c70ed65f38a542cd0ea4b6e" and
   .rootProbe.runtimeArtifactBindingCount==10 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
   (.runtimeArtifactBindings|length)==10 and
-  .runtimeArtifactBindings["probe-output-helpers.sh"]=="da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="2b896fec056035bf7d94e14423a87d43606a1e6addff8d27959a42ba54d04b94" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="e8376b7c771f35a3adc1308240292ec67662c8a7a1b432d71893f3bbec493576" and
-  .runtimeArtifactBindings["restore-verification.sh"]=="0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f" and
-  .runtimeArtifactBindings["postgres-startup.sh"]=="0470150c782f37c8bda99a10d6f62638f6d2f2b10331c4775b199046d2915e76" and
+  .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="5e77dd22afcb11ba94568ba725bbb6450f9458e098818498ad9c7e80731a06a2" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="501f7c17db28ce3d435bcb34fc540b32ad9fcab382e434cbfcc8ef483364f30d" and
+  .runtimeArtifactBindings["restore-verification.sh"]=="996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" and
+  .runtimeArtifactBindings["postgres-startup.sh"]=="54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" and
   .restoreVerification.failureReportSha256=="c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de" and
   .restoreVerification.exactCause=="PRISMA_USER_MODEL_MAPPED_TO_USERS" and
   .ledgerVerificationRepair.failureReportSha256=="9197be647171a35553189a0526a2d6e205442f15965f5ce0ae1c8a1934bd73bd" and
@@ -409,6 +434,21 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .postgresVersionRepair.preparedScriptSha256=="55e730aa6db59637e51c3b171af802e0d95e6ae6688a2481e450a5b72cb18597" and
   .postgresVersionRepair.regressionScenarioCount==33 and
   .postgresVersionRepair.rootProbeRerun==false and
+  .outputParameterCollisionRepair.failureReportSha256=="48567af33cd50d6e8a5d996971b015ab98b753a32ab6811c9db6ff8fdfcd9bef" and
+  .outputParameterCollisionRepair.sourceLine==563 and .outputParameterCollisionRepair.queryLastExit==0 and
+  .outputParameterCollisionRepair.reportedClassification=="POSTGRES_VERSION_OUTPUT_MALFORMED" and
+  .outputParameterCollisionRepair.callerObservedValue=="empty" and
+  .outputParameterCollisionRepair.realCapturedValue=="NOT_RECORDED_IN_SANITIZED_REPORT" and
+  .outputParameterCollisionRepair.minimalFixtureCapturedValue=="160014" and
+  .outputParameterCollisionRepair.exactCause=="CHILD_LOCAL_SHADOWED_CALLER_OUTPUT_TARGET" and
+  .outputParameterCollisionRepair.dynamicScopeCollisionProven==true and
+  .outputParameterCollisionRepair.functionsAudited==25 and
+  .outputParameterCollisionRepair.remainingKnownCollisions==0 and
+  .outputParameterCollisionRepair.preparedScriptSha256=="2c54907799dabee4c92eca40ebfd8176a8b8f4f61c70ed65f38a542cd0ea4b6e" and
+  .outputParameterCollisionRepair.regressionScenarioCount==30 and
+  .outputParameterCollisionRepair.staticSourceAudit=="PASS" and
+  .outputParameterCollisionRepair.postgresStartupScenarioCount==34 and
+  .outputParameterCollisionRepair.rootProbeRerun==false and
   .migrationValidation.exactSqlBindingCount==8 and
   .migrationValidation.prismaDiffEmpty==false and
   .migrationValidation.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
@@ -427,5 +467,5 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=33\n' \
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"

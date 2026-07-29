@@ -29,11 +29,11 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='2b896fec056035bf7d94e14423a87d43606a1e6addff8d27959a42ba54d04b94'
-readonly BOUNDED_OPERATIONS_SHA256='e8376b7c771f35a3adc1308240292ec67662c8a7a1b432d71893f3bbec493576'
-readonly PROBE_OUTPUT_HELPERS_SHA256='da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11'
-readonly RESTORE_VERIFICATION_SHA256='0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f'
-readonly POSTGRES_STARTUP_SHA256='0470150c782f37c8bda99a10d6f62638f6d2f2b10331c4775b199046d2915e76'
+readonly FAILURE_DIAGNOSTICS_SHA256='5e77dd22afcb11ba94568ba725bbb6450f9458e098818498ad9c7e80731a06a2'
+readonly BOUNDED_OPERATIONS_SHA256='501f7c17db28ce3d435bcb34fc540b32ad9fcab382e434cbfcc8ef483364f30d'
+readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
+readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
+readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
 readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -310,12 +310,30 @@ trap 'on_error $LINENO' ERR
 trap on_exit EXIT
 
 bootstrap_validate_out_name() { [[ ${1:-} =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ && $1 != __pm_* ]]; }
+bootstrap_validate_internal_out_name() { [[ ${1:-} =~ ^__pm_[a-zA-Z0-9_]+$ ]]; }
+
+bootstrap_reject_out_collision() {
+  local __pm_candidate=${1:-} __pm_declared
+  shift || true
+  for __pm_declared in "$@"; do
+    [[ $__pm_candidate != "$__pm_declared" ]] || return 65
+  done
+}
 
 bootstrap_assign_out() {
   local __pm_target_name=${1:-} __pm_value=${2-}
   bootstrap_validate_out_name "$__pm_target_name" || return 64
   local -n __pm_out_ref="$__pm_target_name"
   __pm_out_ref=$__pm_value
+}
+
+bootstrap_assign_internal_out() {
+  local __pm_assignment_target=${1:-} __pm_assignment_value=${2-}
+  bootstrap_validate_internal_out_name "$__pm_assignment_target" || return 64
+  bootstrap_reject_out_collision "$__pm_assignment_target" \
+    __pm_assignment_target __pm_assignment_value __pm_assignment_ref || return
+  local -n __pm_assignment_ref="$__pm_assignment_target"
+  __pm_assignment_ref=$__pm_assignment_value
 }
 
 bootstrap_capture() {
@@ -329,8 +347,23 @@ bootstrap_capture() {
   bootstrap_assign_out "$__pm_target_name" "$__pm_captured"
 }
 
+bootstrap_capture_internal() {
+  local __pm_capture_target=${1:-} __pm_capture_seconds=${2:-} __pm_capture_value='' __pm_capture_status
+  bootstrap_validate_internal_out_name "$__pm_capture_target" || return 64
+  bootstrap_reject_out_collision "$__pm_capture_target" \
+    __pm_capture_target __pm_capture_seconds __pm_capture_value __pm_capture_status || return
+  shift 2
+  if __pm_capture_value=$(timeout --signal=TERM --kill-after=10s "${__pm_capture_seconds}s" "$@" 2>/dev/null); then
+    __pm_capture_status=0
+  else
+    __pm_capture_status=$?
+  fi
+  (( __pm_capture_status == 0 )) || return "$__pm_capture_status"
+  bootstrap_assign_internal_out "$__pm_capture_target" "$__pm_capture_value"
+}
+
 bootstrap_verify_runtime_path() {
-  local __pm_name=${1:-} __pm_path pm_result_real_path
+  local __pm_name=${1:-} __pm_path __pm_real_path
   case $__pm_name in
     isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
       probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-sql-gate.sh | migration-sql-bindings.txt | \
@@ -342,22 +375,22 @@ bootstrap_verify_runtime_path() {
     printf 'RUNTIME_ARTIFACT_PATH_REFUSED=%s\n' "$__pm_name" >&2
     return 65
   }
-  bootstrap_capture pm_result_real_path 30 realpath -- "$__pm_path" || return
-  [[ $pm_result_real_path == "$__pm_path" ]] || {
+  bootstrap_capture_internal __pm_real_path 30 realpath -- "$__pm_path" || return
+  [[ $__pm_real_path == "$__pm_path" ]] || {
     printf 'RUNTIME_ARTIFACT_PATH_REFUSED=%s\n' "$__pm_name" >&2
     return 65
   }
 }
 
 bootstrap_verify_runtime_artifact() {
-  local __pm_name=${1:-} __pm_expected=${2:-} pm_result_checksum_line __pm_observed
+  local __pm_name=${1:-} __pm_expected=${2:-} __pm_checksum_line __pm_observed
   [[ $__pm_expected =~ ^[0-9a-f]{64}$ ]] || {
     printf 'RUNTIME_ARTIFACT_EXPECTED_SHA_REFUSED=%s\n' "$__pm_name" >&2
     return 64
   }
   bootstrap_verify_runtime_path "$__pm_name" || return
-  bootstrap_capture pm_result_checksum_line 60 sha256sum -- "$PACKAGE_ROOT/$__pm_name" || return
-  __pm_observed=${pm_result_checksum_line%% *}
+  bootstrap_capture_internal __pm_checksum_line 60 sha256sum -- "$PACKAGE_ROOT/$__pm_name" || return
+  __pm_observed=${__pm_checksum_line%% *}
   [[ $__pm_observed == "$__pm_expected" ]] || {
     printf 'RUNTIME_ARTIFACT_CHECKSUM_MISMATCH=%s\n' "$__pm_name" >&2
     return 66

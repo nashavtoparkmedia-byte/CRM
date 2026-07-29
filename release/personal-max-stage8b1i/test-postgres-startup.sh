@@ -82,12 +82,12 @@ pm_postgres_execute_readiness() {
   return "$fixture_status"
 }
 
-pm_postgres_execute_version() {
+pm_postgres_capture_version_internal() {
   local __pm_target_name=$1 fixture_status='' fixture_value=''
   fixture_value_at fixture_status "$FIXTURE_VERSION_INDEX" "${FIXTURE_VERSION_STATUS[@]}"
   fixture_value_at fixture_value "$FIXTURE_VERSION_INDEX" "${FIXTURE_VERSION_VALUE[@]}"
   FIXTURE_VERSION_INDEX=$((FIXTURE_VERSION_INDEX + 1))
-  (( fixture_status == 0 )) && pm_assign_out "$__pm_target_name" "$fixture_value"
+  (( fixture_status == 0 )) && pm_assign_internal_out "$__pm_target_name" "$fixture_value"
   return "$fixture_status"
 }
 
@@ -169,6 +169,12 @@ pass exact_160014_passes
 [[ $POSTGRES_VERSION_CLASSIFICATION == POSTGRES_VERSION_MATCHED && \
   $POSTGRES_VERSION_OUTPUT_CATEGORY == CANONICAL_NUMERIC && $PROBE_ERROR_CLASSIFICATION == NONE ]]
 pass exact_match_classification
+
+fixture_reset
+pm_result_postgres_version=''
+pm_postgres_execute_version pm_result_postgres_version
+[[ $pm_result_postgres_version == 160014 ]]
+pass corrected_execute_version_handoff
 
 fixture_reset
 sanitized_human_version='16.14 (Debian 16.14-1.pgdg120+1)'
@@ -359,5 +365,5 @@ pm_postgres_wait_readiness 3 30
 [[ $- == *e* ]]
 pass errexit_state_preserved
 
-[[ $PASS_COUNT -eq 33 ]]
-printf 'POSTGRES_STARTUP_TEST_COUNT=33\nPREVIOUS_FAILURE=REPRODUCED\nCORRECTED_FIXTURE=PASS\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
+[[ $PASS_COUNT -eq 34 ]]
+printf 'POSTGRES_STARTUP_TEST_COUNT=34\nPREVIOUS_FAILURE=REPRODUCED\nCORRECTED_FIXTURE=PASS\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'

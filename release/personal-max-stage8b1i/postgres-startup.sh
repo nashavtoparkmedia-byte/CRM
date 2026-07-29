@@ -62,8 +62,8 @@ pm_postgres_start_container() {
 }
 
 pm_postgres_observe_container() {
-  local pm_result_postgres_state='' __pm_state __pm_exit __pm_health __pm_extra
-  if ! pm_capture_bounded pm_result_postgres_state docker_metadata 30 \
+  local __pm_postgres_state='' __pm_state __pm_exit __pm_health __pm_extra
+  if ! pm_capture_bounded_internal __pm_postgres_state docker_metadata 30 \
       POSTGRES_READINESS_COMMAND_FAILED POSTGRES_READINESS_COMMAND_FAILED \
       docker inspect --format \
       '{{.State.Status}}|{{.State.ExitCode}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
@@ -71,7 +71,7 @@ pm_postgres_observe_container() {
     PROBE_ERROR_CLASSIFICATION=POSTGRES_READINESS_COMMAND_FAILED
     return 69
   fi
-  IFS='|' read -r __pm_state __pm_exit __pm_health __pm_extra <<<"$pm_result_postgres_state"
+  IFS='|' read -r __pm_state __pm_exit __pm_health __pm_extra <<<"$__pm_postgres_state"
   case $__pm_state in created | running | restarting | removing | paused | exited | dead) ;;
     *) PROBE_ERROR_CLASSIFICATION=POSTGRES_READINESS_COMMAND_FAILED; return 65 ;;
   esac
@@ -151,19 +151,35 @@ pm_postgres_wait_readiness() {
   done
 }
 
-pm_postgres_execute_version() {
-  local __pm_target_name=${1:-} pm_result_postgres_version=''
-  pm_validate_out_name "$__pm_target_name" || return
-  pm_capture_bounded pm_result_postgres_version disposable_postgresql 30 \
+pm_postgres_capture_version_internal() {
+  local __pm_version_target=${1:-}
+  pm_validate_internal_out_name "$__pm_version_target" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  pm_reject_out_collision "$__pm_version_target" __pm_version_target || return
+  pm_capture_bounded_internal "$__pm_version_target" disposable_postgresql 30 \
     POSTGRES_VERSION_QUERY_FAILED POSTGRES_VERSION_QUERY_FAILED \
     docker exec "$PG_CONTAINER" psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 \
-    -U "$PG_USER" -d "$PG_DB" -c 'SHOW server_version_num' || return
-  pm_assign_out "$__pm_target_name" "$pm_result_postgres_version"
+    -U "$PG_USER" -d "$PG_DB" -c 'SHOW server_version_num'
+}
+
+pm_postgres_execute_version() {
+  local __pm_target_name=${1:-} __pm_version_value=''
+  pm_validate_out_name "$__pm_target_name" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  pm_postgres_capture_version_internal __pm_version_value || return
+  pm_assign_out "$__pm_target_name" "$__pm_version_value"
 }
 
 pm_postgres_validate_version_num() {
   local __pm_target_name=${1:-} __pm_raw=${2-} __pm_expected=${3:-} __pm_normalized
-  pm_validate_out_name "$__pm_target_name" || return
+  pm_validate_out_name "$__pm_target_name" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
   pm_postgres_set_check POSTGRES_SERVER_VERSION_MATCH_CHECK || return
   POSTGRES_VERSION_MATCHED=false
   POSTGRES_VERSION_CLASSIFICATION=NOT_OBSERVED
@@ -211,8 +227,11 @@ pm_postgres_validate_version_num() {
 
 pm_postgres_wait_version() {
   local __pm_target_name=${1:-} __pm_expected=${2:-} __pm_max_attempts=${3:-} __pm_elapsed_limit=${4:-}
-  local __pm_started=$SECONDS __pm_attempt __pm_status=69 __pm_elapsed pm_result_postgres_version=''
-  pm_validate_out_name "$__pm_target_name" || return
+  local __pm_started=$SECONDS __pm_attempt __pm_status=69 __pm_elapsed __pm_version_value=''
+  pm_validate_out_name "$__pm_target_name" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
   pm_safe_uint "$__pm_max_attempts" && pm_safe_uint "$__pm_elapsed_limit" || return 64
   (( __pm_max_attempts > 0 && __pm_elapsed_limit > 0 )) || return 64
   pm_postgres_set_check POSTGRES_SERVER_VERSION_QUERY_CHECK || return
@@ -234,11 +253,11 @@ pm_postgres_wait_version() {
         return 69
         ;;
       running)
-        if pm_postgres_execute_version pm_result_postgres_version; then __pm_status=0; else __pm_status=$?; fi
+        if pm_postgres_capture_version_internal __pm_version_value; then __pm_status=0; else __pm_status=$?; fi
         POSTGRES_VERSION_LAST_EXIT=$__pm_status
         case $__pm_status in
           0)
-            pm_postgres_validate_version_num "$__pm_target_name" "$pm_result_postgres_version" "$__pm_expected" || return
+            pm_postgres_validate_version_num "$__pm_target_name" "$__pm_version_value" "$__pm_expected" || return
             POSTGRES_STARTUP_STATUS=READY
             POSTGRES_STARTUP_ELAPSED_SECONDS=$((POSTGRES_STARTUP_ELAPSED_SECONDS + SECONDS - __pm_started))
             return 0

@@ -1,35 +1,84 @@
 {
-  "schemaVersion": 1,
-  "stage": "8B1I-F",
-  "scope": "release/personal-max-stage8b1i shell functions",
-  "mechanism": {
-    "assignment": "validated Bash nameref",
-    "targetPattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
-    "wrapperReservedPrefix": "__pm_",
-    "helperBridgePrefix": "pm_result_",
-    "helperPublicTargetsRefuseBridgePrefix": true,
-    "evalUsed": false,
-    "callerInitializationRequired": false,
-    "trailingNewlineSemantics": "Bash command substitution strips trailing newlines deterministically"
+  "schemaVersion": 2,
+  "stage": "8B1I",
+  "scope": "complete Stage 8B1I runtime and support output-target call graph",
+  "incident": {
+    "classification": "POSTGRES_VERSION_OUTPUT_MALFORMED",
+    "failureReportSha256": "48567af33cd50d6e8a5d996971b015ab98b753a32ab6811c9db6ff8fdfcd9bef",
+    "failedScriptSha256": "55e730aa6db59637e51c3b171af802e0d95e6ae6688a2481e450a5b72cb18597",
+    "dynamicScopeCollisionProven": true,
+    "exactCause": "CHILD_LOCAL_SHADOWED_CALLER_OUTPUT_TARGET"
+  },
+  "invariant": {
+    "publicTargetPattern": "^[a-zA-Z_][a-zA-Z0-9_]*$",
+    "publicReservedPrefixRejected": "__pm_",
+    "helperInternalPrefix": "__pm_",
+    "publicAssignmentHelper": "pm_assign_out",
+    "internalAssignmentHelper": "pm_assign_internal_out",
+    "internalCaptureHelper": "pm_capture_bounded_internal",
+    "internalForwardersRejectDeclaredLocalCollisions": true,
+    "evalAllowed": false,
+    "printfVAssignmentAllowed": false,
+    "namerefLocations": [
+      "bounded-operations.sh:pm_assign_out",
+      "bounded-operations.sh:pm_assign_internal_out",
+      "isolated-release-probe.sh:bootstrap_assign_out",
+      "isolated-release-probe.sh:bootstrap_assign_internal_out"
+    ]
   },
   "functions": [
-    {"function":"pm_assign_out","file":"bounded-operations.sh","outParameters":["target name"],"localNames":["__pm_target_name","__pm_value","__pm_out_ref"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"collision_matrix"},
-    {"function":"pm_capture_bounded","file":"bounded-operations.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_command_class","__pm_seconds","__pm_timeout_class","__pm_failure_class","__pm_captured","__pm_status","__pm_had_errexit"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"fixed_exact_caller_and_collision_matrix"},
-    {"function":"bootstrap_assign_out","file":"isolated-release-probe.sh","outParameters":["target name"],"localNames":["__pm_target_name","__pm_value","__pm_out_ref"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_bootstrap_collision_matrix"},
-    {"function":"bootstrap_capture","file":"isolated-release-probe.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_seconds","__pm_captured","__pm_status"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_bootstrap_collision_matrix"},
-    {"function":"sha_of","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_path","pm_result_checksum_line"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_sha_helper_collision_matrix"},
-    {"function":"free_bytes_at","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_path","pm_result_df_output","__pm_header","__pm_data","__pm_filesystem","__pm_blocks","__pm_used","__pm_available","__pm_capacity","__pm_mountpoint"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_free_bytes_helper"},
-    {"function":"hash_sorted_text","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_value","pm_result_source_path","pm_result_sorted_path","pm_result_checksum_line","__pm_digest"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_hash_sorted_helper"},
-    {"function":"hash_raw_command","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_command_class","__pm_seconds","__pm_timeout_class","__pm_failure_class","pm_result_raw_path","pm_result_checksum_line","__pm_digest","__pm_status","__pm_original_class"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_hash_raw_command_helper"},
-    {"function":"cleanup_inventory","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_kind","__pm_seconds","pm_result_inventory_output","__pm_run_id"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_cleanup_inventory_outputs_and_failure"},
-    {"function":"image_presence","file":"probe-output-helpers.sh","outParameters":["arguments 1 and 2"],"localNames":["__pm_boolean_target","__pm_id_target","__pm_ref","pm_result_image_id"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_image_presence_outputs_and_failure"},
-    {"function":"psql_value","file":"probe-output-helpers.sh","outParameters":["argument 1"],"localNames":["__pm_target_name","__pm_query","pm_result_psql_output"],"collisionPossible":false,"nounsetSafe":true,"fixed":true,"executableTest":"actual_psql_value_helper"}
+    {"function":"bootstrap_assign_out","file":"isolated-release-probe.sh","outputTarget":"argument 1","internalValue":"__pm_value","callers":["bootstrap_capture"],"collisionPossibleBefore":false,"fixRequired":false,"executableTestCoverage":["actual_bootstrap_collision_matrix"]},
+    {"function":"bootstrap_capture","file":"isolated-release-probe.sh","outputTarget":"argument 1","internalValue":"__pm_captured","callers":["bootstrap_verify_runtime_path","bootstrap_verify_runtime_artifact","bootstrap main"],"collisionPossibleBefore":false,"fixRequired":false,"executableTestCoverage":["actual_bootstrap_collision_matrix"]},
+    {"function":"bootstrap_assign_internal_out","file":"isolated-release-probe.sh","outputTarget":"argument 1 reserved internal","internalValue":"__pm_assignment_value","callers":["bootstrap_capture_internal"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["actual_runtime_artifact_anchor_set","full_package_source_audit"]},
+    {"function":"bootstrap_capture_internal","file":"isolated-release-probe.sh","outputTarget":"argument 1 reserved internal","internalValue":"__pm_capture_value","callers":["bootstrap_verify_runtime_path","bootstrap_verify_runtime_artifact"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["actual_runtime_artifact_anchor_set","paired_runtime_artifact_substitution_refused"]},
+    {"function":"pm_assign_out","file":"bounded-operations.sh","outputTarget":"argument 1 public","internalValue":"__pm_value","callers":["all public output helpers"],"collisionPossibleBefore":false,"fixRequired":false,"executableTestCoverage":["collision_matrix","invalid_destination","reserved_destination"]},
+    {"function":"pm_assign_internal_out","file":"bounded-operations.sh","outputTarget":"argument 1 reserved internal","internalValue":"__pm_assignment_value","callers":["pm_capture_bounded_internal","offline mocks"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["identical_internal_name_rejected","nested_depth_two","nested_depth_three"]},
+    {"function":"pm_capture_bounded","file":"bounded-operations.sh","outputTarget":"argument 1 public","internalValue":"__pm_captured","callers":["top-level probe","failure diagnostics","public support entry points"],"collisionPossibleBefore":false,"fixRequired":false,"executableTestCoverage":["empty_output","multiline_output","failed_command_no_false_overwrite"]},
+    {"function":"pm_capture_bounded_internal","file":"bounded-operations.sh","outputTarget":"argument 1 reserved internal","internalValue":"__pm_capture_value","callers":["all checksum-bound nested output helpers"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["identical_internal_name_rejected","full_package_source_audit"]},
+    {"function":"sha_of","file":"probe-output-helpers.sh","outputTarget":"argument 1 public","internalValue":"__pm_checksum_line","callers":["backup binding","dump binding","runtime tests"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["semantically_similar_names","actual_sha_helper_collision_matrix"]},
+    {"function":"free_bytes_at","file":"probe-output-helpers.sh","outputTarget":"argument 1 public","internalValue":"__pm_df_output","callers":["storage gates"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["actual_free_bytes_helper"]},
+    {"function":"hash_sorted_text","file":"probe-output-helpers.sh","outputTarget":"argument 1 public","internalValue":"__pm_source_path/__pm_sorted_path/__pm_checksum_line","callers":["migration and ledger attestations"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["actual_hash_sorted_helper","ledger_verification_handoff"]},
+    {"function":"hash_raw_command","file":"probe-output-helpers.sh","outputTarget":"argument 1 public","internalValue":"__pm_raw_path/__pm_checksum_line","callers":["production Git hash","production snapshot"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["production_hash_handoff","actual_hash_raw_command_helper"]},
+    {"function":"cleanup_inventory","file":"probe-output-helpers.sh","outputTarget":"argument 1 public","internalValue":"__pm_inventory_output","callers":["cleanup_docker_objects"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["cleanup_inventory_handoff","actual_cleanup_inventory_outputs"]},
+    {"function":"image_presence","file":"probe-output-helpers.sh","outputTarget":"arguments 1 and 2 public","internalValue":"__pm_image_id","callers":["image acquisition gate"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["actual_image_presence_outputs","distinct_target_gate"]},
+    {"function":"psql_value","file":"probe-output-helpers.sh","outputTarget":"argument 1 public","internalValue":"__pm_psql_output","callers":["migration verification","E2E verification"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["actual_psql_value_helper"]},
+    {"function":"pm_postgres_capture_version_internal","file":"postgres-startup.sh","outputTarget":"argument 1 reserved internal","internalValue":"none; forwards bounded capture","callers":["pm_postgres_execute_version","pm_postgres_wait_version"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["corrected_postgres_handoff","output_handoff_after_retry"]},
+    {"function":"pm_postgres_execute_version","file":"postgres-startup.sh","outputTarget":"argument 1 public","internalValue":"__pm_version_value","callers":["direct regression fixture"],"collisionPossibleBefore":true,"fixRequired":true,"executableTestCoverage":["current_postgres_collision_reproduced","corrected_postgres_handoff","corrected_real_helper_fixture"]},
+    {"function":"pm_postgres_validate_version_num","file":"postgres-startup.sh","outputTarget":"argument 1 public","internalValue":"__pm_normalized","callers":["pm_postgres_wait_version","canonical version tests"],"collisionPossibleBefore":false,"fixRequired":false,"executableTestCoverage":["whitespace_normalized_version","success_clears_stale_classification"]},
+    {"function":"pm_postgres_wait_version","file":"postgres-startup.sh","outputTarget":"argument 1 public","internalValue":"__pm_version_value","callers":["isolated-release-probe.sh"],"collisionPossibleBefore":true,"fixRequired":true,"executableTestCoverage":["output_handoff_after_retry","corrected_real_canonical_fixture"]},
+    {"function":"pm_restore_query_raw","file":"restore-verification.sh","outputTarget":"argument 1 public","internalValue":"__pm_restore_output","callers":["pm_restore_query"],"collisionPossibleBefore":false,"fixRequired":true,"executableTestCoverage":["restore backend cases"]},
+    {"function":"pm_restore_query","file":"restore-verification.sh","outputTarget":"argument 1 public","internalValue":"none; validated forwarder","callers":["pm_restore_verify_database"],"collisionPossibleBefore":false,"fixRequired":false,"executableTestCoverage":["restore verification 25-case suite"]},
+    {"function":"pm_restore_query_internal","file":"restore-verification.sh","outputTarget":"argument 1 reserved internal","internalValue":"none; guarded bounded forwarder","callers":["pm_restore_require_relation","pm_restore_optional_representative"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["mapped_table_names","optional_representative_absent"]},
+    {"function":"pm_restore_optional_representative","file":"restore-verification.sh","outputTarget":"arguments 1 and 2 public","internalValue":"__pm_relation_present/__pm_count_value","callers":["pm_restore_verify_database"],"collisionPossibleBefore":true,"fixRequired":true,"executableTestCoverage":["optional_representative_absent","representative_failure_classification"]},
+    {"function":"pm_restore_json_capture","file":"restore-verification.sh","outputTarget":"argument 1 public","internalValue":"__pm_json_value","callers":["ledger and report helpers"],"collisionPossibleBefore":true,"fixRequired":true,"executableTestCoverage":["restore_verification_handoff","ledger_verification_handoff"]},
+    {"function":"pm_restore_json_capture_internal","file":"restore-verification.sh","outputTarget":"argument 1 reserved internal","internalValue":"none; guarded bounded forwarder","callers":["pm_restore_analyze_ledger_json"],"collisionPossibleBefore":"NOT_APPLICABLE_NEW_FUNCTION","fixRequired":false,"executableTestCoverage":["ledger verification 22-case suite","full_package_source_audit"]}
   ],
-  "scans": {
-    "printfVProductionOccurrences": 0,
-    "evalProductionOccurrences": 0,
-    "reservedWrapperTargetCalls": 0,
-    "oldImplementationRetainedOnlyAsTestFixture": true
+  "callChainsReviewed": [
+    {"chain":"bootstrap -> runtime artifact verification -> source","collisionSafe":true},
+    {"chain":"production_snapshot -> hash_raw_command -> internal capture -> public assignment","collisionSafe":true},
+    {"chain":"cleanup_docker_objects -> cleanup_inventory -> internal capture -> public assignment","collisionSafe":true},
+    {"chain":"PostgreSQL retry -> internal version capture -> canonical validation -> public assignment","collisionSafe":true},
+    {"chain":"restore relation/representative -> guarded internal query -> bounded capture","collisionSafe":true},
+    {"chain":"ledger JSON -> guarded internal JSON capture -> attestation hash","collisionSafe":true},
+    {"chain":"failure report rendering/handoff -> public bounded capture","collisionSafe":true},
+    {"chain":"migration SQL and Prisma gates","outputTargetFunctions":0,"collisionSafe":true},
+    {"chain":"synthetic scraper and gateway harness launchers","shellOutputTargetFunctions":0,"collisionSafe":true}
+  ],
+  "summary": {
+    "functionsAudited": 25,
+    "confirmedCollisions": 1,
+    "latentCollisionCapableFunctions": 3,
+    "affectedFunctions": [
+      "pm_postgres_execute_version",
+      "pm_postgres_wait_version",
+      "pm_restore_optional_representative",
+      "pm_restore_json_capture"
+    ],
+    "remainingKnownCollisions": 0,
+    "staticAudit": "PASS",
+    "executableMatrix": "30/30 PASS",
+    "preparedScriptSha256": "2c54907799dabee4c92eca40ebfd8176a8b8f4f61c70ed65f38a542cd0ea4b6e",
+    "rootProbeRerun": false
   },
-  "verdict": "OUT_PARAMETER_COLLISION_ARCHITECTURALLY_REPAIRED_AND_EXECUTABLY_TESTED"
+  "verdict": "OUTPUT_PARAMETER_COLLISIONS_SYSTEMATICALLY_ELIMINATED"
 }

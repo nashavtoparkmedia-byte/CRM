@@ -34,7 +34,8 @@ pm_error_classification_is_safe() {
       PRE_PULL_DISK_GATE_FAILED | POST_PULL_DISK_GATE_FAILED | FINAL_DISK_GATE_FAILED | \
       PRODUCTION_GIT_BASELINE_MISMATCH | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
-      EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
+      EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | OUTPUT_TARGET_SCOPE_COLLISION | \
+      EMERGENCY_DIAGNOSTICS_USED | \
       RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
       RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
       RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
@@ -63,6 +64,21 @@ pm_validate_out_name() {
   [[ ${1:-} =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ && $1 != __pm_* ]]
 }
 
+pm_validate_internal_out_name() {
+  [[ ${1:-} =~ ^__pm_[a-zA-Z0-9_]+$ ]]
+}
+
+pm_reject_out_collision() {
+  local __pm_candidate=${1:-} __pm_declared
+  shift || true
+  for __pm_declared in "$@"; do
+    if [[ $__pm_candidate == "$__pm_declared" ]]; then
+      PROBE_ERROR_CLASSIFICATION=OUTPUT_TARGET_SCOPE_COLLISION
+      return 65
+    fi
+  done
+}
+
 pm_assign_out() {
   local __pm_target_name=${1:-} __pm_value=${2-}
   pm_validate_out_name "$__pm_target_name" || {
@@ -71,6 +87,21 @@ pm_assign_out() {
   }
   local -n __pm_out_ref="$__pm_target_name"
   __pm_out_ref=$__pm_value
+}
+
+# Reserved-scope assignment is private to checksum-bound helpers. Public APIs
+# continue to reject __pm_* destinations. Every forwarding helper must first
+# reject collisions with its own explicitly declared locals.
+pm_assign_internal_out() {
+  local __pm_assignment_target=${1:-} __pm_assignment_value=${2-}
+  pm_validate_internal_out_name "$__pm_assignment_target" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  pm_reject_out_collision "$__pm_assignment_target" \
+    __pm_assignment_target __pm_assignment_value __pm_assignment_ref || return
+  local -n __pm_assignment_ref="$__pm_assignment_target"
+  __pm_assignment_ref=$__pm_assignment_value
 }
 
 pm_restore_errexit() { [[ $1 == true ]] && set -e || set +e; }
@@ -123,6 +154,40 @@ pm_capture_bounded() {
   # Bash command substitution intentionally strips trailing newlines. Empty,
   # one-line, and multiline output otherwise remain byte-for-byte unchanged.
   pm_assign_out "$__pm_target_name" "$__pm_captured"
+}
+
+pm_capture_bounded_internal() {
+  local __pm_capture_target=${1:-} __pm_capture_command_class=${2:-} __pm_capture_seconds=${3:-}
+  local __pm_capture_timeout_class=${4:-} __pm_capture_failure_class=${5:-}
+  local __pm_capture_value='' __pm_capture_status __pm_capture_had_errexit=false
+  pm_validate_internal_out_name "$__pm_capture_target" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  pm_reject_out_collision "$__pm_capture_target" \
+    __pm_capture_target __pm_capture_command_class __pm_capture_seconds \
+    __pm_capture_timeout_class __pm_capture_failure_class __pm_capture_value \
+    __pm_capture_status __pm_capture_had_errexit || return
+  shift 5
+  [[ $- == *e* ]] && __pm_capture_had_errexit=true
+  PROBE_SAFE_COMMAND_CLASS=$__pm_capture_command_class
+  set +e
+  if __pm_capture_value=$("$PM_TIMEOUT_BIN" --signal=TERM --kill-after=10s \
+      "${__pm_capture_seconds}s" "$@" 2>/dev/null); then
+    __pm_capture_status=0
+  else
+    __pm_capture_status=$?
+  fi
+  pm_restore_errexit "$__pm_capture_had_errexit"
+  if (( __pm_capture_status == 124 )); then
+    PROBE_ERROR_CLASSIFICATION=$__pm_capture_timeout_class
+    return 124
+  fi
+  if (( __pm_capture_status != 0 )); then
+    PROBE_ERROR_CLASSIFICATION=$__pm_capture_failure_class
+    return "$__pm_capture_status"
+  fi
+  pm_assign_internal_out "$__pm_capture_target" "$__pm_capture_value"
 }
 
 pm_write_bounded() {

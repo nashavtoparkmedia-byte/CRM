@@ -28,7 +28,8 @@ personal_max_stage8b1i_safe_error() {
       CLEANUP_INCOMPLETE | PRE_PULL_DISK_GATE_FAILED | POST_PULL_DISK_GATE_FAILED | FINAL_DISK_GATE_FAILED | \
       PRODUCTION_GIT_BASELINE_MISMATCH | \
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
-      EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
+      EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | OUTPUT_TARGET_SCOPE_COLLISION | \
+      EMERGENCY_DIAGNOSTICS_USED | \
       RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
       RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
       RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
@@ -83,7 +84,7 @@ personal_max_stage8b1i_render_failure() {
   local post_pull_required post_pull_observed post_pull_deficit final_observed final_deficit cleanup_containers cleanup_networks cleanup_volumes cleanup_temp
   local cleanup_containers_json cleanup_networks_json cleanup_volumes_json cleanup_temp_json
   local ledger_name_count ledger_unique_count ledger_duplicate_count ledger_empty_count ledger_invalid_format_count ledger_unsafe_count
-  local ledger_repository_to_count ledger_to_repository_count ledger_names_sha ledger_attestation_sha ledger_naming_classification value
+  local ledger_repository_to_count ledger_to_repository_count ledger_names_sha ledger_attestation_sha ledger_naming_classification
   local observed_production_head observed_production_status_sha
   local postgres_status postgres_operation postgres_state postgres_health postgres_exit_json
   local postgres_readiness_attempts postgres_readiness_transient postgres_readiness_last_json
@@ -137,10 +138,14 @@ personal_max_stage8b1i_render_failure() {
   ledger_unsafe_count=${LEDGER_UNSAFE_NAME_COUNT:-0}
   ledger_repository_to_count=${LEDGER_REPOSITORY_TO_LEDGER_COUNT:-0}
   ledger_to_repository_count=${LEDGER_TO_REPOSITORY_COUNT:-0}
-  for value in ledger_name_count ledger_unique_count ledger_duplicate_count ledger_empty_count \
-    ledger_invalid_format_count ledger_unsafe_count ledger_repository_to_count ledger_to_repository_count; do
-    [[ ${!value} =~ ^[0-9]+$ ]] || printf -v "$value" '%s' 0
-  done
+  [[ $ledger_name_count =~ ^[0-9]+$ ]] || ledger_name_count=0
+  [[ $ledger_unique_count =~ ^[0-9]+$ ]] || ledger_unique_count=0
+  [[ $ledger_duplicate_count =~ ^[0-9]+$ ]] || ledger_duplicate_count=0
+  [[ $ledger_empty_count =~ ^[0-9]+$ ]] || ledger_empty_count=0
+  [[ $ledger_invalid_format_count =~ ^[0-9]+$ ]] || ledger_invalid_format_count=0
+  [[ $ledger_unsafe_count =~ ^[0-9]+$ ]] || ledger_unsafe_count=0
+  [[ $ledger_repository_to_count =~ ^[0-9]+$ ]] || ledger_repository_to_count=0
+  [[ $ledger_to_repository_count =~ ^[0-9]+$ ]] || ledger_to_repository_count=0
   ledger_names_sha=${LEDGER_NAMES_SHA256:-not_observed}
   [[ $ledger_names_sha =~ ^[0-9a-f]{64}$ ]] || ledger_names_sha=not_observed
   ledger_attestation_sha=${LEDGER_ATTESTATION_SHA256:-not_observed}
@@ -175,9 +180,11 @@ personal_max_stage8b1i_render_failure() {
   postgres_version_attempts=${POSTGRES_VERSION_QUERY_ATTEMPTS:-0}
   postgres_version_transient=${POSTGRES_VERSION_TRANSIENT_COUNT:-0}
   postgres_elapsed=${POSTGRES_STARTUP_ELAPSED_SECONDS:-0}
-  for value in postgres_readiness_attempts postgres_readiness_transient postgres_version_attempts postgres_version_transient postgres_elapsed; do
-    [[ ${!value} =~ ^[0-9]+$ ]] || printf -v "$value" '%s' 0
-  done
+  [[ $postgres_readiness_attempts =~ ^[0-9]+$ ]] || postgres_readiness_attempts=0
+  [[ $postgres_readiness_transient =~ ^[0-9]+$ ]] || postgres_readiness_transient=0
+  [[ $postgres_version_attempts =~ ^[0-9]+$ ]] || postgres_version_attempts=0
+  [[ $postgres_version_transient =~ ^[0-9]+$ ]] || postgres_version_transient=0
+  [[ $postgres_elapsed =~ ^[0-9]+$ ]] || postgres_elapsed=0
   if [[ ${POSTGRES_READINESS_LAST_EXIT:-} =~ ^[0-9]+$ ]]; then postgres_readiness_last_json=${POSTGRES_READINESS_LAST_EXIT}; else postgres_readiness_last_json='"not_observed"'; fi
   if [[ ${POSTGRES_VERSION_LAST_EXIT:-} =~ ^[0-9]+$ ]]; then postgres_version_last_json=${POSTGRES_VERSION_LAST_EXIT}; else postgres_version_last_json='"not_observed"'; fi
   postgres_version_matched=${POSTGRES_VERSION_MATCHED:-false}

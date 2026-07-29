@@ -118,6 +118,14 @@ pm_restore_query_raw() {
   pm_assign_out "$__pm_target_name" "$__pm_value"
 }
 
+pm_restore_query_internal() {
+  local __pm_internal_target=${1:-} __pm_check_id=${2:-} __pm_failure_class=${3:-} __pm_query=${4-}
+  pm_restore_enter_check "$__pm_check_id" || return
+  FIXTURE_INTERNAL_QUERY_VALUE=''
+  pm_restore_query_raw FIXTURE_INTERNAL_QUERY_VALUE "$__pm_failure_class" "$__pm_query" || return
+  pm_assign_internal_out "$__pm_internal_target" "$FIXTURE_INTERNAL_QUERY_VALUE"
+}
+
 expect_full_failure() {
   local __pm_expected_class=$1 __pm_expected_check=$2 __pm_status
   set +e

@@ -34,14 +34,14 @@ pm_restore_enter_check() {
 }
 
 pm_restore_container_available() {
-  local pm_result_restore_running=''
-  if ! pm_capture_bounded pm_result_restore_running docker_disposable 30 \
+  local __pm_restore_running=''
+  if ! pm_capture_bounded_internal __pm_restore_running docker_disposable 30 \
       DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_CONTAINER_UNAVAILABLE \
       docker inspect --format '{{if .State.Running}}true{{else}}false{{end}}' "$PG_CONTAINER"; then
     PROBE_ERROR_CLASSIFICATION=DISPOSABLE_CONTAINER_UNAVAILABLE
     return 69
   fi
-  if [[ $pm_result_restore_running != true ]]; then
+  if [[ $__pm_restore_running != true ]]; then
     PROBE_ERROR_CLASSIFICATION=DISPOSABLE_CONTAINER_UNAVAILABLE
     return 69
   fi
@@ -49,17 +49,17 @@ pm_restore_container_available() {
 
 pm_restore_query_raw() {
   local __pm_target_name=${1:-} __pm_failure_class=${2:-} __pm_query=${3-}
-  local pm_result_restore_output=''
+  local __pm_restore_output=''
   pm_require_helper_out_name "$__pm_target_name" || return
   pm_restore_failure_class_is_safe "$__pm_failure_class" || {
     PROBE_ERROR_CLASSIFICATION=RESTORE_QUERY_FAILED
     return 64
   }
   pm_restore_container_available || return
-  pm_capture_bounded pm_result_restore_output disposable_postgresql 120 \
+  pm_capture_bounded_internal __pm_restore_output disposable_postgresql 120 \
     DISPOSABLE_DOCKER_TIMEOUT "$__pm_failure_class" docker exec "$PG_CONTAINER" \
     psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" -c "$__pm_query" || return
-  pm_assign_out "$__pm_target_name" "$pm_result_restore_output"
+  pm_assign_out "$__pm_target_name" "$__pm_restore_output"
 }
 
 pm_restore_query() {
@@ -67,6 +67,25 @@ pm_restore_query() {
   pm_require_helper_out_name "$__pm_target_name" || return
   pm_restore_enter_check "$__pm_check_id" || return
   pm_restore_query_raw "$__pm_target_name" "$__pm_failure_class" "$__pm_query"
+}
+
+pm_restore_query_internal() {
+  local __pm_internal_target=${1:-} __pm_check_id=${2:-} __pm_failure_class=${3:-} __pm_query=${4-}
+  pm_validate_internal_out_name "$__pm_internal_target" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  pm_reject_out_collision "$__pm_internal_target" \
+    __pm_internal_target __pm_check_id __pm_failure_class __pm_query || return
+  pm_restore_enter_check "$__pm_check_id" || return
+  pm_restore_failure_class_is_safe "$__pm_failure_class" || {
+    PROBE_ERROR_CLASSIFICATION=RESTORE_QUERY_FAILED
+    return 64
+  }
+  pm_restore_container_available || return
+  pm_capture_bounded_internal "$__pm_internal_target" disposable_postgresql 120 \
+    DISPOSABLE_DOCKER_TIMEOUT "$__pm_failure_class" docker exec "$PG_CONTAINER" \
+    psql --no-psqlrc -X -A -t -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$PG_DB" -c "$__pm_query"
 }
 
 pm_restore_assert_uint_equal() {
@@ -86,9 +105,9 @@ pm_restore_assert_uint_positive() {
 }
 
 pm_restore_require_relation() {
-  local __pm_check_id=${1:-} __pm_presence_query=${2-} restore_result_relation_present=''
-  pm_restore_query restore_result_relation_present "$__pm_check_id" RESTORE_QUERY_FAILED "$__pm_presence_query" || return
-  if [[ $restore_result_relation_present != t ]]; then
+  local __pm_check_id=${1:-} __pm_presence_query=${2-} __pm_relation_present=''
+  pm_restore_query_internal __pm_relation_present "$__pm_check_id" RESTORE_QUERY_FAILED "$__pm_presence_query" || return
+  if [[ $__pm_relation_present != t ]]; then
     PROBE_ERROR_CLASSIFICATION=RESTORE_REQUIRED_RELATION_MISSING
     return 67
   fi
@@ -96,12 +115,12 @@ pm_restore_require_relation() {
 
 pm_restore_optional_representative() {
   local __pm_count_target=${1:-} __pm_available_target=${2:-} __pm_check_id=${3:-}
-  local __pm_presence_query=${4-} __pm_count_query=${5-} restore_result_relation_present='' restore_result_count=''
+  local __pm_presence_query=${4-} __pm_count_query=${5-} __pm_relation_present='' __pm_count_value=''
   pm_require_helper_out_name "$__pm_count_target" || return
   pm_require_helper_out_name "$__pm_available_target" || return
   [[ $__pm_count_target != "$__pm_available_target" ]] || return 64
-  pm_restore_query restore_result_relation_present "$__pm_check_id" RESTORE_QUERY_FAILED "$__pm_presence_query" || return
-  case $restore_result_relation_present in
+  pm_restore_query_internal __pm_relation_present "$__pm_check_id" RESTORE_QUERY_FAILED "$__pm_presence_query" || return
+  case $__pm_relation_present in
     f)
       pm_assign_out "$__pm_count_target" null
       pm_assign_out "$__pm_available_target" false
@@ -113,21 +132,32 @@ pm_restore_optional_representative() {
       return 67
       ;;
   esac
-  pm_restore_query restore_result_count "$__pm_check_id" RESTORE_REPRESENTATIVE_CHECK_FAILED "$__pm_count_query" || return
-  if ! pm_safe_uint "$restore_result_count"; then
+  pm_restore_query_internal __pm_count_value "$__pm_check_id" RESTORE_REPRESENTATIVE_CHECK_FAILED "$__pm_count_query" || return
+  if ! pm_safe_uint "$__pm_count_value"; then
     PROBE_ERROR_CLASSIFICATION=RESTORE_REPRESENTATIVE_CHECK_FAILED
     return 67
   fi
-  pm_assign_out "$__pm_count_target" "$restore_result_count"
+  pm_assign_out "$__pm_count_target" "$__pm_count_value"
   pm_assign_out "$__pm_available_target" true
 }
 
 pm_restore_json_capture() {
-  local __pm_target_name=${1:-} __pm_filter=${2:-} __pm_json=${3-} restore_result_json=''
+  local __pm_target_name=${1:-} __pm_filter=${2:-} __pm_json=${3-} __pm_json_value=''
   pm_require_helper_out_name "$__pm_target_name" || return
-  pm_capture_bounded restore_result_json report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+  pm_capture_bounded_internal __pm_json_value report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     jq -r "$__pm_filter" <<<"$__pm_json" || return
-  pm_assign_out "$__pm_target_name" "$restore_result_json"
+  pm_assign_out "$__pm_target_name" "$__pm_json_value"
+}
+
+pm_restore_json_capture_internal() {
+  local __pm_internal_target=${1:-} __pm_filter=${2:-} __pm_json=${3-}
+  pm_validate_internal_out_name "$__pm_internal_target" || {
+    PROBE_ERROR_CLASSIFICATION=INVALID_OUT_PARAMETER
+    return 64
+  }
+  pm_reject_out_collision "$__pm_internal_target" __pm_internal_target __pm_filter __pm_json || return
+  pm_capture_bounded_internal "$__pm_internal_target" report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    jq -r "$__pm_filter" <<<"$__pm_json"
 }
 
 pm_restore_ledger_fail() {
@@ -136,7 +166,7 @@ pm_restore_ledger_fail() {
 }
 
 pm_restore_analyze_ledger_json() {
-  local __pm_ledger_json=${1-} restore_result_canonical=''
+  local __pm_ledger_json=${1-} __pm_canonical=''
   pm_restore_enter_check RESTORE_LEDGER_NAMES_CHECK || return
   if ! pm_run_bounded report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
       jq -e 'type=="array" and all(.[]; type=="string")' <<<"$__pm_ledger_json" >/dev/null; then
@@ -161,8 +191,8 @@ pm_restore_analyze_ledger_json() {
       (if ($name|contains("-")) then "hyphenated_historical_name" else empty end),
       (if (($name|test("^[0-9]{14}_")) and ($name|test("[A-Z-]")|not)) then "other_safe_historical_format" else empty end)
     ]|unique|tojson' "$__pm_ledger_json" || return
-  pm_restore_json_capture restore_result_canonical 'sort|tojson' "$__pm_ledger_json" || return
-  hash_sorted_text LEDGER_NAMES_SHA256 "$restore_result_canonical" || return
+  pm_restore_json_capture_internal __pm_canonical 'sort|tojson' "$__pm_ledger_json" || return
+  hash_sorted_text LEDGER_NAMES_SHA256 "$__pm_canonical" || return
   hash_sorted_text LEDGER_ATTESTATION_SHA256 "$__pm_ledger_json" || return
   (( LEDGER_NAME_COUNT == 46 )) || pm_restore_ledger_fail RESTORE_LEDGER_COUNT_MISMATCH || return
   (( LEDGER_DUPLICATE_COUNT == 0 )) || pm_restore_ledger_fail RESTORE_LEDGER_DUPLICATE_NAME || return
@@ -172,8 +202,8 @@ pm_restore_analyze_ledger_json() {
 
 pm_restore_validate_ledger_json() {
   local __pm_ledger_json=${1-} __pm_preflight=${2:-} __pm_repository_inventory=${3:-}
-  local restore_result_preflight_hash=''
-  local restore_result_repo_count='' restore_result_repo_unique_count=''
+  local __pm_preflight_hash=''
+  local __pm_repo_count='' __pm_repo_unique_count=''
 
   pm_restore_analyze_ledger_json "$__pm_ledger_json" || return
 
@@ -191,7 +221,7 @@ pm_restore_validate_ledger_json() {
     pm_restore_ledger_fail RESTORE_LEDGER_EXPECTED_SET_MISMATCH
     return
   fi
-  pm_capture_bounded restore_result_preflight_hash report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+  pm_capture_bounded_internal __pm_preflight_hash report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     jq -r '.database.migration.ledgerHash' "$__pm_preflight" || return
 
   pm_write_bounded "$TMP/ledger-before.unsorted" report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
@@ -211,9 +241,9 @@ pm_restore_validate_ledger_json() {
   pm_write_bounded "$TMP/expected-migrations.sorted" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     env LC_ALL=C sort "$TMP/expected-migrations" || return
 
-  pm_capture_bounded restore_result_repo_count filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+  pm_capture_bounded_internal __pm_repo_count filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     awk 'NF{count++} END{print count+0}' "$__pm_repository_inventory" || return
-  pm_capture_bounded restore_result_repo_unique_count filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+  pm_capture_bounded_internal __pm_repo_unique_count filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     awk 'NF && !seen[$0]++{count++} END{print count+0}' "$__pm_repository_inventory" || return
   pm_write_bounded "$TMP/repository-to-ledger" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     comm -23 "$__pm_repository_inventory" "$TMP/ledger-before" || return
@@ -224,9 +254,9 @@ pm_restore_validate_ledger_json() {
   pm_capture_bounded LEDGER_TO_REPOSITORY_COUNT filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
     awk 'NF{count++} END{print count+0}' "$TMP/ledger-to-repository" || return
 
-  if [[ $restore_result_preflight_hash != "$ATTESTED_PRODUCTION_LEDGER_SHA256" ||
+  if [[ $__pm_preflight_hash != "$ATTESTED_PRODUCTION_LEDGER_SHA256" ||
         $LEDGER_ATTESTATION_SHA256 != "$ATTESTED_PRODUCTION_LEDGER_SHA256" ||
-        $restore_result_repo_count != 53 || $restore_result_repo_unique_count != 53 ||
+        $__pm_repo_count != 53 || $__pm_repo_unique_count != 53 ||
         $LEDGER_REPOSITORY_TO_LEDGER_COUNT != 8 || $LEDGER_TO_REPOSITORY_COUNT != 1 ]] ||
       ! cmp -s "$TMP/ledger-before" "$TMP/accepted-ledger.sorted" ||
       ! cmp -s "$TMP/accepted-pending.sorted" "$TMP/expected-migrations.sorted" ||

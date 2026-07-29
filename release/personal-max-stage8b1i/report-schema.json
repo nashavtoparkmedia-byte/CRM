@@ -89,7 +89,7 @@
         "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
-          "classification": {"type": "string"},
+          "classification": {"type": "string", "description": "Privacy-safe failure classification, including INVALID_OUT_PARAMETER or OUTPUT_TARGET_SCOPE_COLLISION for output-contract failures."},
           "checkId": {
             "enum": [
               "NONE", "POSTGRES_CONTAINER_START_CHECK", "POSTGRES_READINESS_CHECK",
