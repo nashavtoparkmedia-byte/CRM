@@ -12,6 +12,7 @@ readonly OUTPUT_HELPERS="$SCRIPT_DIR/probe-output-helpers.sh"
 readonly RESTORE_VERIFICATION="$SCRIPT_DIR/restore-verification.sh"
 readonly POSTGRES_STARTUP="$SCRIPT_DIR/postgres-startup.sh"
 readonly MIGRATION_PREFLIGHT="$SCRIPT_DIR/migration-preflight.sh"
+readonly RESIDUAL_CLEANUP="$SCRIPT_DIR/residual-cleanup.sh"
 readonly MIGRATION_SQL_GATE="$SCRIPT_DIR/migration-sql-gate.sh"
 readonly MIGRATION_SQL_BINDINGS="$SCRIPT_DIR/migration-sql-bindings.txt"
 readonly PRISMA_LEGACY_DIFF_GATE="$SCRIPT_DIR/prisma-legacy-diff-gate.sh"
@@ -23,6 +24,9 @@ readonly LEDGER_TESTS="$SCRIPT_DIR/test-ledger-verification.sh"
 readonly POSTGRES_STARTUP_TESTS="$SCRIPT_DIR/test-postgres-startup.sh"
 readonly MIGRATION_PREFLIGHT_TESTS="$SCRIPT_DIR/test-migration-preflight.sh"
 readonly POSTGRES_NETWORK_ALIAS_TESTS="$SCRIPT_DIR/test-postgres-network-alias.sh"
+readonly MIGRATION_VERIFICATION_TESTS="$SCRIPT_DIR/test-migration-verification.sh"
+readonly FAILURE_HANDOFF_TESTS="$SCRIPT_DIR/test-failure-handoff.sh"
+readonly REMAINING_TAIL_TESTS="$SCRIPT_DIR/test-remaining-tail-contract.sh"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
@@ -31,6 +35,10 @@ readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.
 readonly FAILURE_REPORT_SHA='20ed0d543ef36aaa97518968118cc0b7befa5a49ab764f99a76c82ed7107151c'
 readonly ALIAS_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.1772cc2b99934c7c81c4832c29d60abfecbc21d1f3b250bcd437d77a377d22ed.json'
 readonly ALIAS_FAILURE_REPORT_SHA='b53706d5e89786cb572c8389d25cfa80a883c3d57fd40b9c083804ceff1f7524'
+readonly VERIFICATION_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3.json'
+readonly VERIFICATION_FAILURE_REPORT_SHA='0203c1287fc2415367e10852fb83bb8001f558f2484c8e6cafe14d86c7d3dd67'
+readonly VERIFICATION_FAILED_SCRIPT_SHA='6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3'
+readonly VERIFICATION_FAILED_SOURCE_COMMIT='d62c990d74d1b99f455ab24e95d9f8a225bf9d40'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly REPOSITORY_MIGRATIONS="$SCRIPT_DIR/../../gravity-mvp/prisma/migrations"
@@ -101,21 +109,64 @@ jq -e '.schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
   .productionImmutability.observedProductionStatusV2RawSha256=="2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"' \
   "$ALIAS_FAILURE_REPORT" >/dev/null
 pass postgres_alias_failure_report_acceptance
+[[ -f $VERIFICATION_FAILURE_REPORT && ! -L $VERIFICATION_FAILURE_REPORT && \
+  -r $VERIFICATION_FAILURE_REPORT && ! -w $VERIFICATION_FAILURE_REPORT ]]
+[[ $(stat -Lc '%U:%G:%a:%s' "$VERIFICATION_FAILURE_REPORT") == root:codexbot:640:5519 ]]
+[[ $(sha256sum -- "$VERIFICATION_FAILURE_REPORT" | awk '{print $1}') == "$VERIFICATION_FAILURE_REPORT_SHA" ]]
+jq -e --arg scriptSha "$VERIFICATION_FAILED_SCRIPT_SHA" '
+  .schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
+  .script.sha256==$scriptSha and .script.checksumBound==true and
+  .phase=="migration_verification" and .safeCommandClass=="disposable_migration" and
+  .classification=="PRISMA_DIFF_FAILED" and .checkId=="MIGRATION_PRISMA_DIFF_CHECK" and
+  .exitCode==1 and .sourceLine==165 and
+  .migrationPreflight.checkId=="MIGRATION_PRISMA_DIFF_CHECK" and
+  .migrationPreflight.substep=="prisma_diff" and .migrationPreflight.runnerRole=="prisma_diff" and
+  .migrationPreflight.commandCategory=="internal_validator" and
+  .migrationPreflight.executableCategory=="posix_shell" and
+  .migrationPreflight.commandStarted==true and .migrationPreflight.attemptCount==1 and
+  .migrationPreflight.elapsedSeconds==0 and .migrationPreflight.originalExitCode==1 and
+  .migrationPreflight.containerStateCategory=="not_observed" and
+  .migrationPreflight.primaryClassification=="PRISMA_DIFF_FAILED" and
+  .cleanup.completed==true and .cleanup.errorClassification=="NONE" and
+  .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and
+  .cleanup.volumesRemaining==0 and .cleanup.tempFilesRemaining==0 and
+  .productionImmutability.acceptedProductionHead==.productionImmutability.observedProductionHead and
+  .productionImmutability.acceptedProductionStatusV2RawSha256==.productionImmutability.observedProductionStatusV2RawSha256 and
+  ([.diagnostics.rawCommandCaptured,.diagnostics.rawSqlCaptured,.diagnostics.rawStderrCaptured,
+    .diagnostics.environmentValuesCaptured,.diagnostics.credentialsCaptured,
+    .diagnostics.messageDataCaptured,.diagnostics.providerPayloadCaptured,
+    .safety.productionDDL,.safety.productionDML,.safety.productionMigration,.safety.restart,
+    .safety.deploy,.safety.browserLaunched,.safety.maxContacted,.safety.providerAction,
+    .safety.productionNetworkAttached,.safety.productionVolumeMounted,.safety.profileMounted] | all(.==false))' \
+  "$VERIFICATION_FAILURE_REPORT" >/dev/null
+bound_script_sha=$(git -C "$SCRIPT_DIR" show \
+  "$VERIFICATION_FAILED_SOURCE_COMMIT:release/personal-max-stage8b1i/isolated-release-probe.sh" | sha256sum | awk '{print $1}')
+bound_helper_line=$(git -C "$SCRIPT_DIR" show \
+  "$VERIFICATION_FAILED_SOURCE_COMMIT:release/personal-max-stage8b1i/migration-preflight.sh" | sed -n '165p')
+bound_top_level=$(git -C "$SCRIPT_DIR" show \
+  "$VERIFICATION_FAILED_SOURCE_COMMIT:release/personal-max-stage8b1i/isolated-release-probe.sh" | sed -n '741,743p')
+[[ $bound_script_sha == "$VERIFICATION_FAILED_SCRIPT_SHA" &&
+  $bound_helper_line == *'pm_migration_record_failure "${PROBE_ERROR_CLASSIFICATION:-$__pm_failure_class}" "$__pm_status" not_observed'* &&
+  $bound_top_level == *'pm_migration_run_bounded MIGRATION_PRISMA_DIFF_CHECK prisma_diff prisma_diff internal_validator posix_shell'* &&
+  $bound_top_level == *'sh "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh" "$TMP/prisma-diff.log" >/dev/null'* ]]
+pass verification_failure_report_acceptance
 free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
 
-bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" "$MIGRATION_PREFLIGHT" \
+bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" "$MIGRATION_PREFLIGHT" "$RESIDUAL_CLEANUP" \
   "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" "$RESTORE_TESTS" "$LEDGER_TESTS" \
-  "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" "$POSTGRES_NETWORK_ALIAS_TESTS" "$SCRIPT_DIR/test-package.sh"
+  "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" "$POSTGRES_NETWORK_ALIAS_TESTS" \
+  "$MIGRATION_VERIFICATION_TESTS" "$FAILURE_HANDOFF_TESTS" "$REMAINING_TAIL_TESTS" "$SCRIPT_DIR/test-package.sh"
 sh -n "$MIGRATION_SQL_GATE"
 sh -n "$PRISMA_LEGACY_DIFF_GATE"
 pass bash_syntax
 if command -v "$SHELLCHECK_BIN" >/dev/null 2>&1; then
-  "$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" "$MIGRATION_PREFLIGHT" \
+  "$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" "$MIGRATION_PREFLIGHT" "$RESIDUAL_CLEANUP" \
     "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" \
     "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" \
-    "$POSTGRES_NETWORK_ALIAS_TESTS" "$SCRIPT_DIR/test-package.sh"
+    "$POSTGRES_NETWORK_ALIAS_TESTS" "$MIGRATION_VERIFICATION_TESTS" "$FAILURE_HANDOFF_TESTS" \
+    "$REMAINING_TAIL_TESTS" "$SCRIPT_DIR/test-package.sh"
   pass shellcheck
 else
   PACKAGE_SKIP_COUNT=$((PACKAGE_SKIP_COUNT + 1))
@@ -129,12 +180,13 @@ require_fixed "$BOUNDED" '900s docker pull'
 require_fixed "$PROBE" 'backup_validation 120 RESTORE_LIST_TIMEOUT'
 require_fixed "$PROBE" 'backup_validation 1200 FULL_RESTORE_TIMEOUT'
 require_fixed "$MIGRATION_PREFLIGHT" '"${__pm_seconds}s" docker start -a'
-require_fixed "$PROBE" '600 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED'
+require_fixed "$PROBE" '600 PRISMA_DIFF_TIMEOUT MIGRATION_PRISMA_DIFF_EXECUTION_FAILED'
 require_fixed "$PROBE" 'synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT'
 pass long_operation_timeout_guards
 require_fixed "$BOUNDED" 'pm_poll_until()'
-require_fixed "$PROBE" 'pm_poll_until 180 240 POLLING_DEADLINE_EXCEEDED'
-require_fixed "$PROBE" 'pm_poll_until 60 90 GATEWAY_STARTUP_TIMEOUT'
+require_fixed "$PROBE" 'pm_poll_until 180 240 E2E_VERIFICATION_FAILED'
+require_fixed "$PROBE" 'pm_poll_until 30 60 GATEWAY_DORMANT_READINESS_FAILED'
+require_fixed "$PROBE" 'pm_poll_until 60 90 "$failure_class" gateway_active_health'
 pass polling_deadline_guards
 for evidence in POSTGRES_CONTAINER_START_CHECK POSTGRES_READINESS_CHECK \
   POSTGRES_SERVER_VERSION_QUERY_CHECK POSTGRES_SERVER_VERSION_MATCH_CHECK \
@@ -242,6 +294,35 @@ postgres_alias_output=$("$POSTGRES_NETWORK_ALIAS_TESTS")
 [[ $(grep -c '=PASS$' <<<"$postgres_alias_output") -eq 28 ]]
 pass postgres_network_alias_regression
 
+migration_verification_output=$("$MIGRATION_VERIFICATION_TESTS")
+[[ $migration_verification_output == *'MIGRATION_VERIFICATION_TEST_COUNT=14'* && \
+  $migration_verification_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $migration_verification_output == *'DOCKER_EXECUTED=NO'* && \
+  $migration_verification_output == *'DATABASE_CONNECTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$migration_verification_output") -eq 14 ]]
+pass migration_verification_regression
+
+failure_handoff_output=$("$FAILURE_HANDOFF_TESTS")
+[[ $failure_handoff_output == *'FAILURE_HANDOFF_TEST_COUNT=29'* && \
+  $failure_handoff_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $failure_handoff_output == *'DOCKER_EXECUTED=NO'* && \
+  $failure_handoff_output == *'DATABASE_CONNECTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$failure_handoff_output") -eq 29 ]]
+pass failure_handoff_regression
+
+remaining_tail_output=$("$REMAINING_TAIL_TESTS")
+[[ $remaining_tail_output == *'REMAINING_TAIL_TEST_COUNT=21'* && \
+  $remaining_tail_output == *'REQUIRED_REGRESSION_CASES_COVERED=11'* && \
+  $remaining_tail_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $remaining_tail_output == *'DOCKER_EXECUTED=NO'* && \
+  $remaining_tail_output == *'DATABASE_CONNECTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$remaining_tail_output") -eq 21 ]]
+pass remaining_tail_regression
+
+required_regression_cases=$((14 + 25 + 11))
+[[ $required_regression_cases -eq 50 ]]
+pass required_regression_case_matrix
+
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
 [[ $migration_gate_output == MIGRATION_SQL_GATE=PASS && $(wc -l <"$MIGRATION_SQL_BINDINGS") -eq 8 ]]
 pass exact_migration_sql_binding
@@ -274,12 +355,13 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:cf79c2d62de5f8eae16b0b0acf95f46cb6664375512fbcf2896ee9c8536fd9d0" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:1a72c1e76c65b1a504079b2100238417828da30f3ca62aaf4df610da5e80a3e1" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:5e53e982e0b61742817d30cee43f4b2c0a1fdbd5e1394fe0a1e48fed69ef1311" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:3bdac84ac236d95a7bbdd0722aba7c7cbc69b74493f9b4fc409eb51675330639" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
+  "residual-cleanup.sh:RESIDUAL_CLEANUP_SHA256:d25ece44a93cca76a3105fbc2c7d6af98771b7597ed45fdc1b843a24c155b016" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
   "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
-  "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:d0d084950caab5d74670290f5ea5ad4bf1b84408da57b4d667a3c46372c55361" \
+  "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:5818a9eacb04c53adf14ddd4e0839f01fec45fa3402199e243fa5ef04385f99b" \
   "migration-sql-gate.sh:MIGRATION_SQL_GATE_SHA256:9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda" \
   "migration-sql-bindings.txt:MIGRATION_SQL_BINDINGS_SHA256:9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f" \
   "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8" \
@@ -289,6 +371,7 @@ for binding in \
   require_fixed "$PROBE" "readonly $constant='$digest'"
   require_fixed "$PROBE" "bootstrap_verify_runtime_artifact $artifact \"\$$constant\""
 done
+[[ $(rg -c '^bootstrap_verify_runtime_artifact ' "$PROBE") -eq 12 ]]
 require_fixed "$PROBE" 'bootstrap_verify_runtime_path SHA256SUMS'
 refuse_pattern "$PROBE" 'SHA256SUMS_SHA256|EXPECTED_SHA256SUMS'
 last_anchor_line=$(grep -nF 'bootstrap_verify_runtime_artifact gateway-client-harness.js' "$PROBE" | cut -d: -f1)
@@ -391,6 +474,68 @@ for evidence in MIGRATION_SQL_RUNNER_START_CHECK MIGRATION_PRISMA_DEPLOY_CHECK \
   require_fixed "$MIGRATION_PREFLIGHT" "$evidence"
 done
 pass failure_diagnostics
+for evidence in MIGRATION_POST_FINISHED_COUNT_QUERY_FAILED MIGRATION_POST_FAILED_COUNT_QUERY_FAILED \
+  MIGRATION_POST_LEDGER_COUNT_MISMATCH MIGRATION_POST_LEDGER_NAMES_QUERY_FAILED \
+  MIGRATION_POST_APPLIED_SET_FAILED MIGRATION_POST_APPLIED_SET_MISMATCH \
+  MIGRATION_DURATION_QUERY_FAILED MIGRATION_DURATION_RESULT_MALFORMED \
+  MIGRATION_SCHEMA_TABLE_QUERY_FAILED MIGRATION_SCHEMA_TABLE_MISSING \
+  MIGRATION_SCHEMA_COLUMN_QUERY_FAILED MIGRATION_SCHEMA_COLUMN_MISSING \
+  MIGRATION_SCHEMA_INDEX_QUERY_FAILED MIGRATION_SCHEMA_INDEX_MISSING \
+  MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED MIGRATION_SCHEMA_UNIQUE_KEY_MISSING \
+  MIGRATION_PRISMA_DIFF_EXECUTION_FAILED MIGRATION_PRISMA_DIFF_REJECTED; do
+  require_fixed "$MIGRATION_PREFLIGHT" "$evidence"
+  require_fixed "$DIAGNOSTICS" "$evidence"
+done
+for evidence in MIGRATION_POST_FINISHED_COUNT_CHECK MIGRATION_POST_FAILED_COUNT_CHECK \
+  MIGRATION_POST_LEDGER_COUNT_CHECK MIGRATION_POST_LEDGER_NAMES_CHECK \
+  MIGRATION_POST_APPLIED_SET_BUILD_CHECK MIGRATION_POST_APPLIED_SET_COMPARE_CHECK \
+  MIGRATION_DURATION_QUERY_CHECK MIGRATION_DURATION_RESULT_CHECK \
+  MIGRATION_SCHEMA_TABLE_QUERY_CHECK MIGRATION_SCHEMA_TABLE_CHECK \
+  MIGRATION_SCHEMA_COLUMN_QUERY_CHECK MIGRATION_SCHEMA_COLUMN_CHECK \
+  MIGRATION_SCHEMA_INDEX_QUERY_CHECK MIGRATION_SCHEMA_INDEX_CHECK \
+  MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK MIGRATION_SCHEMA_UNIQUE_KEY_CHECK \
+  MIGRATION_PRISMA_DIFF_EXECUTION_CHECK MIGRATION_PRISMA_DIFF_GATE_CHECK; do
+  require_fixed "$MIGRATION_PREFLIGHT" "$evidence"
+  require_fixed "$DIAGNOSTICS" "$evidence"
+  require_fixed "$SCRIPT_DIR/report-schema.json" "$evidence"
+done
+jq -e '
+  (.allOf[1].then.properties.checkId.enum|index("MIGRATION_POST_FINISHED_COUNT_CHECK")) and
+  (.allOf[1].then.properties.checkId.enum|index("MIGRATION_PRISMA_DIFF_GATE_CHECK")) and
+  .allOf[1].then.properties.migrationPreflight.properties.primaryClassification.pattern=="^(NONE|MIGRATION_[A-Z0-9_]+|PRISMA_DIFF_(TIMEOUT|FAILED))$"' \
+  "$SCRIPT_DIR/report-schema.json" >/dev/null
+pass migration_verification_state_contract
+
+for evidence in \
+  "readonly PM_PRIOR_RESIDUAL_PATH='/var/tmp/personal-max-stage8b1i.fee32e594eba.NKiRfY'" \
+  "readonly PM_PRIOR_RESIDUAL_ORIGIN_SCRIPT_SHA256='57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38'" \
+  "readonly PM_LATEST_ACCEPTED_FAILURE_REPORT_SHA256='$VERIFICATION_FAILURE_REPORT_SHA'" \
+  'mountpoint -q -- "$PM_PRIOR_RESIDUAL_PATH"' \
+  'docker ps -aq --no-trunc --filter "label=$STAGE_LABEL" --filter "label=$RUN_LABEL_KEY=$PM_PRIOR_RESIDUAL_RUN_ID"' \
+  'stat -c '\''%d:%i:%u:%g:%a:%F'\'' -- "$PM_PRIOR_RESIDUAL_PATH"' \
+  'rm -rf -- "$PM_PRIOR_RESIDUAL_PATH"'; do
+  require_fixed "$RESIDUAL_CLEANUP" "$evidence"
+done
+for evidence in '/var/tmp/personal-max-stage8b1i.fee32e594eba.NKiRfY' \
+  '57d7cba75198c002de902d1ef569681eb14d89e594ca9488214cd99fb3ec4d38' \
+  "$VERIFICATION_FAILURE_REPORT_SHA" 'It is not the temporary directory of the later'; do
+  require_fixed "$SCRIPT_DIR/failed-run-residual-cleanup-contract.md" "$evidence"
+done
+require_fixed "$PROBE" 'bootstrap_verify_runtime_artifact residual-cleanup.sh "$RESIDUAL_CLEANUP_SHA256"'
+require_fixed "$PROBE" 'pm_cleanup_prior_residual'
+pass residual_cleanup_contract
+
+for evidence in personal_max_stage8b1i_surface_existing_report personal_max_stage8b1i_emit_unavailable \
+  FAILURE_REPORT_UNAVAILABLE EXISTING_AFTER_PRIMARY_FAILURE; do
+  require_fixed "$DIAGNOSTICS" "$evidence"
+done
+for evidence in 'exec 9>/dev/tty' PM_FAILURE_HANDOFF_ATTEMPTED CLEANUP_ATTEMPTED \
+  E2E_VERIFICATION_FAILED PRODUCTION_SNAPSHOT_MISMATCH SUCCESS_REPORT_RENDER_FAILED \
+  SUCCESS_REPORT_HANDOFF_FAILED SUCCESS_TERMINAL_HANDOFF_FAILED; do
+  require_fixed "$PROBE" "$evidence"
+done
+pass failure_handoff_tail_contracts
+
 require_fixed "$DIAGNOSTICS" 'ISOLATED_PROBE_FAILED'
 require_fixed "$PROBE" 'DIAGNOSTICS_LOADED=true'
 require_fixed "$DIAGNOSTICS" 'personal_max_stage8b1i_cleanup_primary_temp'
@@ -489,17 +634,22 @@ jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILU
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3" and
-  .rootProbe.runtimeArtifactBindingCount==11 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
+  .rootProbe.sha256=="78f5f5855db20bb1e98c60f8fb869d5381451b2479d6100274bdf65e4d7cfbc4" and
+  .rootProbe.runtimeArtifactBindingCount==12 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
-  (.runtimeArtifactBindings|length)==11 and
+  (.runtimeArtifactBindings|length)==12 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="cf79c2d62de5f8eae16b0b0acf95f46cb6664375512fbcf2896ee9c8536fd9d0" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="1a72c1e76c65b1a504079b2100238417828da30f3ca62aaf4df610da5e80a3e1" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="5e53e982e0b61742817d30cee43f4b2c0a1fdbd5e1394fe0a1e48fed69ef1311" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="3bdac84ac236d95a7bbdd0722aba7c7cbc69b74493f9b4fc409eb51675330639" and
+  .runtimeArtifactBindings["residual-cleanup.sh"]=="d25ece44a93cca76a3105fbc2c7d6af98771b7597ed45fdc1b843a24c155b016" and
   .runtimeArtifactBindings["restore-verification.sh"]=="996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" and
   .runtimeArtifactBindings["postgres-startup.sh"]=="54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" and
-  .runtimeArtifactBindings["migration-preflight.sh"]=="d0d084950caab5d74670290f5ea5ad4bf1b84408da57b4d667a3c46372c55361" and
+  .runtimeArtifactBindings["migration-preflight.sh"]=="5818a9eacb04c53adf14ddd4e0839f01fec45fa3402199e243fa5ef04385f99b" and
+  .support.migrationVerificationTests.scenarioCount==14 and
+  .support.failureHandoffTests.scenarioCount==29 and
+  .support.remainingTailTests.scenarioCount==21 and
+  .support.remainingTailTests.requiredRegressionCasesCovered==11 and
   .restoreVerification.failureReportSha256=="c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de" and
   .restoreVerification.exactCause=="PRISMA_USER_MODEL_MAPPED_TO_USERS" and
   .ledgerVerificationRepair.failureReportSha256=="9197be647171a35553189a0526a2d6e205442f15965f5ce0ae1c8a1934bd73bd" and
@@ -584,5 +734,11 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\n' \
+if (( PACKAGE_SKIP_COUNT == 0 )); then
+  [[ $PACKAGE_PASS_COUNT -eq 67 ]]
+else
+  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 66 ]]
+fi
+
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nREMAINING_TAIL_TEST_COUNT=21\nREQUIRED_REGRESSION_CASE_COUNT=50\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"

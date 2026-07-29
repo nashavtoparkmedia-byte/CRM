@@ -9,7 +9,7 @@ personal_max_stage8b1i_safe_phase() {
       image_verification | post_pull_storage_gate | disposable_topology | postgresql_start | backup_restore | restore_verification | \
       migration_preflight | disposable_migration | migration_verification | gateway_negative | gateway_dormant | \
       gateway_active | scraper_default_off | e2e_outage | e2e_recovery | e2e_verification | \
-      production_snapshot_after | cleanup | final_storage_gate | report_render | report_validation | report_handoff | completed) return 0 ;;
+      production_snapshot_after | prior_residual_cleanup | cleanup | final_storage_gate | report_render | report_validation | report_handoff | completed) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -45,6 +45,23 @@ personal_max_stage8b1i_safe_error() {
       MIGRATION_RUNTIME_FILE_UNREADABLE | MIGRATION_RUNNER_IDENTITY_MISMATCH | \
       MIGRATION_RUNNER_NETWORK_MISMATCH | MIGRATION_INVENTORY_FAILED | \
       MIGRATION_SHADOW_DATABASE_CREATE_FAILED | \
+      MIGRATION_POST_FINISHED_COUNT_QUERY_FAILED | MIGRATION_POST_FAILED_COUNT_QUERY_FAILED | \
+      MIGRATION_POST_LEDGER_COUNT_MISMATCH | MIGRATION_POST_LEDGER_NAMES_QUERY_FAILED | \
+      MIGRATION_POST_APPLIED_SET_FAILED | MIGRATION_POST_APPLIED_SET_MISMATCH | \
+      MIGRATION_DURATION_QUERY_FAILED | MIGRATION_DURATION_RESULT_MALFORMED | \
+      MIGRATION_SCHEMA_TABLE_QUERY_FAILED | MIGRATION_SCHEMA_TABLE_MISSING | \
+      MIGRATION_SCHEMA_COLUMN_QUERY_FAILED | MIGRATION_SCHEMA_COLUMN_MISSING | \
+      MIGRATION_SCHEMA_INDEX_QUERY_FAILED | MIGRATION_SCHEMA_INDEX_MISSING | \
+      MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED | MIGRATION_SCHEMA_UNIQUE_KEY_MISSING | \
+      MIGRATION_PRISMA_DIFF_EXECUTION_FAILED | MIGRATION_PRISMA_DIFF_REJECTED | \
+      PRIOR_RESIDUAL_CLEANUP_REENTRY | PRIOR_RESIDUAL_PATH_UNSAFE | PRIOR_RESIDUAL_METADATA_FAILED | \
+      PRIOR_RESIDUAL_MOUNTPOINT_REFUSED | PRIOR_RESIDUAL_IN_USE | PRIOR_RESIDUAL_DOCKER_OBJECTS_PRESENT | PRIOR_RESIDUAL_REPORT_REFUSED | \
+      PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
+      GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
+      GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | SPOOL_INITIALIZATION_FAILED | \
+      E2E_OUTAGE_FAILED | E2E_RECOVERY_FAILED | GATEWAY_CLIENT_VERIFICATION_FAILED | \
+      E2E_VERIFICATION_FAILED | PRODUCTION_SNAPSHOT_MISMATCH | SUCCESS_REPORT_RENDER_FAILED | \
+      SUCCESS_REPORT_HANDOFF_FAILED | SUCCESS_TERMINAL_HANDOFF_FAILED | \
       RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
       RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
       RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
@@ -79,7 +96,16 @@ personal_max_stage8b1i_safe_check_id() {
       MIGRATION_SHADOW_DATABASE_CREATE_CHECK | MIGRATION_PRISMA_RUNNER_CREATE_CHECK | \
       MIGRATION_PRISMA_RUNNER_IDENTITY_CHECK | MIGRATION_PRISMA_EXECUTABLE_CHECK | \
       MIGRATION_PRISMA_DEPLOY_CHECK | MIGRATION_POST_LEDGER_CHECK | \
-      MIGRATION_POST_SCHEMA_CHECK | MIGRATION_PRISMA_DIFF_CHECK) return 0 ;;
+      MIGRATION_POST_SCHEMA_CHECK | MIGRATION_PRISMA_DIFF_CHECK | \
+      MIGRATION_POST_FINISHED_COUNT_CHECK | MIGRATION_POST_FAILED_COUNT_CHECK | \
+      MIGRATION_POST_LEDGER_COUNT_CHECK | MIGRATION_POST_LEDGER_NAMES_CHECK | \
+      MIGRATION_POST_APPLIED_SET_BUILD_CHECK | MIGRATION_POST_APPLIED_SET_COMPARE_CHECK | \
+      MIGRATION_DURATION_QUERY_CHECK | MIGRATION_DURATION_RESULT_CHECK | \
+      MIGRATION_SCHEMA_TABLE_QUERY_CHECK | MIGRATION_SCHEMA_TABLE_CHECK | \
+      MIGRATION_SCHEMA_COLUMN_QUERY_CHECK | MIGRATION_SCHEMA_COLUMN_CHECK | \
+      MIGRATION_SCHEMA_INDEX_QUERY_CHECK | MIGRATION_SCHEMA_INDEX_CHECK | \
+      MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK | MIGRATION_SCHEMA_UNIQUE_KEY_CHECK | \
+      MIGRATION_PRISMA_DIFF_EXECUTION_CHECK | MIGRATION_PRISMA_DIFF_GATE_CHECK) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -93,6 +119,61 @@ personal_max_stage8b1i_safe_class() {
   esac
 }
 
+personal_max_stage8b1i_emit_terminal() {
+  local __pm_fd=${PM_HANDOFF_FD:-2}
+  if [[ $__pm_fd =~ ^[0-9]+$ ]] && printf '%s\n' "$@" >&"$__pm_fd" 2>/dev/null; then
+    return 0
+  fi
+  printf '%s\n' "$@" >&2
+}
+
+personal_max_stage8b1i_report_sha() {
+  local __pm_target=${1:-} __pm_line='' __pm_sha
+  [[ -f $__pm_target && ! -L $__pm_target ]] || return 74
+  if ! __pm_line=$(timeout 30 sha256sum -- "$__pm_target" 2>/dev/null); then
+    return 74
+  fi
+  __pm_sha=${__pm_line%% *}
+  [[ $__pm_sha =~ ^[0-9a-f]{64}$ ]] || return 74
+  printf '%s' "$__pm_sha"
+}
+
+personal_max_stage8b1i_emit_unavailable() {
+  local __pm_exit=${1:-1} __pm_phase=${2:-bootstrap_complete} __pm_class=${3:-UNEXPECTED_COMMAND_FAILURE}
+  local __pm_check=${4:-NONE} __pm_cleanup=${5:-FAIL}
+  personal_max_stage8b1i_emit_terminal ISOLATED_PROBE_FAILED "PHASE=$__pm_phase" \
+    "CLASSIFICATION=$__pm_class" "CHECK_ID=$__pm_check" "EXIT_CODE=$__pm_exit" \
+    "CLEANUP_STATUS=$__pm_cleanup" FAILURE_REPORT_UNAVAILABLE
+}
+
+personal_max_stage8b1i_surface_existing_report() {
+  local __pm_exit=${1:-1} __pm_phase=${2:-bootstrap_complete} __pm_class=${3:-UNEXPECTED_COMMAND_FAILURE}
+  local __pm_check=${4:-NONE} __pm_cleanup=${5:-FAIL} __pm_mode=${6:-PRIMARY}
+  local __pm_stat='' __pm_sha=''
+  [[ ${PM_FAILURE_HANDOFF_COMPLETED:-false} == false ]] || return 0
+  [[ ${PM_FAILURE_PATH:-} =~ ^/var/tmp/personal-max-stage8b1i-isolated-release-proof\.failure\.[0-9a-f]{64}\.json$ && \
+    -f $PM_FAILURE_PATH && ! -L $PM_FAILURE_PATH ]] || return 74
+  if ! __pm_stat=$(timeout 30 stat -Lc '%U:%G:%a' -- "$PM_FAILURE_PATH" 2>/dev/null) || \
+    [[ $__pm_stat != root:codexbot:640 ]] || \
+    ! timeout 30 jq -e --arg script "${PM_SCRIPT_SHA256:-}" --arg phase "$__pm_phase" \
+      --arg classification "$__pm_class" --arg checkId "$__pm_check" --argjson exitCode "$__pm_exit" '.schemaVersion==1 and
+      (.mode=="ISOLATED_RELEASE_PROOF_FAILURE" or .mode=="ISOLATED_RELEASE_PROOF_EMERGENCY_FAILURE") and
+      .script.checksumBound==true and .script.sha256==$script and .phase==$phase and
+      .classification==$classification and .checkId==$checkId and .exitCode==$exitCode' \
+      "$PM_FAILURE_PATH" >/dev/null 2>&1; then
+    return 74
+  fi
+  if ! __pm_sha=$(personal_max_stage8b1i_report_sha "$PM_FAILURE_PATH"); then
+    return 74
+  fi
+  personal_max_stage8b1i_emit_terminal ISOLATED_PROBE_FAILED "PHASE=$__pm_phase" \
+    "SAFE_COMMAND_CLASS=${PROBE_SAFE_COMMAND_CLASS:-unknown}" "CLASSIFICATION=$__pm_class" \
+    "CHECK_ID=$__pm_check" "EXIT_CODE=$__pm_exit" "FAILURE_REPORT_PATH=$PM_FAILURE_PATH" \
+    "FAILURE_REPORT_SHA256=$__pm_sha" REPORT_OWNER=root REPORT_GROUP=codexbot REPORT_MODE=0640 \
+    "CLEANUP_STATUS=$__pm_cleanup" "REPORT_HANDOFF=$__pm_mode" || return 74
+  PM_FAILURE_HANDOFF_COMPLETED=true
+}
+
 personal_max_stage8b1i_cleanup_primary_temp() {
   local __pm_path=${PM_DIAGNOSTIC_TMP:-}
   PM_DIAGNOSTIC_TMP=''
@@ -104,7 +185,7 @@ personal_max_stage8b1i_cleanup_primary_temp() {
 
 personal_max_stage8b1i_render_failure() {
   local original_exit=${1:-1} source_line=${2:-0} cleanup_ok=${3:-false}
-  local safe_phase safe_class safe_error safe_check_id cleanup_error generated temporary identity final_identity permissions report_sha
+  local safe_phase safe_class safe_error safe_check_id cleanup_error generated temporary identity final_identity permissions
   local post_pull_required post_pull_observed post_pull_deficit final_observed final_deficit cleanup_containers cleanup_networks cleanup_volumes cleanup_temp
   local cleanup_containers_json cleanup_networks_json cleanup_volumes_json cleanup_temp_json
   local ledger_name_count ledger_unique_count ledger_duplicate_count ledger_empty_count ledger_invalid_format_count ledger_unsafe_count
@@ -272,8 +353,9 @@ personal_max_stage8b1i_render_failure() {
   personal_max_stage8b1i_safe_error "$postgres_alias_validation_classification" || postgres_alias_validation_classification=NONE
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
-    printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH_UNSAFE\n' "$safe_phase" "$original_exit" >&2
-    return 74
+    personal_max_stage8b1i_surface_existing_report "$original_exit" "$safe_phase" "$safe_error" \
+      "$safe_check_id" "$([[ $cleanup_ok == true ]] && printf PASS || printf FAIL)" EXISTING_PRIMARY
+    return $?
   fi
   pm_capture_bounded temporary filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
     mktemp /var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.tmp.XXXXXX || return 74
@@ -413,10 +495,8 @@ personal_max_stage8b1i_render_failure() {
   PM_DIAGNOSTIC_TMP=''
   pm_capture_bounded final_identity report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%d:%i' "$PM_FAILURE_PATH" || return 74
   [[ $identity == "$final_identity" ]]
-  sha_of report_sha "$PM_FAILURE_PATH" || return 74
-  printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nSAFE_COMMAND_CLASS=%s\nCLASSIFICATION=%s\nCHECK_ID=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH=%s\nFAILURE_REPORT_SHA256=%s\nREPORT_OWNER=root\nREPORT_GROUP=codexbot\nREPORT_MODE=0640\n' \
-    "$safe_phase" "$safe_class" "$safe_error" "$safe_check_id" "$original_exit" "$PM_FAILURE_PATH" "$report_sha"
-  return 0
+  personal_max_stage8b1i_surface_existing_report "$original_exit" "$safe_phase" "$safe_error" \
+    "$safe_check_id" "$([[ $cleanup_ok == true ]] && printf PASS || printf FAIL)" PRIMARY
 }
 
 personal_max_stage8b1i_write_emergency_json() {
@@ -442,9 +522,19 @@ personal_max_stage8b1i_emergency_diagnostics() {
   personal_max_stage8b1i_safe_phase "$__pm_phase" || __pm_phase=bootstrap_complete
   personal_max_stage8b1i_safe_error "$__pm_classification" || __pm_classification=UNEXPECTED_COMMAND_FAILURE
   personal_max_stage8b1i_cleanup_primary_temp || true
-  if [[ ! $__pm_target =~ ^/var/tmp/personal-max-stage8b1i-isolated-release-proof\.failure\.[0-9a-f]{64}\.json$ || -e $__pm_target || -L $__pm_target ]]; then
-    printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nCLASSIFICATION=%s\nEXIT_CODE=%s\nFAILURE_REPORT_UNAVAILABLE\n' \
-      "$__pm_phase" "$__pm_classification" "$__pm_original_exit" >&2
+  if [[ ! $__pm_target =~ ^/var/tmp/personal-max-stage8b1i-isolated-release-proof\.failure\.[0-9a-f]{64}\.json$ ]]; then
+    personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
+      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
+    return "$__pm_original_exit"
+  fi
+  if [[ -e $__pm_target || -L $__pm_target ]]; then
+    if personal_max_stage8b1i_surface_existing_report "$__pm_original_exit" "$__pm_phase" \
+      "$__pm_classification" "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" \
+      "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)" EXISTING_AFTER_PRIMARY_FAILURE; then
+      return "$__pm_original_exit"
+    fi
+    personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
+      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
     return "$__pm_original_exit"
   fi
   __pm_temporary="${__pm_target}.emergency.$$.${RANDOM}.tmp"
@@ -454,11 +544,14 @@ personal_max_stage8b1i_emergency_diagnostics() {
     ! timeout 10 chmod 0640 "$__pm_temporary" 2>/dev/null || \
     ! timeout 10 mv --no-clobber --no-target-directory -- "$__pm_temporary" "$__pm_target" 2>/dev/null; then
     timeout 10 rm -f -- "$__pm_temporary" >/dev/null 2>&1 || true
-    printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nCLASSIFICATION=%s\nEXIT_CODE=%s\nFAILURE_REPORT_UNAVAILABLE\n' \
-      "$__pm_phase" "$__pm_classification" "$__pm_original_exit" >&2
+    personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
+      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
     return "$__pm_original_exit"
   fi
-  printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nCLASSIFICATION=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH=%s\nEMERGENCY_DIAGNOSTICS=YES\n' \
-    "$__pm_phase" "$__pm_classification" "$__pm_original_exit" "$__pm_target"
+  personal_max_stage8b1i_surface_existing_report "$__pm_original_exit" "$__pm_phase" \
+    "$__pm_classification" "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" \
+    "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)" EMERGENCY || \
+    personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
+      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
   return "$__pm_original_exit"
 }

@@ -2,6 +2,12 @@
 # shellcheck disable=SC1091,SC2016,SC2034,SC2154,SC2254
 set -Eeuo pipefail
 umask 077
+if { exec 9>/dev/tty; } 2>/dev/null; then
+  :
+else
+  exec 9>&2
+fi
+readonly PM_HANDOFF_FD=9
 
 readonly EXPECTED_PACKAGE_ROOT='/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z/release/personal-max-stage8b1i'
 readonly SUCCESS_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.json'
@@ -29,12 +35,13 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='cf79c2d62de5f8eae16b0b0acf95f46cb6664375512fbcf2896ee9c8536fd9d0'
-readonly BOUNDED_OPERATIONS_SHA256='1a72c1e76c65b1a504079b2100238417828da30f3ca62aaf4df610da5e80a3e1'
+readonly FAILURE_DIAGNOSTICS_SHA256='5e53e982e0b61742817d30cee43f4b2c0a1fdbd5e1394fe0a1e48fed69ef1311'
+readonly BOUNDED_OPERATIONS_SHA256='3bdac84ac236d95a7bbdd0722aba7c7cbc69b74493f9b4fc409eb51675330639'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
+readonly RESIDUAL_CLEANUP_SHA256='d25ece44a93cca76a3105fbc2c7d6af98771b7597ed45fdc1b843a24c155b016'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
-readonly MIGRATION_PREFLIGHT_SHA256='d0d084950caab5d74670290f5ea5ad4bf1b84408da57b4d667a3c46372c55361'
+readonly MIGRATION_PREFLIGHT_SHA256='5818a9eacb04c53adf14ddd4e0839f01fec45fa3402199e243fa5ef04385f99b'
 readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -89,6 +96,11 @@ EXPECTED_POSTGRES_ALIAS=''
 GATEWAY_CONTAINER=''
 DIAGNOSTICS_LOADED=false
 CLEANUP_COMPLETED=false
+CLEANUP_ATTEMPTED=false
+DOCKER_CLEANUP_ATTEMPTED=false
+ERROR_TRAP_ENTERED=false
+PM_FAILURE_HANDOFF_ATTEMPTED=false
+PM_FAILURE_HANDOFF_COMPLETED=false
 FAILURE_SOURCE_LINE=0
 FAILURE_EXIT=0
 GATEWAY_PREEXISTING_BEFORE_PULL=false
@@ -187,6 +199,8 @@ cleanup_remove_kind() {
 cleanup_docker_objects() {
   local deadline containers=unknown networks=unknown volumes=unknown remaining object failed=0 status first_class=NONE
   [[ -n ${RUN_ID:-} ]] || return 0
+  [[ $DOCKER_CLEANUP_ATTEMPTED == false ]] || return 0
+  DOCKER_CLEANUP_ATTEMPTED=true
   pm_enter_phase cleanup cleanup || return
   if (( CLEANUP_GLOBAL_DEADLINE <= SECONDS )); then CLEANUP_GLOBAL_DEADLINE=$((SECONDS + 300)); fi
   deadline=$CLEANUP_GLOBAL_DEADLINE
@@ -241,6 +255,8 @@ cleanup_temp_path() {
 
 cleanup_disposable() {
   local failed=0 deadline status first_class=NONE
+  [[ $CLEANUP_ATTEMPTED == false ]] || return 0
+  CLEANUP_ATTEMPTED=true
   if (( CLEANUP_GLOBAL_DEADLINE <= SECONDS )); then CLEANUP_GLOBAL_DEADLINE=$((SECONDS + 300)); fi
   deadline=$CLEANUP_GLOBAL_DEADLINE
   cleanup_docker_objects || {
@@ -269,6 +285,12 @@ cleanup_disposable() {
 on_error() {
   local status=$? line=${1:-0}
   (( status != 0 )) || status=1
+  if [[ $ERROR_TRAP_ENTERED == true ]]; then
+    trap - ERR
+    exit "$status"
+  fi
+  ERROR_TRAP_ENTERED=true
+  trap - ERR
   [[ ${PROBE_ERROR_CLASSIFICATION:-NONE} != NONE ]] || PROBE_ERROR_CLASSIFICATION=UNEXPECTED_COMMAND_FAILURE
   FAILURE_EXIT=$status
   FAILURE_SOURCE_LINE=$line
@@ -295,8 +317,15 @@ on_exit() {
   PROBE_PHASE=$original_phase
   PROBE_SAFE_COMMAND_CLASS=$original_safe_class
   if (( status != 0 )) && [[ $DIAGNOSTICS_LOADED == true ]]; then
-    if ! personal_max_stage8b1i_render_failure "$status" "$FAILURE_SOURCE_LINE" "$cleanup_ok"; then
-      personal_max_stage8b1i_emergency_diagnostics "$status" || true
+    if [[ $PM_FAILURE_HANDOFF_ATTEMPTED == false ]]; then
+      PM_FAILURE_HANDOFF_ATTEMPTED=true
+      if ! personal_max_stage8b1i_render_failure "$status" "$FAILURE_SOURCE_LINE" "$cleanup_ok"; then
+        personal_max_stage8b1i_emergency_diagnostics "$status" || true
+      fi
+      if [[ $PM_FAILURE_HANDOFF_COMPLETED != true ]]; then
+        personal_max_stage8b1i_emit_unavailable "$status" "$original_phase" "$original_class" \
+          "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ $cleanup_ok == true ]] && printf PASS || printf FAIL)" || true
+      fi
     fi
     if declare -F pm_preserve_original_exit >/dev/null; then
       preserved_status=$(pm_preserve_original_exit "$status" "$cleanup_status")
@@ -369,6 +398,7 @@ bootstrap_verify_runtime_path() {
   case $__pm_name in
     isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
       probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-preflight.sh | \
+      residual-cleanup.sh | \
       migration-sql-gate.sh | migration-sql-bindings.txt | \
       prisma-legacy-diff-gate.sh | synthetic-scraper-harness.js | gateway-client-harness.js) ;;
     *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
@@ -415,7 +445,7 @@ PM_FAILURE_PATH="/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.
 [[ ! -e $SUCCESS_REPORT && ! -L $SUCCESS_REPORT && ! -e $PM_FAILURE_PATH && ! -L $PM_FAILURE_PATH ]] || {
   printf 'NO_CLOBBER_REPORT_PATH_EXISTS\n' >&2; exit 73;
 }
-for command in docker jq sha256sum stat realpath df git awk sed grep comm cmp timeout openssl find sort seq runuser; do
+for command in docker jq sha256sum stat realpath df git awk sed grep comm cmp timeout openssl find sort seq runuser mountpoint readlink bash; do
   command -v "$command" >/dev/null || { printf 'REQUIRED_COMMAND_MISSING=%s\n' "$command" >&2; exit 69; }
 done
 # The checksum argument anchors this script; these constants transitively anchor
@@ -423,6 +453,7 @@ done
 bootstrap_verify_runtime_artifact failure-diagnostics.sh "$FAILURE_DIAGNOSTICS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact bounded-operations.sh "$BOUNDED_OPERATIONS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact probe-output-helpers.sh "$PROBE_OUTPUT_HELPERS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact residual-cleanup.sh "$RESIDUAL_CLEANUP_SHA256" || exit $?
 bootstrap_verify_runtime_artifact restore-verification.sh "$RESTORE_VERIFICATION_SHA256" || exit $?
 bootstrap_verify_runtime_artifact postgres-startup.sh "$POSTGRES_STARTUP_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-preflight.sh "$MIGRATION_PREFLIGHT_SHA256" || exit $?
@@ -444,6 +475,8 @@ DIAGNOSTICS_LOADED=true
 source "$PACKAGE_ROOT/bounded-operations.sh"
 # shellcheck source=release/personal-max-stage8b1i/probe-output-helpers.sh
 source "$PACKAGE_ROOT/probe-output-helpers.sh"
+# shellcheck source=release/personal-max-stage8b1i/residual-cleanup.sh
+source "$PACKAGE_ROOT/residual-cleanup.sh"
 # shellcheck source=release/personal-max-stage8b1i/postgres-startup.sh
 source "$PACKAGE_ROOT/postgres-startup.sh"
 # shellcheck source=release/personal-max-stage8b1i/migration-preflight.sh
@@ -471,6 +504,11 @@ pm_capture_bounded observed_stat filesystem_metadata 60 METADATA_TIMEOUT METADAT
 [[ -f $DUMP_PATH && ! -L $DUMP_PATH && $observed_stat == "root:root:600:$DUMP_BYTES" ]]
 sha_of observed_sha "$DUMP_PATH"
 [[ $observed_sha == "$DUMP_SHA256" ]]
+
+# The exact root-owned residual predates the accepted 2026-07-29 failed run.
+# Its removal is deliberately deferred to this next separately authorized,
+# checksum-bound probe and runs before a fresh run id or Docker object exists.
+pm_cleanup_prior_residual
 
 pm_capture_bounded RUN_ID filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED openssl rand -hex 6
 [[ $RUN_ID =~ ^[0-9a-f]{12}$ ]]
@@ -698,48 +736,60 @@ pm_migration_start_runner "$PREFIX-migration-apply" prisma_deploy "$TMP/migratio
 migration_seconds=$(( $(date +%s) - migration_started ))
 
 pm_enter_phase migration_verification disposable_migration
-pm_migration_psql_value ledger_after_finished MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
-  'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL'
-pm_migration_psql_value ledger_after_failed MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
-  'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL'
-pm_migration_run_bounded MIGRATION_POST_LEDGER_CHECK post_ledger_verification host_validator internal_validator shell_builtin \
-  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+pm_migration_psql_value ledger_after_finished MIGRATION_POST_FINISHED_COUNT_CHECK post_finished_count \
+  'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL' \
+  MIGRATION_POST_FINISHED_COUNT_QUERY_FAILED
+pm_migration_psql_value ledger_after_failed MIGRATION_POST_FAILED_COUNT_CHECK post_failed_count \
+  'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL' \
+  MIGRATION_POST_FAILED_COUNT_QUERY_FAILED
+pm_migration_run_bounded MIGRATION_POST_LEDGER_COUNT_CHECK post_ledger_count host_validator internal_validator shell_builtin \
+  30 MIGRATION_POST_LEDGER_COUNT_MISMATCH MIGRATION_POST_LEDGER_COUNT_MISMATCH \
   test "$ledger_after_finished" -eq 54 -a "$ledger_after_failed" -eq 0
-pm_migration_psql_value ledger_after MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
-  "SELECT migration_name FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name"
-printf '%s\n' "$ledger_after" >"$TMP/ledger-after"
-pm_migration_write_bounded "$TMP/applied-now" MIGRATION_POST_LEDGER_CHECK post_ledger_verification \
-  host_validator internal_validator coreutils 30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+pm_migration_psql_value ledger_after MIGRATION_POST_LEDGER_NAMES_CHECK post_ledger_names \
+  "SELECT migration_name FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name" \
+  MIGRATION_POST_LEDGER_NAMES_QUERY_FAILED
+pm_migration_write_bounded "$TMP/ledger-after" MIGRATION_POST_APPLIED_SET_BUILD_CHECK post_applied_set_build \
+  host_validator internal_validator coreutils 30 MIGRATION_POST_APPLIED_SET_FAILED MIGRATION_POST_APPLIED_SET_FAILED \
+  printf '%s\n' "$ledger_after"
+pm_migration_write_bounded "$TMP/applied-now" MIGRATION_POST_APPLIED_SET_BUILD_CHECK post_applied_set_build \
+  host_validator internal_validator coreutils 30 MIGRATION_POST_APPLIED_SET_FAILED MIGRATION_POST_APPLIED_SET_FAILED \
   comm -13 "$TMP/ledger-before" "$TMP/ledger-after"
-pm_migration_run_bounded MIGRATION_POST_LEDGER_CHECK post_ledger_verification host_validator internal_validator coreutils \
-  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+pm_migration_run_bounded MIGRATION_POST_APPLIED_SET_COMPARE_CHECK post_applied_set_compare host_validator internal_validator coreutils \
+  30 MIGRATION_POST_APPLIED_SET_MISMATCH MIGRATION_POST_APPLIED_SET_MISMATCH \
   cmp "$TMP/expected-migrations" "$TMP/applied-now"
 migration_names_sql=$(printf "'%s'," "${EXPECTED_MIGRATIONS[@]}")
 migration_names_sql=${migration_names_sql%,}
 migration_query="SELECT COALESCE(json_agg(json_build_object('name',migration_name,'durationMs',GREATEST(0,ROUND(EXTRACT(EPOCH FROM (finished_at-started_at))*1000)::bigint)) ORDER BY migration_name),'[]'::json)::text FROM \"_prisma_migrations\" WHERE migration_name IN ($migration_names_sql) AND finished_at IS NOT NULL AND rolled_back_at IS NULL"
-pm_migration_psql_value migration_durations MIGRATION_POST_LEDGER_CHECK post_ledger_verification "$migration_query"
-pm_migration_run_bounded MIGRATION_POST_LEDGER_CHECK post_ledger_verification host_validator internal_validator coreutils \
-  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
+pm_migration_psql_value migration_durations MIGRATION_DURATION_QUERY_CHECK duration_query "$migration_query" \
+  MIGRATION_DURATION_QUERY_FAILED
+pm_migration_run_bounded MIGRATION_DURATION_RESULT_CHECK duration_result_validation host_validator internal_validator coreutils \
+  30 MIGRATION_DURATION_RESULT_MALFORMED MIGRATION_DURATION_RESULT_MALFORMED \
   jq -e 'length==8 and all(.[]; (.name|type)=="string" and (.durationMs|type)=="number" and .durationMs>=0)' \
   <<<"$migration_durations" >/dev/null
-pm_migration_psql_value raw_table_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
-  "SELECT to_regclass('public.\"MaxRawTransportEvent\"') IS NOT NULL"
-pm_migration_psql_value envelope_column_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
-  "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='MaxRawTransportEvent' AND column_name='captureEnvelopeId')"
-pm_migration_psql_value envelope_index_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
-  "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_idx\"') IS NOT NULL"
-pm_migration_psql_value envelope_key_present MIGRATION_POST_SCHEMA_CHECK post_schema_verification \
-  "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_key\"') IS NOT NULL"
-pm_migration_run_bounded MIGRATION_POST_SCHEMA_CHECK post_schema_verification host_validator internal_validator shell_builtin \
-  30 MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POST_VERIFICATION_FAILED \
-  test "$raw_table_present" = t -a "$envelope_column_present" = t -a "$envelope_index_present" = t -a "$envelope_key_present" = t
-pm_migration_write_bounded "$TMP/prisma-diff.log" MIGRATION_PRISMA_DIFF_CHECK prisma_diff \
-  prisma_diff prisma docker_cli 600 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
+pm_migration_psql_value raw_table_present MIGRATION_SCHEMA_TABLE_QUERY_CHECK schema_table_query \
+  "SELECT to_regclass('public.\"MaxRawTransportEvent\"') IS NOT NULL" MIGRATION_SCHEMA_TABLE_QUERY_FAILED
+pm_migration_run_bounded MIGRATION_SCHEMA_TABLE_CHECK schema_table_validation host_validator internal_validator shell_builtin \
+  30 MIGRATION_SCHEMA_TABLE_MISSING MIGRATION_SCHEMA_TABLE_MISSING test "$raw_table_present" = t
+pm_migration_psql_value envelope_column_present MIGRATION_SCHEMA_COLUMN_QUERY_CHECK schema_column_query \
+  "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='MaxRawTransportEvent' AND column_name='captureEnvelopeId')" \
+  MIGRATION_SCHEMA_COLUMN_QUERY_FAILED
+pm_migration_run_bounded MIGRATION_SCHEMA_COLUMN_CHECK schema_column_validation host_validator internal_validator shell_builtin \
+  30 MIGRATION_SCHEMA_COLUMN_MISSING MIGRATION_SCHEMA_COLUMN_MISSING test "$envelope_column_present" = t
+pm_migration_psql_value envelope_index_present MIGRATION_SCHEMA_INDEX_QUERY_CHECK schema_index_query \
+  "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_idx\"') IS NOT NULL" MIGRATION_SCHEMA_INDEX_QUERY_FAILED
+pm_migration_run_bounded MIGRATION_SCHEMA_INDEX_CHECK schema_index_validation host_validator internal_validator shell_builtin \
+  30 MIGRATION_SCHEMA_INDEX_MISSING MIGRATION_SCHEMA_INDEX_MISSING test "$envelope_index_present" = t
+pm_migration_psql_value envelope_key_present MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK schema_unique_key_query \
+  "SELECT to_regclass('public.\"MaxRawTransportEvent_accountId_captureEnvelopeId_key\"') IS NOT NULL" MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED
+pm_migration_run_bounded MIGRATION_SCHEMA_UNIQUE_KEY_CHECK schema_unique_key_validation host_validator internal_validator shell_builtin \
+  30 MIGRATION_SCHEMA_UNIQUE_KEY_MISSING MIGRATION_SCHEMA_UNIQUE_KEY_MISSING test "$envelope_key_present" = t
+pm_migration_write_bounded "$TMP/prisma-diff.log" MIGRATION_PRISMA_DIFF_EXECUTION_CHECK prisma_diff_execution \
+  prisma_diff prisma docker_cli 600 PRISMA_DIFF_TIMEOUT MIGRATION_PRISMA_DIFF_EXECUTION_FAILED \
   docker run --rm --name "$PREFIX-prisma-diff" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/migration.env" --entrypoint sh "$GATEWAY_IMAGE" -ceu \
   'exec /app/node_modules/.bin/prisma migrate diff --from-migrations /app/prisma/migrations --to-url "$DATABASE_URL" --shadow-database-url "$SHADOW_DATABASE_URL" --script'
-pm_migration_run_bounded MIGRATION_PRISMA_DIFF_CHECK prisma_diff prisma_diff internal_validator posix_shell \
-  60 PRISMA_DIFF_TIMEOUT PRISMA_DIFF_FAILED \
+pm_migration_run_bounded MIGRATION_PRISMA_DIFF_GATE_CHECK prisma_diff_gate prisma_diff internal_validator posix_shell \
+  60 PRISMA_DIFF_TIMEOUT MIGRATION_PRISMA_DIFF_REJECTED \
   sh "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh" "$TMP/prisma-diff.log" >/dev/null
 prisma_diff_empty=false
 prisma_diff_status=ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS
@@ -748,102 +798,113 @@ pm_enter_phase gateway_negative docker_disposable
 MIGRATION_CHECK_ID=NONE
 pm_expect_failure_bounded docker_disposable 120 GATEWAY_NEGATIVE_TIMEOUT \
   docker run --rm --name "$PREFIX-gateway-missing-hmac" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" \
-  --network "$NETWORK" --env-file "$TMP/missing-hmac.env" "$GATEWAY_IMAGE"
+  --network "$NETWORK" --env-file "$TMP/missing-hmac.env" "$GATEWAY_IMAGE" || {
+    PROBE_ERROR_CLASSIFICATION=GATEWAY_NEGATIVE_VALIDATION_FAILED; false;
+  }
 pm_expect_failure_bounded docker_disposable 120 GATEWAY_NEGATIVE_TIMEOUT \
   docker run --rm --name "$PREFIX-gateway-invalid-config" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" \
-  --network "$NETWORK" -e MAX_RAW_JOURNAL_ENABLED='*' "$GATEWAY_IMAGE"
+  --network "$NETWORK" -e MAX_RAW_JOURNAL_ENABLED='*' "$GATEWAY_IMAGE" || {
+    PROBE_ERROR_CLASSIFICATION=GATEWAY_NEGATIVE_VALIDATION_FAILED; false;
+  }
 
 gateway_dormant_health() {
-  pm_run_bounded docker_disposable 30 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+  pm_run_bounded docker_disposable 30 GATEWAY_DORMANT_READINESS_FAILED GATEWAY_DORMANT_READINESS_FAILED \
     docker exec "$PREFIX-gateway-dormant" node -e "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.status===200?0:1))" >/dev/null
 }
 
 gateway_active_health() {
-  pm_run_bounded docker_disposable 30 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+  pm_run_bounded docker_disposable 30 GATEWAY_ACTIVE_READINESS_FAILED GATEWAY_ACTIVE_READINESS_FAILED \
     docker exec "$GATEWAY_CONTAINER" node -e "fetch('http://127.0.0.1:8080/health').then(r=>process.exit(r.status===200?0:1))" >/dev/null
 }
 
 pm_enter_phase gateway_dormant docker_disposable
-pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_run_bounded docker_disposable 120 GATEWAY_DORMANT_READINESS_FAILED GATEWAY_DORMANT_READINESS_FAILED \
   docker run -d --name "$PREFIX-gateway-dormant" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" "$GATEWAY_IMAGE" >/dev/null
-pm_poll_until 30 60 GATEWAY_STARTUP_TIMEOUT gateway_dormant_health
-pm_run_bounded docker_disposable 60 GATEWAY_STARTUP_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_poll_until 30 60 GATEWAY_DORMANT_READINESS_FAILED gateway_dormant_health
+pm_run_bounded docker_disposable 60 GATEWAY_DORMANT_READINESS_FAILED GATEWAY_DORMANT_READINESS_FAILED \
   docker exec "$PREFIX-gateway-dormant" node -e "fetch('http://127.0.0.1:8080/ready').then(async r=>{const v=await r.json();process.exit(r.status===200&&v.state==='dormant-ready'?0:1)})"
-pm_run_bounded docker_disposable 60 CONTAINER_REMOVAL_TIMEOUT DISPOSABLE_DOCKER_FAILED docker rm -f "$PREFIX-gateway-dormant" >/dev/null
+pm_run_bounded docker_disposable 60 CONTAINER_REMOVAL_TIMEOUT GATEWAY_DORMANT_READINESS_FAILED docker rm -f "$PREFIX-gateway-dormant" >/dev/null
 
 start_gateway() {
-  pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+  local failure_class=${1:-GATEWAY_ACTIVE_READINESS_FAILED}
+  pm_run_bounded docker_disposable 120 "$failure_class" "$failure_class" \
     docker run -d --name "$GATEWAY_CONTAINER" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
     --network-alias max-personal-gateway --env-file "$TMP/gateway.env" "$GATEWAY_IMAGE" >/dev/null
-  pm_poll_until 60 90 GATEWAY_STARTUP_TIMEOUT gateway_active_health
+  pm_poll_until 60 90 "$failure_class" gateway_active_health
 }
 
 pm_enter_phase gateway_active docker_disposable
-start_gateway
+start_gateway GATEWAY_ACTIVE_READINESS_FAILED
 
 pm_enter_phase scraper_default_off synthetic_harness
-pm_write_bounded "$TMP/default-off.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_write_bounded "$TMP/default-off.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SCRAPER_DEFAULT_OFF_FAILED \
   docker run --rm --name "$PREFIX-scraper-default-off" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
   /tmp/stage8b1i-harness.js
-jq -e '.defaultOffNoSpool==true and .timers==false and .network==false and .database==false' "$TMP/default-off.json" >/dev/null
-pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+jq -e '.defaultOffNoSpool==true and .timers==false and .network==false and .database==false' "$TMP/default-off.json" >/dev/null || {
+  PROBE_ERROR_CLASSIFICATION=SCRAPER_DEFAULT_OFF_FAILED; false;
+}
+pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SPOOL_INITIALIZATION_FAILED \
   docker run --rm --name "$PREFIX-spool-init" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --user 0:0 --network none \
   -v "$SPOOL_VOLUME:/spool" --entrypoint sh "$SCRAPER_IMAGE" -ceu 'chown 1001:1001 /spool; chmod 0700 /spool'
 
 pm_enter_phase e2e_outage synthetic_harness
-pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED docker stop "$PG_CONTAINER" >/dev/null
-pm_run_bounded synthetic_http 120 GATEWAY_CLIENT_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT E2E_OUTAGE_FAILED docker stop "$PG_CONTAINER" >/dev/null
+pm_run_bounded synthetic_http 120 GATEWAY_CLIENT_TIMEOUT E2E_OUTAGE_FAILED \
   docker exec "$GATEWAY_CONTAINER" node -e "fetch('http://127.0.0.1:8080/ready').then(r=>process.exit(r.status===503?0:1))"
-pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED docker start "$PG_CONTAINER" >/dev/null
-pm_poll_until 60 90 POLLING_DEADLINE_EXCEEDED postgres_ready
-pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT DISPOSABLE_DOCKER_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
-pm_write_bounded "$TMP/capture-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT E2E_OUTAGE_FAILED docker start "$PG_CONTAINER" >/dev/null
+pm_poll_until 60 90 E2E_OUTAGE_FAILED postgres_ready
+pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT E2E_OUTAGE_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
+pm_write_bounded "$TMP/capture-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_OUTAGE_FAILED \
   docker run --rm --name "$PREFIX-scraper-capture-a" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a -e STAGE8B1I_HARNESS_MODE=capture-only \
   -e STAGE8B1I_FRAME_COUNT=500 -e STAGE8B1I_IDENTICAL_COUNT=100 \
   -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
-pm_write_bounded "$TMP/retry-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_write_bounded "$TMP/retry-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_OUTAGE_FAILED \
   docker run --rm --name "$PREFIX-scraper-retry-a" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a -e MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture \
   -e STAGE8B1I_HARNESS_MODE=retry-only -e STAGE8B1I_DRAIN_ATTEMPTS=10 \
   -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
-jq -e '.retryCount>0 and .pendingAfter>0 and .lostBeforeSpoolCount==0' "$TMP/retry-a.json" >/dev/null
+jq -e '.retryCount>0 and .pendingAfter>0 and .lostBeforeSpoolCount==0' "$TMP/retry-a.json" >/dev/null || {
+  PROBE_ERROR_CLASSIFICATION=E2E_OUTAGE_FAILED; false;
+}
 
 pm_enter_phase e2e_recovery synthetic_harness
-start_gateway
-pm_write_bounded "$TMP/capture-b.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+start_gateway E2E_RECOVERY_FAILED
+pm_write_bounded "$TMP/capture-b.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
   docker run --rm --name "$PREFIX-scraper-capture-b" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_B" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_B" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-b -e MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture \
   -e STAGE8B1I_HARNESS_MODE=capture-and-drain -e STAGE8B1I_FRAME_COUNT=500 -e STAGE8B1I_IDENTICAL_COUNT=0 \
   -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
-pm_write_bounded "$TMP/drain-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_write_bounded "$TMP/drain-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
   docker run --rm --name "$PREFIX-scraper-drain-a" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a -e MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture \
   -e STAGE8B1I_HARNESS_MODE=drain-only -e STAGE8B1I_DRAIN_ATTEMPTS=120 \
   -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
-pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
   docker run --rm --name "$PREFIX-spool-permissions" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   -v "$SPOOL_VOLUME:/spool" --entrypoint sh "$SCRAPER_IMAGE" -ceu \
   'test "$(stat -c %u:%g:%a /spool)" = 1001:1001:700; find /spool -type d ! -perm 0700 -print -quit | grep -q . && exit 1 || true; find /spool -type f ! -perm 0600 -print -quit | grep -q . && exit 1 || true'
-pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT DISPOSABLE_DOCKER_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
-start_gateway
+pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT E2E_RECOVERY_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
+start_gateway E2E_RECOVERY_FAILED
 
 pm_enter_phase gateway_active synthetic_http
-pm_write_bounded "$TMP/gateway-client.json" synthetic_http 600 GATEWAY_CLIENT_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+pm_write_bounded "$TMP/gateway-client.json" synthetic_http 600 GATEWAY_CLIENT_TIMEOUT GATEWAY_CLIENT_VERIFICATION_FAILED \
   docker run --rm --name "$PREFIX-gateway-client" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e STAGE8B1I_ACCOUNT_A="$ACCOUNT_A" \
   -v "$PACKAGE_ROOT/gateway-client-harness.js:/tmp/stage8b1i-client.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
   /tmp/stage8b1i-client.js
-jq -e 'all(.missingAuthDenied,.invalidAuthDenied,.wrongAccountDenied,.requestSizeLimit,.authenticatedIngress,.idempotentRetry; .==true)' "$TMP/gateway-client.json" >/dev/null
+jq -e 'all(.missingAuthDenied,.invalidAuthDenied,.wrongAccountDenied,.requestSizeLimit,.authenticatedIngress,.idempotentRetry; .==true)' "$TMP/gateway-client.json" >/dev/null || {
+  PROBE_ERROR_CLASSIFICATION=GATEWAY_CLIENT_VERIFICATION_FAILED; false;
+}
 
 e2e_results_ready() {
   psql_value normalized "SELECT count(*) FROM \"MaxInboundNormalizationResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B')" || return
@@ -851,19 +912,36 @@ e2e_results_ready() {
   [[ $normalized -ge 1001 && $compared -ge 1001 ]]
 }
 
+e2e_psql_value() {
+  local target=${1:-} query=${2-} status
+  if psql_value "$target" "$query"; then
+    return 0
+  else
+    status=$?
+  fi
+  PROBE_ERROR_CLASSIFICATION=E2E_VERIFICATION_FAILED
+  return "$status"
+}
+
 pm_enter_phase e2e_verification disposable_postgresql
-pm_poll_until 180 240 POLLING_DEADLINE_EXCEEDED e2e_results_ready
-psql_value physical_frames "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND \"eventType\" IS DISTINCT FROM 'stage8b1i-idempotency'"
-psql_value idempotency_rows "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\"='$ACCOUNT_A' AND \"eventType\"='stage8b1i-idempotency'"
-psql_value identical_frames "SELECT COALESCE(max(c),0) FROM (SELECT count(*) c FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') GROUP BY \"accountId\",\"payloadSha256\" HAVING count(*)>1) grouped"
-psql_value duplicate_envelopes "SELECT count(*) FROM (SELECT 1 FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') GROUP BY \"accountId\",\"captureEnvelopeId\" HAVING count(*)>1) duplicated"
-psql_value wrong_account "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\"='stage8b1i-wrong-account'"
-psql_value critical_regressions "SELECT count(*) FROM \"MaxShadowComparisonResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND \"highestSeverity\"='critical'"
-psql_value quarantined_results "SELECT count(*) FROM \"MaxInboundNormalizationResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND status='quarantined'"
-psql_value unsupported_results "SELECT count(*) FROM \"MaxInboundNormalizationResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND status='unsupported'"
-[[ $physical_frames -eq 1000 && $idempotency_rows -eq 1 && $identical_frames -eq 100 && $duplicate_envelopes -eq 0 && $wrong_account -eq 0 && $critical_regressions -eq 0 ]]
-[[ $quarantined_results -ge 2 && $unsupported_results -ge 2 ]]
-[[ $normalized -ge 1001 && $compared -ge 1001 ]]
+pm_poll_until 180 240 E2E_VERIFICATION_FAILED e2e_results_ready
+e2e_psql_value physical_frames "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND \"eventType\" IS DISTINCT FROM 'stage8b1i-idempotency'"
+e2e_psql_value idempotency_rows "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\"='$ACCOUNT_A' AND \"eventType\"='stage8b1i-idempotency'"
+e2e_psql_value identical_frames "SELECT COALESCE(max(c),0) FROM (SELECT count(*) c FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') GROUP BY \"accountId\",\"payloadSha256\" HAVING count(*)>1) grouped"
+e2e_psql_value duplicate_envelopes "SELECT count(*) FROM (SELECT 1 FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') GROUP BY \"accountId\",\"captureEnvelopeId\" HAVING count(*)>1) duplicated"
+e2e_psql_value wrong_account "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\"='stage8b1i-wrong-account'"
+e2e_psql_value critical_regressions "SELECT count(*) FROM \"MaxShadowComparisonResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND \"highestSeverity\"='critical'"
+e2e_psql_value quarantined_results "SELECT count(*) FROM \"MaxInboundNormalizationResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND status='quarantined'"
+e2e_psql_value unsupported_results "SELECT count(*) FROM \"MaxInboundNormalizationResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND status='unsupported'"
+[[ $physical_frames -eq 1000 && $idempotency_rows -eq 1 && $identical_frames -eq 100 && $duplicate_envelopes -eq 0 && $wrong_account -eq 0 && $critical_regressions -eq 0 ]] || {
+  PROBE_ERROR_CLASSIFICATION=E2E_VERIFICATION_FAILED; false;
+}
+[[ $quarantined_results -ge 2 && $unsupported_results -ge 2 ]] || {
+  PROBE_ERROR_CLASSIFICATION=E2E_VERIFICATION_FAILED; false;
+}
+[[ $normalized -ge 1001 && $compared -ge 1001 ]] || {
+  PROBE_ERROR_CLASSIFICATION=E2E_VERIFICATION_FAILED; false;
+}
 
 pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT DISPOSABLE_DOCKER_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
 cleanup_docker_objects
@@ -881,22 +959,26 @@ pm_enter_phase production_snapshot_after docker_metadata
 pm_capture_bounded TMP_AFTER filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
   mktemp /var/tmp/personal-max-stage8b1i-after.tmp.XXXXXX
 pm_run_bounded filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED chmod 0600 "$TMP_AFTER"
-production_snapshot "$TMP_AFTER"
+production_snapshot "$TMP_AFTER" || {
+  PROBE_ERROR_CLASSIFICATION=PRODUCTION_SNAPSHOT_MISMATCH; false;
+}
 production_unchanged=false
-pm_write_bounded "$TMP/production-before-core.json" filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+pm_write_bounded "$TMP/production-before-core.json" filesystem_metadata 60 METADATA_TIMEOUT PRODUCTION_SNAPSHOT_MISMATCH \
   jq -S 'del(.freeBytes)' "$TMP/production-before.json"
-pm_write_bounded "$TMP/production-after-core.json" filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+pm_write_bounded "$TMP/production-after-core.json" filesystem_metadata 60 METADATA_TIMEOUT PRODUCTION_SNAPSHOT_MISMATCH \
   jq -S 'del(.freeBytes)' "$TMP_AFTER"
-pm_run_bounded filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+pm_run_bounded filesystem_metadata 60 METADATA_TIMEOUT PRODUCTION_SNAPSHOT_MISMATCH \
   cmp "$TMP/production-before-core.json" "$TMP/production-after-core.json" >/dev/null && production_unchanged=true
-[[ $production_unchanged == true ]]
+[[ $production_unchanged == true ]] || {
+  PROBE_ERROR_CLASSIFICATION=PRODUCTION_SNAPSHOT_MISMATCH; false;
+}
 pm_assert_cleanup_zero "$CLEANUP_CONTAINERS_REMAINING" "$CLEANUP_NETWORKS_REMAINING" "$CLEANUP_VOLUMES_REMAINING" 0
 
 pm_enter_phase report_render report_render
-pm_capture_bounded generated_at filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED date -u +'%Y-%m-%dT%H:%M:%SZ'
-pm_capture_bounded applied_names report_render 60 METADATA_TIMEOUT METADATA_FAILED jq -R -s 'split("\n")|map(select(length>0))' "$TMP/applied-now"
-pm_capture_bounded retry_count report_render 60 METADATA_TIMEOUT METADATA_FAILED jq -r '.retryCount' "$TMP/retry-a.json"
-pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED jq -n \
+pm_capture_bounded generated_at filesystem_metadata 30 METADATA_TIMEOUT SUCCESS_REPORT_RENDER_FAILED date -u +'%Y-%m-%dT%H:%M:%SZ'
+pm_capture_bounded applied_names report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_RENDER_FAILED jq -R -s 'split("\n")|map(select(length>0))' "$TMP/applied-now"
+pm_capture_bounded retry_count report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_RENDER_FAILED jq -r '.retryCount' "$TMP/retry-a.json"
+pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_RENDER_FAILED jq -n \
   --arg generatedAt "$generated_at" --arg scriptSha256 "$PM_SCRIPT_SHA256" \
   --arg backupReportSha256 "$BACKUP_REPORT_SHA256" --arg dumpSha256 "$DUMP_SHA256" --argjson dumpBytes "$DUMP_BYTES" \
   --arg gatewayRef "$GATEWAY_IMAGE" --arg scraperRef "$SCRAPER_IMAGE" --arg postgresqlRef "$POSTGRES_IMAGE" \
@@ -1015,20 +1097,33 @@ TMP=''
 pm_assert_cleanup_zero "$CLEANUP_CONTAINERS_REMAINING" "$CLEANUP_NETWORKS_REMAINING" "$CLEANUP_VOLUMES_REMAINING" 0
 
 pm_enter_phase report_handoff report_handoff
-pm_run_bounded report_handoff 60 METADATA_TIMEOUT METADATA_FAILED chgrp codexbot "$TMP_REPORT"
-pm_run_bounded report_handoff 60 METADATA_TIMEOUT METADATA_FAILED chmod 0640 "$TMP_REPORT"
-pm_capture_bounded report_permissions report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%U:%G:%a' "$TMP_REPORT"
-[[ $report_permissions == root:codexbot:640 && -f $TMP_REPORT && ! -L $TMP_REPORT ]]
-pm_capture_bounded report_identity report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%d:%i' "$TMP_REPORT"
-pm_run_bounded report_handoff 60 METADATA_TIMEOUT METADATA_FAILED \
+pm_run_bounded report_handoff 60 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED chgrp codexbot "$TMP_REPORT"
+pm_run_bounded report_handoff 60 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED chmod 0640 "$TMP_REPORT"
+pm_capture_bounded report_permissions report_handoff 60 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED stat -Lc '%U:%G:%a' "$TMP_REPORT"
+[[ $report_permissions == root:codexbot:640 && -f $TMP_REPORT && ! -L $TMP_REPORT ]] || {
+  PROBE_ERROR_CLASSIFICATION=SUCCESS_REPORT_HANDOFF_FAILED; false;
+}
+pm_capture_bounded report_identity report_handoff 60 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED stat -Lc '%d:%i' "$TMP_REPORT"
+pm_run_bounded report_handoff 60 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED \
   mv --no-clobber --no-target-directory -- "$TMP_REPORT" "$SUCCESS_REPORT"
-pm_capture_bounded final_identity report_handoff 60 METADATA_TIMEOUT METADATA_FAILED stat -Lc '%d:%i' "$SUCCESS_REPORT"
-[[ $final_identity == "$report_identity" ]]
-pm_run_bounded report_handoff 30 METADATA_TIMEOUT METADATA_FAILED runuser -u codexbot -- test -r "$SUCCESS_REPORT"
-pm_expect_failure_bounded report_handoff 30 METADATA_TIMEOUT runuser -u codexbot -- test -w "$SUCCESS_REPORT"
-sha_of report_sha "$SUCCESS_REPORT"
+pm_capture_bounded final_identity report_handoff 60 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED stat -Lc '%d:%i' "$SUCCESS_REPORT"
+[[ $final_identity == "$report_identity" ]] || {
+  PROBE_ERROR_CLASSIFICATION=SUCCESS_REPORT_HANDOFF_FAILED; false;
+}
+pm_run_bounded report_handoff 30 METADATA_TIMEOUT SUCCESS_REPORT_HANDOFF_FAILED runuser -u codexbot -- test -r "$SUCCESS_REPORT"
+pm_expect_failure_bounded report_handoff 30 SUCCESS_REPORT_HANDOFF_FAILED runuser -u codexbot -- test -w "$SUCCESS_REPORT" || {
+  PROBE_ERROR_CLASSIFICATION=SUCCESS_REPORT_HANDOFF_FAILED; false;
+}
+sha_of report_sha "$SUCCESS_REPORT" || {
+  PROBE_ERROR_CLASSIFICATION=SUCCESS_REPORT_HANDOFF_FAILED; false;
+}
 TMP_REPORT=''
 pm_enter_phase completed report_handoff
+if ! personal_max_stage8b1i_emit_terminal ISOLATED_RELEASE_PROOF_COMPLETED \
+  "REPORT_PATH=$SUCCESS_REPORT" "REPORT_SHA256=$report_sha" REPORT_OWNER=root REPORT_GROUP=codexbot \
+  REPORT_MODE=0640 CODEXBOT_READABLE=YES CODEXBOT_WRITABLE=NO FULL_RESTORE_PROOF=PASS \
+  DISPOSABLE_MIGRATION_PROOF=PASS PRODUCTION_UNCHANGED=YES CLEANUP=PASS; then
+  PROBE_ERROR_CLASSIFICATION=SUCCESS_TERMINAL_HANDOFF_FAILED
+  exit 74
+fi
 trap - ERR EXIT
-printf 'ISOLATED_RELEASE_PROOF_COMPLETED\nREPORT_PATH=%s\nREPORT_SHA256=%s\nREPORT_OWNER=root\nREPORT_GROUP=codexbot\nREPORT_MODE=0640\nCODEXBOT_READABLE=YES\nCODEXBOT_WRITABLE=NO\nFULL_RESTORE_PROOF=PASS\nDISPOSABLE_MIGRATION_PROOF=PASS\nPRODUCTION_UNCHANGED=YES\nCLEANUP=PASS\n' \
-  "$SUCCESS_REPORT" "$report_sha"

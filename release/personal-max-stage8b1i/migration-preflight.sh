@@ -34,7 +34,16 @@ pm_migration_check_id_is_safe() {
       MIGRATION_SHADOW_DATABASE_CREATE_CHECK | MIGRATION_PRISMA_RUNNER_CREATE_CHECK | \
       MIGRATION_PRISMA_RUNNER_IDENTITY_CHECK | MIGRATION_PRISMA_EXECUTABLE_CHECK | \
       MIGRATION_PRISMA_DEPLOY_CHECK | MIGRATION_POST_LEDGER_CHECK | \
-      MIGRATION_POST_SCHEMA_CHECK | MIGRATION_PRISMA_DIFF_CHECK) return 0 ;;
+      MIGRATION_POST_SCHEMA_CHECK | MIGRATION_PRISMA_DIFF_CHECK | \
+      MIGRATION_POST_FINISHED_COUNT_CHECK | MIGRATION_POST_FAILED_COUNT_CHECK | \
+      MIGRATION_POST_LEDGER_COUNT_CHECK | MIGRATION_POST_LEDGER_NAMES_CHECK | \
+      MIGRATION_POST_APPLIED_SET_BUILD_CHECK | MIGRATION_POST_APPLIED_SET_COMPARE_CHECK | \
+      MIGRATION_DURATION_QUERY_CHECK | MIGRATION_DURATION_RESULT_CHECK | \
+      MIGRATION_SCHEMA_TABLE_QUERY_CHECK | MIGRATION_SCHEMA_TABLE_CHECK | \
+      MIGRATION_SCHEMA_COLUMN_QUERY_CHECK | MIGRATION_SCHEMA_COLUMN_CHECK | \
+      MIGRATION_SCHEMA_INDEX_QUERY_CHECK | MIGRATION_SCHEMA_INDEX_CHECK | \
+      MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK | MIGRATION_SCHEMA_UNIQUE_KEY_CHECK | \
+      MIGRATION_PRISMA_DIFF_EXECUTION_CHECK | MIGRATION_PRISMA_DIFF_GATE_CHECK) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -58,7 +67,16 @@ pm_migration_classification_is_safe() {
       MIGRATION_POST_VERIFICATION_FAILED | MIGRATION_INTERNAL_VALIDATOR_FAILED | \
       MIGRATION_RUNTIME_FILE_UNREADABLE | MIGRATION_RUNNER_IDENTITY_MISMATCH | \
       MIGRATION_RUNNER_NETWORK_MISMATCH | MIGRATION_INVENTORY_FAILED | \
-      MIGRATION_SHADOW_DATABASE_CREATE_FAILED) return 0 ;;
+      MIGRATION_SHADOW_DATABASE_CREATE_FAILED | \
+      MIGRATION_POST_FINISHED_COUNT_QUERY_FAILED | MIGRATION_POST_FAILED_COUNT_QUERY_FAILED | \
+      MIGRATION_POST_LEDGER_COUNT_MISMATCH | MIGRATION_POST_LEDGER_NAMES_QUERY_FAILED | \
+      MIGRATION_POST_APPLIED_SET_FAILED | MIGRATION_POST_APPLIED_SET_MISMATCH | \
+      MIGRATION_DURATION_QUERY_FAILED | MIGRATION_DURATION_RESULT_MALFORMED | \
+      MIGRATION_SCHEMA_TABLE_QUERY_FAILED | MIGRATION_SCHEMA_TABLE_MISSING | \
+      MIGRATION_SCHEMA_COLUMN_QUERY_FAILED | MIGRATION_SCHEMA_COLUMN_MISSING | \
+      MIGRATION_SCHEMA_INDEX_QUERY_FAILED | MIGRATION_SCHEMA_INDEX_MISSING | \
+      MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED | MIGRATION_SCHEMA_UNIQUE_KEY_MISSING | \
+      MIGRATION_PRISMA_DIFF_EXECUTION_FAILED | MIGRATION_PRISMA_DIFF_REJECTED) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -70,7 +88,11 @@ pm_migration_substep_is_safe() {
       sql_runner_create | sql_runner_identity | sql_runner_start | postgres_alias_validation | \
       shadow_database_create | prisma_runner_create | prisma_runner_identity | \
       prisma_executable_validation | prisma_deploy | post_ledger_verification | \
-      post_schema_verification | prisma_diff) return 0 ;;
+      post_schema_verification | prisma_diff | post_finished_count | post_failed_count | \
+      post_ledger_count | post_ledger_names | post_applied_set_build | post_applied_set_compare | \
+      duration_query | duration_result_validation | schema_table_query | schema_table_validation | \
+      schema_column_query | schema_column_validation | schema_index_query | schema_index_validation | \
+      schema_unique_key_query | schema_unique_key_validation | prisma_diff_execution | prisma_diff_gate) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -395,11 +417,17 @@ pm_migration_create_runner() {
 
 pm_migration_psql_value() {
   local __pm_target=${1:-} __pm_check=${2:-} __pm_substep=${3:-} __pm_query=${4-}
+  local __pm_failure_class=${5:-MIGRATION_POST_VERIFICATION_FAILED}
   local __pm_started __pm_status __pm_had_errexit=false
   case $__pm_check:$__pm_substep in
-    MIGRATION_POST_LEDGER_CHECK:post_ledger_verification | MIGRATION_POST_SCHEMA_CHECK:post_schema_verification) ;;
+    MIGRATION_POST_LEDGER_CHECK:post_ledger_verification | MIGRATION_POST_SCHEMA_CHECK:post_schema_verification | \
+    MIGRATION_POST_FINISHED_COUNT_CHECK:post_finished_count | MIGRATION_POST_FAILED_COUNT_CHECK:post_failed_count | \
+    MIGRATION_POST_LEDGER_NAMES_CHECK:post_ledger_names | MIGRATION_DURATION_QUERY_CHECK:duration_query | \
+    MIGRATION_SCHEMA_TABLE_QUERY_CHECK:schema_table_query | MIGRATION_SCHEMA_COLUMN_QUERY_CHECK:schema_column_query | \
+    MIGRATION_SCHEMA_INDEX_QUERY_CHECK:schema_index_query | MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK:schema_unique_key_query) ;;
     *) return 64 ;;
   esac
+  pm_migration_classification_is_safe "$__pm_failure_class" || return 64
   pm_migration_enter_check "$__pm_check" "$__pm_substep" postgres docker_exec postgres_client || return
   pm_migration_mark_started
   __pm_started=$SECONDS
@@ -410,7 +438,7 @@ pm_migration_psql_value() {
   pm_restore_errexit "$__pm_had_errexit"
   MIGRATION_ELAPSED_SECONDS=$((SECONDS - __pm_started))
   if (( __pm_status == 0 )); then pm_migration_finish_success; return 0; fi
-  pm_migration_record_failure MIGRATION_POST_VERIFICATION_FAILED "$__pm_status" running
+  pm_migration_record_failure "$__pm_failure_class" "$__pm_status" running
 }
 
 pm_migration_runner_exit_classification() {
