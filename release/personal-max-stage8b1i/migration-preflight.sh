@@ -23,6 +23,25 @@
 : "${MIGRATION_POSTGRES_CONTAINER_RUNNING:=false}"
 : "${MIGRATION_POSTGRES_ALIAS_URL_BINDING:=false}"
 : "${MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION:=NONE}"
+: "${MIGRATION_PRISMA_DIFF_FACTS_OBSERVED:=false}"
+: "${MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT:=0}"
+: "${MIGRATION_PRISMA_DIFF_STATEMENT_COUNT:=0}"
+: "${MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT:=0}"
+: "${MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT:=0}"
+: "${MIGRATION_PRISMA_DIFF_EXPECTED_TABLE_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_AT_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_DEFAULT_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_CONSTRAINT_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_INDEX_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_DEFAULT_CONSTRAINT_INDEX_PRESENT:=false}"
+: "${MIGRATION_PRISMA_DIFF_PARSER_RESULT:=NOT_OBSERVED}"
+: "${MIGRATION_PRISMA_DIFF_NORMALIZED_SEMANTIC_SHA256:=not_observed}"
+: "${MIGRATION_PRISMA_DIFF_EXPECTED_SEMANTIC_MODE:=LEGACY_TWO_COLUMN_DRIFT_EXPECTED}"
+: "${MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION:=NOT_OBSERVED}"
 
 pm_migration_check_id_is_safe() {
   case ${1:-} in
@@ -76,7 +95,12 @@ pm_migration_classification_is_safe() {
       MIGRATION_SCHEMA_COLUMN_QUERY_FAILED | MIGRATION_SCHEMA_COLUMN_MISSING | \
       MIGRATION_SCHEMA_INDEX_QUERY_FAILED | MIGRATION_SCHEMA_INDEX_MISSING | \
       MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED | MIGRATION_SCHEMA_UNIQUE_KEY_MISSING | \
-      MIGRATION_PRISMA_DIFF_EXECUTION_FAILED | MIGRATION_PRISMA_DIFF_REJECTED) return 0 ;;
+      MIGRATION_PRISMA_DIFF_EXECUTION_FAILED | MIGRATION_PRISMA_DIFF_REJECTED | \
+      MIGRATION_PRISMA_DIFF_EMPTY_UNEXPECTED | MIGRATION_PRISMA_DIFF_REQUIRED_EMPTY | \
+      MIGRATION_PRISMA_DIFF_PARSE_FAILED | MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE | \
+      MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN | MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION | \
+      MIGRATION_PRISMA_DIFF_TYPE_MISMATCH | MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING | \
+      MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT | MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -185,6 +209,92 @@ pm_migration_run_bounded() {
   MIGRATION_ELAPSED_SECONDS=$((SECONDS - __pm_started))
   if (( __pm_status == 0 )); then pm_migration_finish_success; return 0; fi
   pm_migration_record_failure "${PROBE_ERROR_CLASSIFICATION:-$__pm_failure_class}" "$__pm_status" not_observed
+}
+
+pm_migration_load_prisma_diff_facts() {
+  local __pm_path=${1:-} __pm_summary=''
+  [[ -f $__pm_path && ! -L $__pm_path ]] || return 74
+  if ! __pm_summary=$(jq -cer '
+      if (.schemaVersion==1 and
+      (.rawByteCount|type)=="number" and .rawByteCount>=0 and .rawByteCount<=4096 and
+      (.nonCommentStatementCount|type)=="number" and .nonCommentStatementCount>=0 and
+      (.alterTableCount|type)=="number" and .alterTableCount>=0 and
+      (.affectedTableCount|type)=="number" and .affectedTableCount>=0 and
+      ([.expectedTablePresent,.submittedPhoneAddPresent,.submittedPhoneAtAddPresent,
+        .unexpectedTablePresent,.unexpectedColumnPresent,.unexpectedOperationPresent,
+        .defaultPresent,.constraintPresent,.indexPresent,.defaultConstraintIndexPresent,
+        .rawDiffRetained,.rawSqlCaptured]|all(type=="boolean")) and
+      (.parserResult|IN("ACCEPTED","REJECTED","PARSE_FAILED","EMPTY")) and
+      (.normalizedSemanticSha256|test("^[0-9a-f]{64}$")) and
+      .expectedSemanticMode=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
+      (.finalGateClassification|IN(
+        "MIGRATION_PRISMA_DIFF_EMPTY_UNEXPECTED","MIGRATION_PRISMA_DIFF_REQUIRED_EMPTY",
+        "MIGRATION_PRISMA_DIFF_PARSE_FAILED","MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE",
+        "MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN","MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION",
+        "MIGRATION_PRISMA_DIFF_TYPE_MISMATCH","MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING",
+        "MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT","MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED")) and
+      .rawDiffRetained==false and .rawSqlCaptured==false) then {
+          rawByteCount:.rawByteCount,statementCount:.nonCommentStatementCount,
+          alterTableCount:.alterTableCount,affectedTableCount:.affectedTableCount,
+          expectedTablePresent:.expectedTablePresent,submittedPhoneAddPresent:.submittedPhoneAddPresent,
+          submittedPhoneAtAddPresent:.submittedPhoneAtAddPresent,
+          unexpectedTablePresent:.unexpectedTablePresent,unexpectedColumnPresent:.unexpectedColumnPresent,
+          unexpectedOperationPresent:.unexpectedOperationPresent,defaultPresent:.defaultPresent,
+          constraintPresent:.constraintPresent,indexPresent:.indexPresent,
+          defaultConstraintIndexPresent:.defaultConstraintIndexPresent,parserResult:.parserResult,
+          normalizedSemanticSha256:.normalizedSemanticSha256,expectedSemanticMode:.expectedSemanticMode,
+          finalGateClassification:.finalGateClassification
+        } else error("unsafe facts") end' "$__pm_path" 2>/dev/null); then
+    return 74
+  fi
+  MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT=$(jq -r '.rawByteCount' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_STATEMENT_COUNT=$(jq -r '.statementCount' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT=$(jq -r '.alterTableCount' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT=$(jq -r '.affectedTableCount' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_EXPECTED_TABLE_PRESENT=$(jq -r '.expectedTablePresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_PRESENT=$(jq -r '.submittedPhoneAddPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_AT_PRESENT=$(jq -r '.submittedPhoneAtAddPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE_PRESENT=$(jq -r '.unexpectedTablePresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN_PRESENT=$(jq -r '.unexpectedColumnPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION_PRESENT=$(jq -r '.unexpectedOperationPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_DEFAULT_PRESENT=$(jq -r '.defaultPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_CONSTRAINT_PRESENT=$(jq -r '.constraintPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_INDEX_PRESENT=$(jq -r '.indexPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_DEFAULT_CONSTRAINT_INDEX_PRESENT=$(jq -r '.defaultConstraintIndexPresent' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_PARSER_RESULT=$(jq -r '.parserResult' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_NORMALIZED_SEMANTIC_SHA256=$(jq -r '.normalizedSemanticSha256' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_EXPECTED_SEMANTIC_MODE=$(jq -r '.expectedSemanticMode' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION=$(jq -r '.finalGateClassification' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_FACTS_OBSERVED=true
+}
+
+pm_migration_run_prisma_diff_gate() {
+  local __pm_diff=${1:-} __pm_facts=${2:-} __pm_gate=${3:-}
+  local __pm_started __pm_status __pm_classification=MIGRATION_PRISMA_DIFF_PARSE_FAILED
+  pm_migration_enter_check MIGRATION_PRISMA_DIFF_GATE_CHECK prisma_diff_gate \
+    prisma_diff internal_validator posix_shell || return
+  pm_migration_mark_started
+  __pm_started=$SECONDS
+  if pm_run_bounded disposable_migration 60 PRISMA_DIFF_TIMEOUT MIGRATION_PRISMA_DIFF_PARSE_FAILED \
+      sh "$__pm_gate" "$__pm_diff" "$__pm_facts" >/dev/null; then
+    __pm_status=0
+  else
+    __pm_status=$?
+  fi
+  MIGRATION_ELAPSED_SECONDS=$((SECONDS - __pm_started))
+  if (( __pm_status == 124 )); then
+    pm_migration_record_failure PRISMA_DIFF_TIMEOUT 124 not_observed
+    return
+  fi
+  if pm_migration_load_prisma_diff_facts "$__pm_facts"; then
+    __pm_classification=$MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION
+  fi
+  if (( __pm_status == 0 )) && [[ $__pm_classification == MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT ]]; then
+    pm_migration_finish_success
+    return 0
+  fi
+  (( __pm_status != 0 )) || __pm_status=74
+  pm_migration_record_failure "$__pm_classification" "$__pm_status" not_observed
 }
 
 pm_migration_capture_bounded() {

@@ -35,16 +35,16 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='5e53e982e0b61742817d30cee43f4b2c0a1fdbd5e1394fe0a1e48fed69ef1311'
-readonly BOUNDED_OPERATIONS_SHA256='3bdac84ac236d95a7bbdd0722aba7c7cbc69b74493f9b4fc409eb51675330639'
+readonly FAILURE_DIAGNOSTICS_SHA256='6b8b84c9e9d9477f827b82735c7bdb46cd26de6123256b1ee9c4dd249fa37c98'
+readonly BOUNDED_OPERATIONS_SHA256='1c502260909157be33b64369b0f4163b32c9cd224d5aa81115053a1a110566a5'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
-readonly RESIDUAL_CLEANUP_SHA256='d25ece44a93cca76a3105fbc2c7d6af98771b7597ed45fdc1b843a24c155b016'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
-readonly MIGRATION_PREFLIGHT_SHA256='5818a9eacb04c53adf14ddd4e0839f01fec45fa3402199e243fa5ef04385f99b'
+readonly MIGRATION_PREFLIGHT_SHA256='ee913ba6221e929b0d98877206cc68cce04a26067766820d0db9f3cf83503189'
 readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
-readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
+readonly PRISMA_LEGACY_DIFF_GATE_SHA256='a4e45ce793ffbcc70b37ee72b6d96b5c0728471aa87c02ae92737fce574f350b'
+readonly PRISMA_DIFF_SEMANTIC_PARSER_SHA256='2a3ffb3006dc923715e13af4faecbacc1141ea24c85ccb09c9f0c51983cdae03'
 readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e'
 readonly GATEWAY_CLIENT_HARNESS_SHA256='f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428'
 readonly PRODUCTION_PROJECT_LABEL='com.docker.compose.project=crm'
@@ -83,6 +83,7 @@ LEDGER_NAMING_CLASSIFICATION='NOT_OBSERVED'
 PM_SCRIPT_SHA256=''
 PM_FAILURE_PATH=''
 PM_DIAGNOSTIC_TMP=''
+PRISMA_DIFF_FACTS_PATH=''
 RUN_ID=''
 PREFIX=''
 TMP=''
@@ -398,9 +399,9 @@ bootstrap_verify_runtime_path() {
   case $__pm_name in
     isolated-release-probe.sh | SHA256SUMS | failure-diagnostics.sh | bounded-operations.sh | \
       probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-preflight.sh | \
-      residual-cleanup.sh | \
       migration-sql-gate.sh | migration-sql-bindings.txt | \
-      prisma-legacy-diff-gate.sh | synthetic-scraper-harness.js | gateway-client-harness.js) ;;
+      prisma-legacy-diff-gate.sh | prisma-diff-semantic-parser.py | \
+      synthetic-scraper-harness.js | gateway-client-harness.js) ;;
     *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
   esac
   __pm_path="$PACKAGE_ROOT/$__pm_name"
@@ -445,7 +446,7 @@ PM_FAILURE_PATH="/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.
 [[ ! -e $SUCCESS_REPORT && ! -L $SUCCESS_REPORT && ! -e $PM_FAILURE_PATH && ! -L $PM_FAILURE_PATH ]] || {
   printf 'NO_CLOBBER_REPORT_PATH_EXISTS\n' >&2; exit 73;
 }
-for command in docker jq sha256sum stat realpath df git awk sed grep comm cmp timeout openssl find sort seq runuser mountpoint readlink bash; do
+for command in docker jq sha256sum stat realpath df git awk sed grep comm cmp timeout openssl find sort seq runuser mountpoint readlink bash python3; do
   command -v "$command" >/dev/null || { printf 'REQUIRED_COMMAND_MISSING=%s\n' "$command" >&2; exit 69; }
 done
 # The checksum argument anchors this script; these constants transitively anchor
@@ -453,13 +454,13 @@ done
 bootstrap_verify_runtime_artifact failure-diagnostics.sh "$FAILURE_DIAGNOSTICS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact bounded-operations.sh "$BOUNDED_OPERATIONS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact probe-output-helpers.sh "$PROBE_OUTPUT_HELPERS_SHA256" || exit $?
-bootstrap_verify_runtime_artifact residual-cleanup.sh "$RESIDUAL_CLEANUP_SHA256" || exit $?
 bootstrap_verify_runtime_artifact restore-verification.sh "$RESTORE_VERIFICATION_SHA256" || exit $?
 bootstrap_verify_runtime_artifact postgres-startup.sh "$POSTGRES_STARTUP_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-preflight.sh "$MIGRATION_PREFLIGHT_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-gate.sh "$MIGRATION_SQL_GATE_SHA256" || exit $?
 bootstrap_verify_runtime_artifact migration-sql-bindings.txt "$MIGRATION_SQL_BINDINGS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh "$PRISMA_LEGACY_DIFF_GATE_SHA256" || exit $?
+bootstrap_verify_runtime_artifact prisma-diff-semantic-parser.py "$PRISMA_DIFF_SEMANTIC_PARSER_SHA256" || exit $?
 bootstrap_verify_runtime_artifact synthetic-scraper-harness.js "$SYNTHETIC_SCRAPER_HARNESS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact gateway-client-harness.js "$GATEWAY_CLIENT_HARNESS_SHA256" || exit $?
 # SHA256SUMS remains a complete package-integrity ledger, but is deliberately
@@ -475,8 +476,6 @@ DIAGNOSTICS_LOADED=true
 source "$PACKAGE_ROOT/bounded-operations.sh"
 # shellcheck source=release/personal-max-stage8b1i/probe-output-helpers.sh
 source "$PACKAGE_ROOT/probe-output-helpers.sh"
-# shellcheck source=release/personal-max-stage8b1i/residual-cleanup.sh
-source "$PACKAGE_ROOT/residual-cleanup.sh"
 # shellcheck source=release/personal-max-stage8b1i/postgres-startup.sh
 source "$PACKAGE_ROOT/postgres-startup.sh"
 # shellcheck source=release/personal-max-stage8b1i/migration-preflight.sh
@@ -505,10 +504,9 @@ pm_capture_bounded observed_stat filesystem_metadata 60 METADATA_TIMEOUT METADAT
 sha_of observed_sha "$DUMP_PATH"
 [[ $observed_sha == "$DUMP_SHA256" ]]
 
-# The exact root-owned residual predates the accepted 2026-07-29 failed run.
-# Its removal is deliberately deferred to this next separately authorized,
-# checksum-bound probe and runs before a fresh run id or Docker object exists.
-pm_cleanup_prior_residual
+# The exact root-owned historical residual belongs to an older script whose
+# origin failure report is absent. This probe neither inspects nor removes it;
+# a future dedicated privileged cleanup job requires its own approval contract.
 
 pm_capture_bounded RUN_ID filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED openssl rand -hex 6
 [[ $RUN_ID =~ ^[0-9a-f]{12}$ ]]
@@ -788,11 +786,11 @@ pm_migration_write_bounded "$TMP/prisma-diff.log" MIGRATION_PRISMA_DIFF_EXECUTIO
   docker run --rm --name "$PREFIX-prisma-diff" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/migration.env" --entrypoint sh "$GATEWAY_IMAGE" -ceu \
   'exec /app/node_modules/.bin/prisma migrate diff --from-migrations /app/prisma/migrations --to-url "$DATABASE_URL" --shadow-database-url "$SHADOW_DATABASE_URL" --script'
-pm_migration_run_bounded MIGRATION_PRISMA_DIFF_GATE_CHECK prisma_diff_gate prisma_diff internal_validator posix_shell \
-  60 PRISMA_DIFF_TIMEOUT MIGRATION_PRISMA_DIFF_REJECTED \
-  sh "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh" "$TMP/prisma-diff.log" >/dev/null
+PRISMA_DIFF_FACTS_PATH="$TMP/prisma-diff-facts.json"
+pm_migration_run_prisma_diff_gate "$TMP/prisma-diff.log" "$PRISMA_DIFF_FACTS_PATH" \
+  "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh"
 prisma_diff_empty=false
-prisma_diff_status=ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS
+prisma_diff_status=MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT
 
 pm_enter_phase gateway_negative docker_disposable
 MIGRATION_CHECK_ID=NONE
@@ -1020,6 +1018,17 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
   --argjson postgresContainerRunning "$MIGRATION_POSTGRES_CONTAINER_RUNNING" \
   --argjson postgresAliasUrlBinding "$MIGRATION_POSTGRES_ALIAS_URL_BINDING" \
   --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
+  --argjson prismaDiffRawByteCount "$MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT" \
+  --argjson prismaDiffStatementCount "$MIGRATION_PRISMA_DIFF_STATEMENT_COUNT" \
+  --argjson prismaDiffAlterTableCount "$MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT" \
+  --argjson prismaDiffAffectedTableCount "$MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT" \
+  --argjson prismaDiffExpectedTablePresent "$MIGRATION_PRISMA_DIFF_EXPECTED_TABLE_PRESENT" \
+  --argjson prismaDiffSubmittedPhonePresent "$MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_PRESENT" \
+  --argjson prismaDiffSubmittedPhoneAtPresent "$MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_AT_PRESENT" \
+  --arg prismaDiffParserResult "$MIGRATION_PRISMA_DIFF_PARSER_RESULT" \
+  --arg prismaDiffSemanticSha256 "$MIGRATION_PRISMA_DIFF_NORMALIZED_SEMANTIC_SHA256" \
+  --arg prismaDiffExpectedMode "$MIGRATION_PRISMA_DIFF_EXPECTED_SEMANTIC_MODE" \
+  --arg prismaDiffFinalClassification "$MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION" \
   --argjson migrationSeconds "$migration_seconds" --argjson migrationDurations "$migration_durations" \
   --argjson representativeCounts "$(<"$TMP/representative-counts.json")" \
   --argjson physicalFrames "$physical_frames" --argjson identicalFrames "$identical_frames" \
@@ -1056,6 +1065,17 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
     migration:{DISPOSABLE_MIGRATION_PROOF:"PASS",appliedNames:$appliedNames,beforeFinished:$beforeFinished,
       afterFinished:$afterFinished,failed:$failed,prismaDiffEmpty:$prismaDiffEmpty,
       prismaDiffStatus:$prismaDiffStatus,durationSeconds:$migrationSeconds,
+      prismaDiffEvidence:{factsObserved:true,rawByteCount:$prismaDiffRawByteCount,
+        nonCommentStatementCount:$prismaDiffStatementCount,alterTableCount:$prismaDiffAlterTableCount,
+        affectedTableCount:$prismaDiffAffectedTableCount,expectedTablePresent:$prismaDiffExpectedTablePresent,
+        submittedPhoneAddPresent:$prismaDiffSubmittedPhonePresent,
+        submittedPhoneAtAddPresent:$prismaDiffSubmittedPhoneAtPresent,
+        unexpectedTablePresent:false,unexpectedColumnPresent:false,unexpectedOperationPresent:false,
+        defaultPresent:false,constraintPresent:false,indexPresent:false,defaultConstraintIndexPresent:false,
+        parserResult:$prismaDiffParserResult,normalizedSemanticSha256:$prismaDiffSemanticSha256,
+        expectedSemanticMode:$prismaDiffExpectedMode,finalGateClassification:$prismaDiffFinalClassification,
+        rawDiffRetained:false,rawSqlCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false,
+        environmentValuesCaptured:false,businessDataCaptured:false},
       acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"],
       perMigrationDurations:$migrationDurations,repositoryDirectoryCount:53,appliedOnlyLegacyCount:1,productionMigration:false,
       postgresNetworkAlias:{explicit:true,databaseUrlHostBound:$postgresAliasUrlBinding,

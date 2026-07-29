@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "mode": "PRISMA_DIFF_REPOSITORY_CLOSURE_AUDIT",
+  "sourceCommit": "9b46ae8070a472f3338cd97e17612b686ce5bedf",
+  "repositoryRoot": "/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z",
+  "schema": {
+    "path": "gravity-mvp/prisma/schema.prisma",
+    "sha256": "46ef6927d4f11c76a6712e6337d5935a055ab6b71da10a3647cfaf3b57a8e93b",
+    "driverTelegramOccurrences": 1,
+    "submittedPhoneOccurrences": 0,
+    "submittedPhoneAtOccurrences": 0,
+    "containsSubmittedPhone": false,
+    "containsSubmittedPhoneAt": false
+  },
+  "migrationClosure": {
+    "root": "gravity-mvp/prisma/migrations",
+    "directoryCount": 53,
+    "sqlFileCount": 53,
+    "sha256LedgerPath": "release/personal-max-stage8b1i/migration-closure-sha256.txt",
+    "sha256LedgerEntryCount": 54,
+    "sha256LedgerSha256": "2fa525ac333b5c4d27df64b1d94ac5fed21892ace168ca12dcab03af861443b6",
+    "driverTelegramOccurrences": 8,
+    "driverTelegramFileCount": 2,
+    "submittedPhoneOccurrences": 0,
+    "submittedPhoneAtOccurrences": 0,
+    "containsSubmittedPhone": false,
+    "containsSubmittedPhoneAt": false,
+    "repositoryFromMigrationsContainsSubmittedPhone": false,
+    "repositoryFromMigrationsContainsSubmittedPhoneAt": false,
+    "relevantFiles": [
+      {
+        "path": "gravity-mvp/prisma/migrations/0_init/migration.sql",
+        "sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
+        "fact": "CREATES_DRIVER_TELEGRAM_WITHOUT_LEGACY_SUBMITTED_PHONE_COLUMNS"
+      },
+      {
+        "path": "gravity-mvp/prisma/migrations/20260616000000_add_park_name_and_active_park/migration.sql",
+        "sha256": "c2e1bbceda04331775b78c452fbe8e9df63caf5eaf26786fd68a159800381dc4",
+        "fact": "ALTERS_DRIVER_TELEGRAM_ACTIVE_PARK_ONLY"
+      }
+    ]
+  },
+  "acceptedLedgerOnlyMigration": {
+    "name": "20260717000000_add_driver_telegram_submitted_phone",
+    "repositoryDirectoryPresent": false,
+    "repositorySqlPresent": false,
+    "acceptedRestoredLedgerState": "APPLIED_ONLY_LEGACY_MIGRATION",
+    "acceptedSemanticContract": {
+      "source": "release/personal-max-stage8b1i/migration-proof-contract.md",
+      "table": "DriverTelegram",
+      "columns": [
+        {"name": "submittedPhone", "type": "TEXT", "nullable": true},
+        {"name": "submittedPhoneAt", "type": "TIMESTAMP(3)", "nullable": true}
+      ],
+      "defaults": false,
+      "constraints": false,
+      "indexes": false,
+      "dataOperations": false
+    }
+  },
+  "diffDirection": {
+    "from": "repository_migrations",
+    "to": "accepted_restored_database_after_exact_eight",
+    "commandSource": "release/personal-max-stage8b1i/isolated-release-probe.sh",
+    "repositorySideContainsLegacyColumns": false,
+    "restoredDatabaseSideExpectedToContainLegacyColumns": true
+  },
+  "expectedSemanticResult": "LEGACY_TWO_COLUMN_DRIFT_EXPECTED",
+  "evidenceClassification": "A",
+  "proof": "The complete repository migration closure and current Prisma schema omit both legacy columns, while the accepted restored ledger contains the separately applied historical migration whose accepted contract adds only those two nullable columns. A from-migrations to restored-database diff must therefore express that two-column target-side drift; an empty diff is not accepted.",
+  "previousFailure": {
+    "firstFailingOperationProven": true,
+    "gateRejectionProven": true,
+    "rawFailedRunDiffRetained": false,
+    "actualFailedRunDiffSemanticCause": "PRISMA_DIFF_UNDERLYING_EVIDENCE_INSUFFICIENT",
+    "architectureExpectedSemanticMode": "PRISMA_DIFF_UNDERLYING_CAUSE_PROVEN",
+    "speculation": false
+  },
+  "privacy": {
+    "rawPrismaDiffIncluded": false,
+    "rawSqlIncluded": false,
+    "databaseUrlIncluded": false,
+    "credentialsIncluded": false,
+    "environmentValuesIncluded": false,
+    "businessDataIncluded": false
+  }
+}

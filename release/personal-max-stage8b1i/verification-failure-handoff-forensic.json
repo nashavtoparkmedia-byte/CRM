@@ -186,7 +186,14 @@
   },
   "migrationVerificationDiagnosis": {
     "evidenceClassification": "A",
-    "classification": "EXACT_MIGRATION_VERIFICATION_DEFECT_PROVEN",
+    "classification": "PRISMA_DIFF_GATE_REJECTION_PROVEN",
+    "firstFailingOperationProven": true,
+    "gateRejectionProven": true,
+    "rawFailedRunDiffRetained": false,
+    "underlyingFailedRunDiffClassification": "PRISMA_DIFF_UNDERLYING_EVIDENCE_INSUFFICIENT",
+    "repositoryClosureExpectedSemanticClassification": "PRISMA_DIFF_UNDERLYING_CAUSE_PROVEN",
+    "repositoryClosureAudit": "release/personal-max-stage8b1i/prisma-diff-closure-audit.json",
+    "expectedSemanticMode": "LEGACY_TWO_COLUMN_DRIFT_EXPECTED",
     "firstFailingOperationNumber": 15,
     "firstFailingOperation": "accepted_legacy_prisma_diff_gate",
     "failedExecutable": "posix_shell",
@@ -329,7 +336,11 @@
     "contentsInspected": false,
     "removed": false,
     "cleanupExecuted": false,
-    "globalCleanupExecuted": false
+    "globalCleanupExecuted": false,
+    "automaticCleanupInNextProbe": false,
+    "unrelatedFailureReportBindingRemoved": true,
+    "blocksNextIsolatedRun": false,
+    "futureCleanupApprovalContract": "NOT_CREATED"
   },
   "privacy": {
     "rawCommandIncluded": false,
@@ -358,7 +369,7 @@
     "residualRemoved": false
   },
   "futureProbeBinding": {
-    "scriptSha256": "78f5f5855db20bb1e98c60f8fb869d5381451b2479d6100274bdf65e4d7cfbc4",
+    "scriptSha256": "089a6a2e433ab7ffcfa5eeff5ac04f3499b67d749158e72efd1c697d6161a580",
     "bindingStatus": "FINAL_SHA256_BOUND"
   }
 }

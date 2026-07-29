@@ -54,6 +54,11 @@ personal_max_stage8b1i_safe_error() {
       MIGRATION_SCHEMA_INDEX_QUERY_FAILED | MIGRATION_SCHEMA_INDEX_MISSING | \
       MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED | MIGRATION_SCHEMA_UNIQUE_KEY_MISSING | \
       MIGRATION_PRISMA_DIFF_EXECUTION_FAILED | MIGRATION_PRISMA_DIFF_REJECTED | \
+      MIGRATION_PRISMA_DIFF_EMPTY_UNEXPECTED | MIGRATION_PRISMA_DIFF_REQUIRED_EMPTY | \
+      MIGRATION_PRISMA_DIFF_PARSE_FAILED | MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE | \
+      MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN | MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION | \
+      MIGRATION_PRISMA_DIFF_TYPE_MISMATCH | MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING | \
+      MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT | MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED | \
       PRIOR_RESIDUAL_CLEANUP_REENTRY | PRIOR_RESIDUAL_PATH_UNSAFE | PRIOR_RESIDUAL_METADATA_FAILED | \
       PRIOR_RESIDUAL_MOUNTPOINT_REFUSED | PRIOR_RESIDUAL_IN_USE | PRIOR_RESIDUAL_DOCKER_OBJECTS_PRESENT | PRIOR_RESIDUAL_REPORT_REFUSED | \
       PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
@@ -204,6 +209,11 @@ personal_max_stage8b1i_render_failure() {
   local postgres_network_facts_observed postgres_observed_network_count postgres_expected_network_present
   local postgres_alias_array_present postgres_expected_alias_present postgres_unexpected_network_present
   local postgres_alias_container_running postgres_alias_url_binding postgres_alias_validation_classification
+  local prisma_diff_facts_observed prisma_diff_raw_bytes prisma_diff_statement_count prisma_diff_alter_count
+  local prisma_diff_table_count prisma_diff_expected_table prisma_diff_phone prisma_diff_phone_at
+  local prisma_diff_unexpected_table prisma_diff_unexpected_column prisma_diff_unexpected_operation
+  local prisma_diff_default prisma_diff_constraint prisma_diff_index prisma_diff_aggregate
+  local prisma_diff_parser_result prisma_diff_semantic_sha prisma_diff_expected_mode prisma_diff_final_class
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
   [[ $source_line =~ ^[0-9]+$ ]] || source_line=0
   safe_phase=${PROBE_PHASE:-bootstrap_complete}
@@ -351,6 +361,46 @@ personal_max_stage8b1i_render_failure() {
   [[ $postgres_alias_url_binding == true ]] || postgres_alias_url_binding=false
   postgres_alias_validation_classification=${MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$postgres_alias_validation_classification" || postgres_alias_validation_classification=NONE
+  prisma_diff_facts_observed=${MIGRATION_PRISMA_DIFF_FACTS_OBSERVED:-false}
+  [[ $prisma_diff_facts_observed == true ]] || prisma_diff_facts_observed=false
+  prisma_diff_raw_bytes=${MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT:-0}
+  prisma_diff_statement_count=${MIGRATION_PRISMA_DIFF_STATEMENT_COUNT:-0}
+  prisma_diff_alter_count=${MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT:-0}
+  prisma_diff_table_count=${MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT:-0}
+  [[ $prisma_diff_raw_bytes =~ ^[0-9]+$ && $prisma_diff_raw_bytes -le 4096 ]] || prisma_diff_raw_bytes=0
+  [[ $prisma_diff_statement_count =~ ^[0-9]+$ ]] || prisma_diff_statement_count=0
+  [[ $prisma_diff_alter_count =~ ^[0-9]+$ ]] || prisma_diff_alter_count=0
+  [[ $prisma_diff_table_count =~ ^[0-9]+$ ]] || prisma_diff_table_count=0
+  prisma_diff_expected_table=${MIGRATION_PRISMA_DIFF_EXPECTED_TABLE_PRESENT:-false}
+  prisma_diff_phone=${MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_PRESENT:-false}
+  prisma_diff_phone_at=${MIGRATION_PRISMA_DIFF_SUBMITTED_PHONE_AT_PRESENT:-false}
+  prisma_diff_unexpected_table=${MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE_PRESENT:-false}
+  prisma_diff_unexpected_column=${MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN_PRESENT:-false}
+  prisma_diff_unexpected_operation=${MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION_PRESENT:-false}
+  prisma_diff_default=${MIGRATION_PRISMA_DIFF_DEFAULT_PRESENT:-false}
+  prisma_diff_constraint=${MIGRATION_PRISMA_DIFF_CONSTRAINT_PRESENT:-false}
+  prisma_diff_index=${MIGRATION_PRISMA_DIFF_INDEX_PRESENT:-false}
+  prisma_diff_aggregate=${MIGRATION_PRISMA_DIFF_DEFAULT_CONSTRAINT_INDEX_PRESENT:-false}
+  [[ $prisma_diff_expected_table == true ]] || prisma_diff_expected_table=false
+  [[ $prisma_diff_phone == true ]] || prisma_diff_phone=false
+  [[ $prisma_diff_phone_at == true ]] || prisma_diff_phone_at=false
+  [[ $prisma_diff_unexpected_table == true ]] || prisma_diff_unexpected_table=false
+  [[ $prisma_diff_unexpected_column == true ]] || prisma_diff_unexpected_column=false
+  [[ $prisma_diff_unexpected_operation == true ]] || prisma_diff_unexpected_operation=false
+  [[ $prisma_diff_default == true ]] || prisma_diff_default=false
+  [[ $prisma_diff_constraint == true ]] || prisma_diff_constraint=false
+  [[ $prisma_diff_index == true ]] || prisma_diff_index=false
+  [[ $prisma_diff_aggregate == true ]] || prisma_diff_aggregate=false
+  prisma_diff_parser_result=${MIGRATION_PRISMA_DIFF_PARSER_RESULT:-NOT_OBSERVED}
+  case $prisma_diff_parser_result in NOT_OBSERVED | ACCEPTED | REJECTED | PARSE_FAILED | EMPTY) ;; *) prisma_diff_parser_result=NOT_OBSERVED ;; esac
+  prisma_diff_semantic_sha=${MIGRATION_PRISMA_DIFF_NORMALIZED_SEMANTIC_SHA256:-not_observed}
+  [[ $prisma_diff_semantic_sha =~ ^[0-9a-f]{64}$ ]] || prisma_diff_semantic_sha=not_observed
+  prisma_diff_expected_mode=${MIGRATION_PRISMA_DIFF_EXPECTED_SEMANTIC_MODE:-LEGACY_TWO_COLUMN_DRIFT_EXPECTED}
+  [[ $prisma_diff_expected_mode == LEGACY_TWO_COLUMN_DRIFT_EXPECTED ]] || prisma_diff_expected_mode=LEGACY_TWO_COLUMN_DRIFT_EXPECTED
+  prisma_diff_final_class=${MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION:-NOT_OBSERVED}
+  if [[ $prisma_diff_final_class != NOT_OBSERVED ]]; then
+    personal_max_stage8b1i_safe_error "$prisma_diff_final_class" || prisma_diff_final_class=NOT_OBSERVED
+  fi
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
     personal_max_stage8b1i_surface_existing_report "$original_exit" "$safe_phase" "$safe_error" \
@@ -406,6 +456,25 @@ personal_max_stage8b1i_render_failure() {
     --argjson postgresAliasContainerRunning "$postgres_alias_container_running" \
     --argjson postgresAliasUrlBinding "$postgres_alias_url_binding" \
     --arg postgresAliasValidationClassification "$postgres_alias_validation_classification" \
+    --argjson prismaDiffFactsObserved "$prisma_diff_facts_observed" \
+    --argjson prismaDiffRawByteCount "$prisma_diff_raw_bytes" \
+    --argjson prismaDiffStatementCount "$prisma_diff_statement_count" \
+    --argjson prismaDiffAlterTableCount "$prisma_diff_alter_count" \
+    --argjson prismaDiffAffectedTableCount "$prisma_diff_table_count" \
+    --argjson prismaDiffExpectedTablePresent "$prisma_diff_expected_table" \
+    --argjson prismaDiffSubmittedPhonePresent "$prisma_diff_phone" \
+    --argjson prismaDiffSubmittedPhoneAtPresent "$prisma_diff_phone_at" \
+    --argjson prismaDiffUnexpectedTablePresent "$prisma_diff_unexpected_table" \
+    --argjson prismaDiffUnexpectedColumnPresent "$prisma_diff_unexpected_column" \
+    --argjson prismaDiffUnexpectedOperationPresent "$prisma_diff_unexpected_operation" \
+    --argjson prismaDiffDefaultPresent "$prisma_diff_default" \
+    --argjson prismaDiffConstraintPresent "$prisma_diff_constraint" \
+    --argjson prismaDiffIndexPresent "$prisma_diff_index" \
+    --argjson prismaDiffDefaultConstraintIndexPresent "$prisma_diff_aggregate" \
+    --arg prismaDiffParserResult "$prisma_diff_parser_result" \
+    --arg prismaDiffSemanticSha256 "$prisma_diff_semantic_sha" \
+    --arg prismaDiffExpectedMode "$prisma_diff_expected_mode" \
+    --arg prismaDiffFinalClassification "$prisma_diff_final_class" \
     --argjson ledgerNameCount "$ledger_name_count" --argjson ledgerUniqueCount "$ledger_unique_count" \
     --argjson ledgerDuplicateCount "$ledger_duplicate_count" --argjson ledgerEmptyCount "$ledger_empty_count" \
     --argjson ledgerInvalidFormatCount "$ledger_invalid_format_count" --argjson ledgerUnsafeCount "$ledger_unsafe_count" \
@@ -455,6 +524,20 @@ personal_max_stage8b1i_render_failure() {
           rawInspectCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false},
         rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
         databaseUrlCaptured:false,credentialsCaptured:false,sqlCaptured:false,businessDataCaptured:false},
+      prismaDiffEvidence:{factsObserved:$prismaDiffFactsObserved,rawByteCount:$prismaDiffRawByteCount,
+        nonCommentStatementCount:$prismaDiffStatementCount,alterTableCount:$prismaDiffAlterTableCount,
+        affectedTableCount:$prismaDiffAffectedTableCount,expectedTablePresent:$prismaDiffExpectedTablePresent,
+        submittedPhoneAddPresent:$prismaDiffSubmittedPhonePresent,
+        submittedPhoneAtAddPresent:$prismaDiffSubmittedPhoneAtPresent,
+        unexpectedTablePresent:$prismaDiffUnexpectedTablePresent,
+        unexpectedColumnPresent:$prismaDiffUnexpectedColumnPresent,
+        unexpectedOperationPresent:$prismaDiffUnexpectedOperationPresent,
+        defaultPresent:$prismaDiffDefaultPresent,constraintPresent:$prismaDiffConstraintPresent,
+        indexPresent:$prismaDiffIndexPresent,defaultConstraintIndexPresent:$prismaDiffDefaultConstraintIndexPresent,
+        parserResult:$prismaDiffParserResult,normalizedSemanticSha256:$prismaDiffSemanticSha256,
+        expectedSemanticMode:$prismaDiffExpectedMode,finalGateClassification:$prismaDiffFinalClassification,
+        rawDiffRetained:false,rawSqlCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false,
+        environmentValuesCaptured:false,businessDataCaptured:false},
       ledgerDiagnostics:{ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,
         ledgerDuplicateCount:$ledgerDuplicateCount,ledgerEmptyNameCount:$ledgerEmptyCount,
         ledgerInvalidFormatCount:$ledgerInvalidFormatCount,ledgerUnsafeNameCount:$ledgerUnsafeCount,

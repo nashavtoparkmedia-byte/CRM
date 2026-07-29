@@ -44,10 +44,41 @@
           "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "ledgerNamingClassification", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "catalogIntegrity"]},
           "migration": {
             "type": "object",
-            "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty", "prismaDiffStatus", "acceptedLedgerOnlyMigrations", "postgresNetworkAlias"],
+            "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffEvidence", "acceptedLedgerOnlyMigrations", "postgresNetworkAlias"],
             "properties": {
               "prismaDiffEmpty": {"const": false},
-              "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
+              "prismaDiffStatus": {"const": "MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT"},
+              "prismaDiffEvidence": {
+                "type": "object",
+                "required": ["factsObserved", "rawByteCount", "nonCommentStatementCount", "alterTableCount", "affectedTableCount", "expectedTablePresent", "submittedPhoneAddPresent", "submittedPhoneAtAddPresent", "unexpectedTablePresent", "unexpectedColumnPresent", "unexpectedOperationPresent", "defaultPresent", "constraintPresent", "indexPresent", "defaultConstraintIndexPresent", "parserResult", "normalizedSemanticSha256", "expectedSemanticMode", "finalGateClassification", "rawDiffRetained", "rawSqlCaptured", "databaseUrlCaptured", "credentialsCaptured", "environmentValuesCaptured", "businessDataCaptured"],
+                "properties": {
+                  "factsObserved": {"const": true},
+                  "rawByteCount": {"type": "integer", "minimum": 1, "maximum": 4096},
+                  "nonCommentStatementCount": {"type": "integer", "minimum": 1},
+                  "alterTableCount": {"type": "integer", "minimum": 1, "maximum": 2},
+                  "affectedTableCount": {"const": 1},
+                  "expectedTablePresent": {"const": true},
+                  "submittedPhoneAddPresent": {"const": true},
+                  "submittedPhoneAtAddPresent": {"const": true},
+                  "unexpectedTablePresent": {"const": false},
+                  "unexpectedColumnPresent": {"const": false},
+                  "unexpectedOperationPresent": {"const": false},
+                  "defaultPresent": {"const": false},
+                  "constraintPresent": {"const": false},
+                  "indexPresent": {"const": false},
+                  "defaultConstraintIndexPresent": {"const": false},
+                  "parserResult": {"const": "ACCEPTED"},
+                  "normalizedSemanticSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                  "expectedSemanticMode": {"const": "LEGACY_TWO_COLUMN_DRIFT_EXPECTED"},
+                  "finalGateClassification": {"const": "MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT"},
+                  "rawDiffRetained": {"const": false},
+                  "rawSqlCaptured": {"const": false},
+                  "databaseUrlCaptured": {"const": false},
+                  "credentialsCaptured": {"const": false},
+                  "environmentValuesCaptured": {"const": false},
+                  "businessDataCaptured": {"const": false}
+                }
+              },
               "acceptedLedgerOnlyMigrations": {"const": ["20260717000000_add_driver_telegram_submitted_phone"]},
               "postgresNetworkAlias": {
                 "type": "object",
@@ -103,7 +134,7 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "prismaDiffEvidence", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string", "description": "Privacy-safe output-contract or migration-preflight classification; raw commands, stderr, URLs, credentials, SQL, and business data are excluded."},
@@ -183,6 +214,37 @@
               "databaseUrlCaptured": {"const": false},
               "credentialsCaptured": {"const": false},
               "sqlCaptured": {"const": false},
+              "businessDataCaptured": {"const": false}
+            }
+          },
+          "prismaDiffEvidence": {
+            "type": "object",
+            "required": ["factsObserved", "rawByteCount", "nonCommentStatementCount", "alterTableCount", "affectedTableCount", "expectedTablePresent", "submittedPhoneAddPresent", "submittedPhoneAtAddPresent", "unexpectedTablePresent", "unexpectedColumnPresent", "unexpectedOperationPresent", "defaultPresent", "constraintPresent", "indexPresent", "defaultConstraintIndexPresent", "parserResult", "normalizedSemanticSha256", "expectedSemanticMode", "finalGateClassification", "rawDiffRetained", "rawSqlCaptured", "databaseUrlCaptured", "credentialsCaptured", "environmentValuesCaptured", "businessDataCaptured"],
+            "properties": {
+              "factsObserved": {"type": "boolean"},
+              "rawByteCount": {"type": "integer", "minimum": 0, "maximum": 4096},
+              "nonCommentStatementCount": {"type": "integer", "minimum": 0},
+              "alterTableCount": {"type": "integer", "minimum": 0},
+              "affectedTableCount": {"type": "integer", "minimum": 0},
+              "expectedTablePresent": {"type": "boolean"},
+              "submittedPhoneAddPresent": {"type": "boolean"},
+              "submittedPhoneAtAddPresent": {"type": "boolean"},
+              "unexpectedTablePresent": {"type": "boolean"},
+              "unexpectedColumnPresent": {"type": "boolean"},
+              "unexpectedOperationPresent": {"type": "boolean"},
+              "defaultPresent": {"type": "boolean"},
+              "constraintPresent": {"type": "boolean"},
+              "indexPresent": {"type": "boolean"},
+              "defaultConstraintIndexPresent": {"type": "boolean"},
+              "parserResult": {"enum": ["NOT_OBSERVED", "ACCEPTED", "REJECTED", "PARSE_FAILED", "EMPTY"]},
+              "normalizedSemanticSha256": {"type": "string", "pattern": "^(not_observed|[0-9a-f]{64})$"},
+              "expectedSemanticMode": {"const": "LEGACY_TWO_COLUMN_DRIFT_EXPECTED"},
+              "finalGateClassification": {"type": "string", "pattern": "^(NOT_OBSERVED|MIGRATION_PRISMA_DIFF_[A-Z0-9_]+)$"},
+              "rawDiffRetained": {"const": false},
+              "rawSqlCaptured": {"const": false},
+              "databaseUrlCaptured": {"const": false},
+              "credentialsCaptured": {"const": false},
+              "environmentValuesCaptured": {"const": false},
               "businessDataCaptured": {"const": false}
             }
           },

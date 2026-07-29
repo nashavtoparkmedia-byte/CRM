@@ -60,6 +60,11 @@ pm_error_classification_is_safe() {
       MIGRATION_SCHEMA_INDEX_QUERY_FAILED | MIGRATION_SCHEMA_INDEX_MISSING | \
       MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_FAILED | MIGRATION_SCHEMA_UNIQUE_KEY_MISSING | \
       MIGRATION_PRISMA_DIFF_EXECUTION_FAILED | MIGRATION_PRISMA_DIFF_REJECTED | \
+      MIGRATION_PRISMA_DIFF_EMPTY_UNEXPECTED | MIGRATION_PRISMA_DIFF_REQUIRED_EMPTY | \
+      MIGRATION_PRISMA_DIFF_PARSE_FAILED | MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE | \
+      MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN | MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION | \
+      MIGRATION_PRISMA_DIFF_TYPE_MISMATCH | MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING | \
+      MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT | MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED | \
       PRIOR_RESIDUAL_CLEANUP_REENTRY | PRIOR_RESIDUAL_PATH_UNSAFE | PRIOR_RESIDUAL_METADATA_FAILED | \
       PRIOR_RESIDUAL_MOUNTPOINT_REFUSED | PRIOR_RESIDUAL_IN_USE | PRIOR_RESIDUAL_DOCKER_OBJECTS_PRESENT | \
       PRIOR_RESIDUAL_REPORT_REFUSED | PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
@@ -405,7 +410,24 @@ pm_validate_success_report() {
     .restore.representativeCounts.user.available==true and
     .migration.DISPOSABLE_MIGRATION_PROOF=="PASS" and .migration.beforeFinished==46 and
     .migration.afterFinished==54 and .migration.failed==0 and .migration.prismaDiffEmpty==false and
-    .migration.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
+    .migration.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
+    .migration.prismaDiffEvidence.factsObserved==true and
+    .migration.prismaDiffEvidence.rawByteCount>0 and .migration.prismaDiffEvidence.rawByteCount<=4096 and
+    .migration.prismaDiffEvidence.nonCommentStatementCount>=1 and
+    (.migration.prismaDiffEvidence.alterTableCount==1 or .migration.prismaDiffEvidence.alterTableCount==2) and
+    .migration.prismaDiffEvidence.affectedTableCount==1 and
+    .migration.prismaDiffEvidence.expectedTablePresent==true and
+    .migration.prismaDiffEvidence.submittedPhoneAddPresent==true and
+    .migration.prismaDiffEvidence.submittedPhoneAtAddPresent==true and
+    .migration.prismaDiffEvidence.unexpectedTablePresent==false and
+    .migration.prismaDiffEvidence.unexpectedColumnPresent==false and
+    .migration.prismaDiffEvidence.unexpectedOperationPresent==false and
+    .migration.prismaDiffEvidence.defaultConstraintIndexPresent==false and
+    .migration.prismaDiffEvidence.parserResult=="ACCEPTED" and
+    (.migration.prismaDiffEvidence.normalizedSemanticSha256|test("^[0-9a-f]{64}$")) and
+    .migration.prismaDiffEvidence.expectedSemanticMode=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
+    .migration.prismaDiffEvidence.finalGateClassification=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
+    .migration.prismaDiffEvidence.rawDiffRetained==false and .migration.prismaDiffEvidence.rawSqlCaptured==false and
     .migration.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
     .migration.postgresNetworkAlias.explicit==true and
     .migration.postgresNetworkAlias.databaseUrlHostBound==true and

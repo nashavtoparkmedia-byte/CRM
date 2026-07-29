@@ -219,7 +219,8 @@ pass report_render_handoff
 
 RUNTIME_FILES=(
   isolated-release-probe.sh bounded-operations.sh probe-output-helpers.sh postgres-startup.sh
-  restore-verification.sh migration-preflight.sh failure-diagnostics.sh migration-sql-gate.sh prisma-legacy-diff-gate.sh
+  restore-verification.sh migration-preflight.sh failure-diagnostics.sh migration-sql-gate.sh
+  prisma-legacy-diff-gate.sh prisma-diff-semantic-parser.py
 )
 runtime_paths=()
 for runtime_file in "${RUNTIME_FILES[@]}"; do runtime_paths+=("$SCRIPT_DIR/$runtime_file"); done
