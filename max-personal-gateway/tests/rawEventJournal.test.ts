@@ -277,6 +277,25 @@ test('binary quarantine metadata is durable and starts quarantined processing', 
   assert.equal((await journal.getProcessingState('account-a', observationId, 'parser-a'))?.state, 'quarantined')
 })
 
+test('raw quarantine requires explicit replay-normalizer claim and then leases predictably', async () => {
+  const client = new FakePrismaClient()
+  const journal = new PrismaRawEventJournal(client, { idGenerator: ids() })
+  const observationId = await journal.append(observation('account-a', Buffer.from('synthetic-binary')))
+  const claim = {
+    accountId: 'account-a', observationId, parserVersion: 'parser-a', workerId: 'normalizer-a',
+    now: new Date('2026-07-26T10:00:00Z'), leaseUntil: new Date('2026-07-26T10:01:00Z'),
+  }
+
+  await assert.rejects(
+    journal.claimProcessing(claim),
+    (error: unknown) => error instanceof JournalError && error.code === 'CLAIM_CONFLICT',
+  )
+  const claimed = await journal.claimProcessing({ ...claim, allowQuarantinedReplay: true })
+  assert.equal(claimed.state, 'processing')
+  assert.equal(claimed.claimedBy, 'normalizer-a')
+  assert.equal(claimed.attempts, 1)
+})
+
 test('invalid processing state is rejected before persistence', async () => {
   const client = new FakePrismaClient()
   const journal = new PrismaRawEventJournal(client, { idGenerator: ids() })

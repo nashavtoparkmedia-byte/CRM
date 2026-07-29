@@ -94,6 +94,7 @@ export interface ClaimProcessingInput {
   readonly workerId: string
   readonly now: Date
   readonly leaseUntil: Date
+  readonly allowQuarantinedReplay?: boolean
 }
 
 export interface MarkProcessingInput {

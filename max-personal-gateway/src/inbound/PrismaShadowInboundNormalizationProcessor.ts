@@ -260,6 +260,7 @@ export class PrismaShadowInboundNormalizationProcessor implements ShadowInboundN
         workerId: input.workerId,
         now: startedAt,
         leaseUntil,
+        allowQuarantinedReplay: true,
       })
     } catch (error) {
       const raced = await this.getNormalizationResult(input.accountId, input.observationId, input.parserVersion)

@@ -133,6 +133,28 @@ test('batch cursor advances only after terminal durable outcomes and survives pr
   assert.equal((await journal.getCursor('normalizer', 'account-a', MAX_INBOUND_NORMALIZER_VERSION))?.lastJournalSequence, 3n)
 })
 
+test('raw quarantine becomes terminal normalization evidence and cannot block the following cursor', async () => {
+  const { client, journal, processor } = harness()
+  await journal.append({
+    ...observation('account-a', { $quarantine: { reason: 'unsupported_payload', payloadStored: false } }),
+    replayAvailability: 'quarantined',
+    quarantineReason: 'unsupported_payload',
+  })
+  await journal.append(observation('account-a', { kind: 'message', text: 'after raw quarantine' }))
+
+  const batch = await processor.normalizeBatch({
+    accountId: 'account-a', consumerId: 'normalizer', parserVersion: MAX_INBOUND_NORMALIZER_VERSION,
+    workerId: 'worker-a', limit: 2,
+  })
+  assert.deepEqual(batch, {
+    processed: 2, normalized: 1, unsupported: 0, quarantined: 1, idempotent: 0, lastJournalSequence: 2n,
+  })
+  const first = client.normalizationResultRows().find(row => row.sourceJournalSequence === 1n)
+  assert.equal(first?.status, 'quarantined')
+  assert.equal(first?.issueCode, 'RAW_PAYLOAD_UNAVAILABLE')
+  assert.equal((await journal.getCursor('normalizer', 'account-a', MAX_INBOUND_NORMALIZER_VERSION))?.lastJournalSequence, 2n)
+})
+
 test('event insert failure rolls back result and all events, does not advance cursor, and retry succeeds', async () => {
   const { client, journal, processor } = harness()
   const observationId = await journal.append(observation('account-a', {

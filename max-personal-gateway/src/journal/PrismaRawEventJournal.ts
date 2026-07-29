@@ -459,6 +459,8 @@ export class PrismaRawEventJournal implements RawEventJournal {
           update: {},
         })
 
+        const allowQuarantinedReplay = input.allowQuarantinedReplay === true
+          && raw.replayAvailability === 'quarantined'
         const updated = await transaction.maxRawTransportProcessing.updateMany({
           where: {
             observationId: input.observationId,
@@ -467,6 +469,7 @@ export class PrismaRawEventJournal implements RawEventJournal {
               { state: 'pending' },
               { leaseUntil: { lt: input.now } },
               { claimedBy: input.workerId },
+              ...(allowQuarantinedReplay ? [{ state: 'quarantined' }] : []),
             ],
           },
           data: {
