@@ -727,7 +727,7 @@ pass checksum_binding
 for binding in \
   "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87" \
   "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d" \
-  "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
+  "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:9a696286b27239886c911871bb89badc1a20251bc948f36cabcd7ea506cebe9b" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
   "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
   "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:71ac68dde88da402179fce82f970b4820b7b696a98886a9135fb410d54d89735" \
@@ -1085,12 +1085,15 @@ jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILU
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="6d2a94713d280038b0ebee856d9aded763a6d5683b3c65d77a2c6e2ee1599077" and
+  .rootProbe.sha256=="959c3c3c55395934c6884db893e134c5411f12b873e6c1d351599fe55459539b" and
   .rootProbe.runtimeArtifactBindingCount==14 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
   (.runtimeArtifactBindings|length)==14 and
-  .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
+  .runtimeArtifactBindings["probe-output-helpers.sh"]=="9a696286b27239886c911871bb89badc1a20251bc948f36cabcd7ea506cebe9b" and
+  .imagePresenceDigestRepair.failureReportSha256=="d09fc3492c2938762d069e4ee319f1edcb225ee80247431bce655d84d0021110" and
+  .imagePresenceDigestRepair.exactCause=="DOCKER_IMAGE_LS_DID_NOT_RESOLVE_PRESENT_DIGEST_REFERENCE" and
+  .imagePresenceDigestRepair.inspectByExactReference==true and
   .runtimeArtifactBindings["failure-diagnostics.sh"]=="a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87" and
   .runtimeArtifactBindings["bounded-operations.sh"]=="ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d" and
   (.runtimeArtifactBindings|has("residual-cleanup.sh")|not) and

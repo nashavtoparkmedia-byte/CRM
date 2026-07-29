@@ -246,9 +246,9 @@ docker() {
     cleanup_empty) return 0 ;;
     cleanup_multiline) printf 'object-a\nobject-b\n' ;;
     cleanup_failure) return 1 ;;
-    image_present) printf 'sha256:%064d\n' 0 ;;
-    image_absent) return 0 ;;
-    image_failure) return 1 ;;
+    image_present) [[ ${1:-} == image && ${2:-} == inspect ]] || return 64; printf 'sha256:%064d\n' 0 ;;
+    image_absent) [[ ${1:-} == image && ${2:-} == inspect ]] || return 64; return 1 ;;
+    image_failure) return 2 ;;
     psql_value) printf '42\n' ;;
     *) return 64 ;;
   esac
@@ -287,7 +287,7 @@ set +e
 image_presence image_present image_id example.invalid/image@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 actual_image_status=$?
 set -e
-[[ $actual_image_status -eq 1 && $PROBE_ERROR_CLASSIFICATION == METADATA_FAILED ]]
+[[ $actual_image_status -eq 2 && $PROBE_ERROR_CLASSIFICATION == METADATA_FAILED ]]
 pass actual_image_presence_failure
 
 PM_TEST_DOCKER_MODE=psql_value
@@ -319,7 +319,7 @@ pass actual_bootstrap_collision_matrix
 PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
   bootstrap_verify_runtime_artifact failure-diagnostics.sh a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87
   bootstrap_verify_runtime_artifact bounded-operations.sh ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d
-  bootstrap_verify_runtime_artifact probe-output-helpers.sh 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7
+  bootstrap_verify_runtime_artifact probe-output-helpers.sh 9a696286b27239886c911871bb89badc1a20251bc948f36cabcd7ea506cebe9b
   bootstrap_verify_runtime_artifact restore-verification.sh 996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547
   bootstrap_verify_runtime_artifact postgres-startup.sh 54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3
   bootstrap_verify_runtime_artifact migration-preflight.sh 71ac68dde88da402179fce82f970b4820b7b696a98886a9135fb410d54d89735
@@ -344,7 +344,7 @@ printf '%s  %s\n' "$tampered_helper_sha" probe-output-helpers.sh >"$tamper_root/
 set +e
 tamper_output=$(PACKAGE_ROOT="$tamper_root" TAMPER_SENTINEL="$tamper_sentinel" \
   bash -c 'set -Eeuo pipefail; eval "$1"; if bootstrap_verify_runtime_artifact probe-output-helpers.sh "$2"; then source "$PACKAGE_ROOT/probe-output-helpers.sh"; exit 0; else status=$?; [[ ! -e $TAMPER_SENTINEL ]]; exit "$status"; fi' \
-  sh "$bootstrap_functions" 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7 2>&1)
+  sh "$bootstrap_functions" 9a696286b27239886c911871bb89badc1a20251bc948f36cabcd7ea506cebe9b 2>&1)
 tamper_status=$?
 set -e
 [[ $tamper_status -eq 66 && $tamper_output == *'RUNTIME_ARTIFACT_CHECKSUM_MISMATCH=probe-output-helpers.sh'* && ! -e $tamper_sentinel ]]

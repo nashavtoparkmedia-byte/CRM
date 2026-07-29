@@ -123,13 +123,17 @@ cleanup_inventory() {
 }
 
 image_presence() {
-  local __pm_boolean_target=${1:-} __pm_id_target=${2:-} __pm_ref=${3:-} __pm_image_id=''
+  local __pm_boolean_target=${1:-} __pm_id_target=${2:-} __pm_ref=${3:-} __pm_image_id='' __pm_status
   pm_require_helper_out_name "$__pm_boolean_target" || return
   pm_require_helper_out_name "$__pm_id_target" || return
   [[ $__pm_boolean_target != "$__pm_id_target" ]] || return 64
-  pm_capture_bounded_internal __pm_image_id docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
-    docker image ls --no-trunc --quiet "$__pm_ref" || return
-  if [[ -z $__pm_image_id ]]; then
+  if pm_capture_bounded_internal __pm_image_id docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+    docker image inspect --format '{{.Id}}' "$__pm_ref"; then
+    :
+  else
+    __pm_status=$?
+    if (( __pm_status != 1 )); then return "$__pm_status"; fi
+    PROBE_ERROR_CLASSIFICATION=NONE
     pm_assign_out "$__pm_boolean_target" false
     pm_assign_out "$__pm_id_target" absent
     return 0
