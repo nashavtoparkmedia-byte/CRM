@@ -1,0 +1,77 @@
+services:
+  max-web-scraper:
+    image: ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b
+    pull_policy: never
+    user: "1000:1000"
+    environment:
+      MAX_PERSONAL_ACCOUNT_ID: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PERSONAL_LIVE_CAPTURE_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PERSONAL_CAPTURE_SPOOL_PATH: /var/lib/max-personal-capture
+      MAX_PERSONAL_CAPTURE_SPOOL_MAX_BYTES: "268435456"
+      MAX_PERSONAL_CAPTURE_SPOOL_WARNING_RATIO: "0.70"
+      MAX_PERSONAL_CAPTURE_SPOOL_CRITICAL_RATIO: "0.90"
+      MAX_PERSONAL_CAPTURE_INGRESS_URL: http://max-personal-gateway:8080/v1/capture
+      MAX_PERSONAL_CAPTURE_HMAC_KEY_ID: ${MAX_PERSONAL_CAPTURE_HMAC_KEY_ID:?capture key id required}
+      MAX_PERSONAL_CAPTURE_HMAC_SECRET: ${MAX_PERSONAL_CAPTURE_HMAC_SECRET:?capture secret required}
+      MAX_PERSONAL_CAPTURE_DRAIN_INTERVAL_MS: "1000"
+      MAX_PERSONAL_CAPTURE_REQUEST_TIMEOUT_MS: "5000"
+      MAX_PERSONAL_CAPTURE_DRAIN_BATCH_SIZE: "100"
+    volumes:
+      - /var/lib/crm/max-personal-media:/app/media_storage
+      - /var/lib/crm/max-personal-capture:/var/lib/max-personal-capture
+
+  max-personal-gateway:
+    image: ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0
+    pull_policy: never
+    container_name: crm-max-personal-gateway
+    user: "1000:1000"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    pids_limit: 128
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777
+    environment:
+      MAX_RAW_JOURNAL_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_INBOUND_NORMALIZER_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_SHADOW_COMPARISON_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PERSONAL_LIVE_CAPTURE_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PERSONAL_GATEWAY_DATABASE_URL: ${MAX_PERSONAL_GATEWAY_DATABASE_URL:?explicit database binding required}
+      MAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON: ${MAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON:?capture key set required}
+      MAX_PERSONAL_GATEWAY_BIND_HOST: 0.0.0.0
+      MAX_PERSONAL_GATEWAY_PORT: "8080"
+      MAX_PERSONAL_GATEWAY_PRIVATE_NETWORK: required
+      MAX_PERSONAL_GATEWAY_REQUIRED_MIGRATION: 20260727154647_add_max_capture_ingress
+      MAX_PERSONAL_BROWSER_OWNERS_EXPECTED: "1"
+      MAX_PERSONAL_CAPTURE_REQUEST_MAX_BYTES: "1200000"
+      MAX_PERSONAL_CAPTURE_BODY_TIMEOUT_MS: "5000"
+      MAX_PERSONAL_CAPTURE_HEADER_TIMEOUT_MS: "5000"
+      MAX_PERSONAL_CAPTURE_AUTH_CLOCK_SKEW_MS: "30000"
+      MAX_PERSONAL_GATEWAY_WORKER_BATCH_SIZE: "100"
+      MAX_PERSONAL_GATEWAY_WORKER_POLL_MS: "1000"
+    expose:
+      - "8080"
+    networks:
+      - crm_internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:8080/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 6
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    labels:
+      personal-max.stage: 8b2c
+      personal-max.mode: one-account-shadow
+      personal-max.provider-actions: inactive
