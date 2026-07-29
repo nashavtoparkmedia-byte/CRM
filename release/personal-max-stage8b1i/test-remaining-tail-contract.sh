@@ -80,8 +80,8 @@ require_phase_classification gateway_active scraper_default_off GATEWAY_ACTIVE_R
 run_bounded_fault gateway_active_failure gateway_active GATEWAY_ACTIVE_READINESS_FAILED
 
 # Additional remaining-tail boundaries: scraper default-off and spool setup.
-require_phase_classification scraper_default_off e2e_outage SCRAPER_DEFAULT_OFF_FAILED
-run_bounded_fault scraper_default_off_failure scraper_default_off SCRAPER_DEFAULT_OFF_FAILED
+require_phase_classification scraper_default_off e2e_outage SCRAPER_DEFAULT_OFF_HARNESS_EXITED
+run_bounded_fault scraper_default_off_failure scraper_default_off SCRAPER_DEFAULT_OFF_HARNESS_EXITED
 require_phase_classification scraper_default_off e2e_outage SPOOL_INITIALIZATION_FAILED
 run_bounded_fault spool_initialization_failure scraper_default_off SPOOL_INITIALIZATION_FAILED
 
@@ -209,13 +209,98 @@ pass privacy_contract
 
 # Every exact remaining-tail classification is accepted by failure diagnostics.
 for classification in GATEWAY_NEGATIVE_VALIDATION_FAILED GATEWAY_DORMANT_READINESS_FAILED \
-  GATEWAY_ACTIVE_READINESS_FAILED SCRAPER_DEFAULT_OFF_FAILED SPOOL_INITIALIZATION_FAILED \
+  GATEWAY_ACTIVE_READINESS_FAILED SCRAPER_DEFAULT_OFF_MODE_MISSING SCRAPER_DEFAULT_OFF_MODE_MISMATCH \
+  SCRAPER_DEFAULT_OFF_HARNESS_EXITED SCRAPER_DEFAULT_OFF_OUTPUT_MISSING SCRAPER_DEFAULT_OFF_OUTPUT_MALFORMED \
+  SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED SCRAPER_DEFAULT_OFF_FRAME_NOT_HANDLED SCRAPER_DEFAULT_OFF_SPOOL_CREATED \
+  SCRAPER_DEFAULT_OFF_PENDING_UNEXPECTED SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY \
+  SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED SCRAPER_DEFAULT_OFF_DRAIN_CREATED \
+  SCRAPER_DEFAULT_OFF_CHROMIUM_ACTIVITY SCRAPER_DEFAULT_OFF_MAX_CONTACTED SCRAPER_DEFAULT_OFF_PROVIDER_ACTION \
+  SPOOL_INITIALIZATION_FAILED \
   E2E_OUTAGE_FAILED E2E_RECOVERY_FAILED GATEWAY_CLIENT_VERIFICATION_FAILED \
   E2E_VERIFICATION_FAILED PRODUCTION_SNAPSHOT_MISMATCH SUCCESS_REPORT_RENDER_FAILED \
   SUCCESS_REPORT_MALFORMED SUCCESS_REPORT_HANDOFF_FAILED SUCCESS_TERMINAL_HANDOFF_FAILED; do
   personal_max_stage8b1i_safe_error "$classification"
 done
 pass remaining_classification_allowlist
+
+# Expanded executable-invocation source contracts for every not-yet-reached runner.
+default_off_block=$(phase_block scraper_default_off e2e_outage)
+for evidence in 'SCRAPER_DEFAULT_OFF_RUN_CHECK' \
+  '-e STAGE8B1I_HARNESS_MODE="$DEFAULT_OFF_HARNESS_MODE"' '--network none' \
+  'pm_validate_scraper_default_off_result "$TMP/default-off.json"'; do
+  rg -F -- "$evidence" <<<"$default_off_block" >/dev/null
+done
+require_fixed "$BOUNDED" 'SCRAPER_DEFAULT_OFF_RESULT_CHECK'
+for forbidden in MAX_PERSONAL_ACCOUNT_ID MAX_PERSONAL_LIVE_CAPTURE_ENABLED \
+  MAX_PERSONAL_CAPTURE_INGRESS_URL DATABASE_URL '--env-file'; do
+  ! rg -F -- "$forbidden" <<<"$(awk '/PREFIX-scraper-default-off/{active=1} active{print} /stage8b1i-harness.js; then/{exit}' <<<"$default_off_block")" >/dev/null
+done
+pass default_off_runner_contract
+
+for evidence in SPOOL_INITIALIZATION_CHECK '--user 0:0' '--network none' '"$SPOOL_VOLUME:/spool"' \
+  'chown 1001:1001 /spool' 'chmod 0700 /spool'; do
+  rg -F -- "$evidence" <<<"$default_off_block" >/dev/null
+done
+pass spool_initialization_runner_contract
+
+outage_block=$(phase_block e2e_outage e2e_recovery)
+for evidence in 'docker stop "$PG_CONTAINER"' 'status===503' 'docker start "$PG_CONTAINER"' \
+  'PREFIX-scraper-capture-a' '--network none' 'MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A"' \
+  'MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A"' 'MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a' \
+  'STAGE8B1I_HARNESS_MODE=capture-only' 'STAGE8B1I_FRAME_COUNT=500' 'STAGE8B1I_IDENTICAL_COUNT=100' \
+  '"$SPOOL_VOLUME:/spool"'; do
+  rg -F -- "$evidence" <<<"$outage_block" >/dev/null
+done
+capture_a_block=$(awk '/PREFIX-scraper-capture-a/{active=1} active{print} /stage8b1i-harness.js/{exit}' <<<"$outage_block")
+! rg -F 'MAX_PERSONAL_CAPTURE_INGRESS_URL' <<<"$capture_a_block" >/dev/null
+pass outage_capture_runner_contract
+
+for evidence in 'PREFIX-scraper-retry-a' '--network "$NETWORK"' '--env-file "$TMP/client.env"' \
+  'MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A"' 'MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture' \
+  'STAGE8B1I_HARNESS_MODE=retry-only' 'STAGE8B1I_DRAIN_ATTEMPTS=10' \
+  '.retryCount>0 and .pendingAfter>0 and .lostBeforeSpoolCount==0'; do
+  rg -F -- "$evidence" <<<"$outage_block" >/dev/null
+done
+pass outage_retry_runner_contract
+
+recovery_block=$(phase_block e2e_recovery gateway_active)
+for evidence in 'PREFIX-scraper-capture-b' 'MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_B"' \
+  'MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-b' 'STAGE8B1I_HARNESS_MODE=capture-and-drain' \
+  'STAGE8B1I_FRAME_COUNT=500' 'STAGE8B1I_IDENTICAL_COUNT=0' \
+  'PREFIX-scraper-drain-a' 'MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A"' \
+  'MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a' 'STAGE8B1I_HARNESS_MODE=drain-only' \
+  'STAGE8B1I_DRAIN_ATTEMPTS=120' '--network "$NETWORK"' '"$SPOOL_VOLUME:/spool"'; do
+  rg -F -- "$evidence" <<<"$recovery_block" >/dev/null
+done
+drain_a_block=$(awk '/PREFIX-scraper-drain-a/{active=1} active{print} /stage8b1i-harness.js/{exit}' <<<"$recovery_block")
+! rg -F 'STAGE8B1I_FRAME_COUNT' <<<"$drain_a_block" >/dev/null
+! rg -F 'STAGE8B1I_IDENTICAL_COUNT' <<<"$drain_a_block" >/dev/null
+pass recovery_account_isolation_runner_contract
+
+gateway_client_block=$(phase_block gateway_active e2e_verification)
+for evidence in 'PREFIX-gateway-client' '--network "$NETWORK"' '--env-file "$TMP/client.env"' \
+  'STAGE8B1I_ACCOUNT_A="$ACCOUNT_A"' 'gateway-client-harness.js:/tmp/stage8b1i-client.js:ro' \
+  'GATEWAY_CLIENT_VERIFICATION_FAILED'; do
+  rg -F -- "$evidence" <<<"$gateway_client_block" >/dev/null
+done
+pass gateway_client_runner_contract
+
+verification_block=$(phase_block e2e_verification final_storage_gate)
+for evidence in 'pm_poll_until 180 240 E2E_VERIFICATION_FAILED' \
+  'MaxRawTransportEvent' 'MaxInboundNormalizationResult' 'MaxShadowComparisonResult' \
+  '$ACCOUNT_A' '$ACCOUNT_B' '$wrong_account -eq 0' '$duplicate_envelopes -eq 0'; do
+  rg -F -- "$evidence" <<<"$verification_block" >/dev/null
+done
+pass e2e_verification_runner_contract
+
+for evidence in 'free_bytes_at FREE_BYTES_AFTER_CLEANUP /var/lib/docker' \
+  'pm_check_disk_gate "$FREE_BYTES_AFTER_CLEANUP" "$REQUIRED_FREE_BYTES" FINAL_DISK_GATE_FAILED' \
+  'production_snapshot "$TMP_AFTER"' 'cmp "$TMP/production-before-core.json" "$TMP/production-after-core.json"' \
+  'pm_validate_success_report "$TMP_REPORT"' 'chgrp codexbot "$TMP_REPORT"' 'chmod 0640 "$TMP_REPORT"' \
+  'mv --no-clobber --no-target-directory'; do
+  require_fixed "$PROBE" "$evidence"
+done
+pass final_storage_production_report_contract
 
 # Required case 50: the separate text-canary branch remains exact and clean.
 [[ -d $TEXT_CANARY_REPOSITORY/.git ]]
@@ -225,5 +310,5 @@ pass remaining_classification_allowlist
 [[ -z $(env GIT_OPTIONAL_LOCKS=0 git -C "$TEXT_CANARY_REPOSITORY" status --porcelain=v1 --untracked-files=all) ]]
 pass text_canary_unchanged
 
-[[ $PASS_COUNT -eq 21 ]]
-printf 'REMAINING_TAIL_TEST_COUNT=21\nREQUIRED_REGRESSION_CASES_COVERED=11\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
+[[ $PASS_COUNT -eq 29 ]]
+printf 'REMAINING_TAIL_TEST_COUNT=29\nREQUIRED_REGRESSION_CASES_COVERED=19\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'

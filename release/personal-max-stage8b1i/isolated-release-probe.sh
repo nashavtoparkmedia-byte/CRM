@@ -35,8 +35,8 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='0d7ca5534b9f1db587cb06a7499a5862f1edc591568692cfde6cc4376ad93e42'
-readonly BOUNDED_OPERATIONS_SHA256='3dfe9b5bd23c681cf8de5fb3bdb50e1e86da8c0c48309ed806109b923ae7084f'
+readonly FAILURE_DIAGNOSTICS_SHA256='7d0704f522236c999ef185418633b049f0d39444e3df6aae76bc8a6a359cba8c'
+readonly BOUNDED_OPERATIONS_SHA256='bc02fe1cb9c3ce04f4a259cc288c120356e7085c7b2a99cc3efbcfd8ad9cd00b'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
@@ -45,8 +45,9 @@ readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='d9867613380ffdba7af070e916ea782721810fe4268bf1c064b59a5de2cb27b0'
 readonly PRISMA_DIFF_SEMANTIC_PARSER_SHA256='87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890'
-readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e'
+readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='e8ceaccbfd51d8dd91cf5d84f43716f4decd349ac19c4db529bb17ee4cc75af9'
 readonly GATEWAY_CLIENT_HARNESS_SHA256='f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428'
+readonly DEFAULT_OFF_HARNESS_MODE='default-off'
 readonly PRODUCTION_PROJECT_LABEL='com.docker.compose.project=crm'
 readonly STAGE_LABEL='personal-max.stage=8b1i'
 readonly RUN_LABEL_KEY='personal-max.run-id'
@@ -65,6 +66,17 @@ PROBE_PHASE='bootstrap_complete'
 PROBE_SAFE_COMMAND_CLASS='package_validation'
 PROBE_ERROR_CLASSIFICATION='NONE'
 RESTORE_CHECK_ID='NONE'
+SCRAPER_CHECK_ID='NONE'
+SCRAPER_SUBSTEP='NOT_STARTED'
+SCRAPER_COMMAND_CATEGORY='not_observed'
+SCRAPER_EXECUTABLE_CATEGORY='not_observed'
+SCRAPER_COMMAND_STARTED=false
+SCRAPER_ATTEMPT_COUNT=0
+SCRAPER_ELAPSED_SECONDS=0
+SCRAPER_ORIGINAL_EXIT=not_observed
+SCRAPER_PRIMARY_CLASSIFICATION='NONE'
+SCRAPER_CONTAINER_STATE_CATEGORY='not_observed'
+SCRAPER_OPERATION_STARTED_SECONDS=0
 LEDGER_NAME_COUNT=0
 LEDGER_UNIQUE_COUNT=0
 LEDGER_DUPLICATE_COUNT=0
@@ -325,7 +337,7 @@ on_exit() {
       fi
       if [[ $PM_FAILURE_HANDOFF_COMPLETED != true ]]; then
         personal_max_stage8b1i_emit_unavailable "$status" "$original_phase" "$original_class" \
-          "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ $cleanup_ok == true ]] && printf PASS || printf FAIL)" || true
+          "$(personal_max_stage8b1i_current_check_id)" "$([[ $cleanup_ok == true ]] && printf PASS || printf FAIL)" || true
       fi
     fi
     if declare -F pm_preserve_original_exit >/dev/null; then
@@ -835,16 +847,46 @@ pm_enter_phase gateway_active docker_disposable
 start_gateway GATEWAY_ACTIVE_READINESS_FAILED
 
 pm_enter_phase scraper_default_off synthetic_harness
-pm_write_bounded "$TMP/default-off.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SCRAPER_DEFAULT_OFF_FAILED \
+pm_scraper_begin_operation SCRAPER_DEFAULT_OFF_RUN_CHECK default_off_mode_binding invocation_contract shell_builtin command_not_started
+if [[ -z $DEFAULT_OFF_HARNESS_MODE ]]; then
+  pm_scraper_finish_operation 64 SCRAPER_DEFAULT_OFF_MODE_MISSING command_not_started
+  false
+fi
+if [[ $DEFAULT_OFF_HARNESS_MODE != default-off ]]; then
+  pm_scraper_finish_operation 65 SCRAPER_DEFAULT_OFF_MODE_MISMATCH command_not_started
+  false
+fi
+pm_scraper_finish_operation 0 NONE command_not_started
+pm_scraper_begin_operation SCRAPER_DEFAULT_OFF_RUN_CHECK default_off_harness docker_run docker_cli not_observed
+pm_scraper_mark_started
+if pm_write_bounded "$TMP/default-off.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SCRAPER_DEFAULT_OFF_HARNESS_EXITED \
   docker run --rm --name "$PREFIX-scraper-default-off" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
+  -e STAGE8B1I_HARNESS_MODE="$DEFAULT_OFF_HARNESS_MODE" \
   -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
-  /tmp/stage8b1i-harness.js
-jq -e '.defaultOffNoSpool==true and .timers==false and .network==false and .database==false' "$TMP/default-off.json" >/dev/null || {
-  PROBE_ERROR_CLASSIFICATION=SCRAPER_DEFAULT_OFF_FAILED; false;
-}
-pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SPOOL_INITIALIZATION_FAILED \
+  /tmp/stage8b1i-harness.js; then
+  pm_scraper_finish_operation 0 NONE exited
+else
+  scraper_default_off_status=$?
+  if (( scraper_default_off_status == 124 )); then
+    pm_scraper_finish_operation "$scraper_default_off_status" SYNTHETIC_HARNESS_TIMEOUT unavailable
+  else
+    pm_scraper_finish_operation "$scraper_default_off_status" SCRAPER_DEFAULT_OFF_HARNESS_EXITED exited
+  fi
+  false
+fi
+pm_validate_scraper_default_off_result "$TMP/default-off.json"
+pm_scraper_begin_operation SPOOL_INITIALIZATION_CHECK spool_initialization docker_volume_initialization posix_shell not_observed
+pm_scraper_mark_started
+if pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SPOOL_INITIALIZATION_FAILED \
   docker run --rm --name "$PREFIX-spool-init" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --user 0:0 --network none \
-  -v "$SPOOL_VOLUME:/spool" --entrypoint sh "$SCRAPER_IMAGE" -ceu 'chown 1001:1001 /spool; chmod 0700 /spool'
+  -v "$SPOOL_VOLUME:/spool" --entrypoint sh "$SCRAPER_IMAGE" -ceu 'chown 1001:1001 /spool; chmod 0700 /spool'; then
+  pm_scraper_finish_operation 0 NONE exited
+else
+  spool_initialization_status=$?
+  pm_scraper_finish_operation "$spool_initialization_status" SPOOL_INITIALIZATION_FAILED unavailable
+  false
+fi
+SCRAPER_CHECK_ID=NONE
 
 pm_enter_phase e2e_outage synthetic_harness
 pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT E2E_OUTAGE_FAILED docker stop "$PG_CONTAINER" >/dev/null

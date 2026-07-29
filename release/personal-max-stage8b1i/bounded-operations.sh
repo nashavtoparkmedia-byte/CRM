@@ -69,7 +69,16 @@ pm_error_classification_is_safe() {
       PRIOR_RESIDUAL_MOUNTPOINT_REFUSED | PRIOR_RESIDUAL_IN_USE | PRIOR_RESIDUAL_DOCKER_OBJECTS_PRESENT | \
       PRIOR_RESIDUAL_REPORT_REFUSED | PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
       GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
-      GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | SPOOL_INITIALIZATION_FAILED | \
+      GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | \
+      SCRAPER_DEFAULT_OFF_MODE_MISSING | SCRAPER_DEFAULT_OFF_MODE_MISMATCH | \
+      SCRAPER_DEFAULT_OFF_HARNESS_EXITED | SCRAPER_DEFAULT_OFF_OUTPUT_MISSING | \
+      SCRAPER_DEFAULT_OFF_OUTPUT_MALFORMED | SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED | \
+      SCRAPER_DEFAULT_OFF_FRAME_NOT_HANDLED | SCRAPER_DEFAULT_OFF_SPOOL_CREATED | \
+      SCRAPER_DEFAULT_OFF_PENDING_UNEXPECTED | SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY | \
+      SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY | SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY | \
+      SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED | SCRAPER_DEFAULT_OFF_DRAIN_CREATED | \
+      SCRAPER_DEFAULT_OFF_CHROMIUM_ACTIVITY | SCRAPER_DEFAULT_OFF_MAX_CONTACTED | \
+      SCRAPER_DEFAULT_OFF_PROVIDER_ACTION | SPOOL_INITIALIZATION_FAILED | \
       E2E_OUTAGE_FAILED | E2E_RECOVERY_FAILED | GATEWAY_CLIENT_VERIFICATION_FAILED | \
       E2E_VERIFICATION_FAILED | PRODUCTION_SNAPSHOT_MISMATCH | SUCCESS_REPORT_RENDER_FAILED | \
       SUCCESS_REPORT_HANDOFF_FAILED | SUCCESS_TERMINAL_HANDOFF_FAILED | \
@@ -243,6 +252,94 @@ pm_write_bounded() {
     PROBE_ERROR_CLASSIFICATION=$failure_class
     return "$status"
   fi
+}
+
+pm_scraper_check_id_is_safe() {
+  case ${1:-} in
+    SCRAPER_DEFAULT_OFF_RUN_CHECK | SCRAPER_DEFAULT_OFF_RESULT_CHECK | SPOOL_INITIALIZATION_CHECK) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pm_scraper_begin_operation() {
+  local check_id=${1:?check id required} substep=${2:?substep required}
+  local command_category=${3:?command category required} executable_category=${4:?executable category required}
+  local container_state=${5:-not_observed}
+  pm_scraper_check_id_is_safe "$check_id" || return 64
+  case $substep in default_off_mode_binding | default_off_harness | default_off_result_validation | spool_initialization) ;; *) return 64 ;; esac
+  case $command_category in invocation_contract | docker_run | internal_validator | docker_volume_initialization) ;; *) return 64 ;; esac
+  case $executable_category in shell_builtin | docker_cli | jq | posix_shell) ;; *) return 64 ;; esac
+  case $container_state in not_observed | command_not_started | running | exited | unavailable) ;; *) return 64 ;; esac
+  SCRAPER_CHECK_ID=$check_id
+  SCRAPER_SUBSTEP=$substep
+  SCRAPER_COMMAND_CATEGORY=$command_category
+  SCRAPER_EXECUTABLE_CATEGORY=$executable_category
+  SCRAPER_COMMAND_STARTED=false
+  SCRAPER_ATTEMPT_COUNT=0
+  SCRAPER_ELAPSED_SECONDS=0
+  SCRAPER_ORIGINAL_EXIT=not_observed
+  SCRAPER_PRIMARY_CLASSIFICATION=NONE
+  SCRAPER_CONTAINER_STATE_CATEGORY=$container_state
+  SCRAPER_OPERATION_STARTED_SECONDS=$SECONDS
+}
+
+pm_scraper_mark_started() {
+  SCRAPER_COMMAND_STARTED=true
+  SCRAPER_ATTEMPT_COUNT=$(( ${SCRAPER_ATTEMPT_COUNT:-0} + 1 ))
+}
+
+pm_scraper_finish_operation() {
+  local status=${1:-0} classification=${2:-NONE} container_state=${3:-not_observed}
+  [[ $status =~ ^[0-9]+$ && $status -le 255 ]] || return 64
+  pm_error_classification_is_safe "$classification" || return 64
+  case $container_state in not_observed | command_not_started | running | exited | unavailable) ;; *) return 64 ;; esac
+  SCRAPER_ELAPSED_SECONDS=$(( SECONDS - ${SCRAPER_OPERATION_STARTED_SECONDS:-SECONDS} ))
+  SCRAPER_ORIGINAL_EXIT=$status
+  SCRAPER_PRIMARY_CLASSIFICATION=$classification
+  SCRAPER_CONTAINER_STATE_CATEGORY=$container_state
+  PROBE_ERROR_CLASSIFICATION=$classification
+}
+
+pm_scraper_reject_result() {
+  local classification=${1:?classification required}
+  pm_scraper_finish_operation 65 "$classification" exited || return
+  return 65
+}
+
+pm_validate_scraper_default_off_result() {
+  local path=${1:?result path required}
+  pm_scraper_begin_operation SCRAPER_DEFAULT_OFF_RESULT_CHECK default_off_result_validation internal_validator jq exited || return
+  pm_scraper_mark_started
+  if [[ ! -s $path ]]; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_OUTPUT_MISSING; return; fi
+  if ! jq -e '
+      type == "object" and
+      (keys | sort) == ([
+        "activeAdapterFactoryCalled", "adapterEnabled", "chromiumLaunched", "databaseAttemptCount",
+        "drainCreated", "frameHandled", "maxContacted", "networkAttemptCount", "providerAction",
+        "selectedMode", "spoolPathCreated", "spoolPendingCount", "timerAttemptCount"
+      ] | sort) and
+      (.selectedMode | type) == "string" and
+      ([.adapterEnabled,.frameHandled,.spoolPathCreated,.activeAdapterFactoryCalled,.drainCreated,
+        .chromiumLaunched,.maxContacted,.providerAction] | all(type == "boolean")) and
+      ([.spoolPendingCount,.timerAttemptCount,.networkAttemptCount,.databaseAttemptCount] |
+        all(type == "number" and isfinite and floor == . and . >= 0))
+    ' "$path" >/dev/null 2>&1; then
+    pm_scraper_reject_result SCRAPER_DEFAULT_OFF_OUTPUT_MALFORMED; return
+  fi
+  if ! jq -e '.selectedMode == "default-off"' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_MODE_MISMATCH; return; fi
+  if ! jq -e '.adapterEnabled == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED; return; fi
+  if ! jq -e '.frameHandled == true' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_FRAME_NOT_HANDLED; return; fi
+  if ! jq -e '.spoolPathCreated == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_SPOOL_CREATED; return; fi
+  if ! jq -e '.spoolPendingCount == 0' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_PENDING_UNEXPECTED; return; fi
+  if ! jq -e '.timerAttemptCount == 0' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY; return; fi
+  if ! jq -e '.networkAttemptCount == 0' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY; return; fi
+  if ! jq -e '.databaseAttemptCount == 0' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY; return; fi
+  if ! jq -e '.activeAdapterFactoryCalled == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED; return; fi
+  if ! jq -e '.drainCreated == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_DRAIN_CREATED; return; fi
+  if ! jq -e '.chromiumLaunched == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_CHROMIUM_ACTIVITY; return; fi
+  if ! jq -e '.maxContacted == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_MAX_CONTACTED; return; fi
+  if ! jq -e '.providerAction == false' "$path" >/dev/null 2>&1; then pm_scraper_reject_result SCRAPER_DEFAULT_OFF_PROVIDER_ACTION; return; fi
+  pm_scraper_finish_operation 0 NONE exited
 }
 
 pm_expect_failure_bounded() {

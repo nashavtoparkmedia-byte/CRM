@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "incident": "SCRAPER_DEFAULT_OFF_INVOCATION_CONTRACT_FAILURE",
+  "preparedAt": "2026-07-29T14:14:10Z",
+  "failedAttempt": {
+    "scriptSha256": "e36ad6b2436dd827e33c8a996e22ebbd40e45ffb5e1cc1430f75195d9f9f791f",
+    "failureReportPath": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.e36ad6b2436dd827e33c8a996e22ebbd40e45ffb5e1cc1430f75195d9f9f791f.json",
+    "failureReportSha256": "93d75f31f61bed37e7bcfb9cc8164007fc46732c536643d11c6bebcbc9bf6598",
+    "ownerGroupMode": "root:codexbot:0640",
+    "phase": "scraper_default_off",
+    "safeCommandClass": "synthetic_harness",
+    "classification": "SCRAPER_DEFAULT_OFF_FAILED",
+    "checkId": "NONE",
+    "sourceLine": 838,
+    "exitCode": 1,
+    "cleanupCompleted": true,
+    "cleanupObjectsRemaining": 0,
+    "observedProductionHead": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "observedProductionStatusV2RawSha256": "2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"
+  },
+  "evidenceAssessment": {
+    "classification": "A",
+    "classificationName": "SCRAPER_DEFAULT_OFF_MODE_BINDING_DEFECT_PROVEN",
+    "primaryRuntimeCauseCount": 1,
+    "speculationUsed": false,
+    "failedAssertionNotGuessed": true
+  },
+  "sourceMap": {
+    "topLevelInvocation": "isolated-release-probe.sh:838",
+    "boundedWriter": "pm_write_bounded",
+    "dockerRunner": "scraper-default-off on network none",
+    "harness": "synthetic-scraper-harness.js",
+    "missingBinding": "STAGE8B1I_HARNESS_MODE",
+    "implicitSelectedMode": "capture-and-drain",
+    "requiredSelectedMode": "default-off",
+    "disabledAdapterCheckReached": true,
+    "defaultOffBranchReached": false,
+    "activeAdapterPathReached": true,
+    "firstFailedHarnessOperation": "active adapter enabled assertion",
+    "oldHarnessSourceLine": 36,
+    "originalExitCode": 1,
+    "errTrap": "on_error records source line and original exit",
+    "exitTrap": "on_exit performs label-scoped cleanup then renders the sanitized report"
+  },
+  "executableReplay": {
+    "runtime": "checksum-verified portable Node v20.11.1 in temporary non-production storage",
+    "oldHarnessSourceExecuted": true,
+    "realTransportInterceptorExecuted": true,
+    "environmentModePresent": false,
+    "selectedMode": "capture-and-drain",
+    "exitCode": 1,
+    "errorCode": "ERR_ASSERTION",
+    "defaultOffJsonProduced": false,
+    "dockerExecuted": false,
+    "databaseConnected": false,
+    "browserLaunched": false,
+    "maxContacted": false,
+    "providerAction": false
+  },
+  "repairContract": {
+    "defaultOffModeExplicit": true,
+    "implicitHarnessModeRemoved": true,
+    "allowedModes": [
+      "default-off",
+      "capture-only",
+      "retry-only",
+      "capture-and-drain",
+      "drain-only"
+    ],
+    "defaultOffNetwork": "none",
+    "defaultOffDatabaseUrlPresent": false,
+    "defaultOffIngressUrlPresent": false,
+    "defaultOffLiveCaptureFlagPresent": false,
+    "defaultOffSpoolVolumeMounted": false,
+    "observedInstrumentation": true,
+    "preciseCheckIds": true,
+    "preciseClassifications": true,
+    "rootProbeRerun": false
+  },
+  "privacy": {
+    "rawStderrCaptured": false,
+    "rawEnvironmentCaptured": false,
+    "credentialsCaptured": false,
+    "urlsCapturedInFailureReport": false,
+    "messageDataCaptured": false,
+    "providerPayloadCaptured": false
+  },
+  "safety": {
+    "productionMutation": false,
+    "productionDatabaseConnected": false,
+    "migrationExecuted": false,
+    "deployExecuted": false,
+    "restartExecuted": false,
+    "historicalResidualTouched": false,
+    "textCanaryTouched": false,
+    "stage8B2Started": false
+  }
+}

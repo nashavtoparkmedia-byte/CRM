@@ -74,7 +74,16 @@ personal_max_stage8b1i_safe_error() {
       PRIOR_RESIDUAL_MOUNTPOINT_REFUSED | PRIOR_RESIDUAL_IN_USE | PRIOR_RESIDUAL_DOCKER_OBJECTS_PRESENT | PRIOR_RESIDUAL_REPORT_REFUSED | \
       PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
       GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
-      GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | SPOOL_INITIALIZATION_FAILED | \
+      GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | \
+      SCRAPER_DEFAULT_OFF_MODE_MISSING | SCRAPER_DEFAULT_OFF_MODE_MISMATCH | \
+      SCRAPER_DEFAULT_OFF_HARNESS_EXITED | SCRAPER_DEFAULT_OFF_OUTPUT_MISSING | \
+      SCRAPER_DEFAULT_OFF_OUTPUT_MALFORMED | SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED | \
+      SCRAPER_DEFAULT_OFF_FRAME_NOT_HANDLED | SCRAPER_DEFAULT_OFF_SPOOL_CREATED | \
+      SCRAPER_DEFAULT_OFF_PENDING_UNEXPECTED | SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY | \
+      SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY | SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY | \
+      SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED | SCRAPER_DEFAULT_OFF_DRAIN_CREATED | \
+      SCRAPER_DEFAULT_OFF_CHROMIUM_ACTIVITY | SCRAPER_DEFAULT_OFF_MAX_CONTACTED | \
+      SCRAPER_DEFAULT_OFF_PROVIDER_ACTION | SPOOL_INITIALIZATION_FAILED | \
       E2E_OUTAGE_FAILED | E2E_RECOVERY_FAILED | GATEWAY_CLIENT_VERIFICATION_FAILED | \
       E2E_VERIFICATION_FAILED | PRODUCTION_SNAPSHOT_MISMATCH | SUCCESS_REPORT_RENDER_FAILED | \
       SUCCESS_REPORT_HANDOFF_FAILED | SUCCESS_TERMINAL_HANDOFF_FAILED | \
@@ -121,9 +130,21 @@ personal_max_stage8b1i_safe_check_id() {
       MIGRATION_SCHEMA_COLUMN_QUERY_CHECK | MIGRATION_SCHEMA_COLUMN_CHECK | \
       MIGRATION_SCHEMA_INDEX_QUERY_CHECK | MIGRATION_SCHEMA_INDEX_CHECK | \
       MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK | MIGRATION_SCHEMA_UNIQUE_KEY_CHECK | \
-      MIGRATION_PRISMA_DIFF_EXECUTION_CHECK | MIGRATION_PRISMA_DIFF_GATE_CHECK) return 0 ;;
+      MIGRATION_PRISMA_DIFF_EXECUTION_CHECK | MIGRATION_PRISMA_DIFF_GATE_CHECK | \
+      SCRAPER_DEFAULT_OFF_RUN_CHECK | SCRAPER_DEFAULT_OFF_RESULT_CHECK | \
+      SPOOL_INITIALIZATION_CHECK) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+personal_max_stage8b1i_current_check_id() {
+  if [[ ${SCRAPER_CHECK_ID:-NONE} != NONE ]]; then
+    printf '%s' "$SCRAPER_CHECK_ID"
+  elif [[ ${MIGRATION_CHECK_ID:-NONE} != NONE ]]; then
+    printf '%s' "$MIGRATION_CHECK_ID"
+  else
+    printf '%s' "${RESTORE_CHECK_ID:-NONE}"
+  fi
 }
 
 personal_max_stage8b1i_safe_class() {
@@ -217,6 +238,9 @@ personal_max_stage8b1i_render_failure() {
   local migration_check_id migration_substep migration_role migration_command_category migration_executable_category
   local migration_command_started migration_attempt_count migration_elapsed migration_original_exit_json
   local migration_container_state migration_primary_classification
+  local scraper_check_id scraper_substep scraper_command_category scraper_executable_category
+  local scraper_command_started scraper_attempt_count scraper_elapsed scraper_original_exit_json
+  local scraper_container_state scraper_primary_classification
   local postgres_network_facts_observed postgres_observed_network_count postgres_expected_network_present
   local postgres_alias_array_present postgres_expected_alias_present postgres_unexpected_network_present
   local postgres_alias_container_running postgres_alias_url_binding postgres_alias_validation_classification
@@ -233,7 +257,7 @@ personal_max_stage8b1i_render_failure() {
   personal_max_stage8b1i_safe_class "$safe_class" || safe_class=unknown
   safe_error=${PROBE_ERROR_CLASSIFICATION:-UNEXPECTED_COMMAND_FAILURE}
   personal_max_stage8b1i_safe_error "$safe_error" || safe_error=UNEXPECTED_COMMAND_FAILURE
-  if [[ ${MIGRATION_CHECK_ID:-NONE} != NONE ]]; then safe_check_id=${MIGRATION_CHECK_ID}; else safe_check_id=${RESTORE_CHECK_ID:-NONE}; fi
+  safe_check_id=$(personal_max_stage8b1i_current_check_id)
   personal_max_stage8b1i_safe_check_id "$safe_check_id" || safe_check_id=NONE
   cleanup_error=${CLEANUP_ERROR_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$cleanup_error" || cleanup_error=CLEANUP_INCOMPLETE
@@ -354,6 +378,25 @@ personal_max_stage8b1i_render_failure() {
   if ! declare -F pm_migration_state_is_safe >/dev/null || ! pm_migration_state_is_safe "$migration_container_state"; then migration_container_state=not_observed; fi
   migration_primary_classification=${MIGRATION_PRIMARY_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$migration_primary_classification" || migration_primary_classification=NONE
+  scraper_check_id=${SCRAPER_CHECK_ID:-NONE}
+  personal_max_stage8b1i_safe_check_id "$scraper_check_id" || scraper_check_id=NONE
+  scraper_substep=${SCRAPER_SUBSTEP:-NOT_STARTED}
+  case $scraper_substep in NOT_STARTED | default_off_mode_binding | default_off_harness | default_off_result_validation | spool_initialization) ;; *) scraper_substep=NOT_STARTED ;; esac
+  scraper_command_category=${SCRAPER_COMMAND_CATEGORY:-not_observed}
+  case $scraper_command_category in not_observed | invocation_contract | docker_run | internal_validator | docker_volume_initialization) ;; *) scraper_command_category=not_observed ;; esac
+  scraper_executable_category=${SCRAPER_EXECUTABLE_CATEGORY:-not_observed}
+  case $scraper_executable_category in not_observed | shell_builtin | docker_cli | jq | posix_shell) ;; *) scraper_executable_category=not_observed ;; esac
+  scraper_command_started=${SCRAPER_COMMAND_STARTED:-false}
+  [[ $scraper_command_started == true ]] || scraper_command_started=false
+  scraper_attempt_count=${SCRAPER_ATTEMPT_COUNT:-0}
+  [[ $scraper_attempt_count =~ ^[0-9]+$ ]] || scraper_attempt_count=0
+  scraper_elapsed=${SCRAPER_ELAPSED_SECONDS:-0}
+  [[ $scraper_elapsed =~ ^[0-9]+$ ]] || scraper_elapsed=0
+  if [[ ${SCRAPER_ORIGINAL_EXIT:-} =~ ^[0-9]+$ && ${SCRAPER_ORIGINAL_EXIT} -le 255 ]]; then scraper_original_exit_json=${SCRAPER_ORIGINAL_EXIT}; else scraper_original_exit_json='"not_observed"'; fi
+  scraper_container_state=${SCRAPER_CONTAINER_STATE_CATEGORY:-not_observed}
+  case $scraper_container_state in not_observed | command_not_started | running | exited | unavailable) ;; *) scraper_container_state=not_observed ;; esac
+  scraper_primary_classification=${SCRAPER_PRIMARY_CLASSIFICATION:-NONE}
+  personal_max_stage8b1i_safe_error "$scraper_primary_classification" || scraper_primary_classification=NONE
   postgres_network_facts_observed=${MIGRATION_POSTGRES_NETWORK_FACTS_OBSERVED:-false}
   [[ $postgres_network_facts_observed == true ]] || postgres_network_facts_observed=false
   postgres_observed_network_count=${MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT:-0}
@@ -482,6 +525,14 @@ personal_max_stage8b1i_render_failure() {
     --argjson migrationOriginalExit "$migration_original_exit_json" \
     --arg migrationContainerState "$migration_container_state" \
     --arg migrationPrimaryClassification "$migration_primary_classification" \
+    --arg scraperCheckId "$scraper_check_id" --arg scraperSubstep "$scraper_substep" \
+    --arg scraperCommandCategory "$scraper_command_category" \
+    --arg scraperExecutableCategory "$scraper_executable_category" \
+    --argjson scraperCommandStarted "$scraper_command_started" \
+    --argjson scraperAttemptCount "$scraper_attempt_count" --argjson scraperElapsedSeconds "$scraper_elapsed" \
+    --argjson scraperOriginalExit "$scraper_original_exit_json" \
+    --arg scraperContainerState "$scraper_container_state" \
+    --arg scraperPrimaryClassification "$scraper_primary_classification" \
     --argjson postgresNetworkFactsObserved "$postgres_network_facts_observed" \
     --argjson postgresObservedNetworkCount "$postgres_observed_network_count" \
     --argjson postgresExpectedNetworkPresent "$postgres_expected_network_present" \
@@ -571,6 +622,13 @@ personal_max_stage8b1i_render_failure() {
           rawInspectCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false},
         rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
         databaseUrlCaptured:false,credentialsCaptured:false,sqlCaptured:false,businessDataCaptured:false},
+      scraperOperation:{checkId:$scraperCheckId,substep:$scraperSubstep,
+        commandCategory:$scraperCommandCategory,executableCategory:$scraperExecutableCategory,
+        commandStarted:$scraperCommandStarted,attemptCount:$scraperAttemptCount,
+        elapsedSeconds:$scraperElapsedSeconds,originalExitCode:$scraperOriginalExit,
+        containerStateCategory:$scraperContainerState,primaryClassification:$scraperPrimaryClassification,
+        rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
+        databaseUrlCaptured:false,credentialsCaptured:false,messageDataCaptured:false,providerPayloadCaptured:false},
       prismaDiffEvidence:{factsObserved:$prismaDiffFactsObserved,rawByteCount:$prismaDiffRawByteCount,
         sizeLimitBytes:$prismaDiffSizeLimitBytes,utf8Valid:$prismaDiffUtf8Valid,
         commentsBalanced:$prismaDiffCommentsBalanced,quotesBalanced:$prismaDiffQuotesBalanced,
@@ -641,7 +699,7 @@ personal_max_stage8b1i_write_emergency_json() {
   local __pm_path=${1:?path required} __pm_exit=${2:-1} __pm_phase=${3:-bootstrap_complete}
   local __pm_classification=${4:-UNEXPECTED_COMMAND_FAILURE} __pm_script_sha=${PM_SCRIPT_SHA256:-}
   local __pm_check_id
-  if [[ ${MIGRATION_CHECK_ID:-NONE} != NONE ]]; then __pm_check_id=${MIGRATION_CHECK_ID}; else __pm_check_id=${RESTORE_CHECK_ID:-NONE}; fi
+  __pm_check_id=$(personal_max_stage8b1i_current_check_id)
   [[ $__pm_exit =~ ^[1-9][0-9]*$ && $__pm_exit -le 255 ]] || __pm_exit=1
   personal_max_stage8b1i_safe_phase "$__pm_phase" || __pm_phase=bootstrap_complete
   personal_max_stage8b1i_safe_error "$__pm_classification" || __pm_classification=UNEXPECTED_COMMAND_FAILURE
@@ -662,17 +720,17 @@ personal_max_stage8b1i_emergency_diagnostics() {
   personal_max_stage8b1i_cleanup_primary_temp || true
   if [[ ! $__pm_target =~ ^/var/tmp/personal-max-stage8b1i-isolated-release-proof\.failure\.[0-9a-f]{64}\.json$ ]]; then
     personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
-      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
+      "$(personal_max_stage8b1i_current_check_id)" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
     return "$__pm_original_exit"
   fi
   if [[ -e $__pm_target || -L $__pm_target ]]; then
     if personal_max_stage8b1i_surface_existing_report "$__pm_original_exit" "$__pm_phase" \
-      "$__pm_classification" "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" \
+      "$__pm_classification" "$(personal_max_stage8b1i_current_check_id)" \
       "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)" EXISTING_AFTER_PRIMARY_FAILURE; then
       return "$__pm_original_exit"
     fi
     personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
-      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
+      "$(personal_max_stage8b1i_current_check_id)" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
     return "$__pm_original_exit"
   fi
   __pm_temporary="${__pm_target}.emergency.$$.${RANDOM}.tmp"
@@ -683,13 +741,13 @@ personal_max_stage8b1i_emergency_diagnostics() {
     ! timeout 10 mv --no-clobber --no-target-directory -- "$__pm_temporary" "$__pm_target" 2>/dev/null; then
     timeout 10 rm -f -- "$__pm_temporary" >/dev/null 2>&1 || true
     personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
-      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
+      "$(personal_max_stage8b1i_current_check_id)" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
     return "$__pm_original_exit"
   fi
   personal_max_stage8b1i_surface_existing_report "$__pm_original_exit" "$__pm_phase" \
-    "$__pm_classification" "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" \
+    "$__pm_classification" "$(personal_max_stage8b1i_current_check_id)" \
     "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)" EMERGENCY || \
     personal_max_stage8b1i_emit_unavailable "$__pm_original_exit" "$__pm_phase" "$__pm_classification" \
-      "${MIGRATION_CHECK_ID:-${RESTORE_CHECK_ID:-NONE}}" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
+      "$(personal_max_stage8b1i_current_check_id)" "$([[ ${CLEANUP_COMPLETED:-false} == true ]] && printf PASS || printf FAIL)"
   return "$__pm_original_exit"
 }

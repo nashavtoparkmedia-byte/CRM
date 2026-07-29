@@ -146,7 +146,7 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "prismaDiffEvidence", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "scraperOperation", "prismaDiffEvidence", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string", "description": "Privacy-safe output-contract or migration-preflight classification; raw commands, stderr, URLs, credentials, SQL, and business data are excluded."},
@@ -179,7 +179,8 @@
               "MIGRATION_SCHEMA_COLUMN_QUERY_CHECK", "MIGRATION_SCHEMA_COLUMN_CHECK",
               "MIGRATION_SCHEMA_INDEX_QUERY_CHECK", "MIGRATION_SCHEMA_INDEX_CHECK",
               "MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK", "MIGRATION_SCHEMA_UNIQUE_KEY_CHECK",
-              "MIGRATION_PRISMA_DIFF_EXECUTION_CHECK", "MIGRATION_PRISMA_DIFF_GATE_CHECK"
+              "MIGRATION_PRISMA_DIFF_EXECUTION_CHECK", "MIGRATION_PRISMA_DIFF_GATE_CHECK",
+              "SCRAPER_DEFAULT_OFF_RUN_CHECK", "SCRAPER_DEFAULT_OFF_RESULT_CHECK", "SPOOL_INITIALIZATION_CHECK"
             ]
           },
           "exitCode": {"type": "integer", "minimum": 1},
@@ -227,6 +228,29 @@
               "credentialsCaptured": {"const": false},
               "sqlCaptured": {"const": false},
               "businessDataCaptured": {"const": false}
+            }
+          },
+          "scraperOperation": {
+            "type": "object",
+            "required": ["checkId", "substep", "commandCategory", "executableCategory", "commandStarted", "attemptCount", "elapsedSeconds", "originalExitCode", "containerStateCategory", "primaryClassification", "rawStderrCaptured", "rawCommandCaptured", "environmentValuesCaptured", "databaseUrlCaptured", "credentialsCaptured", "messageDataCaptured", "providerPayloadCaptured"],
+            "properties": {
+              "checkId": {"enum": ["NONE", "SCRAPER_DEFAULT_OFF_RUN_CHECK", "SCRAPER_DEFAULT_OFF_RESULT_CHECK", "SPOOL_INITIALIZATION_CHECK"]},
+              "substep": {"enum": ["NOT_STARTED", "default_off_mode_binding", "default_off_harness", "default_off_result_validation", "spool_initialization"]},
+              "commandCategory": {"enum": ["not_observed", "invocation_contract", "docker_run", "internal_validator", "docker_volume_initialization"]},
+              "executableCategory": {"enum": ["not_observed", "shell_builtin", "docker_cli", "jq", "posix_shell"]},
+              "commandStarted": {"type": "boolean"},
+              "attemptCount": {"type": "integer", "minimum": 0},
+              "elapsedSeconds": {"type": "integer", "minimum": 0},
+              "originalExitCode": {"oneOf": [{"type": "integer", "minimum": 0, "maximum": 255}, {"const": "not_observed"}]},
+              "containerStateCategory": {"enum": ["not_observed", "command_not_started", "running", "exited", "unavailable"]},
+              "primaryClassification": {"type": "string", "pattern": "^(NONE|SYNTHETIC_HARNESS_TIMEOUT|SCRAPER_DEFAULT_OFF_[A-Z0-9_]+|SPOOL_INITIALIZATION_FAILED)$"},
+              "rawStderrCaptured": {"const": false},
+              "rawCommandCaptured": {"const": false},
+              "environmentValuesCaptured": {"const": false},
+              "databaseUrlCaptured": {"const": false},
+              "credentialsCaptured": {"const": false},
+              "messageDataCaptured": {"const": false},
+              "providerPayloadCaptured": {"const": false}
             }
           },
           "prismaDiffEvidence": {

@@ -317,8 +317,8 @@ bash -c 'set -Eeuo pipefail; eval "$1"; for name in output status line data sour
 pass actual_bootstrap_collision_matrix
 
 PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
-  bootstrap_verify_runtime_artifact failure-diagnostics.sh 0d7ca5534b9f1db587cb06a7499a5862f1edc591568692cfde6cc4376ad93e42
-  bootstrap_verify_runtime_artifact bounded-operations.sh 3dfe9b5bd23c681cf8de5fb3bdb50e1e86da8c0c48309ed806109b923ae7084f
+  bootstrap_verify_runtime_artifact failure-diagnostics.sh 7d0704f522236c999ef185418633b049f0d39444e3df6aae76bc8a6a359cba8c
+  bootstrap_verify_runtime_artifact bounded-operations.sh bc02fe1cb9c3ce04f4a259cc288c120356e7085c7b2a99cc3efbcfd8ad9cd00b
   bootstrap_verify_runtime_artifact probe-output-helpers.sh 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7
   bootstrap_verify_runtime_artifact restore-verification.sh 996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547
   bootstrap_verify_runtime_artifact postgres-startup.sh 54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3
@@ -327,7 +327,7 @@ PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
   bootstrap_verify_runtime_artifact migration-sql-bindings.txt 9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f
   bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh d9867613380ffdba7af070e916ea782721810fe4268bf1c064b59a5de2cb27b0
   bootstrap_verify_runtime_artifact prisma-diff-semantic-parser.py 87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890
-  bootstrap_verify_runtime_artifact synthetic-scraper-harness.js 85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e
+  bootstrap_verify_runtime_artifact synthetic-scraper-harness.js e8ceaccbfd51d8dd91cf5d84f43716f4decd349ac19c4db529bb17ee4cc75af9
   bootstrap_verify_runtime_artifact gateway-client-harness.js f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428' \
   sh "$bootstrap_functions"
 pass actual_runtime_artifact_anchor_set
