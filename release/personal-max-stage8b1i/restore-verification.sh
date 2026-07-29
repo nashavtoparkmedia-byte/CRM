@@ -122,28 +122,139 @@ pm_restore_optional_representative() {
   pm_assign_out "$__pm_available_target" true
 }
 
-pm_restore_verify_database() {
-  local ledger_name_count ledger_unique_count
+pm_restore_json_capture() {
+  local __pm_target_name=${1:-} __pm_filter=${2:-} __pm_json=${3-} restore_result_json=''
+  pm_require_helper_out_name "$__pm_target_name" || return
+  pm_capture_bounded restore_result_json report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    jq -r "$__pm_filter" <<<"$__pm_json" || return
+  pm_assign_out "$__pm_target_name" "$restore_result_json"
+}
 
+pm_restore_ledger_fail() {
+  PROBE_ERROR_CLASSIFICATION=${1:-RESTORE_LEDGER_EXPECTED_SET_MISMATCH}
+  return 67
+}
+
+pm_restore_analyze_ledger_json() {
+  local __pm_ledger_json=${1-} restore_result_canonical=''
+  pm_restore_enter_check RESTORE_LEDGER_NAMES_CHECK || return
+  if ! pm_run_bounded report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+      jq -e 'type=="array" and all(.[]; type=="string")' <<<"$__pm_ledger_json" >/dev/null; then
+    PROBE_ERROR_CLASSIFICATION=RESTORE_QUERY_FAILED
+    return 65
+  fi
+  pm_restore_json_capture LEDGER_NAME_COUNT 'length' "$__pm_ledger_json" || return
+  pm_restore_json_capture LEDGER_UNIQUE_COUNT 'unique|length' "$__pm_ledger_json" || return
+  LEDGER_DUPLICATE_COUNT=$((LEDGER_NAME_COUNT - LEDGER_UNIQUE_COUNT))
+  pm_restore_json_capture LEDGER_EMPTY_NAME_COUNT '[.[]|select(length==0)]|length' "$__pm_ledger_json" || return
+  pm_restore_json_capture LEDGER_UNSAFE_NAME_COUNT \
+    '[.[]|select(length==0 or any(explode[]; . < 32 or . == 127) or (test("^[A-Za-z0-9][A-Za-z0-9._-]*$")|not))]|length' \
+    "$__pm_ledger_json" || return
+  pm_restore_json_capture LEDGER_INVALID_FORMAT_COUNT \
+    '[.[]|select(test("^[0-9]{14}_[a-z0-9_]+$")|not)]|length' "$__pm_ledger_json" || return
+  pm_restore_json_capture LEDGER_ACCEPTED_HISTORICAL_NAMES_JSON \
+    '[.[]|select(test("^[0-9]{14}_[a-z0-9_]+$")|not)]|sort|tojson' "$__pm_ledger_json" || return
+  pm_restore_json_capture LEDGER_INVALID_NAMING_CATEGORIES_JSON '
+    [.[] as $name | select($name|test("^[0-9]{14}_[a-z0-9_]+$")|not) |
+      (if ($name|test("^[0-9]{14}_")|not) then "non_14_digit_prefix" else empty end),
+      (if ($name|test("[A-Z]")) then "uppercase_character" else empty end),
+      (if ($name|contains("-")) then "hyphenated_historical_name" else empty end),
+      (if (($name|test("^[0-9]{14}_")) and ($name|test("[A-Z-]")|not)) then "other_safe_historical_format" else empty end)
+    ]|unique|tojson' "$__pm_ledger_json" || return
+  pm_restore_json_capture restore_result_canonical 'sort|tojson' "$__pm_ledger_json" || return
+  hash_sorted_text LEDGER_NAMES_SHA256 "$restore_result_canonical" || return
+  hash_sorted_text LEDGER_ATTESTATION_SHA256 "$__pm_ledger_json" || return
+  (( LEDGER_NAME_COUNT == 46 )) || pm_restore_ledger_fail RESTORE_LEDGER_COUNT_MISMATCH || return
+  (( LEDGER_DUPLICATE_COUNT == 0 )) || pm_restore_ledger_fail RESTORE_LEDGER_DUPLICATE_NAME || return
+  (( LEDGER_EMPTY_NAME_COUNT == 0 && LEDGER_UNSAFE_NAME_COUNT == 0 )) || \
+    pm_restore_ledger_fail RESTORE_LEDGER_UNSAFE_NAME || return
+}
+
+pm_restore_validate_ledger_json() {
+  local __pm_ledger_json=${1-} __pm_preflight=${2:-} __pm_repository_inventory=${3:-}
+  local restore_result_preflight_hash=''
+  local restore_result_repo_count='' restore_result_repo_unique_count=''
+
+  pm_restore_analyze_ledger_json "$__pm_ledger_json" || return
+
+  if [[ ! -f $__pm_preflight || -L $__pm_preflight || ! -f $__pm_repository_inventory || -L $__pm_repository_inventory ]]; then
+    pm_restore_ledger_fail RESTORE_LEDGER_EXPECTED_SET_MISMATCH
+    return
+  fi
+  if ! pm_run_bounded package_validation 60 METADATA_TIMEOUT RESTORE_LEDGER_EXPECTED_SET_MISMATCH \
+      jq -e --arg ledgerHash "$ATTESTED_PRODUCTION_LEDGER_SHA256" '
+        .database.migration.ledgerPresent==true and .database.migration.total==46 and
+        .database.migration.finished==46 and .database.migration.failed==0 and
+        (.database.migration.applied|length)==46 and (.database.migration.applied|unique|length)==46 and
+        .database.migration.ledgerHash==$ledgerHash and (.database.migration.pending|length)==8' \
+      "$__pm_preflight" >/dev/null; then
+    pm_restore_ledger_fail RESTORE_LEDGER_EXPECTED_SET_MISMATCH
+    return
+  fi
+  pm_capture_bounded restore_result_preflight_hash report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    jq -r '.database.migration.ledgerHash' "$__pm_preflight" || return
+
+  pm_write_bounded "$TMP/ledger-before.unsorted" report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    jq -r '.[]' <<<"$__pm_ledger_json" || return
+  pm_write_bounded "$TMP/ledger-before" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    env LC_ALL=C sort "$TMP/ledger-before.unsorted" || return
+  pm_write_bounded "$TMP/accepted-ledger" report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    jq -r '.database.migration.applied[]' "$__pm_preflight" || return
+  pm_write_bounded "$TMP/accepted-ledger.sorted" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    env LC_ALL=C sort "$TMP/accepted-ledger" || return
+  pm_write_bounded "$TMP/accepted-pending" report_render 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    jq -r '.database.migration.pending[]' "$__pm_preflight" || return
+  pm_write_bounded "$TMP/accepted-pending.sorted" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    env LC_ALL=C sort "$TMP/accepted-pending" || return
+  pm_write_bounded "$TMP/expected-migrations" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    printf '%s\n' "${EXPECTED_MIGRATIONS[@]}" || return
+  pm_write_bounded "$TMP/expected-migrations.sorted" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    env LC_ALL=C sort "$TMP/expected-migrations" || return
+
+  pm_capture_bounded restore_result_repo_count filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    awk 'NF{count++} END{print count+0}' "$__pm_repository_inventory" || return
+  pm_capture_bounded restore_result_repo_unique_count filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    awk 'NF && !seen[$0]++{count++} END{print count+0}' "$__pm_repository_inventory" || return
+  pm_write_bounded "$TMP/repository-to-ledger" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    comm -23 "$__pm_repository_inventory" "$TMP/ledger-before" || return
+  pm_write_bounded "$TMP/ledger-to-repository" filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    comm -13 "$__pm_repository_inventory" "$TMP/ledger-before" || return
+  pm_capture_bounded LEDGER_REPOSITORY_TO_LEDGER_COUNT filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    awk 'NF{count++} END{print count+0}' "$TMP/repository-to-ledger" || return
+  pm_capture_bounded LEDGER_TO_REPOSITORY_COUNT filesystem_metadata 60 METADATA_TIMEOUT RESTORE_QUERY_FAILED \
+    awk 'NF{count++} END{print count+0}' "$TMP/ledger-to-repository" || return
+
+  if [[ $restore_result_preflight_hash != "$ATTESTED_PRODUCTION_LEDGER_SHA256" ||
+        $LEDGER_ATTESTATION_SHA256 != "$ATTESTED_PRODUCTION_LEDGER_SHA256" ||
+        $restore_result_repo_count != 53 || $restore_result_repo_unique_count != 53 ||
+        $LEDGER_REPOSITORY_TO_LEDGER_COUNT != 8 || $LEDGER_TO_REPOSITORY_COUNT != 1 ]] ||
+      ! cmp -s "$TMP/ledger-before" "$TMP/accepted-ledger.sorted" ||
+      ! cmp -s "$TMP/accepted-pending.sorted" "$TMP/expected-migrations.sorted" ||
+      ! cmp -s "$TMP/repository-to-ledger" "$TMP/expected-migrations.sorted" ||
+      [[ $(<"$TMP/ledger-to-repository") != "$ACCEPTED_LEDGER_ONLY_MIGRATION" ]]; then
+    pm_restore_ledger_fail RESTORE_LEDGER_EXPECTED_SET_MISMATCH
+    return
+  fi
+
+  if (( LEDGER_INVALID_FORMAT_COUNT > 0 )); then
+    LEDGER_NAMING_CLASSIFICATION=RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED
+  else
+    LEDGER_NAMING_CLASSIFICATION=RESTORE_LEDGER_MODERN_NAMES
+  fi
+}
+
+pm_restore_verify_database() {
   pm_restore_query ledger_before_finished RESTORE_LEDGER_FINISHED_CHECK RESTORE_QUERY_FAILED \
     'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL' || return
-  pm_restore_assert_uint_equal "$ledger_before_finished" 46 RESTORE_LEDGER_MISMATCH || return
+  pm_restore_assert_uint_equal "$ledger_before_finished" 46 RESTORE_LEDGER_COUNT_MISMATCH || return
 
   pm_restore_query ledger_before_failed RESTORE_LEDGER_FAILED_CHECK RESTORE_QUERY_FAILED \
     'SELECT count(*) FROM "_prisma_migrations" WHERE finished_at IS NULL OR rolled_back_at IS NOT NULL' || return
-  pm_restore_assert_uint_equal "$ledger_before_failed" 0 RESTORE_LEDGER_MISMATCH || return
+  pm_restore_assert_uint_equal "$ledger_before_failed" 0 RESTORE_LEDGER_COUNT_MISMATCH || return
 
-  pm_restore_query ledger_before RESTORE_LEDGER_NAMES_CHECK RESTORE_QUERY_FAILED \
-    'SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL ORDER BY migration_name' || return
-  ledger_name_count=$(awk 'NF{count++} END{print count+0}' <<<"$ledger_before")
-  ledger_unique_count=$(printf '%s\n' "$ledger_before" | awk 'NF' | LC_ALL=C sort -u | awk 'END{print NR+0}')
-  if (( ledger_name_count != 46 || ledger_unique_count != 46 )) || \
-      grep -Ev '^[0-9]{14}_[a-z0-9_]+$' <<<"$ledger_before" >/dev/null; then
-    PROBE_ERROR_CLASSIFICATION=RESTORE_LEDGER_MISMATCH
-    return 67
-  fi
-  pm_write_bounded "$TMP/ledger-before" disposable_postgresql 60 \
-    RESTORE_QUERY_FAILED RESTORE_LEDGER_MISMATCH printf '%s\n' "$ledger_before" || return
+  pm_restore_query ledger_before_json RESTORE_LEDGER_NAMES_CHECK RESTORE_QUERY_FAILED \
+    'SELECT COALESCE(json_agg(migration_name ORDER BY started_at)::text,'\''[]'\'') FROM "_prisma_migrations" WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL' || return
+  pm_restore_validate_ledger_json "$ledger_before_json" "$PREFLIGHT_REPORT" "$TMP/repository-migrations" || return
 
   pm_restore_query catalog_tables RESTORE_CATALOG_TABLES_CHECK RESTORE_QUERY_FAILED \
     "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r'" || return

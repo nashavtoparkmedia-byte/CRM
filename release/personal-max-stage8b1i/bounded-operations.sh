@@ -36,6 +36,9 @@ pm_error_classification_is_safe() {
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
       RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
+      RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
+      RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
+      RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | \
       RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
       RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -278,6 +281,14 @@ pm_validate_success_report() {
     (.bindings.dumpSha256|test("^[0-9a-f]{64}$")) and .bindings.dumpBytes==45284314 and
     .restore.FULL_RESTORE_PROOF=="PASS" and .restore.objectCount==581 and
     .restore.requiredRelations==["_prisma_migrations","users","Contact","Chat"] and
+    .restore.ledgerNameCount==46 and .restore.ledgerUniqueCount==46 and
+    .restore.ledgerDuplicateCount==0 and .restore.ledgerInvalidFormatCount==1 and
+    .restore.ledgerUnsafeNameCount==0 and
+    .restore.ledgerNamingClassification=="RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED" and
+    .restore.acceptedHistoricalNames==["0_init"] and
+    .restore.ledgerNamesSha256=="d879288b3d8f4d38c1de8565987c231db32ddb322c20a6329519028d8b5a8114" and
+    .restore.ledgerAttestationSha256=="3b77a5c161cbd9850ce3d45b38c2b0e5cc110d97b13f8b506e7723459766a4c3" and
+    .restore.repositoryToLedgerCount==8 and .restore.ledgerToRepositoryCount==1 and
     .restore.representativeCounts.user.physicalRelation=="users" and
     .restore.representativeCounts.user.available==true and
     .migration.DISPOSABLE_MIGRATION_PROOF=="PASS" and .migration.beforeFinished==46 and

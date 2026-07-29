@@ -25,12 +25,13 @@ readonly IMAGE_EXPANSION_BYTES=4323469515
 readonly PROBE_BUDGET_BYTES=2172240240
 readonly CLEANUP_RESERVE_BYTES=5368709120
 readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc110d97b13f8b506e7723459766a4c3'
+readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='d2a2c28c62e4fb14de86616c0bce828cb63d7623bfdffd6fd78736e9503be3c6'
-readonly BOUNDED_OPERATIONS_SHA256='5974cc7aa27edffb5e8dd833b89518e2f90cd2e10421dda9d8430eecf69728ee'
+readonly FAILURE_DIAGNOSTICS_SHA256='3b19b9a50c1e5165336e901ee0c3b5c657f588eebb29a3dca77c1d55359992d0'
+readonly BOUNDED_OPERATIONS_SHA256='4429c3673183ea54090cb65c1c4b30104e5071648c136abaa6db54405f55aaa8'
 readonly PROBE_OUTPUT_HELPERS_SHA256='da46e47aad0953609f284cbb52a6b3860fc169719ad06653b89450a4f0e43e11'
-readonly RESTORE_VERIFICATION_SHA256='b88fc68b0181c1dbcb862709afb72cf72f0b69e2ebe1eeba026237875b5abf68'
+readonly RESTORE_VERIFICATION_SHA256='0a4b0b0bd69a1e9e1a0177c3d57c4e88f9b047883520c373cc809bcb6e19706f'
 readonly MIGRATION_SQL_GATE_SHA256='25d643e416b5bd96b5de2a16bef1d7ec7d74a79b633c7cb8c9a475441116fd9f'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -54,6 +55,21 @@ PROBE_PHASE='bootstrap_complete'
 PROBE_SAFE_COMMAND_CLASS='package_validation'
 PROBE_ERROR_CLASSIFICATION='NONE'
 RESTORE_CHECK_ID='NONE'
+LEDGER_NAME_COUNT=0
+LEDGER_UNIQUE_COUNT=0
+LEDGER_DUPLICATE_COUNT=0
+LEDGER_EMPTY_NAME_COUNT=0
+LEDGER_INVALID_FORMAT_COUNT=0
+LEDGER_UNSAFE_NAME_COUNT=0
+LEDGER_REPOSITORY_TO_LEDGER_COUNT=0
+LEDGER_TO_REPOSITORY_COUNT=0
+OBSERVED_PRODUCTION_HEAD=not_observed
+OBSERVED_PRODUCTION_STATUS_V2_RAW_SHA256=not_observed
+LEDGER_NAMES_SHA256='not_observed'
+LEDGER_ATTESTATION_SHA256='not_observed'
+LEDGER_INVALID_NAMING_CATEGORIES_JSON='[]'
+LEDGER_ACCEPTED_HISTORICAL_NAMES_JSON='[]'
+LEDGER_NAMING_CLASSIFICATION='NOT_OBSERVED'
 PM_SCRIPT_SHA256=''
 PM_FAILURE_PATH=''
 PM_DIAGNOSTIC_TMP=''
@@ -127,6 +143,8 @@ production_snapshot() {
     env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all || return
   pm_assert_production_git_baseline "$git_head" "$git_status_hash" \
     "$ACCEPTED_PRODUCTION_HEAD" "$ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256" || return
+  OBSERVED_PRODUCTION_HEAD=$git_head
+  OBSERVED_PRODUCTION_STATUS_V2_RAW_SHA256=$git_status_hash
   git_text="$git_head|$git_status_hash"
   hash_sorted_text git_hash "$git_text" || return
   free_bytes_at free_bytes /var/lib/docker || return
@@ -556,20 +574,22 @@ pm_write_bounded "$TMP/restore.log" backup_validation 1200 FULL_RESTORE_TIMEOUT 
   docker exec "$PG_CONTAINER" pg_restore --exit-on-error --no-owner --no-acl -U "$PG_USER" -d "$PG_DB" /backup/database.dump
 restore_seconds=$(( $(date +%s) - restore_started ))
 
+pm_enter_phase migration_preflight disposable_migration
+pm_write_bounded "$TMP/repository-migrations" disposable_migration 120 MIGRATION_INVENTORY_TIMEOUT DISPOSABLE_DOCKER_FAILED \
+  docker run --rm --name "$PREFIX-migration-inventory" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
+  --entrypoint sh "$GATEWAY_IMAGE" -ceu 'for directory in /app/prisma/migrations/*; do test -d "$directory" && basename "$directory"; done | sort'
+
 pm_enter_phase restore_verification disposable_postgresql
 pm_restore_verify_database
 RESTORE_CHECK_ID=NONE
 
 pm_enter_phase migration_preflight disposable_migration
-pm_write_bounded "$TMP/repository-migrations" disposable_migration 120 MIGRATION_INVENTORY_TIMEOUT DISPOSABLE_DOCKER_FAILED \
-  docker run --rm --name "$PREFIX-migration-inventory" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
-  --entrypoint sh "$GATEWAY_IMAGE" -ceu 'for directory in /app/prisma/migrations/*; do test -d "$directory" && basename "$directory"; done | sort'
 comm -23 "$TMP/repository-migrations" "$TMP/ledger-before" >"$TMP/pending-before"
 printf '%s\n' "${EXPECTED_MIGRATIONS[@]}" | sort >"$TMP/expected-migrations"
 cmp "$TMP/expected-migrations" "$TMP/pending-before"
 [[ $(wc -l <"$TMP/repository-migrations") -eq 53 ]]
 comm -13 "$TMP/repository-migrations" "$TMP/ledger-before" >"$TMP/applied-only"
-[[ $(<"$TMP/applied-only") == 20260717000000_add_driver_telegram_submitted_phone ]]
+[[ $(<"$TMP/applied-only") == "$ACCEPTED_LEDGER_ONLY_MIGRATION" ]]
 pm_run_bounded disposable_migration 120 MIGRATION_SCAN_TIMEOUT DISPOSABLE_DOCKER_FAILED \
   docker run --rm --name "$PREFIX-migration-scan" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   -v "$PACKAGE_ROOT/migration-sql-gate.sh:/tmp/stage8b1i-migration-sql-gate.sh:ro" \
@@ -773,6 +793,14 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   --argjson objectCount "$object_count" --argjson restoreSeconds "$restore_seconds" \
   --argjson beforeFinished "$ledger_before_finished" --argjson afterFinished "$ledger_after_finished" \
   --argjson failed "$ledger_after_failed" --argjson appliedNames "$applied_names" \
+  --arg ledgerNamesSha256 "$LEDGER_NAMES_SHA256" --arg ledgerAttestationSha256 "$LEDGER_ATTESTATION_SHA256" \
+  --arg ledgerNamingClassification "$LEDGER_NAMING_CLASSIFICATION" \
+  --argjson ledgerNameCount "$LEDGER_NAME_COUNT" --argjson ledgerUniqueCount "$LEDGER_UNIQUE_COUNT" \
+  --argjson ledgerDuplicateCount "$LEDGER_DUPLICATE_COUNT" --argjson ledgerInvalidFormatCount "$LEDGER_INVALID_FORMAT_COUNT" \
+  --argjson ledgerUnsafeNameCount "$LEDGER_UNSAFE_NAME_COUNT" \
+  --argjson repositoryToLedgerCount "$LEDGER_REPOSITORY_TO_LEDGER_COUNT" \
+  --argjson ledgerToRepositoryCount "$LEDGER_TO_REPOSITORY_COUNT" \
+  --argjson acceptedHistoricalNames "$LEDGER_ACCEPTED_HISTORICAL_NAMES_JSON" \
   --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
   --argjson migrationSeconds "$migration_seconds" --argjson migrationDurations "$migration_durations" \
   --argjson representativeCounts "$(<"$TMP/representative-counts.json")" \
@@ -789,6 +817,11 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   '{schemaVersion:1,mode:"ISOLATED_RELEASE_PROOF",generatedAt:$generatedAt,script:{sha256:$scriptSha256,checksumBound:true},
     bindings:{backupReportSha256:$backupReportSha256,dumpSha256:$dumpSha256,dumpBytes:$dumpBytes},
     restore:{FULL_RESTORE_PROOF:"PASS",objectCount:$objectCount,ledgerFinished:$beforeFinished,ledgerFailed:0,
+      ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,ledgerDuplicateCount:$ledgerDuplicateCount,
+      ledgerInvalidFormatCount:$ledgerInvalidFormatCount,ledgerUnsafeNameCount:$ledgerUnsafeNameCount,
+      ledgerNamesSha256:$ledgerNamesSha256,ledgerAttestationSha256:$ledgerAttestationSha256,
+      ledgerNamingClassification:$ledgerNamingClassification,acceptedHistoricalNames:$acceptedHistoricalNames,
+      repositoryToLedgerCount:$repositoryToLedgerCount,ledgerToRepositoryCount:$ledgerToRepositoryCount,
       catalogIntegrity:true,requiredRelations:["_prisma_migrations","users","Contact","Chat"],
       representativeCounts:$representativeCounts,durationSeconds:$restoreSeconds,userDataPrinted:false},
     migration:{DISPOSABLE_MIGRATION_PROOF:"PASS",appliedNames:$appliedNames,beforeFinished:$beforeFinished,

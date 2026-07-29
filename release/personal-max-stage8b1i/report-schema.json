@@ -40,7 +40,7 @@
         "required": ["bindings", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
         "properties": {
           "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
-          "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "catalogIntegrity"]},
+          "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "ledgerNamingClassification", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "catalogIntegrity"]},
           "migration": {
             "type": "object",
             "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty", "prismaDiffStatus", "acceptedLedgerOnlyMigrations"],
@@ -85,7 +85,7 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string"},
@@ -102,11 +102,15 @@
             ]
           },
           "exitCode": {"type": "integer", "minimum": 1},
+          "ledgerDiagnostics": {
+            "type": "object",
+            "required": ["ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerEmptyNameCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "namingClassification", "invalidNamingCategories", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "sqlCaptured", "queryResultsCaptured"]
+          },
           "cleanup": {"type": "object", "required": ["completed", "errorClassification", "containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
           "images": {"type": "object", "required": ["gateway", "scraper", "acceptedImagesRetained"]},
           "storage": {"type": "object", "required": ["freeBytesBeforePull", "freeBytesAfterPull", "freeBytesAfterCleanup", "postPullDeficitBytes", "finalDeficitBytes"]},
           "diagnostics": {"type": "object", "required": ["rawCommandCaptured", "rawSqlCaptured", "rawStderrCaptured", "credentialsCaptured"]},
-          "productionImmutability": {"type": "object", "required": ["productionDatabaseConnections", "productionMigrationLedgerSource", "productionMutationAuthorized"]}
+          "productionImmutability": {"type": "object", "required": ["productionDatabaseConnections", "productionMigrationLedgerSource", "productionMutationAuthorized", "acceptedProductionHead", "acceptedProductionStatusV2RawSha256", "observedProductionHead", "observedProductionStatusV2RawSha256"]}
         }
       }
     },

@@ -30,6 +30,9 @@ personal_max_stage8b1i_safe_error() {
       SUCCESS_REPORT_VALIDATION_TIMEOUT | SUCCESS_REPORT_MALFORMED | SUCCESS_REPORT_SAFETY_VIOLATION | \
       EXPECTED_FAILURE_NOT_OBSERVED | INVALID_OUT_PARAMETER | EMERGENCY_DIAGNOSTICS_USED | \
       RESTORE_LEDGER_MISMATCH | RESTORE_REQUIRED_RELATION_MISSING | \
+      RESTORE_LEDGER_COUNT_MISMATCH | RESTORE_LEDGER_DUPLICATE_NAME | \
+      RESTORE_LEDGER_UNSAFE_NAME | RESTORE_LEDGER_EXPECTED_SET_MISMATCH | \
+      RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | \
       RESTORE_CATALOG_INTEGRITY_FAILED | RESTORE_REPRESENTATIVE_CHECK_FAILED | \
       RESTORE_QUERY_FAILED | DISPOSABLE_CONTAINER_UNAVAILABLE | \
       EMERGENCY_DIAGNOSTICS_UNAVAILABLE) return 0 ;;
@@ -74,6 +77,9 @@ personal_max_stage8b1i_render_failure() {
   local safe_phase safe_class safe_error safe_check_id cleanup_error generated temporary identity final_identity permissions report_sha
   local post_pull_required post_pull_observed post_pull_deficit final_observed final_deficit cleanup_containers cleanup_networks cleanup_volumes cleanup_temp
   local cleanup_containers_json cleanup_networks_json cleanup_volumes_json cleanup_temp_json
+  local ledger_name_count ledger_unique_count ledger_duplicate_count ledger_empty_count ledger_invalid_format_count ledger_unsafe_count
+  local ledger_repository_to_count ledger_to_repository_count ledger_names_sha ledger_attestation_sha ledger_naming_classification value
+  local observed_production_head observed_production_status_sha
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
   [[ $source_line =~ ^[0-9]+$ ]] || source_line=0
   safe_phase=${PROBE_PHASE:-bootstrap_complete}
@@ -111,6 +117,31 @@ personal_max_stage8b1i_render_failure() {
   if [[ $cleanup_networks =~ ^[0-9]+$ ]]; then cleanup_networks_json=$cleanup_networks; else cleanup_networks_json='"unknown"'; fi
   if [[ $cleanup_volumes =~ ^[0-9]+$ ]]; then cleanup_volumes_json=$cleanup_volumes; else cleanup_volumes_json='"unknown"'; fi
   if [[ $cleanup_temp =~ ^[0-9]+$ ]]; then cleanup_temp_json=$cleanup_temp; else cleanup_temp_json='"unknown"'; fi
+  ledger_name_count=${LEDGER_NAME_COUNT:-0}
+  ledger_unique_count=${LEDGER_UNIQUE_COUNT:-0}
+  ledger_duplicate_count=${LEDGER_DUPLICATE_COUNT:-0}
+  ledger_empty_count=${LEDGER_EMPTY_NAME_COUNT:-0}
+  ledger_invalid_format_count=${LEDGER_INVALID_FORMAT_COUNT:-0}
+  ledger_unsafe_count=${LEDGER_UNSAFE_NAME_COUNT:-0}
+  ledger_repository_to_count=${LEDGER_REPOSITORY_TO_LEDGER_COUNT:-0}
+  ledger_to_repository_count=${LEDGER_TO_REPOSITORY_COUNT:-0}
+  for value in ledger_name_count ledger_unique_count ledger_duplicate_count ledger_empty_count \
+    ledger_invalid_format_count ledger_unsafe_count ledger_repository_to_count ledger_to_repository_count; do
+    [[ ${!value} =~ ^[0-9]+$ ]] || printf -v "$value" '%s' 0
+  done
+  ledger_names_sha=${LEDGER_NAMES_SHA256:-not_observed}
+  [[ $ledger_names_sha =~ ^[0-9a-f]{64}$ ]] || ledger_names_sha=not_observed
+  ledger_attestation_sha=${LEDGER_ATTESTATION_SHA256:-not_observed}
+  [[ $ledger_attestation_sha =~ ^[0-9a-f]{64}$ ]] || ledger_attestation_sha=not_observed
+  ledger_naming_classification=${LEDGER_NAMING_CLASSIFICATION:-NOT_OBSERVED}
+  case $ledger_naming_classification in
+    NOT_OBSERVED | RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED | RESTORE_LEDGER_MODERN_NAMES) ;;
+    *) ledger_naming_classification=NOT_OBSERVED ;;
+  esac
+  observed_production_head=${OBSERVED_PRODUCTION_HEAD:-not_observed}
+  [[ $observed_production_head =~ ^[0-9a-f]{40}$ ]] || observed_production_head=not_observed
+  observed_production_status_sha=${OBSERVED_PRODUCTION_STATUS_V2_RAW_SHA256:-not_observed}
+  [[ $observed_production_status_sha =~ ^[0-9a-f]{64}$ ]] || observed_production_status_sha=not_observed
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
     printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH_UNSAFE\n' "$safe_phase" "$original_exit" >&2
@@ -124,6 +155,18 @@ personal_max_stage8b1i_render_failure() {
     --arg generatedAt "$generated" --arg scriptSha256 "$PM_SCRIPT_SHA256" \
     --arg phase "$safe_phase" --arg safeCommandClass "$safe_class" --arg classification "$safe_error" \
     --arg checkId "$safe_check_id" \
+    --arg ledgerNamesSha256 "$ledger_names_sha" --arg ledgerAttestationSha256 "$ledger_attestation_sha" \
+    --arg ledgerNamingClassification "$ledger_naming_classification" \
+    --arg acceptedProductionHead "$ACCEPTED_PRODUCTION_HEAD" \
+    --arg acceptedProductionStatusV2RawSha256 "$ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256" \
+    --arg observedProductionHead "$observed_production_head" \
+    --arg observedProductionStatusV2RawSha256 "$observed_production_status_sha" \
+    --argjson ledgerNameCount "$ledger_name_count" --argjson ledgerUniqueCount "$ledger_unique_count" \
+    --argjson ledgerDuplicateCount "$ledger_duplicate_count" --argjson ledgerEmptyCount "$ledger_empty_count" \
+    --argjson ledgerInvalidFormatCount "$ledger_invalid_format_count" --argjson ledgerUnsafeCount "$ledger_unsafe_count" \
+    --argjson repositoryToLedgerCount "$ledger_repository_to_count" --argjson ledgerToRepositoryCount "$ledger_to_repository_count" \
+    --argjson invalidNamingCategories "${LEDGER_INVALID_NAMING_CATEGORIES_JSON:-[]}" \
+    --argjson acceptedHistoricalNames "${LEDGER_ACCEPTED_HISTORICAL_NAMES_JSON:-[]}" \
     --arg cleanupErrorClassification "$cleanup_error" \
     --argjson exitCode "$original_exit" --argjson sourceLine "$source_line" \
     --argjson cleanupCompleted "$cleanup_ok" \
@@ -142,6 +185,13 @@ personal_max_stage8b1i_render_failure() {
     '{schemaVersion:1,mode:"ISOLATED_RELEASE_PROOF_FAILURE",generatedAt:$generatedAt,
       script:{sha256:$scriptSha256,checksumBound:true},phase:$phase,safeCommandClass:$safeCommandClass,
       classification:$classification,checkId:$checkId,exitCode:$exitCode,sourceLine:$sourceLine,
+      ledgerDiagnostics:{ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,
+        ledgerDuplicateCount:$ledgerDuplicateCount,ledgerEmptyNameCount:$ledgerEmptyCount,
+        ledgerInvalidFormatCount:$ledgerInvalidFormatCount,ledgerUnsafeNameCount:$ledgerUnsafeCount,
+        ledgerNamesSha256:$ledgerNamesSha256,ledgerAttestationSha256:$ledgerAttestationSha256,
+        namingClassification:$ledgerNamingClassification,invalidNamingCategories:$invalidNamingCategories,
+        acceptedHistoricalNames:$acceptedHistoricalNames,repositoryToLedgerCount:$repositoryToLedgerCount,
+        ledgerToRepositoryCount:$ledgerToRepositoryCount,sqlCaptured:false,queryResultsCaptured:false},
       cleanup:{completed:$cleanupCompleted,errorClassification:$cleanupErrorClassification,
         containersRemaining:$cleanupContainers,networksRemaining:$cleanupNetworks,
         volumesRemaining:$cleanupVolumes,tempFilesRemaining:$cleanupTemp,labelScoped:true,globalPrune:false},
@@ -154,7 +204,11 @@ personal_max_stage8b1i_render_failure() {
         freeBytesAfterCleanup:$freeAfterCleanup,postPullRequiredBytes:$postPullRequired,
         postPullDeficitBytes:$postPullDeficit,finalRequiredBytes:$finalRequired,finalDeficitBytes:$finalDeficit},
       productionImmutability:{productionDatabaseConnections:0,
-        productionMigrationLedgerSource:"accepted_preflight_attestation",productionMutationAuthorized:false},
+        productionMigrationLedgerSource:"accepted_preflight_attestation",productionMutationAuthorized:false,
+        acceptedProductionHead:$acceptedProductionHead,
+        acceptedProductionStatusV2RawSha256:$acceptedProductionStatusV2RawSha256,
+        observedProductionHead:$observedProductionHead,
+        observedProductionStatusV2RawSha256:$observedProductionStatusV2RawSha256},
       diagnostics:{rawCommandCaptured:false,rawSqlCaptured:false,rawStderrCaptured:false,
         environmentValuesCaptured:false,credentialsCaptured:false,messageDataCaptured:false,providerPayloadCaptured:false},
       safety:{productionDDL:false,productionDML:false,productionMigration:false,restart:false,deploy:false,

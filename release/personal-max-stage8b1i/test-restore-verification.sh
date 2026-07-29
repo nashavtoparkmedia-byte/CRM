@@ -28,13 +28,27 @@ RESTORE_CHECK_ID=NONE
 PROBE_ERROR_CLASSIFICATION=NONE
 PASS_COUNT=0
 DOCKER_CALLS=0
+PREFLIGHT_REPORT='/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json'
+ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc110d97b13f8b506e7723459766a4c3'
+ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
+EXPECTED_MIGRATIONS=(
+  20260726162043_add_max_raw_transport_journal
+  20260726190658_add_max_route_registry
+  20260726205437_add_max_inbound_normalization
+  20260726215715_add_max_per_chat_outbound_actor
+  20260726225737_add_max_dispatch_ledger
+  20260727053744_add_max_provider_confirmation_matcher
+  20260727141925_add_max_shadow_semantic_comparison
+  20260727154647_add_max_capture_ingress
+)
+find "$SCRIPT_DIR/../../gravity-mvp/prisma/migrations" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | \
+  LC_ALL=C sort >"$TMP/repository-migrations"
 
 docker() { DOCKER_CALLS=$((DOCKER_CALLS + 1)); return 99; }
 pass() { PASS_COUNT=$((PASS_COUNT + 1)); printf '%s=PASS\n' "$1"; }
 
-fixture_ledger_names() {
-  local index
-  for index in $(seq 1 46); do printf '20260101%06d_fixture_%02d\n' "$index" "$index"; done
+fixture_ledger_json() {
+  jq -r '.database.migration.applied | map(tojson) | join(", ") | "["+.+"]"' "$PREFLIGHT_REPORT"
 }
 
 fixture_reset() {
@@ -47,7 +61,7 @@ fixture_reset() {
   FIXTURE_REQUIRED_MISSING=''
   FIXTURE_SQL_EXIT_CHECK=''
   FIXTURE_REPRESENTATIVE_EXIT_CHECK=''
-  FIXTURE_LEDGER_NAMES=$(fixture_ledger_names)
+  FIXTURE_LEDGER_JSON=$(fixture_ledger_json)
   FIXTURE_LAST_USERS_REQUIRED_QUERY=''
   FIXTURE_LAST_USERS_REPRESENTATIVE_QUERY=''
   PROBE_ERROR_CLASSIFICATION=NONE
@@ -80,7 +94,7 @@ pm_restore_query_raw() {
     case $RESTORE_CHECK_ID in
       RESTORE_LEDGER_FINISHED_CHECK) __pm_value=$FIXTURE_FINISHED ;;
       RESTORE_LEDGER_FAILED_CHECK) __pm_value=$FIXTURE_FAILED ;;
-      RESTORE_LEDGER_NAMES_CHECK) __pm_value=$FIXTURE_LEDGER_NAMES ;;
+      RESTORE_LEDGER_NAMES_CHECK) __pm_value=$FIXTURE_LEDGER_JSON ;;
       RESTORE_CATALOG_TABLES_CHECK) __pm_value=$FIXTURE_TABLES ;;
       RESTORE_CATALOG_INDEXES_CHECK) __pm_value=$FIXTURE_INDEXES ;;
       RESTORE_CATALOG_CONSTRAINTS_CHECK) __pm_value=$FIXTURE_CONSTRAINTS ;;
@@ -164,12 +178,12 @@ pass ledger_46_46_0
 
 fixture_reset
 FIXTURE_FAILED=1
-expect_full_failure RESTORE_LEDGER_MISMATCH RESTORE_LEDGER_FAILED_CHECK
+expect_full_failure RESTORE_LEDGER_COUNT_MISMATCH RESTORE_LEDGER_FAILED_CHECK
 pass failed_ledger_entry
 
 fixture_reset
 FIXTURE_FAILED=1
-expect_full_failure RESTORE_LEDGER_MISMATCH RESTORE_LEDGER_FAILED_CHECK
+expect_full_failure RESTORE_LEDGER_COUNT_MISMATCH RESTORE_LEDGER_FAILED_CHECK
 pass rolled_back_ledger_entry
 
 fixture_reset
@@ -223,12 +237,8 @@ rg -F 'mv --no-clobber --no-target-directory' "$PROBE" >/dev/null
 pass package_no_clobber
 
 fixture_reset
-set +e
-pm_restore_query old_users RESTORE_REPRESENTATIVE_USER_CHECK RESTORE_REPRESENTATIVE_CHECK_FAILED \
-  'SELECT count(*) FROM "User"' >/dev/null
-old_status=$?
-set -e
-[[ $old_status -eq 1 && $RESTORE_CHECK_ID == RESTORE_REPRESENTATIVE_USER_CHECK ]]
+old_invalid_count=$(jq '[.database.migration.applied[]|select(test("^[0-9]{14}_[a-z0-9_]+$")|not)]|length' "$PREFLIGHT_REPORT")
+[[ $old_invalid_count -eq 1 ]]
 pass old_failure_reproduced
 
 fixture_reset
@@ -237,8 +247,8 @@ pm_restore_verify_database
 pass corrected_fixture_passes
 
 fixture_reset
-FIXTURE_LEDGER_NAMES=$'20260101000001_duplicate\n20260101000001_duplicate'
-expect_full_failure RESTORE_LEDGER_MISMATCH RESTORE_LEDGER_NAMES_CHECK
+FIXTURE_LEDGER_JSON=$(jq -r '.database.migration.applied | .[45]=.[0] | map(tojson) | join(", ") | "["+.+"]"' "$PREFLIGHT_REPORT")
+expect_full_failure RESTORE_LEDGER_DUPLICATE_NAME RESTORE_LEDGER_NAMES_CHECK
 pass ledger_names_mismatch
 
 fixture_reset
@@ -246,7 +256,8 @@ FIXTURE_REPRESENTATIVE_EXIT_CHECK=RESTORE_REPRESENTATIVE_CONTACT_CHECK
 expect_full_failure RESTORE_REPRESENTATIVE_CHECK_FAILED RESTORE_REPRESENTATIVE_CONTACT_CHECK
 pass representative_failure_classification
 
-for classification in RESTORE_LEDGER_MISMATCH RESTORE_REQUIRED_RELATION_MISSING \
+for classification in RESTORE_LEDGER_COUNT_MISMATCH RESTORE_LEDGER_DUPLICATE_NAME RESTORE_LEDGER_UNSAFE_NAME \
+  RESTORE_LEDGER_EXPECTED_SET_MISMATCH RESTORE_LEDGER_HISTORICAL_NAME_ACCEPTED RESTORE_REQUIRED_RELATION_MISSING \
   RESTORE_CATALOG_INTEGRITY_FAILED RESTORE_REPRESENTATIVE_CHECK_FAILED RESTORE_QUERY_FAILED \
   DISPOSABLE_CONTAINER_UNAVAILABLE; do
   pm_error_classification_is_safe "$classification"
