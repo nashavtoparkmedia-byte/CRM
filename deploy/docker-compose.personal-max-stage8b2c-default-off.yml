@@ -3,6 +3,8 @@ services:
     image: ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b
     pull_policy: never
     user: "1000:1000"
+    volumes:
+      - /var/lib/crm/max-personal-media:/app/media_storage
     environment:
       MAX_PERSONAL_ACCOUNT_ID: ""
       MAX_PERSONAL_LIVE_CAPTURE_ENABLED: ""
