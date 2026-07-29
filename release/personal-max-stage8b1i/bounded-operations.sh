@@ -40,6 +40,10 @@ pm_error_classification_is_safe() {
       MIGRATION_RUNNER_CREATE_FAILED | MIGRATION_RUNNER_START_FAILED | MIGRATION_RUNNER_EXITED | \
       MIGRATION_DOCKER_EXEC_FAILED | MIGRATION_CONTAINER_UNAVAILABLE | \
       MIGRATION_NETWORK_ALIAS_MISMATCH | MIGRATION_DATABASE_URL_CONSTRUCTION_FAILED | \
+      MIGRATION_POSTGRES_INSPECT_FAILED | MIGRATION_POSTGRES_NETWORK_MISSING | \
+      MIGRATION_POSTGRES_UNEXPECTED_NETWORK | MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING | \
+      MIGRATION_POSTGRES_ALIAS_MISSING | MIGRATION_POSTGRES_ALIAS_MISMATCH | \
+      MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED | \
       MIGRATION_PRISMA_EXECUTABLE_MISSING | MIGRATION_PRISMA_COMMAND_REJECTED | \
       MIGRATION_PRISMA_EXIT_1 | MIGRATION_PRISMA_EXIT_2 | MIGRATION_PRISMA_TIMEOUT | \
       MIGRATION_SQL_BINDING_MISMATCH | MIGRATION_SQL_GATE_EXIT_2 | MIGRATION_DIRECTORY_MISSING | \
@@ -386,6 +390,17 @@ pm_validate_success_report() {
     .migration.afterFinished==54 and .migration.failed==0 and .migration.prismaDiffEmpty==false and
     .migration.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
     .migration.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
+    .migration.postgresNetworkAlias.explicit==true and
+    .migration.postgresNetworkAlias.databaseUrlHostBound==true and
+    .migration.postgresNetworkAlias.observedNetworkCount==1 and
+    .migration.postgresNetworkAlias.expectedNetworkPresent==true and
+    .migration.postgresNetworkAlias.aliasArrayPresent==true and
+    .migration.postgresNetworkAlias.expectedAliasPresent==true and
+    .migration.postgresNetworkAlias.unexpectedNetworkPresent==false and
+    .migration.postgresNetworkAlias.containerRunning==true and
+    .migration.postgresNetworkAlias.rawInspectCaptured==false and
+    .migration.postgresNetworkAlias.databaseUrlCaptured==false and
+    .migration.postgresNetworkAlias.credentialsCaptured==false and
     (.migration.appliedNames|sort)==(["20260726162043_add_max_raw_transport_journal",
       "20260726190658_add_max_route_registry","20260726205437_add_max_inbound_normalization",
       "20260726215715_add_max_per_chat_outbound_actor","20260726225737_add_max_dispatch_ledger",

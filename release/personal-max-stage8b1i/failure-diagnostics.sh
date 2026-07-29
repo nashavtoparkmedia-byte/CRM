@@ -34,6 +34,10 @@ personal_max_stage8b1i_safe_error() {
       MIGRATION_RUNNER_CREATE_FAILED | MIGRATION_RUNNER_START_FAILED | MIGRATION_RUNNER_EXITED | \
       MIGRATION_DOCKER_EXEC_FAILED | MIGRATION_CONTAINER_UNAVAILABLE | \
       MIGRATION_NETWORK_ALIAS_MISMATCH | MIGRATION_DATABASE_URL_CONSTRUCTION_FAILED | \
+      MIGRATION_POSTGRES_INSPECT_FAILED | MIGRATION_POSTGRES_NETWORK_MISSING | \
+      MIGRATION_POSTGRES_UNEXPECTED_NETWORK | MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING | \
+      MIGRATION_POSTGRES_ALIAS_MISSING | MIGRATION_POSTGRES_ALIAS_MISMATCH | \
+      MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED | \
       MIGRATION_PRISMA_EXECUTABLE_MISSING | MIGRATION_PRISMA_COMMAND_REJECTED | \
       MIGRATION_PRISMA_EXIT_1 | MIGRATION_PRISMA_EXIT_2 | MIGRATION_PRISMA_TIMEOUT | \
       MIGRATION_SQL_BINDING_MISMATCH | MIGRATION_SQL_GATE_EXIT_2 | MIGRATION_DIRECTORY_MISSING | \
@@ -116,6 +120,9 @@ personal_max_stage8b1i_render_failure() {
   local migration_check_id migration_substep migration_role migration_command_category migration_executable_category
   local migration_command_started migration_attempt_count migration_elapsed migration_original_exit_json
   local migration_container_state migration_primary_classification
+  local postgres_network_facts_observed postgres_observed_network_count postgres_expected_network_present
+  local postgres_alias_array_present postgres_expected_alias_present postgres_unexpected_network_present
+  local postgres_alias_container_running postgres_alias_url_binding postgres_alias_validation_classification
   [[ $original_exit =~ ^[1-9][0-9]*$ && $original_exit -le 255 ]] || original_exit=1
   [[ $source_line =~ ^[0-9]+$ ]] || source_line=0
   safe_phase=${PROBE_PHASE:-bootstrap_complete}
@@ -245,6 +252,24 @@ personal_max_stage8b1i_render_failure() {
   if ! declare -F pm_migration_state_is_safe >/dev/null || ! pm_migration_state_is_safe "$migration_container_state"; then migration_container_state=not_observed; fi
   migration_primary_classification=${MIGRATION_PRIMARY_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$migration_primary_classification" || migration_primary_classification=NONE
+  postgres_network_facts_observed=${MIGRATION_POSTGRES_NETWORK_FACTS_OBSERVED:-false}
+  [[ $postgres_network_facts_observed == true ]] || postgres_network_facts_observed=false
+  postgres_observed_network_count=${MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT:-0}
+  [[ $postgres_observed_network_count =~ ^[0-9]+$ ]] || postgres_observed_network_count=0
+  postgres_expected_network_present=${MIGRATION_POSTGRES_EXPECTED_NETWORK_PRESENT:-false}
+  [[ $postgres_expected_network_present == true ]] || postgres_expected_network_present=false
+  postgres_alias_array_present=${MIGRATION_POSTGRES_ALIAS_ARRAY_PRESENT:-false}
+  [[ $postgres_alias_array_present == true ]] || postgres_alias_array_present=false
+  postgres_expected_alias_present=${MIGRATION_POSTGRES_EXPECTED_ALIAS_PRESENT:-false}
+  [[ $postgres_expected_alias_present == true ]] || postgres_expected_alias_present=false
+  postgres_unexpected_network_present=${MIGRATION_POSTGRES_UNEXPECTED_NETWORK_PRESENT:-false}
+  [[ $postgres_unexpected_network_present == true ]] || postgres_unexpected_network_present=false
+  postgres_alias_container_running=${MIGRATION_POSTGRES_CONTAINER_RUNNING:-false}
+  [[ $postgres_alias_container_running == true ]] || postgres_alias_container_running=false
+  postgres_alias_url_binding=${MIGRATION_POSTGRES_ALIAS_URL_BINDING:-false}
+  [[ $postgres_alias_url_binding == true ]] || postgres_alias_url_binding=false
+  postgres_alias_validation_classification=${MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION:-NONE}
+  personal_max_stage8b1i_safe_error "$postgres_alias_validation_classification" || postgres_alias_validation_classification=NONE
 
   if [[ -e $PM_FAILURE_PATH || -L $PM_FAILURE_PATH ]]; then
     printf 'ISOLATED_PROBE_FAILED\nPHASE=%s\nEXIT_CODE=%s\nFAILURE_REPORT_PATH_UNSAFE\n' "$safe_phase" "$original_exit" >&2
@@ -290,6 +315,15 @@ personal_max_stage8b1i_render_failure() {
     --argjson migrationOriginalExit "$migration_original_exit_json" \
     --arg migrationContainerState "$migration_container_state" \
     --arg migrationPrimaryClassification "$migration_primary_classification" \
+    --argjson postgresNetworkFactsObserved "$postgres_network_facts_observed" \
+    --argjson postgresObservedNetworkCount "$postgres_observed_network_count" \
+    --argjson postgresExpectedNetworkPresent "$postgres_expected_network_present" \
+    --argjson postgresAliasArrayPresent "$postgres_alias_array_present" \
+    --argjson postgresExpectedAliasPresent "$postgres_expected_alias_present" \
+    --argjson postgresUnexpectedNetworkPresent "$postgres_unexpected_network_present" \
+    --argjson postgresAliasContainerRunning "$postgres_alias_container_running" \
+    --argjson postgresAliasUrlBinding "$postgres_alias_url_binding" \
+    --arg postgresAliasValidationClassification "$postgres_alias_validation_classification" \
     --argjson ledgerNameCount "$ledger_name_count" --argjson ledgerUniqueCount "$ledger_unique_count" \
     --argjson ledgerDuplicateCount "$ledger_duplicate_count" --argjson ledgerEmptyCount "$ledger_empty_count" \
     --argjson ledgerInvalidFormatCount "$ledger_invalid_format_count" --argjson ledgerUnsafeCount "$ledger_unsafe_count" \
@@ -331,6 +365,12 @@ personal_max_stage8b1i_render_failure() {
         commandStarted:$migrationCommandStarted,attemptCount:$migrationAttemptCount,
         elapsedSeconds:$migrationElapsedSeconds,originalExitCode:$migrationOriginalExit,
         containerStateCategory:$migrationContainerState,primaryClassification:$migrationPrimaryClassification,
+        postgresNetworkAlias:{factsObserved:$postgresNetworkFactsObserved,
+          observedNetworkCount:$postgresObservedNetworkCount,expectedNetworkPresent:$postgresExpectedNetworkPresent,
+          aliasArrayPresent:$postgresAliasArrayPresent,expectedAliasPresent:$postgresExpectedAliasPresent,
+          unexpectedNetworkPresent:$postgresUnexpectedNetworkPresent,containerRunning:$postgresAliasContainerRunning,
+          databaseUrlHostBound:$postgresAliasUrlBinding,validationClassification:$postgresAliasValidationClassification,
+          rawInspectCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false},
         rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
         databaseUrlCaptured:false,credentialsCaptured:false,sqlCaptured:false,businessDataCaptured:false},
       ledgerDiagnostics:{ledgerNameCount:$ledgerNameCount,ledgerUniqueCount:$ledgerUniqueCount,

@@ -22,12 +22,15 @@ readonly RESTORE_TESTS="$SCRIPT_DIR/test-restore-verification.sh"
 readonly LEDGER_TESTS="$SCRIPT_DIR/test-ledger-verification.sh"
 readonly POSTGRES_STARTUP_TESTS="$SCRIPT_DIR/test-postgres-startup.sh"
 readonly MIGRATION_PREFLIGHT_TESTS="$SCRIPT_DIR/test-migration-preflight.sh"
+readonly POSTGRES_NETWORK_ALIAS_TESTS="$SCRIPT_DIR/test-postgres-network-alias.sh"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
 readonly BACKUP_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
 readonly FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.2c54907799dabee4c92eca40ebfd8176a8b8f4f61c70ed65f38a542cd0ea4b6e.json'
 readonly FAILURE_REPORT_SHA='20ed0d543ef36aaa97518968118cc0b7befa5a49ab764f99a76c82ed7107151c'
+readonly ALIAS_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.1772cc2b99934c7c81c4832c29d60abfecbc21d1f3b250bcd437d77a377d22ed.json'
+readonly ALIAS_FAILURE_REPORT_SHA='b53706d5e89786cb572c8389d25cfa80a883c3d57fd40b9c083804ceff1f7524'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly REPOSITORY_MIGRATIONS="$SCRIPT_DIR/../../gravity-mvp/prisma/migrations"
@@ -80,20 +83,39 @@ jq -e '.schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
   .productionImmutability.observedProductionHead=="e6a0a833fbb756216b058bfe326f9f9c77c4cc6d" and
   .productionImmutability.observedProductionStatusV2RawSha256=="2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"' "$FAILURE_REPORT" >/dev/null
 pass failure_report_acceptance
+[[ -f $ALIAS_FAILURE_REPORT && ! -L $ALIAS_FAILURE_REPORT && -r $ALIAS_FAILURE_REPORT && ! -w $ALIAS_FAILURE_REPORT ]]
+[[ $(stat -Lc '%U:%G:%a' "$ALIAS_FAILURE_REPORT") == root:codexbot:640 ]]
+[[ $(sha256sum -- "$ALIAS_FAILURE_REPORT" | awk '{print $1}') == "$ALIAS_FAILURE_REPORT_SHA" ]]
+jq -e '.schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
+  .script.sha256=="1772cc2b99934c7c81c4832c29d60abfecbc21d1f3b250bcd437d77a377d22ed" and
+  .phase=="migration_preflight" and .safeCommandClass=="disposable_migration" and
+  .classification=="MIGRATION_NETWORK_ALIAS_MISMATCH" and .checkId=="MIGRATION_POSTGRES_ALIAS_CHECK" and
+  .exitCode==65 and .sourceLine==264 and .migrationPreflight.substep=="postgres_alias_validation" and
+  .migrationPreflight.commandStarted==false and .migrationPreflight.attemptCount==0 and
+  .migrationPreflight.elapsedSeconds==0 and .migrationPreflight.originalExitCode==65 and
+  .migrationPreflight.containerStateCategory=="running" and
+  .migrationPreflight.primaryClassification=="MIGRATION_NETWORK_ALIAS_MISMATCH" and
+  .cleanup.completed==true and .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and
+  .cleanup.volumesRemaining==0 and .cleanup.tempFilesRemaining==0 and
+  .productionImmutability.observedProductionHead=="e6a0a833fbb756216b058bfe326f9f9c77c4cc6d" and
+  .productionImmutability.observedProductionStatusV2RawSha256=="2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"' \
+  "$ALIAS_FAILURE_REPORT" >/dev/null
+pass postgres_alias_failure_report_acceptance
 free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
 
 bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" "$MIGRATION_PREFLIGHT" \
   "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" "$RESTORE_TESTS" "$LEDGER_TESTS" \
-  "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" "$SCRIPT_DIR/test-package.sh"
+  "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" "$POSTGRES_NETWORK_ALIAS_TESTS" "$SCRIPT_DIR/test-package.sh"
 sh -n "$MIGRATION_SQL_GATE"
 sh -n "$PRISMA_LEGACY_DIFF_GATE"
 pass bash_syntax
 if command -v "$SHELLCHECK_BIN" >/dev/null 2>&1; then
   "$SHELLCHECK_BIN" -x -S warning "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICATION" "$POSTGRES_STARTUP" "$MIGRATION_PREFLIGHT" \
     "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" \
-    "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" "$SCRIPT_DIR/test-package.sh"
+    "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" \
+    "$POSTGRES_NETWORK_ALIAS_TESTS" "$SCRIPT_DIR/test-package.sh"
   pass shellcheck
 else
   PACKAGE_SKIP_COUNT=$((PACKAGE_SKIP_COUNT + 1))
@@ -212,6 +234,14 @@ migration_preflight_output=$("$MIGRATION_PREFLIGHT_TESTS")
 [[ $(grep -c '=PASS$' <<<"$migration_preflight_output") -eq 27 ]]
 pass migration_preflight_regression
 
+postgres_alias_output=$("$POSTGRES_NETWORK_ALIAS_TESTS")
+[[ $postgres_alias_output == *'POSTGRES_NETWORK_ALIAS_TEST_COUNT=28'* && \
+  $postgres_alias_output == *'ROOT_PROBE_EXECUTED=NO'* && \
+  $postgres_alias_output == *'DOCKER_EXECUTED=NO'* && \
+  $postgres_alias_output == *'DATABASE_CONNECTED=NO'* ]]
+[[ $(grep -c '=PASS$' <<<"$postgres_alias_output") -eq 28 ]]
+pass postgres_network_alias_regression
+
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
 [[ $migration_gate_output == MIGRATION_SQL_GATE=PASS && $(wc -l <"$MIGRATION_SQL_BINDINGS") -eq 8 ]]
 pass exact_migration_sql_binding
@@ -244,12 +274,12 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:781be69af6211b2911ca23ff293d6254d9af1ef53f89a186426f3c823469fe92" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:257dd7834b6dc558428b7a2dd028006ff4098541fcc7481f6cc93d88edeee707" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:cf79c2d62de5f8eae16b0b0acf95f46cb6664375512fbcf2896ee9c8536fd9d0" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:1a72c1e76c65b1a504079b2100238417828da30f3ca62aaf4df610da5e80a3e1" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
   "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
-  "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:08909328360f9ebea4b66716509f691334c601d58c1934ae32d3fdc26308f614" \
+  "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:d0d084950caab5d74670290f5ea5ad4bf1b84408da57b4d667a3c46372c55361" \
   "migration-sql-gate.sh:MIGRATION_SQL_GATE_SHA256:9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda" \
   "migration-sql-bindings.txt:MIGRATION_SQL_BINDINGS_SHA256:9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f" \
   "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8" \
@@ -350,7 +380,10 @@ for evidence in 'postgresStartup:{status:$postgresStatus' 'rawLogsCaptured:false
 done
 for evidence in 'migrationPreflight:{checkId:$migrationCheckId' 'databaseUrlCaptured:false' \
   'businessDataCaptured:false' MIGRATION_SQL_GATE_EXIT_2 MIGRATION_PRISMA_EXIT_1 MIGRATION_PRISMA_EXIT_2 \
-  MIGRATION_RUNTIME_FILE_UNREADABLE MIGRATION_POST_VERIFICATION_FAILED; do
+  MIGRATION_RUNTIME_FILE_UNREADABLE MIGRATION_POST_VERIFICATION_FAILED MIGRATION_POSTGRES_INSPECT_FAILED \
+  MIGRATION_POSTGRES_NETWORK_MISSING MIGRATION_POSTGRES_UNEXPECTED_NETWORK MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING \
+  MIGRATION_POSTGRES_ALIAS_MISSING MIGRATION_POSTGRES_ALIAS_MISMATCH MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED \
+  'postgresNetworkAlias:{factsObserved:$postgresNetworkFactsObserved' 'rawInspectCaptured:false'; do
   require_fixed "$DIAGNOSTICS" "$evidence"
 done
 for evidence in MIGRATION_SQL_RUNNER_START_CHECK MIGRATION_PRISMA_DEPLOY_CHECK \
@@ -437,20 +470,36 @@ jq -e '.schemaVersion==1 and .incident=="MIGRATION_PREFLIGHT_RUNTIME_MOUNT_PERMI
   .systematicRepair.rootProbeRerun==false and .productionSafety.dockerExecutedNow==false and
   .productionSafety.productionDatabaseConnections==0' \
   "$SCRIPT_DIR/migration-preflight-forensic.json" >/dev/null
+jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILURE" and
+  .evidenceClassification=="POSTGRES_NETWORK_ALIAS_EVIDENCE_INSUFFICIENT" and
+  .failedAttempt.failureReportSha256=="b53706d5e89786cb572c8389d25cfa80a883c3d57fd40b9c083804ceff1f7524" and
+  .failedAttempt.sourceLine==264 and .failedAttempt.checkId=="MIGRATION_POSTGRES_ALIAS_CHECK" and
+  .failedAttempt.exitCode==65 and .failedAttempt.substep=="postgres_alias_validation" and
+  .missingEvidence.observedNetworkCount=="NOT_RECORDED" and
+  .missingEvidence.aliasArrayState=="NOT_RECORDED" and .missingEvidence.speculationUsed==false and
+  .executionBoundary.exactEightSqlGateCompleted==true and
+  .executionBoundary.shadowDatabaseCreationReached==false and
+  .executionBoundary.prismaMigrateDeployReached==false and
+  .systematicRepair.explicitNetworkAlias==true and .systematicRepair.structuredJsonValidation==true and
+  .systematicRepair.regressionScenarioCount==28 and
+  .systematicRepair.preparedScriptSha256=="6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3" and
+  .systematicRepair.rootProbeRerun==false and .productionSafety.dockerExecutedNow==false and
+  .productionSafety.productionDatabaseConnections==0' \
+  "$SCRIPT_DIR/postgres-network-alias-forensic.json" >/dev/null
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="1772cc2b99934c7c81c4832c29d60abfecbc21d1f3b250bcd437d77a377d22ed" and
+  .rootProbe.sha256=="6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3" and
   .rootProbe.runtimeArtifactBindingCount==11 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
   (.runtimeArtifactBindings|length)==11 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="781be69af6211b2911ca23ff293d6254d9af1ef53f89a186426f3c823469fe92" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="257dd7834b6dc558428b7a2dd028006ff4098541fcc7481f6cc93d88edeee707" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="cf79c2d62de5f8eae16b0b0acf95f46cb6664375512fbcf2896ee9c8536fd9d0" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="1a72c1e76c65b1a504079b2100238417828da30f3ca62aaf4df610da5e80a3e1" and
   .runtimeArtifactBindings["restore-verification.sh"]=="996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" and
   .runtimeArtifactBindings["postgres-startup.sh"]=="54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" and
-  .runtimeArtifactBindings["migration-preflight.sh"]=="08909328360f9ebea4b66716509f691334c601d58c1934ae32d3fdc26308f614" and
+  .runtimeArtifactBindings["migration-preflight.sh"]=="d0d084950caab5d74670290f5ea5ad4bf1b84408da57b4d667a3c46372c55361" and
   .restoreVerification.failureReportSha256=="c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de" and
   .restoreVerification.exactCause=="PRISMA_USER_MODEL_MAPPED_TO_USERS" and
   .ledgerVerificationRepair.failureReportSha256=="9197be647171a35553189a0526a2d6e205442f15965f5ce0ae1c8a1934bd73bd" and
@@ -506,6 +555,17 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .migrationPreflightEvidenceRepair.regressionScenarioCount==26 and
   .migrationPreflightEvidenceRepair.preparedScriptSha256=="1772cc2b99934c7c81c4832c29d60abfecbc21d1f3b250bcd437d77a377d22ed" and
   .migrationPreflightEvidenceRepair.rootProbeRerun==false and
+  .postgresNetworkAliasRepair.failureReportSha256=="b53706d5e89786cb572c8389d25cfa80a883c3d57fd40b9c083804ceff1f7524" and
+  .postgresNetworkAliasRepair.evidenceClassification=="POSTGRES_NETWORK_ALIAS_EVIDENCE_INSUFFICIENT" and
+  .postgresNetworkAliasRepair.sourceLine==264 and .postgresNetworkAliasRepair.originalExitCode==65 and
+  .postgresNetworkAliasRepair.reportedCheckId=="MIGRATION_POSTGRES_ALIAS_CHECK" and
+  .postgresNetworkAliasRepair.explicitAliasConfigured==true and
+  .postgresNetworkAliasRepair.databaseUrlHostBound==true and
+  .postgresNetworkAliasRepair.shadowDatabaseUrlHostBound==true and
+  .postgresNetworkAliasRepair.structuredValidation==true and
+  .postgresNetworkAliasRepair.regressionScenarioCount==28 and
+  .postgresNetworkAliasRepair.preparedScriptSha256=="6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3" and
+  .postgresNetworkAliasRepair.rootProbeRerun==false and
   .migrationValidation.exactSqlBindingCount==8 and
   .migrationValidation.prismaDiffEmpty==false and
   .migrationValidation.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
@@ -524,5 +584,5 @@ pass git_diff_check
 (cd "$ARCHITECTURE" && sha256sum -c SHA256SUMS >/dev/null)
 pass architecture_checksum
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\n' \
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"

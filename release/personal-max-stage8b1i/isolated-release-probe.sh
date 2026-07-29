@@ -29,12 +29,12 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='781be69af6211b2911ca23ff293d6254d9af1ef53f89a186426f3c823469fe92'
-readonly BOUNDED_OPERATIONS_SHA256='257dd7834b6dc558428b7a2dd028006ff4098541fcc7481f6cc93d88edeee707'
+readonly FAILURE_DIAGNOSTICS_SHA256='cf79c2d62de5f8eae16b0b0acf95f46cb6664375512fbcf2896ee9c8536fd9d0'
+readonly BOUNDED_OPERATIONS_SHA256='1a72c1e76c65b1a504079b2100238417828da30f3ca62aaf4df610da5e80a3e1'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
-readonly MIGRATION_PREFLIGHT_SHA256='08909328360f9ebea4b66716509f691334c601d58c1934ae32d3fdc26308f614'
+readonly MIGRATION_PREFLIGHT_SHA256='d0d084950caab5d74670290f5ea5ad4bf1b84408da57b4d667a3c46372c55361'
 readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='552383e215c3d4f3a6b5ae81556cd3d7888430ecfb66196cd983e3f29a736db8'
@@ -85,6 +85,7 @@ NETWORK=''
 PG_VOLUME=''
 SPOOL_VOLUME=''
 PG_CONTAINER=''
+EXPECTED_POSTGRES_ALIAS=''
 GATEWAY_CONTAINER=''
 DIAGNOSTICS_LOADED=false
 CLEANUP_COMPLETED=false
@@ -478,6 +479,7 @@ NETWORK="$PREFIX-internal"
 PG_VOLUME="$PREFIX-postgres"
 SPOOL_VOLUME="$PREFIX-spool"
 PG_CONTAINER="$PREFIX-postgres"
+EXPECTED_POSTGRES_ALIAS="$PREFIX-postgres-dns"
 GATEWAY_CONTAINER="$PREFIX-gateway"
 pm_capture_bounded TMP filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED mktemp -d "/var/tmp/personal-max-stage8b1i.$RUN_ID.XXXXXX"
 pm_run_bounded filesystem_metadata 60 METADATA_TIMEOUT METADATA_FAILED chmod 0700 "$TMP"
@@ -576,8 +578,9 @@ HMAC_KEY_ID="stage8b1i-$RUN_ID"
 pm_capture_bounded HMAC_SECRET filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED openssl rand -hex 48
 ACCOUNT_A="stage8b1i-a-$RUN_ID"
 ACCOUNT_B="stage8b1i-b-$RUN_ID"
-pm_migration_build_database_url DATABASE_URL "$PG_USER" "$PG_PASSWORD" "$PG_CONTAINER" "$PG_DB"
-pm_migration_build_database_url SHADOW_DATABASE_URL "$PG_USER" "$PG_PASSWORD" "$PG_CONTAINER" "$PG_SHADOW_DB"
+pm_migration_build_database_url DATABASE_URL "$PG_USER" "$PG_PASSWORD" "$EXPECTED_POSTGRES_ALIAS" "$PG_DB"
+pm_migration_build_database_url SHADOW_DATABASE_URL "$PG_USER" "$PG_PASSWORD" "$EXPECTED_POSTGRES_ALIAS" "$PG_SHADOW_DB"
+MIGRATION_POSTGRES_ALIAS_URL_BINDING=true
 printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\n' "$PG_USER" "$PG_PASSWORD" "$PG_DB" >"$TMP/postgres.env"
 printf 'DATABASE_URL=%s\nMAX_PERSONAL_GATEWAY_DATABASE_URL=%s\nMAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON={"%s":"%s"}\nMAX_PERSONAL_GATEWAY_BIND_HOST=0.0.0.0\nMAX_PERSONAL_GATEWAY_PRIVATE_NETWORK=required\nMAX_RAW_JOURNAL_ENABLED=%s,%s\nMAX_INBOUND_NORMALIZER_ENABLED=%s,%s\nMAX_SHADOW_COMPARISON_ENABLED=%s,%s\nMAX_PERSONAL_LIVE_CAPTURE_ENABLED=%s,%s\nMAX_PERSONAL_GATEWAY_WORKER_POLL_MS=100\nMAX_PERSONAL_GATEWAY_WORKER_BATCH_SIZE=100\n' \
   "$DATABASE_URL" "$DATABASE_URL" "$HMAC_KEY_ID" "$HMAC_SECRET" "$ACCOUNT_A" "$ACCOUNT_B" "$ACCOUNT_A" "$ACCOUNT_B" \
@@ -599,6 +602,7 @@ pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER
 pm_enter_phase postgresql_start docker_disposable
 pm_postgres_start_container \
   docker run -d --name "$PG_CONTAINER" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
+  --network-alias "$EXPECTED_POSTGRES_ALIAS" \
   --env-file "$TMP/postgres.env" -v "$PG_VOLUME:/var/lib/postgresql/data" -v "$DUMP_PATH:/backup/database.dump:ro" "$POSTGRES_IMAGE"
 pm_postgres_wait_readiness 90 120
 pm_postgres_wait_version server_version_num "$POSTGRES_VERSION_NUM" 30 60
@@ -673,9 +677,9 @@ pm_migration_validate_runner_identity "$migration_scan_identity" "$GATEWAY_IMAGE
 pm_migration_start_runner "$PREFIX-migration-scan" sql_gate "$TMP/migration-scan.log"
 
 pm_migration_capture_bounded postgres_alias_facts MIGRATION_POSTGRES_ALIAS_CHECK postgres_alias_validation \
-  postgres docker_inspect docker_cli 30 MIGRATION_CONTAINER_UNAVAILABLE MIGRATION_CONTAINER_UNAVAILABLE \
-  docker inspect --format '{{range $name,$network := .NetworkSettings.Networks}}{{$name}}|{{json $network.Aliases}}{{end}}' "$PG_CONTAINER"
-pm_migration_validate_alias_facts "$postgres_alias_facts" "$NETWORK" "$PG_CONTAINER"
+  postgres docker_inspect docker_cli 30 MIGRATION_POSTGRES_INSPECT_FAILED MIGRATION_POSTGRES_INSPECT_FAILED \
+  docker inspect --format '{"running":{{json .State.Running}},"networks":{{json .NetworkSettings.Networks}}}' "$PG_CONTAINER"
+pm_migration_validate_alias_facts "$postgres_alias_facts" "$NETWORK" "$EXPECTED_POSTGRES_ALIAS"
 pm_migration_run_bounded MIGRATION_SHADOW_DATABASE_CREATE_CHECK shadow_database_create postgres docker_exec postgres_client \
   120 MIGRATION_DOCKER_EXEC_FAILED MIGRATION_DOCKER_EXEC_FAILED \
   docker exec "$PG_CONTAINER" createdb -U "$PG_USER" "$PG_SHADOW_DB"
@@ -926,6 +930,13 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
   --arg postgresVersionClassification "$POSTGRES_VERSION_CLASSIFICATION" \
   --arg postgresVersionOutputCategory "$POSTGRES_VERSION_OUTPUT_CATEGORY" \
   --argjson postgresStartupElapsedSeconds "$POSTGRES_STARTUP_ELAPSED_SECONDS" \
+  --argjson postgresNetworkCount "$MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT" \
+  --argjson postgresExpectedNetworkPresent "$MIGRATION_POSTGRES_EXPECTED_NETWORK_PRESENT" \
+  --argjson postgresAliasArrayPresent "$MIGRATION_POSTGRES_ALIAS_ARRAY_PRESENT" \
+  --argjson postgresExpectedAliasPresent "$MIGRATION_POSTGRES_EXPECTED_ALIAS_PRESENT" \
+  --argjson postgresUnexpectedNetworkPresent "$MIGRATION_POSTGRES_UNEXPECTED_NETWORK_PRESENT" \
+  --argjson postgresContainerRunning "$MIGRATION_POSTGRES_CONTAINER_RUNNING" \
+  --argjson postgresAliasUrlBinding "$MIGRATION_POSTGRES_ALIAS_URL_BINDING" \
   --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
   --argjson migrationSeconds "$migration_seconds" --argjson migrationDurations "$migration_durations" \
   --argjson representativeCounts "$(<"$TMP/representative-counts.json")" \
@@ -964,7 +975,12 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT METADATA_FAILED
       afterFinished:$afterFinished,failed:$failed,prismaDiffEmpty:$prismaDiffEmpty,
       prismaDiffStatus:$prismaDiffStatus,durationSeconds:$migrationSeconds,
       acceptedLedgerOnlyMigrations:["20260717000000_add_driver_telegram_submitted_phone"],
-      perMigrationDurations:$migrationDurations,repositoryDirectoryCount:53,appliedOnlyLegacyCount:1,productionMigration:false},
+      perMigrationDurations:$migrationDurations,repositoryDirectoryCount:53,appliedOnlyLegacyCount:1,productionMigration:false,
+      postgresNetworkAlias:{explicit:true,databaseUrlHostBound:$postgresAliasUrlBinding,
+        observedNetworkCount:$postgresNetworkCount,expectedNetworkPresent:$postgresExpectedNetworkPresent,
+        aliasArrayPresent:$postgresAliasArrayPresent,expectedAliasPresent:$postgresExpectedAliasPresent,
+        unexpectedNetworkPresent:$postgresUnexpectedNetworkPresent,containerRunning:$postgresContainerRunning,
+        rawInspectCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false}},
     images:{gateway:{ref:$gatewayRef,runtimeUser:$gatewayUser,digestVerified:true,preexistingBeforePull:$gatewayPreexisting,
         imageIdBeforePull:$gatewayImageIdBefore,acquiredDuringProbe:$gatewayAcquired},
       scraper:{ref:$scraperRef,runtimeUser:$scraperUser,digestVerified:true,preexistingBeforePull:$scraperPreexisting,

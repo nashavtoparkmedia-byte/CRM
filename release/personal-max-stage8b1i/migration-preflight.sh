@@ -14,6 +14,15 @@
 : "${MIGRATION_ORIGINAL_EXIT:=not_observed}"
 : "${MIGRATION_CONTAINER_STATE_CATEGORY:=not_observed}"
 : "${MIGRATION_PRIMARY_CLASSIFICATION:=NONE}"
+: "${MIGRATION_POSTGRES_NETWORK_FACTS_OBSERVED:=false}"
+: "${MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT:=0}"
+: "${MIGRATION_POSTGRES_EXPECTED_NETWORK_PRESENT:=false}"
+: "${MIGRATION_POSTGRES_ALIAS_ARRAY_PRESENT:=false}"
+: "${MIGRATION_POSTGRES_EXPECTED_ALIAS_PRESENT:=false}"
+: "${MIGRATION_POSTGRES_UNEXPECTED_NETWORK_PRESENT:=false}"
+: "${MIGRATION_POSTGRES_CONTAINER_RUNNING:=false}"
+: "${MIGRATION_POSTGRES_ALIAS_URL_BINDING:=false}"
+: "${MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION:=NONE}"
 
 pm_migration_check_id_is_safe() {
   case ${1:-} in
@@ -38,6 +47,10 @@ pm_migration_classification_is_safe() {
       MIGRATION_RUNNER_CREATE_FAILED | MIGRATION_RUNNER_START_FAILED | MIGRATION_RUNNER_EXITED | \
       MIGRATION_DOCKER_EXEC_FAILED | MIGRATION_CONTAINER_UNAVAILABLE | \
       MIGRATION_NETWORK_ALIAS_MISMATCH | MIGRATION_DATABASE_URL_CONSTRUCTION_FAILED | \
+      MIGRATION_POSTGRES_INSPECT_FAILED | MIGRATION_POSTGRES_NETWORK_MISSING | \
+      MIGRATION_POSTGRES_UNEXPECTED_NETWORK | MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING | \
+      MIGRATION_POSTGRES_ALIAS_MISSING | MIGRATION_POSTGRES_ALIAS_MISMATCH | \
+      MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED | \
       MIGRATION_PRISMA_EXECUTABLE_MISSING | MIGRATION_PRISMA_COMMAND_REJECTED | \
       MIGRATION_PRISMA_EXIT_1 | MIGRATION_PRISMA_EXIT_2 | MIGRATION_PRISMA_TIMEOUT | \
       MIGRATION_SQL_BINDING_MISMATCH | MIGRATION_SQL_GATE_EXIT_2 | \
@@ -257,13 +270,91 @@ pm_migration_build_database_url() {
 
 pm_migration_validate_alias_facts() {
   local __pm_facts=${1-} __pm_network=${2:-} __pm_alias=${3:-}
+  local __pm_summary='' __pm_alias_state __pm_alias_count
   pm_migration_enter_check MIGRATION_POSTGRES_ALIAS_CHECK postgres_alias_validation postgres internal_validator docker_cli || return
+  pm_migration_mark_started
+  MIGRATION_POSTGRES_NETWORK_FACTS_OBSERVED=false
+  MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT=0
+  MIGRATION_POSTGRES_EXPECTED_NETWORK_PRESENT=false
+  MIGRATION_POSTGRES_ALIAS_ARRAY_PRESENT=false
+  MIGRATION_POSTGRES_EXPECTED_ALIAS_PRESENT=false
+  MIGRATION_POSTGRES_UNEXPECTED_NETWORK_PRESENT=false
+  MIGRATION_POSTGRES_CONTAINER_RUNNING=false
+  MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=NONE
   if [[ ! $__pm_network =~ ^personal-max-stage8b1i-[0-9a-f]{12}-internal$ || \
-      ! $__pm_alias =~ ^personal-max-stage8b1i-[0-9a-f]{12}-postgres$ || \
-      $__pm_facts != *"$__pm_network"* || $__pm_facts != *"$__pm_alias"* ]]; then
-    pm_migration_record_failure MIGRATION_NETWORK_ALIAS_MISMATCH 65 running
+      ! $__pm_alias =~ ^personal-max-stage8b1i-[0-9a-f]{12}-postgres-dns$ ]]; then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED
+    pm_migration_record_failure MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED 65 command_not_started
     return
   fi
+  if ! __pm_summary=$(jq -cer --arg expectedNetwork "$__pm_network" --arg expectedAlias "$__pm_alias" '
+      if type!="object" or (.running|type)!="boolean" or (.networks|type)!="object" or
+          any(.networks|to_entries[]; (.value|type)!="object") then error("malformed") else
+        (.networks|keys) as $names |
+        (.networks|has($expectedNetwork)) as $expectedNetworkPresent |
+        (if $expectedNetworkPresent then .networks[$expectedNetwork] else {} end) as $endpoint |
+        (if $expectedNetworkPresent and ($endpoint|has("Aliases")) then
+           if $endpoint.Aliases==null then "null"
+           elif ($endpoint.Aliases|type)=="array" and all($endpoint.Aliases[]; type=="string") then "array"
+           else error("malformed") end
+         else "missing" end) as $aliasState |
+        {running:.running,observedNetworkCount:($names|length),
+         expectedNetworkPresent:$expectedNetworkPresent,
+         unexpectedNetworkPresent:any($names[]; .!=$expectedNetwork),aliasState:$aliasState,
+         aliasCount:(if $aliasState=="array" then ($endpoint.Aliases|length) else 0 end),
+         expectedAliasPresent:(if $aliasState=="array" then any($endpoint.Aliases[]; .==$expectedAlias) else false end)}
+      end' <<<"$__pm_facts" 2>/dev/null) || [[ -z $__pm_summary ]]; then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED
+    pm_migration_record_failure MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED 65 not_observed
+    return
+  fi
+  MIGRATION_POSTGRES_NETWORK_FACTS_OBSERVED=true
+  MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT=$(jq -r '.observedNetworkCount' <<<"$__pm_summary")
+  MIGRATION_POSTGRES_EXPECTED_NETWORK_PRESENT=$(jq -r '.expectedNetworkPresent' <<<"$__pm_summary")
+  MIGRATION_POSTGRES_UNEXPECTED_NETWORK_PRESENT=$(jq -r '.unexpectedNetworkPresent' <<<"$__pm_summary")
+  MIGRATION_POSTGRES_CONTAINER_RUNNING=$(jq -r '.running' <<<"$__pm_summary")
+  __pm_alias_state=$(jq -r '.aliasState' <<<"$__pm_summary")
+  __pm_alias_count=$(jq -r '.aliasCount' <<<"$__pm_summary")
+  MIGRATION_POSTGRES_ALIAS_ARRAY_PRESENT=false
+  [[ $__pm_alias_state == array ]] && MIGRATION_POSTGRES_ALIAS_ARRAY_PRESENT=true
+  MIGRATION_POSTGRES_EXPECTED_ALIAS_PRESENT=$(jq -r '.expectedAliasPresent' <<<"$__pm_summary")
+  MIGRATION_CONTAINER_STATE_CATEGORY=running
+  if [[ $MIGRATION_POSTGRES_CONTAINER_RUNNING != true ]]; then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_CONTAINER_UNAVAILABLE
+    pm_migration_record_failure MIGRATION_CONTAINER_UNAVAILABLE 69 unavailable
+    return
+  fi
+  if (( MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT == 0 )); then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_NETWORK_MISSING
+    pm_migration_record_failure MIGRATION_POSTGRES_NETWORK_MISSING 65 running
+    return
+  fi
+  if [[ $MIGRATION_POSTGRES_UNEXPECTED_NETWORK_PRESENT == true ]] || (( MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT != 1 )); then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_UNEXPECTED_NETWORK
+    pm_migration_record_failure MIGRATION_POSTGRES_UNEXPECTED_NETWORK 65 running
+    return
+  fi
+  if [[ $MIGRATION_POSTGRES_EXPECTED_NETWORK_PRESENT != true ]]; then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_NETWORK_MISSING
+    pm_migration_record_failure MIGRATION_POSTGRES_NETWORK_MISSING 65 running
+    return
+  fi
+  if [[ $__pm_alias_state == missing || $__pm_alias_state == null ]]; then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING
+    pm_migration_record_failure MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING 65 running
+    return
+  fi
+  if (( __pm_alias_count == 0 )); then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_ALIAS_MISSING
+    pm_migration_record_failure MIGRATION_POSTGRES_ALIAS_MISSING 65 running
+    return
+  fi
+  if [[ $MIGRATION_POSTGRES_EXPECTED_ALIAS_PRESENT != true ]]; then
+    MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=MIGRATION_POSTGRES_ALIAS_MISMATCH
+    pm_migration_record_failure MIGRATION_POSTGRES_ALIAS_MISMATCH 65 running
+    return
+  fi
+  MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION=NONE
   pm_migration_finish_success
 }
 

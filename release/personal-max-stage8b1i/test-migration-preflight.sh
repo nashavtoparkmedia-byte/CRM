@@ -164,11 +164,12 @@ set -e
 pass invalid_database_url_without_disclosure
 
 set +e
-pm_migration_validate_alias_facts 'fixture-network|["different-alias"]' \
-  personal-max-stage8b1i-abcdef123456-internal personal-max-stage8b1i-abcdef123456-postgres
+pm_migration_validate_alias_facts \
+  '{"running":true,"networks":{"personal-max-stage8b1i-abcdef123456-internal":{"Aliases":["different-alias"]}}}' \
+  personal-max-stage8b1i-abcdef123456-internal personal-max-stage8b1i-abcdef123456-postgres-dns
 alias_status=$?
 set -e
-[[ $alias_status -eq 65 && $MIGRATION_PRIMARY_CLASSIFICATION == MIGRATION_NETWORK_ALIAS_MISMATCH ]]
+[[ $alias_status -eq 65 && $MIGRATION_PRIMARY_CLASSIFICATION == MIGRATION_POSTGRES_ALIAS_MISMATCH ]]
 pass missing_network_alias
 
 set +e
@@ -243,6 +244,10 @@ pass production_immutability_constants
 for classification in MIGRATION_RUNNER_CREATE_FAILED MIGRATION_RUNNER_START_FAILED MIGRATION_RUNNER_EXITED \
   MIGRATION_DOCKER_CLI_FAILED MIGRATION_DOCKER_EXEC_FAILED MIGRATION_CONTAINER_UNAVAILABLE \
   MIGRATION_NETWORK_ALIAS_MISMATCH MIGRATION_DATABASE_URL_CONSTRUCTION_FAILED \
+  MIGRATION_POSTGRES_INSPECT_FAILED MIGRATION_POSTGRES_NETWORK_MISSING \
+  MIGRATION_POSTGRES_UNEXPECTED_NETWORK MIGRATION_POSTGRES_ALIAS_ARRAY_MISSING \
+  MIGRATION_POSTGRES_ALIAS_MISSING MIGRATION_POSTGRES_ALIAS_MISMATCH \
+  MIGRATION_POSTGRES_NETWORK_FACTS_MALFORMED \
   MIGRATION_PRISMA_EXECUTABLE_MISSING MIGRATION_PRISMA_COMMAND_REJECTED MIGRATION_PRISMA_EXIT_1 \
   MIGRATION_PRISMA_EXIT_2 MIGRATION_PRISMA_TIMEOUT MIGRATION_SQL_BINDING_MISMATCH \
   MIGRATION_DIRECTORY_MISSING MIGRATION_DEPLOY_FAILED MIGRATION_POST_VERIFICATION_FAILED \
@@ -252,6 +257,8 @@ for classification in MIGRATION_RUNNER_CREATE_FAILED MIGRATION_RUNNER_START_FAIL
 done
 jq -e '(.allOf[1].then.required|index("migrationPreflight")) and
   (.allOf[1].then.properties.migrationPreflight.required|index("primaryClassification")) and
+  (.allOf[1].then.properties.migrationPreflight.required|index("postgresNetworkAlias")) and
+  .allOf[1].then.properties.migrationPreflight.properties.postgresNetworkAlias.properties.rawInspectCaptured.const==false and
   .allOf[1].then.properties.migrationPreflight.properties.rawStderrCaptured.const==false and
   .allOf[1].then.properties.migrationPreflight.properties.databaseUrlCaptured.const==false and
   .allOf[1].then.properties.migrationPreflight.properties.credentialsCaptured.const==false' \

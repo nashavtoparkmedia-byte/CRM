@@ -44,11 +44,28 @@
           "restore": {"type": "object", "required": ["FULL_RESTORE_PROOF", "objectCount", "ledgerFinished", "ledgerFailed", "ledgerNameCount", "ledgerUniqueCount", "ledgerDuplicateCount", "ledgerInvalidFormatCount", "ledgerUnsafeNameCount", "ledgerNamesSha256", "ledgerAttestationSha256", "ledgerNamingClassification", "acceptedHistoricalNames", "repositoryToLedgerCount", "ledgerToRepositoryCount", "catalogIntegrity"]},
           "migration": {
             "type": "object",
-            "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty", "prismaDiffStatus", "acceptedLedgerOnlyMigrations"],
+            "required": ["DISPOSABLE_MIGRATION_PROOF", "appliedNames", "beforeFinished", "afterFinished", "failed", "prismaDiffEmpty", "prismaDiffStatus", "acceptedLedgerOnlyMigrations", "postgresNetworkAlias"],
             "properties": {
               "prismaDiffEmpty": {"const": false},
               "prismaDiffStatus": {"const": "ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS"},
-              "acceptedLedgerOnlyMigrations": {"const": ["20260717000000_add_driver_telegram_submitted_phone"]}
+              "acceptedLedgerOnlyMigrations": {"const": ["20260717000000_add_driver_telegram_submitted_phone"]},
+              "postgresNetworkAlias": {
+                "type": "object",
+                "required": ["explicit", "databaseUrlHostBound", "observedNetworkCount", "expectedNetworkPresent", "aliasArrayPresent", "expectedAliasPresent", "unexpectedNetworkPresent", "containerRunning", "rawInspectCaptured", "databaseUrlCaptured", "credentialsCaptured"],
+                "properties": {
+                  "explicit": {"const": true},
+                  "databaseUrlHostBound": {"const": true},
+                  "observedNetworkCount": {"const": 1},
+                  "expectedNetworkPresent": {"const": true},
+                  "aliasArrayPresent": {"const": true},
+                  "expectedAliasPresent": {"const": true},
+                  "unexpectedNetworkPresent": {"const": false},
+                  "containerRunning": {"const": true},
+                  "rawInspectCaptured": {"const": false},
+                  "databaseUrlCaptured": {"const": false},
+                  "credentialsCaptured": {"const": false}
+                }
+              }
             }
           },
           "images": {"type": "object", "required": ["gateway", "scraper", "postgresql", "retained"]},
@@ -120,7 +137,7 @@
           },
           "migrationPreflight": {
             "type": "object",
-            "required": ["checkId", "substep", "runnerRole", "commandCategory", "executableCategory", "commandStarted", "attemptCount", "elapsedSeconds", "originalExitCode", "containerStateCategory", "primaryClassification", "rawStderrCaptured", "rawCommandCaptured", "environmentValuesCaptured", "databaseUrlCaptured", "credentialsCaptured", "sqlCaptured", "businessDataCaptured"],
+            "required": ["checkId", "substep", "runnerRole", "commandCategory", "executableCategory", "commandStarted", "attemptCount", "elapsedSeconds", "originalExitCode", "containerStateCategory", "primaryClassification", "postgresNetworkAlias", "rawStderrCaptured", "rawCommandCaptured", "environmentValuesCaptured", "databaseUrlCaptured", "credentialsCaptured", "sqlCaptured", "businessDataCaptured"],
             "properties": {
               "checkId": {"oneOf": [{"const": "NONE"}, {"type": "string", "pattern": "^MIGRATION_[A-Z0-9_]+_CHECK$"}]},
               "substep": {"type": "string"},
@@ -133,6 +150,24 @@
               "originalExitCode": {"oneOf": [{"type": "integer", "minimum": 0, "maximum": 255}, {"const": "not_observed"}]},
               "containerStateCategory": {"enum": ["not_observed", "command_not_started", "created", "running", "exited", "unavailable"]},
               "primaryClassification": {"type": "string", "pattern": "^(NONE|MIGRATION_[A-Z0-9_]+|PRISMA_DIFF_(TIMEOUT|FAILED))$"},
+              "postgresNetworkAlias": {
+                "type": "object",
+                "required": ["factsObserved", "observedNetworkCount", "expectedNetworkPresent", "aliasArrayPresent", "expectedAliasPresent", "unexpectedNetworkPresent", "containerRunning", "databaseUrlHostBound", "validationClassification", "rawInspectCaptured", "databaseUrlCaptured", "credentialsCaptured"],
+                "properties": {
+                  "factsObserved": {"type": "boolean"},
+                  "observedNetworkCount": {"type": "integer", "minimum": 0},
+                  "expectedNetworkPresent": {"type": "boolean"},
+                  "aliasArrayPresent": {"type": "boolean"},
+                  "expectedAliasPresent": {"type": "boolean"},
+                  "unexpectedNetworkPresent": {"type": "boolean"},
+                  "containerRunning": {"type": "boolean"},
+                  "databaseUrlHostBound": {"type": "boolean"},
+                  "validationClassification": {"type": "string", "pattern": "^(NONE|MIGRATION_[A-Z0-9_]+)$"},
+                  "rawInspectCaptured": {"const": false},
+                  "databaseUrlCaptured": {"const": false},
+                  "credentialsCaptured": {"const": false}
+                }
+              },
               "rawStderrCaptured": {"const": false},
               "rawCommandCaptured": {"const": false},
               "environmentValuesCaptured": {"const": false},
