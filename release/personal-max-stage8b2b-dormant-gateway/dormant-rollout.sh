@@ -11,7 +11,7 @@ readonly ACCEPTED_MIGRATION_FILTER="$PACKAGE_ROOT/accepted-migration-report.jq"
 readonly ACCEPTED_MIGRATION_FILTER_SHA='fa32ff2f992b1fcde3e75488ae49b2f80935d578d5177b6ac68274b39f1f0740'
 readonly ROLLBACK_SCRIPT="$PACKAGE_ROOT/dormant-rollback.sh"
 readonly ROLLBACK_SCRIPT_SHA='7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e'
-readonly ACCEPTED_MIGRATION_SCRIPT_SHA='ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e'
+readonly ACCEPTED_MIGRATION_SCRIPT_SHA='6d11dbd72b81b57401b71ea74feb86e7530948e0816eed82e823ab24eddb1199'
 readonly STATE_DIR='/var/lib/personal-max-stage8b2b'
 readonly COMPOSE_RUNTIME="$STATE_DIR/dormant-gateway.compose.yml"
 readonly ISOLATED_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.json'
@@ -168,7 +168,9 @@ production_hash_before=$(project_hash); restart_hash_before=$(restart_hash)
 
 phase image_gate IMAGE_INVALID
 [[ $(run 60 docker image inspect --format '{{join .RepoDigests "\n"}}' "$IMAGE" | grep -Fx "$IMAGE") == "$IMAGE" ]]
-[[ $(run 60 docker image inspect --format '{{.Os}}|{{.Architecture}}|{{.Config.User}}' "$IMAGE") == 'linux|amd64|1000:1000' ]]
+[[ $(run 60 docker image inspect --format '{{.Os}}|{{.Architecture}}|{{.Config.User}}' "$IMAGE") == 'linux|amd64|node' ]]
+run 60 docker run --rm --network none --entrypoint sh "$IMAGE" -ceu \
+  'test "$(id -u):$(id -g)" = "1000:1000"'
 
 phase collision_gate RUNTIME_CONFLICT
 if run 30 docker container inspect "$CONTAINER" >/dev/null 2>&1; then false; fi

@@ -356,7 +356,9 @@ ledger_before=$(psql_read 'SELECT migration_name FROM "_prisma_migrations" WHERE
 
 phase accepted_image_gate IMAGE_GATE_FAILED
 [[ $(run "$COMMAND_TIMEOUT" docker image inspect --format '{{join .RepoDigests "\n"}}' "$GATEWAY_IMAGE" | grep -Fx "$GATEWAY_IMAGE") == "$GATEWAY_IMAGE" ]]
-[[ $(run "$COMMAND_TIMEOUT" docker image inspect --format '{{.Architecture}}|{{.Os}}|{{.Config.User}}' "$GATEWAY_IMAGE") == 'amd64|linux|1000:1000' ]]
+[[ $(run "$COMMAND_TIMEOUT" docker image inspect --format '{{.Architecture}}|{{.Os}}|{{.Config.User}}' "$GATEWAY_IMAGE") == 'amd64|linux|node' ]]
+run "$COMMAND_TIMEOUT" docker run --rm --network none --entrypoint sh "$GATEWAY_IMAGE" -ceu \
+  'test "$(id -u):$(id -g)" = "1000:1000"'
 run "$COMMAND_TIMEOUT" docker run --rm --network none --entrypoint sh "$GATEWAY_IMAGE" -ceu '
   for d in /app/prisma/migrations/*; do test -d "$d" && basename "$d"; done | sort' >"$TMP/repository-migrations"
 comm -23 "$TMP/repository-migrations" <(printf '%s\n' "$ledger_before") >"$TMP/pending"

@@ -49,6 +49,8 @@ grep -Fq 'internal: true' dormant-gateway.compose.yml
 grep -Fq 'ports: []' dormant-gateway.compose.yml
 grep -Fq 'volumes: []' dormant-gateway.compose.yml
 grep -Fq 'user: "1000:1000"' dormant-gateway.compose.yml
+grep -Fq -- "== 'linux|amd64|node'" "$rollout"
+grep -Fq 'test "$(id -u):$(id -g)" = "1000:1000"' "$rollout"
 grep -Fq 'read_only: true' dormant-gateway.compose.yml
 for flag in MAX_RAW_JOURNAL_ENABLED MAX_INBOUND_NORMALIZER_ENABLED MAX_SHADOW_COMPARISON_ENABLED MAX_PERSONAL_LIVE_CAPTURE_ENABLED; do grep -Fq "$flag: \"\"" dormant-gateway.compose.yml; done
 if rg -n '(MAX_PERSONAL_GATEWAY_DATABASE_URL|MAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON|MAX_PERSONAL_GATEWAY_BROWSER_OWNER|MAX_PERSONAL_GATEWAY_CHROMIUM_PROFILE_PATH)' dormant-gateway.compose.yml; then exit 1; fi

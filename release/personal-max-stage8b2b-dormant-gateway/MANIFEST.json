@@ -6,7 +6,7 @@
   "branch": "feature/personal-max-stage8b2-consolidated-20260728T194422Z",
   "image": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0",
   "runtimeUser": "1000:1000",
-  "rolloutScriptSha256": "fabc5068c07a2e5cfc2c8c2f47d8417a52bc2a0a18c56d92b53a3f1f1fd5151d",
+  "rolloutScriptSha256": "8fee02d7470be0b0cdb3e2ac1911c7dcbf7d17bb2fe1bc54e5cf327b3bf21309",
   "rollbackScriptSha256": "7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e",
   "hardBoundRuntimeArtifacts": {
     "failure-diagnostics.sh": "99250892456a7c5f308234a66bb65be1ad762665a0eef97d78d18477a7f9fa25",
@@ -19,7 +19,7 @@
   "publicPorts": 0,
   "productionStatusHashMode": "RAW_PORCELAIN_V2_STREAM",
   "acceptedMigrationBinding": {
-    "productionMigrationScriptSha256": "ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e",
+    "productionMigrationScriptSha256": "6d11dbd72b81b57401b71ea74feb86e7530948e0816eed82e823ab24eddb1199",
     "gatewayImage": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0",
     "isolatedReportShaCrossBound": true,
     "freshBackupValidated": true,

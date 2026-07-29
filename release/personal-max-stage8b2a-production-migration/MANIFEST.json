@@ -7,7 +7,7 @@
   "productionMutationPerformed": false,
   "productionStatusHashMode": "RAW_PORCELAIN_V2_STREAM",
   "acceptedIsolatedProbeScriptSha256": "959c3c3c55395934c6884db893e134c5411f12b873e6c1d351599fe55459539b",
-  "productionMigrationScriptSha256": "ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e",
+  "productionMigrationScriptSha256": "6d11dbd72b81b57401b71ea74feb86e7530948e0816eed82e823ab24eddb1199",
   "hardBoundRuntimeArtifacts": {
     "failure-diagnostics.sh": "c720b22f0cf6644c5202f3daa4ccc9ae7de3d0e2ab6e8a3ebfb4bffa0d9be322",
     "report-success.jq": "01adea28765c72d786d667e15516437606a7f4062fdec897accae1a8e2d4d6bb",
