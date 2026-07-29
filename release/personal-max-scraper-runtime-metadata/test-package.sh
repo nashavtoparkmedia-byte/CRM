@@ -25,7 +25,7 @@ mapfile -t expected_files < <(printf '%s\n' "${EXPECTED_FILES[@]}" | sort)
 [[ "${actual_files[*]}" == "${expected_files[*]}" ]]
 
 jq -e --argjson expected "$(printf '%s\n' "${expected_files[@]}" | jq -Rsc 'split("\n") | map(select(length>0))')" \
-  '.schemaVersion==1 and .status=="READY_NOT_AUTHORIZED" and .execution.performed==false and .execution.productionMutationAuthorized==false and (.files|sort)==$expected' \
+  '.schemaVersion==1 and .status=="AUTHORIZED_FOR_FINAL_DELIVERY" and .execution.performed==false and .execution.productionMutationAuthorized==false and (.files|sort)==$expected' \
   "$PACKAGE_DIR/MANIFEST.json" >/dev/null
 jq -e '.type=="object" and .additionalProperties==false and (.required|index("immutability"))!=null and (.required|index("safety"))!=null' "$PACKAGE_DIR/report-schema.json" >/dev/null
 
@@ -41,7 +41,8 @@ bash -n "$PACKAGE_DIR/test-faults.sh"
 grep -Fq "com.docker.compose.project=crm" "$PACKAGE_DIR/scraper-runtime-metadata.sh"
 grep -Fq "com.docker.compose.service=max-web-scraper" "$PACKAGE_DIR/scraper-runtime-metadata.sh"
 grep -Fq "environment variable names only" "$PACKAGE_DIR/privacy-contract.md"
-grep -Fq "READY_NOT_AUTHORIZED" "$PACKAGE_DIR/owner-instructions.md"
+grep -Fq "AUTHORIZED_FOR_FINAL_DELIVERY" "$PACKAGE_DIR/owner-instructions.md"
+grep -Fq 'env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all' "$PACKAGE_DIR/scraper-runtime-metadata.sh"
 ! grep -ERiq '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|ghp_[A-Za-z0-9]{20,}|Bearer [A-Za-z0-9]{20,})' "$PACKAGE_DIR"
 ! grep -Eq 'docker[[:space:]]+(restart|stop|kill|run|create|rm|update|pull|build|load|push)[[:space:]]' "$PACKAGE_DIR/scraper-runtime-metadata.sh"
 

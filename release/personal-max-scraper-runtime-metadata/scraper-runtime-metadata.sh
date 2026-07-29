@@ -104,7 +104,7 @@ snapshot() {
   volume_hash=$(run docker volume ls --filter "label=com.docker.compose.project=$PROJECT_NAME" --format '{{.Name}}|{{.Driver}}|{{.Scope}}' | sort | hash_stream)
   network_hash=$(run docker network ls --filter "label=com.docker.compose.project=$PROJECT_NAME" --format '{{.ID}}|{{.Name}}|{{.Driver}}|{{.Scope}}' | sort | hash_stream)
   head=$(git -C /opt/crm rev-parse HEAD)
-  status_hash=$(git -C /opt/crm status --porcelain=v2 --untracked-files=all | hash_stream)
+  status_hash=$(env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all | hash_stream)
   disk_json=$(df -B1 --output=source,size,used,avail,pcent,target /opt/crm | tail -n 1 | awk '{printf "{\"filesystem\":\"%s\",\"sizeBytes\":%s,\"usedBytes\":%s,\"freeBytes\":%s,\"percentUsed\":\"%s\",\"target\":\"%s\"}",$1,$2,$3,$4,$5,$6}')
   jq -cn \
     --arg containerHash "$container_hash" --arg stateHash "$state_hash" --arg restartHash "$restart_hash" \
