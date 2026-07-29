@@ -4,7 +4,7 @@ umask 077
 
 EXPECTED_REPOSITORY='nashavtoparkmedia-byte/CRM'
 EXPECTED_BRANCH='feature/personal-max-stage8b1r-release-hardening-20260727T220905Z'
-TAG='stage8b1r-20260727t220905z'
+TAG="stage8b1r-${GITHUB_SHA:?GITHUB_SHA is required}"
 GATEWAY_REPOSITORY='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway'
 SCRAPER_REPOSITORY='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper'
 POSTGRES_IMAGE='postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777'

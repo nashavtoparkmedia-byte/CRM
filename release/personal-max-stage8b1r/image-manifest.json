@@ -4,7 +4,7 @@
   "sourceCommit": "resolved by executable workflow from exact GITHUB_SHA",
   "gateway": {
     "repository": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway",
-    "immutableTag": "stage8b1r-20260727t220905z",
+    "immutableTag": "stage8b1r-${full GITHUB_SHA}",
     "finalDigest": "resolved in final-image-manifest.json produced by executable workflow",
     "dockerfile": "max-personal-gateway/Dockerfile",
     "base": "node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f",
@@ -13,7 +13,7 @@
   },
   "scraper": {
     "repository": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper",
-    "immutableTag": "stage8b1r-20260727t220905z",
+    "immutableTag": "stage8b1r-${full GITHUB_SHA}",
     "finalDigest": "resolved in final-image-manifest.json produced by executable workflow",
     "dockerfile": "max-web-scraper/Dockerfile",
     "base": "mcr.microsoft.com/playwright:v1.62.0-noble@sha256:baed2032d533817f3dbe6425de795788430ba345e819a1201337009ba17c9d07",
