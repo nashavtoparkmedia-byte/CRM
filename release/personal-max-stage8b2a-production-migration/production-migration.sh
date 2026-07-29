@@ -17,7 +17,7 @@ readonly ACCEPTED_BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-back
 readonly ACCEPTED_BACKUP_REPORT_SHA='f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566'
 readonly PREFLIGHT_REPORT='/var/tmp/personal-max-stage8b1r-production-readonly-preflight.json'
 readonly PREFLIGHT_REPORT_SHA='d6a6e4764c90a6f64af9c11b2b0c4eeb08b82c377b58990f939bd559688ac63b'
-readonly GATEWAY_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
+readonly GATEWAY_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0'
 readonly POSTGRES_IMAGE_ID='sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229'
 readonly PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly PRODUCTION_STATUS_V2_SHA='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
@@ -46,7 +46,7 @@ readonly PRISMA_DIFF_RUNNER='personal-max-stage8b2a-prisma-diff-runner'
 readonly PRISMA_DIFF_RUNNER_ROLE='prisma-diff-runner'
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRISMA_DIFF_STATUS='ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS'
-readonly ACCEPTED_ISOLATED_PROBE_SCRIPT_SHA='dbbdaf7a33e3d7bf0e81a6471e5f2461d7042b7b3efdc993f3100d6ff927b053'
+readonly ACCEPTED_ISOLATED_PROBE_SCRIPT_SHA='959c3c3c55395934c6884db893e134c5411f12b873e6c1d351599fe55459539b'
 readonly -a EXPECTED_MIGRATIONS=(
   20260726162043_add_max_raw_transport_journal
   20260726190658_add_max_route_registry
@@ -257,7 +257,7 @@ jq -e --arg expectedProbeScriptSha "$ACCEPTED_ISOLATED_PROBE_SCRIPT_SHA" \
   .restore.FULL_RESTORE_PROOF=="PASS" and .migration.DISPOSABLE_MIGRATION_PROOF=="PASS" and
   (.migration.appliedNames|sort)==($expected|sort) and .migration.beforeFinished==46 and
   .migration.afterFinished==54 and .migration.failed==0 and .migration.prismaDiffEmpty==false and
-  .migration.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
+  .migration.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
   .migration.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
   .e2e.captureLoss==0 and .e2e.accidentalDuplicateRawRows==0 and .e2e.wrongAccount==0 and
   .e2e.criticalSemanticRegressions==0 and .cleanup.containersRemaining==0 and

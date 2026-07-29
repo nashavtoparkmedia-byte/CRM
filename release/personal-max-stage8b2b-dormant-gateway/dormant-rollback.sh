@@ -5,7 +5,7 @@ umask 077
 
 readonly PACKAGE_ROOT='/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2b-dormant-gateway'
 readonly COMPOSE_SOURCE="$PACKAGE_ROOT/dormant-gateway.compose.yml"
-readonly COMPOSE_SOURCE_SHA='3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2'
+readonly COMPOSE_SOURCE_SHA='1fb9f99692823c969650706b6db405e6afe3a7ec379ffa7fc1bbde9cf8a30292'
 readonly FAILURE_DIAGNOSTICS="$PACKAGE_ROOT/failure-diagnostics.sh"
 readonly FAILURE_DIAGNOSTICS_SHA='99250892456a7c5f308234a66bb65be1ad762665a0eef97d78d18477a7f9fa25'
 readonly STATE_DIR='/var/lib/personal-max-stage8b2b'
@@ -13,7 +13,7 @@ readonly COMPOSE_RUNTIME="$STATE_DIR/dormant-gateway.compose.yml"
 readonly COMPOSE_PROJECT='personal-max-stage8b2b'
 readonly CONTAINER='personal-max-dormant-gateway'
 readonly NETWORK='personal-max-stage8b2b-dormant'
-readonly IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
+readonly IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0'
 readonly REPORT='/var/tmp/personal-max-stage8b2b-dormant-rollback.json'
 readonly FAILURE_PREFIX='/var/tmp/personal-max-stage8b2b-dormant-rollback.failure'
 readonly PROJECT_LABEL='com.docker.compose.project=crm'

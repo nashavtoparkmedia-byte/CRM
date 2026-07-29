@@ -51,7 +51,7 @@
           "type": "object",
           "required": ["ref", "digestBound"],
           "properties": {
-            "ref": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
+          "ref": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0"},
             "digestBound": {"const": true}
           },
           "additionalProperties": false

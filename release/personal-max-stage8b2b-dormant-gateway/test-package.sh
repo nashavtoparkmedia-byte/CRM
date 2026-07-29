@@ -91,7 +91,7 @@ if rg -n '(docker rm|docker network rm|docker (system|volume|network) prune)' "$
 isolated_sha=$(printf isolated-proof | sha256sum | awk '{print $1}')
 wrong_isolated_sha=$(printf wrong-isolated-proof | sha256sum | awk '{print $1}')
 migration_script_sha=$(awk -F"'" '/^readonly ACCEPTED_MIGRATION_SCRIPT_SHA=/{print $2}' "$rollout")
-expected_image='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
+expected_image='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0'
 migration_fixture=$(jq -n --arg isolated "$isolated_sha" --arg migrationScript "$migration_script_sha" --arg image "$expected_image" '
   {schemaVersion:1,mode:"PRODUCTION_MIGRATION_EVIDENCE",script:{sha256:$migrationScript,checksumBound:true},
    bindings:{isolatedReportSha256:$isolated,acceptedBackupReportSha256:"f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"},

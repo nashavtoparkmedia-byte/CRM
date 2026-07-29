@@ -15,7 +15,7 @@
           "properties": {
             "isolatedReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "migrationReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "migrationScriptSha256": {"const": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560"}
+            "migrationScriptSha256": {"const": "4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43"}
           },
           "additionalProperties": false
         },
@@ -24,8 +24,8 @@
           "required": ["reportValidated", "productionMigrationScriptSha256", "gatewayImage", "isolatedReportShaCrossBound", "freshBackupStatus", "appliedCount", "runnerCleanup", "safety", "databaseBinding", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded", "acceptedLedgerOnlyMigrations"],
           "properties": {
             "reportValidated": {"const": true},
-            "productionMigrationScriptSha256": {"const": "f054d48ab8b5a93911057c9a9dd6123c48fc91720dd50dcb32c833d3718b9560"},
-            "gatewayImage": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"},
+            "productionMigrationScriptSha256": {"const": "4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43"},
+            "gatewayImage": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0"},
             "isolatedReportShaCrossBound": {"const": true},
             "freshBackupStatus": {"const": "VALIDATED"},
             "appliedCount": {"const": 8},
@@ -39,7 +39,7 @@
           },
           "additionalProperties": false
         },
-        "image": {"const": {"ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de", "runtimeUser": "1000:1000"}},
+        "image": {"const": {"ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0", "runtimeUser": "1000:1000"}},
         "runtime": {"const": {"container": "personal-max-dormant-gateway", "network": "personal-max-stage8b2b-dormant", "networkInternal": true, "publicPorts": 0, "mounts": 0, "health": "PASS", "readiness": "dormant-ready", "restartPolicy": "unless-stopped"}},
         "behavior": {"const": {"databaseConfigured": false, "databaseWrites": 0, "captureEnabled": false, "senderActive": false, "browserLaunched": false, "maxContacted": false, "providerAction": false}},
         "production": {
@@ -48,7 +48,7 @@
           "additionalProperties": false
         },
         "storage": {"type": "object", "required": ["freeBytesBefore"], "properties": {"freeBytesBefore": {"type": "integer", "minimum": 12500000000}}, "additionalProperties": false},
-        "rollback": {"const": {"available": true, "automatic": false, "scriptSha256": "41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d", "composeSha256": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"}}
+        "rollback": {"const": {"available": true, "automatic": false, "scriptSha256": "7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e", "composeSha256": "1fb9f99692823c969650706b6db405e6afe3a7ec379ffa7fc1bbde9cf8a30292"}}
       },
       "additionalProperties": false
     },
@@ -79,8 +79,8 @@
       "required": ["schemaVersion", "mode", "scriptSha256", "composeSha256", "logSha256", "verifiedTarget", "containerRemoved", "networkRemoved", "runtimeConfigRemoved", "stateDirectoryRemoved", "production", "databaseChanged", "scraperChanged", "profileChanged", "globalPrune"],
       "properties": {
         "schemaVersion": {"const": 1}, "mode": {"const": "DORMANT_GATEWAY_ROLLBACK"},
-        "scriptSha256": {"const": "41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d"},
-        "composeSha256": {"const": "3f9656117f5da8db510a9710744263384619aa371cac6fa7c8a7d3e50a352ca2"},
+        "scriptSha256": {"const": "7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e"},
+        "composeSha256": {"const": "1fb9f99692823c969650706b6db405e6afe3a7ec379ffa7fc1bbde9cf8a30292"},
         "logSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "verifiedTarget": {"const": {"container": "personal-max-dormant-gateway", "network": "personal-max-stage8b2b-dormant", "stage": "8b2b", "mode": "dormant", "mounts": 0, "publicPorts": 0}},
         "containerRemoved": {"const": true}, "networkRemoved": {"const": true}, "runtimeConfigRemoved": {"const": true}, "stateDirectoryRemoved": {"const": true},
@@ -95,7 +95,7 @@
         "schemaVersion": {"const": 1}, "mode": {"const": "DORMANT_GATEWAY_ROLLBACK_FAILURE"},
         "phase": {"type": "string", "pattern": "^[a-z0-9_]+$"}, "classification": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
         "exitCode": {"type": "integer", "minimum": 1}, "sourceLine": {"type": "integer", "minimum": 0},
-        "scriptSha256": {"const": "41a6e1962ae38c4946c0e2e1a82ae84dd08fae06dac934b8d2b95a3f519b2a7d"},
+        "scriptSha256": {"const": "7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e"},
         "resources": {
           "type": "object", "required": ["observation", "container", "network", "runtimeConfig", "stateDirectory", "cleanupAutomatic"],
           "properties": {
