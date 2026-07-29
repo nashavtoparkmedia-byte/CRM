@@ -1007,7 +1007,7 @@ pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT E2E_OUTAGE_FAILED
 pm_run_bounded synthetic_http 120 GATEWAY_CLIENT_TIMEOUT E2E_OUTAGE_FAILED \
   docker exec "$GATEWAY_CONTAINER" node -e "fetch('http://127.0.0.1:8080/ready').then(r=>process.exit(r.status===503?0:1))"
 pm_run_bounded docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT E2E_OUTAGE_FAILED docker start "$PG_CONTAINER" >/dev/null
-pm_poll_until 60 90 E2E_OUTAGE_FAILED postgres_ready
+pm_poll_until 60 90 E2E_OUTAGE_FAILED pm_postgres_execute_readiness
 pm_run_bounded cleanup 60 CONTAINER_REMOVAL_TIMEOUT E2E_OUTAGE_FAILED docker rm -f "$GATEWAY_CONTAINER" >/dev/null
 pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/capture-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_OUTAGE_FAILED \

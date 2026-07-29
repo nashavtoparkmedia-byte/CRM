@@ -9,6 +9,7 @@ readonly SCRIPT_DIR
 readonly PROBE="$SCRIPT_DIR/isolated-release-probe.sh"
 readonly DIAGNOSTICS="$SCRIPT_DIR/failure-diagnostics.sh"
 readonly BOUNDED="$SCRIPT_DIR/bounded-operations.sh"
+readonly POSTGRES_STARTUP="$SCRIPT_DIR/postgres-startup.sh"
 readonly TEXT_CANARY_REPOSITORY='/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z'
 readonly TEXT_CANARY_BRANCH='feature/personal-max-text-canary-autonomous-20260728T211316Z'
 readonly TEXT_CANARY_COMMIT='5debe647a5320adbc51ed94fd7c0ab87d6468a4f'
@@ -17,6 +18,8 @@ readonly TEXT_CANARY_COMMIT='5debe647a5320adbc51ed94fd7c0ab87d6468a4f'
 source "$BOUNDED"
 # shellcheck source=release/personal-max-stage8b1i/failure-diagnostics.sh
 source "$DIAGNOSTICS"
+# shellcheck source=release/personal-max-stage8b1i/postgres-startup.sh
+source "$POSTGRES_STARTUP"
 
 TEST_TMP=$(mktemp -d /tmp/personal-max-stage8b1i-remaining-tail.XXXXXX)
 trap 'rm -rf -- "$TEST_TMP"' EXIT
@@ -354,6 +357,11 @@ done
 pass spool_initialization_runner_contract
 
 outage_block=$(phase_block e2e_outage e2e_recovery)
+rg -F 'pm_poll_until 60 90 E2E_OUTAGE_FAILED pm_postgres_execute_readiness' <<<"$outage_block" >/dev/null
+! rg -F 'pm_poll_until 60 90 E2E_OUTAGE_FAILED postgres_ready' <<<"$outage_block" >/dev/null
+declare -F pm_postgres_execute_readiness >/dev/null
+pass disposable_postgres_restart_readiness_callback_contract
+
 for evidence in 'docker stop "$PG_CONTAINER"' 'status===503' 'docker start "$PG_CONTAINER"' \
   'PREFIX-scraper-capture-a' '--network none' 'MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A"' \
   'MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A"' 'MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a' \
@@ -420,5 +428,5 @@ pass final_storage_production_report_contract
 [[ -z $(env GIT_OPTIONAL_LOCKS=0 git -C "$TEXT_CANARY_REPOSITORY" status --porcelain=v1 --untracked-files=all) ]]
 pass text_canary_unchanged
 
-[[ $PASS_COUNT -eq 41 ]]
-printf 'REMAINING_TAIL_TEST_COUNT=41\nREQUIRED_REGRESSION_CASES_COVERED=31\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
+[[ $PASS_COUNT -eq 42 ]]
+printf 'REMAINING_TAIL_TEST_COUNT=42\nREQUIRED_REGRESSION_CASES_COVERED=32\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'

@@ -42,6 +42,7 @@ readonly SCRAPER_DEFAULT_OFF_FORENSIC="$SCRIPT_DIR/scraper-default-off-failure-f
 readonly PINNED_SCRAPER_RUNTIME_FORENSIC="$SCRIPT_DIR/pinned-scraper-runtime-failure-forensic.json"
 readonly SCRAPER_RUNTIME_PHASE_FORENSIC="$SCRIPT_DIR/scraper-runtime-phase-registry-forensic.json"
 readonly SCRAPER_RUNTIME_FILE_FORENSIC="$SCRIPT_DIR/scraper-runtime-file-binding-forensic.json"
+readonly E2E_POSTGRES_RESTART_FORENSIC="$SCRIPT_DIR/e2e-postgres-restart-callback-forensic.json"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly SCRAPER_RUNTIME_CONTRACT="$SCRIPT_DIR/scraper-runtime-contract.js"
 readonly SCRAPER_RUNTIME_SOURCE_LEDGER="$SCRIPT_DIR/scraper-runtime-source-ledger.json"
@@ -66,6 +67,8 @@ readonly PHASE_REGISTRY_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated
 readonly PHASE_REGISTRY_FAILURE_REPORT_SHA='196cd960155f99fe75ee309776dee2f78d661ef91907ccde53442e97f1976130'
 readonly SCRAPER_RUNTIME_FILE_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.fccc17159460d10dfcc5e87318f1a6c9007bca07f222f681ecc698ee3f0b4306.json'
 readonly SCRAPER_RUNTIME_FILE_FAILURE_REPORT_SHA='ce4cb70bab0c052b9d86e63cc4b8ea5f88aa148b3774370fa3eb805c7daaa734'
+readonly E2E_POSTGRES_RESTART_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.b03ead64476b8823c9629e68959c981eaa8d1370d2d91dd8cf3a9cc035fa0239.json'
+readonly E2E_POSTGRES_RESTART_FAILURE_REPORT_SHA='6cd09d50d4bfb74697425a2ec3936ff8cac89ee1a971b9fcf65ebe249bbc9953'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly NODE_BIN=${NODE_BIN:-node}
@@ -390,6 +393,55 @@ jq -e '.schemaVersion==1 and .incident=="SCRAPER_RUNTIME_BIND_MOUNT_PERMISSION_F
   .safety.maxContacted==false and .safety.providerAction==false and .safety.stage8B2Started==false' \
   "$SCRAPER_RUNTIME_FILE_FORENSIC" >/dev/null
 pass scraper_runtime_file_binding_failure_acceptance
+[[ -f $E2E_POSTGRES_RESTART_FAILURE_REPORT && ! -L $E2E_POSTGRES_RESTART_FAILURE_REPORT && \
+  -r $E2E_POSTGRES_RESTART_FAILURE_REPORT && ! -w $E2E_POSTGRES_RESTART_FAILURE_REPORT ]]
+[[ $(stat -Lc '%U:%G:%a:%s' "$E2E_POSTGRES_RESTART_FAILURE_REPORT") == root:codexbot:640:9512 ]]
+[[ $(sha256sum -- "$E2E_POSTGRES_RESTART_FAILURE_REPORT" | awk '{print $1}') == "$E2E_POSTGRES_RESTART_FAILURE_REPORT_SHA" ]]
+jq -e '.schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
+  .generatedAt=="2026-07-29T21:24:11Z" and
+  .script.sha256=="b03ead64476b8823c9629e68959c981eaa8d1370d2d91dd8cf3a9cc035fa0239" and
+  .phase=="e2e_outage" and .safeCommandClass=="docker_disposable" and
+  .classification=="E2E_OUTAGE_FAILED" and .checkId=="NONE" and
+  .sourceLine==1010 and .exitCode==124 and
+  .scraperRuntimeContract.verified==true and .scraperRuntimeContract.status=="PASS" and
+  .scraperRuntimeContract.runtimeUid==1001 and .scraperRuntimeContract.runtimeGid==1001 and
+  .scraperHarnessEnvelope.observed==true and .scraperHarnessEnvelope.status=="PASS" and
+  .scraperHarnessEnvelope.selectedMode=="default-off" and
+  .cleanup.completed==true and .cleanup.errorClassification=="NONE" and
+  .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and
+  .cleanup.volumesRemaining==0 and .cleanup.tempFilesRemaining==0 and
+  .productionImmutability.acceptedProductionHead==.productionImmutability.observedProductionHead and
+  .productionImmutability.acceptedProductionStatusV2RawSha256==.productionImmutability.observedProductionStatusV2RawSha256 and
+  .productionImmutability.productionDatabaseConnections==0 and
+  ([.diagnostics.rawCommandCaptured,.diagnostics.rawSqlCaptured,.diagnostics.rawStderrCaptured,
+    .diagnostics.environmentValuesCaptured,.diagnostics.credentialsCaptured,.diagnostics.messageDataCaptured,
+    .diagnostics.providerPayloadCaptured,.safety.productionDDL,.safety.productionDML,
+    .safety.productionMigration,.safety.restart,.safety.deploy,.safety.browserLaunched,
+    .safety.maxContacted,.safety.providerAction,.safety.productionNetworkAttached,
+    .safety.productionVolumeMounted,.safety.profileMounted] | all(.==false))' \
+  "$E2E_POSTGRES_RESTART_FAILURE_REPORT" >/dev/null
+jq -e '.schemaVersion==1 and .incident=="E2E_POSTGRES_RESTART_CALLBACK_MISSING" and
+  .failedAttempt.failureReportSha256=="6cd09d50d4bfb74697425a2ec3936ff8cac89ee1a971b9fcf65ebe249bbc9953" and
+  .evidenceAssessment.classification=="A" and
+  .evidenceAssessment.classificationName=="E2E_POSTGRES_RESTART_CALLBACK_DEFECT_PROVEN" and
+  .evidenceAssessment.failedCallback=="postgres_ready" and
+  .evidenceAssessment.failedCallbackDefined==false and
+  .evidenceAssessment.existingReadinessFunction=="pm_postgres_execute_readiness" and
+  .evidenceAssessment.existingReadinessFunctionDefined==true and
+  .passedBeforeFailure.exactEightDisposableMigrations==true and
+  .passedBeforeFailure.scraperRuntimeContract==true and
+  .passedBeforeFailure.scraperDefaultOff==true and
+  .systematicRepair.undefinedCallbackRemoved==true and
+  .systematicRepair.boundedPollRetained==true and
+  .systematicRepair.attemptLimit==60 and .systematicRepair.elapsedLimitSeconds==90 and
+  .systematicRepair.timeoutClassification=="E2E_OUTAGE_FAILED" and
+  .systematicRepair.newScriptSha256=="1e5693903325e47394745e9c29b34dc38445ee8834f999dc38b6d38ea3ad5b39" and
+  .systematicRepair.remainingTailScenarioCount==42 and
+  .systematicRepair.remainingTailRequiredRegressionCases==32 and
+  .safety.rootProbeExecuted==true and .safety.productionMutation==false and
+  .safety.maxContacted==false and .safety.providerAction==false and .safety.stage8B2Started==false' \
+  "$E2E_POSTGRES_RESTART_FORENSIC" >/dev/null
+pass e2e_postgres_restart_callback_failure_acceptance
 free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
@@ -568,12 +620,12 @@ failure_handoff_output=$("$FAILURE_HANDOFF_TESTS")
 pass failure_handoff_regression
 
 remaining_tail_output=$("$REMAINING_TAIL_TESTS")
-[[ $remaining_tail_output == *'REMAINING_TAIL_TEST_COUNT=41'* && \
-  $remaining_tail_output == *'REQUIRED_REGRESSION_CASES_COVERED=31'* && \
+[[ $remaining_tail_output == *'REMAINING_TAIL_TEST_COUNT=42'* && \
+  $remaining_tail_output == *'REQUIRED_REGRESSION_CASES_COVERED=32'* && \
   $remaining_tail_output == *'ROOT_PROBE_EXECUTED=NO'* && \
   $remaining_tail_output == *'DOCKER_EXECUTED=NO'* && \
   $remaining_tail_output == *'DATABASE_CONNECTED=NO'* ]]
-[[ $(grep -c '=PASS$' <<<"$remaining_tail_output") -eq 41 ]]
+[[ $(grep -c '=PASS$' <<<"$remaining_tail_output") -eq 42 ]]
 pass remaining_tail_regression
 
 phase_registry_output=$("$PHASE_REGISTRY_TESTS")
@@ -632,8 +684,8 @@ prisma_parser_failure_output=$($PRISMA_PARSER_FAILURE_TESTS)
 [[ $(grep -c '^PASS ' <<<"$prisma_parser_failure_output") -eq 25 ]]
 pass prisma_parser_failure_regression
 
-required_regression_cases=$((14 + 25 + 31 + 30 + 30 + 20 + 20 + 20))
-[[ $required_regression_cases -eq 190 ]]
+required_regression_cases=$((14 + 25 + 32 + 30 + 30 + 20 + 20 + 20))
+[[ $required_regression_cases -eq 191 ]]
 pass required_regression_case_matrix
 
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
@@ -1031,7 +1083,7 @@ jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILU
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="b03ead64476b8823c9629e68959c981eaa8d1370d2d91dd8cf3a9cc035fa0239" and
+  .rootProbe.sha256=="1e5693903325e47394745e9c29b34dc38445ee8834f999dc38b6d38ea3ad5b39" and
   .rootProbe.runtimeArtifactBindingCount==14 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
@@ -1058,16 +1110,16 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .support.scraperRealLoaderTests.realLoaderExecuted==true and
   .support.scraperRuntimeContractTests.scenarioCount==20 and
   .support.scraperRuntimeContractTests.realRuntimeContractCodeExecuted==true and
-  .support.remainingTailTests.scenarioCount==41 and
-  .support.remainingTailTests.requiredRegressionCasesCovered==31 and
+  .support.remainingTailTests.scenarioCount==42 and
+  .support.remainingTailTests.requiredRegressionCasesCovered==32 and
   .support.phaseRegistryTests.scenarioCount==20 and
   .support.phaseRegistryTests.registeredPhaseCount==30 and
   .support.phaseRegistryTests.routeTransitionCount==31 and
   .support.staleClassificationTests.scenarioCount==20 and
   .support.staleClassificationTests.transientPollRecovered==true and
   .support.staleClassificationTests.primaryFailurePreserved==true and
-  .support.nonRootTests.contractCount==84 and
-  .support.nonRootTests.expectedPassCountWithoutShellcheck==83 and
+  .support.nonRootTests.contractCount==85 and
+  .support.nonRootTests.expectedPassCountWithoutShellcheck==84 and
   .support.prismaDiffSemanticTests.scenarioCount==36 and
   .support.prismaDiffSemanticTests.realGateExecuted==true and
   .support.prismaParserFailureTests.scenarioCount==25 and
@@ -1223,6 +1275,26 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .scraperRuntimeFileBindingRepair.rootProbeRerun==true and
   .scraperRuntimeFileBindingRepair.diagnosticDockerExecution==true and
   .scraperRuntimeFileBindingRepair.productionMutation==false and
+  .e2ePostgresRestartCallbackRepair.failureReportSha256=="6cd09d50d4bfb74697425a2ec3936ff8cac89ee1a971b9fcf65ebe249bbc9953" and
+  .e2ePostgresRestartCallbackRepair.terminalLogSha256=="5cf1de85a57085a26e433783d48188b2b1c27a2af53ef77a6e9302d83341f74b" and
+  .e2ePostgresRestartCallbackRepair.evidenceClassification=="A" and
+  .e2ePostgresRestartCallbackRepair.evidenceClassificationName=="E2E_POSTGRES_RESTART_CALLBACK_DEFECT_PROVEN" and
+  .e2ePostgresRestartCallbackRepair.failedCallback=="postgres_ready" and
+  .e2ePostgresRestartCallbackRepair.failedCallbackDefined==false and
+  .e2ePostgresRestartCallbackRepair.replacementCallback=="pm_postgres_execute_readiness" and
+  .e2ePostgresRestartCallbackRepair.replacementCallbackDefined==true and
+  .e2ePostgresRestartCallbackRepair.boundedPollRetained==true and
+  .e2ePostgresRestartCallbackRepair.attemptLimit==60 and
+  .e2ePostgresRestartCallbackRepair.elapsedLimitSeconds==90 and
+  .e2ePostgresRestartCallbackRepair.exactEightDisposableMigrationsPassedBeforeFailure==true and
+  .e2ePostgresRestartCallbackRepair.scraperRuntimeContractPassedBeforeFailure==true and
+  .e2ePostgresRestartCallbackRepair.scraperDefaultOffPassedBeforeFailure==true and
+  .e2ePostgresRestartCallbackRepair.remainingTailScenarioCount==42 and
+  .e2ePostgresRestartCallbackRepair.remainingTailRequiredRegressionCasesCovered==32 and
+  .e2ePostgresRestartCallbackRepair.requiredRegressionCaseCount==191 and
+  .e2ePostgresRestartCallbackRepair.newScriptSha256=="1e5693903325e47394745e9c29b34dc38445ee8834f999dc38b6d38ea3ad5b39" and
+  .e2ePostgresRestartCallbackRepair.rootProbeRerun==true and
+  .e2ePostgresRestartCallbackRepair.productionMutation==false and
   .migrationValidation.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
   .migrationValidation.prismaDiffExpectedSemanticMode=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
   .migrationValidation.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
@@ -1241,10 +1313,10 @@ pass git_diff_check
 pass architecture_checksum
 
 if (( PACKAGE_SKIP_COUNT == 0 )); then
-  [[ $PACKAGE_PASS_COUNT -eq 84 ]]
+  [[ $PACKAGE_PASS_COUNT -eq 85 ]]
 else
-  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 83 ]]
+  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 84 ]]
 fi
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nSCRAPER_DEFAULT_OFF_TEST_COUNT=30\nSCRAPER_REAL_LOADER_TEST_COUNT=30\nSCRAPER_RUNTIME_CONTRACT_TEST_COUNT=20\nPHASE_REGISTRY_TEST_COUNT=20\nSTALE_CLASSIFICATION_TEST_COUNT=20\nREMAINING_TAIL_TEST_COUNT=41\nPRISMA_DIFF_SEMANTIC_TEST_COUNT=36\nPRISMA_PARSER_FAILURE_TEST_COUNT=25\nREQUIRED_REGRESSION_CASE_COUNT=190\n' \
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nSCRAPER_DEFAULT_OFF_TEST_COUNT=30\nSCRAPER_REAL_LOADER_TEST_COUNT=30\nSCRAPER_RUNTIME_CONTRACT_TEST_COUNT=20\nPHASE_REGISTRY_TEST_COUNT=20\nSTALE_CLASSIFICATION_TEST_COUNT=20\nREMAINING_TAIL_TEST_COUNT=42\nPRISMA_DIFF_SEMANTIC_TEST_COUNT=36\nPRISMA_PARSER_FAILURE_TEST_COUNT=25\nREQUIRED_REGRESSION_CASE_COUNT=191\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"
