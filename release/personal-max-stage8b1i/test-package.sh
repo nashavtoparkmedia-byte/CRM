@@ -725,8 +725,8 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
   "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
@@ -737,7 +737,7 @@ for binding in \
   "prisma-diff-semantic-parser.py:PRISMA_DIFF_SEMANTIC_PARSER_SHA256:87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890" \
   "synthetic-scraper-harness.js:SYNTHETIC_SCRAPER_HARNESS_SHA256:8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c" \
   "scraper-runtime-contract.js:SCRAPER_RUNTIME_CONTRACT_SHA256:d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3" \
-  "scraper-runtime-source-ledger.json:SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256:45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f" \
+  "scraper-runtime-source-ledger.json:SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256:ded897ff7ce2d4a4781e34748b2acdde9cf3eb02a212007cca75bb4e6b62381e" \
   "gateway-client-harness.js:GATEWAY_CLIENT_HARNESS_SHA256:f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428"; do
   IFS=: read -r artifact constant digest <<<"$binding"
   require_fixed "$PROBE" "readonly $constant='$digest'"
@@ -755,14 +755,16 @@ require_fixed "$PROBE" "$BACKUP_SHA"
 require_fixed "$PROBE" 'sha_of observed_sha "$DUMP_PATH"'
 require_fixed "$PROBE" '[[ $observed_sha == "$DUMP_SHA256" ]]'
 pass backup_sha_binding
-jq -e '.images.gateway.digest=="sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de" and
-  .images.scraper.digest=="sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768" and
-  .images.scraper.expectedOciRevision=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
-  .images.scraper.expectedSourceCommit=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
+jq -e '.images.gateway.digest=="sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0" and
+  .images.gateway.expectedOciRevision=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
+  .images.gateway.expectedSourceCommit=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
+  .images.scraper.digest=="sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b" and
+  .images.scraper.expectedOciRevision=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
+  .images.scraper.expectedSourceCommit=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
   .images.scraper.sourceLedger=="scraper-runtime-source-ledger.json" and
   .images.postgresql.digest=="sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"' "$SCRIPT_DIR/accepted-images.json" >/dev/null
-jq -e '.image.expectedOciRevision=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
-  .image.expectedSourceCommit=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
+jq -e '.image.expectedOciRevision=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
+  .image.expectedSourceCommit=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
   .runtime.expectedUid==1001 and .runtime.expectedGid==1001 and
   .modules["/app/capture/LiveCaptureAdapter.js"].sha256=="7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5" and
   .modules["/app/capture/AuthenticatedCaptureDrain.js"].sha256=="1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37" and
@@ -844,7 +846,7 @@ jq -e '(.allOf[1].then.required|index("scraperOperation")) and
   .allOf[1].then.properties.scraperOperation.properties.environmentValuesCaptured.const==false and
   .allOf[1].then.properties.scraperOperation.properties.credentialsCaptured.const==false and
   (.allOf[0].then.required|index("scraperRuntimeContract")) and
-  .allOf[0].then.properties.scraperRuntimeContract.properties.expectedSourceCommit.const=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
+  .allOf[0].then.properties.scraperRuntimeContract.properties.expectedSourceCommit.const=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
   .allOf[0].then.properties.scraperRuntimeContract.properties.runtimeUid.const==1001 and
   .allOf[0].then.properties.scraperRuntimeContract.properties.runtimeGid.const==1001' \
   "$SCRIPT_DIR/report-schema.json" >/dev/null
@@ -1083,14 +1085,14 @@ jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILU
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="1e5693903325e47394745e9c29b34dc38445ee8834f999dc38b6d38ea3ad5b39" and
+  .rootProbe.sha256=="6d2a94713d280038b0ebee856d9aded763a6d5683b3c65d77a2c6e2ee1599077" and
   .rootProbe.runtimeArtifactBindingCount==14 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
   (.runtimeArtifactBindings|length)==14 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d" and
   (.runtimeArtifactBindings|has("residual-cleanup.sh")|not) and
   .runtimeArtifactBindings["restore-verification.sh"]=="996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" and
   .runtimeArtifactBindings["postgres-startup.sh"]=="54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" and
@@ -1099,7 +1101,19 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .runtimeArtifactBindings["prisma-diff-semantic-parser.py"]=="87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890" and
   .runtimeArtifactBindings["synthetic-scraper-harness.js"]=="8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c" and
   .runtimeArtifactBindings["scraper-runtime-contract.js"]=="d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3" and
-  .runtimeArtifactBindings["scraper-runtime-source-ledger.json"]=="45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f" and
+  .runtimeArtifactBindings["scraper-runtime-source-ledger.json"]=="ded897ff7ce2d4a4781e34748b2acdde9cf3eb02a212007cca75bb4e6b62381e" and
+  .e2eNormalizationProgressDiagnosis.evidenceClassification=="RAW_QUARANTINE_NORMALIZATION_CURSOR_STALL_PROVEN" and
+  .e2eNormalizationProgressDiagnosis.rawRows==1001 and
+  .e2eNormalizationProgressDiagnosis.normalizedRows==998 and
+  .e2eNormalizationProgressDiagnosis.comparedRows==864 and
+  .rawQuarantineNormalizationRepair.sourceCommit=="cbd790f7fddc85b5e4991af70fdb5966991f83e3" and
+  .rawQuarantineNormalizationRepair.normalizerOnlyOptIn==true and
+  .rawQuarantineNormalizationRepair.gatewayTestCount==199 and
+  .imagePublicationRepair.sourceCommit=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
+  .imagePublicationRepair.workflowRunId==30493941962 and
+  .imagePublicationRepair.workflowConclusion=="success" and
+  .imagePublicationRepair.gatewayDigest=="sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0" and
+  .imagePublicationRepair.scraperDigest=="sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b" and
   .support.migrationVerificationTests.scenarioCount==14 and
   .support.failureHandoffTests.scenarioCount==29 and
   .support.scraperDefaultOffTests.scenarioCount==30 and

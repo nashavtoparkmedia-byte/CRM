@@ -238,7 +238,7 @@ async function main() {
     ...JSON.parse(serializeRuntimeEnvelope(runtime)),
     appRootCategory: 'PINNED_APP_ROOT', runtimeUid: 1001, runtimeGid: 1001,
   }
-  const runtimeCall = 'pm_validate_scraper_runtime_contract "$2" 0 33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a 7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5 1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37 35c979f12d67447d176bac3641fc38eb75fa6a1adc0633e19171a6512e7192f7'
+  const runtimeCall = 'pm_validate_scraper_runtime_contract "$2" 0 cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf 7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5 1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37 35c979f12d67447d176bac3641fc38eb75fa6a1adc0633e19171a6512e7192f7'
   const sourceMismatch = JSON.parse(JSON.stringify(pinnedRuntime))
   sourceMismatch.moduleFacts.liveCaptureAdapter.sha256 = '0'.repeat(64)
   assert.match(validatorResult(sourceMismatch, runtimeCall), /65\|SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH/)

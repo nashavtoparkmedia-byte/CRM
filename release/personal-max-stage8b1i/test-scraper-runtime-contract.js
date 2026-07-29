@@ -30,11 +30,11 @@ assert.equal(ledger.schemaVersion, 1)
 assert.equal(ledger.privacy.sourceContentsCaptured, false)
 pass('ledger_schema_privacy')
 
-assert.equal(ledger.image.digest, 'sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768')
+assert.equal(ledger.image.digest, 'sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b')
 assert.equal(ledger.image.ref, acceptedImages.images.scraper.ref)
 pass('exact_image_digest_ref')
 
-assert.equal(ledger.image.expectedSourceCommit, '33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a')
+assert.equal(ledger.image.expectedSourceCommit, 'cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf')
 assert.equal(ledger.image.expectedOciRevision, ledger.image.expectedSourceCommit)
 pass('expected_source_revision')
 

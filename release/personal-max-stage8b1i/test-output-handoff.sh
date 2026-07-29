@@ -317,8 +317,8 @@ bash -c 'set -Eeuo pipefail; eval "$1"; for name in output status line data sour
 pass actual_bootstrap_collision_matrix
 
 PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
-  bootstrap_verify_runtime_artifact failure-diagnostics.sh 85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9
-  bootstrap_verify_runtime_artifact bounded-operations.sh 7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57
+  bootstrap_verify_runtime_artifact failure-diagnostics.sh a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87
+  bootstrap_verify_runtime_artifact bounded-operations.sh ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d
   bootstrap_verify_runtime_artifact probe-output-helpers.sh 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7
   bootstrap_verify_runtime_artifact restore-verification.sh 996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547
   bootstrap_verify_runtime_artifact postgres-startup.sh 54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3
@@ -329,7 +329,7 @@ PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
   bootstrap_verify_runtime_artifact prisma-diff-semantic-parser.py 87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890
   bootstrap_verify_runtime_artifact synthetic-scraper-harness.js 8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c
   bootstrap_verify_runtime_artifact scraper-runtime-contract.js d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3
-  bootstrap_verify_runtime_artifact scraper-runtime-source-ledger.json 45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f
+  bootstrap_verify_runtime_artifact scraper-runtime-source-ledger.json ded897ff7ce2d4a4781e34748b2acdde9cf3eb02a212007cca75bb4e6b62381e
   bootstrap_verify_runtime_artifact gateway-client-harness.js f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428' \
   sh "$bootstrap_functions"
 pass actual_runtime_artifact_anchor_set

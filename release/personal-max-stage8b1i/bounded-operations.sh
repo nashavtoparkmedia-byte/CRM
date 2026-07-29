@@ -547,7 +547,7 @@ pm_validate_scraper_runtime_contract() {
     pm_scraper_finish_operation "$rejection_exit" SCRAPER_RUNTIME_OUTPUT_MALFORMED exited; return "$rejection_exit"
   fi
   pm_record_scraper_runtime_facts "$path"
-  if [[ $revision != 33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a ]]; then
+  if [[ $revision != cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf ]]; then
     pm_scraper_finish_operation 65 SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH exited; return 65
   fi
   if ! jq -e --arg live "$expected_live" --arg drain "$expected_drain" --arg transport "$expected_transport" '
@@ -877,8 +877,8 @@ pm_validate_success_report() {
       "20260726215715_add_max_per_chat_outbound_actor","20260726225737_add_max_dispatch_ledger",
       "20260727053744_add_max_provider_confirmation_matcher","20260727141925_add_max_shadow_semantic_comparison",
       "20260727154647_add_max_capture_ingress"]|sort) and
-    .images.gateway.ref=="ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de" and
-    .images.scraper.ref=="ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768" and
+    .images.gateway.ref=="ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0" and
+    .images.scraper.ref=="ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b" and
     .images.postgresql.ref=="sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229" and
     .images.gateway.digestVerified==true and .images.scraper.digestVerified==true and
     .images.postgresql.digestVerified==true and .images.gateway.runtimeUser=="1000:1000" and
@@ -886,9 +886,9 @@ pm_validate_success_report() {
     (.images.gateway.preexistingBeforePull|type)=="boolean" and
     (.images.scraper.preexistingBeforePull|type)=="boolean" and .images.retained==true and
     .scraperRuntimeContract.verified==true and .scraperRuntimeContract.status=="PASS" and
-    .scraperRuntimeContract.imageDigest=="sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768" and
-    .scraperRuntimeContract.expectedSourceCommit=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
-    .scraperRuntimeContract.ociRevision=="33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a" and
+    .scraperRuntimeContract.imageDigest=="sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b" and
+    .scraperRuntimeContract.expectedSourceCommit=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
+    .scraperRuntimeContract.ociRevision=="cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf" and
     .scraperRuntimeContract.nodeVersionCategory=="SUPPORTED_NODE_MAJOR" and
     .scraperRuntimeContract.nodeMajor>=20 and .scraperRuntimeContract.nodeMajor<=24 and
     .scraperRuntimeContract.runtimeUid==1001 and .scraperRuntimeContract.runtimeGid==1001 and

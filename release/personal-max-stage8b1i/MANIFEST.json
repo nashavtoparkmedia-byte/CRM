@@ -2,12 +2,13 @@
   "schemaVersion": 1,
   "stage": "8B1I",
   "mode": "PREPARED_NOT_EXECUTED",
-  "preparedAt": "2026-07-29T21:27:39Z",
+  "preparedAt": "2026-07-29T22:05:00Z",
   "source": {
     "worktree": "/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z",
     "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
     "baseCommit": "a5696e32b753b36c474e1659c9575883ab3f897a",
-    "acceptedGatewayAndMigrationArtifact": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de"
+    "acceptedGatewayAndMigrationArtifact": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0",
+    "acceptedImageSourceCommit": "cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf"
   },
   "backupAcceptance": {
     "verdict": "BACKUP_ARTIFACT_ACCEPTED_FOR_ISOLATED_RESTORE",
@@ -34,7 +35,7 @@
   },
   "rootProbe": {
     "path": "isolated-release-probe.sh",
-    "sha256": "1e5693903325e47394745e9c29b34dc38445ee8834f999dc38b6d38ea3ad5b39",
+    "sha256": "6d2a94713d280038b0ebee856d9aded763a6d5683b3c65d77a2c6e2ee1599077",
     "checksumBound": true,
     "packageChecksumValidation": true,
     "rootRequired": true,
@@ -61,8 +62,8 @@
     "pairedHelperAndLedgerSubstitutionRefused": true
   },
   "runtimeArtifactBindings": {
-    "failure-diagnostics.sh": "85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9",
-    "bounded-operations.sh": "7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57",
+    "failure-diagnostics.sh": "a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87",
+    "bounded-operations.sh": "ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d",
     "probe-output-helpers.sh": "64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7",
     "restore-verification.sh": "996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547",
     "postgres-startup.sh": "54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3",
@@ -74,7 +75,7 @@
     "synthetic-scraper-harness.js": "8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c",
     "gateway-client-harness.js": "f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428",
     "scraper-runtime-contract.js": "d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3",
-    "scraper-runtime-source-ledger.json": "45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f"
+    "scraper-runtime-source-ledger.json": "ded897ff7ce2d4a4781e34748b2acdde9cf3eb02a212007cca75bb4e6b62381e"
   },
   "productionGitPreGate": {
     "productionPath": "/opt/crm",
@@ -609,6 +610,46 @@
     "rootProbeRerun": true,
     "productionMutation": false
   },
+  "e2eNormalizationProgressDiagnosis": {
+    "firstFailureReportPath": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.1e5693903325e47394745e9c29b34dc38445ee8834f999dc38b6d38ea3ad5b39.json",
+    "firstFailureReportSha256": "807579b2726cc81256cb0538ed85058f0655d2af8235c23eaf0be297ade0cc4d",
+    "diagnosticFailureReportPath": "/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.2d582fafca22477df2146563452a4838a8c10fd12d94067e0983591a4e5444a9.json",
+    "diagnosticFailureReportSha256": "27e78043015d3fe0a0f164f09a7c109dedd353800028537d62fca02368e7884c",
+    "terminalLogSha256": "f0e52dbb059b5963b7deb02b57d6ad938c7667ed93cad697a3407d8efe38c0ae",
+    "evidenceClassification": "RAW_QUARANTINE_NORMALIZATION_CURSOR_STALL_PROVEN",
+    "rawRows": 1001,
+    "normalizedRows": 998,
+    "comparedRows": 864,
+    "processingRows": 0,
+    "blockedRawSequences": [500, 1000],
+    "followingAvailableSequence": 1001,
+    "cleanupCompleted": true,
+    "productionMutation": false
+  },
+  "rawQuarantineNormalizationRepair": {
+    "sourceCommit": "cbd790f7fddc85b5e4991af70fdb5966991f83e3",
+    "claimOptIn": "allowQuarantinedReplay",
+    "rawReplayQuarantinedRequired": true,
+    "normalizerOnlyOptIn": true,
+    "terminalNormalizationReason": "RAW_PAYLOAD_UNAVAILABLE",
+    "cursorAdvancesPastQuarantine": true,
+    "gatewayTestCount": 199,
+    "gatewayTestsPassed": true,
+    "typecheckPassed": true
+  },
+  "imagePublicationRepair": {
+    "sourceCommit": "cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf",
+    "workflowRunId": 30493941962,
+    "workflowConclusion": "success",
+    "immutableTagUsesFullSourceSha": true,
+    "gatewayDigest": "sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0",
+    "scraperDigest": "sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b",
+    "architecture": "linux/amd64",
+    "gatewayRuntimeUidGid": "1000:1000",
+    "scraperRuntimeUidGid": "1001:1001",
+    "securityGatePassed": true,
+    "pullByDigestPassed": true
+  },
   "migrationValidation": {
     "exactSqlBindingCount": 8,
     "exactSqlSha256Bound": true,
@@ -639,19 +680,19 @@
     "rootAttemptRerun": false
   },
   "support": {
-    "boundedOperations": {"path": "bounded-operations.sh", "sha256": "7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57"},
+    "boundedOperations": {"path": "bounded-operations.sh", "sha256": "ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d"},
     "outputHelpers": {"path": "probe-output-helpers.sh", "sha256": "64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7"},
     "restoreVerification": {"path": "restore-verification.sh", "sha256": "996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547"},
-    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9"},
+    "failureDiagnostics": {"path": "failure-diagnostics.sh", "sha256": "a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87"},
     "residualCleanup": {"path": "residual-cleanup.sh", "sha256": "d25ece44a93cca76a3105fbc2c7d6af98771b7597ed45fdc1b843a24c155b016", "runtimeConsumed": false, "dormantEvidenceOnly": true},
     "postgresStartup": {"path": "postgres-startup.sh", "sha256": "54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3"},
     "migrationPreflight": {"path": "migration-preflight.sh", "sha256": "71ac68dde88da402179fce82f970b4820b7b696a98886a9135fb410d54d89735"},
     "scraperHarness": {"path": "synthetic-scraper-harness.js", "sha256": "8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c"},
     "scraperRuntimeContract": {"path": "scraper-runtime-contract.js", "sha256": "d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3"},
-    "scraperRuntimeSourceLedger": {"path": "scraper-runtime-source-ledger.json", "sha256": "45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f"},
+    "scraperRuntimeSourceLedger": {"path": "scraper-runtime-source-ledger.json", "sha256": "ded897ff7ce2d4a4781e34748b2acdde9cf3eb02a212007cca75bb4e6b62381e"},
     "gatewayClientHarness": {"path": "gateway-client-harness.js", "sha256": "f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428"},
-    "faultTests": {"path": "test-bounded-faults.sh", "sha256": "06abefbc4852df919209dedb0377b80790d17a195406d0cdd59e8e3761dbbbd7", "scenarioCount": 20},
-    "outputHandoffTests": {"path": "test-output-handoff.sh", "sha256": "050f8bc711c5707d670431da9cf6485143d59975e904af55eca5b45d71ff935d", "executableCount": 36, "requiredMatrixCount": 25, "actualHelpersCovered": ["bootstrap_capture", "bootstrap_verify_runtime_artifact", "sha_of", "free_bytes_at", "hash_sorted_text", "hash_raw_command", "cleanup_inventory", "image_presence", "psql_value"]},
+    "faultTests": {"path": "test-bounded-faults.sh", "sha256": "134a7cbfb5412f627de5fb4c8ee0cdbef78357c0db8565c02313a56f6ddd4a4e", "scenarioCount": 20},
+    "outputHandoffTests": {"path": "test-output-handoff.sh", "sha256": "92ded6cd122626b29a228379b29f5eddff5805b3a99211506f09f3a249e6b9a8", "executableCount": 36, "requiredMatrixCount": 25, "actualHelpersCovered": ["bootstrap_capture", "bootstrap_verify_runtime_artifact", "sha_of", "free_bytes_at", "hash_sorted_text", "hash_raw_command", "cleanup_inventory", "image_presence", "psql_value"]},
     "outputTargetCollisionTests": {"path": "test-output-target-collisions.sh", "sha256": "121348d27d139a96b879c9a019054acf13b99a3e4771769f94265c9afc467e36", "scenarioCount": 30, "dynamicScopeCollisionProven": true, "staticSourceAudit": "PASS"},
     "migrationPreflightTests": {"path": "test-migration-preflight.sh", "sha256": "de9610321ec5d993d62a421910de7a977a137d6620f7696e53fbb891a0ed613b", "scenarioCount": 26, "oldExit2Reproduced": true, "correctedPermissionFixturePassed": true},
     "postgresNetworkAliasTests": {"path": "test-postgres-network-alias.sh", "sha256": "c233598365cd317328028ff93ab3c6d0ecfb14a6a79a800fd4e5e5e6c88ebfce", "scenarioCount": 28, "structuredJson": true, "explicitAliasBinding": true},
@@ -661,14 +702,14 @@
     "migrationVerificationTests": {"path": "test-migration-verification.sh", "sha256": "3623721cff88f9cbf651ae2b83ec8fdae3448eaa3fe1c0399300e307467359de", "scenarioCount": 14, "exactFailureReportAccepted": true, "exactSourceMappingProven": true},
     "failureHandoffTests": {"path": "test-failure-handoff.sh", "sha256": "53c3954196349081cbbe579db83ee4d3af6c5531cf10820dbe4c61fe7738ac4a", "scenarioCount": 29, "primaryEmergencyUnavailableInvariant": true},
     "scraperDefaultOffTests": {"path": "test-scraper-default-off.js", "sha256": "43493a5875733ca8a405cc4a38b62498f8ba437042165152ca15e4729b3eb03c", "scenarioCount": 30, "realCheckoutLoaderExecuted": true, "actualHarnessExecuted": true, "actualTransportInterceptorExecuted": true},
-    "scraperRealLoaderTests": {"path": "test-scraper-real-loader.js", "sha256": "bcf2a681bf93aafc0c0cfabee0f1d634fbed396c0eb9b87dccff9fd7b8549060", "scenarioCount": 30, "realLoaderExecuted": true, "faultMatrixExecuted": true},
-    "scraperRuntimeContractTests": {"path": "test-scraper-runtime-contract.js", "sha256": "bce1bd2f1de739605b0c83721de883cb361f2b07f167bd4280c1364ab37f57cd", "scenarioCount": 20, "realRuntimeContractCodeExecuted": true},
+    "scraperRealLoaderTests": {"path": "test-scraper-real-loader.js", "sha256": "fc5dbcf86c15d08bf0e3af052b9a0afee39e7a09e77904e1f60dc0833fd78f72", "scenarioCount": 30, "realLoaderExecuted": true, "faultMatrixExecuted": true},
+    "scraperRuntimeContractTests": {"path": "test-scraper-runtime-contract.js", "sha256": "f57e20fd0cb13e977c99626e84de487bb7cffdfe68607479b74cd4a227812194", "scenarioCount": 20, "realRuntimeContractCodeExecuted": true},
     "remainingTailTests": {"path": "test-remaining-tail-contract.sh", "sha256": "28d24b134bf3c0b9828332029e757229d308e665494f1e504c3b1e16fdfc6402", "scenarioCount": 42, "requiredRegressionCasesCovered": 32, "textCanaryUnchanged": true},
     "phaseRegistryTests": {"path": "test-phase-registry.sh", "sha256": "471a835269eb5f5050ee3a9be9fc9b577e9c6dd95b626af76f0643c2acb5f0eb", "scenarioCount": 20, "registeredPhaseCount": 30, "routeTransitionCount": 31},
     "staleClassificationTests": {"path": "test-stale-classification.sh", "sha256": "66cdc6ddd8aed5cc46f217f0eaf7d3cd58950db92294bb28749d7c2b25ecfa1f", "scenarioCount": 20, "transientPollRecovered": true, "primaryFailurePreserved": true},
     "prismaDiffSemanticTests": {"path": "test-prisma-diff-semantics.sh", "sha256": "1fbe354666adfb60d28f1e303937471795a27f4e0ce8204631ea1d8648cb05df", "scenarioCount": 36, "realGateExecuted": true, "rawSqlAbsent": true},
     "prismaParserFailureTests": {"path": "test-prisma-parser-failures.sh", "sha256": "0d06eb8a58aaea52cf0e106f3801653d70e22ac383e8de5aba451956e4c85880", "scenarioCount": 25, "realisticPrismaFixtures": true, "preciseFailureCodes": true},
-    "nonRootTests": {"path": "test-package.sh", "sha256": "46c255172cbc63d7d282e8dde31da6a138852a69fbf9546be829d9baba462162", "contractCount": 85, "expectedPassCountWithoutShellcheck": 84, "shellcheckOnlyIfInstalled": true},
+    "nonRootTests": {"path": "test-package.sh", "sha256": "fdd54876075612d5e06ba1b1ac08c44fb739dbec22ac428b269fe0521a3d42de", "contractCount": 85, "expectedPassCountWithoutShellcheck": 84, "shellcheckOnlyIfInstalled": true},
     "forensicReport": {"path": "forensic-report.json", "sha256": "5ef9a8f43c2cf82f7d6e34b8c7cd631046034552c1f0d28cec191c44920aadff"},
     "ledgerFailureForensic": {"path": "ledger-failure-forensic.json", "sha256": "d57b544131c0db3a74b9b8b3a71e3f06e3d97c24a9536d6b1e4e03647ebce174"},
     "postgresStartupForensic": {"path": "postgres-startup-forensic.json", "sha256": "7c5b71609fa593fc28fc78583c60c275beb9b2b73194daecf3a20a0cc042e560"},
@@ -683,9 +724,9 @@
     "cleanupContract": {"path": "cleanup-contract.md", "sha256": "3fe7de2ed0f4e7f5e5a168f9f18676c10776912308c8281b2e1e78c8da3d1bc2"},
     "migrationPreflightForensic": {"path": "migration-preflight-forensic.json", "sha256": "4970c83398a77c757647c8fec36cf8432fc94aecbc12de33e4825f844dfc4a6a"},
     "postgresNetworkAliasForensic": {"path": "postgres-network-alias-forensic.json", "sha256": "c4f1ff71a9b902483ee3eb5e83bb467a54ef181055f023e53dab6eb00e6532bf"},
-    "reportSchema": {"path": "report-schema.json", "sha256": "7bb6756518280ce66381ee6ede31a5acf5e7565beb8e9b6b0b089ca60d70c517"},
+    "reportSchema": {"path": "report-schema.json", "sha256": "73ae761f082aba4585a0ba6c726d5b88c79c3933d59585db25f0c8ee2caecebc"},
     "productionImmutabilityContract": {"path": "production-immutability-contract.md", "sha256": "91c50d1635eaa337935a732fcc8677479dd255b284a9e33f129e6f74f0e66863"},
-    "ownerInstructions": {"path": "owner-instructions.md", "sha256": "d85fba94a83a288b921f1dd702a055fda6012d77a5b57bfdb54934784ab0eb05"},
+    "ownerInstructions": {"path": "owner-instructions.md", "sha256": "ea0b636c5f2806e6f43224fac92f11c4810ae0e01cb57c63630945d08cb0ad9c"},
     "residualCleanupContract": {"path": "failed-run-residual-cleanup-contract.md", "sha256": "234126454605fb663730f354b020d9045dedd022fab18d5c5dcfcf67a521663a"},
     "verificationFailureHandoffForensic": {"path": "verification-failure-handoff-forensic.json", "sha256": "d781ee2ac0aaa2cb016080a6ce4a7a87fcd3f933c9a43a726658663182e36902"},
     "realPrismaDiffParseFailureForensic": {"path": "real-prisma-diff-parse-failure-forensic.json", "sha256": "d7a9f989c9cffaeac4bfff279ee63bb9b74b18b7b92d266c320d64a044392073"},
@@ -694,7 +735,7 @@
     "scraperRuntimePhaseRegistryForensic": {"path": "scraper-runtime-phase-registry-forensic.json", "sha256": "9c6793cb3b931211706aa5a1b93a61fd53a8c93290bbc934bd25cf4305508e6e"},
     "scraperRuntimeFileBindingForensic": {"path": "scraper-runtime-file-binding-forensic.json", "sha256": "a96644cbb09960cbc60099a4ba70017004b8f6ac7ef8604307228f20f39824ad"},
     "e2ePostgresRestartCallbackForensic": {"path": "e2e-postgres-restart-callback-forensic.json", "sha256": "1f6c233f6b388579ec96692e0ffb707bffb8e922dd60860520fa3b0e40db7946"},
-    "acceptedImages": {"path": "accepted-images.json", "sha256": "34b21b5feedff8594bf507f469f9c132778a9c21e2fb0f694485bd42253a2296"}
+    "acceptedImages": {"path": "accepted-images.json", "sha256": "d6436388c7946dd7f96c268926a64fc3d4d2df54e3c7f2ddb0d06b7253a3aa8f"}
   },
   "supersedes": {
     "path": "release/personal-max-stage8b1r/root-preflight/probe-isolated-images.sh",

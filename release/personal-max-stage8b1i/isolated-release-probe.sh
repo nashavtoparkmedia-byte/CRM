@@ -19,12 +19,13 @@ readonly DUMP_PATH='/var/backups/personal-max-stage8b1s-production-backup/databa
 readonly DUMP_SHA256='c76bda794cc053d32a42f41209d55252d90d02d3806f45c5b16a275544262a3f'
 readonly DUMP_BYTES=45284314
 readonly DUMP_OBJECTS=581
-readonly GATEWAY_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
-readonly SCRAPER_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
+readonly GATEWAY_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0'
+readonly SCRAPER_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b'
 readonly POSTGRES_IMAGE='sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229'
-readonly GATEWAY_DIGEST='sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
-readonly SCRAPER_DIGEST='sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
-readonly SCRAPER_EXPECTED_OCI_REVISION='33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a'
+readonly GATEWAY_DIGEST='sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0'
+readonly SCRAPER_DIGEST='sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b'
+readonly GATEWAY_EXPECTED_OCI_REVISION='cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf'
+readonly SCRAPER_EXPECTED_OCI_REVISION='cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf'
 readonly SCRAPER_LIVE_CAPTURE_SHA256='7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5'
 readonly SCRAPER_AUTHENTICATED_DRAIN_SHA256='1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37'
 readonly SCRAPER_TRANSPORT_INTERCEPTOR_SHA256='35c979f12d67447d176bac3641fc38eb75fa6a1adc0633e19171a6512e7192f7'
@@ -39,8 +40,8 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9'
-readonly BOUNDED_OPERATIONS_SHA256='7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57'
+readonly FAILURE_DIAGNOSTICS_SHA256='a1786f957b4eba2b0c9f7949a582151d1f02f475a2910fca59ec87a9341ffe87'
+readonly BOUNDED_OPERATIONS_SHA256='ce80db46f64b767ab8435e965d5a9868b6c9b7d7389ad8903b62b20a4e715e3d'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
@@ -52,7 +53,7 @@ readonly PRISMA_DIFF_SEMANTIC_PARSER_SHA256='87024a3151d183292b1c94cd5c681470bd0
 readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c'
 readonly GATEWAY_CLIENT_HARNESS_SHA256='f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428'
 readonly SCRAPER_RUNTIME_CONTRACT_SHA256='d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3'
-readonly SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256='45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f'
+readonly SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256='ded897ff7ce2d4a4781e34748b2acdde9cf3eb02a212007cca75bb4e6b62381e'
 readonly DEFAULT_OFF_HARNESS_MODE='default-off'
 readonly PRODUCTION_PROJECT_LABEL='com.docker.compose.project=crm'
 readonly STAGE_LABEL='personal-max.stage=8b1i'
@@ -602,7 +603,7 @@ pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker volume insp
 pm_expect_failure_bounded docker_metadata 60 METADATA_TIMEOUT docker volume inspect "$SPOOL_VOLUME" >/dev/null 2>&1
 
 verify_image() {
-  local ref=$1 digest=$2 role=$3 os architecture digests
+  local ref=$1 digest=$2 role=$3 expected_revision=$4 os architecture digests revision
   pm_capture_bounded os docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED docker image inspect --format '{{.Os}}' "$ref" || return
   pm_capture_bounded architecture docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED docker image inspect --format '{{.Architecture}}' "$ref" || return
   [[ $os == linux && $architecture == amd64 ]]
@@ -612,6 +613,12 @@ verify_image() {
     PROBE_ERROR_CLASSIFICATION=REGISTRY_DIGEST_MISMATCH
     return 67
   fi
+  pm_capture_bounded revision docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+    docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$ref" || return
+  [[ $revision == "$expected_revision" ]] || {
+    PROBE_ERROR_CLASSIFICATION=REGISTRY_DIGEST_MISMATCH
+    return 67
+  }
   pm_capture_bounded history docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED docker image history --no-trunc --format '{{.CreatedBy}}' "$ref" || return
   if grep -Eiq '(password|secret|token|private[_ -]?key)[=:][^ ]{8,}' <<<"$history"; then
     fail 67 image_verification docker_metadata
@@ -624,7 +631,7 @@ if [[ $GATEWAY_PREEXISTING_BEFORE_PULL == false ]]; then
   pm_pull_exact gateway "$GATEWAY_IMAGE" "$TMP/gateway-pull.log" "$TMP/gateway-pull.stderr"
   GATEWAY_ACQUIRED_DURING_PROBE=true
 fi
-verify_image "$GATEWAY_IMAGE" "$GATEWAY_DIGEST" gateway
+verify_image "$GATEWAY_IMAGE" "$GATEWAY_DIGEST" gateway "$GATEWAY_EXPECTED_OCI_REVISION"
 pm_enter_phase post_pull_storage_gate filesystem_metadata
 free_bytes_at FREE_BYTES_AFTER_GATEWAY_PULL /var/lib/docker
 pm_check_disk_gate "$FREE_BYTES_AFTER_GATEWAY_PULL" "$((REQUIRED_FREE_BYTES + PROBE_BUDGET_BYTES))" POST_PULL_DISK_GATE_FAILED
@@ -633,7 +640,7 @@ if [[ $SCRAPER_PREEXISTING_BEFORE_PULL == false ]]; then
   pm_pull_exact scraper "$SCRAPER_IMAGE" "$TMP/scraper-pull.log" "$TMP/scraper-pull.stderr"
   SCRAPER_ACQUIRED_DURING_PROBE=true
 fi
-verify_image "$SCRAPER_IMAGE" "$SCRAPER_DIGEST" scraper
+verify_image "$SCRAPER_IMAGE" "$SCRAPER_DIGEST" scraper "$SCRAPER_EXPECTED_OCI_REVISION"
 pm_enter_phase post_pull_storage_gate filesystem_metadata
 free_bytes_at FREE_BYTES_AFTER_SCRAPER_PULL /var/lib/docker
 pm_check_disk_gate "$FREE_BYTES_AFTER_SCRAPER_PULL" "$((REQUIRED_FREE_BYTES + PROBE_BUDGET_BYTES))" POST_PULL_DISK_GATE_FAILED
@@ -644,8 +651,8 @@ if [[ $GATEWAY_ACQUIRED_DURING_PROBE == true || $SCRAPER_ACQUIRED_DURING_PROBE =
 fi
 
 pm_enter_phase image_verification docker_metadata
-verify_image "$GATEWAY_IMAGE" "$GATEWAY_DIGEST" gateway
-verify_image "$SCRAPER_IMAGE" "$SCRAPER_DIGEST" scraper
+verify_image "$GATEWAY_IMAGE" "$GATEWAY_DIGEST" gateway "$GATEWAY_EXPECTED_OCI_REVISION"
+verify_image "$SCRAPER_IMAGE" "$SCRAPER_DIGEST" scraper "$SCRAPER_EXPECTED_OCI_REVISION"
 pm_capture_bounded postgres_image_facts docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED docker image inspect --format '{{.Os}}|{{.Architecture}}|{{.Id}}' "$POSTGRES_IMAGE"
 [[ $postgres_image_facts == "linux|amd64|$POSTGRES_DIGEST" ]]
 pm_capture_bounded gateway_user docker_disposable 120 DISPOSABLE_DOCKER_TIMEOUT DISPOSABLE_DOCKER_FAILED \
@@ -1064,9 +1071,22 @@ jq -e 'all(.missingAuthDenied,.invalidAuthDenied,.wrongAccountDenied,.requestSiz
   PROBE_ERROR_CLASSIFICATION=GATEWAY_CLIENT_VERIFICATION_FAILED; false;
 }
 
+e2e_poll_attempt=0
+e2e_last_normalized=-1
+e2e_last_compared=-1
 e2e_results_ready() {
+  local raw_progress processing_progress
+  e2e_poll_attempt=$((e2e_poll_attempt + 1))
   psql_value normalized "SELECT count(*) FROM \"MaxInboundNormalizationResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B')" || return
   psql_value compared "SELECT count(*) FROM \"MaxShadowComparisonResult\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B')" || return
+  if [[ $normalized != "$e2e_last_normalized" || $compared != "$e2e_last_compared" || $((e2e_poll_attempt % 30)) -eq 0 ]]; then
+    psql_value raw_progress "SELECT count(*) FROM \"MaxRawTransportEvent\" WHERE \"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B')" || return
+    psql_value processing_progress "SELECT count(*) FROM \"MaxRawTransportProcessing\" p JOIN \"MaxRawTransportEvent\" r ON r.\"observationId\"=p.\"observationId\" WHERE r.\"accountId\" IN ('$ACCOUNT_A','$ACCOUNT_B') AND p.state='processing'" || return
+    printf 'STAGE8B1I_E2E_PROGRESS=attempt:%s,raw:%s,normalized:%s,compared:%s,processing:%s\n' \
+      "$e2e_poll_attempt" "$raw_progress" "$normalized" "$compared" "$processing_progress"
+    e2e_last_normalized=$normalized
+    e2e_last_compared=$compared
+  fi
   [[ $normalized -ge 1001 && $compared -ge 1001 ]]
 }
 
@@ -1138,6 +1158,7 @@ pm_capture_bounded applied_names report_render 60 METADATA_TIMEOUT SUCCESS_REPOR
 pm_capture_bounded retry_count report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_RENDER_FAILED jq -r '.retryCount' "$TMP/retry-a.json"
 pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_RENDER_FAILED jq -n \
   --arg generatedAt "$generated_at" --arg scriptSha256 "$PM_SCRIPT_SHA256" \
+  --arg imageSourceCommit "$GATEWAY_EXPECTED_OCI_REVISION" \
   --arg backupReportSha256 "$BACKUP_REPORT_SHA256" --arg dumpSha256 "$DUMP_SHA256" --argjson dumpBytes "$DUMP_BYTES" \
   --arg gatewayRef "$GATEWAY_IMAGE" --arg scraperRef "$SCRAPER_IMAGE" --arg postgresqlRef "$POSTGRES_IMAGE" \
   --arg gatewayUser "$gateway_user" --arg scraperUser "$scraper_user" --arg postgresqlVersion "$server_version" \
@@ -1275,15 +1296,17 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
         aliasArrayPresent:$postgresAliasArrayPresent,expectedAliasPresent:$postgresExpectedAliasPresent,
         unexpectedNetworkPresent:$postgresUnexpectedNetworkPresent,containerRunning:$postgresContainerRunning,
         rawInspectCaptured:false,databaseUrlCaptured:false,credentialsCaptured:false}},
-    images:{gateway:{ref:$gatewayRef,runtimeUser:$gatewayUser,digestVerified:true,preexistingBeforePull:$gatewayPreexisting,
+    images:{gateway:{ref:$gatewayRef,runtimeUser:$gatewayUser,digestVerified:true,sourceRevisionVerified:true,
+        ociRevision:$imageSourceCommit,preexistingBeforePull:$gatewayPreexisting,
         imageIdBeforePull:$gatewayImageIdBefore,acquiredDuringProbe:$gatewayAcquired},
-      scraper:{ref:$scraperRef,runtimeUser:$scraperUser,digestVerified:true,preexistingBeforePull:$scraperPreexisting,
+      scraper:{ref:$scraperRef,runtimeUser:$scraperUser,digestVerified:true,sourceRevisionVerified:true,
+        ociRevision:$imageSourceCommit,preexistingBeforePull:$scraperPreexisting,
         imageIdBeforePull:$scraperImageIdBefore,acquiredDuringProbe:$scraperAcquired},
       postgresql:{ref:$postgresqlRef,version:$postgresqlVersion,digestVerified:true,exactProductionImageId:true},
       architecture:"linux/amd64",mutableTags:false,retained:true},
     scraperRuntimeContract:{verified:$scraperRuntimeVerified,status:"PASS",
-      imageDigest:"sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
-      expectedSourceCommit:"33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",ociRevision:$scraperRuntimeRevision,
+      imageDigest:"sha256:e8a6fa389e187129664bc8b66ad883d6ec15308a2d837ee9ab1a7baec89aa43b",
+      expectedSourceCommit:"cd0ba4f7d25fa81f0d3c5427bf06e4cb48a651bf",ociRevision:$scraperRuntimeRevision,
       nodeVersionCategory:$scraperRuntimeNodeCategory,nodeMajor:$scraperRuntimeNodeMajor,
       runtimeUid:$scraperRuntimeUid,runtimeGid:$scraperRuntimeGid,
       moduleSha256:{liveCaptureAdapter:$scraperRuntimeLiveSha,authenticatedCaptureDrain:$scraperRuntimeDrainSha,
