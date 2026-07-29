@@ -276,8 +276,8 @@
             "properties": {
               "checkId": {"enum": ["NONE", "SCRAPER_RUNTIME_CONTRACT_CHECK", "SCRAPER_RUNTIME_SOURCE_CHECK", "SCRAPER_RUNTIME_EXPORT_CHECK", "SCRAPER_RUNTIME_DISABLED_ADAPTER_CHECK", "SCRAPER_RUNTIME_INTERCEPTOR_CHECK", "SCRAPER_DEFAULT_OFF_RUN_CHECK", "SCRAPER_DEFAULT_OFF_RESULT_CHECK", "SPOOL_INITIALIZATION_CHECK"]},
               "substep": {"enum": ["NOT_STARTED", "runtime_revision", "runtime_contract", "runtime_source", "runtime_exports", "runtime_disabled_adapter", "runtime_interceptor", "default_off_mode_binding", "default_off_harness", "default_off_result_validation", "spool_initialization"]},
-              "commandCategory": {"enum": ["not_observed", "invocation_contract", "docker_image_inspect", "docker_run", "internal_validator", "docker_volume_initialization"]},
-              "executableCategory": {"enum": ["not_observed", "shell_builtin", "docker_cli", "jq", "posix_shell"]},
+              "commandCategory": {"enum": ["not_observed", "invocation_contract", "filesystem_binding", "docker_image_inspect", "docker_run", "internal_validator", "docker_volume_initialization"]},
+              "executableCategory": {"enum": ["not_observed", "shell_builtin", "coreutils", "docker_cli", "jq", "posix_shell"]},
               "commandStarted": {"type": "boolean"},
               "attemptCount": {"type": "integer", "minimum": 0},
               "elapsedSeconds": {"type": "integer", "minimum": 0},

@@ -317,8 +317,8 @@ bash -c 'set -Eeuo pipefail; eval "$1"; for name in output status line data sour
 pass actual_bootstrap_collision_matrix
 
 PACKAGE_ROOT="$SCRIPT_DIR" bash -c 'set -Eeuo pipefail; eval "$1";
-  bootstrap_verify_runtime_artifact failure-diagnostics.sh bbe8ff3e4afd429b3d59ef0fc1d219139266611fcbeafca91657ae3e57eeddec
-  bootstrap_verify_runtime_artifact bounded-operations.sh c731452d3ea5d987c0e0318223b08a6e4a55b8b19dc1f8a265c5c8353b04a88b
+  bootstrap_verify_runtime_artifact failure-diagnostics.sh 85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9
+  bootstrap_verify_runtime_artifact bounded-operations.sh 7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57
   bootstrap_verify_runtime_artifact probe-output-helpers.sh 64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7
   bootstrap_verify_runtime_artifact restore-verification.sh 996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547
   bootstrap_verify_runtime_artifact postgres-startup.sh 54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3

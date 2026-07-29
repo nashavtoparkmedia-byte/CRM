@@ -51,7 +51,7 @@ function validateFixture(name, value, expectedClassification = 'NONE') {
 
 function invocationBlocks(probeSource) {
   const lines = probeSource.split('\n')
-  const mounts = lines.map((line, index) => line.includes('synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro') ? index : -1)
+  const mounts = lines.map((line, index) => line.includes('$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness.js:ro') ? index : -1)
     .filter(index => index >= 0)
   return mounts.map(index => {
     let start = index

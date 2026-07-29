@@ -255,7 +255,7 @@ async function main() {
   const probeSource = fs.readFileSync(probePath, 'utf8')
   assert.match(probeSource, /pm_enter_phase scraper_runtime_contract/)
   assert.match(probeSource, /--network none/)
-  assert.match(probeSource, /scraper-runtime-contract\.js:\/tmp\/stage8b1i-runtime-contract\.js:ro/)
+  assert.match(probeSource, /\$SCRAPER_RUNTIME_CONTRACT_RUNNER:\/tmp\/stage8b1i-runtime-contract\.js:ro/)
   assert.match(probeSource, /SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256/)
   pass('pinned_image_contract_invocation_source')
 

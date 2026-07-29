@@ -80,7 +80,8 @@ pm_error_classification_is_safe() {
       PRIOR_RESIDUAL_REPORT_REFUSED | PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
       GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
       GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | \
-      SCRAPER_RUNTIME_CONTRACT_REQUIRED | SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
+      SCRAPER_RUNTIME_CONTRACT_REQUIRED | SCRAPER_RUNTIME_FILE_BINDING_MISMATCH | \
+      SCRAPER_RUNTIME_FILE_UNREADABLE | SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
       SCRAPER_RUNTIME_MODULE_MISSING | SCRAPER_RUNTIME_MODULE_SYMLINK | \
       SCRAPER_RUNTIME_EXPORT_MISSING | SCRAPER_RUNTIME_DISABLED_ADAPTER_INVALID | \
       SCRAPER_RUNTIME_INTERCEPTOR_INVALID | SCRAPER_RUNTIME_NODE_UNSUPPORTED | \
@@ -299,8 +300,8 @@ pm_scraper_begin_operation() {
   pm_scraper_check_id_is_safe "$check_id" || return 64
   case $substep in runtime_revision | runtime_contract | runtime_source | runtime_exports | runtime_disabled_adapter | runtime_interceptor | \
     default_off_mode_binding | default_off_harness | default_off_result_validation | spool_initialization) ;; *) return 64 ;; esac
-  case $command_category in invocation_contract | docker_image_inspect | docker_run | internal_validator | docker_volume_initialization) ;; *) return 64 ;; esac
-  case $executable_category in shell_builtin | docker_cli | jq | posix_shell) ;; *) return 64 ;; esac
+  case $command_category in invocation_contract | filesystem_binding | docker_image_inspect | docker_run | internal_validator | docker_volume_initialization) ;; *) return 64 ;; esac
+  case $executable_category in shell_builtin | coreutils | docker_cli | jq | posix_shell) ;; *) return 64 ;; esac
   case $container_state in not_observed | command_not_started | running | exited | unavailable) ;; *) return 64 ;; esac
   SCRAPER_CHECK_ID=$check_id
   SCRAPER_SUBSTEP=$substep
@@ -695,6 +696,54 @@ pm_require_scraper_runtime_contract() {
   if [[ ${SCRAPER_RUNTIME_CONTRACT_VERIFIED:-false} != true ]]; then
     PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_CONTRACT_REQUIRED
     return 65
+  fi
+  PROBE_ERROR_CLASSIFICATION=NONE
+}
+
+pm_runtime_mode_allows_read() {
+  local file_uid=${1:-} file_gid=${2:-} mode=${3:-} runtime_uid=${4:-} runtime_gid=${5:-} digit
+  [[ $file_uid =~ ^[0-9]+$ && $file_gid =~ ^[0-9]+$ && $mode =~ ^[0-7]{3,4}$ && \
+    $runtime_uid =~ ^[0-9]+$ && $runtime_gid =~ ^[0-9]+$ ]] || return 64
+  mode=${mode: -3}
+  if [[ $file_uid == "$runtime_uid" ]]; then digit=${mode:0:1}
+  elif [[ $file_gid == "$runtime_gid" ]]; then digit=${mode:1:1}
+  else digit=${mode:2:1}
+  fi
+  (( (10#$digit & 4) == 4 ))
+}
+
+pm_prepare_runtime_file() {
+  local source=${1:-} target=${2:-} expected_sha=${3:-} runtime_uid=${4:-} runtime_gid=${5:-}
+  local __pm_runtime_sha='' __pm_runtime_stat='' observed_uid observed_gid observed_mode remainder
+  if [[ ! -f $source || -L $source || -e $target || -L $target || ! $expected_sha =~ ^[0-9a-f]{64}$ || \
+      ! $runtime_uid =~ ^[0-9]+$ || ! $runtime_gid =~ ^[0-9]+$ ]]; then
+    PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_FILE_BINDING_MISMATCH
+    return 64
+  fi
+  if ! pm_capture_bounded_internal __pm_runtime_sha filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED \
+      sha256sum -- "$source"; then
+    PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_FILE_BINDING_MISMATCH
+    return 66
+  fi
+  __pm_runtime_sha=${__pm_runtime_sha%% *}
+  if [[ $__pm_runtime_sha != "$expected_sha" ]]; then
+    PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_FILE_BINDING_MISMATCH
+    return 66
+  fi
+  if ! pm_run_bounded filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED cp -- "$source" "$target" || \
+      ! pm_run_bounded filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED chmod 0444 "$target" || \
+      ! pm_capture_bounded_internal __pm_runtime_stat filesystem_metadata 30 METADATA_TIMEOUT METADATA_FAILED \
+        stat -Lc '%u:%g:%a' "$target"; then
+    PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_FILE_UNREADABLE
+    return 74
+  fi
+  observed_uid=${__pm_runtime_stat%%:*}
+  remainder=${__pm_runtime_stat#*:}
+  observed_gid=${remainder%%:*}
+  observed_mode=${remainder##*:}
+  if ! pm_runtime_mode_allows_read "$observed_uid" "$observed_gid" "$observed_mode" "$runtime_uid" "$runtime_gid"; then
+    PROBE_ERROR_CLASSIFICATION=SCRAPER_RUNTIME_FILE_UNREADABLE
+    return 77
   fi
   PROBE_ERROR_CLASSIFICATION=NONE
 }

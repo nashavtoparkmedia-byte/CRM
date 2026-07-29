@@ -39,8 +39,8 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='bbe8ff3e4afd429b3d59ef0fc1d219139266611fcbeafca91657ae3e57eeddec'
-readonly BOUNDED_OPERATIONS_SHA256='c731452d3ea5d987c0e0318223b08a6e4a55b8b19dc1f8a265c5c8353b04a88b'
+readonly FAILURE_DIAGNOSTICS_SHA256='85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9'
+readonly BOUNDED_OPERATIONS_SHA256='7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
@@ -891,6 +891,35 @@ pm_enter_phase gateway_active docker_disposable
 start_gateway GATEWAY_ACTIVE_READINESS_FAILED
 
 pm_enter_phase scraper_runtime_contract synthetic_harness
+pm_scraper_begin_operation SCRAPER_RUNTIME_SOURCE_CHECK runtime_source filesystem_binding coreutils command_not_started
+pm_scraper_mark_started
+scraper_runtime_prepare_status=0
+if pm_run_bounded filesystem_metadata 30 METADATA_TIMEOUT SCRAPER_RUNTIME_FILE_UNREADABLE \
+    mkdir -m 0755 "$TMP/scraper-runtime"; then
+  SCRAPER_RUNTIME_CONTRACT_RUNNER="$TMP/scraper-runtime/scraper-runtime-contract.js"
+  SYNTHETIC_SCRAPER_HARNESS_RUNNER="$TMP/scraper-runtime/synthetic-scraper-harness.js"
+  GATEWAY_CLIENT_HARNESS_RUNNER="$TMP/scraper-runtime/gateway-client-harness.js"
+else
+  scraper_runtime_prepare_status=$?
+fi
+if (( scraper_runtime_prepare_status == 0 )); then
+  if pm_prepare_runtime_file "$PACKAGE_ROOT/scraper-runtime-contract.js" "$SCRAPER_RUNTIME_CONTRACT_RUNNER" \
+      "$SCRAPER_RUNTIME_CONTRACT_SHA256" 1001 1001; then :; else scraper_runtime_prepare_status=$?; fi
+fi
+if (( scraper_runtime_prepare_status == 0 )); then
+  if pm_prepare_runtime_file "$PACKAGE_ROOT/synthetic-scraper-harness.js" "$SYNTHETIC_SCRAPER_HARNESS_RUNNER" \
+      "$SYNTHETIC_SCRAPER_HARNESS_SHA256" 1001 1001; then :; else scraper_runtime_prepare_status=$?; fi
+fi
+if (( scraper_runtime_prepare_status == 0 )); then
+  if pm_prepare_runtime_file "$PACKAGE_ROOT/gateway-client-harness.js" "$GATEWAY_CLIENT_HARNESS_RUNNER" \
+      "$GATEWAY_CLIENT_HARNESS_SHA256" 1001 1001; then :; else scraper_runtime_prepare_status=$?; fi
+fi
+if (( scraper_runtime_prepare_status != 0 )); then
+  pm_scraper_finish_operation "$scraper_runtime_prepare_status" \
+    "${PROBE_ERROR_CLASSIFICATION:-SCRAPER_RUNTIME_FILE_UNREADABLE}" command_not_started
+  false
+fi
+pm_scraper_finish_operation 0 NONE command_not_started
 pm_scraper_begin_operation SCRAPER_RUNTIME_SOURCE_CHECK runtime_revision docker_image_inspect docker_cli not_observed
 pm_scraper_mark_started
 if pm_capture_bounded scraper_oci_revision docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
@@ -914,7 +943,7 @@ pm_scraper_mark_started
 scraper_runtime_status=0
 if pm_write_bounded "$TMP/scraper-runtime-contract.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SCRAPER_RUNTIME_OUTPUT_MISSING \
   docker run --rm --name "$PREFIX-scraper-runtime-contract" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
-  -v "$PACKAGE_ROOT/scraper-runtime-contract.js:/tmp/stage8b1i-runtime-contract.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
+  -v "$SCRAPER_RUNTIME_CONTRACT_RUNNER:/tmp/stage8b1i-runtime-contract.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
   /tmp/stage8b1i-runtime-contract.js; then
   scraper_runtime_status=0
 else
@@ -947,7 +976,7 @@ pm_scraper_mark_started
 if pm_write_bounded "$TMP/default-off.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SCRAPER_DEFAULT_OFF_HARNESS_EXITED \
   docker run --rm --name "$PREFIX-scraper-default-off" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
   -e STAGE8B1I_HARNESS_MODE="$DEFAULT_OFF_HARNESS_MODE" \
-  -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
+  -v "$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
   /tmp/stage8b1i-harness.js; then
   pm_scraper_finish_operation 0 NONE exited
 else
@@ -986,7 +1015,7 @@ pm_write_bounded "$TMP/capture-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_T
   -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a -e STAGE8B1I_HARNESS_MODE=capture-only \
   -e STAGE8B1I_FRAME_COUNT=500 -e STAGE8B1I_IDENTICAL_COUNT=100 \
-  -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
+  -v "$SPOOL_VOLUME:/spool" -v "$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
 pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/retry-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_OUTAGE_FAILED \
@@ -994,7 +1023,7 @@ pm_write_bounded "$TMP/retry-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIM
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a -e MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture \
   -e STAGE8B1I_HARNESS_MODE=retry-only -e STAGE8B1I_DRAIN_ATTEMPTS=10 \
-  -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
+  -v "$SPOOL_VOLUME:/spool" -v "$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
 jq -e '.retryCount>0 and .pendingAfter>0 and .lostBeforeSpoolCount==0' "$TMP/retry-a.json" >/dev/null || {
   PROBE_ERROR_CLASSIFICATION=E2E_OUTAGE_FAILED; false;
@@ -1008,7 +1037,7 @@ pm_write_bounded "$TMP/capture-b.json" synthetic_harness 600 SYNTHETIC_HARNESS_T
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_B" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_B" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-b -e MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture \
   -e STAGE8B1I_HARNESS_MODE=capture-and-drain -e STAGE8B1I_FRAME_COUNT=500 -e STAGE8B1I_IDENTICAL_COUNT=0 \
-  -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
+  -v "$SPOOL_VOLUME:/spool" -v "$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
 pm_require_scraper_runtime_contract
 pm_write_bounded "$TMP/drain-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
@@ -1016,7 +1045,7 @@ pm_write_bounded "$TMP/drain-a.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIM
   --env-file "$TMP/client.env" -e MAX_PERSONAL_ACCOUNT_ID="$ACCOUNT_A" -e MAX_PERSONAL_LIVE_CAPTURE_ENABLED="$ACCOUNT_A" \
   -e MAX_PERSONAL_CAPTURE_SPOOL_PATH=/spool/account-a -e MAX_PERSONAL_CAPTURE_INGRESS_URL=http://max-personal-gateway:8080/v1/capture \
   -e STAGE8B1I_HARNESS_MODE=drain-only -e STAGE8B1I_DRAIN_ATTEMPTS=120 \
-  -v "$SPOOL_VOLUME:/spool" -v "$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp/stage8b1i-harness.js:ro" \
+  -v "$SPOOL_VOLUME:/spool" -v "$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness.js:ro" \
   --entrypoint node "$SCRAPER_IMAGE" /tmp/stage8b1i-harness.js
 pm_run_bounded synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT E2E_RECOVERY_FAILED \
   docker run --rm --name "$PREFIX-spool-permissions" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
@@ -1029,7 +1058,7 @@ pm_enter_phase gateway_active synthetic_http
 pm_write_bounded "$TMP/gateway-client.json" synthetic_http 600 GATEWAY_CLIENT_TIMEOUT GATEWAY_CLIENT_VERIFICATION_FAILED \
   docker run --rm --name "$PREFIX-gateway-client" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network "$NETWORK" \
   --env-file "$TMP/client.env" -e STAGE8B1I_ACCOUNT_A="$ACCOUNT_A" \
-  -v "$PACKAGE_ROOT/gateway-client-harness.js:/tmp/stage8b1i-client.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
+  -v "$GATEWAY_CLIENT_HARNESS_RUNNER:/tmp/stage8b1i-client.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
   /tmp/stage8b1i-client.js
 jq -e 'all(.missingAuthDenied,.invalidAuthDenied,.wrongAccountDenied,.requestSizeLimit,.authenticatedIngress,.idempotentRetry; .==true)' "$TMP/gateway-client.json" >/dev/null || {
   PROBE_ERROR_CLASSIFICATION=GATEWAY_CLIENT_VERIFICATION_FAILED; false;

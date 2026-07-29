@@ -239,7 +239,7 @@ pass remaining_classification_allowlist
 runtime_contract_block=$(phase_block scraper_runtime_contract scraper_default_off)
 for evidence in 'SCRAPER_RUNTIME_SOURCE_CHECK' 'runtime_revision' \
   'org.opencontainers.image.revision' 'SCRAPER_RUNTIME_CONTRACT_CHECK' \
-  'scraper-runtime-contract.js:/tmp/stage8b1i-runtime-contract.js:ro' '--network none' \
+  'SCRAPER_RUNTIME_CONTRACT_RUNNER:/tmp/stage8b1i-runtime-contract.js:ro' '--network none' \
   'pm_validate_scraper_runtime_contract "$TMP/scraper-runtime-contract.json"'; do
   rg -F -- "$evidence" <<<"$runtime_contract_block" >/dev/null
 done
@@ -248,6 +248,69 @@ for forbidden in MAX_PERSONAL_ACCOUNT_ID MAX_PERSONAL_LIVE_CAPTURE_ENABLED \
   ! rg -F -- "$forbidden" <<<"$runtime_contract_block" >/dev/null
 done
 pass scraper_runtime_contract_runner_contract
+
+source_uid=$(stat -Lc %u "$SCRIPT_DIR/scraper-runtime-contract.js")
+source_gid=$(stat -Lc %g "$SCRIPT_DIR/scraper-runtime-contract.js")
+source_mode=$(stat -Lc %a "$SCRIPT_DIR/scraper-runtime-contract.js")
+[[ $source_mode == 600 ]]
+! pm_runtime_mode_allows_read "$source_uid" "$source_gid" "$source_mode" 1001 1001
+pass private_package_mode_reproduces_runtime_unreadability
+
+mkdir -m 0755 "$TEST_TMP/scraper-runtime"
+for artifact in scraper-runtime-contract.js synthetic-scraper-harness.js gateway-client-harness.js; do
+  artifact_sha=$(sha256sum "$SCRIPT_DIR/$artifact" | awk '{print $1}')
+  pm_prepare_runtime_file "$SCRIPT_DIR/$artifact" "$TEST_TMP/scraper-runtime/$artifact" "$artifact_sha" 1001 1001
+done
+pass three_runtime_files_prepared
+
+[[ $(find "$TEST_TMP/scraper-runtime" -maxdepth 1 -type f -printf '%m\n' | sort -u) == 444 ]]
+pass prepared_runtime_modes_are_0444
+
+for artifact in scraper-runtime-contract.js synthetic-scraper-harness.js gateway-client-harness.js; do
+  [[ $(sha256sum "$SCRIPT_DIR/$artifact" | awk '{print $1}') == \
+    "$(sha256sum "$TEST_TMP/scraper-runtime/$artifact" | awk '{print $1}')" ]]
+done
+pass prepared_runtime_hashes_are_exact
+
+for artifact in scraper-runtime-contract.js synthetic-scraper-harness.js gateway-client-harness.js; do
+  runtime_uid=$(stat -Lc %u "$TEST_TMP/scraper-runtime/$artifact")
+  runtime_gid=$(stat -Lc %g "$TEST_TMP/scraper-runtime/$artifact")
+  runtime_mode=$(stat -Lc %a "$TEST_TMP/scraper-runtime/$artifact")
+  pm_runtime_mode_allows_read "$runtime_uid" "$runtime_gid" "$runtime_mode" 1001 1001
+done
+pass prepared_runtime_files_readable_by_1001
+
+set +e
+pm_prepare_runtime_file "$SCRIPT_DIR/scraper-runtime-contract.js" \
+  "$TEST_TMP/scraper-runtime/scraper-runtime-contract.js" \
+  "$(sha256sum "$SCRIPT_DIR/scraper-runtime-contract.js" | awk '{print $1}')" 1001 1001
+existing_target_status=$?
+set -e
+[[ $existing_target_status -eq 64 && $PROBE_ERROR_CLASSIFICATION == SCRAPER_RUNTIME_FILE_BINDING_MISMATCH ]]
+pass existing_runtime_target_refused
+
+ln -s "$SCRIPT_DIR/scraper-runtime-contract.js" "$TEST_TMP/runtime-symlink.js"
+set +e
+pm_prepare_runtime_file "$TEST_TMP/runtime-symlink.js" "$TEST_TMP/scraper-runtime/symlink-target.js" \
+  d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3 1001 1001
+symlink_status=$?
+pm_prepare_runtime_file "$SCRIPT_DIR/scraper-runtime-contract.js" "$TEST_TMP/scraper-runtime/bad-hash.js" \
+  0000000000000000000000000000000000000000000000000000000000000000 1001 1001
+bad_hash_status=$?
+set -e
+[[ $symlink_status -eq 64 && $bad_hash_status -eq 66 && \
+  $PROBE_ERROR_CLASSIFICATION == SCRAPER_RUNTIME_FILE_BINDING_MISMATCH ]]
+pass symlink_and_hash_mismatch_refused
+
+[[ $(rg -c '^  if pm_prepare_runtime_file ' "$PROBE") -eq 3 ]]
+[[ $(rg -c '\$SYNTHETIC_SCRAPER_HARNESS_RUNNER:/tmp/stage8b1i-harness\.js:ro' "$PROBE") -eq 5 ]]
+[[ $(rg -c '\$SCRAPER_RUNTIME_CONTRACT_RUNNER:/tmp/stage8b1i-runtime-contract\.js:ro' "$PROBE") -eq 1 ]]
+[[ $(rg -c '\$GATEWAY_CLIENT_HARNESS_RUNNER:/tmp/stage8b1i-client\.js:ro' "$PROBE") -eq 1 ]]
+! rg -F '$PACKAGE_ROOT/synthetic-scraper-harness.js:/tmp' "$PROBE" >/dev/null
+! rg -F '$PACKAGE_ROOT/scraper-runtime-contract.js:/tmp' "$PROBE" >/dev/null
+! rg -F '$PACKAGE_ROOT/gateway-client-harness.js:/tmp' "$PROBE" >/dev/null
+PROBE_ERROR_CLASSIFICATION=NONE
+pass every_container_script_mount_uses_verified_runtime_copy
 
 mapfile -t runtime_gate_lines < <(rg -n '^pm_require_scraper_runtime_contract$' "$PROBE" | cut -d: -f1)
 mapfile -t scraper_runner_lines < <(rg -n 'pm_write_bounded "\$TMP/(default-off|capture-a|retry-a|capture-b|drain-a)\.json"' "$PROBE" | cut -d: -f1)
@@ -326,7 +389,7 @@ pass recovery_account_isolation_runner_contract
 
 gateway_client_block=$(phase_block gateway_active e2e_verification)
 for evidence in 'PREFIX-gateway-client' '--network "$NETWORK"' '--env-file "$TMP/client.env"' \
-  'STAGE8B1I_ACCOUNT_A="$ACCOUNT_A"' 'gateway-client-harness.js:/tmp/stage8b1i-client.js:ro' \
+  'STAGE8B1I_ACCOUNT_A="$ACCOUNT_A"' 'GATEWAY_CLIENT_HARNESS_RUNNER:/tmp/stage8b1i-client.js:ro' \
   'GATEWAY_CLIENT_VERIFICATION_FAILED'; do
   rg -F -- "$evidence" <<<"$gateway_client_block" >/dev/null
 done
@@ -357,5 +420,5 @@ pass final_storage_production_report_contract
 [[ -z $(env GIT_OPTIONAL_LOCKS=0 git -C "$TEXT_CANARY_REPOSITORY" status --porcelain=v1 --untracked-files=all) ]]
 pass text_canary_unchanged
 
-[[ $PASS_COUNT -eq 33 ]]
-printf 'REMAINING_TAIL_TEST_COUNT=33\nREQUIRED_REGRESSION_CASES_COVERED=23\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
+[[ $PASS_COUNT -eq 41 ]]
+printf 'REMAINING_TAIL_TEST_COUNT=41\nREQUIRED_REGRESSION_CASES_COVERED=31\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'

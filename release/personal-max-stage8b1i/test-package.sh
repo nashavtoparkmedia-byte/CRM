@@ -41,6 +41,7 @@ readonly REAL_PRISMA_FAILURE_FORENSIC="$SCRIPT_DIR/real-prisma-diff-parse-failur
 readonly SCRAPER_DEFAULT_OFF_FORENSIC="$SCRIPT_DIR/scraper-default-off-failure-forensic.json"
 readonly PINNED_SCRAPER_RUNTIME_FORENSIC="$SCRIPT_DIR/pinned-scraper-runtime-failure-forensic.json"
 readonly SCRAPER_RUNTIME_PHASE_FORENSIC="$SCRIPT_DIR/scraper-runtime-phase-registry-forensic.json"
+readonly SCRAPER_RUNTIME_FILE_FORENSIC="$SCRIPT_DIR/scraper-runtime-file-binding-forensic.json"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly SCRAPER_RUNTIME_CONTRACT="$SCRIPT_DIR/scraper-runtime-contract.js"
 readonly SCRAPER_RUNTIME_SOURCE_LEDGER="$SCRIPT_DIR/scraper-runtime-source-ledger.json"
@@ -63,6 +64,8 @@ readonly PINNED_SCRAPER_RUNTIME_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-
 readonly PINNED_SCRAPER_RUNTIME_FAILURE_REPORT_SHA='c1e5dbb40a02e6748ca32deaa3a8c7eeea61348de704bcebdea1f35466767eed'
 readonly PHASE_REGISTRY_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.ca1f811d7f7af81a26829babc8fce9daad7828f8a120674d47b4679e01240901.json'
 readonly PHASE_REGISTRY_FAILURE_REPORT_SHA='196cd960155f99fe75ee309776dee2f78d661ef91907ccde53442e97f1976130'
+readonly SCRAPER_RUNTIME_FILE_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.fccc17159460d10dfcc5e87318f1a6c9007bca07f222f681ecc698ee3f0b4306.json'
+readonly SCRAPER_RUNTIME_FILE_FAILURE_REPORT_SHA='ce4cb70bab0c052b9d86e63cc4b8ea5f88aa148b3774370fa3eb805c7daaa734'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly NODE_BIN=${NODE_BIN:-node}
@@ -337,6 +340,56 @@ jq -e '.schemaVersion==1 and
   .safety.textCanaryTouched==false and .safety.stage8B2Started==false' \
   "$SCRAPER_RUNTIME_PHASE_FORENSIC" >/dev/null
 pass scraper_runtime_phase_registry_failure_acceptance
+[[ -f $SCRAPER_RUNTIME_FILE_FAILURE_REPORT && ! -L $SCRAPER_RUNTIME_FILE_FAILURE_REPORT && \
+  -r $SCRAPER_RUNTIME_FILE_FAILURE_REPORT && ! -w $SCRAPER_RUNTIME_FILE_FAILURE_REPORT ]]
+[[ $(stat -Lc '%U:%G:%a:%s' "$SCRAPER_RUNTIME_FILE_FAILURE_REPORT") == root:codexbot:640:9460 ]]
+[[ $(sha256sum -- "$SCRAPER_RUNTIME_FILE_FAILURE_REPORT" | awk '{print $1}') == "$SCRAPER_RUNTIME_FILE_FAILURE_REPORT_SHA" ]]
+jq -e '.schemaVersion==1 and .mode=="ISOLATED_RELEASE_PROOF_FAILURE" and
+  .generatedAt=="2026-07-29T21:06:47Z" and
+  .script.sha256=="fccc17159460d10dfcc5e87318f1a6c9007bca07f222f681ecc698ee3f0b4306" and
+  .script.checksumBound==true and .phase=="scraper_runtime_contract" and
+  .safeCommandClass=="synthetic_harness" and .classification=="SCRAPER_RUNTIME_OUTPUT_MISSING" and
+  .checkId=="SCRAPER_RUNTIME_SOURCE_CHECK" and .sourceLine==927 and .exitCode==1 and
+  .scraperOperation.checkId=="SCRAPER_RUNTIME_SOURCE_CHECK" and
+  .scraperOperation.substep=="runtime_source" and .scraperOperation.commandStarted==true and
+  .scraperOperation.attemptCount==1 and .scraperOperation.originalExitCode==1 and
+  .scraperOperation.primaryClassification=="SCRAPER_RUNTIME_OUTPUT_MISSING" and
+  .scraperRuntimeContract.verified==false and .scraperRuntimeContract.envelopeObserved==false and
+  .scraperRuntimeContract.status=="NOT_OBSERVED" and
+  .scraperHarnessEnvelope.observed==false and .scraperHarnessEnvelope.status=="NOT_OBSERVED" and
+  .cleanup.completed==true and .cleanup.errorClassification=="NONE" and
+  .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and
+  .cleanup.volumesRemaining==0 and .cleanup.tempFilesRemaining==0 and
+  .productionImmutability.acceptedProductionHead==.productionImmutability.observedProductionHead and
+  .productionImmutability.acceptedProductionStatusV2RawSha256==.productionImmutability.observedProductionStatusV2RawSha256 and
+  .productionImmutability.productionDatabaseConnections==0 and
+  ([.diagnostics.rawCommandCaptured,.diagnostics.rawSqlCaptured,.diagnostics.rawStderrCaptured,
+    .diagnostics.environmentValuesCaptured,.diagnostics.credentialsCaptured,.diagnostics.messageDataCaptured,
+    .diagnostics.providerPayloadCaptured,.safety.productionDDL,.safety.productionDML,
+    .safety.productionMigration,.safety.restart,.safety.deploy,.safety.browserLaunched,
+    .safety.maxContacted,.safety.providerAction,.safety.productionNetworkAttached,
+    .safety.productionVolumeMounted,.safety.profileMounted] | all(.==false))' \
+  "$SCRAPER_RUNTIME_FILE_FAILURE_REPORT" >/dev/null
+jq -e '.schemaVersion==1 and .incident=="SCRAPER_RUNTIME_BIND_MOUNT_PERMISSION_FAILURE" and
+  .failedAttempt.failureReportSha256=="ce4cb70bab0c052b9d86e63cc4b8ea5f88aa148b3774370fa3eb805c7daaa734" and
+  .evidenceAssessment.classification=="A" and
+  .evidenceAssessment.classificationName=="SCRAPER_RUNTIME_BIND_MOUNT_PERMISSION_DEFECT_PROVEN" and
+  .evidenceAssessment.packageArtifactMode=="0600" and
+  .evidenceAssessment.acceptedScraperRuntimeUid==1001 and
+  .evidenceAssessment.directPackageBindReadableByRuntime==false and
+  .diagnosticProof.runtimeContractExitCode==0 and .diagnosticProof.runtimeContractStatus=="PASS" and
+  .diagnosticProof.defaultOffExitCode==0 and .diagnosticProof.defaultOffStatus=="PASS" and
+  .systematicRepair.directPrivatePackageMountsRemoved==true and
+  .systematicRepair.runtimeFileMode=="0444" and
+  .systematicRepair.allSevenContainerScriptMountsRebound==true and
+  .systematicRepair.bindingMismatchClassification=="SCRAPER_RUNTIME_FILE_BINDING_MISMATCH" and
+  .systematicRepair.unreadableClassification=="SCRAPER_RUNTIME_FILE_UNREADABLE" and
+  .systematicRepair.remainingTailScenarioCount==41 and
+  .systematicRepair.remainingTailRequiredRegressionCases==31 and
+  .safety.rootProbeExecuted==true and .safety.productionMutation==false and
+  .safety.maxContacted==false and .safety.providerAction==false and .safety.stage8B2Started==false' \
+  "$SCRAPER_RUNTIME_FILE_FORENSIC" >/dev/null
+pass scraper_runtime_file_binding_failure_acceptance
 free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
@@ -515,12 +568,12 @@ failure_handoff_output=$("$FAILURE_HANDOFF_TESTS")
 pass failure_handoff_regression
 
 remaining_tail_output=$("$REMAINING_TAIL_TESTS")
-[[ $remaining_tail_output == *'REMAINING_TAIL_TEST_COUNT=33'* && \
-  $remaining_tail_output == *'REQUIRED_REGRESSION_CASES_COVERED=23'* && \
+[[ $remaining_tail_output == *'REMAINING_TAIL_TEST_COUNT=41'* && \
+  $remaining_tail_output == *'REQUIRED_REGRESSION_CASES_COVERED=31'* && \
   $remaining_tail_output == *'ROOT_PROBE_EXECUTED=NO'* && \
   $remaining_tail_output == *'DOCKER_EXECUTED=NO'* && \
   $remaining_tail_output == *'DATABASE_CONNECTED=NO'* ]]
-[[ $(grep -c '=PASS$' <<<"$remaining_tail_output") -eq 33 ]]
+[[ $(grep -c '=PASS$' <<<"$remaining_tail_output") -eq 41 ]]
 pass remaining_tail_regression
 
 phase_registry_output=$("$PHASE_REGISTRY_TESTS")
@@ -579,8 +632,8 @@ prisma_parser_failure_output=$($PRISMA_PARSER_FAILURE_TESTS)
 [[ $(grep -c '^PASS ' <<<"$prisma_parser_failure_output") -eq 25 ]]
 pass prisma_parser_failure_regression
 
-required_regression_cases=$((14 + 25 + 23 + 30 + 30 + 20 + 20 + 20))
-[[ $required_regression_cases -eq 182 ]]
+required_regression_cases=$((14 + 25 + 31 + 30 + 30 + 20 + 20 + 20))
+[[ $required_regression_cases -eq 190 ]]
 pass required_regression_case_matrix
 
 migration_gate_output=$(sh "$MIGRATION_SQL_GATE" "$REPOSITORY_MIGRATIONS" "$MIGRATION_SQL_BINDINGS")
@@ -620,8 +673,8 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:bbe8ff3e4afd429b3d59ef0fc1d219139266611fcbeafca91657ae3e57eeddec" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:c731452d3ea5d987c0e0318223b08a6e4a55b8b19dc1f8a265c5c8353b04a88b" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
   "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
@@ -978,14 +1031,14 @@ jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILU
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="fccc17159460d10dfcc5e87318f1a6c9007bca07f222f681ecc698ee3f0b4306" and
+  .rootProbe.sha256=="b03ead64476b8823c9629e68959c981eaa8d1370d2d91dd8cf3a9cc035fa0239" and
   .rootProbe.runtimeArtifactBindingCount==14 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
   (.runtimeArtifactBindings|length)==14 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="bbe8ff3e4afd429b3d59ef0fc1d219139266611fcbeafca91657ae3e57eeddec" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="c731452d3ea5d987c0e0318223b08a6e4a55b8b19dc1f8a265c5c8353b04a88b" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="85893c747844fa456714e7bb04e805012017fff3a4861075884bedcd4aac85e9" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="7b8dbbca122ffa09e49ff6af22d918b7bcbe5ada3153807ab6e132c4bd162b57" and
   (.runtimeArtifactBindings|has("residual-cleanup.sh")|not) and
   .runtimeArtifactBindings["restore-verification.sh"]=="996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" and
   .runtimeArtifactBindings["postgres-startup.sh"]=="54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" and
@@ -1005,16 +1058,16 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .support.scraperRealLoaderTests.realLoaderExecuted==true and
   .support.scraperRuntimeContractTests.scenarioCount==20 and
   .support.scraperRuntimeContractTests.realRuntimeContractCodeExecuted==true and
-  .support.remainingTailTests.scenarioCount==33 and
-  .support.remainingTailTests.requiredRegressionCasesCovered==23 and
+  .support.remainingTailTests.scenarioCount==41 and
+  .support.remainingTailTests.requiredRegressionCasesCovered==31 and
   .support.phaseRegistryTests.scenarioCount==20 and
   .support.phaseRegistryTests.registeredPhaseCount==30 and
   .support.phaseRegistryTests.routeTransitionCount==31 and
   .support.staleClassificationTests.scenarioCount==20 and
   .support.staleClassificationTests.transientPollRecovered==true and
   .support.staleClassificationTests.primaryFailurePreserved==true and
-  .support.nonRootTests.contractCount==83 and
-  .support.nonRootTests.expectedPassCountWithoutShellcheck==82 and
+  .support.nonRootTests.contractCount==84 and
+  .support.nonRootTests.expectedPassCountWithoutShellcheck==83 and
   .support.prismaDiffSemanticTests.scenarioCount==36 and
   .support.prismaDiffSemanticTests.realGateExecuted==true and
   .support.prismaParserFailureTests.scenarioCount==25 and
@@ -1151,6 +1204,25 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .scraperRuntimePhaseRegistryRepair.runtimeContractRequiredBeforeEveryScraperHarnessMode==true and
   .scraperRuntimePhaseRegistryRepair.newScriptSha256=="fccc17159460d10dfcc5e87318f1a6c9007bca07f222f681ecc698ee3f0b4306" and
   .scraperRuntimePhaseRegistryRepair.rootProbeRerun==false and
+  .scraperRuntimeFileBindingRepair.failureReportSha256=="ce4cb70bab0c052b9d86e63cc4b8ea5f88aa148b3774370fa3eb805c7daaa734" and
+  .scraperRuntimeFileBindingRepair.terminalLogSha256=="308307561641d8653e246f59fa70b765d978c84dbf48da29a7ac470bbe3a69ae" and
+  .scraperRuntimeFileBindingRepair.evidenceClassification=="A" and
+  .scraperRuntimeFileBindingRepair.evidenceClassificationName=="SCRAPER_RUNTIME_BIND_MOUNT_PERMISSION_DEFECT_PROVEN" and
+  .scraperRuntimeFileBindingRepair.packageArtifactMode=="0600" and
+  .scraperRuntimeFileBindingRepair.acceptedScraperRuntimeUid==1001 and
+  .scraperRuntimeFileBindingRepair.directPackageBindReadableByRuntime==false and
+  .scraperRuntimeFileBindingRepair.diagnosticRuntimeContractPassed==true and
+  .scraperRuntimeFileBindingRepair.diagnosticDefaultOffPassed==true and
+  .scraperRuntimeFileBindingRepair.verifiedRuntimeFileMode=="0444" and
+  .scraperRuntimeFileBindingRepair.runtimeArtifactCopyCount==3 and
+  .scraperRuntimeFileBindingRepair.reboundContainerScriptMountCount==7 and
+  .scraperRuntimeFileBindingRepair.remainingTailScenarioCount==41 and
+  .scraperRuntimeFileBindingRepair.remainingTailRequiredRegressionCasesCovered==31 and
+  .scraperRuntimeFileBindingRepair.requiredRegressionCaseCount==190 and
+  .scraperRuntimeFileBindingRepair.newScriptSha256=="b03ead64476b8823c9629e68959c981eaa8d1370d2d91dd8cf3a9cc035fa0239" and
+  .scraperRuntimeFileBindingRepair.rootProbeRerun==true and
+  .scraperRuntimeFileBindingRepair.diagnosticDockerExecution==true and
+  .scraperRuntimeFileBindingRepair.productionMutation==false and
   .migrationValidation.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
   .migrationValidation.prismaDiffExpectedSemanticMode=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
   .migrationValidation.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
@@ -1169,10 +1241,10 @@ pass git_diff_check
 pass architecture_checksum
 
 if (( PACKAGE_SKIP_COUNT == 0 )); then
-  [[ $PACKAGE_PASS_COUNT -eq 83 ]]
+  [[ $PACKAGE_PASS_COUNT -eq 84 ]]
 else
-  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 82 ]]
+  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 83 ]]
 fi
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nSCRAPER_DEFAULT_OFF_TEST_COUNT=30\nSCRAPER_REAL_LOADER_TEST_COUNT=30\nSCRAPER_RUNTIME_CONTRACT_TEST_COUNT=20\nPHASE_REGISTRY_TEST_COUNT=20\nSTALE_CLASSIFICATION_TEST_COUNT=20\nREMAINING_TAIL_TEST_COUNT=33\nPRISMA_DIFF_SEMANTIC_TEST_COUNT=36\nPRISMA_PARSER_FAILURE_TEST_COUNT=25\nREQUIRED_REGRESSION_CASE_COUNT=182\n' \
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nSCRAPER_DEFAULT_OFF_TEST_COUNT=30\nSCRAPER_REAL_LOADER_TEST_COUNT=30\nSCRAPER_RUNTIME_CONTRACT_TEST_COUNT=20\nPHASE_REGISTRY_TEST_COUNT=20\nSTALE_CLASSIFICATION_TEST_COUNT=20\nREMAINING_TAIL_TEST_COUNT=41\nPRISMA_DIFF_SEMANTIC_TEST_COUNT=36\nPRISMA_PARSER_FAILURE_TEST_COUNT=25\nREQUIRED_REGRESSION_CASE_COUNT=190\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"
