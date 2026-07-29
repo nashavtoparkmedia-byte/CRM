@@ -7,10 +7,10 @@
   "productionMutationPerformed": false,
   "productionStatusHashMode": "RAW_PORCELAIN_V2_STREAM",
   "acceptedIsolatedProbeScriptSha256": "959c3c3c55395934c6884db893e134c5411f12b873e6c1d351599fe55459539b",
-  "productionMigrationScriptSha256": "4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43",
+  "productionMigrationScriptSha256": "ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e",
   "hardBoundRuntimeArtifacts": {
     "failure-diagnostics.sh": "c720b22f0cf6644c5202f3daa4ccc9ae7de3d0e2ab6e8a3ebfb4bffa0d9be322",
-    "report-success.jq": "74ba29e22d8a52dce7b00d53ecb4b8a692489d25928cca974f56898433d0c8b5",
+    "report-success.jq": "01adea28765c72d786d667e15516437606a7f4062fdec897accae1a8e2d4d6bb",
     "validate-accepted-prisma-drift.awk": "eeeee2d4cb3e46d5b89e5f8d0601c6a7d8b160a3ef8d95fc0a722447967ca4f4",
     "postgres-database-url.py": "b0b447ac536a8d31936c6e9476de6f7cda74e791c0b6678869ac1467a17090b6"
   },
@@ -56,7 +56,7 @@
     "migrationStatementTimeoutMs": 840000,
     "prismaDiffStatementTimeoutMs": 540000,
     "networkProjectLabel": "crm",
-    "networkComposeLabel": "internal",
+    "networkComposeLabel": "crm_internal",
     "requiredPostgresAlias": "postgres",
     "runnerNetworkCount": 1,
     "postgresIdentityFenced": true,

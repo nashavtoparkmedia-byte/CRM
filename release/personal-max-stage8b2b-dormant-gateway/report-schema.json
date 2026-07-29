@@ -15,7 +15,7 @@
           "properties": {
             "isolatedReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
             "migrationReportSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "migrationScriptSha256": {"const": "4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43"}
+            "migrationScriptSha256": {"const": "ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e"}
           },
           "additionalProperties": false
         },
@@ -24,7 +24,7 @@
           "required": ["reportValidated", "productionMigrationScriptSha256", "gatewayImage", "isolatedReportShaCrossBound", "freshBackupStatus", "appliedCount", "runnerCleanup", "safety", "databaseBinding", "prismaDiffEmpty", "prismaDiffStatus", "prismaDiffRawSqlIncluded", "acceptedLedgerOnlyMigrations"],
           "properties": {
             "reportValidated": {"const": true},
-            "productionMigrationScriptSha256": {"const": "4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43"},
+            "productionMigrationScriptSha256": {"const": "ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e"},
             "gatewayImage": {"const": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0"},
             "isolatedReportShaCrossBound": {"const": true},
             "freshBackupStatus": {"const": "VALIDATED"},

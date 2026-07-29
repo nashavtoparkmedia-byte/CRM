@@ -8,7 +8,7 @@
 .databaseBinding.urlHost == "postgres" and .databaseBinding.urlPort == 5432 and .databaseBinding.urlSchema == "public" and
 .databaseBinding.inspectMode == "0600" and .databaseBinding.envMode == "0600" and
 (.databaseBinding.networkName|type) == "string" and (.databaseBinding.networkName|length) > 0 and
-.databaseBinding.networkProjectLabel == "crm" and .databaseBinding.networkComposeLabel == "internal" and
+.databaseBinding.networkProjectLabel == "crm" and .databaseBinding.networkComposeLabel == "crm_internal" and
 .databaseBinding.alias == "postgres" and .databaseBinding.runnerNetworkCount == 1 and
 .databaseBinding.containerIdentityStable == true and .databaseBinding.credentialsPrinted == false and
 .databaseBinding.credentialsInArguments == false and

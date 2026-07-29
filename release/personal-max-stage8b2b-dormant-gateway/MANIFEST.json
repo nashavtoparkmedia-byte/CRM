@@ -6,11 +6,11 @@
   "branch": "feature/personal-max-stage8b2-consolidated-20260728T194422Z",
   "image": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0",
   "runtimeUser": "1000:1000",
-  "rolloutScriptSha256": "0ef645cea80a7e136aeaa6a9f11024ccbab25cd1c324c9cd130ecea0d278df57",
+  "rolloutScriptSha256": "fabc5068c07a2e5cfc2c8c2f47d8417a52bc2a0a18c56d92b53a3f1f1fd5151d",
   "rollbackScriptSha256": "7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e",
   "hardBoundRuntimeArtifacts": {
     "failure-diagnostics.sh": "99250892456a7c5f308234a66bb65be1ad762665a0eef97d78d18477a7f9fa25",
-    "accepted-migration-report.jq": "1289ec47accdcf726de01de5969a0c1433d5c7f787c83efb064c6e1f9b309ea8",
+    "accepted-migration-report.jq": "fa32ff2f992b1fcde3e75488ae49b2f80935d578d5177b6ac68274b39f1f0740",
     "dormant-gateway.compose.yml": "1fb9f99692823c969650706b6db405e6afe3a7ec379ffa7fc1bbde9cf8a30292",
     "dormant-rollback.sh": "7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e"
   },
@@ -19,7 +19,7 @@
   "publicPorts": 0,
   "productionStatusHashMode": "RAW_PORCELAIN_V2_STREAM",
   "acceptedMigrationBinding": {
-    "productionMigrationScriptSha256": "4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43",
+    "productionMigrationScriptSha256": "ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e",
     "gatewayImage": "ghcr.io/nashavtoparkmedia-byte/crm-max-personal-gateway@sha256:669172fc4ac650e7bffa5c8095b812526f337c75c2811cde747d318d320eddd0",
     "isolatedReportShaCrossBound": true,
     "freshBackupValidated": true,

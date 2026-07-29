@@ -2,7 +2,7 @@
 
 The prepared future rollout template is:
 
-    sudo PERSONAL_MAX_ISOLATED_REPORT_SHA256=cc5e55c65469cac191ad5325d8bf576c7fa3fa844a5d6287fc801475d3324afd PERSONAL_MAX_MIGRATION_REPORT_SHA256=<accepted-migration-report-sha256> /bin/bash /home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2b-dormant-gateway/dormant-rollout.sh 0ef645cea80a7e136aeaa6a9f11024ccbab25cd1c324c9cd130ecea0d278df57
+    sudo PERSONAL_MAX_ISOLATED_REPORT_SHA256=cc5e55c65469cac191ad5325d8bf576c7fa3fa844a5d6287fc801475d3324afd PERSONAL_MAX_MIGRATION_REPORT_SHA256=<accepted-migration-report-sha256> /bin/bash /home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z/release/personal-max-stage8b2b-dormant-gateway/dormant-rollout.sh fabc5068c07a2e5cfc2c8c2f47d8417a52bc2a0a18c56d92b53a3f1f1fd5151d
 
 The separately authorized rollback template is:
 

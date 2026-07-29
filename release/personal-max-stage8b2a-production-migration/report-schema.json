@@ -38,7 +38,7 @@
             "envMode": {"const": "0600"},
             "networkName": {"type": "string", "minLength": 1},
             "networkProjectLabel": {"const": "crm"},
-            "networkComposeLabel": {"const": "internal"},
+            "networkComposeLabel": {"const": "crm_internal"},
             "alias": {"const": "postgres"},
             "runnerNetworkCount": {"const": 1},
             "containerIdentityStable": {"const": true},

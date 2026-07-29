@@ -7,7 +7,7 @@ readonly PACKAGE_ROOT='/home/codexbot/codex-work/crm-personal-max-stage8b2-conso
 readonly FAILURE_DIAGNOSTICS="$PACKAGE_ROOT/failure-diagnostics.sh"
 readonly FAILURE_DIAGNOSTICS_SHA='c720b22f0cf6644c5202f3daa4ccc9ae7de3d0e2ab6e8a3ebfb4bffa0d9be322'
 readonly REPORT_SUCCESS_FILTER="$PACKAGE_ROOT/report-success.jq"
-readonly REPORT_SUCCESS_FILTER_SHA='74ba29e22d8a52dce7b00d53ecb4b8a692489d25928cca974f56898433d0c8b5'
+readonly REPORT_SUCCESS_FILTER_SHA='01adea28765c72d786d667e15516437606a7f4062fdec897accae1a8e2d4d6bb'
 readonly PRISMA_DRIFT_VALIDATOR="$PACKAGE_ROOT/validate-accepted-prisma-drift.awk"
 readonly PRISMA_DRIFT_VALIDATOR_SHA='eeeee2d4cb3e46d5b89e5f8d0601c6a7d8b160a3ef8d95fc0a722447967ca4f4'
 readonly DATABASE_URL_HELPER="$PACKAGE_ROOT/postgres-database-url.py"
@@ -36,7 +36,7 @@ readonly PRISMA_DIFF_STATEMENT_TIMEOUT_MS=540000
 readonly PROJECT_LABEL='com.docker.compose.project=crm'
 readonly POSTGRES_LABEL='com.docker.compose.service=postgres'
 readonly NETWORK_PROJECT_LABEL='com.docker.compose.project=crm'
-readonly NETWORK_INTERNAL_LABEL='com.docker.compose.network=internal'
+readonly NETWORK_INTERNAL_LABEL='com.docker.compose.network=crm_internal'
 readonly RUNNER_STAGE_LABEL='personal-max.stage=8b2a'
 readonly RUNNER_SCRIPT_LABEL_KEY='personal-max.script-sha'
 readonly RUNNER_TOKEN_LABEL_KEY='personal-max.run-token'
@@ -274,7 +274,7 @@ jq -e '.mode=="PRODUCTION_BACKUP_METADATA" and .dump.structuralValidation=="PASS
 
 phase production_git_gate PRODUCTION_DRIFT
 [[ $(git -C /opt/crm rev-parse HEAD) == "$PRODUCTION_HEAD" ]]
-status_sha=$(git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}')
+status_sha=$(env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}')
 [[ $status_sha == "$PRODUCTION_STATUS_V2_SHA" ]]
 
 phase storage_gate STORAGE_REFUSAL
@@ -318,7 +318,7 @@ capture network_inspect_json "$COMMAND_TIMEOUT" docker network inspect "$NETWORK
 jq -e '
   length==1 and
   .[0].Labels["com.docker.compose.project"]=="crm" and
-  .[0].Labels["com.docker.compose.network"]=="internal"
+  .[0].Labels["com.docker.compose.network"]=="crm_internal"
 ' <<<"$network_inspect_json" >/dev/null || {
   MIGRATION_CLASSIFICATION='POSTGRES_NETWORK_IDENTITY_MISMATCH'
   false
@@ -453,7 +453,7 @@ phase production_immutability PRODUCTION_DRIFT
 PROJECT_HASH_AFTER=$(project_hash); RESTART_HASH_AFTER=$(restart_hash)
 [[ $PROJECT_HASH_AFTER == "$PROJECT_HASH_BEFORE" && $RESTART_HASH_AFTER == "$RESTART_HASH_BEFORE" ]]
 [[ $(git -C /opt/crm rev-parse HEAD) == "$PRODUCTION_HEAD" ]]
-status_after=$(git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}')
+status_after=$(env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}')
 [[ $status_after == "$PRODUCTION_STATUS_V2_SHA" ]]
 free_after=$(df -B1 --output=avail "$BACKUP_PARENT" | awk 'NR==2{print $1}'); (( free_after >= ROLLBACK_RESERVE_BYTES ))
 
@@ -472,7 +472,7 @@ jq -n --arg scriptSha "$SCRIPT_SHA" --arg isolatedSha "$PERSONAL_MAX_ISOLATED_RE
    bindings:{isolatedReportSha256:$isolatedSha,acceptedBackupReportSha256:"f9b29d5fbe69b9a87d402bab3a19a1079797640549078b17a6ba8e7280415566"},
    databaseBinding:{source:"postgres-container-env",projectLabel:"crm",serviceLabel:"postgres",
     envKeys:["POSTGRES_USER","POSTGRES_PASSWORD","POSTGRES_DB"],urlHost:"postgres",urlPort:5432,urlSchema:"public",
-    inspectMode:"0600",envMode:"0600",networkName:$network,networkProjectLabel:"crm",networkComposeLabel:"internal",
+    inspectMode:"0600",envMode:"0600",networkName:$network,networkProjectLabel:"crm",networkComposeLabel:"crm_internal",
     alias:"postgres",runnerNetworkCount:1,containerIdentityStable:true,credentialsPrinted:false,credentialsInArguments:false},
    image:{ref:$image,digestBound:true},freshBackup:{directory:$backupDirectory,dumpSha256:$dumpSha,dumpBytes:$dumpBytes,objectCount:$objectCount,configArchiveSha256:$configSha,status:"VALIDATED",structuralValidation:"PASS"},
    migration:{before:{total:46,finished:46,failed:0},after:{total:54,finished:54,failed:0},appliedNames:$applied,

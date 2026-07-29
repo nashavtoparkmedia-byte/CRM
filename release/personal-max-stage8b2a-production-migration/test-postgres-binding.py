@@ -186,7 +186,7 @@ class PostgresBindingCases(unittest.TestCase):
 
     def test_24_network_labels_are_fenced(self) -> None:
         self.assertIn('.Labels["com.docker.compose.project"]=="crm"', SCRIPT)
-        self.assertIn('.Labels["com.docker.compose.network"]=="internal"', SCRIPT)
+        self.assertIn('.Labels["com.docker.compose.network"]=="crm_internal"', SCRIPT)
         self.assertIn("POSTGRES_NETWORK_IDENTITY_MISMATCH", SCRIPT)
 
     def test_25_postgres_alias_is_required(self) -> None:

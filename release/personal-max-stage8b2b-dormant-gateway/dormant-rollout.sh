@@ -8,10 +8,10 @@ readonly COMPOSE_SOURCE_SHA='1fb9f99692823c969650706b6db405e6afe3a7ec379ffa7fc1b
 readonly FAILURE_DIAGNOSTICS="$PACKAGE_ROOT/failure-diagnostics.sh"
 readonly FAILURE_DIAGNOSTICS_SHA='99250892456a7c5f308234a66bb65be1ad762665a0eef97d78d18477a7f9fa25'
 readonly ACCEPTED_MIGRATION_FILTER="$PACKAGE_ROOT/accepted-migration-report.jq"
-readonly ACCEPTED_MIGRATION_FILTER_SHA='1289ec47accdcf726de01de5969a0c1433d5c7f787c83efb064c6e1f9b309ea8'
+readonly ACCEPTED_MIGRATION_FILTER_SHA='fa32ff2f992b1fcde3e75488ae49b2f80935d578d5177b6ac68274b39f1f0740'
 readonly ROLLBACK_SCRIPT="$PACKAGE_ROOT/dormant-rollback.sh"
 readonly ROLLBACK_SCRIPT_SHA='7dd4d63d3939ec263bbe9579d9ec5a0fc906b4a32234d5af935c0b37118b480e'
-readonly ACCEPTED_MIGRATION_SCRIPT_SHA='4939ce5a3646cfdaa8c4cc4e42eff24712cfcc338c7622869734a92c3bd8fb43'
+readonly ACCEPTED_MIGRATION_SCRIPT_SHA='ebbb471b4d491720b5fc888bc85eae989006a8ffd3d61f8011c6327f807b767e'
 readonly STATE_DIR='/var/lib/personal-max-stage8b2b'
 readonly COMPOSE_RUNTIME="$STATE_DIR/dormant-gateway.compose.yml"
 readonly ISOLATED_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.json'
@@ -153,7 +153,7 @@ done
 [[ $(sha_file "$ISOLATED_REPORT") == "$PERSONAL_MAX_ISOLATED_REPORT_SHA256" ]]
 [[ $(sha_file "$MIGRATION_REPORT") == "$PERSONAL_MAX_MIGRATION_REPORT_SHA256" ]]
 jq -e '.mode=="ISOLATED_RELEASE_PROOF" and .restore.FULL_RESTORE_PROOF=="PASS" and .migration.DISPOSABLE_MIGRATION_PROOF=="PASS" and
-  .migration.prismaDiffEmpty==false and .migration.prismaDiffStatus=="ACCEPTED_LEGACY_DRIVER_TELEGRAM_COLUMNS" and
+  .migration.prismaDiffEmpty==false and .migration.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
   .migration.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
   .productionImmutability.unchanged==true and .safety.maxContacted==false and .safety.providerAction==false' "$ISOLATED_REPORT" >/dev/null
 verify_subordinate "$ACCEPTED_MIGRATION_FILTER" "$PACKAGE_ROOT/accepted-migration-report.jq" "$ACCEPTED_MIGRATION_FILTER_SHA"
@@ -162,7 +162,7 @@ jq -e --arg isolated "$PERSONAL_MAX_ISOLATED_REPORT_SHA256" --arg expectedMigrat
 
 phase production_gate PRODUCTION_DRIFT
 [[ $(git -C /opt/crm rev-parse HEAD) == "$PRODUCTION_HEAD" ]]
-status_before=$(git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}'); [[ $status_before == "$PRODUCTION_STATUS_V2_SHA" ]]
+status_before=$(env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}'); [[ $status_before == "$PRODUCTION_STATUS_V2_SHA" ]]
 free_before=$(df -B1 --output=avail /var/lib/docker | awk 'NR==2{print $1}'); [[ $free_before =~ ^[0-9]+$ ]] && (( free_before >= REQUIRED_FREE_BYTES ))
 production_hash_before=$(project_hash); restart_hash_before=$(restart_hash)
 
@@ -197,7 +197,7 @@ phase production_immutability PRODUCTION_DRIFT
 production_hash_after=$(project_hash); restart_hash_after=$(restart_hash)
 [[ $production_hash_after == "$production_hash_before" && $restart_hash_after == "$restart_hash_before" ]]
 [[ $(git -C /opt/crm rev-parse HEAD) == "$PRODUCTION_HEAD" ]]
-status_after=$(git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}'); [[ $status_after == "$PRODUCTION_STATUS_V2_SHA" ]]
+status_after=$(env GIT_OPTIONAL_LOCKS=0 git -C /opt/crm status --porcelain=v2 --untracked-files=all | sha256sum | awk '{print $1}'); [[ $status_after == "$PRODUCTION_STATUS_V2_SHA" ]]
 
 phase report_handoff REPORT_HANDOFF_FAILED
 tmp_report=$(mktemp "/var/tmp/personal-max-stage8b2b-dormant-gateway.$SCRIPT_SHA.XXXXXX")
