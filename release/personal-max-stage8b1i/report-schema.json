@@ -37,7 +37,7 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF"}}},
       "then": {
-        "required": ["bindings", "postgresStartup", "restore", "migration", "images", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
+        "required": ["bindings", "postgresStartup", "restore", "migration", "images", "scraperRuntimeContract", "executable", "e2e", "cleanup", "productionImmutability", "storage"],
         "properties": {
           "bindings": {"type": "object", "required": ["backupReportSha256", "dumpSha256", "dumpBytes"]},
           "postgresStartup": {"type": "object", "required": ["status", "containerState", "containerExitCode", "healthStatus", "readinessAttempts", "readinessTransientCount", "readinessLastExit", "versionQueryAttempts", "versionTransientCount", "versionLastExit", "expectedVersionText", "expectedVersionNum", "observedVersionNum", "observedMajor", "observedMinor", "observedPatch", "versionClassification", "versionOutputCategory", "versionMatched", "elapsedSeconds", "rawLogsCaptured", "environmentValuesCaptured", "credentialsCaptured"]},
@@ -112,6 +112,35 @@
             }
           },
           "images": {"type": "object", "required": ["gateway", "scraper", "postgresql", "retained"]},
+          "scraperRuntimeContract": {
+            "type": "object",
+            "required": ["verified", "status", "imageDigest", "expectedSourceCommit", "ociRevision", "nodeVersionCategory", "nodeMajor", "runtimeUid", "runtimeGid", "moduleSha256", "exportTypes", "disabledAdapterValid", "interceptorValid", "sourceContentsCaptured", "environmentValuesCaptured", "profileDataCaptured", "persistedMessageContentsCaptured"],
+            "properties": {
+              "verified": {"const": true},
+              "status": {"const": "PASS"},
+              "imageDigest": {"const": "sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768"},
+              "expectedSourceCommit": {"const": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a"},
+              "ociRevision": {"const": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a"},
+              "nodeVersionCategory": {"const": "SUPPORTED_NODE_MAJOR"},
+              "nodeMajor": {"type": "integer", "minimum": 20, "maximum": 24},
+              "runtimeUid": {"const": 1001},
+              "runtimeGid": {"const": 1001},
+              "moduleSha256": {
+                "const": {
+                  "liveCaptureAdapter": "7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5",
+                  "authenticatedCaptureDrain": "1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37",
+                  "transportInterceptor": "35c979f12d67447d176bac3641fc38eb75fa6a1adc0633e19171a6512e7192f7"
+                }
+              },
+              "exportTypes": {"const": {"createLiveCaptureAdapterFromEnvironment": "function", "TransportInterceptor": "function"}},
+              "disabledAdapterValid": {"const": true},
+              "interceptorValid": {"const": true},
+              "sourceContentsCaptured": {"const": false},
+              "environmentValuesCaptured": {"const": false},
+              "profileDataCaptured": {"const": false},
+              "persistedMessageContentsCaptured": {"const": false}
+            }
+          },
           "executable": {"type": "object", "required": ["dormant", "invalidConfigFailsClosed", "missingHmacFailsClosed", "authenticatedIngress", "authDenied", "requestSizeLimit"]},
           "e2e": {"type": "object", "required": ["actualHook", "frames", "identicalFrames", "captureLoss", "accidentalDuplicateRawRows", "wrongAccount", "criticalSemanticRegressions"]},
           "cleanup": {"type": "object", "required": ["containersRemaining", "networksRemaining", "volumesRemaining", "tempFilesRemaining"]},
@@ -146,7 +175,7 @@
     {
       "if": {"properties": {"mode": {"const": "ISOLATED_RELEASE_PROOF_FAILURE"}}},
       "then": {
-        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "scraperOperation", "prismaDiffEvidence", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
+        "required": ["phase", "safeCommandClass", "classification", "checkId", "exitCode", "postgresStartup", "migrationPreflight", "scraperOperation", "scraperRuntimeContract", "scraperHarnessEnvelope", "prismaDiffEvidence", "ledgerDiagnostics", "cleanup", "images", "storage", "diagnostics", "productionImmutability"],
         "properties": {
           "phase": {"type": "string"},
           "classification": {"type": "string", "description": "Privacy-safe output-contract or migration-preflight classification; raw commands, stderr, URLs, credentials, SQL, and business data are excluded."},
@@ -180,6 +209,8 @@
               "MIGRATION_SCHEMA_INDEX_QUERY_CHECK", "MIGRATION_SCHEMA_INDEX_CHECK",
               "MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK", "MIGRATION_SCHEMA_UNIQUE_KEY_CHECK",
               "MIGRATION_PRISMA_DIFF_EXECUTION_CHECK", "MIGRATION_PRISMA_DIFF_GATE_CHECK",
+              "SCRAPER_RUNTIME_CONTRACT_CHECK", "SCRAPER_RUNTIME_SOURCE_CHECK", "SCRAPER_RUNTIME_EXPORT_CHECK",
+              "SCRAPER_RUNTIME_DISABLED_ADAPTER_CHECK", "SCRAPER_RUNTIME_INTERCEPTOR_CHECK",
               "SCRAPER_DEFAULT_OFF_RUN_CHECK", "SCRAPER_DEFAULT_OFF_RESULT_CHECK", "SPOOL_INITIALIZATION_CHECK"
             ]
           },
@@ -234,20 +265,77 @@
             "type": "object",
             "required": ["checkId", "substep", "commandCategory", "executableCategory", "commandStarted", "attemptCount", "elapsedSeconds", "originalExitCode", "containerStateCategory", "primaryClassification", "rawStderrCaptured", "rawCommandCaptured", "environmentValuesCaptured", "databaseUrlCaptured", "credentialsCaptured", "messageDataCaptured", "providerPayloadCaptured"],
             "properties": {
-              "checkId": {"enum": ["NONE", "SCRAPER_DEFAULT_OFF_RUN_CHECK", "SCRAPER_DEFAULT_OFF_RESULT_CHECK", "SPOOL_INITIALIZATION_CHECK"]},
-              "substep": {"enum": ["NOT_STARTED", "default_off_mode_binding", "default_off_harness", "default_off_result_validation", "spool_initialization"]},
-              "commandCategory": {"enum": ["not_observed", "invocation_contract", "docker_run", "internal_validator", "docker_volume_initialization"]},
+              "checkId": {"enum": ["NONE", "SCRAPER_RUNTIME_CONTRACT_CHECK", "SCRAPER_RUNTIME_SOURCE_CHECK", "SCRAPER_RUNTIME_EXPORT_CHECK", "SCRAPER_RUNTIME_DISABLED_ADAPTER_CHECK", "SCRAPER_RUNTIME_INTERCEPTOR_CHECK", "SCRAPER_DEFAULT_OFF_RUN_CHECK", "SCRAPER_DEFAULT_OFF_RESULT_CHECK", "SPOOL_INITIALIZATION_CHECK"]},
+              "substep": {"enum": ["NOT_STARTED", "runtime_revision", "runtime_contract", "runtime_source", "runtime_exports", "runtime_disabled_adapter", "runtime_interceptor", "default_off_mode_binding", "default_off_harness", "default_off_result_validation", "spool_initialization"]},
+              "commandCategory": {"enum": ["not_observed", "invocation_contract", "docker_image_inspect", "docker_run", "internal_validator", "docker_volume_initialization"]},
               "executableCategory": {"enum": ["not_observed", "shell_builtin", "docker_cli", "jq", "posix_shell"]},
               "commandStarted": {"type": "boolean"},
               "attemptCount": {"type": "integer", "minimum": 0},
               "elapsedSeconds": {"type": "integer", "minimum": 0},
               "originalExitCode": {"oneOf": [{"type": "integer", "minimum": 0, "maximum": 255}, {"const": "not_observed"}]},
               "containerStateCategory": {"enum": ["not_observed", "command_not_started", "running", "exited", "unavailable"]},
-              "primaryClassification": {"type": "string", "pattern": "^(NONE|SYNTHETIC_HARNESS_TIMEOUT|SCRAPER_DEFAULT_OFF_[A-Z0-9_]+|SPOOL_INITIALIZATION_FAILED)$"},
+              "primaryClassification": {"type": "string", "pattern": "^(NONE|SYNTHETIC_HARNESS_TIMEOUT|SCRAPER_RUNTIME_[A-Z0-9_]+|SCRAPER_DEFAULT_OFF_[A-Z0-9_]+|SPOOL_INITIALIZATION_FAILED)$"},
               "rawStderrCaptured": {"const": false},
               "rawCommandCaptured": {"const": false},
               "environmentValuesCaptured": {"const": false},
               "databaseUrlCaptured": {"const": false},
+              "credentialsCaptured": {"const": false},
+              "messageDataCaptured": {"const": false},
+              "providerPayloadCaptured": {"const": false}
+            }
+          },
+          "scraperRuntimeContract": {
+            "type": "object",
+            "required": ["verified", "envelopeObserved", "status", "failureStage", "failureCode", "imageDigest", "expectedSourceCommit", "ociRevision", "nodeVersionCategory", "nodeMajor", "runtimeUid", "runtimeGid", "moduleSha256", "exportTypes", "disabledAdapterValid", "interceptorValid", "sourceContentsCaptured", "environmentValuesCaptured", "profileDataCaptured", "persistedMessageContentsCaptured"],
+            "properties": {
+              "verified": {"type": "boolean"},
+              "envelopeObserved": {"type": "boolean"},
+              "status": {"enum": ["NOT_OBSERVED", "PASS", "FAIL"]},
+              "failureStage": {"enum": ["NOT_OBSERVED", "NONE", "SOURCE_METADATA", "MODULE_LOAD", "EXPORT_CONTRACT", "DISABLED_ADAPTER_CONTRACT", "INTERCEPTOR_CONTRACT", "DETACH", "RESULT_SERIALIZATION", "INTERNAL"]},
+              "failureCode": {"type": "string", "pattern": "^(NOT_OBSERVED|NONE|RUNTIME_[A-Z0-9_]+)$"},
+              "imageDigest": {"const": "sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768"},
+              "expectedSourceCommit": {"const": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a"},
+              "ociRevision": {"oneOf": [{"const": "not_observed"}, {"type": "string", "pattern": "^[0-9a-f]{40}$"}]},
+              "nodeVersionCategory": {"enum": ["NOT_OBSERVED", "SUPPORTED_NODE_MAJOR", "UNSUPPORTED_NODE_MAJOR"]},
+              "nodeMajor": {"type": "integer"},
+              "runtimeUid": {"type": "integer"},
+              "runtimeGid": {"type": "integer"},
+              "moduleSha256": {"type": "object"},
+              "exportTypes": {"type": "object"},
+              "disabledAdapterValid": {"type": "boolean"},
+              "interceptorValid": {"type": "boolean"},
+              "sourceContentsCaptured": {"const": false},
+              "environmentValuesCaptured": {"const": false},
+              "profileDataCaptured": {"const": false},
+              "persistedMessageContentsCaptured": {"const": false}
+            }
+          },
+          "scraperHarnessEnvelope": {
+            "type": "object",
+            "required": ["observed", "status", "selectedMode", "failureStage", "failureCode", "moduleLoadCompleted", "instrumentationInstalled", "instrumentationRestored", "disabledFactoryCalled", "disabledAdapterCreated", "frameDispatchAttempted", "frameDispatchCompleted", "healthReadCompleted", "detachCompleted", "resultSerialized", "suppressedLogCount", "suppressedWarnCount", "suppressedErrorCount", "rawErrorMessageCaptured", "rawStackCaptured", "rawStderrCaptured", "environmentValuesCaptured", "credentialsCaptured", "messageDataCaptured", "providerPayloadCaptured"],
+            "properties": {
+              "observed": {"type": "boolean"},
+              "status": {"enum": ["NOT_OBSERVED", "PASS", "FAIL"]},
+              "selectedMode": {"enum": ["NOT_SELECTED", "default-off", "capture-only", "retry-only", "capture-and-drain", "drain-only"]},
+              "failureStage": {"type": "string"},
+              "failureCode": {"type": "string"},
+              "moduleLoadCompleted": {"type": "boolean"},
+              "instrumentationInstalled": {"type": "boolean"},
+              "instrumentationRestored": {"type": "boolean"},
+              "disabledFactoryCalled": {"type": "boolean"},
+              "disabledAdapterCreated": {"type": "boolean"},
+              "frameDispatchAttempted": {"type": "boolean"},
+              "frameDispatchCompleted": {"type": "boolean"},
+              "healthReadCompleted": {"type": "boolean"},
+              "detachCompleted": {"type": "boolean"},
+              "resultSerialized": {"type": "boolean"},
+              "suppressedLogCount": {"type": "integer", "minimum": 0},
+              "suppressedWarnCount": {"type": "integer", "minimum": 0},
+              "suppressedErrorCount": {"type": "integer", "minimum": 0},
+              "rawErrorMessageCaptured": {"const": false},
+              "rawStackCaptured": {"const": false},
+              "rawStderrCaptured": {"const": false},
+              "environmentValuesCaptured": {"const": false},
               "credentialsCaptured": {"const": false},
               "messageDataCaptured": {"const": false},
               "providerPayloadCaptured": {"const": false}

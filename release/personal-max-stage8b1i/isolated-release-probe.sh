@@ -24,6 +24,10 @@ readonly SCRAPER_IMAGE='ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha25
 readonly POSTGRES_IMAGE='sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229'
 readonly GATEWAY_DIGEST='sha256:dd718fd8e9e2ec52a0ee1c19b576d75a1035f9e251980351ebc04071dfe5d0de'
 readonly SCRAPER_DIGEST='sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768'
+readonly SCRAPER_EXPECTED_OCI_REVISION='33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a'
+readonly SCRAPER_LIVE_CAPTURE_SHA256='7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5'
+readonly SCRAPER_AUTHENTICATED_DRAIN_SHA256='1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37'
+readonly SCRAPER_TRANSPORT_INTERCEPTOR_SHA256='35c979f12d67447d176bac3641fc38eb75fa6a1adc0633e19171a6512e7192f7'
 readonly POSTGRES_DIGEST='sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229'
 readonly POSTGRES_VERSION='16.14'
 readonly POSTGRES_VERSION_NUM=160014
@@ -35,8 +39,8 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='7d0704f522236c999ef185418633b049f0d39444e3df6aae76bc8a6a359cba8c'
-readonly BOUNDED_OPERATIONS_SHA256='bc02fe1cb9c3ce04f4a259cc288c120356e7085c7b2a99cc3efbcfd8ad9cd00b'
+readonly FAILURE_DIAGNOSTICS_SHA256='85bfc6c3d3fcfe0c1d8c90cf718dff80843330f806750479adc03e83901c9755'
+readonly BOUNDED_OPERATIONS_SHA256='e20cd9e85926c9eebb0108cdc7306dab4b7fe8989d0c3f93dbd6e7877152a891'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
@@ -45,8 +49,10 @@ readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
 readonly PRISMA_LEGACY_DIFF_GATE_SHA256='d9867613380ffdba7af070e916ea782721810fe4268bf1c064b59a5de2cb27b0'
 readonly PRISMA_DIFF_SEMANTIC_PARSER_SHA256='87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890'
-readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='e8ceaccbfd51d8dd91cf5d84f43716f4decd349ac19c4db529bb17ee4cc75af9'
+readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='8fd27a0e4d3b21052f656f2cab929971e0f6b08f410ae8ffea040502e65cc61c'
 readonly GATEWAY_CLIENT_HARNESS_SHA256='f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428'
+readonly SCRAPER_RUNTIME_CONTRACT_SHA256='d736e34c7f75c89538c5fc3855f12994a8c5fe6561f12c4fcaf18a908eb562a3'
+readonly SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256='45405c2417c8d8e10765e4360cb541e793a05f496aafb26e7e0c340503c2916f'
 readonly DEFAULT_OFF_HARNESS_MODE='default-off'
 readonly PRODUCTION_PROJECT_LABEL='com.docker.compose.project=crm'
 readonly STAGE_LABEL='personal-max.stage=8b1i'
@@ -77,6 +83,41 @@ SCRAPER_ORIGINAL_EXIT=not_observed
 SCRAPER_PRIMARY_CLASSIFICATION='NONE'
 SCRAPER_CONTAINER_STATE_CATEGORY='not_observed'
 SCRAPER_OPERATION_STARTED_SECONDS=0
+SCRAPER_RUNTIME_CONTRACT_VERIFIED=false
+SCRAPER_RUNTIME_ENVELOPE_OBSERVED=false
+SCRAPER_RUNTIME_STATUS='NOT_OBSERVED'
+SCRAPER_RUNTIME_FAILURE_STAGE='NOT_OBSERVED'
+SCRAPER_RUNTIME_FAILURE_CODE='NOT_OBSERVED'
+SCRAPER_RUNTIME_OCI_REVISION='not_observed'
+SCRAPER_RUNTIME_NODE_CATEGORY='NOT_OBSERVED'
+SCRAPER_RUNTIME_NODE_MAJOR=0
+SCRAPER_RUNTIME_UID=-1
+SCRAPER_RUNTIME_GID=-1
+SCRAPER_RUNTIME_LIVE_SHA256='not_observed'
+SCRAPER_RUNTIME_DRAIN_SHA256='not_observed'
+SCRAPER_RUNTIME_TRANSPORT_SHA256='not_observed'
+SCRAPER_RUNTIME_LIVE_EXPORT_TYPE='not_observed'
+SCRAPER_RUNTIME_TRANSPORT_EXPORT_TYPE='not_observed'
+SCRAPER_RUNTIME_DISABLED_ADAPTER_VALID=false
+SCRAPER_RUNTIME_INTERCEPTOR_VALID=false
+SCRAPER_HARNESS_ENVELOPE_OBSERVED=false
+SCRAPER_HARNESS_STATUS='NOT_OBSERVED'
+SCRAPER_HARNESS_SELECTED_MODE='NOT_SELECTED'
+SCRAPER_HARNESS_FAILURE_STAGE='NOT_OBSERVED'
+SCRAPER_HARNESS_FAILURE_CODE='NOT_OBSERVED'
+SCRAPER_HARNESS_MODULE_LOAD_COMPLETED=false
+SCRAPER_HARNESS_INSTRUMENTATION_INSTALLED=false
+SCRAPER_HARNESS_INSTRUMENTATION_RESTORED=false
+SCRAPER_HARNESS_DISABLED_FACTORY_CALLED=false
+SCRAPER_HARNESS_DISABLED_ADAPTER_CREATED=false
+SCRAPER_HARNESS_FRAME_DISPATCH_ATTEMPTED=false
+SCRAPER_HARNESS_FRAME_DISPATCH_COMPLETED=false
+SCRAPER_HARNESS_HEALTH_READ_COMPLETED=false
+SCRAPER_HARNESS_DETACH_COMPLETED=false
+SCRAPER_HARNESS_RESULT_SERIALIZED=false
+SCRAPER_HARNESS_SUPPRESSED_LOG_COUNT=0
+SCRAPER_HARNESS_SUPPRESSED_WARN_COUNT=0
+SCRAPER_HARNESS_SUPPRESSED_ERROR_COUNT=0
 LEDGER_NAME_COUNT=0
 LEDGER_UNIQUE_COUNT=0
 LEDGER_DUPLICATE_COUNT=0
@@ -413,7 +454,8 @@ bootstrap_verify_runtime_path() {
       probe-output-helpers.sh | restore-verification.sh | postgres-startup.sh | migration-preflight.sh | \
       migration-sql-gate.sh | migration-sql-bindings.txt | \
       prisma-legacy-diff-gate.sh | prisma-diff-semantic-parser.py | \
-      synthetic-scraper-harness.js | gateway-client-harness.js) ;;
+      synthetic-scraper-harness.js | gateway-client-harness.js | \
+      scraper-runtime-contract.js | scraper-runtime-source-ledger.json) ;;
     *) printf 'RUNTIME_ARTIFACT_NAME_REFUSED\n' >&2; return 64 ;;
   esac
   __pm_path="$PACKAGE_ROOT/$__pm_name"
@@ -475,6 +517,8 @@ bootstrap_verify_runtime_artifact prisma-legacy-diff-gate.sh "$PRISMA_LEGACY_DIF
 bootstrap_verify_runtime_artifact prisma-diff-semantic-parser.py "$PRISMA_DIFF_SEMANTIC_PARSER_SHA256" || exit $?
 bootstrap_verify_runtime_artifact synthetic-scraper-harness.js "$SYNTHETIC_SCRAPER_HARNESS_SHA256" || exit $?
 bootstrap_verify_runtime_artifact gateway-client-harness.js "$GATEWAY_CLIENT_HARNESS_SHA256" || exit $?
+bootstrap_verify_runtime_artifact scraper-runtime-contract.js "$SCRAPER_RUNTIME_CONTRACT_SHA256" || exit $?
+bootstrap_verify_runtime_artifact scraper-runtime-source-ledger.json "$SCRAPER_RUNTIME_SOURCE_LEDGER_SHA256" || exit $?
 # SHA256SUMS remains a complete package-integrity ledger, but is deliberately
 # not a trust anchor because binding it here would create a circular hash.
 bootstrap_verify_runtime_path SHA256SUMS || exit $?
@@ -846,6 +890,46 @@ start_gateway() {
 pm_enter_phase gateway_active docker_disposable
 start_gateway GATEWAY_ACTIVE_READINESS_FAILED
 
+pm_enter_phase scraper_runtime_contract synthetic_harness
+pm_scraper_begin_operation SCRAPER_RUNTIME_SOURCE_CHECK runtime_revision docker_image_inspect docker_cli not_observed
+pm_scraper_mark_started
+if pm_capture_bounded scraper_oci_revision docker_metadata 60 METADATA_TIMEOUT METADATA_FAILED \
+  docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$SCRAPER_IMAGE"; then
+  if [[ ! $scraper_oci_revision =~ ^[0-9a-f]{40}$ ]]; then
+    pm_scraper_finish_operation 65 SCRAPER_RUNTIME_REVISION_MISSING exited
+    false
+  fi
+  if [[ $scraper_oci_revision != "$SCRAPER_EXPECTED_OCI_REVISION" ]]; then
+    pm_scraper_finish_operation 65 SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH exited
+    false
+  fi
+  pm_scraper_finish_operation 0 NONE exited
+else
+  scraper_revision_status=$?
+  pm_scraper_finish_operation "$scraper_revision_status" SCRAPER_RUNTIME_REVISION_MISSING unavailable
+  false
+fi
+pm_scraper_begin_operation SCRAPER_RUNTIME_CONTRACT_CHECK runtime_contract docker_run docker_cli not_observed
+pm_scraper_mark_started
+scraper_runtime_status=0
+if pm_write_bounded "$TMP/scraper-runtime-contract.json" synthetic_harness 600 SYNTHETIC_HARNESS_TIMEOUT SCRAPER_RUNTIME_OUTPUT_MISSING \
+  docker run --rm --name "$PREFIX-scraper-runtime-contract" --label "$STAGE_LABEL" --label "$RUN_LABEL_KEY=$RUN_ID" --network none \
+  -v "$PACKAGE_ROOT/scraper-runtime-contract.js:/tmp/stage8b1i-runtime-contract.js:ro" --entrypoint node "$SCRAPER_IMAGE" \
+  /tmp/stage8b1i-runtime-contract.js; then
+  scraper_runtime_status=0
+else
+  scraper_runtime_status=$?
+fi
+if (( scraper_runtime_status == 124 )); then
+  pm_scraper_finish_operation "$scraper_runtime_status" SYNTHETIC_HARNESS_TIMEOUT unavailable
+  false
+fi
+pm_validate_scraper_runtime_contract "$TMP/scraper-runtime-contract.json" "$scraper_runtime_status" "$scraper_oci_revision" \
+  "$SCRAPER_LIVE_CAPTURE_SHA256" "$SCRAPER_AUTHENTICATED_DRAIN_SHA256" "$SCRAPER_TRANSPORT_INTERCEPTOR_SHA256"
+SCRAPER_RUNTIME_CONTRACT_VERIFIED=true
+SCRAPER_RUNTIME_OCI_REVISION=$scraper_oci_revision
+SCRAPER_CHECK_ID=NONE
+
 pm_enter_phase scraper_default_off synthetic_harness
 pm_scraper_begin_operation SCRAPER_DEFAULT_OFF_RUN_CHECK default_off_mode_binding invocation_contract shell_builtin command_not_started
 if [[ -z $DEFAULT_OFF_HARNESS_MODE ]]; then
@@ -869,10 +953,10 @@ else
   scraper_default_off_status=$?
   if (( scraper_default_off_status == 124 )); then
     pm_scraper_finish_operation "$scraper_default_off_status" SYNTHETIC_HARNESS_TIMEOUT unavailable
+    false
   else
-    pm_scraper_finish_operation "$scraper_default_off_status" SCRAPER_DEFAULT_OFF_HARNESS_EXITED exited
+    pm_classify_scraper_failure_envelope "$TMP/default-off.json" "$scraper_default_off_status"
   fi
-  false
 fi
 pm_validate_scraper_default_off_result "$TMP/default-off.json"
 pm_scraper_begin_operation SPOOL_INITIALIZATION_CHECK spool_initialization docker_volume_initialization posix_shell not_observed
@@ -1092,6 +1176,18 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
   --argjson gatewayPreexisting "$GATEWAY_PREEXISTING_BEFORE_PULL" --arg gatewayImageIdBefore "$GATEWAY_IMAGE_ID_BEFORE" \
   --argjson scraperPreexisting "$SCRAPER_PREEXISTING_BEFORE_PULL" --arg scraperImageIdBefore "$SCRAPER_IMAGE_ID_BEFORE" \
   --argjson gatewayAcquired "$GATEWAY_ACQUIRED_DURING_PROBE" --argjson scraperAcquired "$SCRAPER_ACQUIRED_DURING_PROBE" \
+  --argjson scraperRuntimeVerified "$SCRAPER_RUNTIME_CONTRACT_VERIFIED" \
+  --arg scraperRuntimeRevision "$SCRAPER_RUNTIME_OCI_REVISION" \
+  --arg scraperRuntimeNodeCategory "$SCRAPER_RUNTIME_NODE_CATEGORY" \
+  --argjson scraperRuntimeNodeMajor "$SCRAPER_RUNTIME_NODE_MAJOR" \
+  --argjson scraperRuntimeUid "$SCRAPER_RUNTIME_UID" --argjson scraperRuntimeGid "$SCRAPER_RUNTIME_GID" \
+  --arg scraperRuntimeLiveSha "$SCRAPER_RUNTIME_LIVE_SHA256" \
+  --arg scraperRuntimeDrainSha "$SCRAPER_RUNTIME_DRAIN_SHA256" \
+  --arg scraperRuntimeTransportSha "$SCRAPER_RUNTIME_TRANSPORT_SHA256" \
+  --arg scraperRuntimeLiveExport "$SCRAPER_RUNTIME_LIVE_EXPORT_TYPE" \
+  --arg scraperRuntimeTransportExport "$SCRAPER_RUNTIME_TRANSPORT_EXPORT_TYPE" \
+  --argjson scraperRuntimeDisabledValid "$SCRAPER_RUNTIME_DISABLED_ADAPTER_VALID" \
+  --argjson scraperRuntimeInterceptorValid "$SCRAPER_RUNTIME_INTERCEPTOR_VALID" \
   --argjson freeBytesBeforePull "$FREE_BYTES_BEFORE_PULL" --argjson freeBytesAfterGatewayPull "$FREE_BYTES_AFTER_GATEWAY_PULL" \
   --argjson freeBytesAfterScraperPull "$FREE_BYTES_AFTER_SCRAPER_PULL" --argjson freeBytesAfterPull "$FREE_BYTES_AFTER_PULL" \
   --argjson freeBytesAfterCleanup "$FREE_BYTES_AFTER_CLEANUP" \
@@ -1151,6 +1247,18 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
         imageIdBeforePull:$scraperImageIdBefore,acquiredDuringProbe:$scraperAcquired},
       postgresql:{ref:$postgresqlRef,version:$postgresqlVersion,digestVerified:true,exactProductionImageId:true},
       architecture:"linux/amd64",mutableTags:false,retained:true},
+    scraperRuntimeContract:{verified:$scraperRuntimeVerified,status:"PASS",
+      imageDigest:"sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+      expectedSourceCommit:"33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",ociRevision:$scraperRuntimeRevision,
+      nodeVersionCategory:$scraperRuntimeNodeCategory,nodeMajor:$scraperRuntimeNodeMajor,
+      runtimeUid:$scraperRuntimeUid,runtimeGid:$scraperRuntimeGid,
+      moduleSha256:{liveCaptureAdapter:$scraperRuntimeLiveSha,authenticatedCaptureDrain:$scraperRuntimeDrainSha,
+        transportInterceptor:$scraperRuntimeTransportSha},
+      exportTypes:{createLiveCaptureAdapterFromEnvironment:$scraperRuntimeLiveExport,
+        TransportInterceptor:$scraperRuntimeTransportExport},
+      disabledAdapterValid:$scraperRuntimeDisabledValid,interceptorValid:$scraperRuntimeInterceptorValid,
+      sourceContentsCaptured:false,environmentValuesCaptured:false,profileDataCaptured:false,
+      persistedMessageContentsCaptured:false},
     executable:{dormant:true,invalidConfigFailsClosed:true,missingHmacFailsClosed:true,authenticatedIngress:true,authDenied:true,requestSizeLimit:true},
     e2e:{actualHook:true,frames:$physicalFrames,identicalFrames:$identicalFrames,accounts:2,retryStorm:$retryCount,
       gatewayOutage:true,databaseOutage:true,scraperRestart:true,gatewayRestart:true,spoolRecovery:true,normalized:$normalized,compared:$compared,

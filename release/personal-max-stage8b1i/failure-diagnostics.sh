@@ -8,7 +8,7 @@ personal_max_stage8b1i_safe_phase() {
     bootstrap_complete | source_binding | storage_gate | production_snapshot_before | image_acquisition | \
       image_verification | post_pull_storage_gate | disposable_topology | postgresql_start | backup_restore | restore_verification | \
       migration_preflight | disposable_migration | migration_verification | gateway_negative | gateway_dormant | \
-      gateway_active | scraper_default_off | e2e_outage | e2e_recovery | e2e_verification | \
+      gateway_active | scraper_runtime_contract | scraper_default_off | e2e_outage | e2e_recovery | e2e_verification | \
       production_snapshot_after | prior_residual_cleanup | cleanup | final_storage_gate | report_render | report_validation | report_handoff | completed) return 0 ;;
     *) return 1 ;;
   esac
@@ -75,9 +75,19 @@ personal_max_stage8b1i_safe_error() {
       PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
       GATEWAY_NEGATIVE_VALIDATION_FAILED | GATEWAY_DORMANT_READINESS_FAILED | \
       GATEWAY_ACTIVE_READINESS_FAILED | SCRAPER_DEFAULT_OFF_FAILED | \
+      SCRAPER_RUNTIME_REVISION_MISSING | SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH | \
+      SCRAPER_RUNTIME_MODULE_MISSING | SCRAPER_RUNTIME_MODULE_SYMLINK | \
+      SCRAPER_RUNTIME_EXPORT_MISSING | SCRAPER_RUNTIME_DISABLED_ADAPTER_INVALID | \
+      SCRAPER_RUNTIME_INTERCEPTOR_INVALID | SCRAPER_RUNTIME_NODE_UNSUPPORTED | \
+      SCRAPER_RUNTIME_IDENTITY_MISMATCH | SCRAPER_RUNTIME_OUTPUT_MISSING | SCRAPER_RUNTIME_OUTPUT_MALFORMED | \
       SCRAPER_DEFAULT_OFF_MODE_MISSING | SCRAPER_DEFAULT_OFF_MODE_MISMATCH | \
       SCRAPER_DEFAULT_OFF_HARNESS_EXITED | SCRAPER_DEFAULT_OFF_OUTPUT_MISSING | \
       SCRAPER_DEFAULT_OFF_OUTPUT_MALFORMED | SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED | \
+      SCRAPER_DEFAULT_OFF_INSTRUMENTATION_FAILED | SCRAPER_DEFAULT_OFF_DEPENDENCY_LOAD_FAILED | \
+      SCRAPER_DEFAULT_OFF_ADAPTER_CREATE_FAILED | SCRAPER_DEFAULT_OFF_ADAPTER_CONTRACT_FAILED | \
+      SCRAPER_DEFAULT_OFF_INTERCEPTOR_CONSTRUCT_FAILED | SCRAPER_DEFAULT_OFF_FRAME_DISPATCH_FAILED | \
+      SCRAPER_DEFAULT_OFF_HEALTH_READ_FAILED | SCRAPER_DEFAULT_OFF_DETACH_FAILED | \
+      SCRAPER_DEFAULT_OFF_RESTORE_FAILED | SCRAPER_DEFAULT_OFF_RESULT_SERIALIZATION_FAILED | \
       SCRAPER_DEFAULT_OFF_FRAME_NOT_HANDLED | SCRAPER_DEFAULT_OFF_SPOOL_CREATED | \
       SCRAPER_DEFAULT_OFF_PENDING_UNEXPECTED | SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY | \
       SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY | SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY | \
@@ -131,6 +141,8 @@ personal_max_stage8b1i_safe_check_id() {
       MIGRATION_SCHEMA_INDEX_QUERY_CHECK | MIGRATION_SCHEMA_INDEX_CHECK | \
       MIGRATION_SCHEMA_UNIQUE_KEY_QUERY_CHECK | MIGRATION_SCHEMA_UNIQUE_KEY_CHECK | \
       MIGRATION_PRISMA_DIFF_EXECUTION_CHECK | MIGRATION_PRISMA_DIFF_GATE_CHECK | \
+      SCRAPER_RUNTIME_CONTRACT_CHECK | SCRAPER_RUNTIME_SOURCE_CHECK | SCRAPER_RUNTIME_EXPORT_CHECK | \
+      SCRAPER_RUNTIME_DISABLED_ADAPTER_CHECK | SCRAPER_RUNTIME_INTERCEPTOR_CHECK | \
       SCRAPER_DEFAULT_OFF_RUN_CHECK | SCRAPER_DEFAULT_OFF_RESULT_CHECK | \
       SPOOL_INITIALIZATION_CHECK) return 0 ;;
     *) return 1 ;;
@@ -241,6 +253,13 @@ personal_max_stage8b1i_render_failure() {
   local scraper_check_id scraper_substep scraper_command_category scraper_executable_category
   local scraper_command_started scraper_attempt_count scraper_elapsed scraper_original_exit_json
   local scraper_container_state scraper_primary_classification
+  local runtime_verified runtime_observed runtime_status runtime_failure_stage runtime_failure_code runtime_revision
+  local runtime_node_category runtime_node_major runtime_uid runtime_gid runtime_live_sha runtime_drain_sha runtime_transport_sha
+  local runtime_live_export runtime_transport_export runtime_disabled_valid runtime_interceptor_valid
+  local harness_observed harness_status harness_mode harness_failure_stage harness_failure_code harness_module_loaded
+  local harness_instrumentation_installed harness_instrumentation_restored harness_disabled_factory harness_disabled_created
+  local harness_frame_attempted harness_frame_completed harness_health_completed harness_detach_completed harness_serialized
+  local harness_log_count harness_warn_count harness_error_count
   local postgres_network_facts_observed postgres_observed_network_count postgres_expected_network_present
   local postgres_alias_array_present postgres_expected_alias_present postgres_unexpected_network_present
   local postgres_alias_container_running postgres_alias_url_binding postgres_alias_validation_classification
@@ -381,9 +400,9 @@ personal_max_stage8b1i_render_failure() {
   scraper_check_id=${SCRAPER_CHECK_ID:-NONE}
   personal_max_stage8b1i_safe_check_id "$scraper_check_id" || scraper_check_id=NONE
   scraper_substep=${SCRAPER_SUBSTEP:-NOT_STARTED}
-  case $scraper_substep in NOT_STARTED | default_off_mode_binding | default_off_harness | default_off_result_validation | spool_initialization) ;; *) scraper_substep=NOT_STARTED ;; esac
+  case $scraper_substep in NOT_STARTED | runtime_revision | runtime_contract | runtime_source | runtime_exports | runtime_disabled_adapter | runtime_interceptor | default_off_mode_binding | default_off_harness | default_off_result_validation | spool_initialization) ;; *) scraper_substep=NOT_STARTED ;; esac
   scraper_command_category=${SCRAPER_COMMAND_CATEGORY:-not_observed}
-  case $scraper_command_category in not_observed | invocation_contract | docker_run | internal_validator | docker_volume_initialization) ;; *) scraper_command_category=not_observed ;; esac
+  case $scraper_command_category in not_observed | invocation_contract | docker_image_inspect | docker_run | internal_validator | docker_volume_initialization) ;; *) scraper_command_category=not_observed ;; esac
   scraper_executable_category=${SCRAPER_EXECUTABLE_CATEGORY:-not_observed}
   case $scraper_executable_category in not_observed | shell_builtin | docker_cli | jq | posix_shell) ;; *) scraper_executable_category=not_observed ;; esac
   scraper_command_started=${SCRAPER_COMMAND_STARTED:-false}
@@ -397,6 +416,43 @@ personal_max_stage8b1i_render_failure() {
   case $scraper_container_state in not_observed | command_not_started | running | exited | unavailable) ;; *) scraper_container_state=not_observed ;; esac
   scraper_primary_classification=${SCRAPER_PRIMARY_CLASSIFICATION:-NONE}
   personal_max_stage8b1i_safe_error "$scraper_primary_classification" || scraper_primary_classification=NONE
+  runtime_verified=${SCRAPER_RUNTIME_CONTRACT_VERIFIED:-false}; [[ $runtime_verified == true ]] || runtime_verified=false
+  runtime_observed=${SCRAPER_RUNTIME_ENVELOPE_OBSERVED:-false}; [[ $runtime_observed == true ]] || runtime_observed=false
+  runtime_status=${SCRAPER_RUNTIME_STATUS:-NOT_OBSERVED}; case $runtime_status in NOT_OBSERVED | PASS | FAIL) ;; *) runtime_status=NOT_OBSERVED ;; esac
+  runtime_failure_stage=${SCRAPER_RUNTIME_FAILURE_STAGE:-NOT_OBSERVED}
+  case $runtime_failure_stage in NOT_OBSERVED | NONE | SOURCE_METADATA | MODULE_LOAD | EXPORT_CONTRACT | DISABLED_ADAPTER_CONTRACT | INTERCEPTOR_CONTRACT | DETACH | RESULT_SERIALIZATION | INTERNAL) ;; *) runtime_failure_stage=NOT_OBSERVED ;; esac
+  runtime_failure_code=${SCRAPER_RUNTIME_FAILURE_CODE:-NOT_OBSERVED}
+  case $runtime_failure_code in NOT_OBSERVED | NONE | RUNTIME_MODULE_MISSING | RUNTIME_MODULE_METADATA_FAILED | RUNTIME_MODULE_SYMLINK | RUNTIME_MODULE_NOT_REGULAR | RUNTIME_MODULE_LOAD_FAILED | RUNTIME_EXPORT_MISSING | RUNTIME_DISABLED_ADAPTER_CREATE_FAILED | RUNTIME_DISABLED_ADAPTER_INVALID | RUNTIME_DISABLED_ADAPTER_HEALTH_FAILED | RUNTIME_DISABLED_ADAPTER_ENABLED | RUNTIME_INTERCEPTOR_CONSTRUCT_FAILED | RUNTIME_INTERCEPTOR_INVALID | RUNTIME_INTERCEPTOR_DETACH_FAILED | RUNTIME_CONSOLE_RESTORE_FAILED | RUNTIME_RESULT_SERIALIZATION_FAILED | RUNTIME_INTERNAL_FAILURE) ;; *) runtime_failure_code=NOT_OBSERVED ;; esac
+  runtime_revision=${SCRAPER_RUNTIME_OCI_REVISION:-not_observed}; [[ $runtime_revision =~ ^[0-9a-f]{40}$ ]] || runtime_revision=not_observed
+  runtime_node_category=${SCRAPER_RUNTIME_NODE_CATEGORY:-NOT_OBSERVED}; case $runtime_node_category in NOT_OBSERVED | SUPPORTED_NODE_MAJOR | UNSUPPORTED_NODE_MAJOR) ;; *) runtime_node_category=NOT_OBSERVED ;; esac
+  runtime_node_major=${SCRAPER_RUNTIME_NODE_MAJOR:-0}; [[ $runtime_node_major =~ ^[0-9]+$ ]] || runtime_node_major=0
+  runtime_uid=${SCRAPER_RUNTIME_UID:--1}; [[ $runtime_uid =~ ^-?[0-9]+$ ]] || runtime_uid=-1
+  runtime_gid=${SCRAPER_RUNTIME_GID:--1}; [[ $runtime_gid =~ ^-?[0-9]+$ ]] || runtime_gid=-1
+  runtime_live_sha=${SCRAPER_RUNTIME_LIVE_SHA256:-not_observed}; [[ $runtime_live_sha =~ ^[0-9a-f]{64}$ ]] || runtime_live_sha=not_observed
+  runtime_drain_sha=${SCRAPER_RUNTIME_DRAIN_SHA256:-not_observed}; [[ $runtime_drain_sha =~ ^[0-9a-f]{64}$ ]] || runtime_drain_sha=not_observed
+  runtime_transport_sha=${SCRAPER_RUNTIME_TRANSPORT_SHA256:-not_observed}; [[ $runtime_transport_sha =~ ^[0-9a-f]{64}$ ]] || runtime_transport_sha=not_observed
+  runtime_live_export=${SCRAPER_RUNTIME_LIVE_EXPORT_TYPE:-not_observed}; case $runtime_live_export in not_observed | function | undefined | object | string | boolean | number) ;; *) runtime_live_export=not_observed ;; esac
+  runtime_transport_export=${SCRAPER_RUNTIME_TRANSPORT_EXPORT_TYPE:-not_observed}; case $runtime_transport_export in not_observed | function | undefined | object | string | boolean | number) ;; *) runtime_transport_export=not_observed ;; esac
+  runtime_disabled_valid=${SCRAPER_RUNTIME_DISABLED_ADAPTER_VALID:-false}; [[ $runtime_disabled_valid == true ]] || runtime_disabled_valid=false
+  runtime_interceptor_valid=${SCRAPER_RUNTIME_INTERCEPTOR_VALID:-false}; [[ $runtime_interceptor_valid == true ]] || runtime_interceptor_valid=false
+  harness_observed=${SCRAPER_HARNESS_ENVELOPE_OBSERVED:-false}; [[ $harness_observed == true ]] || harness_observed=false
+  harness_status=${SCRAPER_HARNESS_STATUS:-NOT_OBSERVED}; case $harness_status in NOT_OBSERVED | PASS | FAIL) ;; *) harness_status=NOT_OBSERVED ;; esac
+  harness_mode=${SCRAPER_HARNESS_SELECTED_MODE:-NOT_SELECTED}; case $harness_mode in NOT_SELECTED | default-off | capture-only | retry-only | capture-and-drain | drain-only) ;; *) harness_mode=NOT_SELECTED ;; esac
+  harness_failure_stage=${SCRAPER_HARNESS_FAILURE_STAGE:-NOT_OBSERVED}; case $harness_failure_stage in NOT_OBSERVED | NONE | MODE_SELECTION | INSTRUMENTATION_INSTALL | PRODUCT_DEPENDENCY_LOAD | DISABLED_ADAPTER_CREATE | DISABLED_ADAPTER_CONTRACT | INTERCEPTOR_CONSTRUCT | FRAME_DISPATCH | HEALTH_READ | INTERCEPTOR_DETACH | ACTIVE_ADAPTER_CREATE | ACTIVE_EXECUTION | INSTRUMENTATION_RESTORE | RESULT_SERIALIZATION | INTERNAL) ;; *) harness_failure_stage=NOT_OBSERVED ;; esac
+  harness_failure_code=${SCRAPER_HARNESS_FAILURE_CODE:-NOT_OBSERVED}; case $harness_failure_code in NOT_OBSERVED | NONE | MODE_MISSING | MODE_INVALID | INSTRUMENTATION_INSTALL_FAILED | LIVE_CAPTURE_MODULE_MISSING | TRANSPORT_INTERCEPTOR_MODULE_MISSING | PRODUCT_DEPENDENCY_LOAD_FAILED | LIVE_CAPTURE_EXPORT_MISSING | TRANSPORT_INTERCEPTOR_EXPORT_MISSING | DISABLED_ADAPTER_CREATE_FAILED | CAPTURE_PHYSICAL_FRAME_MISSING | GET_CAPTURE_HEALTH_MISSING | INTERCEPTOR_CONSTRUCT_FAILED | HANDLE_FRAME_MISSING | INTERCEPTOR_HEALTH_MISSING | DETACH_MISSING | FRAME_DISPATCH_FAILED | HEALTH_READ_FAILED | DETACH_FAILED | ACTIVE_ADAPTER_CREATE_FAILED | ACTIVE_ADAPTER_INVALID | ACTIVE_EXECUTION_FAILED | INSTRUMENTATION_RESTORE_FAILED | CONSOLE_RESTORE_FAILED | RESULT_SERIALIZATION_FAILED | INTERNAL_FAILURE) ;; *) harness_failure_code=NOT_OBSERVED ;; esac
+  harness_module_loaded=${SCRAPER_HARNESS_MODULE_LOAD_COMPLETED:-false}; [[ $harness_module_loaded == true ]] || harness_module_loaded=false
+  harness_instrumentation_installed=${SCRAPER_HARNESS_INSTRUMENTATION_INSTALLED:-false}; [[ $harness_instrumentation_installed == true ]] || harness_instrumentation_installed=false
+  harness_instrumentation_restored=${SCRAPER_HARNESS_INSTRUMENTATION_RESTORED:-false}; [[ $harness_instrumentation_restored == true ]] || harness_instrumentation_restored=false
+  harness_disabled_factory=${SCRAPER_HARNESS_DISABLED_FACTORY_CALLED:-false}; [[ $harness_disabled_factory == true ]] || harness_disabled_factory=false
+  harness_disabled_created=${SCRAPER_HARNESS_DISABLED_ADAPTER_CREATED:-false}; [[ $harness_disabled_created == true ]] || harness_disabled_created=false
+  harness_frame_attempted=${SCRAPER_HARNESS_FRAME_DISPATCH_ATTEMPTED:-false}; [[ $harness_frame_attempted == true ]] || harness_frame_attempted=false
+  harness_frame_completed=${SCRAPER_HARNESS_FRAME_DISPATCH_COMPLETED:-false}; [[ $harness_frame_completed == true ]] || harness_frame_completed=false
+  harness_health_completed=${SCRAPER_HARNESS_HEALTH_READ_COMPLETED:-false}; [[ $harness_health_completed == true ]] || harness_health_completed=false
+  harness_detach_completed=${SCRAPER_HARNESS_DETACH_COMPLETED:-false}; [[ $harness_detach_completed == true ]] || harness_detach_completed=false
+  harness_serialized=${SCRAPER_HARNESS_RESULT_SERIALIZED:-false}; [[ $harness_serialized == true ]] || harness_serialized=false
+  harness_log_count=${SCRAPER_HARNESS_SUPPRESSED_LOG_COUNT:-0}; [[ $harness_log_count =~ ^[0-9]+$ ]] || harness_log_count=0
+  harness_warn_count=${SCRAPER_HARNESS_SUPPRESSED_WARN_COUNT:-0}; [[ $harness_warn_count =~ ^[0-9]+$ ]] || harness_warn_count=0
+  harness_error_count=${SCRAPER_HARNESS_SUPPRESSED_ERROR_COUNT:-0}; [[ $harness_error_count =~ ^[0-9]+$ ]] || harness_error_count=0
   postgres_network_facts_observed=${MIGRATION_POSTGRES_NETWORK_FACTS_OBSERVED:-false}
   [[ $postgres_network_facts_observed == true ]] || postgres_network_facts_observed=false
   postgres_observed_network_count=${MIGRATION_POSTGRES_OBSERVED_NETWORK_COUNT:-0}
@@ -533,6 +589,30 @@ personal_max_stage8b1i_render_failure() {
     --argjson scraperOriginalExit "$scraper_original_exit_json" \
     --arg scraperContainerState "$scraper_container_state" \
     --arg scraperPrimaryClassification "$scraper_primary_classification" \
+    --argjson scraperRuntimeVerified "$runtime_verified" --argjson scraperRuntimeObserved "$runtime_observed" \
+    --arg scraperRuntimeStatus "$runtime_status" --arg scraperRuntimeFailureStage "$runtime_failure_stage" \
+    --arg scraperRuntimeFailureCode "$runtime_failure_code" --arg scraperRuntimeRevision "$runtime_revision" \
+    --arg scraperRuntimeNodeCategory "$runtime_node_category" --argjson scraperRuntimeNodeMajor "$runtime_node_major" \
+    --argjson scraperRuntimeUid "$runtime_uid" --argjson scraperRuntimeGid "$runtime_gid" \
+    --arg scraperRuntimeLiveSha "$runtime_live_sha" --arg scraperRuntimeDrainSha "$runtime_drain_sha" \
+    --arg scraperRuntimeTransportSha "$runtime_transport_sha" --arg scraperRuntimeLiveExport "$runtime_live_export" \
+    --arg scraperRuntimeTransportExport "$runtime_transport_export" \
+    --argjson scraperRuntimeDisabledValid "$runtime_disabled_valid" \
+    --argjson scraperRuntimeInterceptorValid "$runtime_interceptor_valid" \
+    --argjson scraperHarnessObserved "$harness_observed" --arg scraperHarnessStatus "$harness_status" \
+    --arg scraperHarnessMode "$harness_mode" --arg scraperHarnessFailureStage "$harness_failure_stage" \
+    --arg scraperHarnessFailureCode "$harness_failure_code" --argjson scraperHarnessModuleLoaded "$harness_module_loaded" \
+    --argjson scraperHarnessInstrumentationInstalled "$harness_instrumentation_installed" \
+    --argjson scraperHarnessInstrumentationRestored "$harness_instrumentation_restored" \
+    --argjson scraperHarnessDisabledFactory "$harness_disabled_factory" \
+    --argjson scraperHarnessDisabledCreated "$harness_disabled_created" \
+    --argjson scraperHarnessFrameAttempted "$harness_frame_attempted" \
+    --argjson scraperHarnessFrameCompleted "$harness_frame_completed" \
+    --argjson scraperHarnessHealthCompleted "$harness_health_completed" \
+    --argjson scraperHarnessDetachCompleted "$harness_detach_completed" \
+    --argjson scraperHarnessSerialized "$harness_serialized" \
+    --argjson scraperHarnessLogCount "$harness_log_count" --argjson scraperHarnessWarnCount "$harness_warn_count" \
+    --argjson scraperHarnessErrorCount "$harness_error_count" \
     --argjson postgresNetworkFactsObserved "$postgres_network_facts_observed" \
     --argjson postgresObservedNetworkCount "$postgres_observed_network_count" \
     --argjson postgresExpectedNetworkPresent "$postgres_expected_network_present" \
@@ -629,6 +709,29 @@ personal_max_stage8b1i_render_failure() {
         containerStateCategory:$scraperContainerState,primaryClassification:$scraperPrimaryClassification,
         rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
         databaseUrlCaptured:false,credentialsCaptured:false,messageDataCaptured:false,providerPayloadCaptured:false},
+      scraperRuntimeContract:{verified:$scraperRuntimeVerified,envelopeObserved:$scraperRuntimeObserved,
+        status:$scraperRuntimeStatus,failureStage:$scraperRuntimeFailureStage,failureCode:$scraperRuntimeFailureCode,
+        imageDigest:"sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+        expectedSourceCommit:"33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",ociRevision:$scraperRuntimeRevision,
+        nodeVersionCategory:$scraperRuntimeNodeCategory,nodeMajor:$scraperRuntimeNodeMajor,
+        runtimeUid:$scraperRuntimeUid,runtimeGid:$scraperRuntimeGid,
+        moduleSha256:{liveCaptureAdapter:$scraperRuntimeLiveSha,authenticatedCaptureDrain:$scraperRuntimeDrainSha,
+          transportInterceptor:$scraperRuntimeTransportSha},
+        exportTypes:{createLiveCaptureAdapterFromEnvironment:$scraperRuntimeLiveExport,TransportInterceptor:$scraperRuntimeTransportExport},
+        disabledAdapterValid:$scraperRuntimeDisabledValid,interceptorValid:$scraperRuntimeInterceptorValid,
+        sourceContentsCaptured:false,environmentValuesCaptured:false,profileDataCaptured:false,
+        persistedMessageContentsCaptured:false},
+      scraperHarnessEnvelope:{observed:$scraperHarnessObserved,status:$scraperHarnessStatus,
+        selectedMode:$scraperHarnessMode,failureStage:$scraperHarnessFailureStage,failureCode:$scraperHarnessFailureCode,
+        moduleLoadCompleted:$scraperHarnessModuleLoaded,instrumentationInstalled:$scraperHarnessInstrumentationInstalled,
+        instrumentationRestored:$scraperHarnessInstrumentationRestored,disabledFactoryCalled:$scraperHarnessDisabledFactory,
+        disabledAdapterCreated:$scraperHarnessDisabledCreated,frameDispatchAttempted:$scraperHarnessFrameAttempted,
+        frameDispatchCompleted:$scraperHarnessFrameCompleted,healthReadCompleted:$scraperHarnessHealthCompleted,
+        detachCompleted:$scraperHarnessDetachCompleted,resultSerialized:$scraperHarnessSerialized,
+        suppressedLogCount:$scraperHarnessLogCount,suppressedWarnCount:$scraperHarnessWarnCount,
+        suppressedErrorCount:$scraperHarnessErrorCount,rawErrorMessageCaptured:false,rawStackCaptured:false,
+        rawStderrCaptured:false,environmentValuesCaptured:false,credentialsCaptured:false,
+        messageDataCaptured:false,providerPayloadCaptured:false},
       prismaDiffEvidence:{factsObserved:$prismaDiffFactsObserved,rawByteCount:$prismaDiffRawByteCount,
         sizeLimitBytes:$prismaDiffSizeLimitBytes,utf8Valid:$prismaDiffUtf8Valid,
         commentsBalanced:$prismaDiffCommentsBalanced,quotesBalanced:$prismaDiffQuotesBalanced,

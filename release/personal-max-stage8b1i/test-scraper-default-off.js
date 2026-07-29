@@ -13,7 +13,7 @@ const probePath = path.join(packageRoot, 'isolated-release-probe.sh')
 const boundedPath = path.join(packageRoot, 'bounded-operations.sh')
 const { createLiveCaptureAdapterFromEnvironment } = require(path.join(repositoryRoot, 'max-web-scraper/capture/LiveCaptureAdapter.js'))
 const { TransportInterceptor } = require(path.join(repositoryRoot, 'max-web-scraper/transport/TransportInterceptor.js'))
-const { DEFAULT_OFF_FIELDS, runHarness, selectedHarnessMode } = require(harnessPath)
+const { DEFAULT_OFF_FIELDS, runHarness, selectedHarnessMode, serializeEnvelope } = require(harnessPath)
 
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'personal-max-stage8b1i-default-off.'))
 let passCount = 0
@@ -71,25 +71,22 @@ function blockByName(blocks, name) {
 async function main() {
   const probeSource = fs.readFileSync(probePath, 'utf8')
   const blocks = invocationBlocks(probeSource)
-  const dependencies = {
-    createDisabledAdapterFromEnvironment: createLiveCaptureAdapterFromEnvironment,
-    createActiveAdapterFromEnvironment: () => { throw new Error('ACTIVE_FACTORY_MUST_NOT_BE_CALLED') },
-    TransportInterceptor,
-  }
   const observed = await runHarness({
     environment: { STAGE8B1I_HARNESS_MODE: 'default-off' },
-    dependencies,
+    appRoot: path.join(repositoryRoot, 'max-web-scraper'),
     disabledPath: path.join(tempRoot, 'disabled-spool'),
   })
+  const pinnedObserved = { ...observed, productDependencySource: 'PINNED_APP_ROOT', resultSerialized: true }
 
+  assert.equal(observed.status, 'PASS')
   assert.equal(observed.selectedMode, 'default-off')
-  validateFixture('accepted', observed)
+  validateFixture('accepted', pinnedObserved)
   pass('explicit_default_off_mode_succeeds')
 
-  expectCode(() => selectedHarnessMode({}), 'STAGE8B1I_HARNESS_MODE_MISSING')
+  expectCode(() => selectedHarnessMode({}), 'MODE_MISSING')
   pass('missing_mode_rejected')
 
-  expectCode(() => selectedHarnessMode({ STAGE8B1I_HARNESS_MODE: 'capture' }), 'STAGE8B1I_HARNESS_MODE_INVALID')
+  expectCode(() => selectedHarnessMode({ STAGE8B1I_HARNESS_MODE: 'capture' }), 'MODE_INVALID')
   pass('wrong_mode_rejected')
 
   assert.match(probeSource, /readonly DEFAULT_OFF_HARNESS_MODE='default-off'/)
@@ -152,7 +149,17 @@ async function main() {
   assert.equal(observed.activeAdapterFactoryCalled, false)
   pass('active_factory_not_called')
 
-  assert.equal(observed.activeAdapterFactoryCalled, false)
+  const injected = await runHarness({
+    environment: { STAGE8B1I_HARNESS_MODE: 'default-off' },
+    dependencies: {
+      createDisabledAdapterFromEnvironment: createLiveCaptureAdapterFromEnvironment,
+      createActiveAdapterFromEnvironment: () => { throw new Error('ACTIVE_FACTORY_MUST_NOT_BE_CALLED') },
+      TransportInterceptor,
+    },
+    disabledPath: path.join(tempRoot, 'injected-disabled-spool'),
+  })
+  assert.equal(injected.status, 'PASS')
+  assert.equal(injected.activeAdapterFactoryCalled, false)
   pass('throwing_active_factory_fixture_not_called')
 
   assert.equal(observed.drainCreated, false)
@@ -191,31 +198,32 @@ async function main() {
   assert.equal(exited.stdout, 'SCRAPER_DEFAULT_OFF_HARNESS_EXITED|1|SCRAPER_DEFAULT_OFF_RUN_CHECK')
   pass('harness_exit_one_precise')
 
-  validateFixture('wrong-mode', { ...observed, selectedMode: 'capture-only' }, 'SCRAPER_DEFAULT_OFF_MODE_MISMATCH')
+  validateFixture('wrong-mode', { ...pinnedObserved, selectedMode: 'capture-only' }, 'SCRAPER_DEFAULT_OFF_MODE_MISMATCH')
   pass('wrong_selected_mode_rejected')
 
-  validateFixture('enabled', { ...observed, adapterEnabled: true }, 'SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED')
+  validateFixture('enabled', { ...pinnedObserved, adapterEnabled: true }, 'SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED')
   pass('enabled_true_rejected')
 
-  validateFixture('spool-created', { ...observed, spoolPathCreated: true }, 'SCRAPER_DEFAULT_OFF_SPOOL_CREATED')
+  validateFixture('spool-created', { ...pinnedObserved, spoolPathCreated: true }, 'SCRAPER_DEFAULT_OFF_SPOOL_CREATED')
   pass('spool_created_rejected')
 
-  validateFixture('timer', { ...observed, timerAttemptCount: 1 }, 'SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY')
+  validateFixture('timer', { ...pinnedObserved, timerAttemptCount: 1 }, 'SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY')
   pass('timer_activity_rejected')
 
-  validateFixture('network', { ...observed, networkAttemptCount: 1 }, 'SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY')
+  validateFixture('network', { ...pinnedObserved, networkAttemptCount: 1 }, 'SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY')
   pass('network_activity_rejected')
 
-  validateFixture('database', { ...observed, databaseAttemptCount: 1 }, 'SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY')
+  validateFixture('database', { ...pinnedObserved, databaseAttemptCount: 1 }, 'SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY')
   pass('database_activity_rejected')
 
-  validateFixture('active-factory', { ...observed, activeAdapterFactoryCalled: true }, 'SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED')
+  validateFixture('active-factory', { ...pinnedObserved, activeAdapterFactoryCalled: true }, 'SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED')
   pass('active_factory_rejected')
 
-  validateFixture('drain', { ...observed, drainCreated: true }, 'SCRAPER_DEFAULT_OFF_DRAIN_CREATED')
+  validateFixture('drain', { ...pinnedObserved, drainCreated: true }, 'SCRAPER_DEFAULT_OFF_DRAIN_CREATED')
   pass('drain_created_rejected')
 
   assert.deepEqual(Object.keys(observed), DEFAULT_OFF_FIELDS)
+  assert.equal(JSON.parse(serializeEnvelope(observed)).resultSerialized, true)
   pass('output_allowlist_exact')
 
   const serialized = JSON.stringify(observed)
@@ -225,7 +233,7 @@ async function main() {
   pass('no_environment_or_secrets_emitted')
 
   assert.equal(passCount, 30)
-  process.stdout.write('SCRAPER_DEFAULT_OFF_TEST_COUNT=30\nACTUAL_HARNESS_EXECUTED=YES\nACTUAL_TRANSPORT_INTERCEPTOR_EXECUTED=YES\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n')
+  process.stdout.write('SCRAPER_DEFAULT_OFF_TEST_COUNT=30\nREAL_CHECKOUT_LOADER_EXECUTED=YES\nACTUAL_HARNESS_EXECUTED=YES\nACTUAL_TRANSPORT_INTERCEPTOR_EXECUTED=YES\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n')
 }
 
 main().finally(() => fs.rmSync(tempRoot, { recursive: true, force: true })).catch(error => {

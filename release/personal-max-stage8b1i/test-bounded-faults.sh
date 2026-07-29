@@ -67,6 +67,18 @@ make_valid_report() {
         digestVerified:true,runtimeUser:"1001:1001",preexistingBeforePull:false},
       postgresql:{ref:"sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
         digestVerified:true,version:"16.14"},retained:true},
+    scraperRuntimeContract:{verified:true,status:"PASS",
+      imageDigest:"sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+      expectedSourceCommit:"33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
+      ociRevision:"33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
+      nodeVersionCategory:"SUPPORTED_NODE_MAJOR",nodeMajor:20,runtimeUid:1001,runtimeGid:1001,
+      moduleSha256:{
+        liveCaptureAdapter:"7b5a8c6b7b9d6020a52bef253c317f90eff070cfbe8ac98aed66381c6bc523a5",
+        authenticatedCaptureDrain:"1bc464fc8eaf6d9111a6a4ba7eda3a4f4b4fdd63d677f7e620720e9f17889b37",
+        transportInterceptor:"35c979f12d67447d176bac3641fc38eb75fa6a1adc0633e19171a6512e7192f7"},
+      exportTypes:{createLiveCaptureAdapterFromEnvironment:"function",TransportInterceptor:"function"},
+      disabledAdapterValid:true,interceptorValid:true,sourceContentsCaptured:false,
+      environmentValuesCaptured:false,profileDataCaptured:false,persistedMessageContentsCaptured:false},
     e2e:{frames:1000,identicalFrames:100,captureLoss:0,accidentalDuplicateRawRows:0,wrongAccount:0,criticalSemanticRegressions:0},
     cleanup:{containersRemaining:0,networksRemaining:0,volumesRemaining:0,tempFilesRemaining:0},
     productionImmutability:{

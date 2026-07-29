@@ -12,6 +12,9 @@
     "scraper": {
       "ref": "ghcr.io/nashavtoparkmedia-byte/crm-max-web-scraper@sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
       "digest": "sha256:abf4405f55ab1c84f319b00cdb8b561f76353001ba2543045fddb17dc6b46768",
+      "expectedOciRevision": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
+      "expectedSourceCommit": "33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a",
+      "sourceLedger": "scraper-runtime-source-ledger.json",
       "expectedRuntimeUser": "1001:1001",
       "mutableTagAllowed": false
     },

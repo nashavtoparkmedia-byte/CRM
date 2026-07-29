@@ -76,10 +76,12 @@ require_phase_classification gateway_dormant gateway_active GATEWAY_DORMANT_READ
 run_bounded_fault gateway_dormant_failure gateway_dormant GATEWAY_DORMANT_READINESS_FAILED
 
 # Additional remaining-tail boundary: active gateway readiness.
-require_phase_classification gateway_active scraper_default_off GATEWAY_ACTIVE_READINESS_FAILED
+require_phase_classification gateway_active scraper_runtime_contract GATEWAY_ACTIVE_READINESS_FAILED
 run_bounded_fault gateway_active_failure gateway_active GATEWAY_ACTIVE_READINESS_FAILED
 
-# Additional remaining-tail boundaries: scraper default-off and spool setup.
+# Additional remaining-tail boundaries: pinned scraper runtime, default-off, and spool setup.
+require_phase_classification scraper_runtime_contract scraper_default_off SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH
+run_bounded_fault scraper_runtime_contract_failure scraper_runtime_contract SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH
 require_phase_classification scraper_default_off e2e_outage SCRAPER_DEFAULT_OFF_HARNESS_EXITED
 run_bounded_fault scraper_default_off_failure scraper_default_off SCRAPER_DEFAULT_OFF_HARNESS_EXITED
 require_phase_classification scraper_default_off e2e_outage SPOOL_INITIALIZATION_FAILED
@@ -181,6 +183,7 @@ for marker in \
   'pm_enter_phase migration_verification disposable_migration' \
   'pm_enter_phase gateway_negative docker_disposable' \
   'pm_enter_phase gateway_dormant docker_disposable' \
+  'pm_enter_phase scraper_runtime_contract synthetic_harness' \
   'pm_enter_phase scraper_default_off synthetic_harness' \
   'pm_enter_phase e2e_outage synthetic_harness' \
   'pm_enter_phase e2e_recovery synthetic_harness' \
@@ -209,8 +212,17 @@ pass privacy_contract
 
 # Every exact remaining-tail classification is accepted by failure diagnostics.
 for classification in GATEWAY_NEGATIVE_VALIDATION_FAILED GATEWAY_DORMANT_READINESS_FAILED \
-  GATEWAY_ACTIVE_READINESS_FAILED SCRAPER_DEFAULT_OFF_MODE_MISSING SCRAPER_DEFAULT_OFF_MODE_MISMATCH \
+  GATEWAY_ACTIVE_READINESS_FAILED SCRAPER_RUNTIME_REVISION_MISSING \
+  SCRAPER_RUNTIME_SOURCE_BINDING_MISMATCH SCRAPER_RUNTIME_MODULE_MISSING SCRAPER_RUNTIME_MODULE_SYMLINK \
+  SCRAPER_RUNTIME_EXPORT_MISSING SCRAPER_RUNTIME_DISABLED_ADAPTER_INVALID SCRAPER_RUNTIME_INTERCEPTOR_INVALID \
+  SCRAPER_RUNTIME_NODE_UNSUPPORTED SCRAPER_RUNTIME_IDENTITY_MISMATCH SCRAPER_RUNTIME_OUTPUT_MISSING \
+  SCRAPER_RUNTIME_OUTPUT_MALFORMED SCRAPER_DEFAULT_OFF_MODE_MISSING SCRAPER_DEFAULT_OFF_MODE_MISMATCH \
   SCRAPER_DEFAULT_OFF_HARNESS_EXITED SCRAPER_DEFAULT_OFF_OUTPUT_MISSING SCRAPER_DEFAULT_OFF_OUTPUT_MALFORMED \
+  SCRAPER_DEFAULT_OFF_INSTRUMENTATION_FAILED SCRAPER_DEFAULT_OFF_DEPENDENCY_LOAD_FAILED \
+  SCRAPER_DEFAULT_OFF_ADAPTER_CREATE_FAILED SCRAPER_DEFAULT_OFF_ADAPTER_CONTRACT_FAILED \
+  SCRAPER_DEFAULT_OFF_INTERCEPTOR_CONSTRUCT_FAILED SCRAPER_DEFAULT_OFF_FRAME_DISPATCH_FAILED \
+  SCRAPER_DEFAULT_OFF_HEALTH_READ_FAILED SCRAPER_DEFAULT_OFF_DETACH_FAILED SCRAPER_DEFAULT_OFF_RESTORE_FAILED \
+  SCRAPER_DEFAULT_OFF_RESULT_SERIALIZATION_FAILED \
   SCRAPER_DEFAULT_OFF_ENABLED_UNEXPECTED SCRAPER_DEFAULT_OFF_FRAME_NOT_HANDLED SCRAPER_DEFAULT_OFF_SPOOL_CREATED \
   SCRAPER_DEFAULT_OFF_PENDING_UNEXPECTED SCRAPER_DEFAULT_OFF_TIMER_ACTIVITY SCRAPER_DEFAULT_OFF_NETWORK_ACTIVITY \
   SCRAPER_DEFAULT_OFF_DATABASE_ACTIVITY SCRAPER_DEFAULT_OFF_ACTIVE_FACTORY_CALLED SCRAPER_DEFAULT_OFF_DRAIN_CREATED \
@@ -224,6 +236,19 @@ done
 pass remaining_classification_allowlist
 
 # Expanded executable-invocation source contracts for every not-yet-reached runner.
+runtime_contract_block=$(phase_block scraper_runtime_contract scraper_default_off)
+for evidence in 'SCRAPER_RUNTIME_SOURCE_CHECK' 'runtime_revision' \
+  'org.opencontainers.image.revision' 'SCRAPER_RUNTIME_CONTRACT_CHECK' \
+  'scraper-runtime-contract.js:/tmp/stage8b1i-runtime-contract.js:ro' '--network none' \
+  'pm_validate_scraper_runtime_contract "$TMP/scraper-runtime-contract.json"'; do
+  rg -F -- "$evidence" <<<"$runtime_contract_block" >/dev/null
+done
+for forbidden in MAX_PERSONAL_ACCOUNT_ID MAX_PERSONAL_LIVE_CAPTURE_ENABLED \
+  MAX_PERSONAL_CAPTURE_INGRESS_URL DATABASE_URL '--env-file' profile; do
+  ! rg -F -- "$forbidden" <<<"$runtime_contract_block" >/dev/null
+done
+pass scraper_runtime_contract_runner_contract
+
 default_off_block=$(phase_block scraper_default_off e2e_outage)
 for evidence in 'SCRAPER_DEFAULT_OFF_RUN_CHECK' \
   '-e STAGE8B1I_HARNESS_MODE="$DEFAULT_OFF_HARNESS_MODE"' '--network none' \
@@ -310,5 +335,5 @@ pass final_storage_production_report_contract
 [[ -z $(env GIT_OPTIONAL_LOCKS=0 git -C "$TEXT_CANARY_REPOSITORY" status --porcelain=v1 --untracked-files=all) ]]
 pass text_canary_unchanged
 
-[[ $PASS_COUNT -eq 29 ]]
-printf 'REMAINING_TAIL_TEST_COUNT=29\nREQUIRED_REGRESSION_CASES_COVERED=19\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
+[[ $PASS_COUNT -eq 31 ]]
+printf 'REMAINING_TAIL_TEST_COUNT=31\nREQUIRED_REGRESSION_CASES_COVERED=21\nROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\n'
