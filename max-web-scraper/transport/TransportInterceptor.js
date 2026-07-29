@@ -767,12 +767,7 @@ class TransportInterceptor {
     // Binary frames from new api.oneme.ru endpoint arrive base64-encoded
     if (raw.startsWith('b64:')) {
       const buffer = Buffer.from(raw.slice(4), 'base64')
-      this._capturePhysicalFrame(raw, buffer.length >= 9 ? {
-        opcode: buffer[5],
-        frameId: String((buffer[3] << 8) | buffer[4]),
-        transportSequence: String((buffer[7] << 8) | buffer[8]),
-      } : {})
-      this._handleBinaryFrame(buffer)
+      this._handleBinaryFrame(buffer, raw)
       return
     }
 
@@ -1430,10 +1425,19 @@ class TransportInterceptor {
   //   Bytes 7-8: uint16 BE = request seq (for matching responses)
   //   Bytes 9+:  MessagePack-encoded payload object
   //
-  _handleBinaryFrame(buf) {
-    if (buf.length < 9) return
+  _handleBinaryFrame(buf, originalRaw = `b64:${Buffer.from(buf).toString('base64')}`) {
+    const captureMetadata = buf.length >= 9 ? {
+      opcode: buf[5],
+      frameId: String((buf[3] << 8) | buf[4]),
+      transportSequence: String((buf[7] << 8) | buf[8]),
+    } : {}
+    if (buf.length < 9) {
+      this._capturePhysicalFrame(originalRaw, captureMetadata)
+      return
+    }
 
     if (buf[0] !== 0x0a) {
+      this._capturePhysicalFrame(originalRaw, captureMetadata)
       console.log('[BIN] Unknown magic byte:', buf[0].toString(16))
       return
     }
@@ -1482,7 +1486,10 @@ class TransportInterceptor {
             }
           } catch {}
         }
-        if (!recovered) return
+        if (!recovered) {
+          this._capturePhysicalFrame(originalRaw, captureMetadata)
+          return
+        }
       }
     }
 
@@ -1492,6 +1499,18 @@ class TransportInterceptor {
     const mappedCmd = (cmd === 4) ? 1 : (cmd === 1 ? 0 : cmd)
 
     const data = { opcode, cmd: mappedCmd, seq: reqSeq, payload, _frameSeq: frameSeq }
+
+    // Persist the decoded representation of this exact physical frame. The raw
+    // binary form remains the fail-closed fallback above, but a successfully
+    // decoded payload is replayable by the versioned normalizer instead of
+    // being permanently quarantined as opaque bytes.
+    let captureRaw = originalRaw
+    try { captureRaw = JSON.stringify(payload) } catch {}
+    this._capturePhysicalFrame(captureRaw, {
+      ...captureMetadata,
+      providerEventId: payload?.message?.id?.hex ?? payload?.message?.id ?? null,
+      eventType: payload?.message ? 'message' : null,
+    })
 
     if (opcode !== OP.PRESENCE) {
       console.log('[BIN] op:', opcode, 'cmd:', cmd, '→', mappedCmd, 'seq:', reqSeq,
