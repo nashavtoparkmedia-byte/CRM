@@ -25,6 +25,18 @@
 : "${MIGRATION_POSTGRES_ALIAS_VALIDATION_CLASSIFICATION:=NONE}"
 : "${MIGRATION_PRISMA_DIFF_FACTS_OBSERVED:=false}"
 : "${MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT:=0}"
+: "${MIGRATION_PRISMA_DIFF_SIZE_LIMIT_BYTES:=4096}"
+: "${MIGRATION_PRISMA_DIFF_UTF8_VALID:=false}"
+: "${MIGRATION_PRISMA_DIFF_COMMENTS_BALANCED:=false}"
+: "${MIGRATION_PRISMA_DIFF_QUOTES_BALANCED:=false}"
+: "${MIGRATION_PRISMA_DIFF_STATEMENT_TERMINATION_VALID:=false}"
+: "${MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_STATE:=NOT_OBSERVED}"
+: "${MIGRATION_PRISMA_DIFF_SCHEMA_QUALIFICATION_OBSERVED:=false}"
+: "${MIGRATION_PRISMA_DIFF_IDENTIFIER_FORM_CATEGORY:=NOT_OBSERVED}"
+: "${MIGRATION_PRISMA_DIFF_FACTS_FILE_CREATED:=false}"
+: "${MIGRATION_PRISMA_DIFF_FACTS_FILE_LOADED:=false}"
+: "${MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE:=NOT_OBSERVED}"
+: "${MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE:=NOT_OBSERVED}"
 : "${MIGRATION_PRISMA_DIFF_STATEMENT_COUNT:=0}"
 : "${MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT:=0}"
 : "${MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT:=0}"
@@ -100,7 +112,18 @@ pm_migration_classification_is_safe() {
       MIGRATION_PRISMA_DIFF_PARSE_FAILED | MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE | \
       MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN | MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION | \
       MIGRATION_PRISMA_DIFF_TYPE_MISMATCH | MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING | \
-      MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT | MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED) return 0 ;;
+      MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT | MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED | \
+      MIGRATION_PRISMA_DIFF_INPUT_MISSING | MIGRATION_PRISMA_DIFF_INPUT_SYMLINK | \
+      MIGRATION_PRISMA_DIFF_INPUT_NOT_REGULAR | MIGRATION_PRISMA_DIFF_INPUT_TOO_LARGE | \
+      MIGRATION_PRISMA_DIFF_INPUT_UTF8_INVALID | MIGRATION_PRISMA_DIFF_COMMENT_UNTERMINATED | \
+      MIGRATION_PRISMA_DIFF_QUOTE_UNTERMINATED | MIGRATION_PRISMA_DIFF_STATEMENT_UNTERMINATED | \
+      MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_INVALID | \
+      MIGRATION_PRISMA_DIFF_ALTER_TABLE_SYNTAX_UNSUPPORTED | \
+      MIGRATION_PRISMA_DIFF_IDENTIFIER_SYNTAX_UNSUPPORTED | \
+      MIGRATION_PRISMA_DIFF_CLAUSE_SYNTAX_UNSUPPORTED | \
+      MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_EXISTS | MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_WRITE_FAILED | \
+      MIGRATION_PRISMA_DIFF_FACTS_SCHEMA_REJECTED | MIGRATION_PRISMA_DIFF_PARSER_INTERNAL_FAILURE | \
+      MIGRATION_PRISMA_DIFF_PARSER_LAUNCH_FAILED) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -216,14 +239,30 @@ pm_migration_load_prisma_diff_facts() {
   [[ -f $__pm_path && ! -L $__pm_path ]] || return 74
   if ! __pm_summary=$(jq -cer '
       if (.schemaVersion==1 and
-      (.rawByteCount|type)=="number" and .rawByteCount>=0 and .rawByteCount<=4096 and
+      (.rawByteCount|type)=="number" and .rawByteCount>=0 and .rawByteCount==(.rawByteCount|floor) and
+      .sizeLimitBytes==4096 and
       (.nonCommentStatementCount|type)=="number" and .nonCommentStatementCount>=0 and
       (.alterTableCount|type)=="number" and .alterTableCount>=0 and
       (.affectedTableCount|type)=="number" and .affectedTableCount>=0 and
       ([.expectedTablePresent,.submittedPhoneAddPresent,.submittedPhoneAtAddPresent,
         .unexpectedTablePresent,.unexpectedColumnPresent,.unexpectedOperationPresent,
         .defaultPresent,.constraintPresent,.indexPresent,.defaultConstraintIndexPresent,
+        .utf8Valid,.commentsBalanced,.quotesBalanced,.statementTerminationValid,
+        .schemaQualificationObserved,.factsFileCreated,.factsFileLoaded,
         .rawDiffRetained,.rawSqlCaptured]|all(type=="boolean")) and
+      .factsFileCreated==true and .factsFileLoaded==false and
+      (.transactionWrapperState|IN("NOT_OBSERVED","ABSENT","VALID","INVALID")) and
+      (.identifierFormCategory|IN("NOT_OBSERVED","UNQUALIFIED_QUOTED","QUALIFIED_QUOTED",
+        "QUALIFIED_MIXED","MIXED")) and
+      (.parserFailureStage|IN("NONE","INPUT_VALIDATION","INPUT_DECODE","COMMENT_LEXING",
+        "STATEMENT_LEXING","TRANSACTION_WRAPPER","ALTER_TABLE_PARSING","IDENTIFIER_PARSING",
+        "CLAUSE_PARSING","FACTS_OUTPUT","FACTS_SCHEMA","PARSER_LAUNCH","INTERNAL")) and
+      (.parserFailureCode|IN("NONE","INPUT_MISSING","INPUT_SYMLINK","INPUT_NOT_REGULAR",
+        "INPUT_TOO_LARGE","INPUT_UTF8_INVALID","COMMENT_UNTERMINATED","QUOTE_UNTERMINATED",
+        "STATEMENT_UNTERMINATED","TRANSACTION_WRAPPER_INVALID","ALTER_TABLE_SYNTAX_UNSUPPORTED",
+        "IDENTIFIER_SYNTAX_UNSUPPORTED","CLAUSE_SYNTAX_UNSUPPORTED","FACTS_OUTPUT_EXISTS",
+        "FACTS_OUTPUT_WRITE_FAILED","FACTS_SCHEMA_REJECTED","PARSER_LAUNCH_FAILED",
+        "PARSER_INTERNAL_FAILURE")) and
       (.parserResult|IN("ACCEPTED","REJECTED","PARSE_FAILED","EMPTY")) and
       (.normalizedSemanticSha256|test("^[0-9a-f]{64}$")) and
       .expectedSemanticMode=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
@@ -232,9 +271,26 @@ pm_migration_load_prisma_diff_facts() {
         "MIGRATION_PRISMA_DIFF_PARSE_FAILED","MIGRATION_PRISMA_DIFF_UNEXPECTED_TABLE",
         "MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN","MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION",
         "MIGRATION_PRISMA_DIFF_TYPE_MISMATCH","MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING",
-        "MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT","MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED")) and
+        "MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT","MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED",
+        "MIGRATION_PRISMA_DIFF_INPUT_MISSING","MIGRATION_PRISMA_DIFF_INPUT_SYMLINK",
+        "MIGRATION_PRISMA_DIFF_INPUT_NOT_REGULAR","MIGRATION_PRISMA_DIFF_INPUT_TOO_LARGE",
+        "MIGRATION_PRISMA_DIFF_INPUT_UTF8_INVALID","MIGRATION_PRISMA_DIFF_COMMENT_UNTERMINATED",
+        "MIGRATION_PRISMA_DIFF_QUOTE_UNTERMINATED","MIGRATION_PRISMA_DIFF_STATEMENT_UNTERMINATED",
+        "MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_INVALID",
+        "MIGRATION_PRISMA_DIFF_ALTER_TABLE_SYNTAX_UNSUPPORTED",
+        "MIGRATION_PRISMA_DIFF_IDENTIFIER_SYNTAX_UNSUPPORTED",
+        "MIGRATION_PRISMA_DIFF_CLAUSE_SYNTAX_UNSUPPORTED",
+        "MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_EXISTS","MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_WRITE_FAILED",
+        "MIGRATION_PRISMA_DIFF_FACTS_SCHEMA_REJECTED","MIGRATION_PRISMA_DIFF_PARSER_INTERNAL_FAILURE")) and
       .rawDiffRetained==false and .rawSqlCaptured==false) then {
-          rawByteCount:.rawByteCount,statementCount:.nonCommentStatementCount,
+          rawByteCount:.rawByteCount,sizeLimitBytes:.sizeLimitBytes,utf8Valid:.utf8Valid,
+          commentsBalanced:.commentsBalanced,quotesBalanced:.quotesBalanced,
+          statementTerminationValid:.statementTerminationValid,
+          transactionWrapperState:.transactionWrapperState,
+          schemaQualificationObserved:.schemaQualificationObserved,
+          identifierFormCategory:.identifierFormCategory,factsFileCreated:.factsFileCreated,
+          factsFileLoaded:true,parserFailureStage:.parserFailureStage,
+          parserFailureCode:.parserFailureCode,statementCount:.nonCommentStatementCount,
           alterTableCount:.alterTableCount,affectedTableCount:.affectedTableCount,
           expectedTablePresent:.expectedTablePresent,submittedPhoneAddPresent:.submittedPhoneAddPresent,
           submittedPhoneAtAddPresent:.submittedPhoneAtAddPresent,
@@ -245,9 +301,21 @@ pm_migration_load_prisma_diff_facts() {
           normalizedSemanticSha256:.normalizedSemanticSha256,expectedSemanticMode:.expectedSemanticMode,
           finalGateClassification:.finalGateClassification
         } else error("unsafe facts") end' "$__pm_path" 2>/dev/null); then
-    return 74
+    return 76
   fi
   MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT=$(jq -r '.rawByteCount' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_SIZE_LIMIT_BYTES=$(jq -r '.sizeLimitBytes' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_UTF8_VALID=$(jq -r '.utf8Valid' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_COMMENTS_BALANCED=$(jq -r '.commentsBalanced' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_QUOTES_BALANCED=$(jq -r '.quotesBalanced' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_STATEMENT_TERMINATION_VALID=$(jq -r '.statementTerminationValid' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_STATE=$(jq -r '.transactionWrapperState' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_SCHEMA_QUALIFICATION_OBSERVED=$(jq -r '.schemaQualificationObserved' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_IDENTIFIER_FORM_CATEGORY=$(jq -r '.identifierFormCategory' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_FACTS_FILE_CREATED=$(jq -r '.factsFileCreated' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_FACTS_FILE_LOADED=$(jq -r '.factsFileLoaded' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE=$(jq -r '.parserFailureStage' <<<"$__pm_summary")
+  MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE=$(jq -r '.parserFailureCode' <<<"$__pm_summary")
   MIGRATION_PRISMA_DIFF_STATEMENT_COUNT=$(jq -r '.statementCount' <<<"$__pm_summary")
   MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT=$(jq -r '.alterTableCount' <<<"$__pm_summary")
   MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT=$(jq -r '.affectedTableCount' <<<"$__pm_summary")
@@ -268,9 +336,41 @@ pm_migration_load_prisma_diff_facts() {
   MIGRATION_PRISMA_DIFF_FACTS_OBSERVED=true
 }
 
+pm_migration_set_prisma_diff_transport_failure() {
+  local __pm_status=${1:-70} __pm_diff=${2:-} __pm_size=0
+  if [[ -f $__pm_diff && ! -L $__pm_diff ]]; then
+    __pm_size=$(stat -c %s -- "$__pm_diff" 2>/dev/null || printf 0)
+    [[ $__pm_size =~ ^[0-9]+$ ]] || __pm_size=0
+  fi
+  MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT=$__pm_size
+  MIGRATION_PRISMA_DIFF_SIZE_LIMIT_BYTES=4096
+  MIGRATION_PRISMA_DIFF_FACTS_FILE_CREATED=false
+  MIGRATION_PRISMA_DIFF_FACTS_FILE_LOADED=false
+  case $__pm_status in
+    69)
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE=PARSER_LAUNCH
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE=PARSER_LAUNCH_FAILED
+      MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION=MIGRATION_PRISMA_DIFF_PARSER_LAUNCH_FAILED ;;
+    74)
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE=FACTS_OUTPUT
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE=FACTS_OUTPUT_WRITE_FAILED
+      MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION=MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_WRITE_FAILED ;;
+    76)
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE=FACTS_SCHEMA
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE=FACTS_SCHEMA_REJECTED
+      MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION=MIGRATION_PRISMA_DIFF_FACTS_SCHEMA_REJECTED ;;
+    *)
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE=INTERNAL
+      MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE=PARSER_INTERNAL_FAILURE
+      MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION=MIGRATION_PRISMA_DIFF_PARSER_INTERNAL_FAILURE ;;
+  esac
+  MIGRATION_PRISMA_DIFF_PARSER_RESULT=PARSE_FAILED
+}
+
 pm_migration_run_prisma_diff_gate() {
   local __pm_diff=${1:-} __pm_facts=${2:-} __pm_gate=${3:-}
   local __pm_started __pm_status __pm_classification=MIGRATION_PRISMA_DIFF_PARSE_FAILED
+  local __pm_facts_candidate=$__pm_facts
   pm_migration_enter_check MIGRATION_PRISMA_DIFF_GATE_CHECK prisma_diff_gate \
     prisma_diff internal_validator posix_shell || return
   pm_migration_mark_started
@@ -286,7 +386,14 @@ pm_migration_run_prisma_diff_gate() {
     pm_migration_record_failure PRISMA_DIFF_TIMEOUT 124 not_observed
     return
   fi
-  if pm_migration_load_prisma_diff_facts "$__pm_facts"; then
+  if (( __pm_status == 73 )) && [[ -f $__pm_facts.failure && ! -L $__pm_facts.failure ]]; then
+    __pm_facts_candidate=$__pm_facts.failure
+  fi
+  if pm_migration_load_prisma_diff_facts "$__pm_facts_candidate"; then
+    __pm_classification=$MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION
+  else
+    if (( __pm_status == 0 || __pm_status == 65 || __pm_status == 73 )); then __pm_status=76; fi
+    pm_migration_set_prisma_diff_transport_failure "$__pm_status" "$__pm_diff"
     __pm_classification=$MIGRATION_PRISMA_DIFF_FINAL_GATE_CLASSIFICATION
   fi
   if (( __pm_status == 0 )) && [[ $__pm_classification == MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT ]]; then

@@ -413,6 +413,17 @@ pm_validate_success_report() {
     .migration.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
     .migration.prismaDiffEvidence.factsObserved==true and
     .migration.prismaDiffEvidence.rawByteCount>0 and .migration.prismaDiffEvidence.rawByteCount<=4096 and
+    .migration.prismaDiffEvidence.sizeLimitBytes==4096 and
+    .migration.prismaDiffEvidence.utf8Valid==true and
+    .migration.prismaDiffEvidence.commentsBalanced==true and
+    .migration.prismaDiffEvidence.quotesBalanced==true and
+    .migration.prismaDiffEvidence.statementTerminationValid==true and
+    (.migration.prismaDiffEvidence.transactionWrapperState=="ABSENT" or
+      .migration.prismaDiffEvidence.transactionWrapperState=="VALID") and
+    .migration.prismaDiffEvidence.factsFileCreated==true and
+    .migration.prismaDiffEvidence.factsFileLoaded==true and
+    .migration.prismaDiffEvidence.parserFailureStage=="NONE" and
+    .migration.prismaDiffEvidence.parserFailureCode=="NONE" and
     .migration.prismaDiffEvidence.nonCommentStatementCount>=1 and
     (.migration.prismaDiffEvidence.alterTableCount==1 or .migration.prismaDiffEvidence.alterTableCount==2) and
     .migration.prismaDiffEvidence.affectedTableCount==1 and

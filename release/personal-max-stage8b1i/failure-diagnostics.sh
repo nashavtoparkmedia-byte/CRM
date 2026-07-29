@@ -59,6 +59,17 @@ personal_max_stage8b1i_safe_error() {
       MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN | MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION | \
       MIGRATION_PRISMA_DIFF_TYPE_MISMATCH | MIGRATION_PRISMA_DIFF_REQUIRED_COLUMN_MISSING | \
       MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT | MIGRATION_PRISMA_DIFF_EMPTY_ACCEPTED | \
+      MIGRATION_PRISMA_DIFF_INPUT_MISSING | MIGRATION_PRISMA_DIFF_INPUT_SYMLINK | \
+      MIGRATION_PRISMA_DIFF_INPUT_NOT_REGULAR | MIGRATION_PRISMA_DIFF_INPUT_TOO_LARGE | \
+      MIGRATION_PRISMA_DIFF_INPUT_UTF8_INVALID | MIGRATION_PRISMA_DIFF_COMMENT_UNTERMINATED | \
+      MIGRATION_PRISMA_DIFF_QUOTE_UNTERMINATED | MIGRATION_PRISMA_DIFF_STATEMENT_UNTERMINATED | \
+      MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_INVALID | \
+      MIGRATION_PRISMA_DIFF_ALTER_TABLE_SYNTAX_UNSUPPORTED | \
+      MIGRATION_PRISMA_DIFF_IDENTIFIER_SYNTAX_UNSUPPORTED | \
+      MIGRATION_PRISMA_DIFF_CLAUSE_SYNTAX_UNSUPPORTED | \
+      MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_EXISTS | MIGRATION_PRISMA_DIFF_FACTS_OUTPUT_WRITE_FAILED | \
+      MIGRATION_PRISMA_DIFF_FACTS_SCHEMA_REJECTED | MIGRATION_PRISMA_DIFF_PARSER_INTERNAL_FAILURE | \
+      MIGRATION_PRISMA_DIFF_PARSER_LAUNCH_FAILED | \
       PRIOR_RESIDUAL_CLEANUP_REENTRY | PRIOR_RESIDUAL_PATH_UNSAFE | PRIOR_RESIDUAL_METADATA_FAILED | \
       PRIOR_RESIDUAL_MOUNTPOINT_REFUSED | PRIOR_RESIDUAL_IN_USE | PRIOR_RESIDUAL_DOCKER_OBJECTS_PRESENT | PRIOR_RESIDUAL_REPORT_REFUSED | \
       PRIOR_RESIDUAL_REMOVAL_TIMEOUT | PRIOR_RESIDUAL_REMOVAL_FAILED | \
@@ -364,10 +375,34 @@ personal_max_stage8b1i_render_failure() {
   prisma_diff_facts_observed=${MIGRATION_PRISMA_DIFF_FACTS_OBSERVED:-false}
   [[ $prisma_diff_facts_observed == true ]] || prisma_diff_facts_observed=false
   prisma_diff_raw_bytes=${MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT:-0}
+  prisma_diff_size_limit=${MIGRATION_PRISMA_DIFF_SIZE_LIMIT_BYTES:-4096}
+  prisma_diff_utf8_valid=${MIGRATION_PRISMA_DIFF_UTF8_VALID:-false}
+  prisma_diff_comments_balanced=${MIGRATION_PRISMA_DIFF_COMMENTS_BALANCED:-false}
+  prisma_diff_quotes_balanced=${MIGRATION_PRISMA_DIFF_QUOTES_BALANCED:-false}
+  prisma_diff_statement_termination=${MIGRATION_PRISMA_DIFF_STATEMENT_TERMINATION_VALID:-false}
+  prisma_diff_transaction_state=${MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_STATE:-NOT_OBSERVED}
+  prisma_diff_schema_qualification=${MIGRATION_PRISMA_DIFF_SCHEMA_QUALIFICATION_OBSERVED:-false}
+  prisma_diff_identifier_category=${MIGRATION_PRISMA_DIFF_IDENTIFIER_FORM_CATEGORY:-NOT_OBSERVED}
+  prisma_diff_facts_created=${MIGRATION_PRISMA_DIFF_FACTS_FILE_CREATED:-false}
+  prisma_diff_facts_loaded=${MIGRATION_PRISMA_DIFF_FACTS_FILE_LOADED:-false}
+  prisma_diff_failure_stage=${MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE:-NOT_OBSERVED}
+  prisma_diff_failure_code=${MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE:-NOT_OBSERVED}
   prisma_diff_statement_count=${MIGRATION_PRISMA_DIFF_STATEMENT_COUNT:-0}
   prisma_diff_alter_count=${MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT:-0}
   prisma_diff_table_count=${MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT:-0}
-  [[ $prisma_diff_raw_bytes =~ ^[0-9]+$ && $prisma_diff_raw_bytes -le 4096 ]] || prisma_diff_raw_bytes=0
+  [[ $prisma_diff_raw_bytes =~ ^[0-9]+$ ]] || prisma_diff_raw_bytes=0
+  [[ $prisma_diff_size_limit == 4096 ]] || prisma_diff_size_limit=4096
+  [[ $prisma_diff_utf8_valid == true ]] || prisma_diff_utf8_valid=false
+  [[ $prisma_diff_comments_balanced == true ]] || prisma_diff_comments_balanced=false
+  [[ $prisma_diff_quotes_balanced == true ]] || prisma_diff_quotes_balanced=false
+  [[ $prisma_diff_statement_termination == true ]] || prisma_diff_statement_termination=false
+  [[ $prisma_diff_schema_qualification == true ]] || prisma_diff_schema_qualification=false
+  [[ $prisma_diff_facts_created == true ]] || prisma_diff_facts_created=false
+  [[ $prisma_diff_facts_loaded == true ]] || prisma_diff_facts_loaded=false
+  case $prisma_diff_transaction_state in NOT_OBSERVED | ABSENT | VALID | INVALID) ;; *) prisma_diff_transaction_state=NOT_OBSERVED ;; esac
+  case $prisma_diff_identifier_category in NOT_OBSERVED | UNQUALIFIED_QUOTED | QUALIFIED_QUOTED | QUALIFIED_MIXED | MIXED) ;; *) prisma_diff_identifier_category=NOT_OBSERVED ;; esac
+  case $prisma_diff_failure_stage in NONE | NOT_OBSERVED | INPUT_VALIDATION | INPUT_DECODE | COMMENT_LEXING | STATEMENT_LEXING | TRANSACTION_WRAPPER | ALTER_TABLE_PARSING | IDENTIFIER_PARSING | CLAUSE_PARSING | FACTS_OUTPUT | FACTS_SCHEMA | PARSER_LAUNCH | INTERNAL) ;; *) prisma_diff_failure_stage=NOT_OBSERVED ;; esac
+  case $prisma_diff_failure_code in NONE | NOT_OBSERVED | INPUT_MISSING | INPUT_SYMLINK | INPUT_NOT_REGULAR | INPUT_TOO_LARGE | INPUT_UTF8_INVALID | COMMENT_UNTERMINATED | QUOTE_UNTERMINATED | STATEMENT_UNTERMINATED | TRANSACTION_WRAPPER_INVALID | ALTER_TABLE_SYNTAX_UNSUPPORTED | IDENTIFIER_SYNTAX_UNSUPPORTED | CLAUSE_SYNTAX_UNSUPPORTED | FACTS_OUTPUT_EXISTS | FACTS_OUTPUT_WRITE_FAILED | FACTS_SCHEMA_REJECTED | PARSER_LAUNCH_FAILED | PARSER_INTERNAL_FAILURE) ;; *) prisma_diff_failure_code=NOT_OBSERVED ;; esac
   [[ $prisma_diff_statement_count =~ ^[0-9]+$ ]] || prisma_diff_statement_count=0
   [[ $prisma_diff_alter_count =~ ^[0-9]+$ ]] || prisma_diff_alter_count=0
   [[ $prisma_diff_table_count =~ ^[0-9]+$ ]] || prisma_diff_table_count=0
@@ -458,6 +493,18 @@ personal_max_stage8b1i_render_failure() {
     --arg postgresAliasValidationClassification "$postgres_alias_validation_classification" \
     --argjson prismaDiffFactsObserved "$prisma_diff_facts_observed" \
     --argjson prismaDiffRawByteCount "$prisma_diff_raw_bytes" \
+    --argjson prismaDiffSizeLimitBytes "$prisma_diff_size_limit" \
+    --argjson prismaDiffUtf8Valid "$prisma_diff_utf8_valid" \
+    --argjson prismaDiffCommentsBalanced "$prisma_diff_comments_balanced" \
+    --argjson prismaDiffQuotesBalanced "$prisma_diff_quotes_balanced" \
+    --argjson prismaDiffStatementTerminationValid "$prisma_diff_statement_termination" \
+    --arg prismaDiffTransactionWrapperState "$prisma_diff_transaction_state" \
+    --argjson prismaDiffSchemaQualificationObserved "$prisma_diff_schema_qualification" \
+    --arg prismaDiffIdentifierFormCategory "$prisma_diff_identifier_category" \
+    --argjson prismaDiffFactsFileCreated "$prisma_diff_facts_created" \
+    --argjson prismaDiffFactsFileLoaded "$prisma_diff_facts_loaded" \
+    --arg prismaDiffParserFailureStage "$prisma_diff_failure_stage" \
+    --arg prismaDiffParserFailureCode "$prisma_diff_failure_code" \
     --argjson prismaDiffStatementCount "$prisma_diff_statement_count" \
     --argjson prismaDiffAlterTableCount "$prisma_diff_alter_count" \
     --argjson prismaDiffAffectedTableCount "$prisma_diff_table_count" \
@@ -525,6 +572,14 @@ personal_max_stage8b1i_render_failure() {
         rawStderrCaptured:false,rawCommandCaptured:false,environmentValuesCaptured:false,
         databaseUrlCaptured:false,credentialsCaptured:false,sqlCaptured:false,businessDataCaptured:false},
       prismaDiffEvidence:{factsObserved:$prismaDiffFactsObserved,rawByteCount:$prismaDiffRawByteCount,
+        sizeLimitBytes:$prismaDiffSizeLimitBytes,utf8Valid:$prismaDiffUtf8Valid,
+        commentsBalanced:$prismaDiffCommentsBalanced,quotesBalanced:$prismaDiffQuotesBalanced,
+        statementTerminationValid:$prismaDiffStatementTerminationValid,
+        transactionWrapperState:$prismaDiffTransactionWrapperState,
+        schemaQualificationObserved:$prismaDiffSchemaQualificationObserved,
+        identifierFormCategory:$prismaDiffIdentifierFormCategory,
+        factsFileCreated:$prismaDiffFactsFileCreated,factsFileLoaded:$prismaDiffFactsFileLoaded,
+        parserFailureStage:$prismaDiffParserFailureStage,parserFailureCode:$prismaDiffParserFailureCode,
         nonCommentStatementCount:$prismaDiffStatementCount,alterTableCount:$prismaDiffAlterTableCount,
         affectedTableCount:$prismaDiffAffectedTableCount,expectedTablePresent:$prismaDiffExpectedTablePresent,
         submittedPhoneAddPresent:$prismaDiffSubmittedPhonePresent,

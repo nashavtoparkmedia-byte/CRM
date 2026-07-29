@@ -31,6 +31,8 @@ readonly MIGRATION_VERIFICATION_TESTS="$SCRIPT_DIR/test-migration-verification.s
 readonly FAILURE_HANDOFF_TESTS="$SCRIPT_DIR/test-failure-handoff.sh"
 readonly REMAINING_TAIL_TESTS="$SCRIPT_DIR/test-remaining-tail-contract.sh"
 readonly PRISMA_DIFF_SEMANTIC_TESTS="$SCRIPT_DIR/test-prisma-diff-semantics.sh"
+readonly PRISMA_PARSER_FAILURE_TESTS="$SCRIPT_DIR/test-prisma-parser-failures.sh"
+readonly REAL_PRISMA_FAILURE_FORENSIC="$SCRIPT_DIR/real-prisma-diff-parse-failure-forensic.json"
 readonly SCRAPER_HARNESS="$SCRIPT_DIR/synthetic-scraper-harness.js"
 readonly CLIENT_HARNESS="$SCRIPT_DIR/gateway-client-harness.js"
 readonly BACKUP_REPORT='/var/tmp/personal-max-stage8b1s-production-backup.json'
@@ -43,6 +45,8 @@ readonly VERIFICATION_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-r
 readonly VERIFICATION_FAILURE_REPORT_SHA='0203c1287fc2415367e10852fb83bb8001f558f2484c8e6cafe14d86c7d3dd67'
 readonly VERIFICATION_FAILED_SCRIPT_SHA='6ebdbd0221c4fb395f5a255ded0f18a3e63b6f677baa644e5b0dd0296992f1f3'
 readonly VERIFICATION_FAILED_SOURCE_COMMIT='d62c990d74d1b99f455ab24e95d9f8a225bf9d40'
+readonly REAL_PRISMA_FAILURE_REPORT='/var/tmp/personal-max-stage8b1i-isolated-release-proof.failure.089a6a2e433ab7ffcfa5eeff5ac04f3499b67d749158e72efd1c697d6161a580.json'
+readonly REAL_PRISMA_FAILURE_REPORT_SHA='92b2e8bac1a540824b595fcc6b1ad9714524ebfaf77d8f4a08511a551d6fd020'
 readonly ARCHITECTURE='/opt/codex-work/releases/personal-max-transport-architecture-20260726T132916Z'
 readonly SHELLCHECK_BIN=${1:-shellcheck}
 readonly REPOSITORY_MIGRATIONS="$SCRIPT_DIR/../../gravity-mvp/prisma/migrations"
@@ -154,6 +158,36 @@ bound_top_level=$(git -C "$SCRIPT_DIR" show \
   $bound_top_level == *'pm_migration_run_bounded MIGRATION_PRISMA_DIFF_CHECK prisma_diff prisma_diff internal_validator posix_shell'* &&
   $bound_top_level == *'sh "$PACKAGE_ROOT/prisma-legacy-diff-gate.sh" "$TMP/prisma-diff.log" >/dev/null'* ]]
 pass verification_failure_report_acceptance
+[[ -f $REAL_PRISMA_FAILURE_REPORT && ! -L $REAL_PRISMA_FAILURE_REPORT && \
+  -r $REAL_PRISMA_FAILURE_REPORT && ! -w $REAL_PRISMA_FAILURE_REPORT ]]
+[[ $(stat -Lc '%U:%G:%a' "$REAL_PRISMA_FAILURE_REPORT") == root:codexbot:640 ]]
+[[ $(sha256sum -- "$REAL_PRISMA_FAILURE_REPORT" | awk '{print $1}') == "$REAL_PRISMA_FAILURE_REPORT_SHA" ]]
+jq -e '.script.sha256=="089a6a2e433ab7ffcfa5eeff5ac04f3499b67d749158e72efd1c697d6161a580" and
+  .phase=="migration_verification" and .classification=="MIGRATION_PRISMA_DIFF_PARSE_FAILED" and
+  .checkId=="MIGRATION_PRISMA_DIFF_GATE_CHECK" and .exitCode==65 and .sourceLine==297 and
+  .migrationPreflight.substep=="prisma_diff_gate" and .migrationPreflight.originalExitCode==65 and
+  .migrationPreflight.commandCategory=="internal_validator" and
+  .migrationPreflight.executableCategory=="posix_shell" and
+  .prismaDiffEvidence.factsObserved==true and .prismaDiffEvidence.rawByteCount==139 and
+  .prismaDiffEvidence.nonCommentStatementCount==1 and .prismaDiffEvidence.alterTableCount==0 and
+  .prismaDiffEvidence.affectedTableCount==1 and .prismaDiffEvidence.expectedTablePresent==false and
+  .prismaDiffEvidence.unexpectedTablePresent==true and .prismaDiffEvidence.unexpectedOperationPresent==true and
+  .prismaDiffEvidence.parserResult=="PARSE_FAILED" and
+  .prismaDiffEvidence.finalGateClassification=="MIGRATION_PRISMA_DIFF_PARSE_FAILED" and
+  .prismaDiffEvidence.rawDiffRetained==false and .prismaDiffEvidence.rawSqlCaptured==false and
+  .cleanup.completed==true and .cleanup.containersRemaining==0 and .cleanup.networksRemaining==0 and
+  .cleanup.volumesRemaining==0 and .cleanup.tempFilesRemaining==0 and
+  .productionImmutability.observedProductionHead=="e6a0a833fbb756216b058bfe326f9f9c77c4cc6d" and
+  .productionImmutability.observedProductionStatusV2RawSha256=="2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b"' \
+  "$REAL_PRISMA_FAILURE_REPORT" >/dev/null
+jq -e '.evidenceAssessment.classification=="B" and
+  .evidenceAssessment.classificationName=="REAL_DIFF_PARSE_BOUNDARY_PROVEN_CAUSE_INSUFFICIENT" and
+  .evidenceAssessment.exactParserFailureCodeProven==false and
+  .sourceAudit.contradictoryOversizeContractProven==true and
+  .sourceAudit.theseSourceDefectsAreNotAssertedAsTheExactFailedRunCause==true and
+  .safety.rawDiffRecovered==false and .safety.rootProbeRepeated==false' \
+  "$REAL_PRISMA_FAILURE_FORENSIC" >/dev/null
+pass real_prisma_failure_report_acceptance
 free=$(df -B1 -P /var/lib/docker | awk 'NR==2{print $4}')
 [[ $free =~ ^[0-9]+$ && $((free - 2172240240)) -ge 12500000000 && $((free - 2172240240 - 5368709120)) -ge 0 ]]
 pass post_backup_storage_gate
@@ -162,7 +196,7 @@ bash -n "$PROBE" "$DIAGNOSTICS" "$BOUNDED" "$OUTPUT_HELPERS" "$RESTORE_VERIFICAT
   "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" "$RESTORE_TESTS" "$LEDGER_TESTS" \
   "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" "$POSTGRES_NETWORK_ALIAS_TESTS" \
   "$MIGRATION_VERIFICATION_TESTS" "$FAILURE_HANDOFF_TESTS" "$REMAINING_TAIL_TESTS" \
-  "$PRISMA_DIFF_SEMANTIC_TESTS" "$SCRIPT_DIR/test-package.sh"
+  "$PRISMA_DIFF_SEMANTIC_TESTS" "$PRISMA_PARSER_FAILURE_TESTS" "$SCRIPT_DIR/test-package.sh"
 sh -n "$MIGRATION_SQL_GATE"
 sh -n "$PRISMA_LEGACY_DIFF_GATE"
 python3 -c 'compile(open(__import__("sys").argv[1], encoding="utf-8").read(), __import__("sys").argv[1], "exec")' \
@@ -173,7 +207,7 @@ if command -v "$SHELLCHECK_BIN" >/dev/null 2>&1; then
     "$MIGRATION_SQL_GATE" "$PRISMA_LEGACY_DIFF_GATE" "$FAULTS" "$OUTPUT_HANDOFF" "$OUTPUT_COLLISIONS" \
     "$RESTORE_TESTS" "$LEDGER_TESTS" "$POSTGRES_STARTUP_TESTS" "$MIGRATION_PREFLIGHT_TESTS" \
     "$POSTGRES_NETWORK_ALIAS_TESTS" "$MIGRATION_VERIFICATION_TESTS" "$FAILURE_HANDOFF_TESTS" \
-    "$REMAINING_TAIL_TESTS" "$PRISMA_DIFF_SEMANTIC_TESTS" "$SCRIPT_DIR/test-package.sh"
+    "$REMAINING_TAIL_TESTS" "$PRISMA_DIFF_SEMANTIC_TESTS" "$PRISMA_PARSER_FAILURE_TESTS" "$SCRIPT_DIR/test-package.sh"
   pass shellcheck
 else
   PACKAGE_SKIP_COUNT=$((PACKAGE_SKIP_COUNT + 1))
@@ -331,6 +365,11 @@ prisma_diff_semantic_output=$("$PRISMA_DIFF_SEMANTIC_TESTS")
 [[ $(grep -c '^PASS ' <<<"$prisma_diff_semantic_output") -eq 36 ]]
 pass prisma_diff_semantic_regression
 
+prisma_parser_failure_output=$($PRISMA_PARSER_FAILURE_TESTS)
+[[ $prisma_parser_failure_output == *'PRISMA_PARSER_FAILURE_TEST_COUNT=25'* ]]
+[[ $(grep -c '^PASS ' <<<"$prisma_parser_failure_output") -eq 25 ]]
+pass prisma_parser_failure_regression
+
 required_regression_cases=$((14 + 25 + 11))
 [[ $required_regression_cases -eq 50 ]]
 pass required_regression_case_matrix
@@ -372,16 +411,16 @@ require_fixed "$PROBE" '[[ $PM_SCRIPT_SHA256 == "$1" ]]'
 require_fixed "$PROBE" 'sha256sum -c SHA256SUMS'
 pass checksum_binding
 for binding in \
-  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:6b8b84c9e9d9477f827b82735c7bdb46cd26de6123256b1ee9c4dd249fa37c98" \
-  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:1c502260909157be33b64369b0f4163b32c9cd224d5aa81115053a1a110566a5" \
+  "failure-diagnostics.sh:FAILURE_DIAGNOSTICS_SHA256:0d7ca5534b9f1db587cb06a7499a5862f1edc591568692cfde6cc4376ad93e42" \
+  "bounded-operations.sh:BOUNDED_OPERATIONS_SHA256:3dfe9b5bd23c681cf8de5fb3bdb50e1e86da8c0c48309ed806109b923ae7084f" \
   "probe-output-helpers.sh:PROBE_OUTPUT_HELPERS_SHA256:64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" \
   "restore-verification.sh:RESTORE_VERIFICATION_SHA256:996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" \
   "postgres-startup.sh:POSTGRES_STARTUP_SHA256:54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" \
-  "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:ee913ba6221e929b0d98877206cc68cce04a26067766820d0db9f3cf83503189" \
+  "migration-preflight.sh:MIGRATION_PREFLIGHT_SHA256:71ac68dde88da402179fce82f970b4820b7b696a98886a9135fb410d54d89735" \
   "migration-sql-gate.sh:MIGRATION_SQL_GATE_SHA256:9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda" \
   "migration-sql-bindings.txt:MIGRATION_SQL_BINDINGS_SHA256:9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f" \
-  "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:a4e45ce793ffbcc70b37ee72b6d96b5c0728471aa87c02ae92737fce574f350b" \
-  "prisma-diff-semantic-parser.py:PRISMA_DIFF_SEMANTIC_PARSER_SHA256:2a3ffb3006dc923715e13af4faecbacc1141ea24c85ccb09c9f0c51983cdae03" \
+  "prisma-legacy-diff-gate.sh:PRISMA_LEGACY_DIFF_GATE_SHA256:d9867613380ffdba7af070e916ea782721810fe4268bf1c064b59a5de2cb27b0" \
+  "prisma-diff-semantic-parser.py:PRISMA_DIFF_SEMANTIC_PARSER_SHA256:87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890" \
   "synthetic-scraper-harness.js:SYNTHETIC_SCRAPER_HARNESS_SHA256:85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e" \
   "gateway-client-harness.js:GATEWAY_CLIENT_HARNESS_SHA256:f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428"; do
   IFS=: read -r artifact constant digest <<<"$binding"
@@ -492,7 +531,10 @@ for evidence in MIGRATION_SQL_RUNNER_START_CHECK MIGRATION_PRISMA_DEPLOY_CHECK \
 done
 pass failure_diagnostics
 for evidence in 'prismaDiffEvidence:{factsObserved:$prismaDiffFactsObserved' \
-  'rawByteCount:$prismaDiffRawByteCount' 'nonCommentStatementCount:$prismaDiffStatementCount' \
+  'rawByteCount:$prismaDiffRawByteCount' 'sizeLimitBytes:$prismaDiffSizeLimitBytes' \
+  'parserFailureStage:$prismaDiffParserFailureStage' 'parserFailureCode:$prismaDiffParserFailureCode' \
+  'factsFileCreated:$prismaDiffFactsFileCreated' 'factsFileLoaded:$prismaDiffFactsFileLoaded' \
+  'nonCommentStatementCount:$prismaDiffStatementCount' \
   'normalizedSemanticSha256:$prismaDiffSemanticSha256' \
   'expectedSemanticMode:$prismaDiffExpectedMode' 'finalGateClassification:$prismaDiffFinalClassification' \
   'rawDiffRetained:false' 'rawSqlCaptured:false' 'databaseUrlCaptured:false' \
@@ -501,6 +543,9 @@ for evidence in 'prismaDiffEvidence:{factsObserved:$prismaDiffFactsObserved' \
 done
 jq -e '(.allOf[1].then.required|index("prismaDiffEvidence")) and
   (.allOf[1].then.properties.prismaDiffEvidence.required|index("normalizedSemanticSha256")) and
+  (.allOf[1].then.properties.prismaDiffEvidence.required|index("parserFailureCode")) and
+  .allOf[1].then.properties.prismaDiffEvidence.properties.sizeLimitBytes.const==4096 and
+  .allOf[1].then.properties.prismaDiffEvidence.properties.rawByteCount.maximum==null and
   .allOf[1].then.properties.prismaDiffEvidence.properties.rawDiffRetained.const==false and
   .allOf[1].then.properties.prismaDiffEvidence.properties.rawSqlCaptured.const==false and
   .allOf[0].then.properties.migration.properties.prismaDiffEvidence.properties.expectedSemanticMode.const=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
@@ -682,26 +727,28 @@ jq -e '.schemaVersion==1 and .incident=="POSTGRES_NETWORK_ALIAS_VALIDATION_FAILU
 
 jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" and
   .rootProbe.executed==false and
-  .rootProbe.sha256=="089a6a2e433ab7ffcfa5eeff5ac04f3499b67d749158e72efd1c697d6161a580" and
+  .rootProbe.sha256=="e36ad6b2436dd827e33c8a996e22ebbd40e45ffb5e1cc1430f75195d9f9f791f" and
   .rootProbe.runtimeArtifactBindingCount==12 and .rootProbe.runtimeArtifactChecksBeforeFirstUse==true and
   .rootProbe.sha256sumsRole=="complete_package_ledger_not_trust_anchor" and
   .rootProbe.pairedHelperAndLedgerSubstitutionRefused==true and
   (.runtimeArtifactBindings|length)==12 and
   .runtimeArtifactBindings["probe-output-helpers.sh"]=="64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7" and
-  .runtimeArtifactBindings["failure-diagnostics.sh"]=="6b8b84c9e9d9477f827b82735c7bdb46cd26de6123256b1ee9c4dd249fa37c98" and
-  .runtimeArtifactBindings["bounded-operations.sh"]=="1c502260909157be33b64369b0f4163b32c9cd224d5aa81115053a1a110566a5" and
+  .runtimeArtifactBindings["failure-diagnostics.sh"]=="0d7ca5534b9f1db587cb06a7499a5862f1edc591568692cfde6cc4376ad93e42" and
+  .runtimeArtifactBindings["bounded-operations.sh"]=="3dfe9b5bd23c681cf8de5fb3bdb50e1e86da8c0c48309ed806109b923ae7084f" and
   (.runtimeArtifactBindings|has("residual-cleanup.sh")|not) and
   .runtimeArtifactBindings["restore-verification.sh"]=="996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547" and
   .runtimeArtifactBindings["postgres-startup.sh"]=="54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3" and
-  .runtimeArtifactBindings["migration-preflight.sh"]=="ee913ba6221e929b0d98877206cc68cce04a26067766820d0db9f3cf83503189" and
-  .runtimeArtifactBindings["prisma-legacy-diff-gate.sh"]=="a4e45ce793ffbcc70b37ee72b6d96b5c0728471aa87c02ae92737fce574f350b" and
-  .runtimeArtifactBindings["prisma-diff-semantic-parser.py"]=="2a3ffb3006dc923715e13af4faecbacc1141ea24c85ccb09c9f0c51983cdae03" and
+  .runtimeArtifactBindings["migration-preflight.sh"]=="71ac68dde88da402179fce82f970b4820b7b696a98886a9135fb410d54d89735" and
+  .runtimeArtifactBindings["prisma-legacy-diff-gate.sh"]=="d9867613380ffdba7af070e916ea782721810fe4268bf1c064b59a5de2cb27b0" and
+  .runtimeArtifactBindings["prisma-diff-semantic-parser.py"]=="87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890" and
   .support.migrationVerificationTests.scenarioCount==14 and
   .support.failureHandoffTests.scenarioCount==29 and
   .support.remainingTailTests.scenarioCount==21 and
   .support.remainingTailTests.requiredRegressionCasesCovered==11 and
   .support.prismaDiffSemanticTests.scenarioCount==36 and
   .support.prismaDiffSemanticTests.realGateExecuted==true and
+  .support.prismaParserFailureTests.scenarioCount==25 and
+  .support.prismaParserFailureTests.realisticPrismaFixtures==true and
   .restoreVerification.failureReportSha256=="c2cf0e2cb2e19e3f59d791c03af02163fe5571ffab7c993749b39a026948d2de" and
   .restoreVerification.exactCause=="PRISMA_USER_MODEL_MAPPED_TO_USERS" and
   .ledgerVerificationRepair.failureReportSha256=="9197be647171a35553189a0526a2d6e205442f15965f5ce0ae1c8a1934bd73bd" and
@@ -777,6 +824,12 @@ jq -e '.schemaVersion==1 and .stage=="8B1I" and .mode=="PREPARED_NOT_EXECUTED" a
   .prismaDiffSemanticRepair.semanticScenarioCount==36 and
   .prismaDiffSemanticRepair.historicalResidualCleanupInvoked==false and
   .prismaDiffSemanticRepair.unrelatedFailureReportCleanupBindingRemoved==true and
+  .realPrismaDiffParseRepair.evidenceClassification=="B" and
+  .realPrismaDiffParseRepair.exactCauseProven==false and
+  .realPrismaDiffParseRepair.failureReportSha256=="92b2e8bac1a540824b595fcc6b1ad9714524ebfaf77d8f4a08511a551d6fd020" and
+  .realPrismaDiffParseRepair.previousScriptSha256=="089a6a2e433ab7ffcfa5eeff5ac04f3499b67d749158e72efd1c697d6161a580" and
+  .realPrismaDiffParseRepair.preparedScriptSha256=="e36ad6b2436dd827e33c8a996e22ebbd40e45ffb5e1cc1430f75195d9f9f791f" and
+  .realPrismaDiffParseRepair.parserFailureScenarioCount==25 and
   .migrationValidation.prismaDiffStatus=="MIGRATION_PRISMA_DIFF_ALLOWED_LEGACY_DRIFT" and
   .migrationValidation.prismaDiffExpectedSemanticMode=="LEGACY_TWO_COLUMN_DRIFT_EXPECTED" and
   .migrationValidation.acceptedLedgerOnlyMigrations==["20260717000000_add_driver_telegram_submitted_phone"] and
@@ -795,10 +848,10 @@ pass git_diff_check
 pass architecture_checksum
 
 if (( PACKAGE_SKIP_COUNT == 0 )); then
-  [[ $PACKAGE_PASS_COUNT -eq 70 ]]
+  [[ $PACKAGE_PASS_COUNT -eq 72 ]]
 else
-  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 69 ]]
+  [[ $PACKAGE_SKIP_COUNT -eq 1 && $PACKAGE_PASS_COUNT -eq 71 ]]
 fi
 
-printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nREMAINING_TAIL_TEST_COUNT=21\nPRISMA_DIFF_SEMANTIC_TEST_COUNT=36\nREQUIRED_REGRESSION_CASE_COUNT=50\n' \
+printf 'ROOT_PROBE_EXECUTED=NO\nDOCKER_EXECUTED=NO\nDATABASE_CONNECTED=NO\nPACKAGE_TEST_COUNT=%s\nPACKAGE_TEST_SKIPPED=%s\nFAULT_SCENARIO_COUNT=20\nOUTPUT_HANDOFF_TEST_COUNT=36\nOUTPUT_TARGET_COLLISION_TEST_COUNT=30\nRESTORE_REGRESSION_TEST_COUNT=25\nLEDGER_REGRESSION_TEST_COUNT=22\nPOSTGRES_STARTUP_TEST_COUNT=34\nMIGRATION_PREFLIGHT_TEST_COUNT=26\nPOSTGRES_NETWORK_ALIAS_TEST_COUNT=28\nMIGRATION_VERIFICATION_TEST_COUNT=14\nFAILURE_HANDOFF_TEST_COUNT=29\nREMAINING_TAIL_TEST_COUNT=21\nPRISMA_DIFF_SEMANTIC_TEST_COUNT=36\nPRISMA_PARSER_FAILURE_TEST_COUNT=25\nREQUIRED_REGRESSION_CASE_COUNT=50\n' \
   "$PACKAGE_PASS_COUNT" "$PACKAGE_SKIP_COUNT"

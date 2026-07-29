@@ -18,7 +18,12 @@ assert_safe_facts() {
   local path=$1 expected_class=$2
   jq -e --arg expected "$expected_class" '
     .schemaVersion==1 and .finalGateClassification==$expected and
-    (.rawByteCount|type)=="number" and (.nonCommentStatementCount|type)=="number" and
+    (.rawByteCount|type)=="number" and .sizeLimitBytes==4096 and
+    ([.utf8Valid,.commentsBalanced,.quotesBalanced,.statementTerminationValid,
+      .schemaQualificationObserved,.factsFileCreated,.factsFileLoaded]|all(type=="boolean")) and
+    (.parserFailureStage|type)=="string" and (.parserFailureCode|type)=="string" and
+    (.transactionWrapperState|type)=="string" and (.identifierFormCategory|type)=="string" and
+    (.nonCommentStatementCount|type)=="number" and
     (.alterTableCount|type)=="number" and (.affectedTableCount|type)=="number" and
     ([.expectedTablePresent,.submittedPhoneAddPresent,.submittedPhoneAtAddPresent,
       .unexpectedTablePresent,.unexpectedColumnPresent,.unexpectedOperationPresent,
@@ -72,7 +77,7 @@ run_sql_case delete_statement 65 MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION "$on
 run_sql_case index_creation 65 MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION "$one_line"'CREATE INDEX "forbidden" ON "DriverTelegram"("submittedPhone");\n'
 run_sql_case constraint_creation 65 MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION "$one_line"'ALTER TABLE "DriverTelegram" ADD CONSTRAINT "forbidden" CHECK (true);\n'
 run_sql_case duplicate_column 65 MIGRATION_PRISMA_DIFF_UNEXPECTED_COLUMN 'ALTER TABLE "DriverTelegram" ADD COLUMN "submittedPhone" TEXT, ADD COLUMN "submittedPhone" TEXT, ADD COLUMN "submittedPhoneAt" TIMESTAMP(3);\n'
-run_sql_case malformed_sql 65 MIGRATION_PRISMA_DIFF_PARSE_FAILED 'ALTER TABLE "DriverTelegram" ADD COLUMN "submittedPhone" TEXT\n'
+run_sql_case malformed_sql 65 MIGRATION_PRISMA_DIFF_STATEMENT_UNTERMINATED 'ALTER TABLE "DriverTelegram" ADD COLUMN "submittedPhone" TEXT\n'
 run_sql_case statement_after 65 MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION "$one_line"'SELECT 1;\n'
 run_sql_case statement_before 65 MIGRATION_PRISMA_DIFF_UNEXPECTED_OPERATION 'SELECT 1;\n'"$one_line"
 
@@ -84,7 +89,7 @@ sh "$GATE" "$size_sql" "$size_facts" >"$TEST_ROOT/size_limit.status"
 size_status=$?
 set -e
 [[ $size_status -eq 65 ]]
-assert_safe_facts "$size_facts" MIGRATION_PRISMA_DIFF_PARSE_FAILED
+assert_safe_facts "$size_facts" MIGRATION_PRISMA_DIFF_INPUT_TOO_LARGE
 pass size_limit
 
 printf '%b' "$one_line" >"$TEST_ROOT/symlink-target.sql"
@@ -94,7 +99,7 @@ sh "$GATE" "$TEST_ROOT/symlink.sql" "$TEST_ROOT/symlink.json" >"$TEST_ROOT/symli
 symlink_status=$?
 set -e
 [[ $symlink_status -eq 65 ]]
-assert_safe_facts "$TEST_ROOT/symlink.json" MIGRATION_PRISMA_DIFF_PARSE_FAILED
+assert_safe_facts "$TEST_ROOT/symlink.json" MIGRATION_PRISMA_DIFF_INPUT_SYMLINK
 pass symlink_refusal
 
 [[ $(find "$REPOSITORY_ROOT/gravity-mvp/prisma/migrations" -mindepth 2 -maxdepth 2 -type f -name migration.sql | wc -l) -eq 53 ]]
@@ -107,7 +112,7 @@ rg -q "readonly_expected_mode='LEGACY_TWO_COLUMN_DRIFT_EXPECTED'" "$GATE"
 ! rg -q 'EMPTY_DIFF_EXPECTED' "$GATE"
 pass expected_semantic_mode_exact
 
-jq -e 'keys==(["affectedTableCount","alterTableCount","constraintPresent","defaultConstraintIndexPresent","defaultPresent","expectedSemanticMode","expectedTablePresent","finalGateClassification","indexPresent","nonCommentStatementCount","normalizedSemanticSha256","parserResult","rawByteCount","rawDiffRetained","rawSqlCaptured","schemaVersion","submittedPhoneAddPresent","submittedPhoneAtAddPresent","unexpectedColumnPresent","unexpectedOperationPresent","unexpectedTablePresent"]|sort)' \
+jq -e 'keys==(["affectedTableCount","alterTableCount","commentsBalanced","constraintPresent","defaultConstraintIndexPresent","defaultPresent","expectedSemanticMode","expectedTablePresent","factsFileCreated","factsFileLoaded","finalGateClassification","identifierFormCategory","indexPresent","nonCommentStatementCount","normalizedSemanticSha256","parserFailureCode","parserFailureStage","parserResult","quotesBalanced","rawByteCount","rawDiffRetained","rawSqlCaptured","schemaQualificationObserved","schemaVersion","sizeLimitBytes","statementTerminationValid","submittedPhoneAddPresent","submittedPhoneAtAddPresent","transactionWrapperState","unexpectedColumnPresent","unexpectedOperationPresent","unexpectedTablePresent","utf8Valid"]|sort)' \
   "$TEST_ROOT/exact_old_form.json" >/dev/null
 pass sanitized_semantic_facts
 

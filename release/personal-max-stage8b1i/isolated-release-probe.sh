@@ -35,16 +35,16 @@ readonly ATTESTED_PRODUCTION_LEDGER_SHA256='3b77a5c161cbd9850ce3d45b38c2b0e5cc11
 readonly ACCEPTED_LEDGER_ONLY_MIGRATION='20260717000000_add_driver_telegram_submitted_phone'
 readonly ACCEPTED_PRODUCTION_HEAD='e6a0a833fbb756216b058bfe326f9f9c77c4cc6d'
 readonly ACCEPTED_PRODUCTION_STATUS_V2_RAW_SHA256='2958f4cc4849e2248b73cff4d0aa779f33f0008d602bb5294326eb01ba44a60b'
-readonly FAILURE_DIAGNOSTICS_SHA256='6b8b84c9e9d9477f827b82735c7bdb46cd26de6123256b1ee9c4dd249fa37c98'
-readonly BOUNDED_OPERATIONS_SHA256='1c502260909157be33b64369b0f4163b32c9cd224d5aa81115053a1a110566a5'
+readonly FAILURE_DIAGNOSTICS_SHA256='0d7ca5534b9f1db587cb06a7499a5862f1edc591568692cfde6cc4376ad93e42'
+readonly BOUNDED_OPERATIONS_SHA256='3dfe9b5bd23c681cf8de5fb3bdb50e1e86da8c0c48309ed806109b923ae7084f'
 readonly PROBE_OUTPUT_HELPERS_SHA256='64f4a885a1f109130059f9466712d5b9088cfe9154ad580903694b17403eeed7'
 readonly RESTORE_VERIFICATION_SHA256='996721573f9b243598c2380497e44a8aafd2800330500256ddc53c2ef6779547'
 readonly POSTGRES_STARTUP_SHA256='54276af4a969b0003c907e249e1fdef04d2b8da6c101cc898aecc6d5685b56e3'
-readonly MIGRATION_PREFLIGHT_SHA256='ee913ba6221e929b0d98877206cc68cce04a26067766820d0db9f3cf83503189'
+readonly MIGRATION_PREFLIGHT_SHA256='71ac68dde88da402179fce82f970b4820b7b696a98886a9135fb410d54d89735'
 readonly MIGRATION_SQL_GATE_SHA256='9faf24f9aacbd48c27d5e8cff8b0bfdcc92570a9d314232969fd684d70539bda'
 readonly MIGRATION_SQL_BINDINGS_SHA256='9128eba91ecb5ce9d010015031050379cd45941fff93bef721df889040a56f8f'
-readonly PRISMA_LEGACY_DIFF_GATE_SHA256='a4e45ce793ffbcc70b37ee72b6d96b5c0728471aa87c02ae92737fce574f350b'
-readonly PRISMA_DIFF_SEMANTIC_PARSER_SHA256='2a3ffb3006dc923715e13af4faecbacc1141ea24c85ccb09c9f0c51983cdae03'
+readonly PRISMA_LEGACY_DIFF_GATE_SHA256='d9867613380ffdba7af070e916ea782721810fe4268bf1c064b59a5de2cb27b0'
+readonly PRISMA_DIFF_SEMANTIC_PARSER_SHA256='87024a3151d183292b1c94cd5c681470bd023eda4b57fc56cce255747edf4890'
 readonly SYNTHETIC_SCRAPER_HARNESS_SHA256='85d3b4f7b63829b054cfcb61af3d9c786b8dbcf0e9d52aa01be86fbef85a917e'
 readonly GATEWAY_CLIENT_HARNESS_SHA256='f1f8c3f5a60a0cf45f44904d8f708f760d02b6553c3b86d05e1ecbbd8cd25428'
 readonly PRODUCTION_PROJECT_LABEL='com.docker.compose.project=crm'
@@ -1019,6 +1019,18 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
   --argjson postgresAliasUrlBinding "$MIGRATION_POSTGRES_ALIAS_URL_BINDING" \
   --argjson prismaDiffEmpty "$prisma_diff_empty" --arg prismaDiffStatus "$prisma_diff_status" \
   --argjson prismaDiffRawByteCount "$MIGRATION_PRISMA_DIFF_RAW_BYTE_COUNT" \
+  --argjson prismaDiffSizeLimitBytes "$MIGRATION_PRISMA_DIFF_SIZE_LIMIT_BYTES" \
+  --argjson prismaDiffUtf8Valid "$MIGRATION_PRISMA_DIFF_UTF8_VALID" \
+  --argjson prismaDiffCommentsBalanced "$MIGRATION_PRISMA_DIFF_COMMENTS_BALANCED" \
+  --argjson prismaDiffQuotesBalanced "$MIGRATION_PRISMA_DIFF_QUOTES_BALANCED" \
+  --argjson prismaDiffStatementTerminationValid "$MIGRATION_PRISMA_DIFF_STATEMENT_TERMINATION_VALID" \
+  --arg prismaDiffTransactionWrapperState "$MIGRATION_PRISMA_DIFF_TRANSACTION_WRAPPER_STATE" \
+  --argjson prismaDiffSchemaQualificationObserved "$MIGRATION_PRISMA_DIFF_SCHEMA_QUALIFICATION_OBSERVED" \
+  --arg prismaDiffIdentifierFormCategory "$MIGRATION_PRISMA_DIFF_IDENTIFIER_FORM_CATEGORY" \
+  --argjson prismaDiffFactsFileCreated "$MIGRATION_PRISMA_DIFF_FACTS_FILE_CREATED" \
+  --argjson prismaDiffFactsFileLoaded "$MIGRATION_PRISMA_DIFF_FACTS_FILE_LOADED" \
+  --arg prismaDiffParserFailureStage "$MIGRATION_PRISMA_DIFF_PARSER_FAILURE_STAGE" \
+  --arg prismaDiffParserFailureCode "$MIGRATION_PRISMA_DIFF_PARSER_FAILURE_CODE" \
   --argjson prismaDiffStatementCount "$MIGRATION_PRISMA_DIFF_STATEMENT_COUNT" \
   --argjson prismaDiffAlterTableCount "$MIGRATION_PRISMA_DIFF_ALTER_TABLE_COUNT" \
   --argjson prismaDiffAffectedTableCount "$MIGRATION_PRISMA_DIFF_AFFECTED_TABLE_COUNT" \
@@ -1066,6 +1078,14 @@ pm_write_bounded "$TMP_REPORT" report_render 60 METADATA_TIMEOUT SUCCESS_REPORT_
       afterFinished:$afterFinished,failed:$failed,prismaDiffEmpty:$prismaDiffEmpty,
       prismaDiffStatus:$prismaDiffStatus,durationSeconds:$migrationSeconds,
       prismaDiffEvidence:{factsObserved:true,rawByteCount:$prismaDiffRawByteCount,
+        sizeLimitBytes:$prismaDiffSizeLimitBytes,utf8Valid:$prismaDiffUtf8Valid,
+        commentsBalanced:$prismaDiffCommentsBalanced,quotesBalanced:$prismaDiffQuotesBalanced,
+        statementTerminationValid:$prismaDiffStatementTerminationValid,
+        transactionWrapperState:$prismaDiffTransactionWrapperState,
+        schemaQualificationObserved:$prismaDiffSchemaQualificationObserved,
+        identifierFormCategory:$prismaDiffIdentifierFormCategory,
+        factsFileCreated:$prismaDiffFactsFileCreated,factsFileLoaded:$prismaDiffFactsFileLoaded,
+        parserFailureStage:$prismaDiffParserFailureStage,parserFailureCode:$prismaDiffParserFailureCode,
         nonCommentStatementCount:$prismaDiffStatementCount,alterTableCount:$prismaDiffAlterTableCount,
         affectedTableCount:$prismaDiffAffectedTableCount,expectedTablePresent:$prismaDiffExpectedTablePresent,
         submittedPhoneAddPresent:$prismaDiffSubmittedPhonePresent,
