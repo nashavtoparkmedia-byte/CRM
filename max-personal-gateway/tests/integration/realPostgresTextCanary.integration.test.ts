@@ -91,6 +91,62 @@ if (config === null) {
       assert.equal(dispatches.every((row: any) => row.state === 'provider_confirmed' && row.providerMessageId), true)
     })
 
+    test('twenty rapid commands cannot overtake a delayed third physical action', { timeout: 120_000 }, async () => {
+      const accountId = runId('rapid_fifo_account')
+      const conversationKey = runId('rapid_fifo_conversation')
+      const protocolChatId = String(780000000000 + Math.floor(Math.random() * 99_999_999_999))
+      await createRoute(client, accountId, conversationKey, protocolChatId)
+      const runtimeConfig = loadTextSenderRuntimeConfig({
+        MAX_PERSONAL_TEXT_SENDER_ENABLED: 'true', MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED: 'true',
+        MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR: 'true', MAX_PERSONAL_TEXT_SENDER_ACCOUNT_ID: accountId,
+        MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON: JSON.stringify([conversationKey]),
+        MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON: JSON.stringify({ current: secret }), MAX_PERSONAL_TEXT_SENDER_HMAC_KEY_ID: 'current',
+        MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET: secret,
+        MAX_PERSONAL_TEXT_SENDER_SCRAPER_URL: 'http://max-web-scraper:3005/v1/personal-max/send/text',
+        MAX_PERSONAL_TEXT_SENDER_OWNER_ID: 'rapid-fifo-scraper-owner', MAX_PERSONAL_TEXT_ACTOR_OWNER_ID: 'rapid-fifo-gateway-actor',
+      })
+      const service = new TextCanaryService(client as any, runtimeConfig)
+      const physicalOrder: string[] = []
+      let activePhysical = 0
+      let maximumActivePhysical = 0
+      globalThis.fetch = async (_input, init) => {
+        const envelope = JSON.parse(String(init?.body))
+        await service.authorize(envelope)
+        activePhysical += 1
+        maximumActivePhysical = Math.max(maximumActivePhysical, activePhysical)
+        physicalOrder.push(envelope.request.payload.text)
+        if (envelope.request.payload.text === 'rapid-03') {
+          await new Promise(resolve => setTimeout(resolve, 40))
+        }
+        activePhysical -= 1
+        const suffix = physicalOrder.length.toString(16).padStart(14, '0')
+        return new Response(JSON.stringify({
+          schemaVersion: 1, attemptId: envelope.request.attemptId, outcome: 'PROVIDER_CONFIRMED',
+          safeCode: 'EXACT_PROVIDER_CONFIRMATION', physicalProviderCalled: true,
+          providerMessageId: `d301${suffix}`,
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      const texts = Array.from({ length: 20 }, (_, index) => `rapid-${String(index + 1).padStart(2, '0')}`)
+      const results = await Promise.all(texts.map((text, index) => service.submit({
+        schemaVersion: 1, accountId, protocolChatId, text, clientMessageId: `rapid-client-${index + 1}`,
+      })))
+
+      assert.deepEqual(physicalOrder, texts)
+      assert.equal(maximumActivePhysical, 1)
+      assert.equal(results.every(result => result.deliveryConfirmed === true), true)
+      const commands = await client.maxOutboundCommand.findMany({
+        where: { accountId, conversationKey }, orderBy: [{ commandSequence: 'asc' }, { commandId: 'asc' }],
+      })
+      assert.deepEqual(commands.map((row: any) => row.commandSequence), Array.from({ length: 20 }, (_, index) => index + 1))
+      assert.deepEqual(commands.map((row: any) => row.commandPayload.text), texts)
+      const attempts = await client.maxOutboundDispatchAttempt.findMany({
+        where: { accountId, conversationKey }, orderBy: [{ physicalActionStartedAt: 'asc' }, { attemptId: 'asc' }],
+      })
+      assert.equal(attempts.length, 20)
+      assert.equal(attempts.every((row: any) => row.attemptState === 'provider_confirmed'), true)
+      assert.equal(await client.maxOutboundReconciliationTask.count({ where: { accountId, conversationKey, state: 'open' } }), 0)
+    })
+
     test('post-action uncertainty is durable and never retried', async () => {
       const accountId = runId('unknown_account')
       const conversationKey = runId('unknown_conversation')

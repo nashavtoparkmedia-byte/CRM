@@ -140,14 +140,17 @@ export class TextCanaryService {
     }
     const command = exactCommand(value)
     if (command.accountId !== this.#config.accountId) throw new TextCanaryError('WRONG_ACCOUNT')
-    const route = await this.#routeRegistry.resolveByIdentity(command.accountId, 'protocol_chat_id', command.protocolChatId)
-    if (!route || route.state !== 'active' || route.hasOpenConflict || route.activeProtocolChatId !== command.protocolChatId) {
-      throw new TextCanaryError('ROUTE_NOT_SENDABLE')
-    }
-    if (!this.#conversationIsEnabled(command.accountId, route.conversationKey)) {
-      throw new TextCanaryError('CONVERSATION_NOT_ALLOWLISTED')
-    }
-    return this.#serialize(`${command.accountId}\0${route.conversationKey}`, async () => {
+    // Register the request in its route lane before the first asynchronous
+    // lookup. Otherwise concurrent route reads can complete out of order and
+    // assign commandSequence by database scheduling rather than request FIFO.
+    return this.#serialize(`${command.accountId}\0protocol_chat_id\0${command.protocolChatId}`, async () => {
+      const route = await this.#routeRegistry.resolveByIdentity(command.accountId, 'protocol_chat_id', command.protocolChatId)
+      if (!route || route.state !== 'active' || route.hasOpenConflict || route.activeProtocolChatId !== command.protocolChatId) {
+        throw new TextCanaryError('ROUTE_NOT_SENDABLE')
+      }
+      if (!this.#conversationIsEnabled(command.accountId, route.conversationKey)) {
+        throw new TextCanaryError('CONVERSATION_NOT_ALLOWLISTED')
+      }
       const commandId = opaque('cmd', `${command.accountId}\0${command.clientMessageId}`)
       const enqueued = await this.#actor.enqueueCommand({
         commandId,
