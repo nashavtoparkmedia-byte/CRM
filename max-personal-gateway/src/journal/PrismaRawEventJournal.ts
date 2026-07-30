@@ -465,6 +465,15 @@ export class PrismaRawEventJournal implements RawEventJournal {
             parserVersion: input.parserVersion,
             OR: [
               { state: 'pending' },
+              {
+                state: 'quarantined',
+                attempts: 0,
+                claimedBy: null,
+                claimedAt: null,
+                leaseUntil: null,
+                leaseVersion: 0,
+                completedAt: null,
+              },
               { leaseUntil: { lt: input.now } },
               { claimedBy: input.workerId },
             ],

@@ -133,6 +133,41 @@ test('batch cursor advances only after terminal durable outcomes and survives pr
   assert.equal((await journal.getCursor('normalizer', 'account-a', MAX_INBOUND_NORMALIZER_VERSION))?.lastJournalSequence, 3n)
 })
 
+test('initial replay-unavailable quarantine is materialized once and does not block the batch cursor', async () => {
+  const { client, journal, processor } = harness()
+  const observationId = await journal.append({
+    ...observation('account-a', { $quarantine: { reason: 'binary_payload_not_persisted' } }),
+    replayAvailability: 'quarantined',
+    quarantineReason: 'binary_payload_not_persisted',
+  })
+  const initial = await journal.getProcessingState('account-a', observationId, MAX_INBOUND_NORMALIZER_VERSION)
+  assert.equal(initial?.state, 'quarantined')
+  assert.equal(initial?.attempts, 0)
+  assert.equal(initial?.completedAt, undefined)
+
+  const batch = await processor.normalizeBatch({
+    accountId: 'account-a', consumerId: 'normalizer', parserVersion: MAX_INBOUND_NORMALIZER_VERSION,
+    workerId: 'worker-a', limit: 1,
+  })
+
+  assert.deepEqual(batch, { processed: 1, normalized: 0, unsupported: 0, quarantined: 1, idempotent: 0, lastJournalSequence: 1n })
+  const result = await processor.getNormalizationResult('account-a', observationId, MAX_INBOUND_NORMALIZER_VERSION)
+  assert.equal(result?.result.status, 'quarantined')
+  assert.equal(result?.result.issueCode, 'RAW_PAYLOAD_UNAVAILABLE')
+  assert.equal(result?.events.length, 0)
+  const terminal = await journal.getProcessingState('account-a', observationId, MAX_INBOUND_NORMALIZER_VERSION)
+  assert.equal(terminal?.state, 'quarantined')
+  assert.equal(terminal?.attempts, 1)
+  assert.equal(terminal?.completedAt?.toISOString(), now.toISOString())
+
+  const replay = await processor.normalizeBatch({
+    accountId: 'account-a', consumerId: 'normalizer', parserVersion: MAX_INBOUND_NORMALIZER_VERSION,
+    workerId: 'worker-b', limit: 1,
+  })
+  assert.equal(replay.processed, 0)
+  assert.equal(client.normalizationResultRows().length, 1)
+})
+
 test('event insert failure rolls back result and all events, does not advance cursor, and retry succeeds', async () => {
   const { client, journal, processor } = harness()
   const observationId = await journal.append(observation('account-a', {

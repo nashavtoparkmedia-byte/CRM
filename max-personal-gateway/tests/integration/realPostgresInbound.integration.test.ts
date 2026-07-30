@@ -202,6 +202,46 @@ if (config === null) {
       }
     })
 
+    test('S3-DB-30A initial replay-unavailable quarantine is claimed once and advances the durable cursor', async () => {
+      const account = runId('s3_initial_quarantine')
+      const observationId = await journal.append({
+        ...observation(account, { $quarantine: { reason: 'binary_payload_not_persisted' } }),
+        replayAvailability: 'quarantined',
+        quarantineReason: 'binary_payload_not_persisted',
+      })
+      const initial = await client.maxRawTransportProcessing.findUniqueOrThrow({
+        where: { observationId_parserVersion: { observationId, parserVersion: MAX_INBOUND_NORMALIZER_VERSION } },
+      })
+      assert.equal(initial.state, 'quarantined')
+      assert.equal(initial.attempts, 0)
+      assert.equal(initial.completedAt, null)
+      const raw = await client.maxRawTransportEvent.findUniqueOrThrow({ where: { observationId } })
+
+      const batch = await processor.normalizeBatch({
+        accountId: account, consumerId: 'stage3-shadow', parserVersion: MAX_INBOUND_NORMALIZER_VERSION,
+        workerId: 'initial-quarantine', limit: 1,
+      })
+
+      assert.deepEqual({ processed: batch.processed, quarantined: batch.quarantined, lastJournalSequence: batch.lastJournalSequence },
+        { processed: 1, quarantined: 1, lastJournalSequence: raw.journalSequence })
+      assert.equal((await journal.getCursor('stage3-shadow', account, MAX_INBOUND_NORMALIZER_VERSION))?.lastJournalSequence,
+        batch.lastJournalSequence)
+      const result = await processor.getNormalizationResult(account, observationId, MAX_INBOUND_NORMALIZER_VERSION)
+      assert.equal(result?.result.status, 'quarantined')
+      assert.equal(result?.result.issueCode, 'RAW_PAYLOAD_UNAVAILABLE')
+      assert.equal(result?.events.length, 0)
+      const terminal = await client.maxRawTransportProcessing.findUniqueOrThrow({
+        where: { observationId_parserVersion: { observationId, parserVersion: MAX_INBOUND_NORMALIZER_VERSION } },
+      })
+      assert.equal(terminal.state, 'quarantined')
+      assert.equal(terminal.attempts, 1)
+      assert.notEqual(terminal.completedAt, null)
+      assert.equal((await processor.normalizeBatch({
+        accountId: account, consumerId: 'stage3-shadow', parserVersion: MAX_INBOUND_NORMALIZER_VERSION,
+        workerId: 'initial-quarantine-restart', limit: 1,
+      })).processed, 0)
+    })
+
     test('S3-DB-31..38 reply, reactions, receipts, route evidence, and feature flag have honest durable semantics', async () => {
       const account = runId('s3_semantics')
       const payloads: JsonValue[] = [

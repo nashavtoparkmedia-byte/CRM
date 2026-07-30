@@ -250,6 +250,8 @@ function makeTransaction(store: Store, failures: FailurePlan): FakeTransaction {
         const now = ((where.OR as Array<Record<string, unknown>> | undefined)?.find(condition => condition.leaseUntil)?.leaseUntil as Record<string, Date> | undefined)?.lt
         const allowedWorker = (where.OR as Array<Record<string, unknown>> | undefined)?.find(condition => condition.claimedBy)?.claimedBy
         const allowPending = (where.OR as Array<Record<string, unknown>> | undefined)?.some(condition => condition.state === 'pending') ?? false
+        const allowInitialQuarantine = (where.OR as Array<Record<string, unknown>> | undefined)?.some(condition =>
+          condition.state === 'quarantined' && condition.attempts === 0 && condition.leaseVersion === 0) ?? false
         const row = store.processing.find(candidate => {
           if (where.observationId !== undefined && candidate.observationId !== String(where.observationId)) return false
           if (where.parserVersion !== undefined && candidate.parserVersion !== String(where.parserVersion)) return false
@@ -261,6 +263,9 @@ function makeTransaction(store: Store, failures: FailurePlan): FakeTransaction {
           }
           if (where.OR !== undefined) {
             return (allowPending && candidate.state === 'pending')
+              || (allowInitialQuarantine && candidate.state === 'quarantined'
+                && candidate.attempts === 0 && candidate.claimedBy === null && candidate.claimedAt === null
+                && candidate.leaseUntil === null && candidate.leaseVersion === 0 && candidate.completedAt === null)
               || (now !== undefined && candidate.leaseUntil !== null && candidate.leaseUntil < now)
               || (allowedWorker !== undefined && candidate.claimedBy === String(allowedWorker))
           }
