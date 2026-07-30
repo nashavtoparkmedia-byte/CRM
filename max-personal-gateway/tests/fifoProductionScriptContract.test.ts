@@ -37,6 +37,8 @@ test('ten allowed FIFO canaries use only the CRM durable API path', () => {
   assert.match(source, /http:\/\/127\.0\.0\.1:3002\/api\/messages/u)
   assert.doesNotMatch(source, /3005\/v1\/personal-max\/send\/text/u)
   assert.match(source, /fifo_gate == '10\|10\|1\|10\|10\|10\|10\|10\|10\|9'/u)
+  assert.match(source, /\.status=="delivered"[\s\S]*\.metadata\.maxDelivery\.status=="provider_confirmed"/u)
+  assert.match(source, /\.metadata\.maxDelivery\.deliveryConfirmed==true/u)
 })
 
 test('rapid client registration preserves order and partial reruns never blindly retry', () => {

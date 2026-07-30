@@ -339,7 +339,8 @@ if (( existing_count < 10 )); then
     });
   ' <"$request_file" >"$response_file"
   jq -e 'length>0 and all(.success==true and .status=="delivered" and .deliveryConfirmed==true and
-    (.externalId|test("^d301[0-9a-f]{14}$";"i")) and .metadata.maxDelivery.status=="delivered")' \
+    (.externalId|test("^d301[0-9a-f]{14}$";"i")) and .metadata.maxDelivery.status=="provider_confirmed" and
+    .metadata.maxDelivery.deliveryConfirmed==true)' \
     "$response_file" >/dev/null
   jq '[.[]|{success,status,deliveryConfirmed,externalId,maxDelivery:.metadata.maxDelivery}]' \
     "$response_file" >"$EVIDENCE_DIR/crm-canary-responses.private.json"
