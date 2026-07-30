@@ -2984,6 +2984,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const isOutgoingCandidate = Boolean(latest.isOutgoing || (latest.viewportW && latest.x > latest.viewportW * 0.55))
   if (isOutgoingCandidate && !options.includeOutgoing) {
     let providerMessageId = null
+    let providerResolution = null
     if (reason === 'manual_debug' && latest.text) {
       const exact = await new MaxWebReplyBridge(page).resolveProviderId(
         chatId,
@@ -2991,8 +2992,21 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
         { uiChatId: uiRouteId },
       ).catch(() => null)
       if (isRealMaxMessageId(exact?.providerMessageId)) providerMessageId = exact.providerMessageId
+      if (exact) {
+        providerResolution = {
+          reason: exact.reason || null,
+          candidateCount: Number(exact.candidateCount) || 0,
+          textMatchCount: Number(exact.textMatchCount) || 0,
+          directionMatchCount: Number(exact.directionMatchCount) || 0,
+          timeWindowMatchCount: Number(exact.timeWindowMatchCount) || 0,
+          routeMatchCount: Number(exact.routeMatchCount) || 0,
+        }
+      }
     }
-    return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW, providerMessageId }
+    return {
+      skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW,
+      providerMessageId, providerResolution,
+    }
   }
   if (isOutgoingCandidate && matchesRecentCrmOutboundText(chatId, uiRouteId, latest.text)) {
     return { skipped: 'crm_outbound_already_recorded', text: latest.text }
