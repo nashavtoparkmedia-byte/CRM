@@ -47,6 +47,7 @@ const { SerializedOutboundQueue }  = require('./lib/SerializedOutboundQueue')
 const { resolveOutboundProviderMessageId } = require('./lib/MaxOutboundConfirmation')
 const { createLiveCaptureAdapterFromEnvironment } = require('./capture/LiveCaptureAdapter')
 const { createPhysicalTextSenderRuntime } = require('./sender-v1/runtime')
+const { sendProviderConfirmedUiText } = require('./sender-v1/ProviderConfirmedUiTextSender')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -5892,21 +5893,30 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
       error.code = 'ROUTE_INVALID'
       throw error
     }
-  },
-  send: async request => enqueueSend(async () => {
-    const chatId = Number(request.route.protocolChatId)
-    const cid = stableTextCid(request.clientMessageId || request.commandId)
-    const response = await transport.sendFrame(
-      OP.SEND_MESSAGE,
-      { chatId, message: { text: request.payload.text, cid, elements: [], attaches: [] }, notify: true },
-      { waitResponse: true, timeoutMs: 30_000 },
-    )
-    const providerMessageId = response?.message?.id ? String(response.message.id) : null
-    if (!providerMessageId || !isRealMaxMessageId(providerMessageId)) {
-      return { outcome: 'UNKNOWN_AFTER_ATTEMPT', safeCode: 'EXACT_PROVIDER_ID_MISSING', physicalProviderCalled: true }
+    const webRouteId = String(request?.route?.webRouteId || '')
+    const resolvedWebRouteId = resolveUiRouteIdForChat(String(protocolChatId)).uiRouteId
+    if (!/^\d{5,15}$/.test(webRouteId) || webRouteId !== String(resolvedWebRouteId)) {
+      const error = new Error('Exact web route does not match the protocol route')
+      error.code = 'ROUTE_MISMATCH'
+      throw error
     }
-    return { outcome: 'PROVIDER_CONFIRMED', providerMessageId, physicalProviderCalled: true }
-  }),
+  },
+  send: async request => enqueueSend(() => sendProviderConfirmedUiText({
+    request,
+    sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
+    startProviderAck: ({ protocolChatId, text }) => waitForUiSendAck(transport, 30_000, {
+      chatId: protocolChatId,
+      text,
+    }),
+    resolveProviderMessageId: ({ protocolChatId, webRouteId, text, sentAt }) => resolveOutboundProviderMessageId({
+      bridge: new MaxWebReplyBridge(page),
+      protocolChatId,
+      uiRouteId: webRouteId,
+      text,
+      sentAt,
+    }),
+    isRealProviderMessageId: isRealMaxMessageId,
+  })),
 })
 
 app.post('/v1/personal-max/send/text', async (req, res) => {

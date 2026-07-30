@@ -39,13 +39,15 @@ test('outcome enum is exact and never asserts recipient delivery', () => {
   assert.doesNotMatch(gatewayTypes + senderSource, /['"]DELIVERED['"]/)
 })
 
-test('synthetic boundary remains provider-free while physical runtime is exact, private, and has no DOM fallback', () => {
+test('synthetic boundary remains provider-free while physical runtime uses one exact private UI provider action', () => {
   assert.doesNotMatch(syntheticSource, /require\(['"][^'"]*(playwright|puppeteer|maxBrowser|TransportInterceptor|SerializedOutboundQueue|providerClient)/i)
   assert.doesNotMatch(syntheticSource, /fetch\s*\(|axios|https?\.request|sendText|sendMessage|page\./i)
   assert.match(runtime, /createPhysicalTextSenderRuntime/)
   assert.match(runtime, /app\.post\('\/v1\/personal-max\/send\/text'/)
-  assert.match(runtime, /transport\.sendFrame\(\s*OP\.SEND_MESSAGE/)
-  assert.match(runtime, /isRealMaxMessageId\(providerMessageId\)/)
+  assert.match(runtime, /sendProviderConfirmedUiText/)
+  assert.match(runtime, /sendTextViaUi\(webRouteId, text, protocolChatId\)/)
+  assert.match(runtime, /resolveOutboundProviderMessageId\(\{/)
+  assert.match(runtime, /isRealProviderMessageId: isRealMaxMessageId/)
   assert.doesNotMatch(physicalBoundary + physicalRuntime, /playwright|puppeteer|page\.|locator\(|click\(|goto\(|page\.evaluate\(/i)
   assert.match(physicalRuntime, /max-personal-gateway/)
   assert.match(physicalRuntime, /\/var\/lib\//)
