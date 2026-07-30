@@ -235,8 +235,9 @@ class MaxWebReplyBridge {
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
         const chatKey = chat.id
         try {
-          if (BigInt(chatKey) !== requestedChatKey
-            || BigInt.asUintN(32, BigInt(chatKey)) !== uiRouteKey) {
+          const normalizedChatKey = BigInt(chatKey)
+          if ((normalizedChatKey !== requestedChatKey && normalizedChatKey !== uiRouteKey)
+            || BigInt.asUintN(32, normalizedChatKey) !== uiRouteKey) {
             return { ok: false, reason: 'max_web_chat_route_mismatch' }
           }
         } catch {
@@ -250,7 +251,8 @@ class MaxWebReplyBridge {
           }
         })
         if (routeMatches.length > 1
-          || (routeMatches.length === 1 && BigInt(routeMatches[0]?.id) !== requestedChatKey)) {
+          || (routeMatches.length === 1
+            && ![requestedChatKey, uiRouteKey].includes(BigInt(routeMatches[0]?.id)))) {
           return { ok: false, reason: 'max_web_chat_route_ambiguous' }
         }
         const routeMatchCount = 1
@@ -386,8 +388,9 @@ class MaxWebReplyBridge {
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded', candidates: [] }
         const chatKey = chat.id
         try {
-          if (BigInt(chatKey) !== requestedChatKey
-            || BigInt.asUintN(32, BigInt(chatKey)) !== uiRouteKey) {
+          const normalizedChatKey = BigInt(chatKey)
+          if ((normalizedChatKey !== requestedChatKey && normalizedChatKey !== uiRouteKey)
+            || BigInt.asUintN(32, normalizedChatKey) !== uiRouteKey) {
             return { ok: false, reason: 'max_web_chat_route_mismatch', candidates: [] }
           }
         } catch {
@@ -401,7 +404,8 @@ class MaxWebReplyBridge {
           }
         })
         if (routeMatches.length > 1
-          || (routeMatches.length === 1 && BigInt(routeMatches[0]?.id) !== requestedChatKey)) {
+          || (routeMatches.length === 1
+            && ![requestedChatKey, uiRouteKey].includes(BigInt(routeMatches[0]?.id)))) {
           return { ok: false, reason: 'max_web_chat_route_ambiguous', candidates: [] }
         }
         const routeMatchCount = 1
@@ -600,8 +604,9 @@ class MaxWebReplyBridge {
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
         const chatKey = chat.id
         try {
-          if (BigInt(chatKey) !== requestedChatKey
-            || BigInt.asUintN(32, BigInt(chatKey)) !== uiRouteKey) {
+          const normalizedChatKey = BigInt(chatKey)
+          if ((normalizedChatKey !== requestedChatKey && normalizedChatKey !== uiRouteKey)
+            || BigInt.asUintN(32, normalizedChatKey) !== uiRouteKey) {
             return { ok: false, reason: 'max_web_chat_route_mismatch' }
           }
         } catch {
@@ -615,7 +620,8 @@ class MaxWebReplyBridge {
           }
         })
         if (routeMatches.length > 1
-          || (routeMatches.length === 1 && BigInt(routeMatches[0]?.id) !== requestedChatKey)) {
+          || (routeMatches.length === 1
+            && ![requestedChatKey, uiRouteKey].includes(BigInt(routeMatches[0]?.id)))) {
           return { ok: false, reason: 'max_web_chat_route_ambiguous' }
         }
 

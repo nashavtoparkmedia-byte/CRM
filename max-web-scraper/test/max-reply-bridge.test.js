@@ -220,6 +220,7 @@ test('MAX Web provider lookup accepts a structurally fenced minified store expor
   const providerMessageId = 'd3019f4dcf27c35ecf'
   const providerNumericId = BigInt(providerDecimalFromId(providerMessageId))
   const chatId = 902454841098n
+  const uiRouteId = 511708938n
   const message = {
     id: providerNumericId,
     text: { plain: 'exact provider-backed text' },
@@ -231,10 +232,10 @@ test('MAX Web provider lookup accepts a structurally fenced minified store expor
     values: [message],
     getLazy: async id => id === providerNumericId ? message : null,
   }
-  const chat = { id: chatId, messages: [message], lastMessage: message }
+  const chat = { id: uiRouteId, messages: [message], lastMessage: message }
   const store = {
     chats: { values: [], getLazy: async id => id === chatId ? chat : null },
-    messages: { get: id => id === chatId ? providerStore : { values: [], getLazy: async () => null } },
+    messages: { get: id => id === uiRouteId ? providerStore : { values: [], getLazy: async () => null } },
     profile: { viewer: { id: 1n } },
   }
   const previousWindow = global.window
@@ -256,6 +257,7 @@ test('MAX Web provider lookup accepts a structurally fenced minified store expor
 
     assert.equal(result.providerMessageId, providerMessageId)
     assert.equal(result.reason, 'unique_strict_match')
+    assert.equal(result.providerChatId, String(uiRouteId))
     assert.equal(result.routeMatchCount, 1)
   } finally {
     global.window = previousWindow

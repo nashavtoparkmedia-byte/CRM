@@ -856,7 +856,8 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
         { uiChatId: route.uiRouteId },
       )
       const exact = assessProviderText(recovered.exactText)
-      if (recovered.providerChatId !== protocolChatId || recovered.routeMatchCount !== 1) {
+      if (![protocolChatId, String(route.uiRouteId)].includes(String(recovered.providerChatId || ''))
+        || recovered.routeMatchCount !== 1) {
         throw new Error('provider route identity mismatch')
       }
       if (!exact.accepted || (!exact.text && !msg.attachments?.length)) {

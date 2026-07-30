@@ -188,6 +188,8 @@ test('history snapshot rejects account, route and participant ambiguity', () => 
   assert.throws(() => snapshot([], { accountId: '' }), /account is invalid/)
   assert.throws(() => snapshot([], { uiRouteId: '1' }), /route binding is invalid/)
   assert.throws(() => snapshot([], { routeMatchCount: 2 }), /provider route is ambiguous/)
+  assert.doesNotThrow(() => snapshot([], { providerChatId: UI_ROUTE_ID }))
+  assert.throws(() => snapshot([], { providerChatId: '999999999' }), /provider route is ambiguous/)
   assert.throws(() => snapshot([], { providerUserId: OWNER_USER_ID }), /participant binding is invalid/)
 })
 

@@ -105,7 +105,8 @@ function buildProviderHistorySnapshot({
     || String(providerUserId) === String(ownerUserId)) {
     throw new Error('History snapshot participant binding is invalid')
   }
-  if (String(providerChatId || '') !== String(protocolChatId) || Number(routeMatchCount) !== 1) {
+  if (![String(protocolChatId), String(uiRouteId)].includes(String(providerChatId || ''))
+    || Number(routeMatchCount) !== 1) {
     throw new Error('History snapshot provider route is ambiguous')
   }
 
