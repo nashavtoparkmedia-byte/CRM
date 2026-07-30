@@ -19,6 +19,9 @@ test('production repair runner is valid shell and checksum/source bound', () => 
   assert.doesNotMatch(productionSource, /--project-directory "\$PROD_DIR"/u)
   assert.match(productionSource, /seal_evidence "\$EVIDENCE_DIR"/u)
   assert.match(productionSource, /printf 'MISSING  %s\\n'/u)
+  assert.match(productionSource, /MIN_DOCKER_FREE_BYTES=15000000000/u)
+  assert.match(productionSource, /docker info --format '\{\{\.DockerRootDir\}\}'/u)
+  assert.match(productionSource, /docker builder prune --all --force/u)
 })
 
 test('fresh backup and default-off precede every repair mutation', () => {

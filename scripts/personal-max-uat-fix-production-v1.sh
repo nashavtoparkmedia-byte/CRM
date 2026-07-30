@@ -14,6 +14,7 @@ readonly STATE_FILE=/var/lib/crm/personal-max-uat-fix-state.json
 readonly RESULT_FILE=/var/tmp/personal-max-uat-fix-production.json
 readonly SEQUENCE5_PROVIDER_ID=d3019fb24937cd40f5
 readonly REPLAY_PROVIDER_ID=d3019f9cddd3452c06
+readonly MIN_DOCKER_FREE_BYTES=15000000000
 
 if [[ $EUID -ne 0 ]]; then
   echo 'ERROR: bounded production repair must run as root' >&2
@@ -167,6 +168,9 @@ build_or_validate_image() {
     --build-arg BUILD_TIMESTAMP="$BUILD_TIMESTAMP" \
     "$@" -f "$dockerfile" -t "$image" "$context"
   [[ $(image_revision "$image") == "$SOURCE_SHA" ]]
+  # The release image owns every required layer. Intermediate BuildKit cache is
+  # rebuildable and must not consume the production rollback reserve.
+  docker builder prune --all --force
 }
 
 postgres_query() {
@@ -240,6 +244,16 @@ else
   install -d -o root -g codexbot -m 2750 "$EVIDENCE_DIR"
 fi
 readonly EVIDENCE_DIR
+
+docker_root=$(docker info --format '{{.DockerRootDir}}')
+[[ $docker_root == /* && -d $docker_root && ! -L $docker_root ]]
+docker_free_bytes=$(df --output=avail -B1 "$docker_root" | tail -n 1 | tr -d ' ')
+[[ $docker_free_bytes =~ ^[0-9]+$ && $docker_free_bytes -ge $MIN_DOCKER_FREE_BYTES ]]
+jq -n --arg dockerRoot "$docker_root" --argjson freeBytes "$docker_free_bytes" \
+  --argjson minimumFreeBytes "$MIN_DOCKER_FREE_BYTES" \
+  '{schemaVersion:1,dockerRoot:$dockerRoot,freeBytes:$freeBytes,
+    minimumFreeBytes:$minimumFreeBytes,gatePassed:true}' \
+  >"$EVIDENCE_DIR/storage-before-build.json"
 
 if [[ $resume == false ]]; then
   previous_run_counts=$(postgres_query <<'SQL'
