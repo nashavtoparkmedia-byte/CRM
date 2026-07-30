@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { loadTextSenderRuntimeConfig } from '../../src/sender/config.ts'
 import { TextCanaryService } from '../../src/sender/TextCanaryService.ts'
+import { createLedgerHarness } from '../support/dispatchHarness.ts'
 import { createRealPrismaClient, readRealPostgresConfig, runId, type RealPrismaClient } from '../support/realPostgres.ts'
 
 const config = readRealPostgresConfig()
@@ -120,6 +121,90 @@ if (config === null) {
       assert.equal(calls, 1)
       const tasks = await client.maxOutboundReconciliationTask.findMany({ where: { accountId, conversationKey, state: 'open' } })
       assert.equal(tasks.length, 1)
+    })
+
+    test('provider identity conflict becomes reconciliation and exact late confirmation releases FIFO', async () => {
+      const accountId = runId('conflict_account')
+      const conversationKey = runId('conflict_conversation')
+      const protocolChatId = String(650000000000 + Math.floor(Math.random() * 99_999_999_999))
+      await createRoute(client, accountId, conversationKey, protocolChatId)
+      const runtimeConfig = loadTextSenderRuntimeConfig({
+        MAX_PERSONAL_TEXT_SENDER_ENABLED: 'true', MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED: 'true',
+        MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR: 'true', MAX_PERSONAL_TEXT_SENDER_ACCOUNT_ID: accountId,
+        MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON: JSON.stringify([conversationKey]),
+        MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON: JSON.stringify({ current: secret }), MAX_PERSONAL_TEXT_SENDER_HMAC_KEY_ID: 'current',
+        MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET: secret,
+        MAX_PERSONAL_TEXT_SENDER_SCRAPER_URL: 'http://max-web-scraper:3005/v1/personal-max/send/text',
+        MAX_PERSONAL_TEXT_SENDER_OWNER_ID: 'conflict-scraper-owner', MAX_PERSONAL_TEXT_ACTOR_OWNER_ID: 'conflict-gateway-actor',
+      })
+      const service = new TextCanaryService(client as any, runtimeConfig)
+      const reusedProviderId = `d301${'a'.repeat(32)}`
+      const reconciledProviderId = `d301${'b'.repeat(32)}`
+      const thirdProviderId = `d301${'c'.repeat(32)}`
+      let physicalCalls = 0
+      globalThis.fetch = async (_input, init) => {
+        physicalCalls += 1
+        const envelope = JSON.parse(String(init?.body))
+        await service.authorize(envelope)
+        return new Response(JSON.stringify({
+          schemaVersion: 1, attemptId: envelope.request.attemptId, outcome: 'PROVIDER_CONFIRMED',
+          safeCode: 'EXACT_PROVIDER_CONFIRMATION', physicalProviderCalled: true,
+          providerMessageId: physicalCalls <= 2 ? reusedProviderId : thirdProviderId,
+        }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+
+      const command = (clientMessageId: string) => ({
+        schemaVersion: 1, accountId, protocolChatId, text: 'same text', clientMessageId,
+      })
+      const first = await service.submit(command('conflict-first'))
+      const second = await service.submit(command('conflict-second'))
+      const third = await service.submit(command('conflict-third'))
+
+      assert.equal(first.deliveryConfirmed, true)
+      assert.equal(second.deliveryStatus, 'needs_review')
+      assert.equal(second.success, true)
+      assert.equal(third.deliveryStatus, 'queued')
+      assert.equal(third.success, true)
+      assert.equal(physicalCalls, 2)
+      assert.equal(await client.maxOutboundReconciliationTask.count({
+        where: { accountId, conversationKey, state: 'open' },
+      }), 1)
+      const thirdCommand = await client.maxOutboundCommand.findFirstOrThrow({
+        where: { accountId, conversationKey, clientMessageId: 'conflict-third' },
+      })
+      const queuedThirdDispatch = await client.maxOutboundDispatch.findUnique({
+        where: { commandId: thirdCommand.commandId },
+      })
+      assert.equal(queuedThirdDispatch?.state, 'queued')
+      assert.equal(queuedThirdDispatch?.attemptCount, 0)
+
+      const secondCommand = await client.maxOutboundCommand.findFirstOrThrow({
+        where: { accountId, conversationKey, clientMessageId: 'conflict-second' },
+      })
+      const secondDispatch = await client.maxOutboundDispatch.findUniqueOrThrow({
+        where: { commandId: secondCommand.commandId },
+      })
+      const secondAttempt = await client.maxOutboundDispatchAttempt.findUniqueOrThrow({
+        where: { attemptId: secondDispatch.currentAttemptId },
+      })
+      const ledger = createLedgerHarness(client).ledger
+      const reconciled = await ledger.recordExactProviderConfirmation({
+        accountId, conversationKey, dispatchId: secondDispatch.dispatchId,
+        attemptId: secondAttempt.attemptId, expectedStateVersion: secondDispatch.stateVersion,
+        expectedAttemptVersion: secondAttempt.attemptVersion,
+        transitionIdempotencyKey: runId('late_exact_transition'),
+        evidenceReference: runId('late_exact_evidence'), providerMessageId: reconciledProviderId,
+      })
+      assert.equal(reconciled.dispatch.state, 'provider_confirmed')
+      assert.equal(reconciled.reconciliationTask?.state, 'resolved')
+
+      const resumed = await service.submit(command('conflict-third'))
+      assert.equal(resumed.deliveryConfirmed, true)
+      assert.equal(resumed.externalId, thirdProviderId)
+      assert.equal(physicalCalls, 3)
+      assert.equal(await client.maxOutboundReconciliationTask.count({
+        where: { accountId, conversationKey, state: 'open' },
+      }), 0)
     })
 
     test('a proven pre-action refusal can retry safely with a new attempt', async () => {

@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import { PrismaDispatchLedger } from '../dispatch/PrismaDispatchLedger.ts'
+import { dispatchErrorCode } from '../dispatch/errors.ts'
 import type { SenderAuthorityInput, SenderAuthorityProof, SenderAuthorityVerifier } from '../dispatch/types.ts'
 import { PrismaPerConversationOutboundActor } from '../outbound/PrismaPerConversationOutboundActor.ts'
 import { PrismaRouteRegistry } from '../route/PrismaRouteRegistry.ts'
@@ -165,7 +166,8 @@ export class TextCanaryService {
         deliveryConfirmed: result.state === 'provider_confirmed',
         deliveryStatus: result.state === 'provider_confirmed' ? 'accepted_by_max'
           : result.state === 'reconciliation_required' ? 'needs_review'
-            : result.state,
+            : result.state === 'dispatching' ? 'sending'
+              : result.state,
         dispatchId: result.dispatchId,
         idempotent: enqueued.idempotent,
       }
@@ -235,7 +237,9 @@ export class TextCanaryService {
         accountId, conversationKey, ownerId: this.#actorOwnerId, leaseEpoch: actor.leaseEpoch,
         expectedActorVersion: actor.optimisticVersion, reservationMilliseconds: 60_000,
       })
-      if (reservation.status !== 'reserved' || reservation.command.commandId !== commandId) throw new TextCanaryError('FIFO_BLOCKED')
+      if (reservation.status !== 'reserved' || reservation.command.commandId !== commandId) {
+        return { state: 'queued', providerMessageId: null, dispatchId: null }
+      }
       const created = await this.#ledger.createDispatchFromReservation({
         dispatchId: opaque('dispatch', commandId), accountId, conversationKey,
         reservationId: reservation.reservation.reservationId, expectedCommandId: commandId,
@@ -260,6 +264,7 @@ export class TextCanaryService {
       })
       dispatch = queued.dispatch
     }
+    if (dispatch.state === 'dispatching') return dispatch
     if (!['queued', 'retryable_failed'].includes(dispatch.state)) throw new TextCanaryError('ATTEMPT_IN_PROGRESS')
     const owner = await this.#sessionOwner.acquire({ accountId, ownerInstanceId: this.#sessionOwnerInstanceId, leaseMilliseconds: 120_000 })
     if (owner.lease.fencingToken > BigInt(Number.MAX_SAFE_INTEGER)) throw new TextCanaryError('FENCING_TOKEN_OVERFLOW')
@@ -267,13 +272,19 @@ export class TextCanaryService {
     const attemptId = opaque('attempt', `${dispatch.dispatchId}:${attemptNumber}`)
     const correlation = opaque('correlation', attemptId)
     const proofTimestamp = new Date()
-    const begun = await this.#ledger.beginAttempt({
-      attemptId, accountId, conversationKey, dispatchId: dispatch.dispatchId,
-      expectedStateVersion: dispatch.stateVersion, senderOwnerId: this.#sessionOwnerInstanceId,
-      senderFencingEpoch: Number(owner.lease.fencingToken), senderProofTimestamp: proofTimestamp,
-      attemptCorrelationId: correlation, transitionIdempotencyKey: opaque('transition', `${attemptId}:begin`),
-      claimMilliseconds: 60_000,
-    })
+    let begun
+    try {
+      begun = await this.#ledger.beginAttempt({
+        attemptId, accountId, conversationKey, dispatchId: dispatch.dispatchId,
+        expectedStateVersion: dispatch.stateVersion, senderOwnerId: this.#sessionOwnerInstanceId,
+        senderFencingEpoch: Number(owner.lease.fencingToken), senderProofTimestamp: proofTimestamp,
+        attemptCorrelationId: correlation, transitionIdempotencyKey: opaque('transition', `${attemptId}:begin`),
+        claimMilliseconds: 60_000,
+      })
+    } catch (error) {
+      if (dispatchErrorCode(error) === 'FIFO_BLOCKED') return dispatch
+      throw error
+    }
     const command = await this.#actor.getCommand(accountId, commandId)
     if (!command || !command.commandPayload || typeof command.commandPayload !== 'object'
       || Array.isArray(command.commandPayload) || (command.commandPayload as any).kind !== 'text'
@@ -321,13 +332,24 @@ export class TextCanaryService {
         expectedStateVersion: accepted.dispatch.stateVersion, expectedAttemptVersion: accepted.attempt!.attemptVersion,
         transitionIdempotencyKey: opaque('transition', `${attemptId}:awaiting`), evidenceReference: correlation,
       })
-      const confirmed = await this.#ledger.recordExactProviderConfirmation({
-        accountId, conversationKey, dispatchId: dispatch.dispatchId, attemptId,
-        expectedStateVersion: awaiting.dispatch.stateVersion, expectedAttemptVersion: awaiting.attempt!.attemptVersion,
-        transitionIdempotencyKey: opaque('transition', `${attemptId}:confirmed`),
-        evidenceReference: correlation, providerMessageId: response.providerMessageId,
-      })
-      return confirmed.dispatch
+      try {
+        const confirmed = await this.#ledger.recordExactProviderConfirmation({
+          accountId, conversationKey, dispatchId: dispatch.dispatchId, attemptId,
+          expectedStateVersion: awaiting.dispatch.stateVersion, expectedAttemptVersion: awaiting.attempt!.attemptVersion,
+          transitionIdempotencyKey: opaque('transition', `${attemptId}:confirmed`),
+          evidenceReference: correlation, providerMessageId: response.providerMessageId,
+        })
+        return confirmed.dispatch
+      } catch (error) {
+        if (dispatchErrorCode(error) !== 'PROVIDER_MESSAGE_ID_CONFLICT') throw error
+        const unknown = await this.#ledger.recordUnknownOutcome({
+          accountId, conversationKey, dispatchId: dispatch.dispatchId, attemptId,
+          expectedStateVersion: awaiting.dispatch.stateVersion, expectedAttemptVersion: awaiting.attempt!.attemptVersion,
+          transitionIdempotencyKey: opaque('transition', `${attemptId}:provider-id-conflict`),
+          evidenceReference: correlation, reason: 'outcome_unknown',
+        })
+        return unknown.dispatch
+      }
     }
     if (currentAttempt.attemptState === 'prepared') {
       const failed = await this.#ledger.recordPreActionFailure({
