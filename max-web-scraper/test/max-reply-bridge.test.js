@@ -233,7 +233,7 @@ test('MAX Web provider lookup accepts a structurally fenced minified store expor
   }
   const chat = { id: chatId, messages: [message], lastMessage: message }
   const store = {
-    chats: { values: [chat], getLazy: async id => id === chatId ? chat : null },
+    chats: { values: [], getLazy: async id => id === chatId ? chat : null },
     messages: { get: id => id === chatId ? providerStore : { values: [], getLazy: async () => null } },
     profile: { viewer: { id: 1n } },
   }
@@ -315,7 +315,7 @@ test('real provider reply target still route-correlates the MAX Web chat before 
   assert.notEqual(sendEnd, -1)
   assert.match(sendBlock, /const requestedChatKey = BigInt\(String\(args\.chatId\)\)/)
   assert.match(sendBlock, /const uiRouteKey = BigInt\(String\(args\.uiRouteId\)\)/)
-  assert.match(sendBlock, /const routeMatches = Array\.from\(core\.store\.chats\.values \|\| \[\]\)/)
+  assert.match(sendBlock, /let routeMatches = Array\.from\(core\.store\.chats\.values \|\| \[\]\)/)
   assert.match(sendBlock, /const chat = routeMatches\.length === 1/)
   assert.match(sendBlock, /: await core\.store\.chats\.getLazy\(requestedChatKey\)/)
   assert.match(sendBlock, /if \(!core\.legacySendPrimitives/)

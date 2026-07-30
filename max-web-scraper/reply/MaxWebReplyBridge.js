@@ -219,18 +219,41 @@ class MaxWebReplyBridge {
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
         const messageKey = BigInt(String(args.providerMessageDecimal))
-        const routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+        let routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
             return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
           } catch {
             return false
           }
         })
+        if (routeMatches.length > 1) {
+          return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+        }
         const chat = routeMatches.length === 1
           ? routeMatches[0]
           : await core.store.chats.getLazy(requestedChatKey)
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
         const chatKey = chat.id
+        try {
+          if (BigInt(chatKey) !== requestedChatKey
+            || BigInt.asUintN(32, BigInt(chatKey)) !== uiRouteKey) {
+            return { ok: false, reason: 'max_web_chat_route_mismatch' }
+          }
+        } catch {
+          return { ok: false, reason: 'max_web_chat_route_mismatch' }
+        }
+        routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+          try {
+            return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
+          } catch {
+            return false
+          }
+        })
+        if (routeMatches.length > 1
+          || (routeMatches.length === 1 && BigInt(routeMatches[0]?.id) !== requestedChatKey)) {
+          return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+        }
+        const routeMatchCount = 1
 
         let message = Array.from(chat.messages || []).find(candidate => {
           try {
@@ -253,7 +276,7 @@ class MaxWebReplyBridge {
         return {
           ok: true,
           providerChatId: String(chatKey),
-          routeMatchCount: routeMatches.length,
+          routeMatchCount,
           message: {
             id: BigInt.asUintN(64, BigInt(message.id)).toString(),
             text: message.text?.plain || '',
@@ -347,18 +370,41 @@ class MaxWebReplyBridge {
         if (!core) return { ok: false, reason: 'max_web_core_not_found', candidates: [] }
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
-        const routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+        let routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
             return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
           } catch {
             return false
           }
         })
+        if (routeMatches.length > 1) {
+          return { ok: false, reason: 'max_web_chat_route_ambiguous', candidates: [] }
+        }
         const chat = routeMatches.length === 1
           ? routeMatches[0]
           : await core.store.chats.getLazy(requestedChatKey)
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded', candidates: [] }
         const chatKey = chat.id
+        try {
+          if (BigInt(chatKey) !== requestedChatKey
+            || BigInt.asUintN(32, BigInt(chatKey)) !== uiRouteKey) {
+            return { ok: false, reason: 'max_web_chat_route_mismatch', candidates: [] }
+          }
+        } catch {
+          return { ok: false, reason: 'max_web_chat_route_mismatch', candidates: [] }
+        }
+        routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+          try {
+            return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
+          } catch {
+            return false
+          }
+        })
+        if (routeMatches.length > 1
+          || (routeMatches.length === 1 && BigInt(routeMatches[0]?.id) !== requestedChatKey)) {
+          return { ok: false, reason: 'max_web_chat_route_ambiguous', candidates: [] }
+        }
+        const routeMatchCount = 1
 
         let historyFrom = null
         try { historyFrom = chat.lastMessage?.time ?? null } catch {}
@@ -409,7 +455,7 @@ class MaxWebReplyBridge {
           ok: true,
           candidates,
           providerChatId: String(chatKey),
-          routeMatchCount: routeMatches.length,
+          routeMatchCount,
         }
       } catch (error) {
         return { ok: false, reason: String(error?.message || error), candidates: [] }
@@ -538,18 +584,40 @@ class MaxWebReplyBridge {
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
         const replyKey = BigInt(args.replyId)
-        const routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+        let routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
             return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
           } catch {
             return false
           }
         })
+        if (routeMatches.length > 1) {
+          return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+        }
         const chat = routeMatches.length === 1
           ? routeMatches[0]
           : await core.store.chats.getLazy(requestedChatKey)
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
         const chatKey = chat.id
+        try {
+          if (BigInt(chatKey) !== requestedChatKey
+            || BigInt.asUintN(32, BigInt(chatKey)) !== uiRouteKey) {
+            return { ok: false, reason: 'max_web_chat_route_mismatch' }
+          }
+        } catch {
+          return { ok: false, reason: 'max_web_chat_route_mismatch' }
+        }
+        routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+          try {
+            return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
+          } catch {
+            return false
+          }
+        })
+        if (routeMatches.length > 1
+          || (routeMatches.length === 1 && BigInt(routeMatches[0]?.id) !== requestedChatKey)) {
+          return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+        }
 
         let target = Array.from(chat.messages || []).find(message => {
           try { return BigInt.asUintN(64, BigInt(message?.id)) === replyKey } catch { return false }
