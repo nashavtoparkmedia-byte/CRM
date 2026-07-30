@@ -7,6 +7,7 @@ import type { QuickReplyTemplate } from "./QuickReplySuggestions"
 import QuickReplyPopover from "./QuickReplyPopover"
 import ImproveDraftPopover from "./ImproveDraftPopover"
 import EmojiPicker from "./EmojiPicker"
+import { createSubmitActivationGate } from "../utils/submit-activation-gate"
 
 // In-memory Draft cache globally preserved across mounts (by chatId + channel)
 const draftCache = new Map<string, string>()
@@ -93,6 +94,7 @@ export default function MessageInputArea({
     const isTouchDevice = useRef(false)
     const [isSendingImage, setIsSendingImage] = useState(false)
     const [sendingFile, setSendingFile] = useState<{ name: string; mimeType: string } | null>(null)
+    const submitActivationGate = useRef(createSubmitActivationGate())
 
     // Mic: hold to record, release to send. Camera: separate button, simple tap.
     const [isRecording, setIsRecording] = useState(false)
@@ -284,6 +286,7 @@ export default function MessageInputArea({
 
     const handleSend = () => {
         if (!text.trim()) return
+        if (!submitActivationGate.current.claim()) return
         onSendMessage(text.trim(), effectiveNormalized)
         setText("")
         draftCache.delete(cacheKey)

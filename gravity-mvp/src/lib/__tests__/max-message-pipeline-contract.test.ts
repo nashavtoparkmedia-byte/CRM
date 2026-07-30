@@ -4,6 +4,8 @@ import { describe, expect, test } from 'vitest'
 
 const root = process.cwd()
 const maxActions = readFileSync(resolve(root, 'src/app/max-actions.ts'), 'utf8')
+const gatewayClient = readFileSync(resolve(root, 'src/lib/PersonalMaxGatewayClient.ts'), 'utf8')
+const gatewayService = readFileSync(resolve(root, '..', 'max-personal-gateway', 'src', 'sender', 'TextCanaryService.ts'), 'utf8')
 const webhook = readFileSync(resolve(root, 'src/app/api/webhooks/max/route.ts'), 'utf8')
 const feed = readFileSync(resolve(root, 'src/app/messages/components/MessageFeed.tsx'), 'utf8')
 const scraper = readFileSync(resolve(root, '..', 'max-web-scraper', 'index.js'), 'utf8')
@@ -16,9 +18,9 @@ describe('MAX text pipeline contract', () => {
     expect(maxActions).toContain('body: JSON.stringify({')
     expect(maxActions).toContain('message,')
     expect(maxActions).not.toMatch(/message\.split\s*\(/)
-    expect(scraper).toContain('buildMaxTextMessage(text, replyToMessageId, cid)')
-    expect(envelope).toContain("text: String(text ?? '')")
-    expect(envelope).not.toMatch(/\.split\s*\(/)
+    expect(gatewayClient).toContain('text: input.text')
+    expect(gatewayClient).not.toMatch(/input\.text\.split\s*\(/)
+    expect(gatewayService).toContain('text: (command.commandPayload as any).text')
   })
 
   test('stores inbound text separately from attachments and reply metadata', () => {
@@ -26,8 +28,9 @@ describe('MAX text pipeline contract', () => {
     expect(webhook).toContain('attachments: attachments || []')
     expect(webhook).toContain('replyToExternalId')
     expect(webhook).toContain('metadata:  { senderId')
-    expect(scraper).toContain('withForwardingMetadata(payload, msg')
-    expect(scraper).not.toMatch(/text:\s*payload\.text\s*\?\s*`\$\{prefix\}/)
+    expect(scraper).toContain('forwardToWebhook({')
+    expect(scraper).toContain('replyToExternalId: latest._replyToExternalId')
+    expect(scraper).toContain('let payload = MessageParser.toCrmPayload(msg)')
     expect(envelope).toContain('forwardedFrom:')
     expect(envelope).not.toContain('`${prefix}')
   })
@@ -41,8 +44,8 @@ describe('MAX text pipeline contract', () => {
 
   test('records invalid UTF-8 diagnostics without claiming a repair', () => {
     expect(transport).toContain("kind: 'invalid_utf8_string'")
-    expect(transport).toContain("MAX_UTF8_DIAGNOSTIC_PREFIX")
-    expect(transport).toContain("Buffer.from(s).toString('utf8')")
+    expect(transport).toContain('UTF8_FATAL_DECODER')
+    expect(transport).toContain("new TextDecoder('utf-8', { fatal: true })")
   })
 
   test('keeps the historical DB runner read-only', () => {

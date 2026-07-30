@@ -82,7 +82,7 @@ describe('MAX outbound provider action contract', () => {
         await expect(sendMaxPersonalMessage('900001', 'Malformed', undefined, undefined, undefined, 'invalid-response'))
             .rejects.toThrow('invalid response')
         await expect(sendMaxPersonalMessage('900001', 'Pre-action refused', undefined, undefined, undefined, 'pre-action-refused'))
-            .rejects.toThrow('failed before confirmation')
+            .resolves.toMatchObject({ success: false, deliveryStatus: 'retryable_failed' })
     })
 
     it('sends repeated equal text as two distinct provider requests', async () => {

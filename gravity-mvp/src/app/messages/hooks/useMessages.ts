@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { prepareMessagesForUI, UIItem } from "../utils/message-utils"
 import { patchConversation } from "./useConversations"
 import { sortMessagesChronologically } from "../utils/message-order"
+import { pendingOptimisticMessages } from "../utils/personal-max-optimistic-identity"
 
 export interface MessageAttachment {
     id: string
@@ -151,17 +152,10 @@ export function useMessages(chatId: string | null) {
 
                     // MERGE: Keep optimistic messages that server doesn't know about yet
                     // Optimistic IDs start with 'cmid-' (clientMessageId)
-                    const existingOptimistic = (messageCache.get(chatId) || [])
-                        .filter(m => m.id.startsWith('cmid-'))
-
-                    const pendingOptimistic = existingOptimistic.filter(opt => {
-                        // Remove optimistic if server returned a message with matching content+time
-                        return !enrichedData.some((srv: Message) =>
-                            srv.direction === 'outbound' &&
-                            srv.content === opt.content &&
-                            Math.abs(new Date(srv.sentAt).getTime() - new Date(opt.sentAt).getTime()) < 60000
-                        )
-                    })
+                    const pendingOptimistic = pendingOptimisticMessages(
+                        messageCache.get(chatId) || [],
+                        enrichedData,
+                    )
 
                     const merged = sortMessagesChronologically([...enrichedData, ...pendingOptimistic])
                     messageCache.set(chatId, merged)
@@ -231,6 +225,7 @@ export function useMessages(chatId: string | null) {
                         existing = prev.findIndex(m =>
                             m.direction === 'outbound' &&
                             m.id.startsWith('cmid-') &&
+                            !m.clientMessageId &&
                             m.content === incoming.content &&
                             Math.abs(new Date(m.sentAt).getTime() - incTs) < 10_000
                         )
@@ -308,6 +303,7 @@ export function useMessages(chatId: string | null) {
             status: 'sent', // Single ✓ — sending
             channel: apiChannel,
             origin: 'operator',
+            clientMessageId,
             metadata: quotedMsgId ? { quotedMsgId } : undefined
         }
 
@@ -342,7 +338,16 @@ export function useMessages(chatId: string | null) {
                     : (allowedStatuses.has(result.status) ? result.status : 'sent') as Message['status']
                 const updatedMsgs = (messageCache.get(chatId) || []).map(m =>
                     m.id === clientMessageId
-                        ? { ...m, id: result.id || m.id, status: finalStatus, ...(result.error ? { metadata: { ...m.metadata, error: result.error } } : {}) }
+                        ? {
+                            ...m,
+                            id: result.id || m.id,
+                            status: finalStatus,
+                            metadata: {
+                                ...m.metadata,
+                                ...(result.metadata || {}),
+                                ...(result.error ? { error: result.error } : {}),
+                            },
+                        }
                         : m
                 )
                 messageCache.set(chatId, updatedMsgs)
@@ -353,7 +358,9 @@ export function useMessages(chatId: string | null) {
                 const errorText = err.error || err.message || 'Ошибка отправки'
                 const failedMsgs = (messageCache.get(chatId) || []).map(m =>
                     m.id === clientMessageId
-                        ? { ...m, status: 'failed' as const, metadata: { ...m.metadata, error: errorText } }
+                        ? apiChannel === 'max'
+                            ? { ...m, status: 'sent' as const, metadata: { ...m.metadata, maxDelivery: { status: 'needs_review', deliveryConfirmed: false }, error: errorText } }
+                            : { ...m, status: 'failed' as const, metadata: { ...m.metadata, error: errorText } }
                         : m
                 )
                 messageCache.set(chatId, failedMsgs)
@@ -364,11 +371,26 @@ export function useMessages(chatId: string | null) {
             const errorText = err instanceof Error ? err.message : 'Ошибка сети'
             const failedMsgs = (messageCache.get(chatId) || []).map(m =>
                 m.id === clientMessageId
-                    ? { ...m, status: 'failed' as const, metadata: { ...m.metadata, error: errorText } }
+                    ? apiChannel === 'max'
+                        ? { ...m, status: 'sent' as const, metadata: { ...m.metadata, maxDelivery: { status: 'needs_review', deliveryConfirmed: false }, error: errorText } }
+                        : { ...m, status: 'failed' as const, metadata: { ...m.metadata, error: errorText } }
                     : m
             )
             messageCache.set(chatId, failedMsgs)
             setMessages(failedMsgs)
+        }
+    }
+
+    const retryMessage = async (messageId: string) => {
+        if (!chatId) return
+        try {
+            await fetch('/api/messages/retry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messageId }),
+            })
+        } finally {
+            await loadMessagesRef.current?.({ silent: true, force: true })
         }
     }
 
@@ -462,5 +484,5 @@ export function useMessages(chatId: string | null) {
         }).catch(() => {})
     }
 
-    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage, sendMedia, deleteMessage }
+    return { messages, uiItems, isLoading, loadMoreHistory, hasMoreHistory, sendMessage, retryMessage, sendMedia, deleteMessage }
 }

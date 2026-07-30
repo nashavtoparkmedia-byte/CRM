@@ -221,11 +221,8 @@ export async function sendMaxPersonalMessage(
                 text: message,
                 clientMessageId,
             })
-            if (data.success === false) {
-                throw new Error(`Personal MAX durable sender failed before confirmation: ${data.deliveryStatus}`)
-            }
             return {
-                success: true,
+                success: data.success !== false,
                 externalId: typeof data.externalId === 'string' ? data.externalId : null,
                 resolvedChatId: typeof data.chatId === 'string' ? data.chatId : cleanTarget,
                 deliveryConfirmed: data.deliveryConfirmed === true,

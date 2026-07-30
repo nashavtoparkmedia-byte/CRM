@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
 import { getRenderedMessageText } from "@/lib/max-message-render-text"
+import { personalMaxMessagePresentation } from "../utils/personal-max-message-status"
 import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
 import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/lib/calls/status"
 import { usePathname, useRouter } from "next/navigation"
@@ -503,6 +504,8 @@ export default function MessageFeed({
 
         const { message: msg, position, showAvatar, showName, showTail, spacingTop, statusPlacement } = item
         const isOutbound = msg.direction === 'outbound'
+        const deliveryPresentation = personalMaxMessagePresentation(msg)
+        const durableMaxStatus = isOutbound && msg.channel === 'max'
         const timeString = new Date(msg.sentAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         const isSearchMatch = activeSearchMessageId === msg.id
 
@@ -823,7 +826,7 @@ export default function MessageFeed({
 
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
                             {getRenderedMessageText(msg)}
-                            <span className={`inline-block h-[10px] ${msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]'}`} />
+                            <span className={`inline-block h-[10px] ${durableMaxStatus ? 'w-[155px]' : (msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]')}`} />
                         </div>
 
                         {/* Статус (время + галочки) */}
@@ -837,7 +840,7 @@ export default function MessageFeed({
                                 {timeString}
                             </span>
                             {isOutbound && (
-                                msg.status === 'failed' ? (
+                                deliveryPresentation.kind === 'failed' ? (
                                     <div className="flex items-center gap-1 translate-y-[1px]">
                                         <div className="group/fail relative">
                                             <AlertCircle size={14} strokeWidth={2.5} className="text-red-500" />
@@ -849,7 +852,7 @@ export default function MessageFeed({
                                                 </div>
                                             )}
                                         </div>
-                                        {onRetry && (
+                                        {onRetry && deliveryPresentation.retryAllowed && (
                                             <button
                                                 onClick={() => onRetry(msg)}
                                                 className="text-[10px] text-red-500 hover:text-red-700 font-medium transition-colors leading-none"
@@ -857,6 +860,19 @@ export default function MessageFeed({
                                                 Повторить
                                             </button>
                                         )}
+                                    </div>
+                                ) : durableMaxStatus ? (
+                                    <div className={`flex items-center gap-1 translate-y-[1px] text-[10px] font-medium ${
+                                        deliveryPresentation.kind === 'checking' ? 'text-amber-600'
+                                            : deliveryPresentation.kind === 'queued' ? 'text-slate-500'
+                                                : 'text-[#5EB25E]'
+                                    }`} title={deliveryPresentation.label}>
+                                        {deliveryPresentation.kind === 'checking' ? (
+                                            <RotateCcw size={12} strokeWidth={2.2} />
+                                        ) : (
+                                            <Check size={13} strokeWidth={2.4} />
+                                        )}
+                                        <span>{deliveryPresentation.label}</span>
                                     </div>
                                 ) : (
                                     <div className="flex items-baseline scale-x-[0.9] -space-x-[11px] translate-y-[2px]">

@@ -107,7 +107,7 @@ function ChatWorkspaceInner({
     conversations: any[]
     onBack?: () => void
 }) {
-    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage, sendMedia, deleteMessage } = useMessages(effectiveChatId)
+    const { messages, uiItems, isLoading, hasMoreHistory, loadMoreHistory, sendMessage, retryMessage, sendMedia, deleteMessage } = useMessages(effectiveChatId)
 
     // A3: Compute channels that have failed outbound messages
     const failedChannels = useMemo(() => {
@@ -244,10 +244,7 @@ function ChatWorkspaceInner({
     }
 
     const handleRetry = (msg: Message) => {
-        const quotedMsgId = typeof msg.metadata?.quotedMsgId === 'string'
-            ? msg.metadata.quotedMsgId
-            : undefined
-        sendMessage(msg.content, msg.channel, quotedMsgId)
+        void retryMessage(msg.id)
     }
 
     const handleReply = (msg: Message) => {

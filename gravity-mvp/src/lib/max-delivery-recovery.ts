@@ -13,5 +13,6 @@ export function shouldMarkStuckOutboundFailed(candidate: DeliveryRecoveryCandida
   if (candidate.channel !== 'max') return true
   const metadata = record(candidate.metadata)
   const maxDelivery = record(metadata.maxDelivery)
-  return maxDelivery.status !== 'send_requested'
+  return !['send_requested', 'sending', 'queued', 'needs_review', 'reconciliation_required']
+    .includes(String(maxDelivery.status || ''))
 }

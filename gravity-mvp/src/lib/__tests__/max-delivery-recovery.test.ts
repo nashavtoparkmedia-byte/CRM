@@ -29,4 +29,13 @@ describe('MAX delayed provider confirmation recovery', () => {
       metadata: {},
     })).toBe(true)
   })
+
+  test.each(['sending', 'queued', 'needs_review', 'reconciliation_required'])(
+    'keeps durable MAX %s out of generic failed-message recovery',
+    status => {
+      expect(shouldMarkStuckOutboundFailed({
+        channel: 'max', metadata: { maxDelivery: { status } },
+      })).toBe(false)
+    },
+  )
 })

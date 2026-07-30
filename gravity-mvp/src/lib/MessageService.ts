@@ -4,6 +4,8 @@ import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { shouldMarkStuckOutboundFailed } from '@/lib/max-delivery-recovery'
+import { shouldProjectPersonalMaxMessage } from '@/lib/personal-max-message-visibility'
+import { projectPersonalMaxDurableState } from '@/lib/personal-max-durable-projection'
 
 function serialize(obj: any): any {
     return JSON.parse(JSON.stringify(obj, (key, value) =>
@@ -12,7 +14,37 @@ function serialize(obj: any): any {
 }
 
 function isRealMaxMessageId(value: unknown): value is string {
-    return typeof value === 'string' && /^d301[0-9a-f]+$/i.test(value)
+    return typeof value === 'string' && /^d301[0-9a-f]{14}$/i.test(value)
+}
+
+const MAX_DURABLE_STATES = new Set([
+    'accepted_by_max', 'provider_confirmed', 'needs_review', 'queued', 'sending',
+    'send_requested', 'retryable_failed', 'hard_failed', 'dead_letter', 'failed',
+])
+
+function normalizeMaxDurableStatus(value: unknown, confirmed: boolean): string {
+    if (confirmed) return 'provider_confirmed'
+    if (value === 'accepted_by_max' || value === 'provider_confirmed') return 'needs_review'
+    return typeof value === 'string' && MAX_DURABLE_STATES.has(value) ? value : 'send_requested'
+}
+
+function crmStatusForMaxDelivery(status: string, confirmed: boolean): MessageStatus {
+    if (confirmed) return 'delivered'
+    if (status === 'queued') return 'queued'
+    if (['retryable_failed', 'hard_failed', 'dead_letter', 'failed'].includes(status)) return 'failed'
+    return 'sent'
+}
+
+function unknownMaxDelivery(protocolChatId: string, webRouteId: unknown) {
+    return {
+        operation: 'send',
+        status: 'needs_review',
+        deliveryConfirmed: false,
+        maxMessageId: null,
+        externalId: null,
+        protocolChatId,
+        webRouteId: typeof webRouteId === 'string' ? webRouteId : null,
+    }
 }
 
 
@@ -323,7 +355,7 @@ export class MessageService {
                 { createdAt: 'desc' },
                 { id: 'desc' },
             ],
-            take: limit,
+            take: limit + 20,
             // Phase 2: do NOT return MessageAttachment.url here. Each
             // attachment.url can be a base64 data URL up to 25MB; multiple
             // such rows in one chat ballooned JSON to >1MB and made every
@@ -342,8 +374,27 @@ export class MessageService {
                 },
             },
         })
+        // Evidence-preserved history replays stay in PostgreSQL but never
+        // re-enter the live CRM conversation projection.
+        const visible = messages.filter(shouldProjectPersonalMaxMessage).slice(0, limit)
+        const accountId = process.env.MAX_PERSONAL_ACCOUNT_ID || ''
+        const clientMessageIds = visible
+            .filter(message => message.channel === 'max' && message.direction === 'outbound')
+            .map(message => message.clientMessageId)
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        let projected = visible
+        if (/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(accountId) && clientMessageIds.length > 0) {
+            const commands = await prisma.maxOutboundCommand.findMany({
+                where: { accountId, clientMessageId: { in: clientMessageIds } },
+                select: {
+                    clientMessageId: true,
+                    dispatch: { select: { state: true, providerMessageId: true } },
+                },
+            })
+            projected = projectPersonalMaxDurableState(visible, commands)
+        }
         // Return in ASC order for UI display
-        return serialize(messages.reverse())
+        return serialize(projected.reverse())
     }
 
     /**
@@ -542,11 +593,15 @@ export class MessageService {
         if (clientMessageId) {
             const existing = await (prisma.message as any).findUnique({
                 where: { clientMessageId },
-                select: { id: true, status: true, chatId: true },
+                select: { id: true, status: true, chatId: true, externalId: true, metadata: true },
             })
             if (existing) {
                 console.log(`[MessageService] IDEMPOTENT: clientMessageId=${clientMessageId} already exists as ${existing.id} (status=${existing.status})`)
-                return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, error: null, duplicate: true }
+                return {
+                    success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id,
+                    status: existing.status, externalId: existing.externalId, metadata: existing.metadata,
+                    error: null, duplicate: true,
+                }
             }
         }
 
@@ -626,17 +681,21 @@ export class MessageService {
                     const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
                     const maxDeliveryConfirmed = Boolean((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
                     if (maxExternalId) deliveryExternalId = maxExternalId
-                    deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
+                    const durableStatus = normalizeMaxDurableStatus(maxDeliveryStatus, maxDeliveryConfirmed)
+                    deliveryStatus = crmStatusForMaxDelivery(durableStatus, maxDeliveryConfirmed)
                     maxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered'
-                            : (maxDeliveryStatus === 'failed' ? 'failed'
-                                : (maxDeliveryStatus === 'needs_review' ? 'needs_review' : 'send_requested')),
+                        status: durableStatus,
                         deliveryConfirmed: maxDeliveryConfirmed,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalChatId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
+                    }
+                    if (deliveryStatus === 'failed') {
+                        errorMessage = durableStatus === 'retryable_failed'
+                            ? 'Personal MAX failed before provider action'
+                            : `Personal MAX durable failure: ${durableStatus}`
                     }
                     console.log('[MAX_DELIVERY]', JSON.stringify({
                         operation: 'send',
@@ -735,8 +794,17 @@ export class MessageService {
                     break
             }
         } catch (provErr: any) {
-            deliveryStatus = 'failed'
             errorMessage = provErr.message
+            if (channel === 'max') {
+                const maxMetadata = (targetChat.metadata || {}) as any
+                deliveryStatus = 'sent'
+                maxDeliveryMetadata = unknownMaxDelivery(
+                    rawExternalChatId,
+                    maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                )
+            } else {
+                deliveryStatus = 'failed'
+            }
         }
 
         // Guarantee metadata.error is always set for failed messages
@@ -753,9 +821,13 @@ export class MessageService {
             }
             if (errorMessage) {
                 metadata.error = errorMessage
-                metadata.errorCode = getErrorCode(errorMessage)
+                metadata.errorCode = maxDeliveryMetadata?.status === 'retryable_failed'
+                    ? 'MAX_PRE_ACTION_FAILURE'
+                    : getErrorCode(errorMessage)
                 metadata.errorSchemaVersion = ERROR_SCHEMA_VERSION
-                const retryable = classifyError(errorMessage)
+                const retryable = maxDeliveryMetadata
+                    ? maxDeliveryMetadata.status === 'retryable_failed'
+                    : classifyError(errorMessage)
                 metadata.retryable = retryable
                 metadata.retryAttempt = 0
                 metadata.maxRetries = 3
@@ -809,6 +881,7 @@ export class MessageService {
             status: deliveryStatus,
             externalId: deliveryExternalId,
             deliveryConfirmed: maxDeliveryMetadata?.deliveryConfirmed,
+            metadata: maxDeliveryMetadata ? { maxDelivery: maxDeliveryMetadata } : undefined,
             error: errorMessage,
         }
     }
@@ -827,6 +900,10 @@ export class MessageService {
         if (message.status !== 'failed') return { success: false, error: `Status is ${message.status}, not failed` }
 
         const meta = (message.metadata as any) || {}
+        const durableStatus = meta?.maxDelivery?.status
+        if (message.channel === 'max' && durableStatus !== 'retryable_failed') {
+            return { success: false, error: 'Personal MAX reconciliation or exact pre-action proof is required' }
+        }
         if (!meta.retryable) return { success: false, error: 'Not retryable' }
 
         const attempt = (meta.retryAttempt || 0) + 1
@@ -914,15 +991,21 @@ export class MessageService {
                     const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
                     const maxDeliveryConfirmed = Boolean((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
                     if (maxExternalId) deliveryExternalId = maxExternalId
-                    deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
+                    const durableStatus = normalizeMaxDurableStatus(maxDeliveryStatus, maxDeliveryConfirmed)
+                    deliveryStatus = crmStatusForMaxDelivery(durableStatus, maxDeliveryConfirmed)
                     retryMaxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: durableStatus,
                         deliveryConfirmed: maxDeliveryConfirmed,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
+                    }
+                    if (deliveryStatus === 'failed') {
+                        errorMessage = durableStatus === 'retryable_failed'
+                            ? 'Personal MAX failed before provider action'
+                            : `Personal MAX durable failure: ${durableStatus}`
                     }
                     console.log('[MAX_DELIVERY]', JSON.stringify({
                         operation: 'send',
@@ -951,16 +1034,27 @@ export class MessageService {
             }
         } catch (err: any) {
             errorMessage = err.message || 'Retry delivery failed'
+            if (message.channel === 'max') {
+                const maxMetadata = (message.chat.metadata || {}) as any
+                deliveryStatus = 'sent'
+                retryMaxDeliveryMetadata = unknownMaxDelivery(
+                    message.chat.externalChatId?.split(':').slice(1).join(':') || message.chat.externalChatId,
+                    maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                )
+            }
         }
 
         // Update final status
         const retryMeta: any = { ...meta, retryAttempt: attempt, lastFailedAt: new Date().toISOString() }
         if (retryMaxDeliveryMetadata) {
             retryMeta.maxDelivery = retryMaxDeliveryMetadata
+            retryMeta.retryable = retryMaxDeliveryMetadata.status === 'retryable_failed'
         }
+        if (errorMessage) retryMeta.error = errorMessage
         if (deliveryStatus === 'failed') {
-            retryMeta.error = errorMessage
-            retryMeta.retryable = classifyError(errorMessage || '')
+            retryMeta.retryable = retryMaxDeliveryMetadata
+                ? retryMaxDeliveryMetadata.status === 'retryable_failed'
+                : classifyError(errorMessage || '')
             opsLog('warn', 'message_retry_failed', { messageId, channel: message.channel, retryAttempt: attempt, error: errorMessage || undefined })
         } else {
             opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
@@ -997,6 +1091,7 @@ type ErrorCode =
     | 'RECIPIENT_NOT_FOUND'
     | 'AUTH_FAILURE'
     | 'VALIDATION_ERROR'
+    | 'MAX_PRE_ACTION_FAILURE'
     | 'UNKNOWN'
 
 const RETRYABLE_PATTERNS: Array<{ pattern: string; code: ErrorCode }> = [
