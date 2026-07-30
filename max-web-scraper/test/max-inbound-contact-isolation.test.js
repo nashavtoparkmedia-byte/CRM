@@ -73,3 +73,25 @@ test('a failed image does not block following text in the same chat', async () =
   assert.deepEqual(stored, ['image-retryable', 'text-after-image'])
   assert.equal(queue.size, 0)
 })
+
+test('live DOM recovery cannot overtake slow direct messages in the same contact lane', async () => {
+  const queue = new PerKeyTaskQueue()
+  const projected = []
+  const lane = 'contact-a'
+  const project = (text, delayMs = 0) => queue.enqueue(lane, async () => {
+    if (delayMs) await wait(delayMs)
+    projected.push(text)
+  })
+
+  await Promise.all([
+    project('PMAX IN 01', 12),
+    project('PMAX IN 02', 8),
+    project('PMAX IN 03', 6),
+    project('PMAX IN 04'),
+    project('PMAX IN 05'),
+  ])
+
+  assert.deepEqual(projected, [
+    'PMAX IN 01', 'PMAX IN 02', 'PMAX IN 03', 'PMAX IN 04', 'PMAX IN 05',
+  ])
+})

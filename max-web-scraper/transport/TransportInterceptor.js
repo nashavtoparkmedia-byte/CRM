@@ -5,6 +5,7 @@ const path = require('path')
 const { createHash } = require('crypto')
 const { TextDecoder } = require('util')
 const { NoopCaptureAdapter } = require('../capture/LiveCaptureAdapter')
+const { normalizeProviderTimestamp } = require('../lib/MaxMessageOrdering')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
@@ -1508,6 +1509,8 @@ class TransportInterceptor {
     const m = payload.message
     if (!m) return null
 
+    const providerMessageId = m.id?.__maxId ? m.id.hex : (m.id || null)
+
     let text    = m.text || ''
     let attaches = Array.isArray(m.attaches) ? m.attaches : []
     if (!attaches.length && Array.isArray(payload.attaches)) {
@@ -1539,11 +1542,11 @@ class TransportInterceptor {
     )
 
     return {
-      id:                m.id?.__maxId ? m.id.hex : (m.id || null),
+      id:                providerMessageId,
       chatId:            payload.chatId || null,
       from:              String(m.sender || ''),
       text,
-      timestamp:         m.time  || Date.now(),
+      timestamp:         normalizeProviderTimestamp(m.time, providerMessageId),
       type:              hasAttaches ? this._detectMaxType(attaches) : 'text',
       attachments:       this._extractMaxAttachmentsV2(attaches),
       isOutgoing:        this._myUserId ? String(m.sender) === this._myUserId : protocolOutgoing,

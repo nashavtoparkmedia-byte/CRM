@@ -164,6 +164,21 @@ test('CRM message ordering is based on provider sentAt before createdAt fallback
   )
 })
 
+test('direct transport and live DOM recovery share one per-chat projection lane', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const transportStart = scraper.indexOf('transport.onMessage(msg =>')
+  const transportHandler = scraper.slice(transportStart, scraper.indexOf('// Синхронизация реакций', transportStart))
+  const latestStart = scraper.indexOf('async function forwardLatestDomMessage(')
+  const latestRecovery = scraper.slice(latestStart, scraper.indexOf('async function forwardRecentDomMessages(', latestStart))
+  const batchStart = scraper.indexOf('async function forwardRecentDomMessages(')
+  const batchRecovery = scraper.slice(batchStart, scraper.indexOf('// ─── Contact sync', batchStart))
+
+  assert.match(scraper, /function enqueueInboundProjection\(chatId, task\)/)
+  assert.match(transportHandler, /enqueueInboundProjection\(msg\?\.chatId/)
+  assert.match(latestRecovery, /enqueueInboundProjection\(chatId/)
+  assert.match(batchRecovery, /enqueueInboundProjection\(chatId/)
+})
+
 test('MAX empty op71 DOM recovery uses single fresh op128 chat when decoded chat id is wrong', () => {
   const scraper = read('max-web-scraper/index.js')
 

@@ -1236,6 +1236,10 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
   }
 }
 
+function enqueueInboundProjection(chatId, task) {
+  return inboundMessageQueue.enqueue(normalizeMaxChatId(chatId || 'unknown'), task)
+}
+
 async function fillEditableText(locator, value) {
   const text = String(value || '')
   await locator.click({ timeout: 1_000 })
@@ -3254,7 +3258,9 @@ async function forwardLatestDomMessage(chatId, reason = 'manual', options = {}) 
     }
     if (transport) transport._activeUiChatId = String(chatId)
     const latest = await scrapeLatestDomMessage(uiRouteId)
-    return await forwardDomCandidate(chatId, uiRouteId, latest, reason, options)
+    return await enqueueInboundProjection(chatId, () =>
+      forwardDomCandidate(chatId, uiRouteId, latest, reason, options)
+    )
   } finally {
     domFallbackRunning = false
   }
@@ -3434,10 +3440,12 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
     const results = []
     const skipped = { ...preSkipped }
     for (const candidate of recoverable) {
-      const result = await forwardDomCandidate(chatId, uiRouteId, candidate, reason, {
-        timestamp: candidate._recoveryTimestamp,
-        ...effectiveOptions,
-      })
+      const result = await enqueueInboundProjection(chatId, () =>
+        forwardDomCandidate(chatId, uiRouteId, candidate, reason, {
+          timestamp: candidate._recoveryTimestamp,
+          ...effectiveOptions,
+        })
+      )
       if (result?.success) results.push(result)
       else if (result?.skipped) skipped[result.skipped] = (skipped[result.skipped] || 0) + 1
     }
@@ -5802,8 +5810,7 @@ async function init() {
   })
 
   transport.onMessage(msg => {
-    const queueKey = normalizeMaxChatId(msg?.chatId || 'unknown')
-    inboundMessageQueue.enqueue(queueKey, () =>
+    enqueueInboundProjection(msg?.chatId, () =>
       handleIncoming(msg, mediaPipeline, sync, transport)
     ).catch(e =>
       console.error('[App] handleIncoming error:', e.message)

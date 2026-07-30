@@ -5,6 +5,8 @@ const assert = require('node:assert/strict')
 const {
   estimateDomRecoveryTimestampMs,
   hasDirectDomTimestampAnchor,
+  normalizeProviderTimestamp,
+  providerMessageTimestampMs,
 } = require('../lib/MaxMessageOrdering')
 
 function direct(sentAtMs) {
@@ -57,4 +59,29 @@ test('zero timestamp is still treated as a real deterministic anchor', () => {
   const candidates = [{ text: 'before' }, direct(0)]
   assert.equal(hasDirectDomTimestampAnchor(candidates), true)
   assert.equal(estimateDomRecoveryTimestampMs(candidates, 0, 10_000), -1000)
+})
+
+test('real MAX provider message id restores millisecond order when opaque time cannot be parsed', () => {
+  const nowMs = Date.parse('2026-07-30T13:20:50.000Z')
+  const ids = [
+    'd3019fb32f2a284a8b',
+    'd3019fb32f2f125165',
+    'd3019fb32f350c6e35',
+    'd3019fb32f3d033327',
+    'd3019fb32f42526c10',
+  ]
+  const timestamps = ids.map(id => providerMessageTimestampMs(id, nowMs))
+
+  assert.deepEqual([...timestamps].sort((a, b) => a - b), timestamps)
+  assert.equal(timestamps[2], Date.parse('2026-07-30T13:20:43.276Z'))
+  assert.equal(
+    normalizeProviderTimestamp({ __maxId: true, hex: 'd300001300f22aa474' }, ids[2], nowMs),
+    timestamps[2],
+  )
+})
+
+test('valid provider timestamp remains authoritative over message-id fallback', () => {
+  const explicit = Date.parse('2026-07-30T13:20:43.306Z')
+  assert.equal(normalizeProviderTimestamp(explicit, 'd3019fb32f350c6e35'), explicit)
+  assert.equal(normalizeProviderTimestamp(new Date(explicit), 'd3019fb32f350c6e35'), explicit)
 })
