@@ -19,6 +19,7 @@ class TextCanaryPolicy {
     this.globalEmergencyStop = configuration.globalEmergencyStop !== false
     this.accountAllowlist = exactSet(configuration.accountAllowlist)
     this.conversationAllowlist = exactSet(configuration.conversationAllowlist, /^[^\p{Cc}]{1,512}$/u)
+    this.allowAuthorizedConversations = configuration.allowAuthorizedConversations === true
     this.disabledAccounts = exactSet(configuration.disabledAccounts)
     this.disabledConversations = exactSet(configuration.disabledConversations, /^[^\p{Cc}]{1,512}$/u)
     this.maximumAccounts = configuration.maximumAccounts ?? 1
@@ -50,7 +51,8 @@ class TextCanaryPolicy {
     if (this.accountAllowlist.size === 0 || this.accountAllowlist.size > this.maximumAccounts || !this.accountAllowlist.has(request.accountId)) return 'ACCOUNT_NOT_ALLOWLISTED'
     if (this.disabledAccounts.has(request.accountId)) return 'ACCOUNT_KILL_SWITCH'
     const scope = this.conversationScope(request)
-    if (this.conversationAllowlist.size === 0 || this.conversationAllowlist.size > this.maximumConversations || !this.conversationAllowlist.has(scope)) return 'CONVERSATION_NOT_ALLOWLISTED'
+    if (!this.allowAuthorizedConversations
+      && (this.conversationAllowlist.size === 0 || this.conversationAllowlist.size > this.maximumConversations || !this.conversationAllowlist.has(scope))) return 'CONVERSATION_NOT_ALLOWLISTED'
     if (this.disabledConversations.has(scope)) return 'CONVERSATION_KILL_SWITCH'
     if (this.unknownStopped) return 'STOPPED_AFTER_UNKNOWN'
     if (this.routeConflictStopped) return 'STOPPED_AFTER_ROUTE_CONFLICT'

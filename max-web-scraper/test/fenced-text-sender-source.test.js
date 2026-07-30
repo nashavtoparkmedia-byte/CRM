@@ -72,3 +72,12 @@ test('all physical gates default disabled with one-account, one-conversation and
     assert.match(durableStore, new RegExp(marker))
   }
 })
+
+test('operational legacy text kill switch refuses before any fallback or provider action', () => {
+  const endpoint = runtime.slice(runtime.indexOf("app.post('/send-message'"), runtime.indexOf("app.post('/send-message'") + 6_000)
+  const guard = endpoint.indexOf("MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED === 'true'")
+  assert.ok(guard >= 0)
+  assert.match(endpoint, /DURABLE_TEXT_ROUTE_REQUIRED/)
+  assert.ok(guard < endpoint.indexOf('rememberCrmOutboundText'))
+  assert.ok(guard < endpoint.indexOf('resolvePhoneLive'))
+})

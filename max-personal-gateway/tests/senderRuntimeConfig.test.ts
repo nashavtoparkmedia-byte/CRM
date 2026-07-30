@@ -23,7 +23,23 @@ function active() {
 test('text sender remains default-off with no bindings', () => {
   const config = loadTextSenderRuntimeConfig({})
   assert.equal(config.enabled, false)
+  assert.equal(config.operationalMode, false)
   assert.equal(config.hmacKeys.size, 0)
+})
+
+test('operational sender is account-scoped and forbids temporary conversation permissions', () => {
+  const config = loadTextSenderRuntimeConfig({
+    ...active(),
+    MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: 'true',
+    MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON: '[]',
+  })
+  assert.equal(config.operationalMode, true)
+  assert.equal(config.accountId, 'account-a')
+  assert.equal(config.conversationScopes.size, 0)
+  assert.throws(() => loadTextSenderRuntimeConfig({
+    ...active(),
+    MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: 'true',
+  }), /durable route authorization/)
 })
 
 test('active text sender requires an exact private scraper and one conversation', () => {

@@ -177,3 +177,27 @@ test('daily provider-call limit and UNKNOWN stop are restored from durable state
 test('default-off runtime does not construct a physical boundary', () => {
   assert.equal(createPhysicalTextSenderRuntime({ environment: {}, preflight: async () => {}, send: async () => {} }), null)
 })
+
+test('operational runtime requires an empty static conversation allowlist', async t => {
+  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  const operational = {
+    ...environment(directory),
+    MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: 'true',
+    MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON: '[]',
+  }
+  const runtime = createPhysicalTextSenderRuntime({
+    environment: operational,
+    clock: () => new Date(now),
+    preflight: async () => {},
+    fetchImpl: async () => new Response(JSON.stringify({ authorized: true }), { status: 200 }),
+    send: async () => ({ outcome: 'PROVIDER_CONFIRMED', providerMessageId: `d301${'0'.repeat(64)}`, physicalProviderCalled: true }),
+  })
+  assert.equal(runtime.canaryPolicy.evaluate(request({ conversationKey: 'conversation-b' })), null)
+  assert.equal(runtime.canaryPolicy.evaluate(request({ accountId: 'account-b', conversationKey: 'conversation-b' })), 'ACCOUNT_NOT_ALLOWLISTED')
+  assert.throws(() => createPhysicalTextSenderRuntime({
+    environment: { ...environment(directory), MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: 'true' },
+    preflight: async () => {},
+    send: async () => {},
+  }), /gateway-authorized conversations/)
+})

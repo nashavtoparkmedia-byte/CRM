@@ -28,6 +28,21 @@ test('all three final runtime images carry exact source revision labels', () => 
   }
 })
 
+test('operational overlay enables only the account-scoped durable fenced text route', () => {
+  const compose = source('deploy/docker-compose.personal-max-text-operational.yml')
+  assert.match(compose, /MAX_PERSONAL_DURABLE_TEXT_ENABLED: "true"/)
+  assert.equal((compose.match(/MAX_PERSONAL_TEXT_SENDER_ENABLED: "true"/g) ?? []).length, 2)
+  assert.equal((compose.match(/MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED: "true"/g) ?? []).length, 2)
+  assert.equal((compose.match(/MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR: "true"/g) ?? []).length, 2)
+  assert.equal((compose.match(/MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: "true"/g) ?? []).length, 2)
+  assert.equal((compose.match(/MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED: "true"/g) ?? []).length, 1)
+  assert.match(compose, /MAX_PERSONAL_TEXT_SENDER_GATEWAY_CONVERSATIONS_JSON:\?empty operational conversation list required/)
+  assert.match(compose, /MAX_PERSONAL_TEXT_SENDER_SCRAPER_CONVERSATIONS_JSON:\?empty operational conversation list required/)
+  assert.match(compose, /http:\/\/max-personal-gateway:8080\/v1\/personal-max\/sender\/authorize/)
+  assert.doesNotMatch(compose, /canary/i)
+  assert.doesNotMatch(compose, /DOM|ports:/i)
+})
+
 test('scraper image and production overlay share the accepted numeric runtime identity', () => {
   const dockerfile = source('max-web-scraper/Dockerfile')
   const compose = source('deploy/docker-compose.personal-max-final-default-off.yml')

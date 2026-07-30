@@ -6170,6 +6170,9 @@ app.post('/debug/dom-identity', async (req, res) => {
 })
 
 app.post('/send-message', async (req, res) => {
+  if (process.env.MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED === 'true') {
+    return res.status(409).json({ error: 'Durable fenced text route is required', code: 'DURABLE_TEXT_ROUTE_REQUIRED' })
+  }
   let { chatId, message, phone, quotedMsgId, quotedText, quotedSentAt, quotedDirection, uiChatId, clientMessageId } = req.body
   if (!message) {
     return res.status(400).json({ error: 'message is required' })

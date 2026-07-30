@@ -109,6 +109,11 @@ export class TextCanaryService {
     this.#actorOwnerId = `${config.actorOwnerId}:${bootId}`
   }
 
+  #conversationIsEnabled(accountId: string, conversationKey: string): boolean {
+    return accountId === this.#config.accountId && (this.#config.operationalMode
+      || this.#config.conversationScopes.has(canaryConversationScope(accountId, conversationKey)))
+  }
+
   authenticateCommand(body: Buffer, authentication: GatewayCommandAuthentication, now = new Date()): boolean {
     if (!this.#config.enabled || !this.#config.commandHmacSecret || typeof authentication.timestamp !== 'string'
       || typeof authentication.nonce !== 'string' || authentication.nonce.length < 1 || authentication.nonce.length > 256
@@ -138,7 +143,7 @@ export class TextCanaryService {
     if (!route || route.state !== 'active' || route.hasOpenConflict || route.activeProtocolChatId !== command.protocolChatId) {
       throw new TextCanaryError('ROUTE_NOT_SENDABLE')
     }
-    if (!this.#config.conversationScopes.has(canaryConversationScope(command.accountId, route.conversationKey))) {
+    if (!this.#conversationIsEnabled(command.accountId, route.conversationKey)) {
       throw new TextCanaryError('CONVERSATION_NOT_ALLOWLISTED')
     }
     return this.#serialize(`${command.accountId}\0${route.conversationKey}`, async () => {
@@ -183,8 +188,7 @@ export class TextCanaryService {
     const deadlineAt = new Date(request.deadlineAt)
     if (request.schemaVersion !== 1 || !Number.isFinite(requestedAt.valueOf()) || !Number.isFinite(deadlineAt.valueOf())
       || deadlineAt <= now || requestedAt > now || deadlineAt <= requestedAt) throw new TextCanaryError('DEADLINE_EXPIRED')
-    if (request.accountId !== this.#config.accountId
-      || !this.#config.conversationScopes.has(canaryConversationScope(request.accountId, request.conversationKey))) {
+    if (!this.#conversationIsEnabled(request.accountId, request.conversationKey)) {
       throw new TextCanaryError('WRONG_ACCOUNT')
     }
     await this.#sessionOwner.verifyImmediatelyBeforeSender({

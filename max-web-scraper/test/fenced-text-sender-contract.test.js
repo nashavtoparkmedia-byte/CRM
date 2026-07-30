@@ -279,3 +279,14 @@ test('daily message limit is bounded', async () => {
 test('length-prefixed conversation scopes cannot collide on account colons', () => {
   assert.notEqual(canaryConversationScope('account:a', 'conversation'), canaryConversationScope('account', 'a:conversation'))
 })
+
+test('account-scoped operational policy delegates conversation authority but preserves account isolation and kill switches', () => {
+  const policy = new TextCanaryPolicy(readyConfiguration({
+    allowAuthorizedConversations: true,
+    conversationAllowlist: [],
+  }))
+  assert.equal(policy.evaluate(request({ conversationKey: 'conversation-b' })), null)
+  assert.equal(policy.evaluate(request({ accountId: 'account-b', conversationKey: 'conversation-b' })), 'ACCOUNT_NOT_ALLOWLISTED')
+  policy.disabledConversations.add(canaryConversationScope('account-a', 'conversation-b'))
+  assert.equal(policy.evaluate(request({ conversationKey: 'conversation-b' })), 'CONVERSATION_KILL_SWITCH')
+})

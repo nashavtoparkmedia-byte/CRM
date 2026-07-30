@@ -51,6 +51,10 @@ function createPhysicalTextSenderRuntime({ environment = process.env, preflight,
   if (keys.size < 1 || keys.size > 4) throw new Error('Sender HMAC rotation set is empty or unbounded')
   const accountAllowlist = jsonStringArray(environment.MAX_PERSONAL_TEXT_SENDER_ACCOUNTS_JSON, 'Sender account allowlist')
   const conversationAllowlist = jsonStringArray(environment.MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON, 'Sender conversation allowlist')
+  const operationalMode = exactBoolean(environment.MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE)
+  if (operationalMode && conversationAllowlist.length !== 0) {
+    throw new Error('Operational text sender must use gateway-authorized conversations instead of a static allowlist')
+  }
   const replayStore = new DurableSenderReplayStore(statePath)
   const attemptStore = new DurableSenderAttemptStore(statePath)
   const authenticator = new SenderAuthenticator({
@@ -65,6 +69,7 @@ function createPhysicalTextSenderRuntime({ environment = process.env, preflight,
     globalEmergencyStop: !exactBoolean(environment.MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR),
     accountAllowlist,
     conversationAllowlist,
+    allowAuthorizedConversations: operationalMode,
     maximumAccounts: 1,
     maximumConversations: 1,
     dailyMessageLimit: positiveInteger(environment.MAX_PERSONAL_TEXT_SENDER_DAILY_LIMIT, 3, 100, 'Sender daily limit'),

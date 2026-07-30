@@ -8,6 +8,7 @@ export interface TextSenderRuntimeConfig {
   readonly enabled: boolean
   readonly physicalEnabled: boolean
   readonly emergencyStopClear: boolean
+  readonly operationalMode: boolean
   readonly accountId: string | null
   readonly conversationScopes: ReadonlySet<string>
   readonly hmacKeys: ReadonlyMap<string, Buffer>
@@ -52,7 +53,7 @@ function timeout(raw: string | undefined): number {
 export function loadTextSenderRuntimeConfig(environment: NodeJS.ProcessEnv = process.env): TextSenderRuntimeConfig {
   const enabled = environment.MAX_PERSONAL_TEXT_SENDER_ENABLED === 'true'
   if (!enabled) return {
-    enabled: false, physicalEnabled: false, emergencyStopClear: false, accountId: null,
+    enabled: false, physicalEnabled: false, emergencyStopClear: false, operationalMode: false, accountId: null,
     conversationScopes: new Set(), hmacKeys: new Map(), currentKeyId: null, commandHmacSecret: null,
     scraperUrl: null, sessionOwnerInstanceId: null, actorOwnerId: null, requestTimeoutMs: 40_000,
   }
@@ -71,11 +72,16 @@ export function loadTextSenderRuntimeConfig(environment: NodeJS.ProcessEnv = pro
   }
   const conversations = jsonArray(environment.MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON)
   const conversationScopes = new Set(conversations.map(conversation => canaryConversationScope(accountId, conversation)))
-  if (conversationScopes.size > 1) throw new Error('Text sender canary must be bound to at most one conversation')
+  const operationalMode = environment.MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE === 'true'
+  if (operationalMode && conversationScopes.size !== 0) {
+    throw new Error('Operational text sender must use durable route authorization instead of a static conversation allowlist')
+  }
+  if (!operationalMode && conversationScopes.size > 1) throw new Error('Text sender canary must be bound to at most one conversation')
   return {
     enabled,
     physicalEnabled: environment.MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED === 'true',
     emergencyStopClear: environment.MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR === 'true',
+    operationalMode,
     accountId,
     conversationScopes,
     hmacKeys: senderKeys,

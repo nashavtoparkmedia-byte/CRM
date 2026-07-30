@@ -1,0 +1,50 @@
+services:
+  gravity-mvp:
+    environment:
+      MAX_PERSONAL_DURABLE_TEXT_ENABLED: "true"
+      MAX_PERSONAL_ACCOUNT_ID: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PERSONAL_GATEWAY_URL: http://max-personal-gateway:8080
+      MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET: ${MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET:?command HMAC secret required}
+    labels:
+      personal-max.stage: 8b2-operational
+      personal-max.capture: active
+      personal-max.physical-sender: operational-enabled
+
+  max-personal-gateway:
+    environment:
+      MAX_PERSONAL_TEXT_SENDER_ENABLED: "true"
+      MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED: "true"
+      MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR: "true"
+      MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: "true"
+      MAX_PERSONAL_TEXT_SENDER_ACCOUNT_ID: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON: ${MAX_PERSONAL_TEXT_SENDER_GATEWAY_CONVERSATIONS_JSON:?empty operational conversation list required}
+      MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON: ${MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON:?sender HMAC keys required}
+      MAX_PERSONAL_TEXT_SENDER_HMAC_KEY_ID: ${MAX_PERSONAL_TEXT_SENDER_HMAC_KEY_ID:?sender HMAC key id required}
+      MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET: ${MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET:?command HMAC secret required}
+      MAX_PERSONAL_TEXT_SENDER_SCRAPER_URL: http://max-web-scraper:3005/v1/personal-max/send/text
+      MAX_PERSONAL_TEXT_SENDER_OWNER_ID: personal-max-operational-session-owner
+      MAX_PERSONAL_TEXT_ACTOR_OWNER_ID: personal-max-operational-actor-owner
+      MAX_PERSONAL_TEXT_SENDER_REQUEST_TIMEOUT_MS: "40000"
+    labels:
+      personal-max.stage: 8b2-operational
+      personal-max.mode: one-account-operational
+      personal-max.physical-sender: operational-enabled
+
+  max-web-scraper:
+    environment:
+      MAX_PERSONAL_TEXT_SENDER_ENABLED: "true"
+      MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED: "true"
+      MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR: "true"
+      MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: "true"
+      MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED: "true"
+      MAX_PERSONAL_TEXT_SENDER_GATEWAY_URL: http://max-personal-gateway:8080/v1/personal-max/sender/authorize
+      MAX_PERSONAL_TEXT_SENDER_STATE_PATH: /var/lib/max-personal-sender/operational-v1
+      MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON: ${MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON:?sender HMAC keys required}
+      MAX_PERSONAL_TEXT_SENDER_ACCOUNTS_JSON: ${MAX_PERSONAL_TEXT_SENDER_ACCOUNTS_JSON:?sender account allowlist required}
+      MAX_PERSONAL_TEXT_SENDER_CONVERSATIONS_JSON: ${MAX_PERSONAL_TEXT_SENDER_SCRAPER_CONVERSATIONS_JSON:?empty operational conversation list required}
+      MAX_PERSONAL_TEXT_SENDER_DAILY_LIMIT: "100"
+      MAX_PERSONAL_TEXT_SENDER_REPLAY_WINDOW_MS: "60000"
+    labels:
+      personal-max.stage: 8b2-operational
+      personal-max.capture: active
+      personal-max.physical-sender: operational-enabled
