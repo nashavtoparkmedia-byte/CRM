@@ -404,44 +404,90 @@ default_off_now
 health_gate
 actual_default_off_gate
 
-pg_user=
-pg_password=
-pg_database=
-while IFS= read -r entry; do
-  case "$entry" in
-    POSTGRES_USER=*) pg_user=${entry#*=} ;;
-    POSTGRES_PASSWORD=*) pg_password=${entry#*=} ;;
-    POSTGRES_DB=*) pg_database=${entry#*=} ;;
-  esac
-done < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' crm-postgres)
-[[ -n $pg_user && -n $pg_password && -n $pg_database ]]
-pg_user_uri=$(jq -rn --arg value "$pg_user" '$value|@uri')
-pg_password_uri=$(jq -rn --arg value "$pg_password" '$value|@uri')
-pg_database_uri=$(jq -rn --arg value "$pg_database" '$value|@uri')
 account_id=$(env_value "$OPERATIONAL_ENV" MAX_PERSONAL_ACCOUNT_ID)
 [[ $account_id =~ ^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$ ]]
-repair_env=$(mktemp /var/tmp/personal-max-uat-repair.env.XXXXXX)
-chmod 0600 "$repair_env"
-printf '%s\n' \
-  "MAX_PERSONAL_GATEWAY_DATABASE_URL=postgresql://$pg_user_uri:$pg_password_uri@postgres:5432/$pg_database_uri?schema=public" \
-  "PERSONAL_MAX_UAT_REPAIR_DATABASE_NAME=$pg_database" \
-  "MAX_PERSONAL_ACCOUNT_ID=$account_id" \
-  'PERSONAL_MAX_UAT_REPAIR_MODE=uat-failure-20260730-exact' \
-  "PERSONAL_MAX_UAT_REPAIR_SEQUENCE5_PROVIDER_ID=$SEQUENCE5_PROVIDER_ID" \
-  "PERSONAL_MAX_UAT_REPAIR_REPLAY_PROVIDER_ID=$REPLAY_PROVIDER_ID" >"$repair_env"
-docker run --rm --network crm_internal --env-file "$repair_env" "$GATEWAY_IMAGE" \
-  node --experimental-strip-types src/ops/repairUatFailure.ts \
-  >"$EVIDENCE_DIR/ledger-repair.json"
-jq -e '
-  .repair == "PERSONAL_MAX_UAT_FAILURE_20260730" and
-  .providerConfirmedSequences == [3,4,5] and
-  .cancelledBeforeProviderSequences == [6,7,8,9,10] and
-  .nextPhysicalSequence == 11 and .openReconciliation == 0 and
-  .historyReplayQuarantined == 1 and .providerActionsPerformedByRepair == 0 and
-  .evidenceRowsDeleted == 0
-' "$EVIDENCE_DIR/ledger-repair.json" >/dev/null
-rm -f -- "$repair_env"
-repair_env=
+if [[ $resume == false ]]; then
+  pg_user=
+  pg_password=
+  pg_database=
+  while IFS= read -r entry; do
+    case "$entry" in
+      POSTGRES_USER=*) pg_user=${entry#*=} ;;
+      POSTGRES_PASSWORD=*) pg_password=${entry#*=} ;;
+      POSTGRES_DB=*) pg_database=${entry#*=} ;;
+    esac
+  done < <(docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' crm-postgres)
+  [[ -n $pg_user && -n $pg_password && -n $pg_database ]]
+  pg_user_uri=$(jq -rn --arg value "$pg_user" '$value|@uri')
+  pg_password_uri=$(jq -rn --arg value "$pg_password" '$value|@uri')
+  pg_database_uri=$(jq -rn --arg value "$pg_database" '$value|@uri')
+  repair_env=$(mktemp /var/tmp/personal-max-uat-repair.env.XXXXXX)
+  chmod 0600 "$repair_env"
+  printf '%s\n' \
+    "MAX_PERSONAL_GATEWAY_DATABASE_URL=postgresql://$pg_user_uri:$pg_password_uri@postgres:5432/$pg_database_uri?schema=public" \
+    "PERSONAL_MAX_UAT_REPAIR_DATABASE_NAME=$pg_database" \
+    "MAX_PERSONAL_ACCOUNT_ID=$account_id" \
+    'PERSONAL_MAX_UAT_REPAIR_MODE=uat-failure-20260730-exact' \
+    "PERSONAL_MAX_UAT_REPAIR_SEQUENCE5_PROVIDER_ID=$SEQUENCE5_PROVIDER_ID" \
+    "PERSONAL_MAX_UAT_REPAIR_REPLAY_PROVIDER_ID=$REPLAY_PROVIDER_ID" >"$repair_env"
+  docker run --rm --network crm_internal --env-file "$repair_env" "$GATEWAY_IMAGE" \
+    node --experimental-strip-types src/ops/repairUatFailure.ts \
+    >"$EVIDENCE_DIR/ledger-repair.json"
+  jq -e '
+    .repair == "PERSONAL_MAX_UAT_FAILURE_20260730" and
+    .providerConfirmedSequences == [3,4,5] and
+    .cancelledBeforeProviderSequences == [6,7,8,9,10] and
+    .nextPhysicalSequence == 11 and .openReconciliation == 0 and
+    .historyReplayQuarantined == 1 and .providerActionsPerformedByRepair == 0 and
+    .evidenceRowsDeleted == 0
+  ' "$EVIDENCE_DIR/ledger-repair.json" >/dev/null
+  rm -f -- "$repair_env"
+  repair_env=
+else
+  incident_repair_resume_gate=$(postgres_query <<SQL
+WITH incident AS (
+  SELECT c."commandSequence", c."conversationKey", d."dispatchId", d."state",
+         d."providerMessageId", d."attemptCount", d."currentAttemptId", m."status"
+  FROM "MaxOutboundCommand" c
+  JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
+  JOIN "Message" m ON m."clientMessageId"=c."clientMessageId"
+  WHERE c."accountId"='$account_id'
+    AND c."createdAt">=TIMESTAMPTZ '2026-07-30 09:07:00'
+    AND c."createdAt"<TIMESTAMPTZ '2026-07-30 09:13:00'
+    AND c."commandSequence" BETWEEN 3 AND 10
+), scope AS (SELECT min("conversationKey") AS conversation_key FROM incident)
+SELECT concat_ws('|',
+  (SELECT count(*) FROM incident),
+  (SELECT count(DISTINCT "conversationKey") FROM incident),
+  (SELECT count(*) FROM incident WHERE "commandSequence" IN (3,4,5) AND "state"='provider_confirmed'),
+  (SELECT count(*) FROM incident WHERE "commandSequence" BETWEEN 6 AND 10 AND "state"='hard_failed'),
+  (SELECT count(*) FROM incident WHERE "commandSequence" IN (3,4,5) AND "providerMessageId" ~* '^d301[0-9a-f]{14}$'),
+  (SELECT count(DISTINCT "providerMessageId") FROM incident WHERE "commandSequence" IN (3,4,5)),
+  (SELECT count(*) FROM incident WHERE "commandSequence" BETWEEN 6 AND 10 AND "attemptCount"=0
+    AND "currentAttemptId" IS NULL AND "providerMessageId" IS NULL),
+  (SELECT count(*) FROM "MaxOutboundDispatchAttempt" a JOIN incident i ON i."dispatchId"=a."dispatchId"
+    WHERE i."commandSequence" BETWEEN 6 AND 10 AND a."physicalActionStartedAt" IS NOT NULL),
+  (SELECT count(*) FROM "MaxOutboundDispatchLane" l, scope s WHERE l."accountId"='$account_id'
+    AND l."conversationKey"=s.conversation_key AND l."nextPhysicalSequence"=17),
+  (SELECT count(*) FROM "MaxOutboundReconciliationTask" r, scope s WHERE r."accountId"='$account_id'
+    AND r."conversationKey"=s.conversation_key AND r."state"='open'),
+  (SELECT count(*) FROM "Message" WHERE "createdAt">=TIMESTAMPTZ '2026-07-30 09:07:00'
+    AND "createdAt"<TIMESTAMPTZ '2026-07-30 09:13:00' AND "direction"='inbound' AND "channel"='max'
+    AND "content"='3' AND "externalId"='$REPLAY_PROVIDER_ID'
+    AND "metadata"->'personalMaxIngressDisposition'->>'kind'='history_replay'
+    AND "metadata"->'personalMaxIngressDisposition'->>'visibility'='quarantined'),
+  (SELECT count(*) FROM incident WHERE "commandSequence" IN (3,4,5) AND "status"='delivered'),
+  (SELECT count(*) FROM incident WHERE "commandSequence" BETWEEN 6 AND 10 AND "status"='failed'),
+  (SELECT count(*) FROM incident WHERE "commandSequence"=5 AND lower("providerMessageId")='$SEQUENCE5_PROVIDER_ID')
+);
+SQL
+)
+  [[ $incident_repair_resume_gate == '8|1|3|5|3|3|5|0|1|0|1|3|5|1' ]]
+  jq -n --arg gate "$incident_repair_resume_gate" \
+    '{schemaVersion:1,repair:"PERSONAL_MAX_UAT_FAILURE_20260730",verificationMode:"read_only_resume",
+      exactGate:$gate,providerActionsPerformedByVerification:0,evidenceRowsDeleted:0}' \
+    >"$EVIDENCE_DIR/ledger-repair.json"
+fi
 
 render_file=$(mktemp /var/tmp/personal-max-operational-render.XXXXXX)
 chmod 0600 "$render_file"
