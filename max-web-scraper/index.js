@@ -6267,6 +6267,135 @@ function isLoopbackRequest(req) {
   return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
 }
 
+function oldestProviderCandidateTimestamp(candidates = []) {
+  const timestamps = candidates
+    .map(candidate => Number(candidate?.timestamp))
+    .filter(Number.isFinite)
+  return timestamps.length > 0 ? Math.min(...timestamps) : null
+}
+
+// MAX Web's current bundle no longer exports the legacy history action used by
+// MaxWebReplyBridge. Opening an exact, already-fenced route and scrolling its
+// message viewport upwards is the supported read-only way to ask the UI to
+// hydrate older provider rows into the in-memory store. This helper never
+// clicks, types, sends, or forwards a message.
+async function hydrateReadOnlyProviderHistory({
+  protocolChatId,
+  uiRouteId,
+  windowStart,
+  maxScrollAttempts = 48,
+}) {
+  const targetTimestamp = new Date(windowStart).getTime()
+  if (!Number.isFinite(targetTimestamp)) throw new Error('invalid history window start')
+  const targetUrl = `https://web.max.ru/${uiRouteId}`
+  if (!page.url().includes(`/${uiRouteId}`)) {
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 })
+    await page.waitForTimeout(1800)
+  }
+
+  const bridge = new MaxWebReplyBridge(page)
+  let lookup = await bridge.readCandidates(protocolChatId, {}, {
+    uiChatId: uiRouteId,
+    historyWindowStart: windowStart,
+    historyMaxPages: 32,
+  })
+  let oldestTimestamp = oldestProviderCandidateTimestamp(lookup.candidates)
+  let attempts = 0
+  let stalledAttempts = 0
+  let previousSignature = `${lookup.candidates.length}:${oldestTimestamp ?? 'none'}`
+  let lastScroll = null
+
+  while ((oldestTimestamp === null || oldestTimestamp > targetTimestamp)
+    && attempts < Math.max(1, Math.min(Number(maxScrollAttempts) || 1, 48))) {
+    lastScroll = await page.evaluate(() => {
+      const viewportWidth = window.innerWidth || 1280
+      const viewportHeight = window.innerHeight || 720
+      const messageRows = [...document.querySelectorAll(
+        '[class*="messageWrapper"], [data-testid*="message"], [class*="messageRow"]',
+      )].filter(row => {
+        const rect = row.getBoundingClientRect()
+        return rect.width > 40 && rect.height > 12 && rect.left > viewportWidth * 0.25
+      })
+      const scored = new Map()
+      for (const row of messageRows) {
+        let current = row.parentElement
+        for (let depth = 0; current && depth < 10; depth += 1, current = current.parentElement) {
+          const rect = current.getBoundingClientRect()
+          const style = getComputedStyle(current)
+          const canScroll = current.scrollHeight > current.clientHeight + 40 &&
+            /(auto|scroll)/.test(style.overflowY || style.overflow || '') &&
+            rect.width > 160 && rect.height > Math.min(240, viewportHeight * 0.35) &&
+            rect.left > viewportWidth * 0.20
+          if (!canScroll) continue
+          const score = (scored.get(current) || 0) + 1
+          scored.set(current, score)
+        }
+      }
+
+      let candidates = [...scored.entries()].map(([element, messageCount]) => ({
+        element,
+        messageCount,
+        rect: element.getBoundingClientRect(),
+      }))
+      if (candidates.length === 0) {
+        candidates = [...document.querySelectorAll('main, section, div')]
+          .map(element => ({ element, messageCount: 0, rect: element.getBoundingClientRect() }))
+          .filter(item => {
+            const style = getComputedStyle(item.element)
+            return item.element.scrollHeight > item.element.clientHeight + 40 &&
+              /(auto|scroll)/.test(style.overflowY || style.overflow || '') &&
+              item.rect.left > viewportWidth * 0.25 &&
+              item.rect.width > 280 && item.rect.height > Math.min(300, viewportHeight * 0.45)
+          })
+      }
+      candidates.sort((a, b) =>
+        (b.messageCount - a.messageCount) ||
+        ((b.rect.width * b.rect.height) - (a.rect.width * a.rect.height)),
+      )
+      const target = candidates[0]?.element
+      if (!target) return { found: false, moved: false, atTop: false, messageRows: messageRows.length }
+
+      const before = Number(target.scrollTop) || 0
+      const distance = Math.max(500, Math.floor(target.clientHeight * 0.85))
+      target.scrollTop = Math.max(0, before - distance)
+      target.dispatchEvent(new Event('scroll', { bubbles: true }))
+      const after = Number(target.scrollTop) || 0
+      return {
+        found: true,
+        moved: after < before,
+        atTop: after <= 1,
+        before,
+        after,
+        scrollHeight: target.scrollHeight,
+        clientHeight: target.clientHeight,
+        messageRows: messageRows.length,
+        matchedRows: candidates[0]?.messageCount || 0,
+      }
+    })
+    attempts += 1
+    await page.waitForTimeout(900)
+    lookup = await bridge.readCandidates(protocolChatId, {}, {
+      uiChatId: uiRouteId,
+      historyWindowStart: windowStart,
+      historyMaxPages: 32,
+    })
+    oldestTimestamp = oldestProviderCandidateTimestamp(lookup.candidates)
+    const signature = `${lookup.candidates.length}:${oldestTimestamp ?? 'none'}`
+    stalledAttempts = signature === previousSignature ? stalledAttempts + 1 : 0
+    previousSignature = signature
+    if (!lastScroll?.found || (lastScroll.atTop && stalledAttempts >= 4)) break
+  }
+
+  return {
+    lookup,
+    attempts,
+    oldestTimestamp,
+    completeThroughWindowStart: oldestTimestamp !== null && oldestTimestamp <= targetTimestamp,
+    stalledAttempts,
+    lastScroll,
+  }
+}
+
 // Root-operated, read-only provider-store snapshot. It is intentionally
 // loopback-only: callers use docker exec and the endpoint is unavailable to
 // neighbouring containers. Reading may ask MAX Web to load history into its
@@ -6290,15 +6419,13 @@ app.post('/v1/personal-max/history/snapshot', async (req, res) => {
       || requestedProviderUserId === String(transport._myUserId || '')) {
       return res.status(409).json({ error: 'route_or_participant_mismatch' })
     }
-    const lookup = await new MaxWebReplyBridge(page).readCandidates(
+    const hydration = await hydrateReadOnlyProviderHistory({
       protocolChatId,
-      {},
-      {
-        uiChatId: requestedUiRouteId,
-        historyWindowStart: body.windowStart,
-        historyMaxPages: 32,
-      },
-    )
+      uiRouteId: requestedUiRouteId,
+      windowStart: body.windowStart,
+      maxScrollAttempts: 48,
+    })
+    const lookup = hydration.lookup
     const discoveredProviderUserId = dialogPeerProviderUserId(protocolChatId)
     if (discoveredProviderUserId && discoveredProviderUserId !== requestedProviderUserId) {
       return res.status(409).json({ error: 'route_or_participant_mismatch' })
@@ -6328,10 +6455,12 @@ app.post('/v1/personal-max/history/snapshot', async (req, res) => {
       ...snapshot,
       historyLoad: {
         pagesLoaded: lookup.historyPagesLoaded,
-        oldestTimestamp: lookup.historyOldestTimestamp,
+        domScrollAttempts: hydration.attempts,
+        oldestTimestamp: hydration.oldestTimestamp,
         requestedWindowStart: body.windowStart || null,
-        completeThroughWindowStart: lookup.historyOldestTimestamp !== null &&
-          new Date(lookup.historyOldestTimestamp).getTime() <= new Date(body.windowStart).getTime(),
+        completeThroughWindowStart: hydration.completeThroughWindowStart,
+        stalledAttempts: hydration.stalledAttempts,
+        lastScroll: hydration.lastScroll,
       },
     })
   } catch (error) {

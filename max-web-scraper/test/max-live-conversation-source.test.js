@@ -22,10 +22,24 @@ test('history snapshot endpoint is loopback-only, read-only and exact-route fenc
   assert.match(block, /isLoopbackRequest\(req\)/)
   assert.match(block, /account_mismatch/)
   assert.match(block, /route_or_participant_mismatch/)
-  assert.match(block, /readCandidates/)
-  assert.match(block, /historyMaxPages:\s*32/)
+  assert.match(block, /hydrateReadOnlyProviderHistory/)
+  assert.match(block, /maxScrollAttempts:\s*48/)
   assert.match(block, /completeThroughWindowStart/)
   assert.match(block, /buildProviderHistorySnapshot/)
+  assert.doesNotMatch(block, /forwardToWebhook/)
+  assert.doesNotMatch(block, /sendProviderConfirmedUiText/)
+  assert.doesNotMatch(block, /page\.type|keyboard\.press|click\(/)
+})
+
+test('read-only history hydration is bounded and cannot perform provider actions', () => {
+  const block = blockBetween(
+    'async function hydrateReadOnlyProviderHistory',
+    '// Root-operated, read-only provider-store snapshot',
+  )
+  assert.match(block, /Math\.min\(Number\(maxScrollAttempts\) \|\| 1, 48\)/)
+  assert.match(block, /target\.scrollTop = Math\.max\(0, before - distance\)/)
+  assert.match(block, /readCandidates/)
+  assert.match(block, /stalledAttempts >= 4/)
   assert.doesNotMatch(block, /forwardToWebhook/)
   assert.doesNotMatch(block, /sendProviderConfirmedUiText/)
   assert.doesNotMatch(block, /page\.type|keyboard\.press|click\(/)
