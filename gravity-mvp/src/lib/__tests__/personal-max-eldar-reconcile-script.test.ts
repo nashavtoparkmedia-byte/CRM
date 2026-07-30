@@ -18,6 +18,8 @@ describe('Personal MAX exact-history repair script', () => {
     expect(source).toContain("visibility','suppressed_duplicate'")
     expect(source).toContain("visibility','suppressed_provider_absent'")
     expect(source).toContain('availableHistoryExhausted')
+    expect(source).toContain("- 'personalMaxIngressDisposition'")
+    expect(source).toContain("'{personalMaxIngressDisposition,visibility}'")
   })
 
   it('contains no MAX/provider action or blind retry primitive', () => {

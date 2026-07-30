@@ -172,6 +172,7 @@ SELECT
        OR m.type::text<>p.expected_type
        OR m.status::text<>p.expected_status
        OR round(extract(epoch FROM m."sentAt")*1000)::bigint<>p.timestamp_ms
+       OR coalesce(m.metadata #>> '{personalMaxIngressDisposition,visibility}','')='quarantined'
        OR NOT (coalesce(m.metadata,'{}'::jsonb) @> p.expected_metadata)) AS updates,
   (SELECT count(*) FROM expected_provider p LEFT JOIN "Message" m ON m."externalId"=p.provider_message_id
     WHERE m.id IS NULL) AS creates,
@@ -197,7 +198,7 @@ UPDATE "Message" m SET
   type=p.expected_type::"MessageType",
   status=p.expected_status::"MessageStatus",
   "sentAt"=to_timestamp(p.timestamp_ms/1000.0),
-  metadata=coalesce(m.metadata,'{}'::jsonb) || p.expected_metadata,
+  metadata=(coalesce(m.metadata,'{}'::jsonb) - 'personalMaxIngressDisposition') || p.expected_metadata,
   "updatedAt"=now()
 FROM expected_provider p
 WHERE m."externalId"=p.provider_message_id
@@ -207,6 +208,7 @@ WHERE m."externalId"=p.provider_message_id
     OR m.type::text<>p.expected_type
     OR m.status::text<>p.expected_status
     OR round(extract(epoch FROM m."sentAt")*1000)::bigint<>p.timestamp_ms
+    OR coalesce(m.metadata #>> '{personalMaxIngressDisposition,visibility}','')='quarantined'
     OR NOT (coalesce(m.metadata,'{}'::jsonb) @> p.expected_metadata));
 
 INSERT INTO "Message" (
@@ -347,6 +349,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM expected_provider p JOIN visible_target_messages m ON m."externalId"=p.provider_message_id
       WHERE m.content<>p.expected_content OR m.direction::text<>p.direction OR m.type::text<>p.expected_type
         OR m.status::text<>p.expected_status OR round(extract(epoch FROM m."sentAt")*1000)::bigint<>p.timestamp_ms
+        OR coalesce(m.metadata #>> '{personalMaxIngressDisposition,visibility}','')='quarantined'
         OR NOT (coalesce(m.metadata,'{}'::jsonb) @> p.expected_metadata))
       THEN RAISE EXCEPTION 'message field parity mismatch';
     END IF;
