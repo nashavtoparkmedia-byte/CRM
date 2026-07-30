@@ -3,12 +3,16 @@
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const test = require('node:test')
 const { createPhysicalTextSenderRuntime } = require('../sender-v1/runtime')
 const { DurableSenderAttemptStore, canonical, canaryConversationScope, signForSyntheticTest } = require('../sender-v1')
 
 const secret = 'physical-sender-test-secret-000000000000000000'
 const now = new Date('2026-07-29T12:00:00.000Z')
+const temporaryStateDirectory = () => fs.mkdtempSync(path.join(os.tmpdir(), 'max-sender-test-'))
+const allowTemporaryTestState = () => true
 
 function request(overrides = {}) {
   return {
@@ -43,6 +47,7 @@ function authentication(body, nonce) {
 function harness(directory, calls, options = {}) {
   return createPhysicalTextSenderRuntime({
     environment: environment(directory), clock: () => new Date(now),
+    statePathValidator: allowTemporaryTestState,
     preflight: async () => { calls.preflight += 1 },
     fetchImpl: async (_url, init) => {
       calls.authorize += 1
@@ -58,7 +63,7 @@ function harness(directory, calls, options = {}) {
 }
 
 test('durable physical boundary confirms exact provider identity once across restart', async t => {
-  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const directory = temporaryStateDirectory()
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const calls = { preflight: 0, authorize: 0, send: 0 }
   const body = request()
@@ -72,7 +77,7 @@ test('durable physical boundary confirms exact provider identity once across res
 })
 
 test('post-action failure is durable UNKNOWN and never blindly retried', async t => {
-  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const directory = temporaryStateDirectory()
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const calls = { preflight: 0, authorize: 0, send: 0 }
   const body = request()
@@ -85,7 +90,7 @@ test('post-action failure is durable UNKNOWN and never blindly retried', async t
 })
 
 test('a reserved pre-action attempt is recoverable after a process restart', async t => {
-  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const directory = temporaryStateDirectory()
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const body = request()
   const digest = createHash('sha256').update(canonical(body)).digest('hex')
@@ -98,7 +103,7 @@ test('a reserved pre-action attempt is recoverable after a process restart', asy
 })
 
 test('a physically-started crash becomes durable UNKNOWN without another provider call', async t => {
-  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const directory = temporaryStateDirectory()
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const body = request()
   const digest = createHash('sha256').update(canonical(body)).digest('hex')
@@ -113,13 +118,14 @@ test('a physically-started crash becomes durable UNKNOWN without another provide
 })
 
 test('a concurrent duplicate is refused while the reserved local attempt is in flight', async t => {
-  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const directory = temporaryStateDirectory()
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const calls = { preflight: 0, authorize: 0, send: 0 }
   let releaseAuthorization
   const authorizationGate = new Promise(resolve => { releaseAuthorization = resolve })
   const runtime = createPhysicalTextSenderRuntime({
     environment: environment(directory), clock: () => new Date(now),
+    statePathValidator: allowTemporaryTestState,
     preflight: async () => { calls.preflight += 1 },
     fetchImpl: async (_url, init) => {
       calls.authorize += 1
@@ -145,8 +151,8 @@ test('a concurrent duplicate is refused while the reserved local attempt is in f
 })
 
 test('daily provider-call limit and UNKNOWN stop are restored from durable state', async t => {
-  const limitDirectory = fs.mkdtempSync('/var/lib/max-sender-test-')
-  const unknownDirectory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const limitDirectory = temporaryStateDirectory()
+  const unknownDirectory = temporaryStateDirectory()
   t.after(() => fs.rmSync(limitDirectory, { recursive: true, force: true }))
   t.after(() => fs.rmSync(unknownDirectory, { recursive: true, force: true }))
   const calls = { preflight: 0, authorize: 0, send: 0 }
@@ -178,8 +184,16 @@ test('default-off runtime does not construct a physical boundary', () => {
   assert.equal(createPhysicalTextSenderRuntime({ environment: {}, preflight: async () => {}, send: async () => {} }), null)
 })
 
+test('production runtime rejects non-persistent sender state without the test-only validator seam', () => {
+  assert.throws(() => createPhysicalTextSenderRuntime({
+    environment: environment('/tmp/non-persistent-sender-state'),
+    preflight: async () => {},
+    send: async () => {},
+  }), /Sender state path must be persistent/)
+})
+
 test('operational runtime requires an empty static conversation allowlist', async t => {
-  const directory = fs.mkdtempSync('/var/lib/max-sender-test-')
+  const directory = temporaryStateDirectory()
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   const operational = {
     ...environment(directory),
@@ -189,6 +203,7 @@ test('operational runtime requires an empty static conversation allowlist', asyn
   const runtime = createPhysicalTextSenderRuntime({
     environment: operational,
     clock: () => new Date(now),
+    statePathValidator: allowTemporaryTestState,
     preflight: async () => {},
     fetchImpl: async () => new Response(JSON.stringify({ authorized: true }), { status: 200 }),
     send: async () => ({ outcome: 'PROVIDER_CONFIRMED', providerMessageId: `d301${'0'.repeat(64)}`, physicalProviderCalled: true }),
@@ -197,6 +212,7 @@ test('operational runtime requires an empty static conversation allowlist', asyn
   assert.equal(runtime.canaryPolicy.evaluate(request({ accountId: 'account-b', conversationKey: 'conversation-b' })), 'ACCOUNT_NOT_ALLOWLISTED')
   assert.throws(() => createPhysicalTextSenderRuntime({
     environment: { ...environment(directory), MAX_PERSONAL_TEXT_SENDER_OPERATIONAL_MODE: 'true' },
+    statePathValidator: allowTemporaryTestState,
     preflight: async () => {},
     send: async () => {},
   }), /gateway-authorized conversations/)

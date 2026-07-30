@@ -96,21 +96,21 @@ test('MAX outbound text delivery is confirmed only by a real d301 provider messa
 
   assert.match(messageService, /Boolean\(\(maxRes as any\)\?\.deliveryConfirmed && isRealMaxMessageId\(maxExternalId\)\)/)
   assert.doesNotMatch(messageService, /\|\| maxDeliveryStatus === 'delivered'/)
-  assert.match(messageService, /deliveryStatus = maxDeliveryConfirmed \? 'delivered' : 'sent'/)
+  assert.match(messageService, /deliveryStatus = crmStatusForMaxDelivery\(durableStatus, maxDeliveryConfirmed\)/)
 })
 
 test('CRM retry preserves reply identity and does not promote every HTTP 200 to delivered', () => {
   const workspace = read('gravity-mvp/src/app/messages/components/ChatWorkspace.tsx')
   const messagesHook = read('gravity-mvp/src/app/messages/hooks/useMessages.ts')
 
-  assert.match(workspace, /const quotedMsgId = typeof msg\.metadata\?\.quotedMsgId === 'string'/)
-  assert.match(workspace, /sendMessage\(msg\.content, msg\.channel, quotedMsgId\)/)
+  assert.match(workspace, /retryMessage\(msg\.id\)/)
+  assert.doesNotMatch(workspace.slice(workspace.indexOf('const handleRetry ='), workspace.indexOf('const handleReply')), /sendMessage\(/)
+  assert.match(messagesHook, /fetch\('\/api\/messages\/retry'/)
   assert.match(messagesHook, /metadata: quotedMsgId \? \{ quotedMsgId \} : undefined/)
   assert.match(messagesHook, /const allowedStatuses = new Set\(\['queued', 'sent', 'delivered', 'read', 'failed'\]\)/)
   assert.match(messagesHook, /allowedStatuses\.has\(result\.status\)/)
   assert.doesNotMatch(messagesHook, /result\.success === false \? 'failed' as const : 'delivered' as const/)
-  assert.match(messagesHook, /metadata: \{ \.\.\.m\.metadata, error:/)
-  assert.equal((messagesHook.match(/metadata: \{ \.\.\.m\.metadata, error:/g) || []).length, 3)
+  assert.match(messagesHook, /maxDelivery: \{ status: 'needs_review'/)
 })
 
 test('CRM outbound text keeps clientMessageId idempotency before creating a message', () => {
@@ -122,7 +122,14 @@ test('CRM outbound text keeps clientMessageId idempotency before creating a mess
     'const created = await (prisma.message as any).create',
     'clientMessageId lookup must happen before outbound message create',
   )
-  assert.match(messageService, /return \{ success: existing\.status !== 'failed', chatId: existing\.chatId, id: existing\.id, error: null, duplicate: true \}/)
+  assert.match(messageService, /status: existing\.status, externalId: existing\.externalId, metadata: existing\.metadata/)
+  assert.match(messageService, /error: null, duplicate: true/)
+})
+
+test('MAX text DOM fallback refuses an unanchored body without provider identity', () => {
+  const scraper = read('max-web-scraper/index.js')
+  assert.match(scraper, /!isOutgoingCandidate && !resolvedProviderId && attachments\.length === 0/)
+  assert.match(scraper, /skipped: 'provider_identity_required'/)
 })
 
 test('CRM message ordering is based on provider sentAt before createdAt fallback', () => {

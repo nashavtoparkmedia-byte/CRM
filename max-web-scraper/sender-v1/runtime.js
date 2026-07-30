@@ -37,7 +37,18 @@ function positiveInteger(raw, fallback, maximum, label) {
   return value
 }
 
-function createPhysicalTextSenderRuntime({ environment = process.env, preflight, send, fetchImpl = fetch, clock = () => new Date() }) {
+function persistentStatePath(statePath) {
+  return typeof statePath === 'string' && statePath.startsWith('/var/lib/')
+}
+
+function createPhysicalTextSenderRuntime({
+  environment = process.env,
+  preflight,
+  send,
+  fetchImpl = fetch,
+  clock = () => new Date(),
+  statePathValidator = persistentStatePath,
+}) {
   if (!exactBoolean(environment.MAX_PERSONAL_TEXT_SENDER_ENABLED)) return null
   const gateway = new URL(environment.MAX_PERSONAL_TEXT_SENDER_GATEWAY_URL || '')
   if (gateway.protocol !== 'http:' || gateway.username || gateway.password || gateway.search || gateway.hash
@@ -46,7 +57,7 @@ function createPhysicalTextSenderRuntime({ environment = process.env, preflight,
     throw new Error('Sender authorization URL is not an exact private endpoint')
   }
   const statePath = environment.MAX_PERSONAL_TEXT_SENDER_STATE_PATH
-  if (!statePath || !statePath.startsWith('/var/lib/')) throw new Error('Sender state path must be persistent')
+  if (!statePathValidator(statePath)) throw new Error('Sender state path must be persistent')
   const keys = hmacKeys(environment.MAX_PERSONAL_TEXT_SENDER_HMAC_KEYS_JSON)
   if (keys.size < 1 || keys.size > 4) throw new Error('Sender HMAC rotation set is empty or unbounded')
   const accountAllowlist = jsonStringArray(environment.MAX_PERSONAL_TEXT_SENDER_ACCOUNTS_JSON, 'Sender account allowlist')

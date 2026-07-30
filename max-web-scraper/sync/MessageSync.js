@@ -11,7 +11,8 @@ const DEDUP_TTL_MS       = 5 * 60 * 1000   // 5 минут
 const MAX_DEDUP_ENTRIES  = 5000
 
 class MessageSync {
-  constructor() {
+  constructor(options = {}) {
+    this.dedupPath = options.dedupPath || DEDUP_PATH
     this.seen = new Map()
     this._load()
   }
@@ -148,7 +149,7 @@ class MessageSync {
 
   _load() {
     try {
-      const raw = JSON.parse(fs.readFileSync(DEDUP_PATH, 'utf8'))
+      const raw = JSON.parse(fs.readFileSync(this.dedupPath, 'utf8'))
       const now = Date.now()
       for (const [k, ts] of Object.entries(raw)) {
         if (now - ts < DEDUP_TTL_MS) this.seen.set(k, ts)
@@ -161,7 +162,7 @@ class MessageSync {
 
   _save() {
     try {
-      fs.writeFileSync(DEDUP_PATH, JSON.stringify(Object.fromEntries(this.seen)))
+      fs.writeFileSync(this.dedupPath, JSON.stringify(Object.fromEntries(this.seen)))
     } catch (e) {
       console.error('[Sync] Ошибка сохранения dedup cache:', e.message)
     }
@@ -170,7 +171,7 @@ class MessageSync {
   // Полный сброс кэша (используется перед full-history reimport)
   clear() {
     this.seen.clear()
-    try { fs.unlinkSync(DEDUP_PATH) } catch {}
+    try { fs.unlinkSync(this.dedupPath) } catch {}
     console.log('[Sync] Dedup cache сброшен')
   }
 }

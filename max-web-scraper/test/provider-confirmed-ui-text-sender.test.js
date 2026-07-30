@@ -5,6 +5,7 @@ const test = require('node:test')
 const { sendProviderConfirmedUiText } = require('../sender-v1/ProviderConfirmedUiTextSender')
 
 const exactId = value => /^d301/i.test(String(value || ''))
+const emptySnapshot = async () => []
 
 function request(overrides = {}) {
   return {
@@ -19,6 +20,7 @@ test('registers echo before one UI action and confirms only the exact provider-s
   const result = await sendProviderConfirmedUiText({
     request: request(),
     clock: () => 1234,
+    snapshotProviderMessageIds: async input => { calls.push(['snapshot', input]); return [] },
     startProviderAck: input => { calls.push(['ack', input]); return Promise.resolve(null) },
     sendViaUi: async input => { calls.push(['send', input]); return true },
     resolveProviderMessageId: async input => { calls.push(['store', input]); return 'd30100000000000000aa' },
@@ -27,17 +29,18 @@ test('registers echo before one UI action and confirms only the exact provider-s
 
   assert.equal(result.outcome, 'PROVIDER_CONFIRMED')
   assert.equal(result.providerMessageId, 'd30100000000000000aa')
-  assert.deepEqual(calls.map(item => item[0]), ['ack', 'send', 'store'])
-  assert.deepEqual(calls[1][1], {
+  assert.deepEqual(calls.map(item => item[0]), ['snapshot', 'ack', 'send', 'store'])
+  assert.deepEqual(calls[2][1], {
     protocolChatId: '902454841098', webRouteId: '511708938', text: 'one physical canary',
   })
-  assert.equal(calls[2][1].sentAt, 1234)
+  assert.equal(calls[3][1].sentAt, 1234)
 })
 
 test('accepts an exact own echo when the provider store has not materialized yet', async () => {
   let sends = 0
   const result = await sendProviderConfirmedUiText({
     request: request(),
+    snapshotProviderMessageIds: emptySnapshot,
     startProviderAck: () => Promise.resolve('d30100000000000000bb'),
     sendViaUi: async () => { sends += 1; return true },
     resolveProviderMessageId: async () => null,
@@ -53,6 +56,7 @@ test('rechecks the provider store after a bounded empty own-echo wait without an
   let storeReads = 0
   const result = await sendProviderConfirmedUiText({
     request: request(),
+    snapshotProviderMessageIds: emptySnapshot,
     startProviderAck: () => Promise.resolve(null),
     sendViaUi: async () => { sends += 1; return true },
     resolveProviderMessageId: async () => {
@@ -71,6 +75,7 @@ test('an ambiguous post-action result is UNKNOWN and never retries the UI action
   let sends = 0
   const result = await sendProviderConfirmedUiText({
     request: request(),
+    snapshotProviderMessageIds: emptySnapshot,
     startProviderAck: () => Promise.resolve(null),
     sendViaUi: async () => { sends += 1; return true },
     resolveProviderMessageId: async () => 'max-dom-placeholder',
@@ -85,12 +90,52 @@ test('missing exact web route fails closed without a physical action', async () 
   let sends = 0
   const result = await sendProviderConfirmedUiText({
     request: request({ route: { protocolChatId: '902454841098', webRouteId: null } }),
+    snapshotProviderMessageIds: emptySnapshot,
     startProviderAck: () => Promise.resolve(null),
     sendViaUi: async () => { sends += 1; return true },
     resolveProviderMessageId: async () => null,
     isRealProviderMessageId: exactId,
   })
-  assert.equal(result.outcome, 'UNKNOWN_AFTER_ATTEMPT')
+  assert.equal(result.outcome, 'REFUSED_BEFORE_SEND')
   assert.equal(result.safeCode, 'EXACT_WEB_ROUTE_MISSING')
+  assert.equal(sends, 0)
+})
+
+test('repeated identical text excludes every provider id present before the physical action', async () => {
+  const oldId = 'd30100000000000000d1'
+  const newId = 'd30100000000000000d2'
+  const resolutions = []
+  const result = await sendProviderConfirmedUiText({
+    request: request({ payload: { text: 'Одинаковое сообщение' } }),
+    snapshotProviderMessageIds: async () => [oldId],
+    startProviderAck: () => Promise.resolve(oldId),
+    sendViaUi: async () => true,
+    resolveProviderMessageId: async input => {
+      resolutions.push(input)
+      return newId
+    },
+    isRealProviderMessageId: exactId,
+  })
+
+  assert.equal(result.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(result.providerMessageId, newId)
+  assert.deepEqual(resolutions[0].excludedProviderMessageIds, [oldId])
+})
+
+test('snapshot failure refuses before send and never creates an unknown physical outcome', async () => {
+  let sends = 0
+  const result = await sendProviderConfirmedUiText({
+    request: request(),
+    snapshotProviderMessageIds: async () => { throw new Error('store unavailable') },
+    startProviderAck: () => Promise.resolve(null),
+    sendViaUi: async () => { sends += 1; return true },
+    resolveProviderMessageId: async () => null,
+    isRealProviderMessageId: exactId,
+  })
+  assert.deepEqual(result, {
+    outcome: 'REFUSED_BEFORE_SEND',
+    safeCode: 'PROVIDER_STORE_SNAPSHOT_FAILED',
+    physicalProviderCalled: false,
+  })
   assert.equal(sends, 0)
 })

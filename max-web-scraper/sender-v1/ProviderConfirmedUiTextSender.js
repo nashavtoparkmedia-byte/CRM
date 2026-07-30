@@ -8,6 +8,14 @@ function unknown(safeCode) {
   })
 }
 
+function refused(safeCode) {
+  return Object.freeze({
+    outcome: 'REFUSED_BEFORE_SEND',
+    safeCode,
+    physicalProviderCalled: false,
+  })
+}
+
 /**
  * Execute one fenced MAX Web text action and promote it only when MAX exposes
  * an exact provider message id.  This helper never retries the physical action.
@@ -17,6 +25,7 @@ async function sendProviderConfirmedUiText(options) {
     request,
     sendViaUi,
     startProviderAck,
+    snapshotProviderMessageIds,
     resolveProviderMessageId,
     isRealProviderMessageId,
     clock = () => Date.now(),
@@ -28,11 +37,22 @@ async function sendProviderConfirmedUiText(options) {
   if (!/^\d{5,15}$/.test(protocolChatId) || !/^\d{5,15}$/.test(webRouteId)
     || typeof text !== 'string' || text.length === 0
     || typeof sendViaUi !== 'function' || typeof startProviderAck !== 'function'
+    || typeof snapshotProviderMessageIds !== 'function'
     || typeof resolveProviderMessageId !== 'function' || typeof isRealProviderMessageId !== 'function') {
-    return unknown('EXACT_WEB_ROUTE_MISSING')
+    return refused('EXACT_WEB_ROUTE_MISSING')
   }
 
-  const sentAt = Number(clock())
+  let excludedProviderMessageIds
+  try {
+    excludedProviderMessageIds = Object.freeze(Array.from(new Set(
+      (await snapshotProviderMessageIds({ protocolChatId, webRouteId }))
+        .filter(isRealProviderMessageId)
+        .map(value => String(value).toLowerCase())
+    )))
+  } catch {
+    return refused('PROVIDER_STORE_SNAPSHOT_FAILED')
+  }
+
   let ackPromise
   try {
     // Register the exact own-echo listener before the single physical action.
@@ -42,6 +62,7 @@ async function sendProviderConfirmedUiText(options) {
     ackPromise = Promise.resolve(null)
   }
 
+  const sentAt = Number(clock())
   let actionAccepted = false
   try {
     actionAccepted = await sendViaUi({ protocolChatId, webRouteId, text })
@@ -52,7 +73,7 @@ async function sendProviderConfirmedUiText(options) {
 
   let storeId = null
   try {
-    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt })
+    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds })
   } catch {}
   if (isRealProviderMessageId(storeId)) {
     return Object.freeze({
@@ -64,7 +85,8 @@ async function sendProviderConfirmedUiText(options) {
   }
 
   const echoId = await ackPromise
-  if (isRealProviderMessageId(echoId)) {
+  if (isRealProviderMessageId(echoId)
+    && !excludedProviderMessageIds.includes(String(echoId).toLowerCase())) {
     return Object.freeze({
       outcome: 'PROVIDER_CONFIRMED',
       safeCode: 'EXACT_PROVIDER_CONFIRMATION',
@@ -77,7 +99,7 @@ async function sendProviderConfirmedUiText(options) {
   // starts. Re-read the store once after that bounded wait; never repeat the UI
   // action and never promote a DOM-only identifier.
   try {
-    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt })
+    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds })
   } catch {}
   const providerMessageId = isRealProviderMessageId(storeId) ? String(storeId) : null
   if (!isRealProviderMessageId(providerMessageId)) return unknown('EXACT_PROVIDER_ID_MISSING')

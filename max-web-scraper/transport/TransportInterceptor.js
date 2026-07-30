@@ -1305,10 +1305,9 @@ class TransportInterceptor {
       }
     }
 
-    // Raw-хэндлеры (contacts, chats, и т.д.)
-    // op:49 — browser-driven history load when the UI opens a chat route.
-    // MAX often sends media/text history here while our active catch-up op:71
-    // response stays empty. Use the currently opened UI chat as chatId fallback.
+    // Raw handlers retain opcode 49 for capture and explicit history consumers.
+    // History must never enter the live message path: doing so replays old MAX
+    // rows as new CRM inbound messages when a browser route is opened.
     if (data.opcode === OP.GET_HISTORY && (data.payload?.chatId != null || Array.isArray(data.payload) || Array.isArray(data.payload?.messages) || Array.isArray(data.payload?.__complexEntries))) {
       const arrayPayload = Array.isArray(data.payload)
       const arrayEnvelope = arrayPayload
@@ -1324,25 +1323,7 @@ class TransportInterceptor {
       }
       const chatIdRaw = arrayEnvelope?.chatId ?? data.payload?.chatId ?? this._extractChatIdDeep(data.payload) ?? this._activeUiChatId
       if (chatIdRaw != null && messages.length > 0) {
-        const chatIdStr = String(chatIdRaw)
-        console.log(`[op49] active history chatId:${chatIdStr} msgs:${messages.length}`)
-        for (const m of messages) {
-          if (!m || typeof m !== 'object') continue
-          const pseudo = { chatId: chatIdStr, message: m }
-          this._consumeLooseMediaForMessage(pseudo)
-          const msg = this._normalizeMaxMsg(pseudo)
-          if (!msg || (!msg.text && !msg.attachments?.length)) continue
-          const msgIdStr = msg.id || null
-          const storedHex = this._lastMsgRawHex.get(chatIdStr)
-          if (msgIdStr && isUsableMaxMessageHex(storedHex) && compareMaxIdHex(msgIdStr, storedHex) <= 0) {
-            console.log(`[op49] skip stale msgId:${String(msgIdStr).slice(0,16)} anchor:${String(storedHex).slice(0,16)} text:"${String(msg.text || '').slice(0, 50)}"`)
-            continue
-          }
-          if (msgIdStr && this._lastSeenMsgId.get(chatIdStr) === msgIdStr) continue
-          if (msgIdStr) this._lastSeenMsgId.set(chatIdStr, msgIdStr)
-          console.log(`[op49] emit msgId:${msg.id} from:${msg.from} text:"${String(msg.text || '').slice(0, 50)}"`)
-          this._emit(msg)
-        }
+        console.log(`[op49] history quarantined chatId:${String(chatIdRaw)} msgs:${messages.length}`)
       }
     }
 

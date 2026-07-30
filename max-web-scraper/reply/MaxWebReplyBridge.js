@@ -49,6 +49,9 @@ function selectReplyTargetCandidate(candidates, context = {}, options = {}) {
     : (context.direction === 'inbound' ? false : null)
   const maxDistanceMs = Number(options.maxDistanceMs) || 120_000
   const ambiguityMarginMs = Number(options.ambiguityMarginMs) || 150
+  const excludedProviderMessageIds = new Set(
+    Array.from(options.excludedProviderMessageIds || [], value => String(value).toLowerCase())
+  )
   const seenIds = new Set()
 
   const matches = []
@@ -62,7 +65,9 @@ function selectReplyTargetCandidate(candidates, context = {}, options = {}) {
     } catch {
       continue
     }
-    if (!REAL_MAX_MESSAGE_ID_RE.test(providerMessageId) || seenIds.has(providerMessageId)) continue
+    if (!REAL_MAX_MESSAGE_ID_RE.test(providerMessageId)
+      || excludedProviderMessageIds.has(providerMessageId.toLowerCase())
+      || seenIds.has(providerMessageId)) continue
 
     const candidateTime = timestampMs(candidate.timestamp)
     const distanceMs = expectedTime !== null && candidateTime !== null
@@ -438,7 +443,7 @@ class MaxWebReplyBridge {
       return candidateTime !== null && Math.abs(candidateTime - expectedTime) <= 120_000
     })
     return {
-      ...selectReplyTargetCandidate(candidates, context),
+      ...selectReplyTargetCandidate(candidates, context, options),
       candidateCount: candidates.length,
       textMatchCount: textMatches.length,
       directionMatchCount: directionMatches.length,
@@ -446,6 +451,17 @@ class MaxWebReplyBridge {
       providerChatId: lookup.providerChatId,
       routeMatchCount: lookup.routeMatchCount,
     }
+  }
+
+  async snapshotProviderMessageIds(chatId, options = {}) {
+    const lookup = await this.readCandidates(chatId, {}, options)
+    const providerMessageIds = new Set()
+    for (const candidate of lookup.candidates) {
+      try {
+        providerMessageIds.add(providerIdFromDecimal(candidate.id))
+      } catch {}
+    }
+    return Array.from(providerMessageIds).sort()
   }
 
   async resolveInboundReply(chatId, context, options = {}) {

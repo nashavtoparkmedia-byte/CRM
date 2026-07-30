@@ -79,6 +79,16 @@ test('keeps non-text fallback dedup for missing provider id', () => {
   sync.markSeen(first)
   assert.equal(sync.isDuplicate(replay), true)
 })
+
+test('opcode 49 browser history is quarantined from live inbound handlers', () => {
+  const source = fs.readFileSync(require.resolve('../transport/TransportInterceptor'), 'utf8')
+  const start = source.indexOf('if (data.opcode === OP.GET_HISTORY')
+  const end = source.indexOf('\n    for (const h of this._rawHandlers)', start)
+  const block = source.slice(start, end)
+  assert.match(block, /history quarantined/)
+  assert.doesNotMatch(block, /this\._emit\(/)
+  assert.doesNotMatch(block, /this\._lastSeenMsgId\.set/)
+})
 test('bare op128 live inbound keeps previous anchor until op71 confirms the new provider id', () => {
   const transport = new TransportInterceptor()
   transport._lastMsgRawHex.clear()
@@ -284,7 +294,9 @@ test('live op128 and startup chat scan only retain validated provider anchors', 
 
   assert.match(source, /this\._rememberConfirmedMessageAnchor\(cidStr, hex, \{ markSeen: true \}\)/)
   assert.match(source, /key\?\.__maxId && isUsableMaxMessageHex\(key\.hex\)/)
-  assert.match(source, /msgIdStr && isUsableMaxMessageHex\(storedHex\)/)
+  assert.match(source, /\[op49\] history quarantined/)
+  const historyBlock = source.slice(source.indexOf('if (data.opcode === OP.GET_HISTORY'), source.indexOf('for (const h of this._rawHandlers)'))
+  assert.doesNotMatch(historyBlock, /this\._emit\(/)
   assert.doesNotMatch(source, /!stored \|\| hex\.slice\(2\) > stored\.slice\(2\)/)
 })
 
@@ -470,7 +482,7 @@ test('provider-backed DOM reply recovery forwards only reply body text', () => {
 })
 
 
-test('single live DOM text after unsafe op128 can recover without direct anchor', () => {
+test('unanchored live DOM text is blocked until an exact provider identity is available', () => {
   const source = fs.readFileSync(require.resolve('../index'), 'utf8')
   const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
   const liveRecoveryEnd = source.indexOf('const results = []', liveRecoveryStart)
@@ -481,7 +493,7 @@ test('single live DOM text after unsafe op128 can recover without direct anchor'
   assert.match(liveRecoveryBlock, /liveWindowDetails\.recentOp128Count > 0/)
   assert.match(liveRecoveryBlock, /selectPendingLiveDomCandidates\(\s*recoverable,\s*Math\.min\(recoverable\.length, liveWindowDetails\.recentOp128Count\)/s)
   assert.match(liveRecoveryBlock, /candidate\._liveDomSeriesCandidate = true/)
-  assert.match(source, /source: isOutgoingCandidate \? 'max_web_mirror' : \(resolvedProviderId \? 'live_dom_recovery' : 'dom_fallback'\)/)
+  assert.match(source, /skipped: 'provider_identity_required'/)
 })
 
 

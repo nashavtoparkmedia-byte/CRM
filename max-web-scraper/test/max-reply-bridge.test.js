@@ -166,6 +166,32 @@ test('same text uses the uniquely nearest provider event without content dedup',
   assert.equal(result.reason, 'nearest_strict_match')
 })
 
+test('repeated outbound text cannot reuse an id from the pre-action provider snapshot', () => {
+  const sentAtMs = Date.parse('2026-07-30T09:09:26.000Z')
+  const oldId = 'd3019f4dcf27c35ec1'
+  const newId = 'd3019f4dcf27c35ec2'
+  const result = selectReplyTargetCandidate([
+    { id: providerDecimalFromId(oldId), text: 'Одинаковое сообщение', timestamp: sentAtMs - 1200, isOutgoing: true },
+    { id: providerDecimalFromId(newId), text: 'Одинаковое сообщение', timestamp: sentAtMs + 80, isOutgoing: true },
+  ], { text: 'Одинаковое сообщение', sentAt: sentAtMs, direction: 'outbound' }, {
+    excludedProviderMessageIds: [oldId],
+  })
+  assert.equal(result.providerMessageId, newId)
+  assert.equal(result.reason, 'unique_strict_match')
+})
+
+test('only a pre-action repeated-text match remains unknown until a new provider row appears', () => {
+  const sentAtMs = Date.parse('2026-07-30T09:09:26.000Z')
+  const oldId = 'd3019f4dcf27c35ec1'
+  const result = selectReplyTargetCandidate([
+    { id: providerDecimalFromId(oldId), text: 'Одинаковое сообщение', timestamp: sentAtMs - 1200, isOutgoing: true },
+  ], { text: 'Одинаковое сообщение', sentAt: sentAtMs, direction: 'outbound' }, {
+    excludedProviderMessageIds: [oldId],
+  })
+  assert.equal(result.providerMessageId, null)
+  assert.equal(result.reason, 'no_strict_match')
+})
+
 test('ambiguous duplicate target is rejected instead of replying to the wrong message', () => {
   const sentAtMs = Date.parse('2026-07-10T20:54:13.900Z')
   const result = selectReplyTargetCandidate([

@@ -16,6 +16,7 @@ async function resolveOutboundProviderMessageId(options = {}) {
     attempts = 4,
     delayMs = 250,
     waitFn = wait,
+    excludedProviderMessageIds = [],
   } = options
 
   if (!bridge || typeof bridge.resolveProviderId !== 'function') return null
@@ -24,7 +25,7 @@ async function resolveOutboundProviderMessageId(options = {}) {
     const result = await bridge.resolveProviderId(
       protocolChatId,
       { text, sentAt, direction: 'outbound' },
-      { uiChatId: uiRouteId },
+      { uiChatId: uiRouteId, excludedProviderMessageIds },
     ).catch(() => null)
     if (isRealMaxMessageId(result?.providerMessageId)) {
       return String(result.providerMessageId)
@@ -35,7 +36,24 @@ async function resolveOutboundProviderMessageId(options = {}) {
   return null
 }
 
+async function snapshotOutboundProviderMessageIds(options = {}) {
+  const { bridge, protocolChatId, uiRouteId } = options
+  if (!bridge || typeof bridge.snapshotProviderMessageIds !== 'function') {
+    throw new Error('MAX provider-store snapshot is unavailable')
+  }
+  const providerMessageIds = await bridge.snapshotProviderMessageIds(
+    protocolChatId,
+    { uiChatId: uiRouteId },
+  )
+  return Object.freeze(Array.from(new Set(
+    (Array.isArray(providerMessageIds) ? providerMessageIds : [])
+      .filter(isRealMaxMessageId)
+      .map(value => String(value).toLowerCase())
+  )).sort())
+}
+
 module.exports = {
   isRealMaxMessageId,
   resolveOutboundProviderMessageId,
+  snapshotOutboundProviderMessageIds,
 }

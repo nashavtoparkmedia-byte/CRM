@@ -44,7 +44,10 @@ const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
 const { MaxWebReplyBridge }        = require('./reply/MaxWebReplyBridge')
 const { PerKeyTaskQueue }          = require('./lib/PerKeyTaskQueue')
 const { SerializedOutboundQueue }  = require('./lib/SerializedOutboundQueue')
-const { resolveOutboundProviderMessageId } = require('./lib/MaxOutboundConfirmation')
+const {
+  resolveOutboundProviderMessageId,
+  snapshotOutboundProviderMessageIds,
+} = require('./lib/MaxOutboundConfirmation')
 const { createLiveCaptureAdapterFromEnvironment } = require('./capture/LiveCaptureAdapter')
 const { createPhysicalTextSenderRuntime } = require('./sender-v1/runtime')
 const { sendProviderConfirmedUiText } = require('./sender-v1/ProviderConfirmedUiTextSender')
@@ -3133,6 +3136,9 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   if (!text && !attachments.length && !rawAttachmentHints.length) {
     return { skipped: 'no_content', rawAttachments: 0 }
   }
+  if (!isOutgoingCandidate && !resolvedProviderId && attachments.length === 0 && rawAttachmentHints.length === 0) {
+    return { skipped: 'provider_identity_required', text }
+  }
 
   const attachmentIdentity = attachments.length > 0 ? attachments : rawAttachmentHints
   const externalId = isOutgoingCandidate
@@ -5929,17 +5935,23 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
   },
   send: async request => enqueueSend(() => sendProviderConfirmedUiText({
     request,
+    snapshotProviderMessageIds: ({ protocolChatId, webRouteId }) => snapshotOutboundProviderMessageIds({
+      bridge: new MaxWebReplyBridge(page),
+      protocolChatId,
+      uiRouteId: webRouteId,
+    }),
     sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
     startProviderAck: ({ protocolChatId, text }) => waitForUiSendAck(transport, 12_000, {
       chatId: protocolChatId,
       text,
     }),
-    resolveProviderMessageId: ({ protocolChatId, webRouteId, text, sentAt }) => resolveOutboundProviderMessageId({
+    resolveProviderMessageId: ({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds }) => resolveOutboundProviderMessageId({
       bridge: new MaxWebReplyBridge(page),
       protocolChatId,
       uiRouteId: webRouteId,
       text,
       sentAt,
+      excludedProviderMessageIds,
     }),
     isRealProviderMessageId: isRealMaxMessageId,
   })),

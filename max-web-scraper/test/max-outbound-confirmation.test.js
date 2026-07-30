@@ -8,6 +8,7 @@ const path = require('node:path')
 const {
   isRealMaxMessageId,
   resolveOutboundProviderMessageId,
+  snapshotOutboundProviderMessageIds,
 } = require('../lib/MaxOutboundConfirmation')
 
 test('resolves an exact outbound provider id from the MAX Web store', async () => {
@@ -41,8 +42,24 @@ test('resolves an exact outbound provider id from the MAX Web store', async () =
       sentAt: 1_721_000_000_000,
       direction: 'outbound',
     },
-    route: { uiChatId: '24393518' },
+    route: { uiChatId: '24393518', excludedProviderMessageIds: [] },
   })
+})
+
+test('takes a normalized provider-store baseline before repeated-text resolution', async () => {
+  const bridge = {
+    async snapshotProviderMessageIds(chatId, options) {
+      assert.equal(chatId, '902454841098')
+      assert.deepEqual(options, { uiChatId: '511708938' })
+      return ['D30100000000000000AA', 'not-provider', 'd30100000000000000aa']
+    },
+  }
+  const snapshot = await snapshotOutboundProviderMessageIds({
+    bridge,
+    protocolChatId: '902454841098',
+    uiRouteId: '511708938',
+  })
+  assert.deepEqual(snapshot, ['d30100000000000000aa'])
 })
 
 test('does not promote an ambiguous or malformed store result', async () => {
@@ -78,5 +95,5 @@ test('integrates exact store confirmation and protects pending CRM delivery stat
   assert.match(scraper, /const ackId = storeId \|\| await ackPromise/)
   assert.match(service, /\.filter\(shouldMarkStuckOutboundFailed\)/)
   assert.match(service, /maxDeliveryMetadata = \{/)
-  assert.match(service, /status: maxDeliveryConfirmed \? 'delivered'/)
+  assert.match(service, /status: durableStatus/)
 })
