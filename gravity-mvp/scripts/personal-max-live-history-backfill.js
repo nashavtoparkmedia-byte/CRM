@@ -45,7 +45,7 @@ function validateSnapshot(snapshot, expectedAccountId) {
   if (!/^\d{11,15}$/.test(snapshot.protocolChatId)
     || !/^\d{1,10}$/.test(snapshot.uiRouteId)
     || BigInt.asUintN(32, BigInt(snapshot.protocolChatId)).toString() !== snapshot.uiRouteId
-    || snapshot.providerChatId !== snapshot.protocolChatId
+    || ![snapshot.protocolChatId, snapshot.uiRouteId].includes(snapshot.providerChatId)
     || snapshot.routeMatchCount !== 1) throw new Error('Snapshot route binding is invalid')
   if (!/^\d{9,15}$/.test(snapshot.providerUserId)
     || !/^\d{9,15}$/.test(snapshot.ownerUserId)

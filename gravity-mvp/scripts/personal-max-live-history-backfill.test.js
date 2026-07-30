@@ -104,6 +104,14 @@ test('snapshot validation requires an exact provider-bound phone identity', () =
   const bounds = validateSnapshot(snapshot, snapshot.accountId)
   assert.equal(bounds.normalizedPhone, '+79990000011')
 
+  const uiRouteStoreSnapshot = structuredClone(snapshot)
+  uiRouteStoreSnapshot.providerChatId = snapshot.uiRouteId
+  assert.doesNotThrow(() => validateSnapshot(uiRouteStoreSnapshot, snapshot.accountId))
+
+  const unrelatedStoreSnapshot = structuredClone(snapshot)
+  unrelatedStoreSnapshot.providerChatId = '999999999'
+  assert.throws(() => validateSnapshot(unrelatedStoreSnapshot, snapshot.accountId), /route binding is invalid/)
+
   const mismatched = structuredClone(snapshot)
   mismatched.profile.phoneEvidence.providerIdentityId = snapshot.protocolChatId
   assert.throws(() => validateSnapshot(mismatched, snapshot.accountId), /not exactly bound/)
