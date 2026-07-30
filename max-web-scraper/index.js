@@ -3094,6 +3094,40 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
       console.warn(`[domFallback] strict reply lookup failed chatId=${chatId}: ${error.message}`)
     }
   }
+  if (!resolvedProviderId && !isOutgoingCandidate && latest.text && !latest.attachments?.length) {
+    try {
+      const receivedAt = options.timestamp || latest._providerTimestamp || Date.now()
+      const resolvedInbound = await replyBridge.resolveProviderId(
+        chatId,
+        { text: latest.text, sentAt: receivedAt, direction: 'inbound' },
+        { uiChatId: uiRouteId },
+      )
+      if (isRealMaxMessageId(resolvedInbound.providerMessageId)) {
+        const providerMessage = await replyBridge.readProviderMessage(
+          chatId,
+          resolvedInbound.providerMessageId,
+          { uiChatId: uiRouteId },
+        )
+        if (!providerMessage.isOutgoing
+          && comparableDomText(providerMessage.text) === comparableDomText(latest.text)) {
+          resolvedProviderId = providerMessage.providerMessageId
+          latest = {
+            ...latest,
+            text: providerMessage.text,
+            _providerTimestamp: providerMessage.timestamp,
+            _replyToExternalId: providerMessage.replyToExternalId,
+            _providerStoreRecovered: true,
+          }
+          console.log(
+            `[domFallback] resolved exact inbound provider identity chatId=${chatId} ` +
+            `msgId=${resolvedProviderId} via=${resolvedInbound.reason}`,
+          )
+        }
+      }
+    } catch (error) {
+      console.warn(`[domFallback] exact inbound lookup failed chatId=${chatId}: ${error.message}`)
+    }
+  }
   if (isStructuredDomReply && !latest._replyToExternalId) {
     const directReply = findRecentDirectInboundText(chatId, replyParts.leafText)
     if (isRealMaxMessageId(directReply?.externalId)) {

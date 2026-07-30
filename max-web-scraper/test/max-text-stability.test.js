@@ -493,6 +493,11 @@ test('unanchored live DOM text is blocked until an exact provider identity is av
   assert.match(liveRecoveryBlock, /liveWindowDetails\.recentOp128Count > 0/)
   assert.match(liveRecoveryBlock, /selectPendingLiveDomCandidates\(\s*recoverable,\s*Math\.min\(recoverable\.length, liveWindowDetails\.recentOp128Count\)/s)
   assert.match(liveRecoveryBlock, /candidate\._liveDomSeriesCandidate = true/)
+  const exactLookup = source.indexOf("{ text: latest.text, sentAt: receivedAt, direction: 'inbound' }")
+  const identityGate = source.indexOf("skipped: 'provider_identity_required'", exactLookup)
+  assert.ok(exactLookup > -1 && identityGate > exactLookup)
+  assert.match(source.slice(exactLookup, identityGate), /resolvedInbound\.providerMessageId/)
+  assert.match(source.slice(exactLookup, identityGate), /comparableDomText\(providerMessage\.text\)/)
   assert.match(source, /skipped: 'provider_identity_required'/)
 })
 

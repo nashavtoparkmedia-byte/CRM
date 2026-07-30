@@ -128,6 +128,11 @@ test('CRM outbound text keeps clientMessageId idempotency before creating a mess
 
 test('MAX text DOM fallback refuses an unanchored body without provider identity', () => {
   const scraper = read('max-web-scraper/index.js')
+  const exactLookup = scraper.indexOf("{ text: latest.text, sentAt: receivedAt, direction: 'inbound' }")
+  const identityGate = scraper.indexOf("skipped: 'provider_identity_required'", exactLookup)
+  assert.ok(exactLookup > -1 && identityGate > exactLookup)
+  assert.match(scraper.slice(exactLookup, identityGate), /readProviderMessage/)
+  assert.match(scraper.slice(exactLookup, identityGate), /!providerMessage\.isOutgoing/)
   assert.match(scraper, /!isOutgoingCandidate && !resolvedProviderId && attachments\.length === 0/)
   assert.match(scraper, /skipped: 'provider_identity_required'/)
 })
