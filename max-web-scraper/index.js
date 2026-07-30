@@ -6588,7 +6588,28 @@ app.get('/contacts', (req, res) => {
 })
 
 app.get('/health', (req, res) => {
-  res.json({ status: isReady ? 'ready' : 'initializing', isReady, queueLength: outboundSendQueue.size })
+  const capture = transport?.getCaptureHealth?.() || null
+  res.json({
+    status: isReady ? 'ready' : 'initializing',
+    isReady,
+    queueLength: outboundSendQueue.size,
+    capture: capture && {
+      enabled: capture.enabled,
+      adapterState: capture.adapterState,
+      spoolPendingCount: capture.spoolPendingCount,
+      spoolPendingBytes: capture.spoolPendingBytes,
+      oldestPendingAgeMs: capture.oldestPendingAgeMs,
+      acknowledgedCount: capture.acknowledgedCount,
+      retryCount: capture.retryCount,
+      rejectedCount: capture.rejectedCount,
+      quarantinedCount: capture.quarantinedCount,
+      lostBeforeSpoolCount: capture.lostBeforeSpoolCount,
+      lastDrainErrorCode: capture.lastDrainErrorCode,
+      captureEnvelopeIdCollisionCount: capture.captureEnvelopeIdCollisionCount,
+      ingressIdempotentRetryCount: capture.ingressIdempotentRetryCount,
+      hookFailureCount: capture.hookFailureCount,
+    },
+  })
 })
 
 app.get('/status', (req, res) => {

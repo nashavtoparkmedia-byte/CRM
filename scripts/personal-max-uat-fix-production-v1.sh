@@ -120,6 +120,12 @@ cleanup() {
   if [[ -n ${EVIDENCE_DIR-} && -d ${EVIDENCE_DIR-} && ! -L ${EVIDENCE_DIR-} ]]; then
     if [[ $status -ne 0 && -f $RESULT_FILE ]]; then
       install -o root -g codexbot -m 0640 "$RESULT_FILE" "$EVIDENCE_DIR/failure-report.json"
+      docker exec crm-max-personal-gateway node -e \
+        "fetch('http://127.0.0.1:8080/ready').then(async r=>process.stdout.write(await r.text())).catch(()=>process.exit(1))" \
+        >"$EVIDENCE_DIR/gateway-ready-on-failure.json" 2>/dev/null
+      docker exec crm-max-scraper node -e \
+        "fetch('http://127.0.0.1:3005/health').then(async r=>process.stdout.write(await r.text())).catch(()=>process.exit(1))" \
+        >"$EVIDENCE_DIR/scraper-health-on-failure.json" 2>/dev/null
     fi
     seal_evidence "$EVIDENCE_DIR"
   fi

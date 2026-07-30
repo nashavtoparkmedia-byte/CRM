@@ -137,6 +137,19 @@ test('MAX text DOM fallback refuses an unanchored body without provider identity
   assert.match(scraper, /skipped: 'provider_identity_required'/)
 })
 
+test('scraper health exposes bounded capture diagnostics without payload or credentials', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const healthStart = scraper.indexOf("app.get('/health'")
+  const statusStart = scraper.indexOf("app.get('/status'", healthStart)
+  const health = scraper.slice(healthStart, statusStart)
+  assert.match(health, /transport\?\.getCaptureHealth\?\.\(\)/)
+  for (const field of ['adapterState', 'spoolPendingCount', 'spoolPendingBytes',
+    'lostBeforeSpoolCount', 'lastDrainErrorCode', 'hookFailureCount']) {
+    assert.ok(health.includes(field), `missing safe capture health field: ${field}`)
+  }
+  assert.doesNotMatch(health, /sanitizedPayload|secret|credential|authorization/i)
+})
+
 test('CRM message ordering is based on provider sentAt before createdAt fallback', () => {
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
   const route = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
