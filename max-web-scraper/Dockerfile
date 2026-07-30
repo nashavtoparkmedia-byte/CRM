@@ -75,13 +75,19 @@ LABEL org.opencontainers.image.title="max-web-scraper" \
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
+    HOME=/home/pwuser \
     NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
     PLAYWRIGHT_SKIP_BROWSER_GC=1 \
     TZ=Europe/Moscow
 
 WORKDIR /app
-USER pwuser
+# Production bind mounts and the accepted profile are owned by UID/GID 1000.
+# Keep the runtime filesystem and process on that exact numeric identity so
+# restrictive 0600 source files remain executable and rollback never needs a
+# profile ownership rewrite.
+RUN /usr/bin/chown -R 1000:1000 /app /home/pwuser
+USER 1000:1000
 EXPOSE 3005
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \

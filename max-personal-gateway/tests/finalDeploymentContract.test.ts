@@ -27,3 +27,13 @@ test('all three final runtime images carry exact source revision labels', () => 
     assert.match(value, /org\.opencontainers\.image\.stage="8B2"/)
   }
 })
+
+test('scraper image and production overlay share the accepted numeric runtime identity', () => {
+  const dockerfile = source('max-web-scraper/Dockerfile')
+  const compose = source('deploy/docker-compose.personal-max-final-default-off.yml')
+  const finalStage = dockerfile.slice(dockerfile.lastIndexOf('FROM scratch'))
+  assert.match(finalStage, /HOME=\/home\/pwuser/)
+  assert.match(finalStage, /RUN \/usr\/bin\/chown -R 1000:1000 \/app \/home\/pwuser/)
+  assert.match(finalStage, /USER 1000:1000/)
+  assert.match(compose, /max-web-scraper:[\s\S]*?user: "1000:1000"/)
+})
