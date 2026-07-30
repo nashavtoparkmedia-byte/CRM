@@ -33,7 +33,7 @@ test('fresh backup and automatic default-off precede any production rollout', ()
 test('ten allowed FIFO canaries use only the CRM durable API path', () => {
   assert.match(source, /PMAX FIFO FINAL /u)
   assert.match(source, /range\(\$start;11\)/u)
-  assert.match(source, /pmax-fifo-\$\{SHORT_SHA\}-/u)
+  assert.match(source, /pmax-fifo-\$\{CANARY_SHORT_SHA\}-/u)
   assert.match(source, /http:\/\/127\.0\.0\.1:3002\/api\/messages/u)
   assert.doesNotMatch(source, /3005\/v1\/personal-max\/send\/text/u)
   assert.match(source, /fifo_gate == '10\|10\|1\|10\|10\|10\|10\|10\|10\|9'/u)
@@ -49,6 +49,10 @@ test('rapid client registration preserves order and partial reruns never blindly
   assert.match(source, /confirmedPrefix/u)
   assert.match(source, /resumeSafe:true,blindRetry:false/u)
   assert.match(source, /existing_count -ge 0 && \$existing_count -le 10/u)
+  assert.match(source, /CANARY_SOURCE_SHA=\$\{3:-\$SOURCE_SHA\}/u)
+  assert.match(source, /CANARY_SHORT_SHA=\$\{CANARY_SOURCE_SHA:0:12\}/u)
+  assert.match(source, /pmax-fifo-\$\{CANARY_SHORT_SHA\}-/u)
+  assert.match(source, /CANARY_SOURCE_SHA != "\$SOURCE_SHA"[\s\S]*existing_count -gt 0/u)
 })
 
 test('runner proves restart, default-off, roll-forward, queue zero and immutable production tree', () => {

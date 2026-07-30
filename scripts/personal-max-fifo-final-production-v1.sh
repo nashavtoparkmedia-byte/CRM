@@ -20,12 +20,14 @@ if [[ ${EUID} -ne 0 ]]; then
   echo 'ERROR: root is required for bounded production activation' >&2
   exit 77
 fi
-if [[ $# -ne 2 || ! $1 =~ ^[0-9a-f]{64}$ || ! $2 =~ ^[0-9a-f]{40}$ ]]; then
-  echo 'usage: personal-max-fifo-final-production-v1.sh <script-sha256> <source-sha>' >&2
+if [[ $# -lt 2 || $# -gt 3 || ! $1 =~ ^[0-9a-f]{64}$ || ! $2 =~ ^[0-9a-f]{40}$ \
+   || ($# -eq 3 && ! ${3-} =~ ^[0-9a-f]{40}$) ]]; then
+  echo 'usage: personal-max-fifo-final-production-v1.sh <script-sha256> <source-sha> [canary-run-source-sha]' >&2
   exit 64
 fi
 readonly EXPECTED_SCRIPT_SHA=$1
 readonly SOURCE_SHA=$2
+readonly CANARY_SOURCE_SHA=${3:-$SOURCE_SHA}
 if [[ $(sha256sum "$SCRIPT_PATH" | awk '{print $1}') != "$EXPECTED_SCRIPT_SHA" ]]; then
   echo 'ERROR: script checksum mismatch' >&2
   exit 66
@@ -48,6 +50,7 @@ fi
 
 umask 0077
 readonly SHORT_SHA=${SOURCE_SHA:0:12}
+readonly CANARY_SHORT_SHA=${CANARY_SOURCE_SHA:0:12}
 readonly GRAVITY_IMAGE=crm/gravity-mvp:personal-max-fifo-${SHORT_SHA}
 readonly GATEWAY_IMAGE=crm/max-personal-gateway:personal-max-fifo-${SHORT_SHA}
 readonly SCRAPER_IMAGE=crm/max-web-scraper:personal-max-fifo-${SHORT_SHA}
@@ -197,7 +200,7 @@ FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
 JOIN "Message" m ON m."clientMessageId"=c."clientMessageId"
 JOIN "MaxOutboundDispatchAttempt" a ON a."dispatchId"=d."dispatchId"
-WHERE c."clientMessageId" LIKE 'pmax-fifo-${SHORT_SHA}-%'
+WHERE c."clientMessageId" LIKE 'pmax-fifo-${CANARY_SHORT_SHA}-%'
 ORDER BY c."commandSequence";
 SQL
 }
@@ -228,7 +231,7 @@ FROM (
   FROM "MaxOutboundCommand" c
   LEFT JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
   LEFT JOIN "Message" m ON m."clientMessageId"=c."clientMessageId"
-  WHERE c."clientMessageId" LIKE 'pmax-fifo-${SHORT_SHA}-%'
+  WHERE c."clientMessageId" LIKE 'pmax-fifo-${CANARY_SHORT_SHA}-%'
 ) x;
 SQL
 )
@@ -239,8 +242,11 @@ jq -e '
     (.value.providerMessageId|test("^d301[0-9a-f]{14}$";"i")))' <<<"$existing_canaries" >/dev/null
 existing_count=$(jq length <<<"$existing_canaries")
 [[ $existing_count -ge 0 && $existing_count -le 10 ]]
-jq -n --argjson existing "$existing_canaries" --argjson confirmedPrefix "$existing_count" \
-  '{schemaVersion:1,existing:$existing,confirmedPrefix:$confirmedPrefix,resumeSafe:true,blindRetry:false}' \
+if [[ $CANARY_SOURCE_SHA != "$SOURCE_SHA" ]]; then [[ $existing_count -gt 0 ]]; fi
+jq -n --arg sourceSha "$SOURCE_SHA" --arg canaryRunSourceSha "$CANARY_SOURCE_SHA" \
+  --argjson existing "$existing_canaries" --argjson confirmedPrefix "$existing_count" \
+  '{schemaVersion:1,sourceSha:$sourceSha,canaryRunSourceSha:$canaryRunSourceSha,
+    existing:$existing,confirmedPrefix:$confirmedPrefix,resumeSafe:true,blindRetry:false}' \
   >"$EVIDENCE_DIR/preexisting-canary-gate.private.json"
 
 migration_count_before=$(postgres_query <<'SQL'
@@ -313,7 +319,7 @@ SQL
 if (( existing_count < 10 )); then
   request_file=$(mktemp /var/tmp/personal-max-fifo-requests.XXXXXX)
   response_file=$(mktemp /var/tmp/personal-max-fifo-responses.XXXXXX)
-  jq -n --arg chatId "$chat_id" --arg prefix "pmax-fifo-${SHORT_SHA}-" --argjson start "$((existing_count+1))" '
+  jq -n --arg chatId "$chat_id" --arg prefix "pmax-fifo-${CANARY_SHORT_SHA}-" --argjson start "$((existing_count+1))" '
     [range($start;11) | {chatId:$chatId,channel:"max",
       content:("PMAX FIFO FINAL " + (tostring|if length==1 then "0"+. else . end)),
       clientMessageId:($prefix + (tostring|if length==1 then "0"+. else . end))}]' >"$request_file"
@@ -355,7 +361,7 @@ COPY (
   FROM "MaxOutboundCommand" c JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
   JOIN "Message" m ON m."clientMessageId"=c."clientMessageId"
   JOIN "MaxOutboundDispatchAttempt" a ON a."dispatchId"=d."dispatchId"
-  WHERE c."clientMessageId" LIKE 'pmax-fifo-${SHORT_SHA}-%' ORDER BY c."commandSequence"
+  WHERE c."clientMessageId" LIKE 'pmax-fifo-${CANARY_SHORT_SHA}-%' ORDER BY c."commandSequence"
 ) TO STDOUT WITH CSV HEADER
 SQL
 
@@ -369,7 +375,7 @@ WITH rows AS (
   FROM "MaxOutboundCommand" c JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
   JOIN "Message" m ON m."clientMessageId"=c."clientMessageId"
   JOIN "MaxOutboundDispatchAttempt" a ON a."dispatchId"=d."dispatchId"
-  WHERE c."clientMessageId" LIKE 'pmax-fifo-${SHORT_SHA}-%'
+  WHERE c."clientMessageId" LIKE 'pmax-fifo-${CANARY_SHORT_SHA}-%'
 )
 SELECT concat_ws('|',count(*),count(DISTINCT "providerMessageId"),count(DISTINCT "conversationKey"),
  count(*) FILTER (WHERE "state"='provider_confirmed' AND "attemptState"='provider_confirmed' AND "attemptCount"=1),
@@ -384,7 +390,7 @@ SQL
 [[ $fifo_gate == '10|10|1|10|10|10|10|10|10|9' ]]
 
 route_gate=$(postgres_query <<SQL
-WITH scope AS (SELECT DISTINCT "conversationKey" FROM "MaxOutboundCommand" WHERE "clientMessageId" LIKE 'pmax-fifo-${SHORT_SHA}-%')
+WITH scope AS (SELECT DISTINCT "conversationKey" FROM "MaxOutboundCommand" WHERE "clientMessageId" LIKE 'pmax-fifo-${CANARY_SHORT_SHA}-%')
 SELECT concat_ws('|',
  (SELECT count(*) FROM scope),
  (SELECT count(*) FROM "MaxRouteConversation" r JOIN scope s ON s."conversationKey"=r."conversationKey"
@@ -457,15 +463,16 @@ readonly PROD_TREE_HASH_AFTER=$(tracked_tree_hash)
 provider_ids=$(postgres_query <<SQL
 SELECT json_agg(d."providerMessageId" ORDER BY c."commandSequence")
 FROM "MaxOutboundCommand" c JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-fifo-${SHORT_SHA}-%';
+WHERE c."clientMessageId" LIKE 'pmax-fifo-${CANARY_SHORT_SHA}-%';
 SQL
 )
 backup_sha=$(awk '{print $1}' "$EVIDENCE_DIR/production-before-fifo-rollout.dump.sha256")
 backup_bytes=$(stat -c '%s' "$EVIDENCE_DIR/production-before-fifo-rollout.dump")
-jq -n --arg sourceSha "$SOURCE_SHA" --arg evidenceDirectory "$EVIDENCE_DIR" \
+jq -n --arg sourceSha "$SOURCE_SHA" --arg canaryRunSourceSha "$CANARY_SOURCE_SHA" --arg evidenceDirectory "$EVIDENCE_DIR" \
   --arg gravityImage "$GRAVITY_IMAGE" --arg gatewayImage "$GATEWAY_IMAGE" --arg scraperImage "$SCRAPER_IMAGE" \
   --arg backupSha "$backup_sha" --argjson backupBytes "$backup_bytes" --argjson providerIds "$provider_ids" \
   '{schemaVersion:1,status:"PERSONAL_MAX_FIFO_FINAL_USER_CHECK_READY",sourceSha:$sourceSha,
+    canaryRunSourceSha:$canaryRunSourceSha,
     evidenceDirectory:$evidenceDirectory,images:{gravity:$gravityImage,gateway:$gatewayImage,scraper:$scraperImage},
     backup:{sha256:$backupSha,bytes:$backupBytes,restoreListValidated:true},
     canary:{count:10,exactlyOnce:true,fifo:true,uniqueProviderIds:10,providerMessageIds:$providerIds,
