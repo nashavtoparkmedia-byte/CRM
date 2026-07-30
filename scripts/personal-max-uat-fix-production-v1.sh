@@ -324,7 +324,9 @@ SQL
       runningProcess:false,stateMarker:false,resultMarker:false,evidenceMarker:false,
       ledger:$ledger,runtime:$runtime,providerActions:0,rollbackRequired:false,safeToStartFresh:true}' \
     >"$EVIDENCE_DIR/previous-run-preflight.json"
+fi
 
+if [[ $resume == false || $CANARY_SOURCE_SHA != "$SOURCE_SHA" ]]; then
   avito_public=$(env_value "$PROD_ENV" NEXT_PUBLIC_AVITO_LEADS_URL)
   max_phone_public=$(env_value "$PROD_ENV" NEXT_PUBLIC_MAX_SCRAPER_PHONE)
   force_channels_public=$(env_value "$PROD_ENV" NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS)

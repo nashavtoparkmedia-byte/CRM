@@ -72,6 +72,7 @@ test('cross-revision resume is exact-state-bound and never repeats a confirmed l
   assert.match(productionSource, /physicalActionRows == 1/u)
   assert.match(productionSource, /messageStatus == "delivered"/u)
   assert.match(productionSource, /\[\[ \$existing_operation == '\[\]' \]\]/u)
+  assert.match(productionSource, /\$resume == false \|\| \$CANARY_SOURCE_SHA != "\$SOURCE_SHA"/u)
 })
 
 test('outbound evidence export uses multiline-safe server COPY', () => {
