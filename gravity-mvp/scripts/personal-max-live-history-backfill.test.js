@@ -251,6 +251,30 @@ test('empty provider event is quarantined without rendering a technical placehol
   assert.equal(secondPlan.unsupportedEventSuppressions.length, 0)
 })
 
+test('existing provider row with exact text but drifted timestamp gets an audited timeline repair', () => {
+  const bounds = validateSnapshot(snapshot, snapshot.accountId)
+  const state = exactState()
+  state.messages = []
+  state.providerRows = [{
+    id: 'provider-timeline-row',
+    chatId: canonicalChat.id,
+    externalId: snapshot.messages[0].providerMessageId,
+    content: snapshot.messages[0].text,
+    direction: snapshot.messages[0].direction,
+    sentAt: new Date(snapshot.messages[0].timestamp + 39),
+    metadata: {},
+  }]
+
+  const plan = buildPlan(snapshot, bounds, state)
+  assert.equal(plan.repairs.length, 1)
+  assert.equal(plan.repairs[0].repairText, false)
+  assert.equal(plan.repairs[0].repairTimestamp, true)
+  assert.equal(plan.repairs[0].repairDirection, false)
+  const report = safeReport(snapshot, 'b'.repeat(64), plan, '/backup/marker')
+  assert.equal(report.textRepairs, 0)
+  assert.equal(report.timelineRepairs, 1)
+})
+
 test('post-write state produces a zero-mutation idempotent plan', () => {
   const bounds = validateSnapshot(snapshot, snapshot.accountId)
   const state = exactState()
@@ -279,6 +303,8 @@ test('post-write state produces a zero-mutation idempotent plan', () => {
     chatId: canonicalChat.id,
     externalId: snapshot.messages[0].providerMessageId,
     content: snapshot.messages[0].text,
+    direction: snapshot.messages[0].direction,
+    sentAt: new Date(snapshot.messages[0].timestamp),
   })
 
   const plan = buildPlan(snapshot, bounds, state)

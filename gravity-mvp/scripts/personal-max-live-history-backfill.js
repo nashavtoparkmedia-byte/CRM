@@ -235,8 +235,11 @@ function buildPlan(snapshot, bounds, state) {
       continue
     }
     if (existing) {
-      if (provider.text !== null && existing.content !== provider.text) {
-        repairs.push({ existing, provider })
+      const repairText = provider.text !== null && existing.content !== provider.text
+      const repairTimestamp = new Date(existing.sentAt).getTime() !== Number(provider.timestamp)
+      const repairDirection = existing.direction !== provider.direction
+      if (repairText || repairTimestamp || repairDirection) {
+        repairs.push({ existing, provider, repairText, repairTimestamp, repairDirection })
       } else unchanged.push(provider.providerMessageId)
       continue
     }
@@ -331,7 +334,8 @@ function safeReport(snapshot, snapshotSha, plan, backupMarker) {
     missingOwnAccountOutbound: plan.creates.filter(message => message.direction === 'outbound').length,
     missingInbound: plan.creates.filter(message => message.direction === 'inbound').length,
     crmEchoLinks: plan.echoLinks.length,
-    textRepairs: plan.repairs.length,
+    textRepairs: plan.repairs.filter(item => item.repairText).length,
+    timelineRepairs: plan.repairs.filter(item => item.repairTimestamp || item.repairDirection).length,
     placeholderSuppressions: plan.suppressions.length,
     supersededChats: plan.supersededChats.length,
     mergedContacts: plan.mergeContacts.length,
@@ -497,36 +501,61 @@ async function applyPlan(prisma, snapshot, snapshotSha, plan) {
     for (const item of plan.repairs) {
       const beforeSha = sha256(item.existing.content)
       const afterSha = sha256(item.provider.text)
+      const repairMetadata = {
+        ...(item.repairText ? {
+          personalMaxTextRepair: {
+            version: 1,
+            providerMessageId: item.provider.providerMessageId,
+            beforeSha256: beforeSha,
+            afterSha256: afterSha,
+            snapshotSha256: snapshotSha,
+            repairedAt: now.toISOString(),
+          },
+        } : {}),
+        ...(item.repairTimestamp || item.repairDirection ? {
+          personalMaxTimelineRepair: {
+            version: 1,
+            providerMessageId: item.provider.providerMessageId,
+            timestampRepaired: item.repairTimestamp,
+            directionRepaired: item.repairDirection,
+            snapshotSha256: snapshotSha,
+            repairedAt: now.toISOString(),
+          },
+        } : {}),
+      }
       await tx.message.update({
         where: { id: item.existing.id },
         data: {
           chatId: plan.canonicalChat.id,
-          content: item.provider.text,
+          ...(item.repairText ? { content: item.provider.text } : {}),
+          direction: item.provider.direction,
           sentAt: new Date(item.provider.timestamp),
-          metadata: metadataWith(item.existing.metadata, {
-            personalMaxTextRepair: {
-              version: 1,
-              providerMessageId: item.provider.providerMessageId,
-              beforeSha256: beforeSha,
-              afterSha256: afterSha,
-              snapshotSha256: snapshotSha,
-              repairedAt: now.toISOString(),
-            },
-          }),
+          metadata: metadataWith(item.existing.metadata, repairMetadata),
         },
       })
-      const priorAudit = await tx.messageEventLog.findFirst({
-        where: { messageId: item.existing.id, eventType: 'personal_max_text_repaired' },
-      })
-      if (!priorAudit) {
-        await tx.messageEventLog.create({
-          data: {
-            messageId: item.existing.id,
-            eventType: 'personal_max_text_repaired',
-            status: 'completed',
-            metadata: { beforeSha256: beforeSha, afterSha256: afterSha, snapshotSha256: snapshotSha },
-          },
+      for (const eventType of [
+        ...(item.repairText ? ['personal_max_text_repaired'] : []),
+        ...(item.repairTimestamp || item.repairDirection ? ['personal_max_timeline_repaired'] : []),
+      ]) {
+        const priorAudit = await tx.messageEventLog.findFirst({
+          where: { messageId: item.existing.id, eventType },
         })
+        if (!priorAudit) {
+          await tx.messageEventLog.create({
+            data: {
+              messageId: item.existing.id,
+              eventType,
+              status: 'completed',
+              metadata: eventType === 'personal_max_text_repaired'
+                ? { beforeSha256: beforeSha, afterSha256: afterSha, snapshotSha256: snapshotSha }
+                : {
+                    timestampRepaired: item.repairTimestamp,
+                    directionRepaired: item.repairDirection,
+                    snapshotSha256: snapshotSha,
+                  },
+            },
+          })
+        }
       }
     }
 
