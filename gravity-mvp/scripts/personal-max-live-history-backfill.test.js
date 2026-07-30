@@ -152,6 +152,52 @@ test('contact merge blocks any unrelated active identity, chat or phone', () => 
   assert.throws(() => buildPlan(snapshot, bounds, state), /CONTACT_SCOPE_CONFLICT/)
 })
 
+test('one exact active phone owner becomes the survivor without creating a duplicate contact', () => {
+  const bounds = validateSnapshot(snapshot, snapshot.accountId)
+  const state = exactState()
+  const phoneContact = {
+    id: 'contact-phone-owner',
+    primaryPhoneId: 'phone-1',
+    displayName: 'Existing driver',
+    identities: [{ channel: 'telegram', externalId: 'tg-driver', isActive: true }],
+    chats: [],
+    phones: [{ id: 'phone-1', phone: bounds.normalizedPhone, isActive: true }],
+  }
+  state.phoneOwners = [{ id: 'phone-1', contactId: phoneContact.id }]
+  state.contactScopes.push(phoneContact)
+
+  const plan = buildPlan(snapshot, bounds, state)
+  assert.equal(plan.canonicalContact.id, phoneContact.id)
+  assert.deepEqual(
+    plan.mergeContacts.map(contact => contact.id).sort(),
+    [canonicalContact.id, protocolContact.id, uiContact.id].sort(),
+  )
+})
+
+test('more than one active contact owning the exact phone fails closed', () => {
+  const bounds = validateSnapshot(snapshot, snapshot.accountId)
+  const state = exactState()
+  state.phoneOwners = [
+    { id: 'phone-1', contactId: 'contact-phone-owner-1' },
+    { id: 'phone-2', contactId: 'contact-phone-owner-2' },
+  ]
+  assert.throws(() => buildPlan(snapshot, bounds, state), /PHONE_OWNER_CONFLICT/)
+})
+
+test('phone owner bound to a different MAX identity fails closed', () => {
+  const bounds = validateSnapshot(snapshot, snapshot.accountId)
+  const state = exactState()
+  const phoneContact = {
+    id: 'contact-phone-owner',
+    identities: [{ channel: 'max', externalId: '900000009999', isActive: true }],
+    chats: [],
+    phones: [{ id: 'phone-1', phone: bounds.normalizedPhone, isActive: true }],
+  }
+  state.phoneOwners = [{ id: 'phone-1', contactId: phoneContact.id }]
+  state.contactScopes.push(phoneContact)
+  assert.throws(() => buildPlan(snapshot, bounds, state), /PHONE_OWNER_SCOPE_CONFLICT/)
+})
+
 test('provider row outside the two exact route chats blocks the backfill', () => {
   const bounds = validateSnapshot(snapshot, snapshot.accountId)
   const state = exactState()

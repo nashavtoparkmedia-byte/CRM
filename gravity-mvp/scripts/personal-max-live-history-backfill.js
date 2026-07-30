@@ -101,7 +101,13 @@ async function collectState(prisma, snapshot, bounds) {
     where: { channel: 'max', externalId: { in: identityValues } },
     include: { contact: true },
   })
-  const contactIds = [...new Set(identities.map(identity => identity.contactId))]
+  const phoneOwners = bounds.normalizedPhone ? await prisma.contactPhone.findMany({
+    where: { phone: bounds.normalizedPhone, isActive: true },
+  }) : []
+  const contactIds = [...new Set([
+    ...identities.map(identity => identity.contactId),
+    ...phoneOwners.map(phone => phone.contactId),
+  ])]
   const chats = await prisma.chat.findMany({
     where: {
       channel: 'max',
@@ -135,9 +141,6 @@ async function collectState(prisma, snapshot, bounds) {
   const crmOriginated = clientIds.length ? await prisma.message.findMany({
     where: { clientMessageId: { in: clientIds } },
   }) : []
-  const phoneOwners = bounds.normalizedPhone ? await prisma.contactPhone.findMany({
-    where: { phone: bounds.normalizedPhone, isActive: true },
-  }) : []
   const contactScopes = contactIds.length ? await prisma.contact.findMany({
     where: { id: { in: contactIds } },
     include: {
@@ -164,14 +167,21 @@ function buildPlan(snapshot, bounds, state) {
   const peerIdentities = state.identities.filter(identity => identity.externalId === snapshot.providerUserId)
   if (peerIdentities.length !== 1) throw new Error('Exact provider participant identity is missing or ambiguous')
   const canonicalIdentity = peerIdentities[0]
-  const canonicalContact = canonicalIdentity.contact
-  const phoneOwnerIds = [...new Set(state.phoneOwners.map(phone => phone.contactId))]
-  if (phoneOwnerIds.some(contactId => contactId !== canonicalContact.id)) {
-    throw new Error('PHONE_OWNER_CONFLICT')
-  }
-
   const routeIdentityValues = new Set([snapshot.providerUserId, snapshot.protocolChatId, snapshot.uiRouteId])
   const routeChatValues = new Set([snapshot.protocolChatId, snapshot.uiRouteId])
+  const phoneOwnerIds = [...new Set(state.phoneOwners.map(phone => phone.contactId))]
+  if (phoneOwnerIds.length > 1) throw new Error('PHONE_OWNER_CONFLICT')
+  const canonicalContact = phoneOwnerIds.length === 1
+    ? state.contactScopes.find(contact => contact.id === phoneOwnerIds[0])
+    : canonicalIdentity.contact
+  if (!canonicalContact) throw new Error('PHONE_OWNER_SCOPE_MISSING')
+  if (phoneOwnerIds.length === 1) {
+    const unrelatedMaxIdentity = canonicalContact.identities.some(identity =>
+      identity.isActive && identity.channel === 'max' && !routeIdentityValues.has(identity.externalId))
+    const unrelatedMaxChat = canonicalContact.chats.some(chat => !routeChatValues.has(chat.externalChatId))
+    if (unrelatedMaxIdentity || unrelatedMaxChat) throw new Error('PHONE_OWNER_SCOPE_CONFLICT')
+  }
+
   const mergeContactIds = new Set(
     state.identities
       .filter(identity => identity.contactId !== canonicalContact.id)
