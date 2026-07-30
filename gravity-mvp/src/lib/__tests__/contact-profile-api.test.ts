@@ -113,6 +113,23 @@ describe('canonical Contact profile API', () => {
         unreadCount: 0,
         status: 'new',
         name: 'MAX:902144614300',
+        metadata: {},
+      }, {
+        id: 'chat-route-alias',
+        channel: 'max',
+        externalChatId: '2351835259',
+        contactIdentityId: 'identity-1',
+        lastMessageAt: new Date('2026-07-13T11:59:00.000Z'),
+        unreadCount: 0,
+        status: 'new',
+        name: 'MAX:2351835259',
+        metadata: {
+          personalMaxProjection: {
+            state: 'superseded',
+            evidencePreserved: true,
+            canonicalChatId: 'chat-1',
+          },
+        },
       }],
       mergesAsSurvivor: [],
       mergesAsMerged: [],
@@ -148,7 +165,8 @@ describe('canonical Contact profile API', () => {
     expect(body.channels.map((item: { channel: string }) => item.channel)).toEqual(['max', 'whatsapp', 'telegram'])
     expect(body.canonicalSummary.displayName).toBe('+7 922 215-57-50')
     expect(body.canonicalSummary.primaryPhone).toBe('+7 922 215-57-50')
-    expect(body.canonicalSummary.channelCount).toBe(3)
+    expect(body.canonicalSummary.channelCount).toBe(1)
+    expect(body.chats.map((chat: { id: string }) => chat.id)).toEqual(['chat-1'])
     expect(body.canonicalSummary.providerIdentities).toEqual([{
       channel: 'max',
       externalId: '902144614300',

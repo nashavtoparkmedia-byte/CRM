@@ -4,7 +4,10 @@ import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { shouldMarkStuckOutboundFailed } from '@/lib/max-delivery-recovery'
-import { shouldProjectPersonalMaxMessage } from '@/lib/personal-max-message-visibility'
+import {
+    isSupersededPersonalMaxChat,
+    shouldProjectPersonalMaxMessage,
+} from '@/lib/personal-max-message-visibility'
 import { projectPersonalMaxDurableState } from '@/lib/personal-max-durable-projection'
 
 function serialize(obj: any): any {
@@ -46,17 +49,6 @@ function unknownMaxDelivery(protocolChatId: string, webRouteId: unknown) {
         webRouteId: typeof webRouteId === 'string' ? webRouteId : null,
     }
 }
-
-function isSupersededPersonalMaxChat(metadata: unknown): boolean {
-    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
-    const projection = (metadata as Record<string, unknown>).personalMaxProjection
-    return Boolean(
-        projection && typeof projection === 'object' && !Array.isArray(projection)
-        && (projection as Record<string, unknown>).state === 'superseded'
-        && typeof (projection as Record<string, unknown>).canonicalChatId === 'string',
-    )
-}
-
 
 export class MessageService {
     /**

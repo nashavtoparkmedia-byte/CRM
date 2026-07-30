@@ -112,6 +112,7 @@ describe('Personal MAX provider-id history plan', () => {
         direction: item.direction,
         content: item.text!,
         sentAt: new Date(item.timestamp),
+        metadata: { origin: 'max_native' },
       })),
       dispatches: [],
     })
@@ -137,8 +138,99 @@ describe('Personal MAX provider-id history plan', () => {
       messageId: 'damaged-message',
       providerMessageId: item.providerMessageId,
       exactText: item.text,
+      direction: 'inbound',
+      sentAt: item.timestamp,
+      origin: 'max_provider',
     }])
     expect(plan.creates).toEqual([])
+  })
+
+  it('repairs a provider id that DOM recovery assigned the wrong direction and prior text', () => {
+    const item = provider('d30100000000000012', 'Ответ менеджера', 'outbound', 2000)
+    const plan = buildPersonalMaxHistoryPlan({
+      providerMessages: [item],
+      existingMessages: [{
+        id: 'misbound-dom-message',
+        externalId: item.providerMessageId,
+        direction: 'inbound',
+        content: 'Предыдущее сообщение водителя',
+        sentAt: new Date(2100),
+        metadata: { source: 'live_dom_recovery' },
+      }],
+      dispatches: [],
+    })
+    expect(plan.repairs).toEqual([{
+      messageId: 'misbound-dom-message',
+      providerMessageId: item.providerMessageId,
+      exactText: 'Ответ менеджера',
+      direction: 'outbound',
+      sentAt: 2000,
+      origin: 'max_native',
+    }])
+  })
+
+  it('upgrades one strongly route-scoped live placeholder instead of creating a second bubble', () => {
+    const item = provider('d30100000000000013', 'Точное сообщение', 'inbound', 3000)
+    const plan = buildPersonalMaxHistoryPlan({
+      providerMessages: [item],
+      existingMessages: [{
+        id: 'live-placeholder',
+        externalId: 'max-dom-902000000123-safe',
+        direction: 'inbound',
+        content: item.text!,
+        sentAt: new Date(3100),
+        metadata: {
+          providerAccountId: 'max-personal-account',
+          protocolChatId: '902000000123',
+          uiRouteId: '2351835259',
+        },
+      }],
+      dispatches: [],
+      identity: {
+        accountId: 'max-personal-account',
+        protocolChatId: '902000000123',
+        uiRouteId: '2351835259',
+      },
+    })
+    expect(plan.creates).toEqual([])
+    expect(plan.placeholderLinks).toEqual([{
+      messageId: 'live-placeholder',
+      providerMessageId: item.providerMessageId,
+      exactText: item.text,
+      direction: 'inbound',
+      sentAt: 3000,
+    }])
+  })
+
+  it('fails closed when equal provider messages make one placeholder identity ambiguous', () => {
+    const first = provider('d30100000000000014', 'Одинаковое сообщение', 'inbound', 4000)
+    const second = provider('d30100000000000015', 'Одинаковое сообщение', 'inbound', 4001)
+    const plan = buildPersonalMaxHistoryPlan({
+      providerMessages: [first, second],
+      existingMessages: [{
+        id: 'ambiguous-placeholder',
+        externalId: 'max-dom-902000000123-ambiguous',
+        direction: 'inbound',
+        content: first.text!,
+        sentAt: new Date(4050),
+        metadata: {
+          providerAccountId: 'max-personal-account',
+          protocolChatId: '902000000123',
+          uiRouteId: '2351835259',
+        },
+      }],
+      dispatches: [],
+      identity: {
+        accountId: 'max-personal-account',
+        protocolChatId: '902000000123',
+        uiRouteId: '2351835259',
+      },
+    })
+    expect(plan.placeholderLinks).toEqual([])
+    expect(plan.creates.map(item => item.providerMessageId)).toEqual([
+      first.providerMessageId,
+      second.providerMessageId,
+    ])
   })
 
   it('links a provider-confirmed CRM echo to the optimistic bubble', () => {

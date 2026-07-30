@@ -32,8 +32,22 @@ export type PersonalMaxDispatch = {
 
 export type PersonalMaxHistoryPlan = {
   creates: PersonalMaxProviderMessage[]
-  repairs: Array<{ messageId: string; providerMessageId: string; exactText: string }>
+  repairs: Array<{
+    messageId: string
+    providerMessageId: string
+    exactText: string | null
+    direction: 'inbound' | 'outbound'
+    sentAt: number
+    origin: 'crm' | 'max_native' | 'max_provider'
+  }>
   echoLinks: Array<{ messageId: string; providerMessageId: string; clientMessageId: string }>
+  placeholderLinks: Array<{
+    messageId: string
+    providerMessageId: string
+    exactText: string
+    direction: 'inbound' | 'outbound'
+    sentAt: number
+  }>
   quarantined: PersonalMaxProviderMessage[]
   unchangedProviderMessageIds: string[]
 }
@@ -88,6 +102,7 @@ export function buildPersonalMaxHistoryPlan(input: {
   providerMessages: PersonalMaxProviderMessage[]
   existingMessages: PersonalMaxExistingMessage[]
   dispatches: PersonalMaxDispatch[]
+  identity?: { accountId: string; protocolChatId: string; uiRouteId: string }
 }): PersonalMaxHistoryPlan {
   const byProviderId = new Map(
     input.existingMessages
@@ -109,6 +124,7 @@ export function buildPersonalMaxHistoryPlan(input: {
     creates: [],
     repairs: [],
     echoLinks: [],
+    placeholderLinks: [],
     quarantined: [],
     unchangedProviderMessageIds: [],
   }
@@ -116,6 +132,23 @@ export function buildPersonalMaxHistoryPlan(input: {
   const ordered = [...input.providerMessages].sort((left, right) =>
     left.timestamp - right.timestamp
       || left.providerMessageId.localeCompare(right.providerMessageId))
+  const scopedPlaceholderMatches = (provider: PersonalMaxProviderMessage) => {
+    if (!input.identity || provider.text === null) return []
+    return input.existingMessages.filter(message => {
+      if (!message.externalId?.startsWith('max-dom-') || message.clientMessageId) return false
+      const metadata = record(message.metadata)
+      const personalIdentity = record(metadata.personalMaxIdentity)
+      const accountId = String(personalIdentity.accountId || metadata.providerAccountId || '')
+      const protocolChatId = String(personalIdentity.protocolChatId || metadata.protocolChatId || metadata.maxChatId || '')
+      const uiRouteId = String(personalIdentity.uiRouteId || metadata.uiRouteId || metadata.maxRawChatId || '')
+      return accountId === input.identity!.accountId
+        && protocolChatId === input.identity!.protocolChatId
+        && uiRouteId === input.identity!.uiRouteId
+        && message.direction === provider.direction
+        && message.content === provider.text
+        && Math.abs(new Date(message.sentAt).getTime() - provider.timestamp) <= 120_000
+    })
+  }
   for (const provider of ordered) {
     const providerKey = provider.providerMessageId.toLowerCase()
     if (!REAL_PERSONAL_MAX_MESSAGE_ID.test(provider.providerMessageId) || seen.has(providerKey)) continue
@@ -128,11 +161,23 @@ export function buildPersonalMaxHistoryPlan(input: {
 
     const existing = byProviderId.get(providerKey)
     if (existing) {
-      if (provider.text !== null && existing.content !== provider.text) {
+      const metadata = record(existing.metadata)
+      const expectedOrigin = existing.clientMessageId
+        ? 'crm'
+        : provider.direction === 'outbound' ? 'max_native' : 'max_provider'
+      const existingTimestamp = new Date(existing.sentAt).getTime()
+      const needsRepair = (provider.text !== null && existing.content !== provider.text)
+        || existing.direction !== provider.direction
+        || existingTimestamp !== provider.timestamp
+        || metadata.origin !== expectedOrigin
+      if (needsRepair) {
         plan.repairs.push({
           messageId: existing.id,
           providerMessageId: provider.providerMessageId,
           exactText: provider.text,
+          direction: provider.direction,
+          sentAt: provider.timestamp,
+          origin: expectedOrigin,
         })
       } else {
         plan.unchangedProviderMessageIds.push(provider.providerMessageId)
@@ -156,6 +201,23 @@ export function buildPersonalMaxHistoryPlan(input: {
     if (provider.direction === 'outbound' && dispatch) {
       plan.quarantined.push(provider)
       continue
+    }
+    const placeholderMatches = scopedPlaceholderMatches(provider)
+    if (placeholderMatches.length === 1) {
+      const placeholder = placeholderMatches[0]
+      const competingProviders = ordered.filter(candidate =>
+        candidate.providerMessageId !== provider.providerMessageId
+        && scopedPlaceholderMatches(candidate).some(match => match.id === placeholder.id))
+      if (competingProviders.length === 0 && provider.text !== null) {
+        plan.placeholderLinks.push({
+          messageId: placeholder.id,
+          providerMessageId: provider.providerMessageId,
+          exactText: provider.text,
+          direction: provider.direction,
+          sentAt: provider.timestamp,
+        })
+        continue
+      }
     }
     if (provider.text === null && Number(provider.attachmentCount || 0) === 0) {
       plan.quarantined.push(provider)

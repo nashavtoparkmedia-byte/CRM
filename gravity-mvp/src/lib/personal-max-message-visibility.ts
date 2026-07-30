@@ -17,5 +17,18 @@ export function shouldProjectPersonalMaxMessage(message: MessageLike): boolean {
     || (projection.visibility === 'suppressed_duplicate'
       && projection.evidencePreserved === true
       && typeof projection.canonicalProviderMessageId === 'string')
+    || (projection.visibility === 'suppressed_provider_absent'
+      && projection.evidencePreserved === true
+      && projection.availableHistoryExhausted === true
+      && typeof projection.providerMessageId === 'string'
+      && typeof projection.snapshotSha256 === 'string')
   )
+}
+
+export function isSupersededPersonalMaxChat(metadataValue: unknown): boolean {
+  const metadata = record(metadataValue)
+  const projection = record(metadata.personalMaxProjection)
+  return projection.state === 'superseded'
+    && projection.evidencePreserved === true
+    && typeof projection.canonicalChatId === 'string'
 }

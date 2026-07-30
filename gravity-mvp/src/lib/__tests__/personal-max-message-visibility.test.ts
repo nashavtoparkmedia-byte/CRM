@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { shouldProjectPersonalMaxMessage } from '../personal-max-message-visibility'
+import {
+  isSupersededPersonalMaxChat,
+  shouldProjectPersonalMaxMessage,
+} from '../personal-max-message-visibility'
 
 describe('Personal MAX inbound projection visibility', () => {
   it('quarantines an evidence-preserved browser history replay from live CRM projection', () => {
@@ -50,5 +53,43 @@ describe('Personal MAX inbound projection visibility', () => {
         },
       },
     })).toBe(true)
+  })
+
+  it('hides a provider-absent row only with exhausted-history evidence', () => {
+    expect(shouldProjectPersonalMaxMessage({
+      metadata: {
+        personalMaxProjection: {
+          visibility: 'suppressed_provider_absent',
+          evidencePreserved: true,
+          availableHistoryExhausted: true,
+          providerMessageId: 'd30100000000000001',
+          snapshotSha256: 'a'.repeat(64),
+        },
+      },
+    })).toBe(false)
+    expect(shouldProjectPersonalMaxMessage({
+      metadata: {
+        personalMaxProjection: {
+          visibility: 'suppressed_provider_absent',
+          evidencePreserved: true,
+          availableHistoryExhausted: false,
+          providerMessageId: 'd30100000000000001',
+          snapshotSha256: 'a'.repeat(64),
+        },
+      },
+    })).toBe(true)
+  })
+
+  it('recognizes only evidence-preserved superseded route aliases', () => {
+    expect(isSupersededPersonalMaxChat({
+      personalMaxProjection: {
+        state: 'superseded',
+        evidencePreserved: true,
+        canonicalChatId: 'chat-canonical',
+      },
+    })).toBe(true)
+    expect(isSupersededPersonalMaxChat({
+      personalMaxProjection: { state: 'superseded', canonicalChatId: 'chat-canonical' },
+    })).toBe(false)
   })
 })

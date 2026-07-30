@@ -18,6 +18,7 @@ import { formatProfileRefreshWarning, getContactProfileRefreshDecision } from '@
 import { deriveTelegramBotProfileState } from '@/lib/telegram-bot-profile-state'
 import { resolveCanonicalContactId } from '@/lib/contacts/canonical-contact'
 import { buildYandexDispatcherTarget } from '@/lib/driver-profiles/dispatcher-links'
+import { isSupersededPersonalMaxChat } from '@/lib/personal-max-message-visibility'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -111,6 +112,7 @@ export async function GET(
             unreadCount: true,
             status: true,
             name: true,
+            metadata: true,
           },
         },
         mergesAsSurvivor: {
@@ -510,6 +512,7 @@ export async function GET(
       anomalies.filter(anomaly => anomaly.type !== 'sync_stale').length,
     )
     const primaryPhone = contact.phones.find(phone => phone.id === contact.primaryPhoneId) || contact.phones.find(phone => phone.isPrimary) || contact.phones[0] || null
+    const activeChats = contact.chats.filter(chat => !isSupersededPersonalMaxChat(chat.metadata))
     const channels = PROFILE_CHANNELS.map(channel => {
       const identity = contact.identities.find(item => item.channel === channel)
       return {
@@ -526,8 +529,11 @@ export async function GET(
     const canonicalSummary = buildCanonicalContactSummary({
       contact,
       profiles: attachedProfiles,
-      currentChannel: contact.chats[0]?.channel || null,
-      providerChannels: channels.map(channel => channel.channel),
+      currentChannel: activeChats[0]?.channel || null,
+      providerChannels: Array.from(new Set([
+        ...contact.identities.map(identity => identity.channel),
+        ...activeChats.map(chat => chat.channel),
+      ])),
     })
 
     const mergeHistory = [
@@ -554,7 +560,7 @@ export async function GET(
       updatedAt: contact.updatedAt,
       phones: contact.phones,
       identities: contact.identities,
-      chats: contact.chats,
+      chats: activeChats,
       channels,
       canonicalSummary,
       driverProfileState,
