@@ -216,13 +216,24 @@ function buildPlan(snapshot, bounds, state) {
   const repairs = []
   const echoLinks = []
   const quarantined = []
+  const unsupportedEventSuppressions = []
   const unchanged = []
   for (const provider of snapshot.messages) {
-    if (provider.textDisposition === 'quarantined') {
+    const existing = existingByProviderId.get(provider.providerMessageId.toLowerCase())
+    const unsupportedEmptyEvent = provider.text === '' && Number(provider.attachmentCount || 0) === 0
+    if (provider.textDisposition === 'quarantined' || unsupportedEmptyEvent) {
       quarantined.push(provider.providerMessageId)
+      if (unsupportedEmptyEvent && existing) {
+        const disposition = record(record(existing.metadata).personalMaxIngressDisposition)
+        if (!(disposition.kind === 'history_replay'
+          && disposition.visibility === 'quarantined'
+          && disposition.evidencePreserved === true
+          && disposition.providerMessageId === provider.providerMessageId)) {
+          unsupportedEventSuppressions.push({ existing, provider })
+        }
+      }
       continue
     }
-    const existing = existingByProviderId.get(provider.providerMessageId.toLowerCase())
     if (existing) {
       if (provider.text !== null && existing.content !== provider.text) {
         repairs.push({ existing, provider })
@@ -248,7 +259,7 @@ function buildPlan(snapshot, bounds, state) {
 
   const materializedProviderIds = new Set(snapshot.messages
     .filter(provider => provider.textDisposition !== 'quarantined'
-      && (provider.text !== null || Number(provider.attachmentCount || 0) > 0))
+      && ((provider.text !== null && provider.text !== '') || Number(provider.attachmentCount || 0) > 0))
     .map(message => message.providerMessageId.toLowerCase()))
   const suppressions = []
   for (const candidate of state.messages) {
@@ -288,6 +299,7 @@ function buildPlan(snapshot, bounds, state) {
     repairs,
     echoLinks,
     quarantined,
+    unsupportedEventSuppressions,
     unchanged,
     suppressions,
     supersededChats,
@@ -324,6 +336,7 @@ function safeReport(snapshot, snapshotSha, plan, backupMarker) {
     supersededChats: plan.supersededChats.length,
     mergedContacts: plan.mergeContacts.length,
     quarantined: plan.quarantined.length,
+    unsupportedEventSuppressions: plan.unsupportedEventSuppressions.length,
     unchanged: plan.unchanged.length,
     phoneConflict: false,
     phonePresent: Boolean(plan.bounds.normalizedPhone),
@@ -517,6 +530,25 @@ async function applyPlan(prisma, snapshot, snapshotSha, plan) {
       }
     }
 
+    for (const item of plan.unsupportedEventSuppressions) {
+      await tx.message.update({
+        where: { id: item.existing.id },
+        data: {
+          chatId: plan.canonicalChat.id,
+          metadata: metadataWith(item.existing.metadata, {
+            personalMaxIngressDisposition: {
+              kind: 'history_replay',
+              visibility: 'quarantined',
+              evidencePreserved: true,
+              reason: 'empty_provider_event',
+              providerMessageId: item.provider.providerMessageId,
+              snapshotSha256: snapshotSha,
+            },
+          }),
+        },
+      })
+    }
+
     for (const provider of plan.creates) {
       const existing = await tx.message.findUnique({ where: { externalId: provider.providerMessageId } })
       if (existing) continue
@@ -589,6 +621,7 @@ async function applyPlan(prisma, snapshot, snapshotSha, plan) {
       repaired: plan.repairs.length,
       echoLinked: plan.echoLinks.length,
       suppressed: plan.suppressions.length,
+      unsupportedSuppressed: plan.unsupportedEventSuppressions.length,
       contactsMerged: plan.mergeContacts.length,
       chatsSuperseded: plan.supersededChats.length,
     }

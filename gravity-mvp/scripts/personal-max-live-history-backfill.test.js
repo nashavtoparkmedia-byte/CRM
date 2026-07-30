@@ -221,6 +221,36 @@ test('unresolved CRM dispatch is not projected as a second native bubble', () =>
   assert.throws(() => buildPlan(snapshot, bounds, state), /CRM_ECHO_RECONCILIATION_REQUIRED/)
 })
 
+test('empty provider event is quarantined without rendering a technical placeholder', () => {
+  const emptySnapshot = structuredClone(snapshot)
+  emptySnapshot.messages[0].text = ''
+  const bounds = validateSnapshot(emptySnapshot, emptySnapshot.accountId)
+  const state = exactState()
+  state.messages = []
+  state.providerRows = [{
+    id: 'provider-empty-row',
+    chatId: canonicalChat.id,
+    externalId: emptySnapshot.messages[0].providerMessageId,
+    content: '[Неподдерживаемое вложение MAX]',
+    metadata: { origin: 'max_provider', source: 'history' },
+  }]
+
+  const plan = buildPlan(emptySnapshot, bounds, state)
+  assert.equal(plan.creates.length, 0)
+  assert.equal(plan.repairs.length, 0)
+  assert.deepEqual(plan.quarantined, [emptySnapshot.messages[0].providerMessageId])
+  assert.equal(plan.unsupportedEventSuppressions.length, 1)
+
+  state.providerRows[0].metadata.personalMaxIngressDisposition = {
+    kind: 'history_replay',
+    visibility: 'quarantined',
+    evidencePreserved: true,
+    providerMessageId: emptySnapshot.messages[0].providerMessageId,
+  }
+  const secondPlan = buildPlan(emptySnapshot, bounds, state)
+  assert.equal(secondPlan.unsupportedEventSuppressions.length, 0)
+})
+
 test('post-write state produces a zero-mutation idempotent plan', () => {
   const bounds = validateSnapshot(snapshot, snapshot.accountId)
   const state = exactState()
@@ -255,6 +285,7 @@ test('post-write state produces a zero-mutation idempotent plan', () => {
   assert.equal(plan.creates.length, 0)
   assert.equal(plan.repairs.length, 0)
   assert.equal(plan.echoLinks.length, 0)
+  assert.equal(plan.unsupportedEventSuppressions.length, 0)
   assert.equal(plan.suppressions.length, 0)
   assert.equal(plan.supersededChats.length, 0)
   assert.equal(plan.mergeContacts.length, 0)
