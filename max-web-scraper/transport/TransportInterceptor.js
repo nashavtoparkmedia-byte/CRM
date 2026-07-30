@@ -367,6 +367,31 @@ function maxMsgpackDecodeAll(buf, options = {}) {
   return results
 }
 
+function unwrapNestedMaxMessagePayload(payload) {
+  const nested = Buffer.isBuffer(payload)
+    ? payload
+    : (payload?.type === 'Buffer' && Array.isArray(payload.data)
+      ? Buffer.from(payload.data)
+      : null)
+  if (!nested || nested.length === 0 || nested.length > 1024 * 1024) return payload
+
+  try {
+    const values = maxMsgpackDecodeAll(nested)
+    const envelope = [...values].reverse().find(value =>
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      value.chatId != null &&
+      value.message &&
+      typeof value.message === 'object' &&
+      !Array.isArray(value.message)
+    )
+    return envelope || payload
+  } catch {
+    return payload
+  }
+}
+
 function findMsgpackFieldValue(buf, fieldName) {
   if (!Buffer.isBuffer(buf) || !fieldName) return null
   const key = Buffer.from(String(fieldName), 'utf8')
@@ -1486,6 +1511,12 @@ class TransportInterceptor {
     // We normalise to old protocol: cmd=1 for success, cmd=0 for push
     const mappedCmd = (cmd === 4) ? 1 : (cmd === 1 ? 0 : cmd)
 
+    // Some live op:128 pushes wrap the actual {chatId, message} MessagePack
+    // envelope in a MessagePack bin value. Without this bounded second decode,
+    // exact own-account outbound text remains visible only in provider history
+    // and the live CRM projection silently misses it.
+    if (opcode === OP.INCOMING_MSG) payload = unwrapNestedMaxMessagePayload(payload)
+
     const data = { opcode, cmd: mappedCmd, seq: reqSeq, payload, _frameSeq: frameSeq }
 
     // Persist the decoded representation of this exact physical frame. The raw
@@ -2482,6 +2513,7 @@ module.exports = {
   TransportInterceptor,
   OP,
   maxMsgpackDecodeAll,
+  unwrapNestedMaxMessagePayload,
   maxReplyTargetId,
   selectPendingLiveDomCandidates,
 }

@@ -3,11 +3,13 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
+const { encode } = require('@msgpack/msgpack')
 
 const { MessageSync } = require('../sync/MessageSync')
 const {
   TransportInterceptor,
   selectPendingLiveDomCandidates,
+  unwrapNestedMaxMessagePayload,
 } = require('../transport/TransportInterceptor')
 
 function isolatedSync() {
@@ -88,6 +90,49 @@ test('opcode 49 browser history is quarantined from live inbound handlers', () =
   assert.match(block, /history quarantined/)
   assert.doesNotMatch(block, /this\._emit\(/)
   assert.doesNotMatch(block, /this\._lastSeenMsgId\.set/)
+})
+
+test('nested binary op128 envelope preserves exact native outbound identity and text', () => {
+  const ownerUserId = '902000000001'
+  const chatId = '902000000002'
+  const providerMessageId = 'd3010000000000000007'
+  const text = 'PMAX native UTF8: Привет ✅ № — «»'
+  const inner = Buffer.from(encode({
+    chatId,
+    message: {
+      id: providerMessageId,
+      time: Date.parse('2026-07-30T18:30:56.199Z'),
+      type: 'USER',
+      sender: ownerUserId,
+      text,
+      attaches: [],
+    },
+  }))
+
+  const decoded = unwrapNestedMaxMessagePayload(inner)
+  assert.equal(decoded.chatId, chatId)
+  assert.equal(decoded.message.id, providerMessageId)
+  assert.equal(decoded.message.text, text)
+
+  const transport = new TransportInterceptor()
+  transport._myUserId = ownerUserId
+  transport._rememberConfirmedMessageAnchor = () => false
+  const emitted = []
+  transport.onMessage(message => emitted.push(message))
+
+  const outerPayload = Buffer.from(encode(inner))
+  const frame = Buffer.concat([
+    Buffer.from([0x0a, 0x01, 0x00, 0x00, 0x01, 0x80, 0x01, 0x00, 0x00]),
+    outerPayload,
+  ])
+  transport._handleBinaryFrame(frame)
+
+  assert.equal(emitted.length, 1)
+  assert.equal(emitted[0].id, providerMessageId)
+  assert.equal(emitted[0].chatId, chatId)
+  assert.equal(emitted[0].text, text)
+  assert.equal(emitted[0].isOutgoing, true)
+  assert.equal(emitted[0].textQuarantineReason, null)
 })
 test('bare op128 live inbound keeps previous anchor until op71 confirms the new provider id', () => {
   const transport = new TransportInterceptor()
