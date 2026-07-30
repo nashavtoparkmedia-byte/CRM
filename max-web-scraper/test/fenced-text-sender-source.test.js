@@ -50,6 +50,7 @@ test('synthetic boundary remains provider-free while physical runtime uses one e
   assert.match(runtime, /isRealProviderMessageId: isRealMaxMessageId/)
   assert.match(runtime, /reason === 'manual_debug'/)
   assert.match(runtime, /providerMessageId = exact\.providerMessageId/)
+  assert.match(runtime, /provider_lookup_failed/)
   assert.match(runtime, /textMatchCount: Number\(exact\.textMatchCount\)/)
   assert.match(runtime, /routeMatchCount: Number\(exact\.routeMatchCount\)/)
   assert.match(runtime, /waitForUiSendAck\(transport, 12_000/)

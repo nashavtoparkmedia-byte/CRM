@@ -2990,11 +2990,14 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
         chatId,
         { text: latest.text, direction: 'outbound' },
         { uiChatId: uiRouteId },
-      ).catch(() => null)
+      ).catch(error => {
+        const match = /^MAX reply target lookup failed: ([a-z0-9_]+)$/u.exec(String(error?.message || ''))
+        return { lookupError: match?.[1] || 'provider_lookup_failed' }
+      })
       if (isRealMaxMessageId(exact?.providerMessageId)) providerMessageId = exact.providerMessageId
       if (exact) {
         providerResolution = {
-          reason: exact.reason || null,
+          reason: exact.reason || exact.lookupError || null,
           candidateCount: Number(exact.candidateCount) || 0,
           textMatchCount: Number(exact.textMatchCount) || 0,
           directionMatchCount: Number(exact.directionMatchCount) || 0,
