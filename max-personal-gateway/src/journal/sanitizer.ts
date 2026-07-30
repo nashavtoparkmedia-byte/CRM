@@ -104,6 +104,10 @@ function sanitizeQueryString(value: string, path: string, evidence: MutableEvide
 }
 
 function sanitizeString(value: string, path: string, evidence: MutableEvidence): string {
+  if (value.includes('\u0000')) {
+    record(evidence, 'postgres_nul_replacement', path)
+    value = value.replaceAll('\u0000', '\uFFFD')
+  }
   if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(value)) {
     return record(evidence, 'private_key', path)
   }
@@ -216,14 +220,23 @@ function sanitizeValue(
     }
     const result = Object.create(null) as Record<string, JsonValue>
     for (const key of keys.sort()) {
-      const childPath = path === '$' ? `$.${key}` : `${path}.${key}`
+      let outputKey = key
+      if (outputKey.includes('\u0000')) {
+        record(evidence, 'postgres_nul_replacement', `${path}.$key`)
+        outputKey = outputKey.replaceAll('\u0000', '\uFFFD')
+      }
+      if (Object.prototype.hasOwnProperty.call(result, outputKey)) {
+        record(evidence, 'postgres_nul_key_collision', `${path}.$key`)
+        outputKey = `${outputKey}[nul:${createHash('sha256').update(key).digest('hex').slice(0, 12)}]`
+      }
+      const childPath = path === '$' ? `$.${outputKey}` : `${path}.${outputKey}`
       const category = sensitiveCategory(key)
       if (category) {
-        result[key] = record(evidence, category, childPath)
+        result[outputKey] = record(evidence, category, childPath)
         continue
       }
       const descriptor = Object.getOwnPropertyDescriptor(input, key)
-      result[key] = !descriptor || !('value' in descriptor)
+      result[outputKey] = !descriptor || !('value' in descriptor)
         ? quarantine(evidence, 'unsupported_payload', 'unsupported_value', childPath, { kind: 'property_accessor' })
         : sanitizeValue(descriptor.value, childPath, evidence, seen, depth + 1)
     }
@@ -239,6 +252,55 @@ function canonicalJson(value: JsonValue): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value)
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`
+}
+
+export interface PostgresSafeJsonResult {
+  readonly value: JsonValue
+  readonly changed: boolean
+  readonly paths: readonly string[]
+  readonly payloadSha256: string
+  readonly payloadSizeBytes: number
+}
+
+/**
+ * PostgreSQL JSONB rejects U+0000 even though JSON.parse accepts `\\u0000`.
+ * This compatibility boundary is also applied to already-durable v1 spool
+ * envelopes so an upgrade can drain them without deleting or rewriting the
+ * source evidence. The original payload hash is retained by the ingress in
+ * correlation metadata whenever replacement is required.
+ */
+export function normalizePostgresSafeJson(input: JsonValue): PostgresSafeJsonResult {
+  const paths: string[] = []
+  const visit = (value: JsonValue, path: string): JsonValue => {
+    if (typeof value === 'string') {
+      if (!value.includes('\u0000')) return value
+      paths.push(path)
+      return value.replaceAll('\u0000', '\uFFFD')
+    }
+    if (value === null || typeof value !== 'object') return value
+    if (Array.isArray(value)) return value.map((child, index) => visit(child, `${path}[${index}]`))
+    const output = Object.create(null) as Record<string, JsonValue>
+    for (const key of Object.keys(value).sort()) {
+      let safeKey = key.replaceAll('\u0000', '\uFFFD')
+      const childPath = path === '$' ? `$.${safeKey}` : `${path}.${safeKey}`
+      if (safeKey !== key) paths.push(`${path}.$key`)
+      if (Object.prototype.hasOwnProperty.call(output, safeKey)) {
+        paths.push(`${path}.$key-collision`)
+        safeKey = `${safeKey}[nul:${createHash('sha256').update(key).digest('hex').slice(0, 12)}]`
+      }
+      output[safeKey] = visit(value[key], childPath)
+    }
+    return output
+  }
+  const value = visit(input, '$')
+  const canonicalPayload = canonicalJson(value)
+  return {
+    value,
+    changed: paths.length > 0,
+    paths: [...new Set(paths)].sort(),
+    payloadSha256: createHash('sha256').update(canonicalPayload).digest('hex'),
+    payloadSizeBytes: Buffer.byteLength(canonicalPayload, 'utf8'),
+  }
 }
 
 export function sanitizeRawObservationPayload(input: unknown): SanitizationResult {

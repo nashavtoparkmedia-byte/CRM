@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { appendFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -113,6 +114,28 @@ test('same capture identity with different physical evidence is rejected and cou
     rejectedCount: 1,
     captureEnvelopeIdCollisionCount: 1,
   })
+})
+
+test('already-durable v1 spool envelope with NUL drains idempotently through PostgreSQL compatibility boundary', async () => {
+  const originalPayload = { legacy: 'before\u0000after' }
+  const originalCanonical = JSON.stringify(originalPayload)
+  const legacy = {
+    ...envelope(),
+    sanitizedPayload: originalPayload,
+    payloadSha256: createHash('sha256').update(originalCanonical).digest('hex'),
+    payloadSizeBytes: Buffer.byteLength(originalCanonical),
+  }
+  const client = new FakePrismaClient()
+  const ingress = new PrismaRawCaptureIngress(client)
+  const first = await ingress.ingestEnvelope(legacy)
+  const retry = await ingress.ingestEnvelope(legacy)
+  assert.equal(first.created, true)
+  assert.equal(retry.created, false)
+  const stored = client.rawRows()[0]
+  assert.equal(JSON.stringify(stored.sanitizedPayload).includes('\\u0000'), false)
+  assert.notEqual(stored.payloadSha256, legacy.payloadSha256)
+  assert.match(stored.sanitizerVersion, /\+postgres-nul-v1$/)
+  assert.equal((stored.correlationMetadata as Record<string, unknown>).sourcePayloadSha256, legacy.payloadSha256)
 })
 
 test('sanitization precedes spool, does not mutate input, and quarantines binary evidence', () => {

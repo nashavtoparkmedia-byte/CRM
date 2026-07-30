@@ -66,6 +66,15 @@ test('canonical hashing is deterministic across object key order and changes wit
   assert.notEqual(first.payloadSha256, changed.payloadSha256)
 })
 
+test('PostgreSQL-incompatible NUL is deterministically replaced before durable JSON', () => {
+  const result = sanitizeRawObservationPayload({ key: 'before\u0000after', '\u0000key': 'safe' })
+  const serialized = JSON.stringify(result.sanitizedPayload)
+  assert.equal(serialized.includes('\\u0000'), false)
+  assert.match(serialized, /before�after/)
+  assert.ok(result.redactionMetadata.categories.includes('postgres_nul_replacement'))
+  assert.ok(result.redactionMetadata.paths.includes('$.key'))
+})
+
 test('binary inputs use deterministic metadata-only quarantine without retaining bytes', () => {
   const bytes = Uint8Array.from([0, 1, 2, 250, 255])
   const buffer = Buffer.from(bytes)

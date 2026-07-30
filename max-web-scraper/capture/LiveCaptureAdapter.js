@@ -36,10 +36,14 @@ const SENSITIVE_KEY = /^(authorization|proxy-authorization|cookie|set-cookie|coo
 const SENSITIVE_QUERY = /^(access_token|auth|authorization|code|credential|expires|key|password|refresh_token|session|sig|signature|token)$/i
 
 function sanitizeString(value, evidence, location) {
+  if (value.includes('\u0000')) {
+    evidence.push({ category: 'postgres_nul_replacement', path: location })
+    value = value.replaceAll('\u0000', '\uFFFD')
+  }
   if (/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i.test(value)
     || /(?:^|\s)Bearer\s+\S+/i.test(value)
     || /^\s*(?:authorization|proxy-authorization|cookie|set-cookie)\s*:/i.test(value)) {
-    evidence.push(location)
+    evidence.push({ category: 'credential', path: location })
     return '[REDACTED:credential]'
   }
   try {
@@ -53,7 +57,7 @@ function sanitizeString(value, evidence, location) {
     for (const key of [...url.searchParams.keys()]) {
       if (SENSITIVE_QUERY.test(key)) {
         url.searchParams.set(key, '[REDACTED]')
-        evidence.push(`${location}.query.${key}`)
+        evidence.push({ category: 'credential', path: `${location}.query.${key}` })
         changed = true
       }
     }
@@ -78,12 +82,21 @@ function sanitizeValue(value, evidence, location = '$', seen = new WeakSet(), de
     if (Array.isArray(value)) return value.slice(0, 10000).map((item, index) => sanitizeValue(item, evidence, `${location}[${index}]`, seen, depth + 1))
     const output = {}
     for (const key of Object.keys(value).sort().slice(0, 10000)) {
-      const child = `${location}.${key}`
+      let outputKey = key
+      if (outputKey.includes('\u0000')) {
+        evidence.push({ category: 'postgres_nul_replacement', path: `${location}.$key` })
+        outputKey = outputKey.replaceAll('\u0000', '\uFFFD')
+      }
+      if (Object.prototype.hasOwnProperty.call(output, outputKey)) {
+        evidence.push({ category: 'postgres_nul_key_collision', path: `${location}.$key` })
+        outputKey = `${outputKey}[nul:${hash(key).slice(0, 12)}]`
+      }
+      const child = `${location}.${outputKey}`
       if (SENSITIVE_KEY.test(key)) {
-        output[key] = '[REDACTED:credential]'
-        evidence.push(child)
+        output[outputKey] = '[REDACTED:credential]'
+        evidence.push({ category: 'credential', path: child })
       } else {
-        output[key] = sanitizeValue(value[key], evidence, child, seen, depth + 1)
+        output[outputKey] = sanitizeValue(value[key], evidence, child, seen, depth + 1)
       }
     }
     return output
@@ -133,8 +146,8 @@ function sanitizedPhysicalPayload(raw) {
     quarantineReason: typeof parsed === 'string' ? 'unsupported_payload' : null,
     redactionMetadata: {
       sanitizerVersion: SANITIZER_VERSION,
-      categories: evidence.length > 0 ? ['credential'] : [],
-      paths: [...new Set(evidence)].sort(),
+      categories: [...new Set(evidence.map(item => item.category))].sort(),
+      paths: [...new Set(evidence.map(item => item.path))].sort(),
     },
     payloadEncoding: typeof parsed === 'string' ? 'text_sanitized' : 'json',
   }

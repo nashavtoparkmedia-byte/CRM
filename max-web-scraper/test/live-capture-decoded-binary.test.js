@@ -81,3 +81,23 @@ test('decoded binary message becomes a replayable durable capture envelope', () 
     fs.rmSync(directory, { recursive: true, force: true })
   }
 })
+
+test('replaces PostgreSQL-incompatible NUL before the capture envelope reaches the durable spool', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nul-safe-capture-'))
+  try {
+    const adapter = new LiveCaptureAdapter({ accountId: 'account-exact', spoolPath: directory })
+
+    adapter.capturePhysicalFrame({
+      raw: JSON.stringify({ message: { text: 'before\u0000after' }, '\u0000key': 'safe' }),
+      metadata: { opcode: 128, sourceOrigin: 'test' },
+    })
+
+    const pending = adapter.spool.readPending(10)
+    assert.equal(pending.length, 1)
+    assert.equal(JSON.stringify(pending[0].envelope.sanitizedPayload).includes('\\u0000'), false)
+    assert.ok(pending[0].envelope.redactionMetadata.categories.includes('postgres_nul_replacement'))
+    assert.ok(pending[0].envelope.redactionMetadata.paths.includes('$.message.text'))
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true })
+  }
+})
