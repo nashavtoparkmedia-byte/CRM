@@ -62,7 +62,7 @@ ARG SOURCE_COMMIT=uncommitted
 ARG BUILD_TIMESTAMP=unknown
 
 COPY --from=sanitized-runtime / /
-RUN /usr/bin/chown -R 1001:1001 /app /home/pwuser
+RUN /usr/bin/chown -R 1000:1000 /app /home/pwuser
 
 LABEL org.opencontainers.image.title="max-web-scraper" \
       org.opencontainers.image.description="Single-owner MAX transport with durable capture and default-off fenced text canary" \
@@ -86,7 +86,6 @@ WORKDIR /app
 # Keep the runtime filesystem and process on that exact numeric identity so
 # restrictive 0600 source files remain executable and rollback never needs a
 # profile ownership rewrite.
-RUN /usr/bin/chown -R 1000:1000 /app /home/pwuser
 USER 1000:1000
 EXPOSE 3005
 
