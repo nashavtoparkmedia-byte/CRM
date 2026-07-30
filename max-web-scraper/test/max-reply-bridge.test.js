@@ -281,6 +281,56 @@ test('MAX Web reply loads provider history before reading target candidates', ()
   assert.doesNotMatch(source, /this\.page\.goto\(/)
 })
 
+test('read-only provider history pagination advances by exact oldest provider timestamp', async () => {
+  const chatId = 902197592419n
+  const uiRouteId = 254460259n
+  const base = Date.parse('2026-07-30T15:40:00.000Z')
+  const messages = [0, 1, 2, 3].map(index => ({
+    id: BigInt(providerDecimalFromId(`d3019fb3a90000000${index}`)),
+    text: { plain: `message-${index}` },
+    time: base - index * 60_000,
+    isOut: false,
+    link: null,
+  }))
+  const providerStore = { values: [messages[0]] }
+  const chat = { id: uiRouteId, messages: [], lastMessage: messages[0] }
+  let historyCalls = 0
+  const store = {
+    chats: { values: [], getLazy: async id => id === chatId ? chat : null },
+    messages: { get: id => id === uiRouteId ? providerStore : { values: [] } },
+    profile: { viewer: { id: 1n } },
+  }
+  const previousWindow = global.window
+  global.window = {
+    __crmMaxCoreModule: {
+      module: {
+        Wa: store,
+        ro: async () => {
+          historyCalls += 1
+          if (messages[historyCalls]) providerStore.values.push(messages[historyCalls])
+        },
+      },
+      store,
+      storeExportKey: 'Wa',
+      legacySendPrimitives: true,
+    },
+  }
+  try {
+    const bridge = new MaxWebReplyBridge({ evaluate: (callback, args) => callback(args) })
+    const result = await bridge.readCandidates(String(chatId), {}, {
+      uiChatId: String(uiRouteId),
+      historyWindowStart: base - 3 * 60_000,
+      historyMaxPages: 10,
+    })
+    assert.equal(historyCalls, 3)
+    assert.equal(result.historyPagesLoaded, 3)
+    assert.equal(result.historyOldestTimestamp, base - 3 * 60_000)
+    assert.equal(result.candidates.length, 4)
+  } finally {
+    global.window = previousWindow
+  }
+})
+
 test('MAX Web reply returns strict provider confirmation from the message store', () => {
   const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
   const beforeSnapshot = source.indexOf('const beforeProviderIds = new Set(')

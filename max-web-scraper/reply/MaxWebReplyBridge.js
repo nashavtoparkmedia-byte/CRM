@@ -413,8 +413,33 @@ class MaxWebReplyBridge {
         let historyFrom = null
         try { historyFrom = chat.lastMessage?.time ?? null } catch {}
         if (historyFrom == null && Number.isFinite(args.sentAt)) historyFrom = args.sentAt
+        const historyWindowStart = Number.isFinite(args.historyWindowStart)
+          ? args.historyWindowStart
+          : null
+        const historyMaxPages = Number.isInteger(args.historyMaxPages)
+          ? Math.max(1, Math.min(args.historyMaxPages, 32))
+          : 1
+        let historyPagesLoaded = 0
+        let historyOldestTimestamp = null
         if (historyFrom != null && core.storeExportKey === 'Wa' && typeof core.module.ro === 'function') {
-          await core.module.ro({ chat, from: historyFrom })
+          let previousOldest = null
+          for (let pageIndex = 0; pageIndex < historyMaxPages; pageIndex++) {
+            await core.module.ro({ chat, from: historyFrom })
+            historyPagesLoaded += 1
+            const loaded = core.store.messages?.get
+              ? Array.from(core.store.messages.get(chatKey).values || [])
+              : []
+            const timestamps = loaded
+              .map(message => Number(message?.time))
+              .filter(Number.isFinite)
+            if (!timestamps.length) break
+            const oldest = Math.min(...timestamps)
+            historyOldestTimestamp = oldest
+            if (historyWindowStart !== null && oldest <= historyWindowStart) break
+            if (previousOldest !== null && oldest >= previousOldest) break
+            previousOldest = oldest
+            historyFrom = oldest
+          }
         }
 
         const providerMessages = core.store.messages?.get
@@ -460,6 +485,8 @@ class MaxWebReplyBridge {
           candidates,
           providerChatId: String(chatKey),
           routeMatchCount,
+          historyPagesLoaded,
+          historyOldestTimestamp,
         }
       } catch (error) {
         return { ok: false, reason: String(error?.message || error), candidates: [] }
@@ -468,6 +495,8 @@ class MaxWebReplyBridge {
       chatId: String(chatId),
       uiRouteId,
       sentAt: timestampMs(context?.sentAt),
+      historyWindowStart: timestampMs(options?.historyWindowStart),
+      historyMaxPages: Number.isInteger(options?.historyMaxPages) ? options.historyMaxPages : 1,
     })
 
     if (!result?.ok) throw new Error(`MAX reply target lookup failed: ${result?.reason || 'unknown'}`)
@@ -475,6 +504,8 @@ class MaxWebReplyBridge {
       candidates: result.candidates || [],
       providerChatId: result.providerChatId || null,
       routeMatchCount: Number(result.routeMatchCount) || 0,
+      historyPagesLoaded: Number(result.historyPagesLoaded) || 0,
+      historyOldestTimestamp: timestampMs(result.historyOldestTimestamp),
     }
   }
 

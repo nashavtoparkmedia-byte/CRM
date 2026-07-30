@@ -23,6 +23,8 @@ test('history snapshot endpoint is loopback-only, read-only and exact-route fenc
   assert.match(block, /account_mismatch/)
   assert.match(block, /route_or_participant_mismatch/)
   assert.match(block, /readCandidates/)
+  assert.match(block, /historyMaxPages:\s*32/)
+  assert.match(block, /completeThroughWindowStart/)
   assert.match(block, /buildProviderHistorySnapshot/)
   assert.doesNotMatch(block, /forwardToWebhook/)
   assert.doesNotMatch(block, /sendProviderConfirmedUiText/)

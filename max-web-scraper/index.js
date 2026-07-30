@@ -6293,7 +6293,11 @@ app.post('/v1/personal-max/history/snapshot', async (req, res) => {
     const lookup = await new MaxWebReplyBridge(page).readCandidates(
       protocolChatId,
       {},
-      { uiChatId: requestedUiRouteId },
+      {
+        uiChatId: requestedUiRouteId,
+        historyWindowStart: body.windowStart,
+        historyMaxPages: 32,
+      },
     )
     const discoveredProviderUserId = dialogPeerProviderUserId(protocolChatId)
     if (discoveredProviderUserId && discoveredProviderUserId !== requestedProviderUserId) {
@@ -6320,7 +6324,16 @@ app.post('/v1/personal-max/history/snapshot', async (req, res) => {
       providerChatId: lookup.providerChatId,
       routeMatchCount: lookup.routeMatchCount,
     })
-    res.json(snapshot)
+    res.json({
+      ...snapshot,
+      historyLoad: {
+        pagesLoaded: lookup.historyPagesLoaded,
+        oldestTimestamp: lookup.historyOldestTimestamp,
+        requestedWindowStart: body.windowStart || null,
+        completeThroughWindowStart: lookup.historyOldestTimestamp !== null &&
+          new Date(lookup.historyOldestTimestamp).getTime() <= new Date(body.windowStart).getTime(),
+      },
+    })
   } catch (error) {
     res.status(422).json({ error: 'snapshot_failed', reason: String(error?.message || error) })
   }
