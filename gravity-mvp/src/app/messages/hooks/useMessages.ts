@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { prepareMessagesForUI, UIItem } from "../utils/message-utils"
 import { patchConversation } from "./useConversations"
 import { sortMessagesChronologically } from "../utils/message-order"
+import { personalMaxSendLane } from "../utils/personal-max-send-lane"
 import { pendingOptimisticMessages } from "../utils/personal-max-optimistic-identity"
 
 export interface MessageAttachment {
@@ -323,11 +324,14 @@ export function useMessages(chatId: string | null) {
 
         // Actual API call — includes clientMessageId for idempotency
         try {
-            const res = await fetch('/api/messages', {
+            const request = () => fetch('/api/messages', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chatId: primaryChatId, content, channel: apiChannel, clientMessageId, quotedMsgId })
             })
+            const res = apiChannel === 'max'
+                ? await personalMaxSendLane.enqueue(primaryChatId, request)
+                : await request()
             
             if (res.ok) {
                 const result = await res.json()

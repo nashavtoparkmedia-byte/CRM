@@ -64,4 +64,16 @@ describe('Personal MAX UAT UI contract', () => {
     expect(block).toContain('retryMessage(msg.id)')
     expect(block).not.toContain('sendMessage(')
   })
+
+  it('registers MAX sends in the per-chat lane before starting network I/O', () => {
+    const hook = fs.readFileSync('src/app/messages/hooks/useMessages.ts', 'utf8')
+    const start = hook.indexOf('const request = () => fetch')
+    const end = hook.indexOf('if (res.ok)', start)
+    const block = hook.slice(start, end)
+
+    expect(start).toBeGreaterThan(-1)
+    expect(block).toContain("apiChannel === 'max'")
+    expect(block).toContain('personalMaxSendLane.enqueue(primaryChatId, request)')
+    expect(block.indexOf('personalMaxSendLane.enqueue')).toBeLessThan(block.indexOf('await request()'))
+  })
 })
