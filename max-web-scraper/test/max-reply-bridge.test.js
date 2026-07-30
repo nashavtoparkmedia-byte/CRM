@@ -189,11 +189,57 @@ test('wrong direction, stale history and placeholder ids are never selected', ()
   assert.equal(result.reason, 'no_strict_match')
 })
 
+test('MAX Web provider lookup accepts a structurally fenced minified store export', async () => {
+  const providerMessageId = 'd3019f4dcf27c35ecf'
+  const providerNumericId = BigInt(providerDecimalFromId(providerMessageId))
+  const chatId = 902454841098n
+  const message = {
+    id: providerNumericId,
+    text: { plain: 'exact provider-backed text' },
+    time: 1785380000000,
+    isOut: true,
+    link: null,
+  }
+  const providerStore = {
+    values: [message],
+    getLazy: async id => id === providerNumericId ? message : null,
+  }
+  const chat = { id: chatId, messages: [message], lastMessage: message }
+  const store = {
+    chats: { values: [chat], getLazy: async id => id === chatId ? chat : null },
+    messages: { get: id => id === chatId ? providerStore : { values: [], getLazy: async () => null } },
+    profile: { viewer: { id: 1n } },
+  }
+  const previousWindow = global.window
+  global.window = {
+    __crmMaxCoreModule: {
+      module: { Ya: store },
+      url: 'https://web.max.ru/_app/immutable/chunks/current.js',
+      store,
+      storeExportKey: 'Ya',
+      legacySendPrimitives: false,
+    },
+  }
+  try {
+    const bridge = new MaxWebReplyBridge({ evaluate: (callback, args) => callback(args) })
+    const result = await bridge.resolveProviderId(String(chatId), {
+      text: message.text.plain,
+      direction: 'outbound',
+    }, { uiChatId: '511708938' })
+
+    assert.equal(result.providerMessageId, providerMessageId)
+    assert.equal(result.reason, 'unique_strict_match')
+    assert.equal(result.routeMatchCount, 1)
+  } finally {
+    global.window = previousWindow
+  }
+})
+
 test('MAX Web reply loads provider history before reading target candidates', () => {
   const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
   const historyLoad = source.indexOf('await core.module.ro({ chat, from: historyFrom })')
-  const chatRouteLookup = source.indexOf('Array.from(core.module.Wa.chats.values || [])')
-  const providerStoreRead = source.indexOf('core.module.Wa.messages.get(chatKey).values')
+  const chatRouteLookup = source.indexOf('Array.from(core.store.chats.values || [])')
+  const providerStoreRead = source.indexOf('core.store.messages.get(chatKey).values')
   const candidateRead = source.indexOf('const candidates = []')
 
   assert.notEqual(historyLoad, -1, 'missing MAX chatLoadHistory action')
@@ -224,11 +270,11 @@ test('MAX Web reply returns strict provider confirmation from the message store'
 test('MAX Web reply preserves BigInt chat keys after strict route correlation', () => {
   const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
 
-  assert.match(source, /await core\.module\.Wa\.chats\.getLazy\(requestedChatKey\)/)
+  assert.match(source, /await core\.store\.chats\.getLazy\(requestedChatKey\)/)
   assert.match(source, /const requestedChatKey = BigInt\(String\(args\.chatId\)\)/)
   assert.match(source, /const chatKey = chat\.id/)
   assert.doesNotMatch(source, /const chatKey = Number\(args\.chatId\)/)
-  assert.doesNotMatch(source, /core\.module\.Wa\.chats\.get\(chatKey\)/)
+  assert.doesNotMatch(source, /core\.store\.chats\.get\(chatKey\)/)
 })
 
 test('real provider reply target still route-correlates the MAX Web chat before send', () => {
@@ -242,8 +288,9 @@ test('real provider reply target still route-correlates the MAX Web chat before 
   assert.notEqual(sendEnd, -1)
   assert.match(sendBlock, /const requestedChatKey = BigInt\(String\(args\.chatId\)\)/)
   assert.match(sendBlock, /const uiRouteKey = BigInt\(String\(args\.uiRouteId\)\)/)
-  assert.match(sendBlock, /const routeMatches = Array\.from\(core\.module\.Wa\.chats\.values \|\| \[\]\)/)
+  assert.match(sendBlock, /const routeMatches = Array\.from\(core\.store\.chats\.values \|\| \[\]\)/)
   assert.match(sendBlock, /const chat = routeMatches\.length === 1/)
-  assert.match(sendBlock, /: await core\.module\.Wa\.chats\.getLazy\(requestedChatKey\)/)
+  assert.match(sendBlock, /: await core\.store\.chats\.getLazy\(requestedChatKey\)/)
+  assert.match(sendBlock, /if \(!core\.legacySendPrimitives/)
   assert.match(scraperSource, /replyBridge\.sendReply\([\s\S]*?\{ uiChatId: directUiRouteId \}[\s\S]*?\)/)
 })

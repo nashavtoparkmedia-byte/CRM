@@ -167,7 +167,27 @@ class MaxWebReplyBridge {
     const result = await this.page.evaluate(async args => {
       const findCoreModule = async () => {
         const cached = window.__crmMaxCoreModule
-        if (cached?.module?.Wa?.chats && typeof cached.module.$i === 'function') return cached
+        if (cached?.store?.chats && cached?.store?.messages) return cached
+
+        const describeModule = (module, url) => {
+          const legacyStore = module?.Wa
+          if (legacyStore?.chats && legacyStore?.messages) {
+            return { module, url, store: legacyStore, storeExportKey: 'Wa', legacySendPrimitives: true }
+          }
+          const storeMatches = Object.entries(module || {}).filter(([, value]) => {
+            try {
+              return value !== null && typeof value === 'object' &&
+                typeof value.chats?.getLazy === 'function' &&
+                typeof value.messages?.get === 'function' &&
+                value.profile != null
+            } catch {
+              return false
+            }
+          })
+          if (storeMatches.length !== 1) return null
+          const [storeExportKey, store] = storeMatches[0]
+          return { module, url, store, storeExportKey, legacySendPrimitives: false }
+        }
 
         const urls = new Set()
         for (const script of document.querySelectorAll('script[src]')) urls.add(script.src)
@@ -178,8 +198,9 @@ class MaxWebReplyBridge {
           if (!/\/_app\/immutable\/chunks\/[^/]+\.js(?:\?|$)/.test(url)) continue
           try {
             const module = await import(url)
-            if (module?.Wa?.chats && typeof module.$i === 'function' && module.Es && module.ws) {
-              window.__crmMaxCoreModule = { module, url }
+            const descriptor = describeModule(module, url)
+            if (descriptor) {
+              window.__crmMaxCoreModule = descriptor
               return window.__crmMaxCoreModule
             }
           } catch {}
@@ -193,7 +214,7 @@ class MaxWebReplyBridge {
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
         const messageKey = BigInt(String(args.providerMessageDecimal))
-        const routeMatches = Array.from(core.module.Wa.chats.values || []).filter(candidate => {
+        const routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
             return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
           } catch {
@@ -202,7 +223,7 @@ class MaxWebReplyBridge {
         })
         const chat = routeMatches.length === 1
           ? routeMatches[0]
-          : await core.module.Wa.chats.getLazy(requestedChatKey)
+          : await core.store.chats.getLazy(requestedChatKey)
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
         const chatKey = chat.id
 
@@ -213,8 +234,8 @@ class MaxWebReplyBridge {
             return false
           }
         })
-        if (!message && core.module.Wa.messages?.get) {
-          try { message = await core.module.Wa.messages.get(chatKey).getLazy(messageKey) } catch {}
+        if (!message && core.store.messages?.get) {
+          try { message = await core.store.messages.get(chatKey).getLazy(messageKey) } catch {}
         }
         if (!message) return { ok: false, reason: 'max_web_provider_message_not_loaded' }
 
@@ -274,7 +295,27 @@ class MaxWebReplyBridge {
     const result = await this.page.evaluate(async args => {
       const findCoreModule = async () => {
         const cached = window.__crmMaxCoreModule
-        if (cached?.module?.Wa?.chats && typeof cached.module.$i === 'function') return cached
+        if (cached?.store?.chats && cached?.store?.messages) return cached
+
+        const describeModule = (module, url) => {
+          const legacyStore = module?.Wa
+          if (legacyStore?.chats && legacyStore?.messages) {
+            return { module, url, store: legacyStore, storeExportKey: 'Wa', legacySendPrimitives: true }
+          }
+          const storeMatches = Object.entries(module || {}).filter(([, value]) => {
+            try {
+              return value !== null && typeof value === 'object' &&
+                typeof value.chats?.getLazy === 'function' &&
+                typeof value.messages?.get === 'function' &&
+                value.profile != null
+            } catch {
+              return false
+            }
+          })
+          if (storeMatches.length !== 1) return null
+          const [storeExportKey, store] = storeMatches[0]
+          return { module, url, store, storeExportKey, legacySendPrimitives: false }
+        }
 
         const urls = new Set()
         for (const script of document.querySelectorAll('script[src]')) urls.add(script.src)
@@ -285,8 +326,9 @@ class MaxWebReplyBridge {
           if (!/\/_app\/immutable\/chunks\/[^/]+\.js(?:\?|$)/.test(url)) continue
           try {
             const module = await import(url)
-            if (module?.Wa?.chats && typeof module.$i === 'function' && module.Es && module.ws) {
-              window.__crmMaxCoreModule = { module, url }
+            const descriptor = describeModule(module, url)
+            if (descriptor) {
+              window.__crmMaxCoreModule = descriptor
               return window.__crmMaxCoreModule
             }
           } catch {}
@@ -299,7 +341,7 @@ class MaxWebReplyBridge {
         if (!core) return { ok: false, reason: 'max_web_core_not_found', candidates: [] }
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
-        const routeMatches = Array.from(core.module.Wa.chats.values || []).filter(candidate => {
+        const routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
             return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
           } catch {
@@ -308,19 +350,19 @@ class MaxWebReplyBridge {
         })
         const chat = routeMatches.length === 1
           ? routeMatches[0]
-          : await core.module.Wa.chats.getLazy(requestedChatKey)
+          : await core.store.chats.getLazy(requestedChatKey)
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded', candidates: [] }
         const chatKey = chat.id
 
         let historyFrom = null
         try { historyFrom = chat.lastMessage?.time ?? null } catch {}
         if (historyFrom == null && Number.isFinite(args.sentAt)) historyFrom = args.sentAt
-        if (historyFrom != null && typeof core.module.ro === 'function') {
+        if (historyFrom != null && core.storeExportKey === 'Wa' && typeof core.module.ro === 'function') {
           await core.module.ro({ chat, from: historyFrom })
         }
 
-        const providerMessages = core.module.Wa.messages?.get
-          ? Array.from(core.module.Wa.messages.get(chatKey).values || [])
+        const providerMessages = core.store.messages?.get
+          ? Array.from(core.store.messages.get(chatKey).values || [])
           : []
         const messagesById = new Map()
         for (const message of [
@@ -425,7 +467,27 @@ class MaxWebReplyBridge {
     const result = await this.page.evaluate(async args => {
       const findCoreModule = async () => {
         const cached = window.__crmMaxCoreModule
-        if (cached?.module?.Wa?.chats && typeof cached.module.$i === 'function') return cached
+        if (cached?.store?.chats && cached?.store?.messages) return cached
+
+        const describeModule = (module, url) => {
+          const legacyStore = module?.Wa
+          if (legacyStore?.chats && legacyStore?.messages) {
+            return { module, url, store: legacyStore, storeExportKey: 'Wa', legacySendPrimitives: true }
+          }
+          const storeMatches = Object.entries(module || {}).filter(([, value]) => {
+            try {
+              return value !== null && typeof value === 'object' &&
+                typeof value.chats?.getLazy === 'function' &&
+                typeof value.messages?.get === 'function' &&
+                value.profile != null
+            } catch {
+              return false
+            }
+          })
+          if (storeMatches.length !== 1) return null
+          const [storeExportKey, store] = storeMatches[0]
+          return { module, url, store, storeExportKey, legacySendPrimitives: false }
+        }
 
         const urls = new Set()
         for (const script of document.querySelectorAll('script[src]')) urls.add(script.src)
@@ -436,8 +498,9 @@ class MaxWebReplyBridge {
           if (!/\/_app\/immutable\/chunks\/[^/]+\.js(?:\?|$)/.test(url)) continue
           try {
             const module = await import(url)
-            if (module?.Wa?.chats && typeof module.$i === 'function' && module.Es && module.ws) {
-              window.__crmMaxCoreModule = { module, url }
+            const descriptor = describeModule(module, url)
+            if (descriptor) {
+              window.__crmMaxCoreModule = descriptor
               return window.__crmMaxCoreModule
             }
           } catch {}
@@ -448,10 +511,13 @@ class MaxWebReplyBridge {
       try {
         const core = await findCoreModule()
         if (!core) return { ok: false, reason: 'max_web_core_not_found' }
+        if (!core.legacySendPrimitives || typeof core.module.$i !== 'function' || !core.module.Es || !core.module.ws) {
+          return { ok: false, reason: 'max_web_reply_sender_not_supported' }
+        }
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
         const replyKey = BigInt(args.replyId)
-        const routeMatches = Array.from(core.module.Wa.chats.values || []).filter(candidate => {
+        const routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
             return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
           } catch {
@@ -460,19 +526,19 @@ class MaxWebReplyBridge {
         })
         const chat = routeMatches.length === 1
           ? routeMatches[0]
-          : await core.module.Wa.chats.getLazy(requestedChatKey)
+          : await core.store.chats.getLazy(requestedChatKey)
         if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
         const chatKey = chat.id
 
         let target = Array.from(chat.messages || []).find(message => {
           try { return BigInt.asUintN(64, BigInt(message?.id)) === replyKey } catch { return false }
         })
-        if (!target && core.module.Wa.messages?.get) {
-          try { target = await core.module.Wa.messages.get(chatKey).getLazy(replyKey) } catch {}
+        if (!target && core.store.messages?.get) {
+          try { target = await core.store.messages.get(chatKey).getLazy(replyKey) } catch {}
         }
         if (!target) return { ok: false, reason: 'max_web_reply_target_not_loaded' }
 
-        const providerStore = core.module.Wa.messages.get(chatKey)
+        const providerStore = core.store.messages.get(chatKey)
         const beforeProviderIds = new Set(
           Array.from(providerStore.values || []).map(message => {
             try { return BigInt.asUintN(64, BigInt(message?.id)).toString() } catch { return null }
