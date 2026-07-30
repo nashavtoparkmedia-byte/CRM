@@ -23,6 +23,9 @@ export function personalMaxMessagePresentation(message: MessageLike): {
   const durableStatus = typeof maxDelivery.status === 'string' ? maxDelivery.status : null
 
   if (message.channel === 'max' && message.direction === 'outbound') {
+    if (durableStatus === 'provider_present' && metadata.origin === 'max_native') {
+      return { kind: 'confirmed', label: 'Отправлено через MAX', retryAllowed: false }
+    }
     if (['delivered', 'provider_confirmed', 'accepted_by_max'].includes(String(durableStatus))
       && maxDelivery.deliveryConfirmed === true) {
       return { kind: 'confirmed', label: 'Подтверждено MAX', retryAllowed: false }

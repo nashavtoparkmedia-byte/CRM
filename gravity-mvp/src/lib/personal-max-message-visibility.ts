@@ -9,9 +9,13 @@ function record(value: unknown): Record<string, unknown> {
 export function shouldProjectPersonalMaxMessage(message: MessageLike): boolean {
   const metadata = record(message.metadata)
   const disposition = record(metadata.personalMaxIngressDisposition)
+  const projection = record(metadata.personalMaxProjection)
   return !(
-    disposition.kind === 'history_replay'
-    && disposition.visibility === 'quarantined'
-    && disposition.evidencePreserved === true
+    (disposition.kind === 'history_replay'
+      && disposition.visibility === 'quarantined'
+      && disposition.evidencePreserved === true)
+    || (projection.visibility === 'suppressed_duplicate'
+      && projection.evidencePreserved === true
+      && typeof projection.canonicalProviderMessageId === 'string')
   )
 }

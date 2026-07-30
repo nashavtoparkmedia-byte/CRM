@@ -285,6 +285,7 @@ class MaxWebReplyBridge {
       providerChatId: result.providerChatId || null,
       routeMatchCount: Number(result.routeMatchCount) || 0,
       text: normalizeReplyText(result.message?.text),
+      exactText: typeof result.message?.text === 'string' ? result.message.text : '',
       timestamp: timestampMs(result.message?.timestamp),
       isOutgoing: Boolean(result.message?.isOutgoing),
       replyToExternalId,
@@ -397,6 +398,10 @@ class MaxWebReplyBridge {
               isOutgoing: Boolean(message.isOut),
               replyToId,
               quotedText,
+              attachmentCount: Array.isArray(message.attaches) ? message.attaches.length : 0,
+              messageType: Array.isArray(message.attaches) && message.attaches.length > 0
+                ? String(message.attaches[0]?._type || message.attaches[0]?.type || 'attachment').toLowerCase()
+                : 'text',
             })
           } catch {}
         }

@@ -9,6 +9,25 @@ const outbound = (status: string, durableStatus: string, retryable = false) => (
 })
 
 describe('Personal MAX UAT UI contract', () => {
+  it('renders native MAX outbound as provider-present and never retryable', () => {
+    expect(personalMaxMessagePresentation({
+      ...outbound('sent', 'provider_present'),
+      metadata: {
+        origin: 'max_native',
+        retryable: false,
+        maxDelivery: {
+          status: 'provider_present',
+          deliveryConfirmed: false,
+          retryable: false,
+        },
+      },
+    })).toEqual({
+      kind: 'confirmed',
+      label: 'Отправлено через MAX',
+      retryAllowed: false,
+    })
+  })
+
   it('maps durable queued to a neutral queue label', () => {
     expect(personalMaxMessagePresentation(outbound('queued', 'queued')))
       .toEqual({ kind: 'queued', label: 'В очереди', retryAllowed: false })

@@ -22,6 +22,8 @@ class MessageParser {
       attachments:       msg.attachments || [],
       isOutgoing:        msg.isOutgoing || false,
       replyToExternalId: msg.replyToMessageId || null,
+      ...(msg.source ? { source: msg.source } : {}),
+      ...(msg.textQuarantineReason ? { textQuarantineReason: msg.textQuarantineReason } : {}),
     }
     maxRuntimeTrace('parser.to_crm_payload', {
       providerMessageId: payload.externalId,

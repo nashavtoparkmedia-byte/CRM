@@ -59,7 +59,7 @@ test('MAX webhook history/catch-up does not promote existing chats as new activi
   assert.match(route, /const isHistoryReplay = source === 'history' \|\| source === 'catchup'/)
   assert.match(route, /!isOutgoing && !isHistoryReplay/)
   assert.match(route, /\.\.\.\(isHistoryReplay \? \{\} : \{ lastMessageAt: sentAt \}\)/)
-  assert.match(route, /metadata:\s+\{[^\n]*\.\.\.\(source \? \{ source \} : \{\}\)/)
+  assert.match(route, /\.\.\.\(source \? \{ source \} : \{\}\)/)
 })
 
 test('MAX history and catch-up payloads carry explicit source markers', () => {

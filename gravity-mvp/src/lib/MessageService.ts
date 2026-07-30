@@ -47,6 +47,16 @@ function unknownMaxDelivery(protocolChatId: string, webRouteId: unknown) {
     }
 }
 
+function isSupersededPersonalMaxChat(metadata: unknown): boolean {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
+    const projection = (metadata as Record<string, unknown>).personalMaxProjection
+    return Boolean(
+        projection && typeof projection === 'object' && !Array.isArray(projection)
+        && (projection as Record<string, unknown>).state === 'superseded'
+        && typeof (projection as Record<string, unknown>).canonicalChatId === 'string',
+    )
+}
+
 
 export class MessageService {
     /**
@@ -56,7 +66,7 @@ export class MessageService {
     static async listConversations() {
         try {
             // 1. Fetch all chats with basic data
-            const chats = await (prisma.chat as any).findMany({
+            const fetchedChats = await (prisma.chat as any).findMany({
                 select: {
                     id: true,
                     name: true,
@@ -112,6 +122,7 @@ export class MessageService {
                 orderBy: { lastMessageAt: 'desc' },
                 take: 400,
             })
+            const chats = fetchedChats.filter((chat: any) => !isSupersededPersonalMaxChat(chat.metadata))
 
             // 1b. Enrich with fields not in Prisma client types (chatType, workflow fields)
             // Scoped to the same set of chatIds to avoid a full-table scan.

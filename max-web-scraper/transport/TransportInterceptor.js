@@ -6,6 +6,7 @@ const { createHash } = require('crypto')
 const { TextDecoder } = require('util')
 const { NoopCaptureAdapter } = require('../capture/LiveCaptureAdapter')
 const { normalizeProviderTimestamp } = require('../lib/MaxMessageOrdering')
+const { assessProviderText } = require('../lib/MaxLiveConversation')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
@@ -237,13 +238,17 @@ function maxMsgpackDecodeAll(buf, options = {}) {
     try {
       return UTF8_FATAL_DECODER.decode(s)
     } catch {
-      options.onDiagnostic?.({
+      const diagnostic = {
         kind: 'invalid_utf8_string',
         byteOffset,
         byteLength: s.length,
         sha256: createHash('sha256').update(s).digest('hex'),
-      })
-      return Buffer.from(s).toString('utf8')
+      }
+      options.onDiagnostic?.(diagnostic)
+      // Invalid bytes are evidence, not text. Returning a tagged value keeps
+      // the decoder aligned without materialising U+FFFD into the provider
+      // payload or allowing binary metadata to leak into a CRM bubble.
+      return { __maxInvalidUtf8: true, ...diagnostic }
     }
   }
   function readBin(len)  { const s = buf.slice(pos, pos + len); pos += len; return s }
@@ -1085,7 +1090,7 @@ class TransportInterceptor {
             const pseudo = { chatId, message: candidate }
             this._consumeLooseMediaForMessage(pseudo)
             const msg = this._normalizeMaxMsg(pseudo)
-            if (msg && (msg.text || msg.attachments?.length > 0)) {
+            if (msg && (msg.text || msg.attachments?.length > 0 || (isUsableMaxMessageHex(msg.id) && msg.textQuarantineReason))) {
               console.log(`[Transport] op:53 deep msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from} out:${msg.isOutgoing}`)
               this._emit(msg)
             }
@@ -1153,7 +1158,7 @@ class TransportInterceptor {
             const pseudo = { chatId, message: candidate }
             this._consumeLooseMediaForMessage(pseudo)
             const msg = this._normalizeMaxMsg(pseudo)
-            if (msg && (msg.text || msg.attachments?.length > 0)) {
+            if (msg && (msg.text || msg.attachments?.length > 0 || (isUsableMaxMessageHex(msg.id) && msg.textQuarantineReason))) {
               console.log(`[Transport] op:53 new msg chat:${chatId} id:${msgId.slice(0,16)} from:${msg.from} out:${msg.isOutgoing}`)
               this._emit(msg)
             }
@@ -1291,7 +1296,8 @@ class TransportInterceptor {
         if (m.id?.__maxId) {
           if (!bestMsgHex || m.id.hex.slice(2) > bestMsgHex.slice(2)) bestMsgHex = m.id.hex
         }
-        if (msg.text || msg.attachments?.length > 0) {
+        if (msg.text || msg.attachments?.length > 0 || (isUsableMaxMessageHex(msg.id) && msg.textQuarantineReason)) {
+          msg.source = 'catchup'
           console.log(`[op71] emit msgId:${msg.id} from:${msg.from} text:"${String(msg.text || '').slice(0, 50)}" out:${msg.isOutgoing}`)
           this._emit(msg)
         }
@@ -1511,7 +1517,12 @@ class TransportInterceptor {
 
     const providerMessageId = m.id?.__maxId ? m.id.hex : (m.id || null)
 
-    let text    = m.text || ''
+    const rawText = typeof m.text === 'string'
+      ? m.text
+      : (typeof m.text?.plain === 'string' ? m.text.plain : '')
+    let hasExactProviderText = rawText.length > 0
+    let textAssessment = assessProviderText(rawText)
+    let text = textAssessment.accepted ? textAssessment.text : ''
     let attaches = Array.isArray(m.attaches) ? m.attaches : []
     if (!attaches.length && Array.isArray(payload.attaches)) {
       const rootToken = payload.token || payload['110'] || null
@@ -1526,9 +1537,16 @@ class TransportInterceptor {
     // Without this, text='' + attaches=[] → webhook skips with 'empty_text'.
     if (m.link?.type === 'FORWARD' && m.link.message) {
       const fwd = m.link.message
-      if (!text) text = fwd.text || ''
+      if (!text) {
+        text = typeof fwd.text === 'string'
+          ? fwd.text
+          : (typeof fwd.text?.plain === 'string' ? fwd.text.plain : '')
+        hasExactProviderText = text.length > 0
+      }
       if (!attaches.length && fwd.attaches?.length > 0) attaches = fwd.attaches
       if (!text && !attaches.length) text = '[Переслано]'
+      textAssessment = assessProviderText(text)
+      text = textAssessment.accepted ? textAssessment.text : ''
     }
 
     const hasAttaches = Array.isArray(attaches) && attaches.length > 0
@@ -1553,6 +1571,9 @@ class TransportInterceptor {
       replyToMessageId:  maxReplyTargetId(m.link),
       forwardedFromId:   (m.link?.type === 'FORWARD' && m.link.message?.sender) ? String(m.link.message.sender) : null,
       status:            m.status || null,
+      textQuarantineReason: textAssessment.accepted
+        ? (!hasExactProviderText && providerMessageId ? 'provider_text_missing_from_transport' : null)
+        : textAssessment.reason,
       raw:               payload,
     }
   }

@@ -51,6 +51,12 @@ const {
 const { createLiveCaptureAdapterFromEnvironment } = require('./capture/LiveCaptureAdapter')
 const { createPhysicalTextSenderRuntime } = require('./sender-v1/runtime')
 const { sendProviderConfirmedUiText } = require('./sender-v1/ProviderConfirmedUiTextSender')
+const {
+  assessProviderText,
+  buildProviderHistorySnapshot,
+  protocolChatIdForUiRouteCandidate,
+  providerPeerUserId,
+} = require('./lib/MaxLiveConversation')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -78,6 +84,8 @@ function protocolChatIdForUiRoute(routeId) {
   for (const [protocolId, uiRouteId] of Object.entries(UI_CHAT_ID_OVERRIDES)) {
     if (String(uiRouteId) === value) return protocolId
   }
+  const discovered = protocolChatIdForUiRouteCandidate(value, chatCache)
+  if (discovered) return discovered
   return value
 }
 
@@ -108,6 +116,11 @@ function dialogParticipantUiRouteId(chatId) {
   if (otherParticipants.length !== 1) return null
   const routeId = String(otherParticipants[0])
   return routeId && routeId !== chatIdStr ? routeId : null
+}
+
+function dialogPeerProviderUserId(chatId) {
+  const chat = chatCache?.get?.(String(chatId || ''))
+  return providerPeerUserId(chat, transport?._myUserId)
 }
 
 function resolveUiRouteIdForChat(chatId) {
@@ -828,6 +841,38 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   const rawChatId = msg.chatId
   if (msg.chatId != null) msg = { ...msg, chatId: normalizeMaxChatId(msg.chatId), rawChatId }
 
+  const protocolChatId = String(msg.chatId || '')
+  const route = resolveUiRouteIdForChat(protocolChatId)
+  const providerUserId = dialogPeerProviderUserId(protocolChatId)
+  if (msg.id && /^d301[0-9a-f]{14}$/i.test(String(msg.id)) && msg.textQuarantineReason) {
+    try {
+      const recovered = await new MaxWebReplyBridge(page).readProviderMessage(
+        protocolChatId,
+        String(msg.id),
+        { uiChatId: route.uiRouteId },
+      )
+      const exact = assessProviderText(recovered.exactText)
+      if (recovered.providerChatId !== protocolChatId || recovered.routeMatchCount !== 1) {
+        throw new Error('provider route identity mismatch')
+      }
+      if (!exact.accepted || (!exact.text && !msg.attachments?.length)) {
+        throw new Error(exact.reason || 'provider text unavailable')
+      }
+      msg = {
+        ...msg,
+        text: exact.text,
+        timestamp: recovered.timestamp || msg.timestamp,
+        isOutgoing: recovered.isOutgoing,
+        textQuarantineReason: null,
+        source: 'provider_store_recovery',
+      }
+      console.log(`[providerTextRecovery] recovered exact provider text id=${msg.id} chatId=${protocolChatId}`)
+    } catch (error) {
+      console.warn(`[providerTextRecovery] quarantined id=${msg.id} chatId=${protocolChatId} reason=${error.message}`)
+      return
+    }
+  }
+
   // Server push: message was deleted in MAX — propagate to CRM
   if (msg.status === 'REMOVED') {
     if (!msg.id) return
@@ -861,6 +906,14 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   }
 
   let payload = MessageParser.toCrmPayload(msg)
+  payload = {
+    ...payload,
+    providerAccountId: process.env.MAX_PERSONAL_ACCOUNT_ID || null,
+    protocolChatId,
+    uiRouteId: route.uiRouteId,
+    providerUserId,
+    ...(providerUserId && !msg.isOutgoing ? { senderId: providerUserId } : {}),
+  }
   if (msg.rawChatId && String(msg.rawChatId) !== String(msg.chatId)) {
     payload = { ...payload, rawChatId: msg.rawChatId }
   }
@@ -904,14 +957,13 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     if (phoneEvidence) savePhoneChatId(contactPhone, payload.chatId, phoneEvidence)
   }
 
-  // Переслано: текстовый префикс в content + структурированные метаданные
+  // Переслано: provider metadata остаются структурированными и никогда не
+  // подмешиваются в точный пользовательский текст.
   if (msg.forwardedFromId) {
     const fwdName  = contactStore.getName(msg.forwardedFromId) || msg.forwardedFromId
     const fwdPhone = contactStore.getPhone(msg.forwardedFromId) || null
-    const prefix   = `[↩ ${msg.forwardedFromId}:${fwdName}]`
     payload = {
       ...payload,
-      text:          payload.text ? `${prefix}\n${payload.text}` : prefix,
       forwardedFrom: { id: msg.forwardedFromId, name: fwdName, phone: fwdPhone },
     }
   }
@@ -2983,12 +3035,15 @@ function stableDomMirrorMessageId(chatId, text, attachments = [], candidate = {}
 }
 
 async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual', options = {}) {
+  const rawChatId = String(chatId)
+  chatId = normalizeMaxChatId(chatId)
   if (!latest?.text && !latest?.attachments?.length) return { skipped: 'no_content' }
   if (latest.text && !latest.attachments?.length && isDomNoiseText(latest.text)) return { skipped: 'noise_text', text: latest.text }
   if (!latest.attachments?.length && reason === 'loose_op128_media') {
     return { skipped: 'text_only_auto_fallback', text: latest.text }
   }
   const isOutgoingCandidate = Boolean(latest.isOutgoing || (latest.viewportW && latest.x > latest.viewportW * 0.55))
+  let resolvedProviderId = null
   if (isOutgoingCandidate && !options.includeOutgoing) {
     let providerMessageId = null
     let providerResolution = null
@@ -3018,18 +3073,48 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
       providerMessageId, providerResolution,
     }
   }
-  if (isOutgoingCandidate && matchesRecentCrmOutboundText(chatId, uiRouteId, latest.text)) {
-    return { skipped: 'crm_outbound_already_recorded', text: latest.text }
-  }
   if (isOutgoingCandidate && latest.attachments?.length && !options.includeOutgoingMedia) {
     return { skipped: 'outgoing_media_mirror_deferred', text: latest.text }
+  }
+  if (isOutgoingCandidate && latest.text) {
+    try {
+      const resolved = await new MaxWebReplyBridge(page).resolveProviderId(
+        chatId,
+        {
+          text: latest.text,
+          sentAt: options.timestamp || latest._providerTimestamp || Date.now(),
+          direction: 'outbound',
+        },
+        { uiChatId: uiRouteId },
+      )
+      if (isRealMaxMessageId(resolved.providerMessageId)) {
+        const exact = await new MaxWebReplyBridge(page).readProviderMessage(
+          chatId,
+          resolved.providerMessageId,
+          { uiChatId: uiRouteId },
+        )
+        if (exact.isOutgoing && exact.routeMatchCount === 1
+          && comparableDomText(exact.exactText) === comparableDomText(latest.text)) {
+          resolvedProviderId = exact.providerMessageId
+          latest = {
+            ...latest,
+            text: exact.exactText,
+            _providerTimestamp: exact.timestamp,
+            _providerStoreRecovered: true,
+          }
+        }
+      }
+    } catch (error) {
+      console.warn(`[domFallback] exact outbound lookup failed chatId=${chatId}: ${error.message}`)
+    }
+    if (!resolvedProviderId) return { skipped: 'outgoing_provider_identity_required', text: latest.text }
   }
   const pendingProviderId = ['empty_op71_after_op128', 'loose_op128_media'].includes(reason)
     && !isOutgoingCandidate
     && (latest.text || latest.attachments?.length)
     ? transport?.peekPendingLiveTextIdForDomRecovery?.(chatId, { maxAgeMs: 15_000 })
     : null
-  let resolvedProviderId = pendingProviderId
+  resolvedProviderId = resolvedProviderId || pendingProviderId
   const replyParts = reason === 'empty_op71_after_op128' && !isOutgoingCandidate && latest.text && !latest.attachments?.length
     ? domReplyQuoteParts(latest.text)
     : null
@@ -3179,9 +3264,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   }
 
   const attachmentIdentity = attachments.length > 0 ? attachments : rawAttachmentHints
-  const externalId = isOutgoingCandidate
-    ? stableDomMirrorMessageId(chatId, text, attachmentIdentity, latest)
-    : (resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachmentIdentity, latest))
+  const externalId = resolvedProviderId || stableDomCandidateMessageId(chatId, text, attachmentIdentity, latest)
   if (domFallbackSeen.has(externalId)) return { skipped: 'seen', text: latest.text }
   domFallbackSeen.add(externalId)
 
@@ -3201,6 +3284,12 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   const result = await forwardToWebhook({
     externalId,
     chatId: String(chatId),
+    rawChatId,
+    protocolChatId: String(chatId),
+    uiRouteId: String(uiRouteId),
+    providerAccountId: process.env.MAX_PERSONAL_ACCOUNT_ID || null,
+    providerUserId: dialogPeerProviderUserId(chatId),
+    ...(dialogPeerProviderUserId(chatId) ? { senderId: dialogPeerProviderUserId(chatId) } : {}),
     text,
     timestamp: latest._providerTimestamp || options.timestamp || Date.now(),
     messageType,
@@ -3214,7 +3303,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
       },
     } : {}),
     isOutgoing: isOutgoingCandidate,
-    source: isOutgoingCandidate ? 'max_web_mirror' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
+    source: isOutgoingCandidate ? 'max_native' : (resolvedProviderId ? 'live_dom_recovery' : 'dom_fallback'),
     ...(latest._replyToExternalId ? { replyToExternalId: latest._replyToExternalId } : {}),
     ...(latest._replyQuoteText ? { replyQuoteText: latest._replyQuoteText } : {}),
     ...(crmPhone ? { phone: crmPhone, senderPhone: crmPhone } : {}),
@@ -3247,6 +3336,7 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
 }
 
 async function forwardLatestDomMessage(chatId, reason = 'manual', options = {}) {
+  chatId = normalizeMaxChatId(chatId)
   if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
   domFallbackRunning = true
@@ -3267,6 +3357,7 @@ async function forwardLatestDomMessage(chatId, reason = 'manual', options = {}) 
 }
 
 async function forwardRecentDomMessages(chatId, reason = 'manual') {
+  chatId = normalizeMaxChatId(chatId)
   const options = arguments[2] || {}
   if (uiSendInProgress) return { skipped: 'ui_send_in_progress' }
   if (domFallbackRunning) return { skipped: 'busy' }
@@ -3285,7 +3376,7 @@ async function forwardRecentDomMessages(chatId, reason = 'manual') {
       const peerIdentity = await scrapeDomPeerIdentity(uiRouteId, {
         forcePhone: Boolean(options.forcePeerIdentity || !cachedPhone || !cachedPhoneEvidence),
         protocolChatId: chatId,
-        providerIdentityId: options.providerIdentityId || chatId,
+        providerIdentityId: options.providerIdentityId || dialogPeerProviderUserId(chatId),
       }).catch(e => {
         console.warn(`[domIdentity] failed chatId=${chatId}: ${e.message}`)
         return {}
@@ -6166,6 +6257,64 @@ app.get('/debug/chats', (req, res) => {
   res.json({ total: chats.length, myUserId: myId, chats: chats.slice(0, 200) })
 })
 
+function isLoopbackRequest(req) {
+  const address = String(req.socket?.remoteAddress || '')
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1'
+}
+
+// Root-operated, read-only provider-store snapshot. It is intentionally
+// loopback-only: callers use docker exec and the endpoint is unavailable to
+// neighbouring containers. Reading may ask MAX Web to load history into its
+// in-memory store, but it never invokes a send primitive or CRM webhook.
+app.post('/v1/personal-max/history/snapshot', async (req, res) => {
+  if (!isLoopbackRequest(req)) return res.status(403).json({ error: 'loopback_required' })
+  if (!isReady || !page || !transport) return res.status(503).json({ error: 'scraper_not_ready' })
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const accountId = String(body.accountId || '')
+    const protocolChatId = normalizeMaxChatId(body.protocolChatId)
+    const route = resolveUiRouteIdForChat(protocolChatId)
+    const providerUserId = dialogPeerProviderUserId(protocolChatId)
+    if (!accountId || accountId !== String(process.env.MAX_PERSONAL_ACCOUNT_ID || '')) {
+      return res.status(409).json({ error: 'account_mismatch' })
+    }
+    if (String(body.protocolChatId || '') !== protocolChatId
+      || String(body.uiRouteId || '') !== String(route.uiRouteId)
+      || String(body.providerUserId || '') !== String(providerUserId || '')) {
+      return res.status(409).json({ error: 'route_or_participant_mismatch' })
+    }
+    const lookup = await new MaxWebReplyBridge(page).readCandidates(
+      protocolChatId,
+      {},
+      { uiChatId: route.uiRouteId },
+    )
+    const profile = body.includeProfile === true
+      ? await scrapeDomPeerIdentity(route.uiRouteId, {
+          forcePhone: true,
+          protocolChatId,
+          providerIdentityId: providerUserId,
+        })
+      : {}
+    const snapshot = buildProviderHistorySnapshot({
+      accountId,
+      protocolChatId,
+      uiRouteId: route.uiRouteId,
+      providerUserId,
+      ownerUserId: transport._myUserId,
+      phone: profile.phone || cachedPhoneForChatId(protocolChatId),
+      phoneEvidence: profile.phoneEvidence || cachedPhoneEvidenceForChatId(protocolChatId),
+      candidates: lookup.candidates,
+      windowStart: body.windowStart,
+      windowEnd: body.windowEnd,
+      providerChatId: lookup.providerChatId,
+      routeMatchCount: lookup.routeMatchCount,
+    })
+    res.json(snapshot)
+  } catch (error) {
+    res.status(422).json({ error: 'snapshot_failed', reason: String(error?.message || error) })
+  }
+})
+
 // Отправить текст
 // Body: { chatId: number|string, message: string, phone?: string }
 // chatId может быть MAX internal ID или телефон — если телефон, автоматически резолвим
@@ -6213,10 +6362,16 @@ app.post('/debug/dom-identity', async (req, res) => {
   try {
     const { chatId } = req.body || {}
     if (!chatId) return res.status(400).json({ error: 'chatId is required' })
-    const route = resolveUiRouteIdForChat(String(chatId))
-    const identity = await scrapeDomPeerIdentity(route.uiRouteId, { forcePhone: true })
-    if (identity.phone) savePhoneChatId(identity.phone, String(chatId))
-    res.json({ chatId: String(chatId), uiRouteId: route.uiRouteId, ...identity })
+    const protocolChatId = normalizeMaxChatId(chatId)
+    const route = resolveUiRouteIdForChat(protocolChatId)
+    const providerIdentityId = dialogPeerProviderUserId(protocolChatId)
+    const identity = await scrapeDomPeerIdentity(route.uiRouteId, {
+      forcePhone: true,
+      protocolChatId,
+      providerIdentityId,
+    })
+    if (identity.phone) savePhoneChatId(identity.phone, protocolChatId, identity.phoneEvidence)
+    res.json({ chatId: protocolChatId, uiRouteId: route.uiRouteId, providerIdentityId, ...identity })
   } catch (e) {
     res.status(500).json({ error: e.message })
   }

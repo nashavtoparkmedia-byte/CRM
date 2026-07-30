@@ -12,6 +12,10 @@ import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-reso
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { resolveMaxPhoneEvidence } from '@/lib/contacts/max-phone-evidence'
 import { opsLog } from '@/lib/opsLog'
+import {
+  personalMaxNativeMetadata,
+  REAL_PERSONAL_MAX_MESSAGE_ID,
+} from '@/lib/personal-max-live-conversation'
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
 let maxRuntimeTraceSeq = 0
@@ -120,6 +124,11 @@ type MaxWebhookBody = {
   replyToExternalId?: string | number | null
   replyQuoteText?: string | null
   chatKind?: 'private' | 'group' | 'unknown' | null
+  providerAccountId?: string | null
+  protocolChatId?: string | number | null
+  uiRouteId?: string | number | null
+  providerUserId?: string | number | null
+  textQuarantineReason?: string | null
 }
 
 function normalizeMaxChatId(chatId: unknown): string {
@@ -187,6 +196,7 @@ export async function POST(request: Request) {
       externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone,
       phoneEvidence, text, timestamp, messageType, attachments, isOutgoing,
       attachmentResolution, deleted, forwardedFrom, source, replyToExternalId, replyQuoteText, chatKind,
+      providerAccountId, protocolChatId, uiRouteId, providerUserId, textQuarantineReason,
     } = body
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
@@ -216,6 +226,19 @@ export async function POST(request: Request) {
     if (!chatId) {
       maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, reason: 'missing_chat_id' })
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
+    }
+    const configuredAccountId = process.env.MAX_PERSONAL_ACCOUNT_ID || ''
+    if (providerAccountId && configuredAccountId && providerAccountId !== configuredAccountId) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, reason: 'account_mismatch' })
+      return NextResponse.json({ error: 'Personal MAX account mismatch' }, { status: 409 })
+    }
+    if (textQuarantineReason) {
+      maxRuntimeTrace('webhook.skipped', {
+        providerMessageId: externalId ? String(externalId) : null,
+        chatId: String(chatId),
+        reason: 'provider_text_quarantined',
+      })
+      return NextResponse.json({ ok: true, skipped: 'provider_text_quarantined' })
     }
 
     // Reject empty text messages (pure protocol noise — ack / receipt
@@ -323,6 +346,70 @@ export async function POST(request: Request) {
       })
     }
 
+    if (isOutgoing && externalIdString && REAL_PERSONAL_MAX_MESSAGE_ID.test(externalIdString)) {
+      const exactDispatch = await prisma.maxOutboundDispatch.findFirst({
+        where: {
+          providerMessageId: externalIdString,
+          ...(configuredAccountId ? { accountId: configuredAccountId } : {}),
+        },
+        select: {
+          state: true,
+          command: { select: { clientMessageId: true } },
+        },
+      })
+      const clientMessageId = exactDispatch?.command.clientMessageId
+      const crmOriginated = clientMessageId
+        ? await prisma.message.findUnique({ where: { clientMessageId } })
+        : null
+      if (exactDispatch?.state === 'provider_confirmed' && crmOriginated) {
+        const metadata = metadataRecord(crmOriginated.metadata)
+        const delivery = metadataRecord(metadata.maxDelivery)
+        const linked = await prisma.message.update({
+          where: { id: crmOriginated.id },
+          data: {
+            externalId: externalIdString,
+            status: 'delivered',
+            sentAt,
+            metadata: {
+              ...metadata,
+              origin: 'crm',
+              retryable: false,
+              maxDelivery: {
+                ...delivery,
+                status: 'provider_confirmed',
+                deliveryConfirmed: true,
+                maxMessageId: externalIdString,
+                externalId: externalIdString,
+              },
+            },
+          },
+        })
+        maxRuntimeTrace('webhook.crm_echo_linked', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          messageId: linked.id,
+        })
+        return NextResponse.json({
+          success: true,
+          chatInternalId: linked.chatId,
+          messageId: linked.id,
+          deduped: true,
+          crmEchoLinked: true,
+        })
+      }
+      if (exactDispatch) {
+        maxRuntimeTrace('webhook.reconciliation_required', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          reason: 'crm_dispatch_without_linkable_bubble',
+        })
+        return NextResponse.json({
+          ok: true,
+          skipped: 'crm_echo_reconciliation_required',
+        })
+      }
+    }
+
     if (isTextProviderEvent && externalIdString) {
       const existingText = await prisma.message.findUnique({
         where: { externalId: externalIdString },
@@ -384,12 +471,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const rawExternalChatId = String(rawChatId || chatId)
-    const externalChatId = normalizeMaxChatId(chatId)
+    const rawExternalChatId = String(rawChatId || uiRouteId || chatId)
+    const externalChatId = normalizeMaxChatId(protocolChatId || chatId)
     const senderIdString = senderId ? String(senderId) : null
+    const providerUserIdString = providerUserId ? String(providerUserId) : senderIdString
     const maxPhoneEvidence = resolveMaxPhoneEvidence(senderPhone || phone, phoneEvidence, {
       externalChatId,
-      senderId: senderIdString,
+      senderId: providerUserIdString,
     })
     const effectiveSenderPhone = maxPhoneEvidence.normalizedPhone
     const trustedSenderPhone = maxPhoneEvidence.trustedForAutomaticResolution
@@ -411,9 +499,9 @@ export async function POST(request: Request) {
     const maxContactResolutionShadow = await startMaxContactResolutionShadow({
       resolutionInput: {
         channel: 'max',
-        externalUserId: senderIdString,
+        externalUserId: providerUserIdString,
         externalChatId,
-        providerAccountId: null,
+        providerAccountId: providerAccountId || configuredAccountId || null,
         channelDisplayName: senderName || null,
         normalizedPhone: effectiveSenderPhone,
         phoneEvidence: effectiveSenderPhone
@@ -433,11 +521,33 @@ export async function POST(request: Request) {
       where: { externalChatId },
     })
 
-    if (!chat && !isOutgoing && senderIdString) {
+    if (!chat && rawExternalChatId !== externalChatId) {
+      const existingByUiRoute = await prisma.chat.findUnique({
+        where: { externalChatId: rawExternalChatId },
+      })
+      if (existingByUiRoute) {
+        const metadata = metadataRecord(existingByUiRoute.metadata)
+        chat = await prisma.chat.update({
+          where: { id: existingByUiRoute.id },
+          data: {
+            externalChatId,
+            metadata: {
+              ...metadata,
+              previousExternalChatId: rawExternalChatId,
+              protocolChatId: externalChatId,
+              uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+              providerAccountId: providerAccountId || configuredAccountId || null,
+            },
+          },
+        })
+      }
+    }
+
+    if (!chat && !isOutgoing && providerUserIdString) {
       const existingBySender = await prisma.chat.findFirst({
         where: {
           channel: 'max',
-          metadata: { path: ['senderId'], equals: senderIdString },
+          metadata: { path: ['providerUserId'], equals: providerUserIdString },
         },
         orderBy: { lastMessageAt: 'desc' },
       })
@@ -454,7 +564,11 @@ export async function POST(request: Request) {
               ...existingMetadata,
               previousExternalChatId: existingBySender.externalChatId,
               rawExternalChatId,
-              senderId: senderIdString,
+              senderId: providerUserIdString,
+              providerUserId: providerUserIdString,
+              protocolChatId: externalChatId,
+              uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+              providerAccountId: providerAccountId || configuredAccountId || null,
               ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
               ...(effectiveSenderPhone ? { phoneEvidence: maxPhoneEvidence } : {}),
               connectionId: existingMetadata.connectionId || 'max_scraper',
@@ -473,10 +587,13 @@ export async function POST(request: Request) {
           lastMessageAt: sentAt,
           status:        'new',
           metadata: {
-            ...(senderIdString       ? { senderId: senderIdString }       : {}),
+            ...(providerUserIdString ? { senderId: providerUserIdString, providerUserId: providerUserIdString } : {}),
             ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
             ...(effectiveSenderPhone ? { phoneEvidence: maxPhoneEvidence } : {}),
             rawExternalChatId,
+            protocolChatId: externalChatId,
+            uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+            providerAccountId: providerAccountId || configuredAccountId || null,
             connectionId: 'max_scraper',
           },
         },
@@ -490,13 +607,16 @@ export async function POST(request: Request) {
           // Обновляем имя если раньше было только MAX:ID
           ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),
           // Обновляем senderId / phone в metadata
-          ...((senderIdString || effectiveSenderPhone) ? {
+          ...((providerUserIdString || effectiveSenderPhone) ? {
             metadata: {
               ...existingMetadata,
-              ...(senderIdString       ? { senderId: senderIdString }       : {}),
+              ...(providerUserIdString ? { senderId: providerUserIdString, providerUserId: providerUserIdString } : {}),
               ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
               ...(effectiveSenderPhone ? { phoneEvidence: maxPhoneEvidence } : {}),
               rawExternalChatId,
+              protocolChatId: externalChatId,
+              uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+              providerAccountId: providerAccountId || configuredAccountId || null,
               connectionId: existingMetadata.connectionId || 'max_scraper',
             }
           } : {}),
@@ -535,6 +655,22 @@ export async function POST(request: Request) {
       audio: '[Аудио]', document: '[Документ]',
     }
     const content = text || contentFallbacks[effectiveMessageTypeKey] || ''
+    const isNativeMaxOutbound = Boolean(
+      isOutgoing && externalIdString && REAL_PERSONAL_MAX_MESSAGE_ID.test(externalIdString),
+    )
+    const nativeMetadata = isNativeMaxOutbound
+      ? personalMaxNativeMetadata({
+          accountId: providerAccountId || configuredAccountId,
+          protocolChatId: externalChatId,
+          uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+          providerUserId: providerUserIdString || externalChatId,
+          source: source === 'history' || source === 'catchup'
+            ? 'history'
+            : source === 'provider_store_recovery'
+              ? 'provider_store_recovery'
+              : 'live',
+        })
+      : null
 
     let message: Message | null = null
     const shouldUpgradeDomMessage =
@@ -632,7 +768,7 @@ export async function POST(request: Request) {
     // Workflow: update status/unread/requiresResponse via centralized service
     if (!isOutgoing && !isHistoryReplay) {
       await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
-    } else if (isOutgoing) {
+    } else if (isOutgoing && !isHistoryReplay) {
       await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
 
@@ -648,9 +784,23 @@ export async function POST(request: Request) {
           content,
           channel:   'max',
           externalId: externalIdString,
-          status:    'delivered',
+          status:    isNativeMaxOutbound ? 'sent' : 'delivered',
           sentAt,   // validated above
-          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(attachmentResolutionMetadata ? { attachmentResolution: attachmentResolutionMetadata } : {}), ...(source ? { source } : {}), ...providerReplyMetadata, ...(forwardedFrom ? { forwardedFrom } : {}) },
+          metadata:  {
+            senderId: providerUserIdString || senderId,
+            maxChatId: externalChatId,
+            maxRawChatId: rawExternalChatId,
+            protocolChatId: externalChatId,
+            uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+            providerAccountId: providerAccountId || configuredAccountId || null,
+            providerUserId: providerUserIdString,
+            attachments: attachments || [],
+            ...(attachmentResolutionMetadata ? { attachmentResolution: attachmentResolutionMetadata } : {}),
+            ...(source ? { source } : {}),
+            ...(nativeMetadata || {}),
+            ...providerReplyMetadata,
+            ...(forwardedFrom ? { forwardedFrom } : {}),
+          },
         },
       })
     }
@@ -723,7 +873,7 @@ export async function POST(request: Request) {
     if (!isOutgoing) {
       try {
         // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
-        const maxExternalId = senderIdString || externalChatId
+        const maxExternalId = providerUserIdString || externalChatId
         const maxPhone = effectiveSenderPhone
 
         const contactResult = await ContactService.resolveContact(

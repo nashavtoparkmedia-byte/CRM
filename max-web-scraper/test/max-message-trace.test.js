@@ -96,7 +96,13 @@ test('reports invalid UTF-8 at the msgpack string boundary', () => {
     { onDiagnostic: value => diagnostics.push(value) },
   )
 
-  assert.equal(decoded[0], '�(')
+  assert.deepEqual(decoded[0], {
+    __maxInvalidUtf8: true,
+    kind: 'invalid_utf8_string',
+    byteOffset: 1,
+    byteLength: 2,
+    sha256: 'eddf68639913a3cb8331cdfe7f87559e0beccf2c289c0d90ac4d89b3204004f8',
+  })
   assert.equal(diagnostics.length, 1)
   assert.deepEqual(diagnostics[0], {
     kind: 'invalid_utf8_string',

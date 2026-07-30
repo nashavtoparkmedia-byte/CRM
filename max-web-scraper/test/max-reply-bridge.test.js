@@ -51,6 +51,7 @@ test('provider-backed DOM reply restores only body and exact reply identity', as
     providerChatId: '511708938',
     routeMatchCount: 1,
     text: 'Ответил',
+    exactText: 'Ответил',
     timestamp: 1783762168000,
     isOutgoing: false,
     replyToExternalId,

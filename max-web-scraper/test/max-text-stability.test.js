@@ -472,7 +472,7 @@ test('provider-backed DOM reply recovery forwards only reply body text', () => {
   const quoteTextIndex = forwardBlock.indexOf('_replyQuoteText: replyParts.quotedText')
   const unresolvedIndex = forwardBlock.indexOf('replyQuoteText: latest._replyQuoteText')
   const webhookIndex = forwardBlock.indexOf('const result = await forwardToWebhook')
-  const externalIndex = forwardBlock.indexOf('const externalId = isOutgoingCandidate')
+  const externalIndex = forwardBlock.indexOf('const externalId = resolvedProviderId || stableDomCandidateMessageId')
 
   assert.ok(pendingIndex > -1 && quoteIndex > -1 && quoteTextIndex > -1 && unresolvedIndex > -1 && webhookIndex > -1 && externalIndex > -1)
   assert.ok(pendingIndex < quoteIndex, 'provider id must be checked before quote handling')

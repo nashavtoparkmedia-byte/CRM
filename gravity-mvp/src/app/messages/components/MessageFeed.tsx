@@ -824,6 +824,11 @@ export default function MessageFeed({
                             )
                         })()}
 
+                        {isOutbound && msg.channel === 'max' && msg.metadata?.origin === 'max_native' && (
+                            <div className="mb-0.5 text-[10px] font-medium text-[#5E7A56]" title="Сообщение отправлено менеджером непосредственно в MAX">
+                                из MAX
+                            </div>
+                        )}
                         <div className="text-[14.5px] leading-[20px] whitespace-pre-wrap text-[#000] relative">
                             {getRenderedMessageText(msg)}
                             <span className={`inline-block h-[10px] ${durableMaxStatus ? 'w-[155px]' : (msg.status === 'failed' && isOutbound ? 'w-[105px]' : 'w-[52px]')}`} />
