@@ -35,7 +35,11 @@ function providerPeerUserId(chat, myUserId) {
     ? Object.keys(chat.participants)
     : []
   const owner = String(myUserId || '')
-  if (owner && !participants.includes(owner)) return null
+  const declaredOwner = /^\d{9,15}$/.test(String(chat.owner || ''))
+    ? String(chat.owner)
+    : null
+  if (owner && declaredOwner && declaredOwner !== owner) return null
+  if (owner && !declaredOwner && !participants.includes(owner)) return null
   const peers = participants
     .map(String)
     .filter(value => value !== owner && /^\d{9,15}$/.test(value))

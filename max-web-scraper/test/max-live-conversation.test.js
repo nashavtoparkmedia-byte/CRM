@@ -100,6 +100,11 @@ test('dialog identity resolves only the one non-owner participant', () => {
   }, OWNER_USER_ID), PROVIDER_USER_ID)
   assert.equal(providerPeerUserId({
     type: 'DIALOG',
+    owner: OWNER_USER_ID,
+    participants: { '42': 0, [PROVIDER_USER_ID]: {} },
+  }, OWNER_USER_ID), PROVIDER_USER_ID)
+  assert.equal(providerPeerUserId({
+    type: 'DIALOG',
     participants: { [PROVIDER_USER_ID]: {} },
   }, OWNER_USER_ID), null)
   assert.equal(providerPeerUserId({

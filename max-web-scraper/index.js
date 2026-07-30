@@ -107,7 +107,11 @@ function dialogParticipantUiRouteId(chatId) {
   if (!participants.length) return null
 
   const myId = String(transport?._myUserId || '')
-  if (myId && !participants.includes(myId)) return null
+  const declaredOwner = /^\d{9,15}$/.test(String(chat.owner || ''))
+    ? String(chat.owner)
+    : null
+  if (myId && declaredOwner && declaredOwner !== myId) return null
+  if (myId && !declaredOwner && !participants.includes(myId)) return null
 
   const otherParticipants = participants
     .filter(id => id && String(id) !== myId)
@@ -6272,34 +6276,40 @@ app.post('/v1/personal-max/history/snapshot', async (req, res) => {
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {}
     const accountId = String(body.accountId || '')
-    const protocolChatId = normalizeMaxChatId(body.protocolChatId)
-    const route = resolveUiRouteIdForChat(protocolChatId)
-    const providerUserId = dialogPeerProviderUserId(protocolChatId)
+    const protocolChatId = String(body.protocolChatId || '')
+    const requestedUiRouteId = String(body.uiRouteId || '')
+    const requestedProviderUserId = String(body.providerUserId || '')
     if (!accountId || accountId !== String(process.env.MAX_PERSONAL_ACCOUNT_ID || '')) {
       return res.status(409).json({ error: 'account_mismatch' })
     }
-    if (String(body.protocolChatId || '') !== protocolChatId
-      || String(body.uiRouteId || '') !== String(route.uiRouteId)
-      || String(body.providerUserId || '') !== String(providerUserId || '')) {
+    if (!/^\d{11,15}$/.test(protocolChatId)
+      || !/^\d{1,10}$/.test(requestedUiRouteId)
+      || BigInt.asUintN(32, BigInt(protocolChatId)).toString() !== requestedUiRouteId
+      || !/^\d{9,15}$/.test(requestedProviderUserId)
+      || requestedProviderUserId === String(transport._myUserId || '')) {
       return res.status(409).json({ error: 'route_or_participant_mismatch' })
     }
     const lookup = await new MaxWebReplyBridge(page).readCandidates(
       protocolChatId,
       {},
-      { uiChatId: route.uiRouteId },
+      { uiChatId: requestedUiRouteId },
     )
+    const discoveredProviderUserId = dialogPeerProviderUserId(protocolChatId)
+    if (discoveredProviderUserId && discoveredProviderUserId !== requestedProviderUserId) {
+      return res.status(409).json({ error: 'route_or_participant_mismatch' })
+    }
     const profile = body.includeProfile === true
-      ? await scrapeDomPeerIdentity(route.uiRouteId, {
+      ? await scrapeDomPeerIdentity(requestedUiRouteId, {
           forcePhone: true,
           protocolChatId,
-          providerIdentityId: providerUserId,
+          providerIdentityId: requestedProviderUserId,
         })
       : {}
     const snapshot = buildProviderHistorySnapshot({
       accountId,
       protocolChatId,
-      uiRouteId: route.uiRouteId,
-      providerUserId,
+      uiRouteId: requestedUiRouteId,
+      providerUserId: requestedProviderUserId,
       ownerUserId: transport._myUserId,
       phone: profile.phone || cachedPhoneForChatId(protocolChatId),
       phoneEvidence: profile.phoneEvidence || cachedPhoneEvidenceForChatId(protocolChatId),
