@@ -2983,7 +2983,16 @@ async function forwardDomCandidate(chatId, uiRouteId, latest, reason = 'manual',
   }
   const isOutgoingCandidate = Boolean(latest.isOutgoing || (latest.viewportW && latest.x > latest.viewportW * 0.55))
   if (isOutgoingCandidate && !options.includeOutgoing) {
-    return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW }
+    let providerMessageId = null
+    if (reason === 'manual_debug' && latest.text) {
+      const exact = await new MaxWebReplyBridge(page).resolveProviderId(
+        chatId,
+        { text: latest.text, direction: 'outbound' },
+        { uiChatId: uiRouteId },
+      ).catch(() => null)
+      if (isRealMaxMessageId(exact?.providerMessageId)) providerMessageId = exact.providerMessageId
+    }
+    return { skipped: 'outgoing_side', text: latest.text, x: latest.x, viewportW: latest.viewportW, providerMessageId }
   }
   if (isOutgoingCandidate && matchesRecentCrmOutboundText(chatId, uiRouteId, latest.text)) {
     return { skipped: 'crm_outbound_already_recorded', text: latest.text }
@@ -5904,7 +5913,7 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
   send: async request => enqueueSend(() => sendProviderConfirmedUiText({
     request,
     sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
-    startProviderAck: ({ protocolChatId, text }) => waitForUiSendAck(transport, 30_000, {
+    startProviderAck: ({ protocolChatId, text }) => waitForUiSendAck(transport, 12_000, {
       chatId: protocolChatId,
       text,
     }),

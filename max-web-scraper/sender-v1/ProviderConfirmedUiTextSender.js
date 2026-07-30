@@ -54,7 +54,32 @@ async function sendProviderConfirmedUiText(options) {
   try {
     storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt })
   } catch {}
-  const providerMessageId = isRealProviderMessageId(storeId) ? String(storeId) : await ackPromise
+  if (isRealProviderMessageId(storeId)) {
+    return Object.freeze({
+      outcome: 'PROVIDER_CONFIRMED',
+      safeCode: 'EXACT_PROVIDER_CONFIRMATION',
+      physicalProviderCalled: true,
+      providerMessageId: String(storeId),
+    })
+  }
+
+  const echoId = await ackPromise
+  if (isRealProviderMessageId(echoId)) {
+    return Object.freeze({
+      outcome: 'PROVIDER_CONFIRMED',
+      safeCode: 'EXACT_PROVIDER_CONFIRMATION',
+      physicalProviderCalled: true,
+      providerMessageId: String(echoId),
+    })
+  }
+
+  // MAX Web can materialize the durable provider row after the own-echo wait
+  // starts. Re-read the store once after that bounded wait; never repeat the UI
+  // action and never promote a DOM-only identifier.
+  try {
+    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt })
+  } catch {}
+  const providerMessageId = isRealProviderMessageId(storeId) ? String(storeId) : null
   if (!isRealProviderMessageId(providerMessageId)) return unknown('EXACT_PROVIDER_ID_MISSING')
   return Object.freeze({
     outcome: 'PROVIDER_CONFIRMED',

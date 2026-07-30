@@ -48,6 +48,25 @@ test('accepts an exact own echo when the provider store has not materialized yet
   assert.equal(sends, 1)
 })
 
+test('rechecks the provider store after a bounded empty own-echo wait without another UI action', async () => {
+  let sends = 0
+  let storeReads = 0
+  const result = await sendProviderConfirmedUiText({
+    request: request(),
+    startProviderAck: () => Promise.resolve(null),
+    sendViaUi: async () => { sends += 1; return true },
+    resolveProviderMessageId: async () => {
+      storeReads += 1
+      return storeReads === 2 ? 'd30100000000000000cc' : null
+    },
+    isRealProviderMessageId: exactId,
+  })
+  assert.equal(result.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(result.providerMessageId, 'd30100000000000000cc')
+  assert.equal(storeReads, 2)
+  assert.equal(sends, 1)
+})
+
 test('an ambiguous post-action result is UNKNOWN and never retries the UI action', async () => {
   let sends = 0
   const result = await sendProviderConfirmedUiText({
