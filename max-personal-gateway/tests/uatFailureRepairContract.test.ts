@@ -26,13 +26,34 @@ test('fresh backup and default-off precede every repair mutation', () => {
   assert.match(productionSource, /if \[\[ \$status -ne 0 && \$production_mutated == true \]\]; then[\s\S]*default_off_now/u)
 })
 
-test('bounded canary contains the exact six outbound and four inbound texts', () => {
+test('bounded canary contains the exact outbound and historical inbound evidence texts', () => {
   for (const text of [
     'PMAX UAT FIX 1', 'Одинаковое сообщение', 'Сообщение 1', 'Сообщение 2', 'Сообщение 3',
     'Ответ из MAX', 'Входящее 1', 'Входящее 2', 'Входящее 3',
   ]) assert.ok(productionSource.includes(text), `missing exact canary text: ${text}`)
   assert.match(productionSource, /outbound_gate == '6\|6\|6\|6\|6'/u)
-  assert.match(productionSource, /inbound_gate == '4\|4\|4\|0'/u)
+  assert.match(productionSource, /incident_inbound_gate == '4\|4\|4\|3\|1\|1'/u)
+  assert.match(productionSource, /new_inbound_before_restart == 0/u)
+  assert.match(productionSource, /new_inbound_after_restart == 0/u)
+  assert.doesNotMatch(productionSource, /INBOUND_WAIT_SECONDS/u)
+})
+
+test('production runner proves restart, rollback and no-send roll-forward identity stability', () => {
+  assert.match(productionSource, /max-personal-gateway max-web-scraper/u)
+  assert.match(productionSource, /contact_projection_hash_before/u)
+  assert.match(productionSource, /contact_projection_hash_after/u)
+  assert.match(productionSource, /actual_default_off_gate/u)
+  assert.match(productionSource, /actual_operational_gate/u)
+  assert.match(productionSource, /rollback_identity_hash_before/u)
+  assert.match(productionSource, /rollforward_identity_hash_after/u)
+  assert.match(productionSource, /final_queue_gate_after_rollforward == '0\|0'/u)
+})
+
+test('fresh run refuses orphaned canary operations before any new provider action', () => {
+  assert.match(productionSource, /PREVIOUS_RUN_DID_NOT_CROSS_PREFLIGHT/u)
+  assert.match(productionSource, /\.commands == 0 and \.dispatches == 0 and \.attempts == 0/u)
+  assert.match(productionSource, /\.providerConfirmed == 0 and \.providerActions == 0/u)
+  assert.match(productionSource, /safeToStartFresh:true/u)
 })
 
 test('ledger repair is exact-scope, evidence preserving, and provider-action free', () => {

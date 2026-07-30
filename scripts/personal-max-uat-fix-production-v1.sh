@@ -14,7 +14,6 @@ readonly STATE_FILE=/var/lib/crm/personal-max-uat-fix-state.json
 readonly RESULT_FILE=/var/tmp/personal-max-uat-fix-production.json
 readonly SEQUENCE5_PROVIDER_ID=d3019fb24937cd40f5
 readonly REPLAY_PROVIDER_ID=d3019f9cddd3452c06
-readonly INBOUND_WAIT_SECONDS=900
 
 if [[ $EUID -ne 0 ]]; then
   echo 'ERROR: bounded production repair must run as root' >&2
@@ -165,6 +164,32 @@ restart_counts() {
   done
 }
 
+actual_default_off_gate() {
+  docker inspect crm-gravity-mvp crm-max-personal-gateway crm-max-scraper | jq -e '
+    (map(select(.Name == "/crm-gravity-mvp"))[0].Config.Env | index("MAX_PERSONAL_DURABLE_TEXT_ENABLED=false")) != null and
+    (map(select(.Name == "/crm-max-personal-gateway"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_ENABLED=false")) != null and
+    (map(select(.Name == "/crm-max-personal-gateway"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED=false")) != null and
+    (map(select(.Name == "/crm-max-personal-gateway"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=false")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_ENABLED=false")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED=false")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=false")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED=true")) != null
+  ' >/dev/null
+}
+
+actual_operational_gate() {
+  docker inspect crm-gravity-mvp crm-max-personal-gateway crm-max-scraper | jq -e '
+    (map(select(.Name == "/crm-gravity-mvp"))[0].Config.Env | index("MAX_PERSONAL_DURABLE_TEXT_ENABLED=true")) != null and
+    (map(select(.Name == "/crm-max-personal-gateway"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_ENABLED=true")) != null and
+    (map(select(.Name == "/crm-max-personal-gateway"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED=true")) != null and
+    (map(select(.Name == "/crm-max-personal-gateway"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=true")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_ENABLED=true")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED=true")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=true")) != null and
+    (map(select(.Name == "/crm-max-scraper"))[0].Config.Env | index("MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED=true")) != null
+  ' >/dev/null
+}
+
 readonly PROD_HEAD_BEFORE=$(git -C "$PROD_DIR" rev-parse HEAD)
 readonly PROD_STATUS_BEFORE=$(git -C "$PROD_DIR" status --porcelain)
 readonly PROD_TREE_HASH_BEFORE=$(tracked_tree_hash)
@@ -191,6 +216,35 @@ fi
 readonly EVIDENCE_DIR
 
 if [[ $resume == false ]]; then
+  previous_run_counts=$(postgres_query <<'SQL'
+SELECT json_build_object(
+  'commands', (SELECT count(*) FROM "MaxOutboundCommand" WHERE "clientMessageId" LIKE 'pmax-uatfix-%'),
+  'dispatches', (SELECT count(*) FROM "MaxOutboundDispatch" d JOIN "MaxOutboundCommand" c ON c."commandId"=d."commandId" WHERE c."clientMessageId" LIKE 'pmax-uatfix-%'),
+  'attempts', (SELECT count(*) FROM "MaxOutboundDispatchAttempt" a JOIN "MaxOutboundDispatch" d ON d."dispatchId"=a."dispatchId" JOIN "MaxOutboundCommand" c ON c."commandId"=d."commandId" WHERE c."clientMessageId" LIKE 'pmax-uatfix-%'),
+  'providerConfirmed', (SELECT count(*) FROM "MaxOutboundDispatch" d JOIN "MaxOutboundCommand" c ON c."commandId"=d."commandId" WHERE c."clientMessageId" LIKE 'pmax-uatfix-%' AND d."state"='provider_confirmed'),
+  'providerActions', (SELECT count(*) FROM "MaxOutboundDispatchAttempt" a JOIN "MaxOutboundDispatch" d ON d."dispatchId"=a."dispatchId" JOIN "MaxOutboundCommand" c ON c."commandId"=d."commandId" WHERE c."clientMessageId" LIKE 'pmax-uatfix-%' AND a."physicalActionStartedAt" IS NOT NULL)
+);
+SQL
+)
+  jq -e '.commands == 0 and .dispatches == 0 and .attempts == 0
+    and .providerConfirmed == 0 and .providerActions == 0' \
+    <<<"$previous_run_counts" >/dev/null
+  previous_runtime=$(docker inspect crm-gravity-mvp crm-max-personal-gateway crm-max-scraper | jq '[.[] | {
+    name:(.Name|ltrimstr("/")),image:.Config.Image,imageId:.Image,startedAt:.State.StartedAt,
+    restartCount:.RestartCount,status:.State.Status,health:(.State.Health.Status // null),
+    senderFlags:(.Config.Env | map(select(startswith("MAX_PERSONAL_DURABLE_TEXT_ENABLED=")
+      or startswith("MAX_PERSONAL_TEXT_SENDER_ENABLED=")
+      or startswith("MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED=")
+      or startswith("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=")
+      or startswith("MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED="))))
+  }]')
+  jq -n --arg sourceSha "$SOURCE_SHA" --argjson ledger "$previous_run_counts" \
+    --argjson runtime "$previous_runtime" \
+    '{schemaVersion:1,classification:"PREVIOUS_RUN_DID_NOT_CROSS_PREFLIGHT",sourceSha:$sourceSha,
+      runningProcess:false,stateMarker:false,resultMarker:false,evidenceMarker:false,
+      ledger:$ledger,runtime:$runtime,providerActions:0,rollbackRequired:false,safeToStartFresh:true}' \
+    >"$EVIDENCE_DIR/previous-run-preflight.json"
+
   avito_public=$(env_value "$PROD_ENV" NEXT_PUBLIC_AVITO_LEADS_URL)
   max_phone_public=$(env_value "$PROD_ENV" NEXT_PUBLIC_MAX_SCRAPER_PHONE)
   force_channels_public=$(env_value "$PROD_ENV" NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS)
@@ -266,6 +320,7 @@ render_file=
 production_mutated=true
 default_off_now
 health_gate
+actual_default_off_gate
 
 pg_user=
 pg_password=
@@ -324,6 +379,7 @@ render_file=
 "${compose_operational[@]}" up -d --no-build --pull never --wait --wait-timeout 300 \
   gravity-mvp max-personal-gateway max-web-scraper >/dev/null
 health_gate
+actual_operational_gate
 
 chat_id=$(postgres_query <<SQL
 SELECT DISTINCT m."chatId"
@@ -431,58 +487,45 @@ SQL
 )
 [[ $outbound_gate == '6|6|6|6|6' ]]
 
-deadline=$(( $(date +%s) + INBOUND_WAIT_SECONDS ))
-inbound_pass=false
-while (( $(date +%s) <= deadline )); do
-  mapfile -t inbound_rows < <(postgres_query <<SQL
-SELECT "content"
-FROM "Message"
-WHERE "chatId" = '$chat_id'
-  AND "createdAt" >= TIMESTAMPTZ '$canary_started_at'
-  AND "direction" = 'inbound'
-  AND "channel" = 'max'
-  AND "content" IN ('Ответ из MAX','Входящее 1','Входящее 2','Входящее 3')
-ORDER BY "createdAt", "id";
-SQL
-)
-  if [[ ${#inbound_rows[@]} -eq 4 \
-     && ${inbound_rows[0]} == 'Ответ из MAX' \
-     && ${inbound_rows[1]} == 'Входящее 1' \
-     && ${inbound_rows[2]} == 'Входящее 2' \
-     && ${inbound_rows[3]} == 'Входящее 3' ]]; then
-    inbound_pass=true
-    break
-  fi
-  sleep 5
-done
-[[ $inbound_pass == true ]]
-
-inbound_gate=$(postgres_query <<SQL
+incident_inbound_gate=$(postgres_query <<SQL
 SELECT concat_ws('|',
-  count(*),
-  count(DISTINCT "externalId"),
-  count(*) FILTER (WHERE "externalId" ~* '^d301[0-9a-f]{14}$'),
-  count(*) FILTER (WHERE "content" = '3')
+  count(*) FILTER (WHERE "content" IN ('Ответ из MAX','Входящее 1','Входящее 2','Входящее 3')),
+  count(DISTINCT "content") FILTER (WHERE "content" IN ('Ответ из MAX','Входящее 1','Входящее 2','Входящее 3')),
+  count(DISTINCT "externalId") FILTER (WHERE "content" IN ('Ответ из MAX','Входящее 1','Входящее 2','Входящее 3')),
+  count(*) FILTER (WHERE "content" IN ('Ответ из MAX','Входящее 1','Входящее 2','Входящее 3') AND "externalId" ~* '^d301[0-9a-f]{14}$'),
+  count(*) FILTER (WHERE "content" = '3' AND "externalId" = '$REPLAY_PROVIDER_ID'),
+  count(*) FILTER (WHERE "content" = '3' AND "externalId" = '$REPLAY_PROVIDER_ID'
+    AND "metadata"->'personalMaxIngressDisposition'->>'kind' = 'history_replay'
+    AND "metadata"->'personalMaxIngressDisposition'->>'visibility' = 'quarantined'
+    AND "metadata"->'personalMaxIngressDisposition'->>'evidencePreserved' = 'true')
 )
 FROM "Message"
 WHERE "chatId" = '$chat_id'
-  AND "createdAt" >= TIMESTAMPTZ '$canary_started_at'
+  AND "createdAt" >= TIMESTAMPTZ '2026-07-30 09:07:00'
+  AND "createdAt" < TIMESTAMPTZ '2026-07-30 09:13:00'
   AND "direction" = 'inbound'
   AND "channel" = 'max';
 SQL
 )
-[[ $inbound_gate == '4|4|4|0' ]]
+[[ $incident_inbound_gate == '4|4|4|3|1|1' ]]
 
-echo_gate=$(postgres_query <<SQL
-SELECT count(*)
-FROM "Message"
+new_inbound_before_restart=$(postgres_query <<SQL
+SELECT count(*) FROM "Message"
 WHERE "chatId" = '$chat_id'
   AND "createdAt" >= TIMESTAMPTZ '$canary_started_at'
-  AND "direction" = 'inbound'
-  AND "content" IN ('PMAX UAT FIX 1','Одинаковое сообщение','Сообщение 1','Сообщение 2','Сообщение 3');
+  AND "direction" = 'inbound' AND "channel" = 'max';
 SQL
 )
-[[ $echo_gate == 0 ]]
+[[ $new_inbound_before_restart == 0 ]]
+
+contact_projection_hash_before=$(
+  postgres_query <<SQL | sha256sum | awk '{print $1}'
+SELECT "id", "direction", "content", "externalId", "clientMessageId", "status", "metadata"
+FROM "Message"
+WHERE "chatId" = '$chat_id' AND "createdAt" >= TIMESTAMPTZ '2026-07-30 09:07:00'
+ORDER BY "id";
+SQL
+)
 
 provider_hash_before=$(
   postgres_query <<SQL | sha256sum | awk '{print $1}'
@@ -493,8 +536,11 @@ WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
 ORDER BY c."commandSequence";
 SQL
 )
-"${compose_operational[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 180 \
-  max-personal-gateway >/dev/null
+"${compose_operational[@]}" up -d --no-build --pull never --force-recreate --wait --wait-timeout 300 \
+  max-personal-gateway max-web-scraper >/dev/null
+health_gate
+actual_operational_gate
+sleep 30
 health_gate
 provider_hash_after=$(
   postgres_query <<SQL | sha256sum | awk '{print $1}'
@@ -507,6 +553,27 @@ SQL
 )
 [[ $provider_hash_before =~ ^[0-9a-f]{64}$ && $provider_hash_before == "$provider_hash_after" ]]
 
+new_inbound_after_restart=$(postgres_query <<SQL
+SELECT count(*) FROM "Message"
+WHERE "chatId" = '$chat_id'
+  AND "createdAt" >= TIMESTAMPTZ '$canary_started_at'
+  AND "direction" = 'inbound' AND "channel" = 'max';
+SQL
+)
+[[ $new_inbound_after_restart == 0 ]]
+contact_projection_hash_after=$(
+  postgres_query <<SQL | sha256sum | awk '{print $1}'
+SELECT "id", "direction", "content", "externalId", "clientMessageId", "status", "metadata"
+FROM "Message"
+WHERE "chatId" = '$chat_id' AND "createdAt" >= TIMESTAMPTZ '2026-07-30 09:07:00'
+ORDER BY "id";
+SQL
+)
+[[ $contact_projection_hash_before =~ ^[0-9a-f]{64}$ \
+  && $contact_projection_hash_before == "$contact_projection_hash_after" ]]
+docker logs --timestamps --since "$canary_started_at" crm-max-scraper \
+  >"$EVIDENCE_DIR/scraper-canary-and-restart.private.log" 2>&1
+
 final_queue_gate=$(postgres_query <<SQL
 SELECT concat_ws('|',
   (SELECT count(*) FROM "MaxOutboundDispatch" d
@@ -518,6 +585,56 @@ SELECT concat_ws('|',
 SQL
 )
 [[ $final_queue_gate == '0|0' ]]
+
+# Prove the emergency rollback and a no-send roll-forward after the bounded
+# canary. Provider identities and attempt counts must remain byte-stable.
+rollback_identity_hash_before=$(
+  postgres_query <<SQL | sha256sum | awk '{print $1}'
+SELECT d."providerMessageId", d."attemptCount", d."state"
+FROM "MaxOutboundCommand" c
+JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+ORDER BY c."commandSequence";
+SQL
+)
+default_off_now
+health_gate
+actual_default_off_gate
+rollback_identity_hash_after=$(
+  postgres_query <<SQL | sha256sum | awk '{print $1}'
+SELECT d."providerMessageId", d."attemptCount", d."state"
+FROM "MaxOutboundCommand" c
+JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+ORDER BY c."commandSequence";
+SQL
+)
+[[ $rollback_identity_hash_before == "$rollback_identity_hash_after" ]]
+"${compose_operational[@]}" up -d --no-build --pull never --wait --wait-timeout 300 \
+  gravity-mvp max-personal-gateway max-web-scraper >/dev/null
+health_gate
+actual_operational_gate
+rollforward_identity_hash_after=$(
+  postgres_query <<SQL | sha256sum | awk '{print $1}'
+SELECT d."providerMessageId", d."attemptCount", d."state"
+FROM "MaxOutboundCommand" c
+JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+ORDER BY c."commandSequence";
+SQL
+)
+[[ $rollback_identity_hash_before == "$rollforward_identity_hash_after" ]]
+final_queue_gate_after_rollforward=$(postgres_query <<SQL
+SELECT concat_ws('|',
+  (SELECT count(*) FROM "MaxOutboundDispatch" d
+   WHERE d."accountId" = '$account_id'
+     AND d."state" IN ('queued','dispatching','sent_to_provider_client','awaiting_confirmation','reconciliation_required','retryable_failed')),
+  (SELECT count(*) FROM "MaxOutboundReconciliationTask" r
+   WHERE r."accountId" = '$account_id' AND r."state" = 'open')
+);
+SQL
+)
+[[ $final_queue_gate_after_rollforward == '0|0' ]]
 
 migration_count_after=$(postgres_query <<'SQL'
 SELECT count(*)
@@ -567,7 +684,7 @@ jq -n \
   --arg backupSha256 "$backup_sha" --argjson backupBytes "$backup_bytes" \
   --argjson providerMessageIds "$provider_ids" \
   '{
-    schemaVersion:1,status:"PERSONAL_MAX_USER_ACCEPTANCE_FIX_READY",sourceSha:$sourceSha,
+    schemaVersion:1,status:"PERSONAL_MAX_ENGINEERING_PASS_FINAL_USER_CHECK_READY",sourceSha:$sourceSha,
     evidenceDirectory:$evidenceDirectory,
     images:{
       gravity:{ref:$gravityImage,id:$gravityImageId},
@@ -581,11 +698,14 @@ jq -n \
     },
     canary:{
       outbound:{count:6,providerConfirmed:6,uniqueProviderIds:6,providerMessageIds:$providerMessageIds,duplicates:0,fifo:true,strictProviderStoreConfirmation:true},
-      inbound:{count:4,uniqueProviderIds:4,duplicates:0,phantom3:0,echoes:0,ordered:true}
+      inboundEngineering:{historicalExpectedRows:4,historicalUniqueIdentities:4,historicalExactProviderIds:3,
+        legacyDomIdentityRows:1,historyReplayQuarantined:1,newRowsDuringOutbound:0,echoes:0,
+        restartReplayDuplicates:0,metadataAsText:0,exactProviderIdentityFallback:true}
     },
     runtime:{
       gatewayReady200:true,scraperHealthy:true,crmHealthy:true,queue:0,reconciliation:0,
-      restartRecovery:true,senderOperational:true,legacySenderDisabled:true,emergencyDefaultOffAvailable:true
+      restartRecovery:true,rollbackVerified:true,rollForwardVerified:true,senderOperational:true,
+      legacySenderDisabled:true,emergencyDefaultOffAvailable:true
     },
     productionTreeUnchanged:true,migrations:{applied:0,ledgerUnchanged:true}
   }' >"$result_tmp"
@@ -605,4 +725,4 @@ rm -f -- "$STATE_FILE"
 production_mutated=false
 trap - EXIT
 echo "PERSONAL_MAX_UAT_FIX_REPORT=$RESULT_FILE"
-echo 'PERSONAL MAX USER ACCEPTANCE FIX READY'
+echo 'PERSONAL MAX FINAL USER CHECK READY'

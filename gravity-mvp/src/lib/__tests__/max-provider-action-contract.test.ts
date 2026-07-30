@@ -32,7 +32,7 @@ describe('MAX outbound provider action contract', () => {
         process.env.MAX_PERSONAL_ACCOUNT_ID = 'account-a'
         process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET = 'command-test-secret-0000000000000000000000'
         const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-            success: true, externalId: 'provider-exact-1', chatId: '900001',
+            success: true, externalId: 'd301abcdef01234567', chatId: '900001',
             deliveryConfirmed: true, deliveryStatus: 'accepted_by_max', dispatchId: 'dispatch-1',
         }), { status: 200 }))
         vi.stubGlobal('fetch', fetchMock)
