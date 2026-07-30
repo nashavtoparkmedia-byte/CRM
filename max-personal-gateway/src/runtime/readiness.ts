@@ -28,8 +28,8 @@ export interface ReadinessSnapshot {
   readonly gates: Readonly<Record<string, boolean>>
   readonly browserOwnersExpected: 1
   readonly browserOwnersObserved: number | null
-  readonly senderModulesInactive: true
-  readonly providerActionsInactive: true
+  readonly senderModulesInactive: boolean
+  readonly providerActionsInactive: boolean
 }
 
 export function buildReadiness(
@@ -45,14 +45,14 @@ export function buildReadiness(
       gates: {
         configValid: runtime.configValid,
         featuresDormant: true,
-        senderModulesInactive: true,
-        providerActionsInactive: true,
+        senderRuntimeModeDeclared: true,
+        providerActionModeDeclared: true,
         browserOwnerInvariant: config.browserOwnersExpected === 1,
       },
       browserOwnersExpected: config.browserOwnersExpected,
       browserOwnersObserved: config.browserOwnersObserved,
-      senderModulesInactive: true,
-      providerActionsInactive: true,
+      senderModulesInactive: config.senderModulesInactive,
+      providerActionsInactive: config.providerActionsInactive,
     }
   }
   const producer = runtime.producerHealth
@@ -78,8 +78,8 @@ export function buildReadiness(
     criticalRegressionsZero: metrics.counter('criticalRegressions') === 0,
     wrongAccountDifferencesZero: metrics.counter('wrongAccountDifferences') === 0,
     browserOwnerInvariant: config.browserOwnersExpected === 1,
-    senderModulesInactive: config.senderModulesInactive,
-    providerActionsInactive: config.providerActionsInactive,
+    senderRuntimeModeDeclared: typeof config.senderModulesInactive === 'boolean',
+    providerActionModeDeclared: typeof config.providerActionsInactive === 'boolean',
     workerQueueHealthy: !runtime.workerQueueCritical,
   }
   const ready = Object.values(gates).every(Boolean)
@@ -89,7 +89,7 @@ export function buildReadiness(
     gates,
     browserOwnersExpected: config.browserOwnersExpected,
     browserOwnersObserved: config.browserOwnersObserved,
-    senderModulesInactive: true,
-    providerActionsInactive: true,
+    senderModulesInactive: config.senderModulesInactive,
+    providerActionsInactive: config.providerActionsInactive,
   }
 }

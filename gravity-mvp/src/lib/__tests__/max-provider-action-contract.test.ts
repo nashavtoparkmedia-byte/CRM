@@ -19,7 +19,70 @@ describe('MAX outbound provider action contract', () => {
     })
 
     afterEach(() => {
+        delete process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED
+        delete process.env.MAX_PERSONAL_GATEWAY_URL
+        delete process.env.MAX_PERSONAL_ACCOUNT_ID
+        delete process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET
         vi.unstubAllGlobals()
+    })
+
+    it('routes an enabled plain-text command only through the authenticated durable gateway', async () => {
+        process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED = 'true'
+        process.env.MAX_PERSONAL_GATEWAY_URL = 'http://max-personal-gateway:8080'
+        process.env.MAX_PERSONAL_ACCOUNT_ID = 'account-a'
+        process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET = 'command-test-secret-0000000000000000000000'
+        const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            success: true, externalId: 'provider-exact-1', chatId: '900001',
+            deliveryConfirmed: true, deliveryStatus: 'accepted_by_max', dispatchId: 'dispatch-1',
+        }), { status: 200 }))
+        vi.stubGlobal('fetch', fetchMock)
+
+        const result = await sendMaxPersonalMessage('900001', 'Durable text', undefined, undefined, undefined, 'crm-message-1')
+
+        expect(result.deliveryConfirmed).toBe(true)
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        const [url, options] = fetchMock.mock.calls[0]
+        expect(String(url)).toBe('http://max-personal-gateway:8080/v1/personal-max/commands/text')
+        expect(options.headers['x-max-command-signature']).toMatch(/^[0-9a-f]{64}$/)
+        expect(JSON.parse(options.body)).toMatchObject({ protocolChatId: '900001', clientMessageId: 'crm-message-1' })
+    })
+
+    it('rejects credentialed or non-exact durable gateway bindings before network I/O', async () => {
+        process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED = 'true'
+        process.env.MAX_PERSONAL_ACCOUNT_ID = 'account-a'
+        process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET = 'command-test-secret-0000000000000000000000'
+        const fetchMock = vi.fn()
+        vi.stubGlobal('fetch', fetchMock)
+        for (const unsafeUrl of [
+            'http://user:password@max-personal-gateway:8080',
+            'http://max-personal-gateway:8080/unexpected',
+            'http://max-personal-gateway:8081',
+            'https://max-personal-gateway:8080',
+        ]) {
+            process.env.MAX_PERSONAL_GATEWAY_URL = unsafeUrl
+            await expect(sendMaxPersonalMessage('900001', 'Must not leave CRM', undefined, undefined, undefined, 'binding-test'))
+                .rejects.toThrow('Personal MAX durable sender binding is invalid')
+        }
+        expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('fails closed on malformed or proven pre-action gateway responses', async () => {
+        process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED = 'true'
+        process.env.MAX_PERSONAL_GATEWAY_URL = 'http://max-personal-gateway:8080'
+        process.env.MAX_PERSONAL_ACCOUNT_ID = 'account-a'
+        process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET = 'command-test-secret-0000000000000000000000'
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), { status: 200 }))
+            .mockResolvedValueOnce(new Response(JSON.stringify({
+                success: false, externalId: null, chatId: '900001', deliveryConfirmed: false,
+                deliveryStatus: 'retryable_failed', dispatchId: 'dispatch-pre-action',
+            }), { status: 200 }))
+        vi.stubGlobal('fetch', fetchMock)
+
+        await expect(sendMaxPersonalMessage('900001', 'Malformed', undefined, undefined, undefined, 'invalid-response'))
+            .rejects.toThrow('invalid response')
+        await expect(sendMaxPersonalMessage('900001', 'Pre-action refused', undefined, undefined, undefined, 'pre-action-refused'))
+            .rejects.toThrow('failed before confirmation')
     })
 
     it('sends repeated equal text as two distinct provider requests', async () => {

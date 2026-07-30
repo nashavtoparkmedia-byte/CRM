@@ -59,6 +59,7 @@ CREATE TABLE "MaxOutboundShadowPlan" (
 );
 
 CREATE UNIQUE INDEX "MaxOutboundShadowPlan_command_key" ON "MaxOutboundShadowPlan"("commandId");
+CREATE UNIQUE INDEX "MaxOutboundShadowPlan_command_identity_key" ON "MaxOutboundShadowPlan"("accountId", "conversationKey", "commandId", "commandSequence");
 CREATE UNIQUE INDEX "MaxOutboundShadowPlan_account_idempotency_key" ON "MaxOutboundShadowPlan"("accountId", "idempotencyKey");
 CREATE INDEX "MaxOutboundShadowPlan_account_conversation_sequence_idx" ON "MaxOutboundShadowPlan"("accountId", "conversationKey", "commandSequence");
 CREATE INDEX "MaxOutboundShadowPlan_account_decision_idx" ON "MaxOutboundShadowPlan"("accountId", "wouldSend", "refusalReason");

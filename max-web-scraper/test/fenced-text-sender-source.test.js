@@ -11,6 +11,11 @@ const senderSource = readdirSync(senderRoot).map(name => readFileSync(path.join(
 const gatewayTypes = readFileSync(path.join(repositoryRoot, 'max-personal-gateway/src/sender/types.ts'), 'utf8')
 const gatewayRequest = readFileSync(path.join(repositoryRoot, 'max-personal-gateway/src/sender/GatewayTextSenderRequest.ts'), 'utf8')
 const runtime = readFileSync(path.join(repositoryRoot, 'max-web-scraper/index.js'), 'utf8')
+const physicalBoundary = readFileSync(path.join(senderRoot, 'PhysicalTextSenderBoundary.js'), 'utf8')
+const physicalRuntime = readFileSync(path.join(senderRoot, 'runtime.js'), 'utf8')
+const durableStore = readFileSync(path.join(senderRoot, 'DurableSenderStore.js'), 'utf8')
+const syntheticSource = ['FencedTextSenderBoundary.js', 'SyntheticTextSenderAdapter.js']
+  .map(name => readFileSync(path.join(senderRoot, name), 'utf8')).join('\n')
 const schema = JSON.parse(readFileSync(path.join(repositoryRoot, 'contracts/personal-max-text-sender-v1.schema.json'), 'utf8'))
 
 test('contract endpoint, version, exact route, fence, correlation and deadline are explicit', () => {
@@ -34,10 +39,17 @@ test('outcome enum is exact and never asserts recipient delivery', () => {
   assert.doesNotMatch(gatewayTypes + senderSource, /['"]DELIVERED['"]/)
 })
 
-test('synthetic boundary has no browser, MAX, network, or real provider dependency and runtime is unwired', () => {
-  assert.doesNotMatch(senderSource, /require\(['"][^'"]*(playwright|puppeteer|maxBrowser|TransportInterceptor|SerializedOutboundQueue|providerClient)/i)
-  assert.doesNotMatch(senderSource, /fetch\s*\(|axios|https?\.request|sendText|sendMessage|page\./i)
-  assert.doesNotMatch(runtime, /sender-v1|FencedTextSenderBoundary|\/v1\/personal-max\/send\/text/)
+test('synthetic boundary remains provider-free while physical runtime is exact, private, and has no DOM fallback', () => {
+  assert.doesNotMatch(syntheticSource, /require\(['"][^'"]*(playwright|puppeteer|maxBrowser|TransportInterceptor|SerializedOutboundQueue|providerClient)/i)
+  assert.doesNotMatch(syntheticSource, /fetch\s*\(|axios|https?\.request|sendText|sendMessage|page\./i)
+  assert.match(runtime, /createPhysicalTextSenderRuntime/)
+  assert.match(runtime, /app\.post\('\/v1\/personal-max\/send\/text'/)
+  assert.match(runtime, /transport\.sendFrame\(\s*OP\.SEND_MESSAGE/)
+  assert.match(runtime, /isRealMaxMessageId\(providerMessageId\)/)
+  assert.doesNotMatch(physicalBoundary + physicalRuntime, /playwright|puppeteer|page\.|locator\(|click\(|goto\(|page\.evaluate\(/i)
+  assert.match(physicalRuntime, /max-personal-gateway/)
+  assert.match(physicalRuntime, /\/var\/lib\//)
+  assert.doesNotMatch(physicalRuntime, /https:|0\.0\.0\.0|host\.docker\.internal/)
 })
 
 test('all physical gates default disabled with one-account, one-conversation and small-message limits', () => {
@@ -48,4 +60,7 @@ test('all physical gates default disabled with one-account, one-conversation and
   assert.match(senderSource, /maximumConversations \?\? 1/)
   assert.match(senderSource, /dailyMessageLimit \?\? 3/)
   assert.match(senderSource, /physicalProviderCalls = 0/)
+  for (const marker of ['fsyncSync', 'physical_action_started', 'pending_recoverable', 'unknownOutcomes', 'staleFences']) {
+    assert.match(durableStore, new RegExp(marker))
+  }
 })

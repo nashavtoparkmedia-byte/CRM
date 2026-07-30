@@ -1,4 +1,4 @@
-import { createHash, createHmac } from 'node:crypto'
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { TEXT_SENDER_AUTH_NAMESPACE, TEXT_SENDER_SCHEMA_VERSION } from './types.ts'
 import type { BuildTextSenderRequestInput, TextSenderAuthenticationV1, TextSenderRequestV1 } from './types.ts'
 
@@ -60,4 +60,26 @@ export function signTextSenderRequest(
   const signingInput = `${TEXT_SENDER_AUTH_NAMESPACE}\n${input.keyId}\n${timestamp}\n${input.nonce}\n${bodySha256}`
   const signature = createHmac('sha256', input.secret).update(signingInput).digest('hex')
   return Object.freeze({ namespace: TEXT_SENDER_AUTH_NAMESPACE, keyId: input.keyId, timestamp, nonce: input.nonce, bodySha256, signature })
+}
+
+export function verifyTextSenderAuthentication(
+  request: TextSenderRequestV1,
+  authentication: TextSenderAuthenticationV1,
+  input: { readonly keys: ReadonlyMap<string, Buffer>; readonly now: Date; readonly maximumClockSkewMs: number },
+): boolean {
+  if (authentication?.namespace !== TEXT_SENDER_AUTH_NAMESPACE
+    || typeof authentication.keyId !== 'string' || typeof authentication.timestamp !== 'string'
+    || typeof authentication.nonce !== 'string' || authentication.nonce.length < 1 || authentication.nonce.length > 256
+    || !/^[0-9a-f]{64}$/.test(authentication.bodySha256 || '') || !/^[0-9a-f]{64}$/.test(authentication.signature || '')) return false
+  const timestamp = new Date(authentication.timestamp)
+  if (!Number.isFinite(timestamp.valueOf()) || Math.abs(input.now.valueOf() - timestamp.valueOf()) >= input.maximumClockSkewMs) return false
+  const secret = input.keys.get(authentication.keyId)
+  if (!secret || secret.byteLength < 32) return false
+  const bodySha256 = createHash('sha256').update(canonicalTextSenderBody(request)).digest('hex')
+  if (bodySha256 !== authentication.bodySha256) return false
+  const expected = createHmac('sha256', secret)
+    .update(`${TEXT_SENDER_AUTH_NAMESPACE}\n${authentication.keyId}\n${authentication.timestamp}\n${authentication.nonce}\n${bodySha256}`)
+    .digest()
+  const supplied = Buffer.from(authentication.signature, 'hex')
+  return supplied.byteLength === expected.byteLength && timingSafeEqual(supplied, expected)
 }

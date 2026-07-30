@@ -629,7 +629,9 @@ export class MessageService {
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     maxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered'
+                            : (maxDeliveryStatus === 'failed' ? 'failed'
+                                : (maxDeliveryStatus === 'needs_review' ? 'needs_review' : 'send_requested')),
                         deliveryConfirmed: maxDeliveryConfirmed,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,

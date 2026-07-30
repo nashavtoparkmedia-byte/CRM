@@ -213,6 +213,25 @@ export async function sendMaxPersonalMessage(
     if (!cleanTarget) throw new Error("Invalid target")
 
     try {
+        if (process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED === 'true') {
+            if (quotedMsgId || quotedContext?.text) throw new Error('Personal MAX durable sender currently accepts plain text only')
+            const { sendPersonalMaxDurableText } = await import('@/lib/PersonalMaxGatewayClient')
+            const data = await sendPersonalMaxDurableText({
+                protocolChatId: cleanTarget,
+                text: message,
+                clientMessageId,
+            })
+            if (data.success === false) {
+                throw new Error(`Personal MAX durable sender failed before confirmation: ${data.deliveryStatus}`)
+            }
+            return {
+                success: true,
+                externalId: typeof data.externalId === 'string' ? data.externalId : null,
+                resolvedChatId: typeof data.chatId === 'string' ? data.chatId : cleanTarget,
+                deliveryConfirmed: data.deliveryConfirmed === true,
+                deliveryStatus: typeof data.deliveryStatus === 'string' ? data.deliveryStatus : null,
+            }
+        }
         console.log(`[CRM] Sending MAX message: target=${cleanTarget}, name=${name || 'N/A'}`)
         const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
         const response = await fetch(`${maxScraperUrl}/send-message`, {

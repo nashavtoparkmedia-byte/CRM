@@ -123,4 +123,4 @@ class FencedTextSenderBoundary {
   }
 }
 
-module.exports = { FencedTextSenderBoundary, InMemorySenderIdempotencyLedger, OUTCOMES }
+module.exports = { FencedTextSenderBoundary, InMemorySenderIdempotencyLedger, OUTCOMES, validateRequest }

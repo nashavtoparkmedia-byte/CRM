@@ -6,8 +6,10 @@ import test from 'node:test'
 
 const root = resolve(import.meta.dirname, '../..')
 const source = (path: string) => readFileSync(resolve(root, path), 'utf8')
+const stage8b1Base = '6d994070b1d56b1eaafa5fd5b495b6564a430c3c'
+const stage8b1Accepted = '33eb40b87f77eee16fbf4ccd06a667ea4ce51e5a'
 
-test('gateway image and runtime are browserless and contain no sender/provider/projection imports', () => {
+test('gateway image and runtime stay browserless with no direct provider client or CRM projection', () => {
   const dockerfile = source('max-personal-gateway/Dockerfile')
   assert.match(dockerfile, /^FROM node:22\.22\.2-alpine3\.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS runtime$/m)
   assert.match(dockerfile, /^USER node$/m)
@@ -28,13 +30,13 @@ test('compose overlay keeps ingress private and only scraper receives spool/prof
   assert.doesNotMatch(source('deploy/nginx/nginx.conf') + source('deploy/nginx/conf.d/default.conf'), /max-personal-gateway/)
 })
 
-test('Stage 8B1 source delta adds no browser/listener owner and preserves protected sender/projection paths', () => {
-  const patch = execFileSync('git', ['diff', '--unified=0', '6d994070b1d56b1eaafa5fd5b495b6564a430c3c', '--', 'max-web-scraper', 'max-personal-gateway/src/runtime', 'deploy/docker-compose.stage8b1.shadow.yml'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
+test('immutable Stage 8B1 source delta adds no browser/listener owner and preserves its protected paths', () => {
+  const patch = execFileSync('git', ['diff', '--unified=0', stage8b1Base, stage8b1Accepted, '--', 'max-web-scraper', 'max-personal-gateway/src/runtime', 'deploy/docker-compose.stage8b1.shadow.yml'], { cwd: root, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
   const additions = patch.split('\n').filter(line => line.startsWith('+') && !line.startsWith('+++')).join('\n')
   assert.doesNotMatch(additions, /launchPersistentContext\(|chromium\.launch|newCDPSession\(|webSocketFrameReceived\(/)
   assert.equal((source('max-web-scraper/index.js').match(/launchPersistentContext\(/g) ?? []).length, 1)
   assert.equal((source('max-web-scraper/transport/TransportInterceptor.js').match(/exposeFunction\('__maxWsReceive'/g) ?? []).length, 1)
-  execFileSync('git', ['diff', '--quiet', '6d994070b1d56b1eaafa5fd5b495b6564a430c3c', '--',
+  execFileSync('git', ['diff', '--quiet', stage8b1Base, stage8b1Accepted, '--',
     'max-web-scraper/lib/SerializedOutboundQueue.js', 'max-web-scraper/sync/MessageSync.js',
     'max-web-scraper/sync/InitialHistorySync.js', 'max-personal-gateway/src/outbound',
     'max-personal-gateway/src/route', 'gravity-mvp/src'], { cwd: root })

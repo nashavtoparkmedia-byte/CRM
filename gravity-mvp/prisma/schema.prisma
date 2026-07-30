@@ -387,6 +387,7 @@ model MaxOutboundShadowPlan {
   createdAt                 DateTime @default(now())
   command                   MaxOutboundCommand @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundShadowPlan_command_fkey")
 
+  @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundShadowPlan_command_identity_key")
   @@unique([accountId, idempotencyKey], map: "MaxOutboundShadowPlan_account_idempotency_key")
   @@index([accountId, conversationKey, commandSequence], map: "MaxOutboundShadowPlan_account_conversation_sequence_idx")
   @@index([accountId, wouldSend, refusalReason], map: "MaxOutboundShadowPlan_account_decision_idx")

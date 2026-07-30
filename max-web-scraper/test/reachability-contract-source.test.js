@@ -51,10 +51,9 @@ test('outbound sent status does not confirm provider account reachability', () =
 test('new chat reachability UI checks MAX and reserves green for confirmed status', () => {
   const popover = read('gravity-mvp/src/app/messages/components/NewChatPopover.tsx')
 
-  assert.match(popover, /dbChannel === 'telegram' \|\| dbChannel === 'whatsapp' \|\| dbChannel === 'max'/)
+  assert.match(popover, /selectedProviderChannel === 'telegram'[\s\S]*selectedProviderChannel === 'whatsapp'[\s\S]*selectedProviderChannel === 'max'/)
   assert.match(popover, /const normalized: ReachabilityState/)
-  assert.match(popover, /normalized\.status === 'checking' \|\| normalized\.reachable === null/)
-  assert.match(popover, /i\.reachabilityStatus === 'confirmed'/)
+  assert.match(popover, /status: data\.status \|\| \(data\.reachable === false \? 'unreachable' : data\.reachable === true \? 'confirmed' : 'checking'\)/)
   assert.match(popover, /reachability\?\.status === 'confirmed'/)
   assert.match(popover, /reachability\?\.status === 'checking'/)
   assert.match(popover, /reachability\?\.status === 'unreachable'/)
@@ -72,17 +71,16 @@ test('channel tabs do not render CRM chat presence as green reachability', () =>
   assert.doesNotMatch(tabs, /title="нет в этом канале"/)
 })
 
-test('contact profile shows explicit account reachability text and retries checking state', () => {
+test('contact profile shows explicit account reachability without a client retry loop', () => {
   const drawer = read('gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx')
+  const presentation = read('gravity-mvp/src/lib/channel-reachability-ui.ts')
 
   assert.match(drawer, /const checkChannels = \['telegram', 'whatsapp', 'max'\] as const/)
-  assert.match(drawer, /nextStatus === 'checking' && data\.retryable !== false/)
-  assert.match(drawer, /retryTimers\.push\(setTimeout\(\(\) => \{ if \(!cancelled\) runCheck\(channel\) \}, 5_000\)\)/)
-  assert.match(drawer, /const reachabilityBadge = \(reachable: boolean \| null, live\?: LiveReachabilityEntry\) =>/)
-  assert.match(drawer, /label: 'есть'/)
-  assert.match(drawer, /label: 'нет'/)
-  assert.match(drawer, /label: 'проверяем'/)
-  assert.match(drawer, /label: 'нет связи'/)
+  assert.match(drawer, /retryable: data\.retryable !== false/)
+  assert.match(drawer, /connectionHealth: 'unavailable'/)
+  assert.match(drawer, /deriveChannelReachabilityPresentation/)
+  assert.doesNotMatch(drawer, /retryTimers|setInterval\(|runCheck\(/)
+  for (const label of ['есть', 'нет', 'проверяем', 'нет связи']) assert.match(presentation, new RegExp(`label: '${label}'`))
 })
 
 test('WhatsApp reachability never converts operational fallback into account found', () => {

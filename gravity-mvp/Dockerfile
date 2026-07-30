@@ -49,6 +49,14 @@ RUN npm run build
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
+ARG SOURCE_COMMIT=uncommitted
+ARG BUILD_TIMESTAMP=unknown
+LABEL org.opencontainers.image.title="gravity-mvp" \
+      org.opencontainers.image.description="CRM with default-off durable Personal MAX text routing" \
+      org.opencontainers.image.stage="8B2" \
+      org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIMESTAMP}"
+
 # Runtime зависимости:
 #   - openssl: Prisma engine
 #   - ffmpeg: голосовые / видео-сообщения в чатах

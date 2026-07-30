@@ -46,7 +46,7 @@ test('MAX repeated inbound text is keyed by provider ID and replay is deduplicat
   }
 })
 
-test('MAX event without provider ID uses only the documented composite fallback', () => {
+test('MAX text without provider ID is never content-deduplicated', () => {
   const dedupPath = tempDedupPath()
   const sync = new MessageSync({ dedupPath })
   try {
@@ -57,7 +57,7 @@ test('MAX event without provider ID uses only the documented composite fallback'
       timestamp: 1784383200000,
     }
     sync.markSeen(event)
-    assert.equal(sync.isDuplicate({ ...event }), true)
+    assert.equal(sync.isDuplicate({ ...event }), false)
     assert.equal(sync.isDuplicate({ ...event, timestamp: 1784383260000 }), false)
   } finally {
     try { fs.unlinkSync(dedupPath) } catch {}
@@ -114,7 +114,10 @@ test('MAX media, captions, files, and replies stay in structured fields', () => 
     url: null,
     name: 'contract.pdf',
     size: 2048,
+    mimeType: null,
     previewData: null,
+    thumbnail: null,
+    duration: null,
     photoId: null,
     videoId: null,
     fileId: 'fixture-file-id',

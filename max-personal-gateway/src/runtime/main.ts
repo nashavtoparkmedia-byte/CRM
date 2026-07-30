@@ -4,6 +4,8 @@ import { loadGatewayConfig } from './config.ts'
 import { GatewayRuntime } from './GatewayRuntime.ts'
 import { OperationalMetrics } from './metrics.ts'
 import { ShadowPipeline } from './ShadowPipeline.ts'
+import { loadTextSenderRuntimeConfig } from '../sender/config.ts'
+import { TextCanaryService } from '../sender/TextCanaryService.ts'
 
 function structured(event: Readonly<Record<string, unknown>>): void {
   process.stdout.write(`${JSON.stringify({ timestamp: new Date().toISOString(), ...event })}\n`)
@@ -14,15 +16,26 @@ async function start(): Promise<void> {
   let client: PrismaClient | null = null
   let ingress: PrismaRawCaptureIngress | null = null
   let pipeline: ShadowPipeline | null = null
+  let textSender: TextCanaryService | null = null
   const sharedMetrics = new OperationalMetrics()
   if (config.mode === 'active') {
     client = new PrismaClient({ datasources: { db: { url: config.databaseUrl! } } })
     ingress = new PrismaRawCaptureIngress(client as any)
     pipeline = new ShadowPipeline(client, config, sharedMetrics)
+    const textSenderConfig = loadTextSenderRuntimeConfig(process.env)
+    if (textSenderConfig.enabled) {
+      if (textSenderConfig.accountId === null || !config.enabledAccounts.has(textSenderConfig.accountId)) {
+        throw new Error('Text sender account must be enabled in the gateway capture account set')
+      }
+      textSender = new TextCanaryService(client, textSenderConfig)
+    }
+  } else if (process.env.MAX_PERSONAL_TEXT_SENDER_ENABLED === 'true') {
+    throw new Error('Text sender cannot run in a dormant gateway')
   }
   const runtime = new GatewayRuntime(config, {
     ingress,
     pipeline,
+    textSender,
     metrics: sharedMetrics,
     checkDatabase: async () => {
       if (client === null) return false

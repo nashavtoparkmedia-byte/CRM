@@ -31,8 +31,8 @@ export interface GatewayConfig {
   readonly comparisonLagLimitMs: number
   readonly browserOwnersExpected: 1
   readonly browserOwnersObserved: number | null
-  readonly senderModulesInactive: true
-  readonly providerActionsInactive: true
+  readonly senderModulesInactive: boolean
+  readonly providerActionsInactive: boolean
 }
 
 export class GatewayConfigError extends Error {
@@ -148,7 +148,9 @@ export function loadGatewayConfig(environment: NodeJS.ProcessEnv = process.env):
     comparisonLagLimitMs: boundedInteger(environment.MAX_PERSONAL_COMPARISON_LAG_LIMIT_MS, 60_000, 1000, 3_600_000, 'MAX_PERSONAL_COMPARISON_LAG_LIMIT_MS'),
     browserOwnersExpected,
     browserOwnersObserved: null,
-    senderModulesInactive: true,
-    providerActionsInactive: true,
+    senderModulesInactive: environment.MAX_PERSONAL_TEXT_SENDER_ENABLED !== 'true',
+    providerActionsInactive: !(environment.MAX_PERSONAL_TEXT_SENDER_ENABLED === 'true'
+      && environment.MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED === 'true'
+      && environment.MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR === 'true'),
   }
 }

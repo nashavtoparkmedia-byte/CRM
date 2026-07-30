@@ -2,9 +2,13 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 
 const { MessageParser } = require('../parser/MessageParser')
 const { TransportInterceptor } = require('../transport/TransportInterceptor')
+const { LiveCaptureAdapter } = require('../capture/LiveCaptureAdapter')
 const {
   MAX_RUNTIME_TRACE_PREFIX,
   maxRuntimeTrace,
@@ -104,65 +108,29 @@ test('MessageParser instrumentation does not change CRM payload', () => {
   assert.ok(!output.includes('79991234567'))
 })
 
-test('raw WS instrumentation summarizes candidate ids without logging payload secrets', () => {
+test('raw transport exposes no payload trace API that could bypass capture sanitization', () => {
   const transport = new TransportInterceptor()
-  const payload = {
-    chatId: '902454841098',
-    token: 'secret-token-that-must-not-appear',
-    message: {
-      id: { __maxId: true, hex: 'd301ffffffff000001' },
-      sender: 902264026154,
-      text: 'с',
-      attaches: [],
-    },
-    nested: {
-      time: { __maxId: true, hex: 'd300ffffffff000001' },
-    },
-  }
-
-  const { output } = captureStdout(() => {
-    transport._traceRawFrameSummary('test.raw_ws.decoded', {
-      direction: 'in',
-      frameType: 'binary',
-      opcode: 199,
-      rawCmd: 2,
-      mappedCmd: 2,
-      reqSeq: 0,
-      frameSeq: 42,
-      byteLength: 256,
-      payloadByteLength: 247,
-      payload,
-    })
-  })
-
-  const parsed = JSON.parse(output.trim().slice(MAX_RUNTIME_TRACE_PREFIX.length + 1))
-  assert.equal(parsed.stage, 'test.raw_ws.decoded')
-  assert.equal(parsed.opcode, 199)
-  assert.deepEqual(parsed.candidateProviderIds, ['d301ffffffff000001'])
-  assert.equal(parsed.candidateMessageCount, 1)
-  assert.equal(parsed.candidateMessages[0].providerMessageId, 'd301ffffffff000001')
-  assert.equal(parsed.candidateMessages[0].text, 'с')
-  assert.equal(parsed.candidateMessages[0].attachmentCount, 0)
-  assert.ok(!output.includes('secret-token-that-must-not-appear'))
+  assert.equal(typeof transport._traceRawFrameSummary, 'undefined')
+  const source = fs.readFileSync(require.resolve('../transport/TransportInterceptor'), 'utf8')
+  assert.doesNotMatch(source, /_traceRawFrameSummary|candidateMessages|MAX_RUNTIME_TRACE_PREFIX/)
 })
 
-test('live trace snapshot reads pending queues without mutating them', () => {
-  const transport = new TransportInterceptor()
-  const chatId = '902454841098'
-  const pendingHex = 'd301ffffffff000002'
-  transport._pendingNewMsgIds = [{ pendingHex: 'd301ffffffff000003', ts: Date.now() - 60_000 }]
-  transport._pendingLiveMessageIds.set(chatId, [{ pendingHex, ts: Date.now() - 60_000 }])
-  transport._catchUpChatIds.set(chatId, 2)
-  transport._lastMsgRawHex.set(chatId, 'd301ffffffff000000')
-  transport._lastSeenMsgId.set(chatId, 'd301ffffffff000000')
-
-  const snapshot = transport.debugLiveTraceSnapshot(chatId)
-
-  assert.equal(snapshot.pendingNewQueueSize, 1)
-  assert.deepEqual(snapshot.pendingNewIds, ['d301ffffffff000003'])
-  assert.equal(snapshot.pendingLiveQueueSize, 1)
-  assert.deepEqual(snapshot.pendingLiveIds, [pendingHex])
-  assert.equal(snapshot.catchUpRetryCount, 2)
-  assert.equal(transport._pendingNewMsgIds.length, 1)
-  assert.equal(transport._pendingLiveMessageIds.get(chatId).length, 1)
+test('durable capture health diagnostics read spool state without mutating it', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'max-trace-health-'))
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  const adapter = new LiveCaptureAdapter({
+    accountId: 'account-a', spoolPath: directory,
+    clock: () => new Date('2026-07-30T00:00:00.000Z'),
+  })
+  const captured = adapter.capturePhysicalFrame({
+    raw: JSON.stringify({ message: { id: 'd301ffffffff000002', text: 'diagnostic fixture' } }),
+    metadata: { opcode: 128, sourceOrigin: 'test', providerEventId: 'd301ffffffff000002' },
+  })
+  assert.equal(captured.captured, true)
+  const first = adapter.getCaptureHealth()
+  const second = adapter.getCaptureHealth()
+  assert.deepEqual(second, first)
+  assert.equal(second.adapterState, 'healthy')
+  assert.equal(second.spoolPendingCount, 1)
+  assert.equal(adapter.spool.readPending(10).length, 1)
 })

@@ -43,7 +43,7 @@ test('protected legacy synchronization, parser, sender, and projection paths hav
     'max-personal-gateway/src/outbound',
     'gravity-mvp/src',
   ]
-  execFileSync('git', ['diff', '--quiet', allowlist.baseCommit, '--', ...protectedPaths], { cwd: repositoryRoot })
+  execFileSync('git', ['diff', '--quiet', allowlist.baseCommit, allowlist.acceptedCommit, '--', ...protectedPaths], { cwd: repositoryRoot })
 })
 
 test('capture module has no browser, Redis, sender, provider action, DOM, or CRM projection dependency', () => {

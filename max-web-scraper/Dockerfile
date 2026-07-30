@@ -17,8 +17,8 @@ WORKDIR /app
 ARG SOURCE_COMMIT=uncommitted
 ARG BUILD_TIMESTAMP=unknown
 LABEL org.opencontainers.image.title="max-web-scraper" \
-      org.opencontainers.image.description="Single-owner MAX scraper with default-off durable shadow capture" \
-      org.opencontainers.image.stage="8B1R" \
+      org.opencontainers.image.description="Single-owner MAX transport with durable capture and default-off fenced text canary" \
+      org.opencontainers.image.stage="8B2" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 
@@ -45,7 +45,8 @@ RUN mkdir -p /app/userData \
 
 USER pwuser
 
-# Скрапер не слушает HTTP-порт — общается через CRM_WEBHOOK_URL.
+# Private HTTP API is reachable only on the deployment network.
+EXPOSE 3005
 # Healthcheck — наличие процесса.
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f "node.*index" >/dev/null || exit 1
@@ -64,8 +65,8 @@ COPY --from=sanitized-runtime / /
 RUN /usr/bin/chown -R 1001:1001 /app /home/pwuser
 
 LABEL org.opencontainers.image.title="max-web-scraper" \
-      org.opencontainers.image.description="Single-owner MAX scraper with default-off durable shadow capture" \
-      org.opencontainers.image.stage="8B1R" \
+      org.opencontainers.image.description="Single-owner MAX transport with durable capture and default-off fenced text canary" \
+      org.opencontainers.image.stage="8B2" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.created="${BUILD_TIMESTAMP}" \
       org.opencontainers.image.base.name="mcr.microsoft.com/playwright:v1.62.0-noble" \
@@ -81,6 +82,7 @@ ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
 
 WORKDIR /app
 USER pwuser
+EXPOSE 3005
 
 HEALTHCHECK --interval=60s --timeout=10s --start-period=60s --retries=3 \
     CMD pgrep -f "node.*index" >/dev/null || exit 1

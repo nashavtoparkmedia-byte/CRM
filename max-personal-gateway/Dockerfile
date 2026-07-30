@@ -1,19 +1,21 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS dependencies
+FROM node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS development-dependencies
 WORKDIR /app
 COPY max-personal-gateway/package.json max-personal-gateway/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY gravity-mvp/prisma /app/prisma
-RUN npx prisma generate --schema /app/prisma/schema.prisma \
-    && npm prune --omit=dev \
+RUN npx prisma generate --schema /app/prisma/schema.prisma
+
+FROM development-dependencies AS dependencies
+RUN npm prune --omit=dev \
     && npm cache clean --force
 
 FROM node:22.22.2-alpine3.23@sha256:8ea2348b068a9544dae7317b4f3aafcdc032df1647bb7d768a05a5cad1a7683f AS runtime
 ARG SOURCE_COMMIT=uncommitted
 ARG BUILD_TIMESTAMP=unknown
 LABEL org.opencontainers.image.title="max-personal-gateway" \
-      org.opencontainers.image.description="Browserless authenticated MAX shadow capture gateway" \
-      org.opencontainers.image.stage="8B1R" \
+      org.opencontainers.image.description="Browserless MAX journal gateway with default-off durable fenced text canary" \
+      org.opencontainers.image.stage="8B2" \
       org.opencontainers.image.revision="${SOURCE_COMMIT}" \
       org.opencontainers.image.created="${BUILD_TIMESTAMP}"
 ENV NODE_ENV=production \

@@ -46,6 +46,7 @@ const { PerKeyTaskQueue }          = require('./lib/PerKeyTaskQueue')
 const { SerializedOutboundQueue }  = require('./lib/SerializedOutboundQueue')
 const { resolveOutboundProviderMessageId } = require('./lib/MaxOutboundConfirmation')
 const { createLiveCaptureAdapterFromEnvironment } = require('./capture/LiveCaptureAdapter')
+const { createPhysicalTextSenderRuntime } = require('./sender-v1/runtime')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -5877,6 +5878,48 @@ async function init() {
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '50mb' }))
+
+const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
+  preflight: async request => {
+    if (!isReady || !transport || transport._wsConnected !== true) {
+      const error = new Error('MAX transport is not ready')
+      error.code = 'SENDER_NOT_READY'
+      throw error
+    }
+    const protocolChatId = request?.route?.protocolChatId
+    if (!/^\d{5,15}$/.test(String(protocolChatId || '')) || !Number.isSafeInteger(Number(protocolChatId))) {
+      const error = new Error('Exact protocol route is not sendable')
+      error.code = 'ROUTE_INVALID'
+      throw error
+    }
+  },
+  send: async request => enqueueSend(async () => {
+    const chatId = Number(request.route.protocolChatId)
+    const cid = stableTextCid(request.clientMessageId || request.commandId)
+    const response = await transport.sendFrame(
+      OP.SEND_MESSAGE,
+      { chatId, message: { text: request.payload.text, cid, elements: [], attaches: [] }, notify: true },
+      { waitResponse: true, timeoutMs: 30_000 },
+    )
+    const providerMessageId = response?.message?.id ? String(response.message.id) : null
+    if (!providerMessageId || !isRealMaxMessageId(providerMessageId)) {
+      return { outcome: 'UNKNOWN_AFTER_ATTEMPT', safeCode: 'EXACT_PROVIDER_ID_MISSING', physicalProviderCalled: true }
+    }
+    return { outcome: 'PROVIDER_CONFIRMED', providerMessageId, physicalProviderCalled: true }
+  }),
+})
+
+app.post('/v1/personal-max/send/text', async (req, res) => {
+  if (physicalTextSenderRuntime === null) {
+    return res.status(503).json({ schemaVersion: 1, outcome: 'REFUSED_BEFORE_SEND', safeCode: 'PHYSICAL_SENDER_DISABLED' })
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {}
+  const result = await physicalTextSenderRuntime.boundary.handle(body.request, body.authentication)
+  const status = result.outcome === 'PROVIDER_CONFIRMED' ? 200
+    : result.outcome === 'UNKNOWN_AFTER_ATTEMPT' ? 202
+      : result.outcome === 'UNSUPPORTED' ? 422 : 409
+  res.status(status).json(result)
+})
 
 // Резолвинг телефона в MAX chatId
 // GET /resolve-phone?phone=79222155750

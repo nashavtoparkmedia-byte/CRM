@@ -17,6 +17,11 @@ export interface GatewayRuntimeDependencies {
     readonly comparisonLagMs: number
     readonly queueCritical: boolean
   } | null
+  readonly textSender?: {
+    authenticateCommand(body: Buffer, authentication: { timestamp: string | undefined; nonce: string | undefined; signature: string | undefined }): boolean
+    submit(value: unknown): Promise<Readonly<Record<string, unknown>>>
+    authorize(value: unknown): Promise<Readonly<Record<string, unknown>>>
+  } | null
   readonly metrics?: OperationalMetrics
   readonly log?: (event: Readonly<Record<string, unknown>>) => void
 }
@@ -209,6 +214,40 @@ export class GatewayRuntime {
         const body = this.metrics.prometheus()
         response.writeHead(200, { 'content-type': 'text/plain; version=0.0.4', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store' })
         response.end(body)
+        return
+      }
+      if (request.method === 'POST' && url.search === ''
+        && (url.pathname === '/v1/personal-max/commands/text' || url.pathname === '/v1/personal-max/sender/authorize')) {
+        if (this.#dependencies.textSender == null) {
+          json(response, 503, { code: 'TEXT_SENDER_DISABLED' })
+          return
+        }
+        if (header(request, 'content-type')?.split(';')[0].trim() !== 'application/json') {
+          json(response, 415, { code: 'CONTENT_TYPE_REJECTED' })
+          return
+        }
+        const body = await readBody(request, 100_000, this.config.bodyTimeoutMs)
+        if (url.pathname === '/v1/personal-max/commands/text' && !this.#dependencies.textSender.authenticateCommand(body, {
+          timestamp: header(request, 'x-max-command-timestamp'),
+          nonce: header(request, 'x-max-command-nonce'),
+          signature: header(request, 'x-max-command-signature'),
+        })) {
+          json(response, 401, { code: 'COMMAND_AUTH_REJECTED' })
+          return
+        }
+        let decoded: unknown
+        try { decoded = JSON.parse(body.toString('utf8')) } catch { decoded = null }
+        try {
+          const result = url.pathname === '/v1/personal-max/commands/text'
+            ? await this.#dependencies.textSender.submit(decoded)
+            : await this.#dependencies.textSender.authorize(decoded)
+          const uncertain = result.deliveryStatus === 'needs_review'
+          json(response, uncertain ? 202 : 200, result)
+        } catch (error) {
+          const code = error !== null && typeof error === 'object' && typeof Reflect.get(error, 'code') === 'string'
+            ? String(Reflect.get(error, 'code')) : 'TEXT_SENDER_FAILED'
+          json(response, 409, { code, safeCode: code })
+        }
         return
       }
       if (request.method !== 'POST' || url.pathname !== '/v1/capture' || url.search !== '') {
