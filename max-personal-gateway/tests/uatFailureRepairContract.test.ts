@@ -16,6 +16,9 @@ test('production repair runner is valid shell and checksum/source bound', () => 
   assert.match(productionSource, /sha256sum "\$SCRIPT_PATH"/u)
   assert.match(productionSource, /rev-parse "origin\/\$EXPECTED_BRANCH"/u)
   assert.match(productionSource, /status --porcelain/u)
+  assert.doesNotMatch(productionSource, /--project-directory "\$PROD_DIR"/u)
+  assert.match(productionSource, /seal_evidence "\$EVIDENCE_DIR"/u)
+  assert.match(productionSource, /printf 'MISSING  %s\\n'/u)
 })
 
 test('fresh backup and default-off precede every repair mutation', () => {

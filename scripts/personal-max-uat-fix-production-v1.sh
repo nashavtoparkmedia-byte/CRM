@@ -59,13 +59,11 @@ export PERSONAL_MAX_GATEWAY_IMAGE=$GATEWAY_IMAGE
 export PERSONAL_MAX_SCRAPER_IMAGE=$SCRAPER_IMAGE
 
 compose_default_off=(
-  docker compose --project-directory "$PROD_DIR"
-  --env-file "$PROD_ENV" --env-file "$OPERATIONAL_ENV"
+  docker compose --env-file "$PROD_ENV" --env-file "$OPERATIONAL_ENV"
   -f "$BASE_COMPOSE" -f "$OPERATIONAL_COMPOSE" -f "$DEFAULT_OFF_COMPOSE"
 )
 compose_operational=(
-  docker compose --project-directory "$PROD_DIR"
-  --env-file "$PROD_ENV" --env-file "$OPERATIONAL_ENV"
+  docker compose --env-file "$PROD_ENV" --env-file "$OPERATIONAL_ENV"
   -f "$BASE_COMPOSE" -f "$DEFAULT_OFF_COMPOSE" -f "$OPERATIONAL_COMPOSE"
 )
 
@@ -78,6 +76,20 @@ render_file=
 default_off_now() {
   "${compose_default_off[@]}" up -d --no-build --pull never --wait --wait-timeout 300 \
     gravity-mvp max-personal-gateway max-web-scraper >/dev/null
+}
+
+seal_evidence() {
+  local directory=$1
+  [[ $directory =~ ^/var/backups/personal-max-uat-fix-[0-9]{8}T[0-9]{6}Z$ ]]
+  [[ -d $directory && ! -L $directory ]]
+  find "$directory" -type f -exec chown root:codexbot {} +
+  find "$directory" -type f -exec chmod 0640 {} +
+  rm -f -- "$directory/SHA256SUMS" "$directory/SHA256SUMS.verify"
+  (cd "$directory" && find . -maxdepth 1 -type f ! -name SHA256SUMS ! -name SHA256SUMS.verify -printf '%P\0' \
+    | LC_ALL=C sort -z | xargs -0 sha256sum >SHA256SUMS)
+  (cd "$directory" && sha256sum -c SHA256SUMS >SHA256SUMS.verify)
+  chown root:codexbot "$directory/SHA256SUMS" "$directory/SHA256SUMS.verify"
+  chmod 0640 "$directory/SHA256SUMS" "$directory/SHA256SUMS.verify"
 }
 
 cleanup() {
@@ -104,6 +116,12 @@ cleanup() {
     chown root:codexbot "$RESULT_FILE"
     chmod 0640 "$RESULT_FILE"
   fi
+  if [[ -n ${EVIDENCE_DIR-} && -d ${EVIDENCE_DIR-} && ! -L ${EVIDENCE_DIR-} ]]; then
+    if [[ $status -ne 0 && -f $RESULT_FILE ]]; then
+      install -o root -g codexbot -m 0640 "$RESULT_FILE" "$EVIDENCE_DIR/failure-report.json"
+    fi
+    seal_evidence "$EVIDENCE_DIR"
+  fi
   exit "$status"
 }
 trap cleanup EXIT
@@ -111,7 +129,15 @@ trap cleanup EXIT
 tracked_tree_hash() {
   git -C "$PROD_DIR" ls-files -z \
     | sort -z \
-    | while IFS= read -r -d '' file; do sha256sum "$PROD_DIR/$file"; done \
+    | while IFS= read -r -d '' file; do
+        if [[ -f $PROD_DIR/$file ]]; then
+          sha256sum "$PROD_DIR/$file"
+        elif [[ -L $PROD_DIR/$file ]]; then
+          printf 'SYMLINK  %s  %s\n' "$file" "$(readlink "$PROD_DIR/$file")"
+        else
+          printf 'MISSING  %s\n' "$file"
+        fi
+      done \
     | sha256sum \
     | awk '{print $1}'
 }
@@ -715,12 +741,7 @@ mv -f "$result_tmp" "$RESULT_FILE"
 chown root:codexbot "$RESULT_FILE"
 chmod 0640 "$RESULT_FILE"
 install -o root -g codexbot -m 0640 "$RESULT_FILE" "$EVIDENCE_DIR/final-report.json"
-find "$EVIDENCE_DIR" -type f -exec chown root:codexbot {} +
-find "$EVIDENCE_DIR" -type f -exec chmod 0640 {} +
-(cd "$EVIDENCE_DIR" && find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%P\0' \
-  | sort -z | xargs -0 sha256sum >SHA256SUMS)
-chown root:codexbot "$EVIDENCE_DIR/SHA256SUMS"
-chmod 0640 "$EVIDENCE_DIR/SHA256SUMS"
+seal_evidence "$EVIDENCE_DIR"
 rm -f -- "$STATE_FILE"
 production_mutated=false
 trap - EXIT
