@@ -20,13 +20,15 @@ if [[ $EUID -ne 0 ]]; then
   echo 'ERROR: bounded production repair must run as root' >&2
   exit 77
 fi
-if [[ $# -ne 2 ]]; then
-  echo 'usage: personal-max-uat-fix-production-v1.sh <script-sha256> <source-sha>' >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo 'usage: personal-max-uat-fix-production-v1.sh <script-sha256> <source-sha> [resume-state-source-sha]' >&2
   exit 64
 fi
 readonly EXPECTED_SCRIPT_SHA=$1
 readonly SOURCE_SHA=$2
-if [[ ! $EXPECTED_SCRIPT_SHA =~ ^[0-9a-f]{64}$ || ! $SOURCE_SHA =~ ^[0-9a-f]{40}$ ]]; then
+readonly EXPECTED_RESUME_SOURCE_SHA=${3-}
+if [[ ! $EXPECTED_SCRIPT_SHA =~ ^[0-9a-f]{64}$ || ! $SOURCE_SHA =~ ^[0-9a-f]{40}$ \
+   || (-n $EXPECTED_RESUME_SOURCE_SHA && ! $EXPECTED_RESUME_SOURCE_SHA =~ ^[0-9a-f]{40}$) ]]; then
   echo 'ERROR: invalid checksum or source revision' >&2
   exit 65
 fi
@@ -232,24 +234,56 @@ readonly PROD_TREE_HASH_BEFORE=$(tracked_tree_hash)
 readonly BUILD_TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 resume=false
+CANARY_SOURCE_SHA=$SOURCE_SHA
 if [[ -f $STATE_FILE ]]; then
+  state_source_sha=$(jq -r '.canarySourceSha // .sourceSha // ""' "$STATE_FILE")
   if [[ $(stat -c '%U:%G:%a' "$STATE_FILE") != root:root:600 \
-     || $(jq -r '.sourceSha // ""' "$STATE_FILE") != "$SOURCE_SHA" ]]; then
+     || ! $state_source_sha =~ ^[0-9a-f]{40}$ ]]; then
     echo 'ERROR: existing UAT state is not safely resumable' >&2
     exit 69
   fi
+  if [[ $state_source_sha != "$SOURCE_SHA" \
+     && $EXPECTED_RESUME_SOURCE_SHA != "$state_source_sha" ]]; then
+    echo 'ERROR: cross-revision resume was not bound to the exact prior state source' >&2
+    exit 69
+  fi
+  CANARY_SOURCE_SHA=$state_source_sha
   resume=true
   EVIDENCE_DIR=$(jq -r '.evidenceDirectory' "$STATE_FILE")
   [[ $EVIDENCE_DIR =~ ^/var/backups/personal-max-uat-fix-[0-9]{8}T[0-9]{6}Z$ ]]
   [[ -d $EVIDENCE_DIR && ! -L $EVIDENCE_DIR \
     && $(stat -c '%U:%G:%a' "$EVIDENCE_DIR") == root:codexbot:2750 ]]
 else
+  [[ -z $EXPECTED_RESUME_SOURCE_SHA ]]
   readonly STAMP=$(date -u +%Y%m%dT%H%M%SZ)
   EVIDENCE_DIR=/var/backups/personal-max-uat-fix-$STAMP
   [[ ! -e $EVIDENCE_DIR ]]
   install -d -o root -g codexbot -m 2750 "$EVIDENCE_DIR"
 fi
 readonly EVIDENCE_DIR
+readonly CANARY_SOURCE_SHA
+readonly CANARY_SHORT_SHA=${CANARY_SOURCE_SHA:0:12}
+
+if [[ $CANARY_SOURCE_SHA != "$SOURCE_SHA" ]]; then
+  cross_revision_resume_gate=$(postgres_query <<SQL
+SELECT concat_ws('|',count(*),
+  count(*) FILTER (WHERE d."state"='provider_confirmed'),
+  count(DISTINCT d."providerMessageId"),
+  count(*) FILTER (WHERE d."attemptCount"=1),
+  count(*) FILTER (WHERE m."status"='delivered' AND m."externalId"=d."providerMessageId"),
+  (SELECT count(*) FROM "MaxOutboundDispatchAttempt" a
+   JOIN "MaxOutboundDispatch" rd ON rd."dispatchId"=a."dispatchId"
+   JOIN "MaxOutboundCommand" rc ON rc."commandId"=rd."commandId"
+   WHERE rc."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
+     AND a."physicalActionStartedAt" IS NOT NULL))
+FROM "MaxOutboundCommand" c
+JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
+JOIN "Message" m ON m."clientMessageId"=c."clientMessageId"
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%';
+SQL
+)
+  [[ $cross_revision_resume_gate == '6|6|6|6|6|6' ]]
+fi
 
 docker_root=$(docker info --format '{{.DockerRootDir}}')
 [[ $docker_root == /* && -d $docker_root && ! -L $docker_root ]]
@@ -442,9 +476,10 @@ SQL
 if [[ $resume == false ]]; then
   canary_started_at=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
   state_tmp=$(mktemp /var/lib/crm/personal-max-uat-fix-state.XXXXXX)
-  jq -n --arg sourceSha "$SOURCE_SHA" --arg evidenceDirectory "$EVIDENCE_DIR" \
+  jq -n --arg sourceSha "$SOURCE_SHA" --arg canarySourceSha "$CANARY_SOURCE_SHA" \
+    --arg evidenceDirectory "$EVIDENCE_DIR" \
     --arg canaryStartedAt "$canary_started_at" --arg chatId "$chat_id" \
-    '{schemaVersion:1,sourceSha:$sourceSha,evidenceDirectory:$evidenceDirectory,
+    '{schemaVersion:1,sourceSha:$sourceSha,canarySourceSha:$canarySourceSha,evidenceDirectory:$evidenceDirectory,
       canaryStartedAt:$canaryStartedAt,chatId:$chatId}' >"$state_tmp"
   chown root:root "$state_tmp"
   chmod 0600 "$state_tmp"
@@ -464,15 +499,29 @@ canary_texts=(
   'Сообщение 3'
 )
 for index in 1 2 3 4 5 6; do
-  client_id=pmax-uatfix-${SHORT_SHA}-$index
-  existing_count=$(postgres_query <<SQL
-SELECT count(*) FROM "Message" WHERE "clientMessageId" = '$client_id';
+  client_id=pmax-uatfix-${CANARY_SHORT_SHA}-$index
+  existing_operation=$(postgres_query <<SQL
+SELECT coalesce(json_agg(json_build_object(
+  'content',m."content",'state',d."state",'attemptCount',d."attemptCount",
+  'providerMessageId',d."providerMessageId",'messageStatus',m."status",
+  'identityMatches',(m."externalId"=d."providerMessageId"),
+  'attemptRows',(SELECT count(*) FROM "MaxOutboundDispatchAttempt" a WHERE a."dispatchId"=d."dispatchId"),
+  'physicalActionRows',(SELECT count(*) FROM "MaxOutboundDispatchAttempt" a WHERE a."dispatchId"=d."dispatchId" AND a."physicalActionStartedAt" IS NOT NULL)
+)), '[]'::json)
+FROM "Message" m
+JOIN "MaxOutboundCommand" c ON c."clientMessageId"=m."clientMessageId"
+JOIN "MaxOutboundDispatch" d ON d."commandId"=c."commandId"
+WHERE m."clientMessageId" = '$client_id';
 SQL
 )
-  if [[ $existing_count == 1 ]]; then
+  if jq -e --arg content "${canary_texts[index-1]}" '
+    length == 1 and .[0].content == $content and .[0].state == "provider_confirmed" and
+    .[0].attemptCount == 1 and (.[0].providerMessageId | test("^d301[0-9a-f]{14}$";"i")) and
+    .[0].messageStatus == "delivered" and .[0].identityMatches == true and
+    .[0].attemptRows == 1 and .[0].physicalActionRows == 1' <<<"$existing_operation" >/dev/null; then
     continue
   fi
-  [[ $existing_count == 0 ]]
+  [[ $existing_operation == '[]' ]]
   request_file=$(mktemp /var/tmp/personal-max-uat-request.XXXXXX)
   response_file=$(mktemp /var/tmp/personal-max-uat-response.XXXXXX)
   chmod 0600 "$request_file" "$response_file"
@@ -507,13 +556,13 @@ SQL
 done
 
 postgres_query >"$EVIDENCE_DIR/outbound-verification.private.csv" <<SQL
-\copy (
+COPY (
   SELECT c."commandSequence", c."clientMessageId", d."state", d."providerMessageId",
          d."attemptCount", m."status", m."externalId"
   FROM "MaxOutboundCommand" c
   JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
   JOIN "Message" m ON m."clientMessageId" = c."clientMessageId"
-  WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+  WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
   ORDER BY c."commandSequence"
 ) TO STDOUT WITH CSV HEADER
 SQL
@@ -528,7 +577,7 @@ SELECT concat_ws('|',
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
 JOIN "Message" m ON m."clientMessageId" = c."clientMessageId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%';
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%';
 SQL
 )
 [[ $outbound_gate == '6|6|6|6|6' ]]
@@ -578,7 +627,7 @@ provider_hash_before=$(
 SELECT d."providerMessageId"
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
 ORDER BY c."commandSequence";
 SQL
 )
@@ -593,7 +642,7 @@ provider_hash_after=$(
 SELECT d."providerMessageId"
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
 ORDER BY c."commandSequence";
 SQL
 )
@@ -639,7 +688,7 @@ rollback_identity_hash_before=$(
 SELECT d."providerMessageId", d."attemptCount", d."state"
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
 ORDER BY c."commandSequence";
 SQL
 )
@@ -651,7 +700,7 @@ rollback_identity_hash_after=$(
 SELECT d."providerMessageId", d."attemptCount", d."state"
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
 ORDER BY c."commandSequence";
 SQL
 )
@@ -665,7 +714,7 @@ rollforward_identity_hash_after=$(
 SELECT d."providerMessageId", d."attemptCount", d."state"
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%'
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%'
 ORDER BY c."commandSequence";
 SQL
 )
@@ -715,7 +764,7 @@ provider_ids=$(postgres_query <<SQL
 SELECT json_agg(d."providerMessageId" ORDER BY c."commandSequence")
 FROM "MaxOutboundCommand" c
 JOIN "MaxOutboundDispatch" d ON d."commandId" = c."commandId"
-WHERE c."clientMessageId" LIKE 'pmax-uatfix-$SHORT_SHA-%';
+WHERE c."clientMessageId" LIKE 'pmax-uatfix-$CANARY_SHORT_SHA-%';
 SQL
 )
 backup_sha=$(awk '{print $1}' "$EVIDENCE_DIR/production-before-repair.dump.sha256")
@@ -723,6 +772,7 @@ backup_bytes=$(stat -c '%s' "$EVIDENCE_DIR/production-before-repair.dump")
 result_tmp=$(mktemp /var/tmp/personal-max-uat-fix-production.success.XXXXXX)
 jq -n \
   --arg sourceSha "$SOURCE_SHA" \
+  --arg canaryRunSourceSha "$CANARY_SOURCE_SHA" \
   --arg evidenceDirectory "$EVIDENCE_DIR" \
   --arg gravityImage "$GRAVITY_IMAGE" --arg gravityImageId "$gravity_image_id" \
   --arg gatewayImage "$GATEWAY_IMAGE" --arg gatewayImageId "$gateway_image_id" \
@@ -731,6 +781,7 @@ jq -n \
   --argjson providerMessageIds "$provider_ids" \
   '{
     schemaVersion:1,status:"PERSONAL_MAX_ENGINEERING_PASS_FINAL_USER_CHECK_READY",sourceSha:$sourceSha,
+    canaryRunSourceSha:$canaryRunSourceSha,
     evidenceDirectory:$evidenceDirectory,
     images:{
       gravity:{ref:$gravityImage,id:$gravityImageId},

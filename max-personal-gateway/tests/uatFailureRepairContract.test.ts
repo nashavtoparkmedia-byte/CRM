@@ -64,6 +64,21 @@ test('fresh run refuses orphaned canary operations before any new provider actio
   assert.match(productionSource, /safeToStartFresh:true/u)
 })
 
+test('cross-revision resume is exact-state-bound and never repeats a confirmed logical operation', () => {
+  assert.match(productionSource, /EXPECTED_RESUME_SOURCE_SHA/u)
+  assert.match(productionSource, /cross_revision_resume_gate == '6\|6\|6\|6\|6\|6'/u)
+  assert.match(productionSource, /CANARY_SHORT_SHA=\$\{CANARY_SOURCE_SHA:0:12\}/u)
+  assert.match(productionSource, /existing_operation=\$\(postgres_query/u)
+  assert.match(productionSource, /physicalActionRows == 1/u)
+  assert.match(productionSource, /messageStatus == "delivered"/u)
+  assert.match(productionSource, /\[\[ \$existing_operation == '\[\]' \]\]/u)
+})
+
+test('outbound evidence export uses multiline-safe server COPY', () => {
+  assert.match(productionSource, /COPY \([\s\S]*\) TO STDOUT WITH CSV HEADER/u)
+  assert.doesNotMatch(productionSource, /\\copy/u)
+})
+
 test('ledger repair is exact-scope, evidence preserving, and provider-action free', () => {
   assert.match(repairSource, /2026-07-30T09:07:00\.000Z/u)
   assert.match(repairSource, /2026-07-30T09:13:00\.000Z/u)
