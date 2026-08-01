@@ -24,7 +24,7 @@ test('reply frame uses native MAX op64 reply payload shape', () => {
 
   assert.equal(frame[0], 0x0a)
   assert.equal(frame[5], OP.SEND_MESSAGE)
-  assert.equal(frame[6], 0x01)
+  assert.equal(frame[6], 0x00, 'synthetic op64 payload is uncompressed')
   assert.equal(frame[7], 0x00)
   assert.equal((frame[8] << 8) | frame[9], frame.length - 10)
   assert.deepEqual([...frame.subarray(10, 12)], [0xf0, OP.SEND_MESSAGE])
@@ -33,12 +33,13 @@ test('reply frame uses native MAX op64 reply payload shape', () => {
   assert.equal(decoded[0], -16, 'MAX schema marker must start op64 payload')
   assert.equal(decoded[1], OP.SEND_MESSAGE, 'MAX schema marker must be opcode-specific for SEND_MESSAGE')
   const payload = decoded[2]
+  assert.equal(payload.chatId.hex.toLowerCase(), 'cf000000d21e800f0a', 'op64 uses the full protocol chat id, not lower32/ui route')
   assert.equal(payload.postId, null, 'direct-dialog op64 keeps native postId:nil shape')
   assert.equal(payload.notify, true)
   assert.equal(payload.message.text, 'Ответил')
   assert.equal(payload.message.link.type, 'REPLY')
   assert.equal(payload.message.link.id, undefined, 'outbound reply must not use provider-store read-model key id')
-  assert.equal(payload.message.link.messageId.hex.toLowerCase(), REPLY_TO)
+  assert.equal(payload.message.link.messageId.hex.toLowerCase(), `cf${REPLY_TO.slice(2)}`, 'native BigInt encoder uses uint64 for positive provider ids')
 })
 
 test('reply frame prefers a browser-captured op64 prefix over unrelated global prefix', () => {

@@ -2163,6 +2163,19 @@ class TransportInterceptor {
     ])
   }
 
+  _maxExtFromBigInt(value) {
+    const n = BigInt(String(value))
+    const raw = Buffer.alloc(9)
+    if (n >= 0n) {
+      raw[0] = 0xcf
+      raw.writeBigUInt64BE(n, 1)
+    } else {
+      raw[0] = 0xd3
+      raw.writeBigInt64BE(n, 1)
+    }
+    return Buffer.concat([Buffer.from([0xc7, raw.length, 0x01]), raw])
+  }
+
   _maxExtFromIdHex(hex, preferUnsigned = true) {
     const clean = String(hex || '').replace(/[^a-fA-F0-9]/g, '')
     if (!clean || clean.length % 2 !== 0) throw new Error(`Invalid MAX id hex: ${hex}`)
@@ -2197,7 +2210,11 @@ class TransportInterceptor {
     header[3] = frameSeq & 0xff
     header[4] = 0x00
     header[5] = opcode & 0xff
-    header[6] = 0x01
+    // Native MAX Web stores the payload-compression marker in byte 6.  These
+    // synthetic provider frames are deliberately uncompressed, so byte 6 must
+    // be zero; setting it to 1 makes MAX try to LZ4-decompress raw msgpack and
+    // close the socket without creating a provider message.
+    header[6] = 0x00
     header[7] = 0x00
     header[8] = (payload.length >> 8) & 0xff
     header[9] = payload.length & 0xff
@@ -2215,13 +2232,10 @@ class TransportInterceptor {
       this._mpStr('type'), this._mpStr('REPLY'),
       // Native web.max.ru sends reply links in op:64 as
       // { type: 'REPLY', messageId: <provider message id> }.
-      // Provider-store snapshots later materialize the same relationship as
-      // link.message.id, but that is the read model, not the outbound frame.
-      // Unlike op:71 anchors, native op:64 message links preserve MAX's
-      // provider id signedness marker (d3).  Re-encoding reply targets as
-      // unsigned cf makes the frame syntactically decodable but invalid for
-      // the send-message command.
-      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, false),
+      // Native MAX's msgpack extension codec re-encodes positive BigInt ids
+      // with a uint64 (cf) nested marker even when provider-store snapshots
+      // expose the same id with the signed read-model marker (d3).
+      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, true),
     ])
     const messageMap = Buffer.concat([
       Buffer.from([0x85]),
@@ -2233,7 +2247,7 @@ class TransportInterceptor {
     ])
     const payloadMap = Buffer.concat([
       Buffer.from([0x84]),
-      this._mpStr('chatId'), this._maxExtFromLower32(chatId),
+      this._mpStr('chatId'), this._maxExtFromBigInt(chatId),
       // Native MAX Web includes postId: B.resolvePostId(chatId) in send
       // commands.  For direct dialogs resolvePostId is undefined and encodes
       // as nil; keeping the key preserves the browser payload shape while
@@ -2266,7 +2280,7 @@ class TransportInterceptor {
       throw new Error(`MAX reaction requires a numeric provider reaction id`)
     }
     const fields = [
-      this._mpStr('chatId'), this._maxExtFromLower32(chatId),
+      this._mpStr('chatId'), this._maxExtFromBigInt(chatId),
       this._mpStr('messageId'), this._maxExtFromIdHex(messageId, preferUnsignedMessageId),
     ]
     if (!remove) {
