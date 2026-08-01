@@ -754,7 +754,7 @@ SQL
 
 verify_final_database_gate() {
   postgres_query_account <<SQL
-CREATE TEMP TABLE rc3_final_facts ON COMMIT DROP AS
+CREATE TEMP TABLE rc3_final_facts AS
 WITH facts AS (
   SELECT
     (SELECT count(*) FROM "Contact" WHERE id IN ('$A_TARGET_CONTACT','$B_TARGET_CONTACT') AND "isArchived"=false) AS targets_active,

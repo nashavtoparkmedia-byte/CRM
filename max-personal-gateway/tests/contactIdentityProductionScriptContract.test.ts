@@ -90,6 +90,8 @@ test('production gates prove provider store, UI projection, restart and rollback
   assert.match(source, /attempt_hash_before_restart/u)
   assert.match(source, /attempt_hash_after_rollback/u)
   assert.match(source, /attempt_hash_after_rollforward/u)
+  assert.match(source, /CREATE TEMP TABLE rc3_final_facts AS/u)
+  assert.doesNotMatch(source, /CREATE TEMP TABLE rc3_final_facts ON COMMIT DROP/u)
   assert.match(source, /RC2_GRAVITY_IMAGE=crm\/gravity-mvp:personal-max-rc2-burst-e2711dc02d06/u)
   assert.match(source, /actual_operational_gate/u)
   assert.match(source, /MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED=true/u)
