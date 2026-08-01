@@ -1,0 +1,16 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+CRM_PRODUCTION_ENV_FILE=/opt/crm/.env.production
+CRM_OPERATIONAL_ENV_FILE=/var/lib/crm/max-personal-text-operational.env
+HEALTH_STATE_DIR=/var/lib/crm/health-state
+EXPECTED_CONTAINERS=crm-postgres crm-redis crm-nginx crm-gravity-mvp crm-max-personal-gateway crm-max-scraper
+HEALTH_MONITOR_ENABLE_S3_BACKUP_CHECK=false
+PERSONAL_MAX_TEXT_V1_MONITOR_ENABLED=true
+PERSONAL_MAX_TEXT_V1_BACKUP_PATH=/var/backups/personal-max-soak-reliability-final-20260801T075734Z/production-before-op180-rollout-8a9e7f79d912-20260801T143056Z.dump
+PERSONAL_MAX_TEXT_V1_BACKUP_SHA256=58d55cd2f895bc7ffbc72c8ff9b9b1fbc59649a9df573166dd47e2dfa40a03de
+PERSONAL_MAX_TEXT_V1_BACKUP_MAX_AGE_SECONDS=93600
+PERSONAL_MAX_TEXT_V1_QUEUE_GRACE_SECONDS=300
+PERSONAL_MAX_TEXT_V1_WS_GRACE_SECONDS=120
+PERSONAL_MAX_TEXT_V1_DISK_MIN_FREE_BYTES=10737418240
+
+* * * * * root /usr/local/sbin/crm-health-monitor.sh >> /var/log/crm-health.log 2>&1
