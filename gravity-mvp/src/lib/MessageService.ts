@@ -51,6 +51,7 @@ function unknownMaxDelivery(protocolChatId: string, webRouteId: unknown) {
 }
 
 const PERSONAL_MAX_PRE_ACTION_REFUSALS = new Set([
+    'DURABLE_TEXT_ROUTE_REQUIRED',
     'COMMAND_INVALID',
     'PHYSICAL_SENDER_DISABLED',
     'TEXT_SENDER_DISABLED',
@@ -64,8 +65,17 @@ const PERSONAL_MAX_PRE_ACTION_REFUSALS = new Set([
     'CONTENT_TYPE_REJECTED',
 ])
 
+const PERSONAL_MAX_RETRYABLE_PRE_ACTION_REFUSALS = new Set([
+    'DURABLE_TEXT_ROUTE_REQUIRED',
+    'PHYSICAL_SENDER_DISABLED',
+    'TEXT_SENDER_DISABLED',
+])
+
 function personalMaxPreActionFailure(errorMessage: string | null | undefined): string | null {
     const message = String(errorMessage || '')
+    if (/Durable fenced text route is required/i.test(message)) {
+        return 'DURABLE_TEXT_ROUTE_REQUIRED'
+    }
     if (/Personal MAX durable (?:text command|reply target) is invalid/i.test(message)) {
         return 'COMMAND_INVALID'
     }
@@ -81,6 +91,15 @@ function failedBeforeProviderAction(protocolChatId: string, webRouteId: unknown,
     return {
         ...unknownMaxDelivery(protocolChatId, webRouteId),
         status: 'hard_failed',
+        failurePhase: 'before_provider_action',
+        safeErrorCode: safeCode,
+    }
+}
+
+function retryableBeforeProviderAction(protocolChatId: string, webRouteId: unknown, safeCode: string) {
+    return {
+        ...unknownMaxDelivery(protocolChatId, webRouteId),
+        status: 'retryable_failed',
         failurePhase: 'before_provider_action',
         safeErrorCode: safeCode,
     }
@@ -971,10 +990,24 @@ export class MessageService {
             messageId, chatId: message.chatId, channel: message.channel, retryAttempt: attempt,
         })
 
-        // Reset to 'sent' for delivery attempt
+        // Mark retry as in-flight without claiming provider success.  For MAX,
+        // "sent" is reserved for a durable post-action unknown/needs-review
+        // outcome or a provider-confirmed terminal projection; pre-action
+        // refusals must remain retryable on the same row.
+        const pendingMeta = message.channel === 'max'
+            ? {
+                ...meta,
+                retryAttempt: attempt,
+                maxDelivery: {
+                    ...(meta.maxDelivery || {}),
+                    status: 'queued',
+                    deliveryConfirmed: false,
+                },
+            }
+            : { ...meta, retryAttempt: attempt }
         await (prisma.message as any).update({
             where: { id: messageId },
-            data: { status: 'sent', metadata: { ...meta, retryAttempt: attempt } },
+            data: { status: message.channel === 'max' ? 'queued' : 'sent', metadata: pendingMeta },
         })
 
         // Re-dispatch through channel
@@ -1087,11 +1120,18 @@ export class MessageService {
             errorMessage = err.message || 'Retry delivery failed'
             if (message.channel === 'max') {
                 const maxMetadata = (message.chat.metadata || {}) as any
-                deliveryStatus = 'sent'
-                retryMaxDeliveryMetadata = unknownMaxDelivery(
-                    message.chat.externalChatId?.split(':').slice(1).join(':') || message.chat.externalChatId,
-                    maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
-                )
+                const protocolChatId = message.chat.externalChatId?.split(':').slice(1).join(':') || message.chat.externalChatId
+                const webRouteId = maxMetadata.oldExternalChatId || maxMetadata.uiChatId
+                const safePreActionCode = personalMaxPreActionFailure(errorMessage)
+                if (safePreActionCode) {
+                    deliveryStatus = 'failed'
+                    retryMaxDeliveryMetadata = PERSONAL_MAX_RETRYABLE_PRE_ACTION_REFUSALS.has(safePreActionCode)
+                        ? retryableBeforeProviderAction(protocolChatId, webRouteId, safePreActionCode)
+                        : failedBeforeProviderAction(protocolChatId, webRouteId, safePreActionCode)
+                } else {
+                    deliveryStatus = 'sent'
+                    retryMaxDeliveryMetadata = unknownMaxDelivery(protocolChatId, webRouteId)
+                }
             }
         }
 

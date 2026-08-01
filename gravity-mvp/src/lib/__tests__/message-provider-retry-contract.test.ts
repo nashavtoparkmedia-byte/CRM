@@ -82,8 +82,14 @@ describe('MessageService provider retry contract', () => {
         expect(prismaMock.message.update).toHaveBeenNthCalledWith(1, {
             where: { id: 'message-retry-1' },
             data: {
-                status: 'sent',
-                metadata: expect.objectContaining({ retryAttempt: 1 }),
+                status: 'queued',
+                metadata: expect.objectContaining({
+                    retryAttempt: 1,
+                    maxDelivery: expect.objectContaining({
+                        status: 'queued',
+                        deliveryConfirmed: false,
+                    }),
+                }),
             },
         })
         expect(prismaMock.message.update).toHaveBeenLastCalledWith({
@@ -98,6 +104,50 @@ describe('MessageService provider retry contract', () => {
                         status: 'provider_confirmed',
                         deliveryConfirmed: true,
                         maxMessageId: 'd301abcdef01234567',
+                    }),
+                }),
+            },
+        })
+    })
+
+    it('keeps MAX durable pre-action route refusal failed and retryable on the same row', async () => {
+        maxSendMock.mockRejectedValue(new Error('Durable fenced text route is required'))
+
+        const result = await MessageService.retrySend('message-retry-1')
+
+        expect(result).toEqual({
+            success: false,
+            error: 'Durable fenced text route is required',
+        })
+        expect(prismaMock.message.create).not.toHaveBeenCalled()
+        expect(workflowMock.onOutboundMessage).not.toHaveBeenCalled()
+        expect(prismaMock.message.update).toHaveBeenNthCalledWith(1, {
+            where: { id: 'message-retry-1' },
+            data: {
+                status: 'queued',
+                metadata: expect.objectContaining({
+                    retryAttempt: 1,
+                    maxDelivery: expect.objectContaining({
+                        status: 'queued',
+                        deliveryConfirmed: false,
+                    }),
+                }),
+            },
+        })
+        expect(prismaMock.message.update).toHaveBeenLastCalledWith({
+            where: { id: 'message-retry-1' },
+            data: {
+                status: 'failed',
+                externalId: undefined,
+                metadata: expect.objectContaining({
+                    retryAttempt: 1,
+                    retryable: true,
+                    error: 'Durable fenced text route is required',
+                    maxDelivery: expect.objectContaining({
+                        status: 'retryable_failed',
+                        deliveryConfirmed: false,
+                        failurePhase: 'before_provider_action',
+                        safeErrorCode: 'DURABLE_TEXT_ROUTE_REQUIRED',
                     }),
                 }),
             },
