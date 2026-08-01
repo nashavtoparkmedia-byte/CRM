@@ -284,15 +284,16 @@ class MaxWebReplyBridge {
           storeExportKey: core.storeExportKey || null,
           legacySendPrimitives: core.legacySendPrimitives === true,
           support: {
-            dollarI: typeof core.module?.$i,
-            Es: typeof core.module?.Es,
-            ws: typeof core.module?.ws,
+            sendChatMessageAction: typeof core.module?.ia,
+            replyDraft: typeof core.module?.Is,
+            pendingMessage: typeof core.module?.Ps,
+            userMessage: typeof core.module?.Es,
             ro: typeof core.module?.ro,
           },
           snippets: {
-            dollarI: sourceSnippet(core.module?.$i),
-            Es: sourceSnippet(core.module?.Es),
-            ws: sourceSnippet(core.module?.ws),
+            sendChatMessageAction: sourceSnippet(core.module?.ia),
+            replyDraft: sourceSnippet(core.module?.Is),
+            pendingMessage: sourceSnippet(core.module?.Ps),
           },
           route: {
             requestedChatId: String(args.chatId),
@@ -772,9 +773,9 @@ class MaxWebReplyBridge {
       try {
         const core = await findCoreModule()
         if (!core) return { ok: false, reason: 'max_web_core_not_found', providerActionStarted }
-        if (typeof core.module.$i !== 'function'
-          || typeof core.module.Es !== 'function'
-          || typeof core.module.ws !== 'function') {
+        if (typeof core.module.ia !== 'function'
+          || typeof core.module.Is !== 'function'
+          || typeof core.module.Ps !== 'function') {
           return { ok: false, reason: 'max_web_reply_sender_not_supported', providerActionStarted }
         }
         const requestedChatKey = BigInt(String(args.chatId))
@@ -831,15 +832,15 @@ class MaxWebReplyBridge {
             try { return BigInt.asUintN(64, BigInt(message?.id)).toString() } catch { return null }
           }).filter(Boolean),
         )
-        const draft = new core.module.Es(chatKey, {
+        const draft = new core.module.Is(chatKey, {
           text: String(args.text),
           saveTime: Date.now(),
           replyTo: replyKey,
         })
-        const pending = new core.module.ws(draft)
+        const pending = new core.module.Ps(draft)
         pending.id = BigInt(args.cid)
         providerActionStarted = true
-        await core.module.$i({ chat, message: pending })
+        await core.module.ia({ chat, message: pending })
 
         const normalizeText = value => String(value || '')
           .replace(/\u00a0/g, ' ')

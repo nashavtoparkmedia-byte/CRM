@@ -352,7 +352,7 @@ test('read-only provider history pagination advances by exact oldest provider ti
 test('MAX Web reply returns strict provider confirmation from the message store', () => {
   const source = fs.readFileSync(require.resolve('../reply/MaxWebReplyBridge'), 'utf8')
   const beforeSnapshot = source.indexOf('const beforeProviderIds = new Set(')
-  const sendAction = source.indexOf('await core.module.$i({ chat, message: pending })')
+  const sendAction = source.indexOf('await core.module.ia({ chat, message: pending })')
   const confirmation = source.indexOf('providerMessageDecimal: confirmedProviderId')
 
   assert.notEqual(beforeSnapshot, -1, 'missing provider-store snapshot')
@@ -360,8 +360,102 @@ test('MAX Web reply returns strict provider confirmation from the message store'
   assert.notEqual(confirmation, -1, 'missing provider confirmation result')
   assert.ok(beforeSnapshot < sendAction, 'snapshot must happen before send')
   assert.ok(sendAction < confirmation, 'confirmation must happen after send')
+  assert.match(source, /new core\.module\.Is\(chatKey,[\s\S]*?replyTo: replyKey/)
+  assert.match(source, /new core\.module\.Ps\(draft\)/)
+  assert.doesNotMatch(source, /await core\.module\.\$i\(\{ chat, message: pending \}\)/)
   assert.match(source, /BigInt\.asUintN\(64, BigInt\(message\?\.link\?\.id\)\) !== replyKey/)
   assert.match(source, /providerHex\.startsWith\('01'\)/)
+})
+
+test('MAX Web reply invokes the current sendChatMessage action instead of the wrapper factory', async () => {
+  const targetProviderMessageId = 'd3019f50829ca56ef0'
+  const replyProviderMessageId = 'd3019f50829ca56ef1'
+  const replyKey = BigInt(providerDecimalFromId(targetProviderMessageId))
+  const replyMessageKey = BigInt(providerDecimalFromId(replyProviderMessageId))
+  const chatId = 902454841098n
+  const uiRouteId = 511708938n
+  const target = {
+    id: replyKey,
+    text: { plain: 'quoted target' },
+    time: 1785576000000,
+    isOut: true,
+    link: null,
+  }
+  const providerStore = {
+    values: [target],
+    getLazy: async id => id === replyKey ? target : null,
+  }
+  const chat = { id: uiRouteId, messages: [target], lastMessage: target }
+  const store = {
+    chats: { values: [chat], getLazy: async id => id === chatId ? chat : null },
+    messages: { get: id => id === uiRouteId ? providerStore : { values: [], getLazy: async () => null } },
+    profile: { viewer: { id: 1n } },
+  }
+  let sendActionCalls = 0
+  const module = {
+    Ya: store,
+    Is: class ReplyDraft {
+      constructor(replyChatId, input) {
+        this.chatId = replyChatId
+        this.replyTo = input.replyTo
+        this.text = { plain: input.text, toApiElements: () => [] }
+        this.attaches = []
+      }
+    },
+    Ps: class PendingMessage {
+      constructor(draft) {
+        this.id = 0n
+        this.chatId = draft.chatId
+        this.text = draft.text
+        this.link = { id: draft.replyTo }
+        this.attaches = []
+        this.type = 'USER'
+      }
+    },
+    ia: async ({ chat: actionChat, message }) => {
+      sendActionCalls += 1
+      assert.equal(actionChat, chat)
+      assert.equal(message.text.plain, 'reply body')
+      assert.equal(message.link.id, replyKey)
+      providerStore.values.push({
+        id: replyMessageKey,
+        text: { plain: 'reply body' },
+        time: 1785576001000,
+        isOut: true,
+        link: { id: replyKey },
+      })
+    },
+    $i: async () => {
+      throw new Error('legacy wrapper factory must not be invoked')
+    },
+  }
+  const previousWindow = global.window
+  global.window = {
+    __crmMaxCoreModule: {
+      module,
+      url: 'https://web.max.ru/_app/immutable/chunks/current.js',
+      store,
+      storeExportKey: 'Ya',
+      legacySendPrimitives: false,
+    },
+  }
+  try {
+    const bridge = new MaxWebReplyBridge({ evaluate: (callback, args) => callback(args) })
+    const result = await bridge.sendReply(
+      String(chatId),
+      'reply body',
+      targetProviderMessageId,
+      '1785576000123',
+      { uiChatId: String(uiRouteId) },
+    )
+
+    assert.equal(sendActionCalls, 1)
+    assert.equal(result.ok, true)
+    assert.equal(result.providerMessageId, replyProviderMessageId)
+    assert.equal(result.providerCandidateCount, 1)
+  } finally {
+    global.window = previousWindow
+  }
 })
 
 test('MAX Web reply preserves BigInt chat keys after strict route correlation', () => {
@@ -389,8 +483,8 @@ test('real provider reply target still route-correlates the MAX Web chat before 
   assert.match(sendBlock, /const chat = routeMatches\.length === 1/)
   assert.match(sendBlock, /: await core\.store\.chats\.getLazy\(requestedChatKey\)/)
   assert.doesNotMatch(sendBlock, /if \(!core\.legacySendPrimitives/)
-  assert.match(sendBlock, /typeof core\.module\.\$i !== 'function'/)
-  assert.match(sendBlock, /typeof core\.module\.Es !== 'function'/)
-  assert.match(sendBlock, /typeof core\.module\.ws !== 'function'/)
+  assert.match(sendBlock, /typeof core\.module\.ia !== 'function'/)
+  assert.match(sendBlock, /typeof core\.module\.Is !== 'function'/)
+  assert.match(sendBlock, /typeof core\.module\.Ps !== 'function'/)
   assert.match(scraperSource, /replyBridge\.sendReply\([\s\S]*?\{ uiChatId: directUiRouteId \}[\s\S]*?\)/)
 })
