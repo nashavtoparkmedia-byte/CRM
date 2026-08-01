@@ -191,6 +191,50 @@ test('daily provider-call limit and UNKNOWN stop are restored from durable state
   assert.equal(unknownCalls.send, 2)
 })
 
+test('UNKNOWN stop is restored as clear after exact provider confirmation resolution', async t => {
+  const directory = temporaryStateDirectory()
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  const calls = { preflight: 0, authorize: 0, send: 0 }
+  const uncertain = request({
+    commandId: 'command-exact-unknown',
+    attemptId: 'attempt-exact-unknown',
+    attemptCorrelationId: 'correlation-exact-unknown',
+    clientMessageId: 'client-exact-unknown',
+    idempotencyKey: 'idempotency-exact-unknown',
+  })
+  assert.equal((await harness(directory, calls, { unknown: true }).boundary
+    .handle(uncertain, authentication(uncertain, 'nonce-exact-unknown'))).outcome, 'UNKNOWN_AFTER_ATTEMPT')
+
+  const stoppedRequest = request({
+    commandId: 'command-after-exact-unknown-stop',
+    attemptId: 'attempt-after-exact-unknown-stop',
+    attemptCorrelationId: 'correlation-after-exact-unknown-stop',
+    clientMessageId: 'client-after-exact-unknown-stop',
+    idempotencyKey: 'idempotency-after-exact-unknown-stop',
+  })
+  assert.equal((await harness(directory, calls).boundary
+    .handle(stoppedRequest, authentication(stoppedRequest, 'nonce-exact-unknown-stopped'))).safeCode, 'STOPPED_AFTER_UNKNOWN')
+
+  const store = new DurableSenderAttemptStore(directory)
+  store.resolveUnknownAttempt(uncertain.attemptId, {
+    resolutionType: 'exact_provider_confirmation',
+    resolvedAt: now.toISOString(),
+    evidenceReference: 'test-exact-provider-confirmation-evidence:d30100000000000000',
+  })
+
+  const resumedRequest = request({
+    commandId: 'command-after-exact-confirmed',
+    attemptId: 'attempt-after-exact-confirmed',
+    attemptCorrelationId: 'correlation-after-exact-confirmed',
+    clientMessageId: 'client-after-exact-confirmed',
+    idempotencyKey: 'idempotency-after-exact-confirmed',
+  })
+  const resumed = await harness(directory, calls).boundary
+    .handle(resumedRequest, authentication(resumedRequest, 'nonce-exact-confirmed-resumed'))
+  assert.equal(resumed.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(calls.send, 2)
+})
+
 test('default-off runtime does not construct a physical boundary', () => {
   assert.equal(createPhysicalTextSenderRuntime({ environment: {}, preflight: async () => {}, send: async () => {} }), null)
 })

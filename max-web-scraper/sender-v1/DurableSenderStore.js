@@ -43,7 +43,7 @@ function resolvedUnknown(record) {
   const resolution = record?.resolution
   return record?.response?.outcome === 'UNKNOWN_AFTER_ATTEMPT'
     && resolution?.schemaVersion === 1
-    && ['provider_absence_proven', 'operator_dead_letter'].includes(resolution.resolutionType)
+    && ['exact_provider_confirmation', 'provider_absence_proven', 'operator_dead_letter'].includes(resolution.resolutionType)
     && typeof resolution.resolvedAt === 'string'
     && typeof resolution.evidenceReference === 'string'
     && resolution.evidenceReference.length >= 1
@@ -189,7 +189,7 @@ class DurableSenderAttemptStore {
     const resolvedAt = resolution?.resolvedAt || new Date().toISOString()
     const resolutionType = resolution?.resolutionType
     const evidenceReference = resolution?.evidenceReference
-    if (!['provider_absence_proven', 'operator_dead_letter'].includes(resolutionType)
+    if (!['exact_provider_confirmation', 'provider_absence_proven', 'operator_dead_letter'].includes(resolutionType)
       || typeof resolvedAt !== 'string' || Number.isNaN(Date.parse(resolvedAt))
       || typeof evidenceReference !== 'string' || evidenceReference.length < 1 || evidenceReference.length > 512
       || /[\x00-\x1f\x7f]/.test(evidenceReference)) {
