@@ -257,6 +257,11 @@ route_evidence_json() {
       source:"root_operator_verified_existing_contact_and_chat_evidence",messageTextPrinted:false,payloadPrinted:false}'
 }
 
+stable_idempotency_key() {
+  local seed=$1
+  printf '%s' "$seed" | sha256sum | awk '{print $1}'
+}
+
 repair_sql() {
   local apply=$1
   local rollback_command=ROLLBACK
@@ -276,6 +281,10 @@ repair_sql() {
     -e A_PROVIDER_EVIDENCE_SIZE="$a_provider_evidence_size" \
     -e A_WEB_EVIDENCE_SIZE="$a_web_evidence_size" \
     -e B_PROVIDER_EVIDENCE_SIZE="$b_provider_evidence_size" \
+    -e A_PROTOCOL_IDEMPOTENCY_KEY="$a_protocol_idempotency_key" \
+    -e A_PROVIDER_IDEMPOTENCY_KEY="$a_provider_idempotency_key" \
+    -e A_WEB_IDEMPOTENCY_KEY="$a_web_idempotency_key" \
+    -e B_PROVIDER_IDEMPOTENCY_KEY="$b_provider_idempotency_key" \
     -e PMAX_REPAIR_APPLY="$psql_apply" \
     crm-postgres sh -c 'exec psql -X -v ON_ERROR_STOP=1 \
       -v account_id="$PMAX_ACCOUNT_ID" \
@@ -291,6 +300,10 @@ repair_sql() {
       -v a_provider_evidence_size="$A_PROVIDER_EVIDENCE_SIZE" \
       -v a_web_evidence_size="$A_WEB_EVIDENCE_SIZE" \
       -v b_provider_evidence_size="$B_PROVIDER_EVIDENCE_SIZE" \
+      -v a_protocol_idempotency_key="$A_PROTOCOL_IDEMPOTENCY_KEY" \
+      -v a_provider_idempotency_key="$A_PROVIDER_IDEMPOTENCY_KEY" \
+      -v a_web_idempotency_key="$A_WEB_IDEMPOTENCY_KEY" \
+      -v b_provider_idempotency_key="$B_PROVIDER_IDEMPOTENCY_KEY" \
       -v apply="$PMAX_REPAIR_APPLY" \
       -At -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<SQL
 BEGIN;
@@ -575,10 +588,10 @@ CREATE TEMP TABLE rc3_route_observations (
   route_version_after int
 ) ON COMMIT DROP;
 INSERT INTO rc3_route_observations VALUES
-  ('pmax_rc3_route_a_protocol', 'pmax-rc3-contact-identity:a:protocol', '$A_CONVERSATION_KEY', 'protocol_chat_id', '$A_PROTOCOL_CHAT_ID', 'manual_approved', :'a_protocol_evidence_json'::jsonb, :'a_protocol_evidence_sha', :'a_protocol_evidence_size', 1),
-  ('pmax_rc3_route_a_provider', 'pmax-rc3-contact-identity:a:provider', '$A_CONVERSATION_KEY', 'provider_user_id', '$A_PROVIDER_USER_ID', 'manual_approved', :'a_provider_evidence_json'::jsonb, :'a_provider_evidence_sha', :'a_provider_evidence_size', 1),
-  ('pmax_rc3_route_a_web', 'pmax-rc3-contact-identity:a:web', '$A_CONVERSATION_KEY', 'web_route_id', '$A_WEB_ROUTE_ID', 'manual_approved', :'a_web_evidence_json'::jsonb, :'a_web_evidence_sha', :'a_web_evidence_size', 1),
-  ('pmax_rc3_route_b_provider', 'pmax-rc3-contact-identity:b:provider', '$B_CONVERSATION_KEY', 'provider_user_id', '$B_PROVIDER_USER_ID', 'manual_approved', :'b_provider_evidence_json'::jsonb, :'b_provider_evidence_sha', :'b_provider_evidence_size', NULL);
+  ('pmax_rc3_route_a_protocol', :'a_protocol_idempotency_key', '$A_CONVERSATION_KEY', 'protocol_chat_id', '$A_PROTOCOL_CHAT_ID', 'manual_approved', :'a_protocol_evidence_json'::jsonb, :'a_protocol_evidence_sha', :'a_protocol_evidence_size', 1),
+  ('pmax_rc3_route_a_provider', :'a_provider_idempotency_key', '$A_CONVERSATION_KEY', 'provider_user_id', '$A_PROVIDER_USER_ID', 'manual_approved', :'a_provider_evidence_json'::jsonb, :'a_provider_evidence_sha', :'a_provider_evidence_size', 1),
+  ('pmax_rc3_route_a_web', :'a_web_idempotency_key', '$A_CONVERSATION_KEY', 'web_route_id', '$A_WEB_ROUTE_ID', 'manual_approved', :'a_web_evidence_json'::jsonb, :'a_web_evidence_sha', :'a_web_evidence_size', 1),
+  ('pmax_rc3_route_b_provider', :'b_provider_idempotency_key', '$B_CONVERSATION_KEY', 'provider_user_id', '$B_PROVIDER_USER_ID', 'manual_approved', :'b_provider_evidence_json'::jsonb, :'b_provider_evidence_sha', :'b_provider_evidence_size', NULL);
 
 UPDATE "MaxRouteIdentityBinding" b
 SET status='superseded', version=b.version+1, "lastSeenAt"=now(), "updatedAt"=now()
@@ -639,7 +652,7 @@ WHERE r."accountId"=:'account_id' AND r."conversationKey"='$B_CONVERSATION_KEY'
   )
   AND EXISTS (
     SELECT 1 FROM "MaxRouteObservation" o
-    WHERE o."accountId"=:'account_id' AND o."idempotencyKey"='pmax-rc3-contact-identity:b:provider'
+    WHERE o."accountId"=:'account_id' AND o."idempotencyKey"=:'b_provider_idempotency_key'
       AND o."createdAt" >= now() - interval '2 minutes'
   );
 
@@ -975,6 +988,10 @@ readonly a_protocol_evidence_sha=$(printf '%s' "$a_protocol_evidence_json" | sha
 readonly a_provider_evidence_sha=$(printf '%s' "$a_provider_evidence_json" | sha256sum | awk '{print $1}')
 readonly a_web_evidence_sha=$(printf '%s' "$a_web_evidence_json" | sha256sum | awk '{print $1}')
 readonly b_provider_evidence_sha=$(printf '%s' "$b_provider_evidence_json" | sha256sum | awk '{print $1}')
+readonly a_protocol_idempotency_key=$(stable_idempotency_key "personal-max-rc3-contact-identity:a:protocol:${ACCOUNT_ID}:${A_PROTOCOL_CHAT_ID}:${A_CONVERSATION_KEY}")
+readonly a_provider_idempotency_key=$(stable_idempotency_key "personal-max-rc3-contact-identity:a:provider:${ACCOUNT_ID}:${A_PROVIDER_USER_ID}:${A_CONVERSATION_KEY}")
+readonly a_web_idempotency_key=$(stable_idempotency_key "personal-max-rc3-contact-identity:a:web:${ACCOUNT_ID}:${A_WEB_ROUTE_ID}:${A_CONVERSATION_KEY}")
+readonly b_provider_idempotency_key=$(stable_idempotency_key "personal-max-rc3-contact-identity:b:provider:${ACCOUNT_ID}:${B_PROVIDER_USER_ID}:${B_CONVERSATION_KEY}")
 readonly a_protocol_evidence_size=$(printf '%s' "$a_protocol_evidence_json" | wc -c)
 readonly a_provider_evidence_size=$(printf '%s' "$a_provider_evidence_json" | wc -c)
 readonly a_web_evidence_size=$(printf '%s' "$a_web_evidence_json" | wc -c)
