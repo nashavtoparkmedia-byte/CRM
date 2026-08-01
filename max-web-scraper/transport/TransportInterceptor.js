@@ -2217,7 +2217,11 @@ class TransportInterceptor {
       // { type: 'REPLY', messageId: <provider message id> }.
       // Provider-store snapshots later materialize the same relationship as
       // link.message.id, but that is the read model, not the outbound frame.
-      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, true),
+      // Unlike op:71 anchors, native op:64 message links preserve MAX's
+      // provider id signedness marker (d3).  Re-encoding reply targets as
+      // unsigned cf makes the frame syntactically decodable but invalid for
+      // the send-message command.
+      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, false),
     ])
     const messageMap = Buffer.concat([
       Buffer.from([0x85]),

@@ -38,7 +38,7 @@ test('reply frame uses native MAX op64 reply payload shape', () => {
   assert.equal(payload.message.text, 'Ответил')
   assert.equal(payload.message.link.type, 'REPLY')
   assert.equal(payload.message.link.id, undefined, 'outbound reply must not use provider-store read-model key id')
-  assert.equal(payload.message.link.messageId.hex.toLowerCase(), REPLY_TO.replace(/^d3/i, 'cf'))
+  assert.equal(payload.message.link.messageId.hex.toLowerCase(), REPLY_TO)
 })
 
 test('reply frame prefers a browser-captured op64 prefix over unrelated global prefix', () => {
