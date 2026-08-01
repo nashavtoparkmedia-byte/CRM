@@ -49,6 +49,8 @@ test('data repair is exact scoped, audited and idempotent', () => {
 
   assert.match(source, /INSERT INTO "ContactMerge"/u)
   assert.match(source, /personal_max_rc3_contact_identity_merge/u)
+  assert.match(source, /to_regclass\('public\."Task"'\)/u)
+  assert.match(source, /rc3_optional_task_plan/u)
   assert.match(source, /UPDATE "MaxRouteIdentityBinding" b[\s\S]*status='superseded'/u)
   assert.match(source, /INSERT INTO "MaxRouteObservation"/u)
   assert.match(source, /route_bindings_to_activate==0/u)

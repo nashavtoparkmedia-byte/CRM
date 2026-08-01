@@ -310,13 +310,29 @@ INSERT INTO rc3_pairs VALUES
   ('A', '$A_PHONE', '$A_SOURCE_CONTACT', '$A_TARGET_CONTACT', '$A_PHONE_ID'),
   ('B', '$B_PHONE', '$B_SOURCE_CONTACT', '$B_TARGET_CONTACT', '$B_PHONE_ID');
 
+CREATE TEMP TABLE rc3_optional_task_plan (
+  tasks_to_move int NOT NULL DEFAULT 0
+) ON COMMIT DROP;
+INSERT INTO rc3_optional_task_plan VALUES (0);
+DO \$\$
+DECLARE
+  task_count int;
+BEGIN
+  IF to_regclass('public."Task"') IS NOT NULL THEN
+    EXECUTE 'SELECT count(*) FROM rc3_pairs p JOIN "Task" t ON t."contactId"=p.source_contact'
+      INTO task_count;
+    UPDATE rc3_optional_task_plan SET tasks_to_move=task_count;
+  END IF;
+END
+\$\$;
+
 CREATE TEMP TABLE rc3_plan AS
 SELECT
   (SELECT count(*) FROM rc3_pairs p JOIN "Contact" c ON c.id=p.source_contact WHERE c."isArchived"=false) AS source_contacts_active,
   (SELECT count(*) FROM rc3_pairs p JOIN "ContactPhone" ph ON ph.id=p.phone_id WHERE ph."contactId"=p.source_contact) AS phones_to_move,
   (SELECT count(*) FROM rc3_pairs p JOIN "ContactIdentity" i ON i."contactId"=p.source_contact) AS identities_to_move,
   (SELECT count(*) FROM rc3_pairs p JOIN "Chat" ch ON ch."contactId"=p.source_contact) AS chats_to_move,
-  (SELECT count(*) FROM rc3_pairs p JOIN "Task" t ON t."contactId"=p.source_contact) AS tasks_to_move,
+  (SELECT tasks_to_move FROM rc3_optional_task_plan) AS tasks_to_move,
   (SELECT count(*) FROM rc3_pairs p JOIN "Call" ca ON ca."contactId"=p.source_contact) AS calls_to_move,
   (SELECT count(*) FROM rc3_pairs p JOIN "Driver" d ON d."contactId"=p.source_contact) AS driver_profiles_to_move,
   (SELECT count(*) FROM "ContactMerge" cm WHERE cm."survivorId" IN ('$A_TARGET_CONTACT','$B_TARGET_CONTACT') AND cm."mergedId" IN ('$A_SOURCE_CONTACT','$B_SOURCE_CONTACT') AND cm."mergedBy"='$REPAIR_ACTOR' AND cm.action='merge') AS existing_repair_merges,
@@ -451,10 +467,13 @@ SET "contactId"=p.target_contact
 FROM rc3_pairs p
 WHERE ch."contactId"=p.source_contact;
 
-UPDATE "Task" t
-SET "contactId"=p.target_contact
-FROM rc3_pairs p
-WHERE t."contactId"=p.source_contact;
+DO \$\$
+BEGIN
+  IF to_regclass('public."Task"') IS NOT NULL THEN
+    EXECUTE 'UPDATE "Task" t SET "contactId"=p.target_contact FROM rc3_pairs p WHERE t."contactId"=p.source_contact';
+  END IF;
+END
+\$\$;
 
 UPDATE "Call" ca
 SET "contactId"=p.target_contact
