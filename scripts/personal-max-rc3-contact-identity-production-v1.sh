@@ -936,10 +936,21 @@ printf 'isolated_restore_container=%s\n' "$restore_container" >"$EVIDENCE_DIR/is
 docker run -d --rm --network none --name "$restore_container" \
   -e POSTGRES_PASSWORD=restore-check-not-production postgres:16-alpine \
   >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
-for _ in {1..60}; do
-  if docker exec "$restore_container" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+restore_ready_count=0
+for _ in {1..120}; do
+  if docker exec "$restore_container" pg_isready -U postgres >/dev/null 2>&1; then
+    restore_ready_count=$((restore_ready_count + 1))
+    if [[ $restore_ready_count -ge 2 ]]; then break; fi
+  else
+    restore_ready_count=0
+  fi
   sleep 1
 done
+if [[ $restore_ready_count -lt 2 ]]; then
+  docker logs "$restore_container" >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1 || true
+  echo 'ERROR: isolated restore postgres did not become stable-ready' >&2
+  exit 72
+fi
 docker exec "$restore_container" pg_isready -U postgres \
   >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
 docker exec "$restore_container" createdb -U postgres restore_check \
