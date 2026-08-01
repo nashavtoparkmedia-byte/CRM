@@ -27,12 +27,11 @@ test('reply frame uses native MAX op64 reply payload shape', () => {
   assert.equal(frame[6], 0x00, 'synthetic op64 payload is uncompressed')
   assert.equal(frame[7], 0x00)
   assert.equal((frame[8] << 8) | frame[9], frame.length - 10)
-  assert.deepEqual([...frame.subarray(10, 12)], [0xf0, OP.SEND_MESSAGE])
+  assert.equal(frame[10], 0x84, 'native op64 payload root is a map, not an f0/opcode wrapper')
 
   const decoded = maxMsgpackDecodeAll(frame.subarray(10))
-  assert.equal(decoded[0], -16, 'MAX schema marker must start op64 payload')
-  assert.equal(decoded[1], OP.SEND_MESSAGE, 'MAX schema marker must be opcode-specific for SEND_MESSAGE')
-  const payload = decoded[2]
+  assert.equal(decoded.length, 1, 'native op64 frame contains one root payload object')
+  const payload = decoded[0]
   assert.equal(payload.chatId.hex.toLowerCase(), 'cf000000d21e800f0a', 'op64 uses the full protocol chat id, not lower32/ui route')
   assert.equal(payload.postId, null, 'direct-dialog op64 keeps native postId:nil shape')
   assert.equal(payload.notify, true)
@@ -42,22 +41,24 @@ test('reply frame uses native MAX op64 reply payload shape', () => {
   assert.equal(payload.message.link.messageId.hex.toLowerCase(), `cf${REPLY_TO.slice(2)}`, 'native BigInt encoder uses uint64 for positive provider ids')
 })
 
-test('reply frame prefers a browser-captured op64 prefix over unrelated global prefix', () => {
+test('reply frame ignores captured f0 prefixes and keeps a native map root', () => {
   const transport = new TransportInterceptor()
   transport._browserBinaryRequestPrefix = [0xf0, 0x1b]
   transport._browserBinaryRequestPrefixesByOpcode.set(OP.SEND_MESSAGE, [0xf0, 0x41])
 
   const frame = transport._buildBinaryReplyFrame(CHAT_ID, 'Ответил', REPLY_TO, -12345)
 
-  assert.deepEqual([...frame.subarray(10, 12)], [0xf0, 0x41])
+  assert.equal(frame[10], 0x84)
+  assert.notDeepEqual([...frame.subarray(10, 12)], [0xf0, 0x41])
 })
 
-test('reply frame uses deterministic op64 prefix when browser has not emitted native op64', () => {
+test('reply frame does not require a captured prefix when browser has not emitted native op64', () => {
   const transport = new TransportInterceptor()
 
   const frame = transport._buildBinaryReplyFrame(CHAT_ID, 'Ответил', REPLY_TO, -12345)
 
-  assert.deepEqual([...frame.subarray(10, 12)], [0xf0, OP.SEND_MESSAGE])
+  assert.equal(frame[10], 0x84)
+  assert.notDeepEqual([...frame.subarray(10, 12)], [0xf0, OP.SEND_MESSAGE])
 })
 
 test('reply frame refuses non-provider reply targets before physical action', () => {

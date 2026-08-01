@@ -2184,20 +2184,12 @@ class TransportInterceptor {
     return Buffer.concat([Buffer.from([0xc7, raw.length, 0x01]), raw])
   }
 
-  _buildBrowserBinaryRequestFrame(opcode, payloadMap, options = {}) {
-    const fallbackPrefix = Array.isArray(options.fallbackPrefix) ? options.fallbackPrefix : null
-    const opcodePrefix = this._browserBinaryRequestPrefixesByOpcode instanceof Map
-      ? this._browserBinaryRequestPrefixesByOpcode.get(opcode)
-      : null
-    const capturedPrefix = opcodePrefix ||
-      fallbackPrefix ||
-      this._browserBinaryRequestPrefix ||
-      (Array.isArray(this._op71Prefix) ? this._op71Prefix.slice(-2) : null)
-    if (!capturedPrefix || capturedPrefix.length !== 2 || capturedPrefix[0] !== 0xf0) {
-      throw new Error(`Binary op:${opcode} requires a browser-captured MAX request prefix`)
-    }
-
-    const payload = Buffer.concat([Buffer.from(capturedPrefix), payloadMap])
+  _buildBrowserBinaryRequestFrame(opcode, payloadMap) {
+    // Native MAX Web frames encode the command payload map directly after the
+    // 10-byte transport header.  Earlier synthetic frames prepended an inferred
+    // [0xf0, opcode] schema marker that made the server parse a non-map root
+    // and reject op:64 replies with "Expected map at 1".
+    const payload = payloadMap
     if (payload.length > 0xffff) {
       throw new Error(`Binary op:${opcode} payload is too large: ${payload.length}`)
     }
@@ -2257,13 +2249,7 @@ class TransportInterceptor {
       this._mpStr('notify'), Buffer.from([0xc3]),
     ])
 
-    return this._buildBrowserBinaryRequestFrame(OP.SEND_MESSAGE, payloadMap, {
-      // A globally captured f0/schema prefix can belong to an unrelated
-      // opcode (for example stickers op:26/27).  If the browser has not
-      // emitted a native op:64 in this session, use the opcode-specific
-      // request prefix shape observed for cmd=1 browser frames.
-      fallbackPrefix: [0xf0, OP.SEND_MESSAGE],
-    })
+    return this._buildBrowserBinaryRequestFrame(OP.SEND_MESSAGE, payloadMap)
   }
 
   async sendBinaryReply(chatId, text, replyToMessageId, cid) {
