@@ -914,7 +914,8 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                                                 ? liveReachabilityFor(identity.channel)
                                                 : undefined)
                                             const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
-                                            const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)
+                                            const routeKnown = identity.personalMaxRouteKnown === true
+                                                || Boolean(identity.externalId || linkedChat?.externalChatId)
                                             const presentation = deriveChannelReachabilityPresentation({
                                                 persistedStatus: identity.reachabilityStatus,
                                                 live: liveEntry,
@@ -1002,7 +1003,8 @@ export default function ContactProfileDrawer({ chatId, contactId }: { chatId: st
                                 ? liveReachabilityFor(identity.channel)
                                 : undefined)
                             const linkedChat = contact.chats.find(c => c.contactIdentityId === identity.id)
-                            const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)
+                            const routeKnown = identity.personalMaxRouteKnown === true
+                                || Boolean(identity.externalId || linkedChat?.externalChatId)
                             const presentation = deriveChannelReachabilityPresentation({
                                 persistedStatus: identity.reachabilityStatus,
                                 live: liveEntry,

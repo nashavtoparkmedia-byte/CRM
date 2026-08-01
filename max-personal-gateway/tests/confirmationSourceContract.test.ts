@@ -12,15 +12,26 @@ test('confirmation module has no Redis, Chromium, sender, network, or provider r
   assert.doesNotMatch(source, /\b(?:fetch|WebSocket|axios)\s*\(/)
   assert.doesNotMatch(source, /MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED.*(?:true|\*)/)
 })
-test('existing runtime does not import the Stage 6 matcher', async () => {
-  const runtimeFiles = [
+test('provider-facing runtimes do not import the confirmation matcher or feature flag', async () => {
+  const providerRuntimeFiles = [
     '../../max-web-scraper/index.js',
     '../../gravity-mvp/src/lib/MessageService.ts',
   ]
-  for (const relative of runtimeFiles) {
+  for (const relative of providerRuntimeFiles) {
     const content = await readFile(new URL(relative, import.meta.url), 'utf8')
     assert.doesNotMatch(content, /confirmation\/PrismaConfirmationMatcher|MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED/)
   }
+})
+
+test('gateway shadow worker runs confirmation matcher only behind an exact account allowlist', async () => {
+  const pipeline = await readFile(new URL('../src/runtime/ShadowPipeline.ts', import.meta.url), 'utf8')
+  const config = await readFile(new URL('../src/runtime/config.ts', import.meta.url), 'utf8')
+  assert.match(config, /providerConfirmation: parseExactAccountAllowlist\(environment\.MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED\)/)
+  assert.match(config, /subset\(features\.providerConfirmation, features\.normalizer, 'Provider confirmation matcher'\)/)
+  assert.match(pipeline, /new PrismaConfirmationMatcher\(client\)/)
+  assert.match(pipeline, /features\.providerConfirmation\.has\(accountId\)/)
+  assert.match(pipeline, /consumerId: 'max-personal-gateway-provider-confirmation-v1'/)
+  assert.doesNotMatch(config, /MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED.*(?:true|\*)/)
 })
 
 test('migration is additive and carries append-only and cursor guards', async () => {

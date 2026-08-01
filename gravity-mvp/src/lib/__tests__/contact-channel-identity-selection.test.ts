@@ -21,6 +21,7 @@ function identity(
   externalId: string,
   phoneId: string | null,
   reachabilityStatus: ContactIdentityPayload['reachabilityStatus'],
+  personalMaxRouteKnown = false,
 ): ContactIdentityPayload {
   return {
     id,
@@ -32,6 +33,7 @@ function identity(
     confidence: 1,
     reachabilityStatus,
     reachabilityCheckedAt: null,
+    personalMaxRouteKnown,
   }
 }
 
@@ -105,5 +107,23 @@ describe('canonical Contact channel identity selection', () => {
     })
 
     expect(selected.map(item => item.id)).toEqual(['phone-placeholder'])
+  })
+
+  test('preserves durable route knowledge when phone placeholders are collapsed', () => {
+    const selected = selectCanonicalContactChannelIdentities({
+      phones: [phone],
+      identities: [
+        identity('phone-placeholder', '79126787532', 'phone-1', 'confirmed', true),
+        identity('provider-route', '902454841098', null, 'unknown'),
+      ],
+      chats: [chat('provider-route', '902454841098')],
+    })
+
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toMatchObject({
+      id: 'provider-route',
+      personalMaxRouteKnown: true,
+      reachabilityStatus: 'confirmed',
+    })
   })
 })

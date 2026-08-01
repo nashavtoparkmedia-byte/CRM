@@ -17,6 +17,39 @@ export type ReachabilityIdentityResolution =
 export type ProviderConnectionHealth = 'connected' | 'disconnected' | 'unknown'
 export type ReachabilityChannel = 'telegram' | 'whatsapp' | 'max'
 
+export type PersonalMaxDurableRouteResolution =
+  | {
+      kind: 'active'
+      accountId: string
+      conversationKey: string
+      routeVersion: number
+      protocolChatId: string | null
+      providerUserId: string | null
+      webRouteId: string | null
+      identityValues: string[]
+    }
+  | { kind: 'not_found' }
+  | { kind: 'ambiguous'; conversationKeys: string[] }
+  | { kind: 'unavailable' }
+
+const MAX_ROUTE_IDENTITY_KINDS = new Set([
+  'protocol_chat_id',
+  'provider_user_id',
+  'web_route_id',
+])
+
+function personalMaxAccountId(): string | null {
+  const value = process.env.MAX_PERSONAL_ACCOUNT_ID || ''
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u.test(value) ? value : null
+}
+
+function exactRouteIdentity(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!/^\d{1,15}$/u.test(trimmed)) return null
+  return trimmed
+}
+
 /**
  * Update the reachability status of a ContactIdentity.
  *
@@ -143,6 +176,96 @@ export async function resolveReachabilityIdentity(
     }
   }
   return { kind: 'matched', identity: matches[0] }
+}
+
+/**
+ * Resolve the exact durable Personal MAX route for one ContactIdentity.
+ *
+ * This is deliberately stricter than phone reachability: it only trusts
+ * account-scoped active route-registry bindings for the configured Personal
+ * MAX account. It never creates routes, never selects a different account, and
+ * never promotes a phone-only match into sendability.
+ */
+export async function resolvePersonalMaxDurableRouteForIdentity(
+  identityId: string | null | undefined,
+): Promise<PersonalMaxDurableRouteResolution> {
+  const accountId = personalMaxAccountId()
+  if (!accountId || !identityId) return { kind: 'not_found' }
+
+  try {
+    const identity = await prisma.contactIdentity.findUnique({
+      where: { id: identityId },
+      select: {
+        id: true,
+        channel: true,
+        externalId: true,
+        isActive: true,
+        contactId: true,
+        contact: {
+          select: {
+            isArchived: true,
+            chats: {
+              where: { channel: 'max' },
+              select: { externalChatId: true, contactIdentityId: true },
+            },
+          },
+        },
+      },
+    })
+    if (!identity || !identity.isActive || identity.channel !== 'max' || identity.contact.isArchived) {
+      return { kind: 'not_found' }
+    }
+
+    const candidates = new Set<string>()
+    const identityExternalId = exactRouteIdentity(identity.externalId)
+    if (identityExternalId) candidates.add(identityExternalId)
+    for (const chat of identity.contact.chats) {
+      if (chat.contactIdentityId !== identity.id) continue
+      const value = exactRouteIdentity(chat.externalChatId)
+      if (value) candidates.add(value)
+    }
+    if (candidates.size === 0) return { kind: 'not_found' }
+
+    const bindings = await prisma.maxRouteIdentityBinding.findMany({
+      where: {
+        accountId,
+        status: 'active',
+        identityValue: { in: [...candidates] },
+        conversation: { state: 'active' },
+      },
+      select: {
+        identityKind: true,
+        identityValue: true,
+        conversationKey: true,
+        conversation: {
+          select: {
+            routeVersion: true,
+          },
+        },
+      },
+      orderBy: [{ conversationKey: 'asc' }, { identityKind: 'asc' }, { identityValue: 'asc' }],
+    })
+    const exactBindings = bindings.filter(binding => MAX_ROUTE_IDENTITY_KINDS.has(binding.identityKind))
+    if (exactBindings.length === 0) return { kind: 'not_found' }
+    const conversationKeys = [...new Set(exactBindings.map(binding => binding.conversationKey))].sort()
+    if (conversationKeys.length !== 1) return { kind: 'ambiguous', conversationKeys }
+
+    const byKind = new Map(exactBindings.map(binding => [binding.identityKind, binding.identityValue]))
+    return {
+      kind: 'active',
+      accountId,
+      conversationKey: conversationKeys[0]!,
+      routeVersion: exactBindings[0]!.conversation.routeVersion,
+      protocolChatId: byKind.get('protocol_chat_id') || null,
+      providerUserId: byKind.get('provider_user_id') || null,
+      webRouteId: byKind.get('web_route_id') || null,
+      identityValues: [...new Set(exactBindings.map(binding => binding.identityValue))].sort(),
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[ReachabilityService] Personal MAX route lookup unavailable for ${identityId}: ${message}`)
+    return { kind: 'unavailable' }
+  }
 }
 
 /**

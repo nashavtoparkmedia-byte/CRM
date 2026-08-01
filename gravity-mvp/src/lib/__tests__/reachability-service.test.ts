@@ -10,18 +10,21 @@ const prismaMock = vi.hoisted(() => ({
   telegramConnection: { findMany: vi.fn() },
   maxPersonalSession: { findMany: vi.fn() },
   maxConnection: { findMany: vi.fn() },
+  maxRouteIdentityBinding: { findMany: vi.fn() },
 }))
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
 import {
   findIdentityByPhoneAndChannel,
   getProviderConnectionHealth,
+  resolvePersonalMaxDurableRouteForIdentity,
   resolveReachabilityIdentity,
 } from '@/lib/ReachabilityService'
 
 describe('strict reachability identity resolution', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    process.env.MAX_PERSONAL_ACCOUNT_ID = 'max-personal-account-a'
   })
 
   test('accepts an explicitly requested identity only when channel and Contact phone match', async () => {
@@ -80,6 +83,91 @@ describe('strict reachability identity resolution', () => {
     })
     await expect(findIdentityByPhoneAndChannel('+79222155750', 'whatsapp')).resolves.toBeNull()
     expect(prismaMock.contactIdentity.findMany).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('Personal MAX durable route lookup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    process.env.MAX_PERSONAL_ACCOUNT_ID = 'max-personal-account-a'
+  })
+
+  test('trusts only active account-scoped route-registry bindings for sendability', async () => {
+    prismaMock.contactIdentity.findUnique.mockResolvedValue({
+      id: 'identity-max',
+      channel: 'max',
+      externalId: '902454841098',
+      isActive: true,
+      contactId: 'contact-a',
+      contact: {
+        isArchived: false,
+        chats: [
+          { externalChatId: '902454841098', contactIdentityId: 'identity-max' },
+          { externalChatId: '511708938', contactIdentityId: 'identity-max' },
+        ],
+      },
+    })
+    prismaMock.maxRouteIdentityBinding.findMany.mockResolvedValue([
+      {
+        identityKind: 'protocol_chat_id',
+        identityValue: '902454841098',
+        conversationKey: 'conv-exact',
+        conversation: { routeVersion: 7 },
+      },
+      {
+        identityKind: 'provider_user_id',
+        identityValue: '511708938',
+        conversationKey: 'conv-exact',
+        conversation: { routeVersion: 7 },
+      },
+      {
+        identityKind: 'web_route_id',
+        identityValue: '511708938',
+        conversationKey: 'conv-exact',
+        conversation: { routeVersion: 7 },
+      },
+    ])
+
+    await expect(resolvePersonalMaxDurableRouteForIdentity('identity-max')).resolves.toEqual({
+      kind: 'active',
+      accountId: 'max-personal-account-a',
+      conversationKey: 'conv-exact',
+      routeVersion: 7,
+      protocolChatId: '902454841098',
+      providerUserId: '511708938',
+      webRouteId: '511708938',
+      identityValues: ['511708938', '902454841098'],
+    })
+    expect(prismaMock.maxRouteIdentityBinding.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        accountId: 'max-personal-account-a',
+        status: 'active',
+        conversation: { state: 'active' },
+      }),
+    }))
+  })
+
+  test('returns ambiguous instead of selecting between two durable conversations', async () => {
+    prismaMock.contactIdentity.findUnique.mockResolvedValue({
+      id: 'identity-max',
+      channel: 'max',
+      externalId: '902454841098',
+      isActive: true,
+      contactId: 'contact-a',
+      contact: {
+        isArchived: false,
+        chats: [{ externalChatId: '511708938', contactIdentityId: 'identity-max' }],
+      },
+    })
+    prismaMock.maxRouteIdentityBinding.findMany.mockResolvedValue([
+      { identityKind: 'protocol_chat_id', identityValue: '902454841098', conversationKey: 'conv-a', conversation: { routeVersion: 1 } },
+      { identityKind: 'web_route_id', identityValue: '511708938', conversationKey: 'conv-b', conversation: { routeVersion: 1 } },
+    ])
+
+    await expect(resolvePersonalMaxDurableRouteForIdentity('identity-max')).resolves.toEqual({
+      kind: 'ambiguous',
+      conversationKeys: ['conv-a', 'conv-b'],
+    })
   })
 })
 

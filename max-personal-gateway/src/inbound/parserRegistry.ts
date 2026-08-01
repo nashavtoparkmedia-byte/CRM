@@ -229,6 +229,7 @@ function messageEvents(input: NormalizeRawObservationInput, payload: UnknownReco
   const protocolChatId = exactIdentifier(payload.protocolChatId, 'protocolChatId')
   const webRouteId = exactIdentifier(payload.webRouteId, 'webRouteId')
   const clientMessageId = exactIdentifier(payload.clientMessageId, 'clientMessageId')
+  const attemptCorrelationId = exactIdentifier(payload.attemptCorrelationId, 'attemptCorrelationId')
   const providerOccurredAt = providerDate(payload.providerOccurredAt)
   const text = optionalString(payload.text, 'text')
   const caption = optionalString(payload.caption, 'caption')
@@ -255,6 +256,7 @@ function messageEvents(input: NormalizeRawObservationInput, payload: UnknownReco
     protocolChatId,
     webRouteId,
     clientMessageId,
+    attemptCorrelationId,
     providerOccurredAt: providerOccurredAt?.toISOString() ?? null,
     observedAt: input.observedAt.toISOString(),
     text,

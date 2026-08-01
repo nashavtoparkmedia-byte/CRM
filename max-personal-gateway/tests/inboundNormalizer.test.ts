@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { MAX_INBOUND_NORMALIZER_VERSION } from '../src/inbound/constants.ts'
+import { classifyConfirmationEvidence } from '../src/confirmation/evidence.ts'
 import { isMaxInboundNormalizerEnabled } from '../src/inbound/featureFlag.ts'
 import { MaxInboundNormalizer } from '../src/inbound/MaxInboundNormalizer.ts'
 import { VersionedInboundParserRegistry } from '../src/inbound/parserRegistry.ts'
@@ -73,6 +74,49 @@ test('message fixtures cover inbound/outbound, history/live, rapid and identical
   assert.equal(outbound.events[0]?.direction, 'outbound_echo')
   assert.equal(history.events[0]?.origin, 'history')
   assert.equal(inbound.events[0]?.origin, 'live')
+})
+
+test('outbound provider-store echo preserves exact attempt correlation for confirmation matching', () => {
+  const normalizer = new MaxInboundNormalizer()
+  const outcome = normalizer.normalizeRawObservation(input({
+    kind: 'message',
+    direction: 'outbound_echo',
+    providerMessageId: 'd3019fbea4d9bb24fc',
+    senderProviderUserId: '511708938',
+    protocolChatId: '902454841098',
+    webRouteId: '511708938',
+    clientMessageId: 'cmid-1785609899932-po0dcr',
+    attemptCorrelationId: 'correlation-3c1f64cc44c1dad2a19cf64933b74366a14a8bd46f8e28a02e600464719c3241',
+    providerOccurredAt: '2026-08-01T18:45:02.523Z',
+    text: '11',
+  }))
+  const event = outcome.events[0]!
+  const envelope = messagePayload(outcome)
+  assert.equal(envelope.attemptCorrelationId, 'correlation-3c1f64cc44c1dad2a19cf64933b74366a14a8bd46f8e28a02e600464719c3241')
+  const draft = classifyConfirmationEvidence({
+    normalizedEventId: 'normalized-event-1',
+    accountId: 'max-personal-81d98d8cc9fc95c1f1c0461f',
+    sourceObservationId: 'observation-1',
+    sourceJournalSequence: 42458n,
+    eventOrdinal: event.eventOrdinal,
+    eventKind: event.eventKind,
+    direction: event.direction,
+    origin: event.origin,
+    providerMessageId: event.providerMessageId,
+    providerUserId: event.providerUserId,
+    protocolChatId: event.protocolChatId,
+    webRouteId: event.webRouteId,
+    clientMessageId: event.clientMessageId,
+    targetProviderMessageId: event.targetProviderMessageId,
+    providerOccurredAt: event.providerOccurredAt,
+    normalizedPayload: event.normalizedPayload as unknown as JsonValue,
+    semanticSha256: event.semanticSha256,
+  })
+  assert.equal(draft.evidenceKind, 'outbound_echo')
+  assert.equal(draft.positiveAcceptanceEligible, true)
+  assert.equal(draft.attemptCorrelationId, envelope.attemptCorrelationId)
+  assert.equal(draft.clientMessageId, envelope.clientMessageId)
+  assert.equal(draft.providerMessageId, envelope.providerMessageId)
 })
 
 test('JPEG, PDF, MP4 and OGG/voice attachments, caption, and ordinals normalize without download', () => {

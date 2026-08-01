@@ -1402,6 +1402,143 @@ function normalizedProviderEchoText(message) {
     .trim()
 }
 
+function isoFromProviderTimestamp(value) {
+  const numeric = Number(value)
+  if (Number.isFinite(numeric)) {
+    const ms = numeric < 1e12 ? numeric * 1000 : numeric
+    const date = new Date(ms)
+    if (Number.isFinite(date.valueOf())) return date.toISOString()
+  }
+  const parsed = new Date(String(value || '')).getTime()
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString()
+}
+
+function cleanupPendingOutboundProviderStoreConfirmations(now = Date.now()) {
+  if (!pendingOutboundProviderStoreConfirmations) return
+  for (const [key, context] of pendingOutboundProviderStoreConfirmations) {
+    if (now - context.registeredAt > 90_000) pendingOutboundProviderStoreConfirmations.delete(key)
+  }
+}
+
+function trackPendingOutboundProviderStoreConfirmation(context = {}) {
+  cleanupPendingOutboundProviderStoreConfirmations()
+  const protocolChatId = normalizeMaxChatId(context.protocolChatId)
+  const webRouteId = String(context.webRouteId || '')
+  const text = String(context.text || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\r\n/g, '\n')
+    .trim()
+  const attemptCorrelationId = String(context.attemptCorrelationId || '')
+  const clientMessageId = String(context.clientMessageId || '')
+  if (!protocolChatId || !/^\d{1,15}$/.test(webRouteId) || !text
+    || !attemptCorrelationId || !clientMessageId) return () => {}
+  const key = `${attemptCorrelationId}\0${clientMessageId}`
+  pendingOutboundProviderStoreConfirmations.set(key, {
+    protocolChatId,
+    webRouteId,
+    providerUserId: context.providerUserId ? String(context.providerUserId) : null,
+    text,
+    replyToProviderMessageId: context.replyToProviderMessageId ? String(context.replyToProviderMessageId).toLowerCase() : null,
+    clientMessageId,
+    attemptCorrelationId,
+    sentAt: Number.isFinite(context.sentAt) ? Number(context.sentAt) : Date.now(),
+    registeredAt: Date.now(),
+  })
+  const timer = setTimeout(() => pendingOutboundProviderStoreConfirmations.delete(key), 90_000)
+  timer.unref?.()
+  return () => {
+    clearTimeout(timer)
+    pendingOutboundProviderStoreConfirmations.delete(key)
+  }
+}
+
+function matchingPendingOutboundProviderStoreConfirmation(chatId, uiRouteId, providerMessage, providerId) {
+  cleanupPendingOutboundProviderStoreConfirmations()
+  const protocolChatId = normalizeMaxChatId(chatId)
+  const webRouteId = String(uiRouteId || '')
+  const providerText = normalizedProviderEchoText({
+    text: typeof providerMessage?.exactText === 'string' && providerMessage.exactText.length > 0
+      ? providerMessage.exactText
+      : providerMessage?.text,
+  })
+  const providerTime = Number(providerMessage?.timestamp)
+  const candidates = []
+  for (const context of pendingOutboundProviderStoreConfirmations.values()) {
+    if (context.protocolChatId !== protocolChatId || context.webRouteId !== webRouteId) continue
+    if (context.text !== providerText) continue
+    if (context.replyToProviderMessageId
+      && String(providerMessage?.replyToExternalId || '').toLowerCase() !== context.replyToProviderMessageId) continue
+    const distanceMs = Number.isFinite(providerTime)
+      ? Math.abs(providerTime - context.sentAt)
+      : Math.abs(Date.now() - context.sentAt)
+    const afterPhysicalStart = !Number.isFinite(providerTime) || providerTime >= context.sentAt - 5_000
+    if (!afterPhysicalStart || distanceMs > 120_000) continue
+    candidates.push({ context, distanceMs })
+  }
+  if (candidates.length === 0) return { skipped: 'outbound_echo_pending_context_missing' }
+  candidates.sort((left, right) =>
+    (left.distanceMs - right.distanceMs) ||
+    left.context.sentAt - right.context.sentAt ||
+    left.context.attemptCorrelationId.localeCompare(right.context.attemptCorrelationId)
+  )
+  if (candidates.length > 1 && candidates[1].distanceMs - candidates[0].distanceMs < 250) {
+    return { skipped: 'outbound_echo_pending_context_ambiguous' }
+  }
+  return { context: candidates[0].context, providerId: String(providerId).toLowerCase() }
+}
+
+function captureProviderStoreOutgoingEchoForConfirmation(chatId, uiRouteId, providerMessage, providerId, reason) {
+  if (!captureAdapter?.enabled) return { skipped: 'capture_disabled' }
+  const match = matchingPendingOutboundProviderStoreConfirmation(chatId, uiRouteId, providerMessage, providerId)
+  if (!match.context) return match
+  const context = match.context
+  const routeEvidence = [
+    { identityKind: 'protocol_chat_id', identityValue: context.protocolChatId },
+    ...(context.providerUserId ? [{ identityKind: 'provider_user_id', identityValue: context.providerUserId }] : []),
+    { identityKind: 'web_route_id', identityValue: context.webRouteId },
+  ]
+  const payload = {
+    kind: 'message',
+    direction: 'outbound_echo',
+    providerMessageId: match.providerId,
+    senderProviderUserId: context.providerUserId,
+    protocolChatId: context.protocolChatId,
+    webRouteId: context.webRouteId,
+    clientMessageId: context.clientMessageId,
+    attemptCorrelationId: context.attemptCorrelationId,
+    providerOccurredAt: isoFromProviderTimestamp(providerMessage?.timestamp),
+    text: typeof providerMessage?.exactText === 'string' && providerMessage.exactText.length > 0
+      ? providerMessage.exactText
+      : providerMessage?.text,
+    ...(context.replyToProviderMessageId
+      ? { reply: { targetProviderMessageId: context.replyToProviderMessageId } }
+      : {}),
+    routeEvidence,
+    recoveryReason: reason,
+  }
+  const captured = captureAdapter.capturePhysicalFrame({
+    raw: JSON.stringify(payload),
+    metadata: {
+      sourceOrigin: 'live',
+      socketGeneration: 'provider-store-recovery',
+      opcode: null,
+      eventType: 'message',
+      providerEventId: match.providerId,
+      observedAt: new Date().toISOString(),
+    },
+  })
+  if (captured?.captured) {
+    for (const [key, pending] of pendingOutboundProviderStoreConfirmations) {
+      if (pending.attemptCorrelationId === context.attemptCorrelationId
+        && pending.clientMessageId === context.clientMessageId) {
+        pendingOutboundProviderStoreConfirmations.delete(key)
+      }
+    }
+    return { success: true, outboundEchoCaptured: true, externalId: match.providerId }
+  }
+  return { skipped: captured?.errorCode || 'outbound_echo_capture_failed' }
+}
+
 function waitForUiSendAck(transport, timeoutMs = 60_000, expected = {}) {
   if (!transport?._rawHandlers) return Promise.resolve(null)
   const expectedChatId = expected.chatId != null ? String(expected.chatId) : null
@@ -2454,7 +2591,21 @@ async function recoverProviderStoreLiveTextById(chatId, providerMessageId, reaso
     || Number(providerMessage?.routeMatchCount || 0) !== 1) {
     return { skipped: 'provider_store_identity_mismatch' }
   }
-  if (providerMessage.isOutgoing) return { skipped: 'provider_store_outgoing_echo' }
+  if (providerMessage.isOutgoing) {
+    const captured = captureProviderStoreOutgoingEchoForConfirmation(
+      chatIdStr,
+      String(uiRouteId),
+      providerMessage,
+      providerId,
+      reason,
+    )
+    if (captured?.success) {
+      transport?.confirmPendingLiveTextIdForDomRecovery?.(chatIdStr, providerId)
+      console.log(`[providerStoreRecovery] captured outbound echo chatId=${chatIdStr} id=${providerId}`)
+      return captured
+    }
+    return { skipped: captured?.skipped || 'provider_store_outgoing_echo_unmatched' }
+  }
   const text = typeof providerMessage.exactText === 'string' && providerMessage.exactText.length > 0
     ? providerMessage.exactText
     : providerMessage.text
@@ -5691,6 +5842,7 @@ const chatCache = new Map()  // chatId → chat object (собирается и�
 // handleIncoming пропустит эти echo чтобы не создать дубль-чат до того как
 // CRM обновит externalChatId на реальный conversation ID.
 const capturedEchoIds = new Set()
+const pendingOutboundProviderStoreConfirmations = new Map()
 
 let page               = null
 let context            = null   // Playwright persistent context — keep at module scope so shutdown/uncaught handlers can close it cleanly
@@ -6189,40 +6341,67 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
       throw error
     }
   },
-  send: async request => enqueueSend(() => sendProviderConfirmedUiText({
-    request,
-    snapshotProviderMessageIds: ({ protocolChatId, webRouteId }) => snapshotOutboundProviderMessageIds({
-      bridge: new MaxWebReplyBridge(page),
-      protocolChatId,
-      uiRouteId: webRouteId,
-    }),
-    sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
-    sendReplyViaUi: async ({ protocolChatId, webRouteId, text, replyToProviderMessageId, clientMessageId, attemptId }) => {
-      const cid = stableTextCid(clientMessageId || attemptId)
-      return new MaxWebReplyBridge(page).sendReply(
+  send: async request => enqueueSend(() => {
+    let releasePendingProviderStoreContext = null
+    const releasePendingProviderStoreContextOnce = () => {
+      if (typeof releasePendingProviderStoreContext !== 'function') return
+      releasePendingProviderStoreContext()
+      releasePendingProviderStoreContext = null
+    }
+    return sendProviderConfirmedUiText({
+      request,
+      snapshotProviderMessageIds: ({ protocolChatId, webRouteId }) => snapshotOutboundProviderMessageIds({
+        bridge: new MaxWebReplyBridge(page),
         protocolChatId,
-        text,
-        replyToProviderMessageId,
-        cid,
-        { uiChatId: webRouteId },
-      )
-    },
-    startProviderAck: ({ protocolChatId, text, replyToProviderMessageId }) => waitForUiSendAck(transport, 12_000, {
-      chatId: protocolChatId,
-      text,
-      ...(replyToProviderMessageId ? { replyToMessageId: replyToProviderMessageId } : {}),
-    }),
-    resolveProviderMessageId: ({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds, replyToProviderMessageId }) => resolveOutboundProviderMessageId({
-      bridge: new MaxWebReplyBridge(page),
-      protocolChatId,
-      uiRouteId: webRouteId,
-      text,
-      sentAt,
-      excludedProviderMessageIds,
-      replyToProviderMessageId,
-    }),
-    isRealProviderMessageId: isRealMaxMessageId,
-  })),
+        uiRouteId: webRouteId,
+      }),
+      sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
+      sendReplyViaUi: async ({ protocolChatId, webRouteId, text, replyToProviderMessageId, clientMessageId, attemptId }) => {
+        const cid = stableTextCid(clientMessageId || attemptId)
+        return new MaxWebReplyBridge(page).sendReply(
+          protocolChatId,
+          text,
+          replyToProviderMessageId,
+          cid,
+          { uiChatId: webRouteId },
+        )
+      },
+      startProviderAck: ({ protocolChatId, text, replyToProviderMessageId }) => {
+        releasePendingProviderStoreContext = trackPendingOutboundProviderStoreConfirmation({
+          protocolChatId,
+          webRouteId: request?.route?.webRouteId,
+          providerUserId: request?.route?.providerUserId,
+          text,
+          replyToProviderMessageId,
+          clientMessageId: request?.clientMessageId,
+          attemptCorrelationId: request?.attemptCorrelationId,
+          sentAt: Date.now(),
+        })
+        return waitForUiSendAck(transport, 12_000, {
+          chatId: protocolChatId,
+          text,
+          ...(replyToProviderMessageId ? { replyToMessageId: replyToProviderMessageId } : {}),
+        }).then(value => {
+          if (isRealMaxMessageId(value)) releasePendingProviderStoreContextOnce()
+          return value
+        })
+      },
+      resolveProviderMessageId: async ({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds, replyToProviderMessageId }) => {
+        const value = await resolveOutboundProviderMessageId({
+          bridge: new MaxWebReplyBridge(page),
+          protocolChatId,
+          uiRouteId: webRouteId,
+          text,
+          sentAt,
+          excludedProviderMessageIds,
+          replyToProviderMessageId,
+        })
+        if (isRealMaxMessageId(value)) releasePendingProviderStoreContextOnce()
+        return value
+      },
+      isRealProviderMessageId: isRealMaxMessageId,
+    })
+  }),
 })
 
 app.post('/v1/personal-max/send/text', async (req, res) => {

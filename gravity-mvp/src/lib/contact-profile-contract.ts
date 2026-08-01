@@ -47,6 +47,7 @@ export interface ContactIdentityPayload {
   reachabilityStatus: 'confirmed' | 'unreachable' | 'unknown'
   reachabilityCheckedAt: string | null
   metadata?: Record<string, string | null> | null
+  personalMaxRouteKnown?: boolean
 }
 
 export interface ContactChatPayload {

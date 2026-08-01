@@ -37,7 +37,8 @@ describe('critical Messages stabilization source guards', () => {
 
   it('uses a known provider route without restoring the legacy MAX-only branch', () => {
     expect(drawer).toContain('const linkedChat = contact.chats.find')
-    expect(drawer).toContain('const routeKnown = Boolean(identity.externalId || linkedChat?.externalChatId)')
+    expect(drawer).toContain('const routeKnown = identity.personalMaxRouteKnown === true')
+    expect(drawer).toContain('|| Boolean(identity.externalId || linkedChat?.externalChatId)')
     expect(drawer).toContain('canWrite={presentation.canWrite}')
     expect(drawer).not.toContain('hasOperationalMaxChat')
   })

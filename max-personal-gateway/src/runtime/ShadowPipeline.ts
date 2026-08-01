@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { DefaultSemanticComparisonEngine } from '../comparison/SemanticComparisonEngine.ts'
+import { PrismaConfirmationMatcher } from '../confirmation/PrismaConfirmationMatcher.ts'
+import { MAX_PROVIDER_CONFIRMATION_MATCHER_VERSION } from '../confirmation/constants.ts'
 import { PrismaShadowSemanticComparisonHarness } from '../comparison/PrismaShadowSemanticComparisonHarness.ts'
 import { MAX_SHADOW_COMPARISON_VERSION } from '../comparison/constants.ts'
 import { MaxInboundNormalizer } from '../inbound/MaxInboundNormalizer.ts'
@@ -21,6 +23,7 @@ export class ShadowPipeline {
   readonly #metrics: OperationalMetrics
   readonly #journal: PrismaRawEventJournal
   readonly #normalizer: PrismaShadowInboundNormalizationProcessor
+  readonly #confirmation: PrismaConfirmationMatcher
   readonly #engine = new DefaultSemanticComparisonEngine()
   readonly #comparison: PrismaShadowSemanticComparisonHarness
   readonly #running = new Map<string, Promise<void>>()
@@ -41,6 +44,7 @@ export class ShadowPipeline {
       this.#journal,
       new MaxInboundNormalizer(),
     )
+    this.#confirmation = new PrismaConfirmationMatcher(client)
     this.#comparison = new PrismaShadowSemanticComparisonHarness(client, this.#engine)
   }
 
@@ -88,6 +92,20 @@ export class ShadowPipeline {
       this.normalizerLagMs = Date.now() - started
       this.#metrics.observe('normalizationLagMs', this.normalizerLagMs)
       this.#metrics.increment('normalizerQuarantined', result.quarantined)
+    }
+    if (this.#config.features.providerConfirmation.has(accountId)) {
+      const started = Date.now()
+      const result = await this.#confirmation.processBatch({
+        accountId,
+        consumerId: 'max-personal-gateway-provider-confirmation-v1',
+        matcherVersion: MAX_PROVIDER_CONFIRMATION_MATCHER_VERSION,
+        limit: this.#config.workerBatchSize,
+      })
+      this.#metrics.observe('confirmationLagMs', Date.now() - started)
+      this.#metrics.increment('providerConfirmationsMatched', result.matched)
+      this.#metrics.increment('providerConfirmationsUnmatched', result.unmatched)
+      this.#metrics.increment('providerConfirmationsDeferred', result.deferred)
+      this.#metrics.increment('providerConfirmationsAmbiguous', result.ambiguous)
     }
     if (this.#config.features.comparison.has(accountId)) {
       const runId = anonymousRunId(accountId)

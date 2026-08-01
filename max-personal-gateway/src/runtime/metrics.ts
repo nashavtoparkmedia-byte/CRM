@@ -4,13 +4,15 @@ export type LatencyMetric =
   | 'ingressAckMs'
   | 'journalMs'
   | 'normalizationLagMs'
+  | 'confirmationLagMs'
   | 'comparisonLagMs'
 
 const COUNTERS = [
   'captureAccepted', 'captureRejected', 'ingressAuthFailures', 'journalAckCount',
   'idempotentRetryCount', 'drainFailures', 'lostBeforeSpool', 'matched',
   'expectedDifferences', 'regressions', 'criticalRegressions', 'wrongAccountDifferences',
-  'normalizerQuarantined',
+  'normalizerQuarantined', 'providerConfirmationsMatched', 'providerConfirmationsUnmatched',
+  'providerConfirmationsDeferred', 'providerConfirmationsAmbiguous',
 ] as const
 
 export type CounterName = typeof COUNTERS[number]

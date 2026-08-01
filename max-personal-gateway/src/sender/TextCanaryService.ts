@@ -334,6 +334,9 @@ export class TextCanaryService {
     }
     const currentDispatch = await (this.#client as any).maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: dispatch.dispatchId } })
     const currentAttempt = await (this.#client as any).maxOutboundDispatchAttempt.findUniqueOrThrow({ where: { attemptId } })
+    if (currentDispatch.state === 'provider_confirmed' && currentAttempt.attemptState === 'provider_confirmed') {
+      return currentDispatch
+    }
     const response = senderResponse(rawResponse, attemptId)
     if (response?.outcome === 'PROVIDER_CONFIRMED' && typeof response.providerMessageId === 'string'
       && currentAttempt.attemptState === 'physical_action_started') {
@@ -376,13 +379,22 @@ export class TextCanaryService {
       return failed.dispatch
     }
     if (currentAttempt.attemptState === 'physical_action_started') {
-      const unknown = await this.#ledger.recordUnknownOutcome({
-        accountId, conversationKey, dispatchId: dispatch.dispatchId, attemptId,
-        expectedStateVersion: currentDispatch.stateVersion, expectedAttemptVersion: currentAttempt.attemptVersion,
-        transitionIdempotencyKey: opaque('transition', `${attemptId}:unknown`), evidenceReference: correlation,
-        reason: 'outcome_unknown',
-      })
-      return unknown.dispatch
+      try {
+        const unknown = await this.#ledger.recordUnknownOutcome({
+          accountId, conversationKey, dispatchId: dispatch.dispatchId, attemptId,
+          expectedStateVersion: currentDispatch.stateVersion, expectedAttemptVersion: currentAttempt.attemptVersion,
+          transitionIdempotencyKey: opaque('transition', `${attemptId}:unknown`), evidenceReference: correlation,
+          reason: 'outcome_unknown',
+        })
+        return unknown.dispatch
+      } catch (error) {
+        const confirmed = await (this.#client as any).maxOutboundDispatch.findUnique({ where: { dispatchId: dispatch.dispatchId } })
+        const confirmedAttempt = await (this.#client as any).maxOutboundDispatchAttempt.findUnique({ where: { attemptId } })
+        if (confirmed?.state === 'provider_confirmed' && confirmedAttempt?.attemptState === 'provider_confirmed') {
+          return confirmed
+        }
+        throw error
+      }
     }
     throw new TextCanaryError('SENDER_STATE_MISMATCH')
   }

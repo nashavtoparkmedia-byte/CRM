@@ -22,6 +22,7 @@ test('allowlists reject wildcard, booleans, whitespace, malformed and global ena
 
 test('active account flags require safe dependency ordering, explicit DB URL and HMAC keys', () => {
   assert.throws(() => loadGatewayConfig({ MAX_PERSONAL_LIVE_CAPTURE_ENABLED: 'account-a' }), /upstream account/)
+  assert.throws(() => loadGatewayConfig({ MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: 'account-a' }), /upstream account/)
   assert.throws(() => loadGatewayConfig({ MAX_RAW_JOURNAL_ENABLED: 'account-a' }), /PostgreSQL URL/)
   assert.throws(() => loadGatewayConfig({
     MAX_RAW_JOURNAL_ENABLED: 'account-a',
@@ -30,12 +31,14 @@ test('active account flags require safe dependency ordering, explicit DB URL and
   const config = loadGatewayConfig({
     MAX_RAW_JOURNAL_ENABLED: 'account-a',
     MAX_INBOUND_NORMALIZER_ENABLED: 'account-a',
+    MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: 'account-a',
     MAX_SHADOW_COMPARISON_ENABLED: 'account-a',
     MAX_PERSONAL_LIVE_CAPTURE_ENABLED: 'account-a',
     MAX_PERSONAL_GATEWAY_DATABASE_URL: 'postgresql://synthetic.invalid/db',
     MAX_PERSONAL_CAPTURE_HMAC_KEYS_JSON: JSON.stringify({ current: secret }),
   })
   assert.equal(config.mode, 'active')
+  assert.equal(config.features.providerConfirmation.has('account-a'), true)
   assert.deepEqual([...config.enabledAccounts], ['account-a'])
 })
 

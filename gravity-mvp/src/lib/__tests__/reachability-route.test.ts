@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 
 const serviceMock = vi.hoisted(() => ({
   resolveReachabilityIdentity: vi.fn(),
+  resolvePersonalMaxDurableRouteForIdentity: vi.fn(),
   getProviderConnectionHealth: vi.fn(),
   updateReachability: vi.fn(),
 }))
@@ -28,6 +29,7 @@ describe('canonical reachability refresh decision route', () => {
     vi.clearAllMocks()
     resetReachabilityDecisionCacheForTests()
     serviceMock.getProviderConnectionHealth.mockResolvedValue('connected')
+    serviceMock.resolvePersonalMaxDurableRouteForIdentity.mockResolvedValue({ kind: 'not_found' })
     serviceMock.updateReachability.mockResolvedValue(undefined)
   })
 
@@ -88,6 +90,47 @@ describe('canonical reachability refresh decision route', () => {
     expect(firstBody.status).toBe('confirmed')
     expect(secondBody.status).toBe('confirmed')
     expect(whatsappMock.checkReachability).toHaveBeenCalledTimes(1)
+  })
+
+  test('durable Personal MAX route confirms sendability without live scraper account lookup', async () => {
+    serviceMock.resolveReachabilityIdentity.mockResolvedValue({
+      kind: 'matched',
+      identity: {
+        id: 'identity-max',
+        reachabilityStatus: 'unknown',
+        reachabilityCheckedAt: null,
+      },
+    })
+    serviceMock.resolvePersonalMaxDurableRouteForIdentity.mockResolvedValue({
+      kind: 'active',
+      accountId: 'max-personal-account-a',
+      conversationKey: 'conv-exact',
+      routeVersion: 7,
+      protocolChatId: '902454841098',
+      providerUserId: '511708938',
+      webRouteId: '511708938',
+      identityValues: ['511708938', '902454841098'],
+    })
+
+    const response = await POST(request({
+      phone: '+79126787532',
+      channel: 'max',
+      identityId: 'identity-max',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      status: 'confirmed',
+      reachable: true,
+      cached: false,
+      decisionSource: 'persisted',
+      source: 'durable-route-registry',
+      maxChatId: '902454841098',
+      connectionHealth: 'connected',
+      identityResolution: 'matched',
+    })
+    expect(serviceMock.updateReachability).toHaveBeenCalledWith('identity-max', 'confirmed')
+    expect(whatsappMock.checkReachability).not.toHaveBeenCalled()
   })
 
   test('client_not_ready is no connection, not an account-not-found answer', async () => {

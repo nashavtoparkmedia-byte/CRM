@@ -12,6 +12,7 @@ services:
 
   max-personal-gateway:
     environment:
+      MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
       MAX_PERSONAL_TEXT_SENDER_ENABLED: "true"
       MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED: "true"
       MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR: "true"

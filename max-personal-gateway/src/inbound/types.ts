@@ -54,6 +54,7 @@ export interface NormalizedMessageEnvelope {
   readonly protocolChatId: string | null
   readonly webRouteId: string | null
   readonly clientMessageId: string | null
+  readonly attemptCorrelationId: string | null
   readonly providerOccurredAt: string | null
   readonly observedAt: string
   readonly text: string | null

@@ -42,7 +42,12 @@ test('resolves an exact outbound provider id from the MAX Web store', async () =
       sentAt: 1_721_000_000_000,
       direction: 'outbound',
     },
-    route: { uiChatId: '24393518', excludedProviderMessageIds: [] },
+    route: {
+      uiChatId: '24393518',
+      excludedProviderMessageIds: [],
+      historyWindowStart: 1_720_999_820_000,
+      historyMaxPages: 6,
+    },
   })
 })
 
@@ -92,8 +97,42 @@ test('passes reply target into exact provider-store resolution', async () => {
       direction: 'outbound',
       replyToProviderMessageId: 'd301abcdef01234567',
     },
-    route: { uiChatId: '511708938', excludedProviderMessageIds: ['d30100000000000000aa'] },
+    route: {
+      uiChatId: '511708938',
+      excludedProviderMessageIds: ['d30100000000000000aa'],
+      historyWindowStart: 1_785_566_973_000,
+      historyMaxPages: 6,
+    },
   })
+})
+
+test('uses a bounded history window and page count when resolving after a stalled ack', async () => {
+  const routes = []
+  const bridge = {
+    async resolveProviderId(_chatId, _context, route) {
+      routes.push(route)
+      return { providerMessageId: null }
+    },
+  }
+
+  const providerId = await resolveOutboundProviderMessageId({
+    bridge,
+    protocolChatId: '902454841098',
+    uiRouteId: '511708938',
+    text: 'late echo',
+    sentAt: 1_785_600_000_000,
+    attempts: 1,
+    delayMs: 0,
+    waitFn: async () => {},
+  })
+
+  assert.equal(providerId, null)
+  assert.deepEqual(routes, [{
+    uiChatId: '511708938',
+    excludedProviderMessageIds: [],
+    historyWindowStart: 1_785_599_820_000,
+    historyMaxPages: 6,
+  }])
 })
 
 test('does not promote an ambiguous or malformed store result', async () => {
@@ -127,6 +166,10 @@ test('integrates exact store confirmation and protects pending CRM delivery stat
 
   assert.match(scraper, /const storeId = await resolveOutboundProviderMessageId\(\{/)
   assert.match(scraper, /const ackId = storeId \|\| await ackPromise/)
+  assert.match(scraper, /captureProviderStoreOutgoingEchoForConfirmation\(/)
+  assert.match(scraper, /trackPendingOutboundProviderStoreConfirmation\(\{/)
+  assert.match(scraper, /attemptCorrelationId: request\?\.attemptCorrelationId/)
+  assert.doesNotMatch(scraper, /if \(providerMessage\.isOutgoing\) return \{ skipped: 'provider_store_outgoing_echo' \}/)
   assert.match(service, /\.filter\(shouldMarkStuckOutboundFailed\)/)
   assert.match(service, /maxDeliveryMetadata = \{/)
   assert.match(service, /status: durableStatus/)

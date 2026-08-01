@@ -38,6 +38,7 @@ services:
     environment:
       MAX_RAW_JOURNAL_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
       MAX_INBOUND_NORMALIZER_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
+      MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
       MAX_SHADOW_COMPARISON_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
       MAX_PERSONAL_LIVE_CAPTURE_ENABLED: ${MAX_PERSONAL_ACCOUNT_ID:?bounded account identity required}
       MAX_PERSONAL_GATEWAY_DATABASE_URL: ${MAX_PERSONAL_GATEWAY_DATABASE_URL:?explicit database binding required}

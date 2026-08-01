@@ -94,6 +94,7 @@ export function selectCanonicalContactChannelIdentities(input: {
     const preferred = preferIncoming ? identity : existing
     byProviderIdentity.set(key, {
       ...preferred,
+      personalMaxRouteKnown: existing.personalMaxRouteKnown === true || identity.personalMaxRouteKnown === true,
       reachabilityStatus: strongerReachability(
         existing.reachabilityStatus,
         identity.reachabilityStatus,
@@ -133,7 +134,12 @@ export function selectCanonicalContactChannelIdentities(input: {
       )
       selected.push(...visible.map(identity =>
         identity.id === routeId
-          ? { ...identity, reachabilityStatus: combinedStatus }
+          ? {
+              ...identity,
+              personalMaxRouteKnown: identity.personalMaxRouteKnown === true
+                || phonePlaceholders.some(item => item.personalMaxRouteKnown === true),
+              reachabilityStatus: combinedStatus,
+            }
           : identity
       ))
     } else {

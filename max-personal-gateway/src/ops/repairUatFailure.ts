@@ -32,6 +32,26 @@ function commandText(command: any): string {
   return typeof command?.commandPayload?.text === 'string' ? command.commandPayload.text : ''
 }
 
+interface IncidentCommand {
+  readonly commandId: string
+  readonly accountId: string
+  readonly conversationKey: string
+  readonly commandSequence: number
+  readonly clientMessageId: string | null
+  readonly commandPayload: any
+}
+
+interface IncidentDispatch {
+  readonly dispatchId: string
+  readonly commandId: string
+  readonly commandSequence: number
+  readonly state: string
+  readonly stateVersion: number
+  readonly attemptCount: number
+  readonly currentAttemptId: string | null
+  readonly providerMessageId: string | null
+}
+
 async function main(): Promise<void> {
   if (process.env.PERSONAL_MAX_UAT_REPAIR_MODE !== 'uat-failure-20260730-exact') {
     throw new Error('REPAIR_MODE_DENIED')
@@ -45,20 +65,21 @@ async function main(): Promise<void> {
 
   const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
   await prisma.$connect()
+  const db = prisma as any
   try {
-    const database = await prisma.$queryRawUnsafe<Array<{ database_name: string }>>(
+    const database = await db.$queryRawUnsafe(
       'SELECT current_database() AS database_name',
-    )
+    ) as Array<{ database_name: string }>
     if (database[0]?.database_name !== expectedDatabase) throw new Error('DATABASE_BINDING_MISMATCH')
 
-    const commands = await prisma.maxOutboundCommand.findMany({
+    const commands = await db.maxOutboundCommand.findMany({
       where: {
         accountId,
         createdAt: { gte: INCIDENT_FROM, lt: INCIDENT_TO },
         commandKind: 'text',
       },
       orderBy: { commandSequence: 'asc' },
-    })
+    }) as IncidentCommand[]
     const incidentCommands = commands.filter(command =>
       Array.from(EXPECTED_TEXT_BY_SEQUENCE.values()).includes(commandText(command)),
     )
@@ -74,10 +95,10 @@ async function main(): Promise<void> {
       }
     }
 
-    const dispatches = await prisma.maxOutboundDispatch.findMany({
+    const dispatches = await db.maxOutboundDispatch.findMany({
       where: { accountId, conversationKey, commandSequence: { in: Array.from(EXPECTED_TEXT_BY_SEQUENCE.keys()) } },
       orderBy: { commandSequence: 'asc' },
-    })
+    }) as IncidentDispatch[]
     if (dispatches.length !== EXPECTED_TEXT_BY_SEQUENCE.size) throw new Error('DISPATCH_COUNT_MISMATCH')
     const dispatchBySequence = new Map(dispatches.map(dispatch => [dispatch.commandSequence, dispatch]))
     for (const [sequence, command] of commandBySequence) {
@@ -100,12 +121,12 @@ async function main(): Promise<void> {
       }
     }
 
-    const routeRegistry = new PrismaRouteRegistry(prisma as any)
-    const ledger = new PrismaDispatchLedger(prisma as any, routeRegistry)
-    let currentSequence5 = await prisma.maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: sequence5.dispatchId } })
+    const routeRegistry = new PrismaRouteRegistry(db)
+    const ledger = new PrismaDispatchLedger(db, routeRegistry)
+    let currentSequence5 = await db.maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: sequence5.dispatchId } }) as IncidentDispatch
     if (currentSequence5.state === 'awaiting_confirmation') {
       if (currentSequence5.currentAttemptId === null) throw new Error('SEQUENCE5_ATTEMPT_MISSING')
-      const attempt = await prisma.maxOutboundDispatchAttempt.findUniqueOrThrow({
+      const attempt = await db.maxOutboundDispatchAttempt.findUniqueOrThrow({
         where: { attemptId: currentSequence5.currentAttemptId },
       })
       if (attempt.attemptState !== 'awaiting_confirmation') throw new Error('SEQUENCE5_ATTEMPT_STATE_MISMATCH')
@@ -120,7 +141,7 @@ async function main(): Promise<void> {
         evidenceReference: 'uat-20260730-provider-store-exact',
         providerMessageId: sequence5ProviderId,
       })
-      currentSequence5 = await prisma.maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: sequence5.dispatchId } })
+      currentSequence5 = await db.maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: sequence5.dispatchId } }) as IncidentDispatch
     }
     if (currentSequence5.state !== 'provider_confirmed'
       || currentSequence5.providerMessageId?.toLowerCase() !== sequence5ProviderId) {
@@ -128,9 +149,9 @@ async function main(): Promise<void> {
     }
 
     for (const sequence of [6, 7, 8, 9, 10]) {
-      let dispatch = await prisma.maxOutboundDispatch.findUniqueOrThrow({
+      let dispatch = await db.maxOutboundDispatch.findUniqueOrThrow({
         where: { dispatchId: dispatchBySequence.get(sequence)!.dispatchId },
-      })
+      }) as IncidentDispatch
       if (dispatch.state === 'queued') {
         const failed = await ledger.markHardFailed({
           accountId,
@@ -141,10 +162,10 @@ async function main(): Promise<void> {
           evidenceReference: 'uat-20260730-no-provider-action',
           safeErrorCode: 'UAT_ABORTED_BEFORE_PROVIDER_ACTION',
         })
-        dispatch = await prisma.maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: failed.dispatch.dispatchId } })
+        dispatch = await db.maxOutboundDispatch.findUniqueOrThrow({ where: { dispatchId: failed.dispatch.dispatchId } }) as IncidentDispatch
       }
       if (dispatch.state !== 'hard_failed') throw new Error('TERMINAL_CLASSIFICATION_FAILED')
-      const lane = await prisma.maxOutboundDispatchLane.findUniqueOrThrow({
+      const lane = await db.maxOutboundDispatchLane.findUniqueOrThrow({
         where: { accountId_conversationKey: { accountId, conversationKey } },
       })
       if (lane.nextPhysicalSequence === sequence) {
@@ -161,10 +182,10 @@ async function main(): Promise<void> {
       }
     }
 
-    const finalDispatches = await prisma.maxOutboundDispatch.findMany({
+    const finalDispatches = await db.maxOutboundDispatch.findMany({
       where: { accountId, conversationKey, commandSequence: { in: Array.from(EXPECTED_TEXT_BY_SEQUENCE.keys()) } },
       orderBy: { commandSequence: 'asc' },
-    })
+    }) as IncidentDispatch[]
     const finalBySequence = new Map(finalDispatches.map(dispatch => [dispatch.commandSequence, dispatch]))
     if ([3, 4, 5].some(sequence => finalBySequence.get(sequence)?.state !== 'provider_confirmed')
       || [6, 7, 8, 9, 10].some(sequence => finalBySequence.get(sequence)?.state !== 'hard_failed')) {
@@ -174,11 +195,11 @@ async function main(): Promise<void> {
     if (providerIds.some(value => !PROVIDER_ID.test(value ?? '')) || new Set(providerIds).size !== 3) {
       throw new Error('FINAL_PROVIDER_IDENTITY_MISMATCH')
     }
-    const lane = await prisma.maxOutboundDispatchLane.findUniqueOrThrow({
+    const lane = await db.maxOutboundDispatchLane.findUniqueOrThrow({
       where: { accountId_conversationKey: { accountId, conversationKey } },
     })
     if (lane.nextPhysicalSequence !== 11) throw new Error('FINAL_FIFO_STATE_MISMATCH')
-    const openReconciliation = await prisma.maxOutboundReconciliationTask.count({
+    const openReconciliation = await db.maxOutboundReconciliationTask.count({
       where: { accountId, conversationKey, state: 'open' },
     })
     if (openReconciliation !== 0) throw new Error('OPEN_RECONCILIATION_REMAINS')
@@ -186,9 +207,9 @@ async function main(): Promise<void> {
     for (const sequence of [3, 4, 5]) {
       const command = commandBySequence.get(sequence)!
       const dispatch = finalBySequence.get(sequence)!
-      const message = await prisma.message.findUniqueOrThrow({ where: { clientMessageId: command.clientMessageId! } })
+      const message = await db.message.findUniqueOrThrow({ where: { clientMessageId: command.clientMessageId! } })
       const metadata = object(message.metadata)
-      await prisma.message.update({
+      await db.message.update({
         where: { id: message.id },
         data: {
           status: 'delivered',
@@ -209,9 +230,9 @@ async function main(): Promise<void> {
     }
     for (const sequence of [6, 7, 8, 9, 10]) {
       const command = commandBySequence.get(sequence)!
-      const message = await prisma.message.findUniqueOrThrow({ where: { clientMessageId: command.clientMessageId! } })
+      const message = await db.message.findUniqueOrThrow({ where: { clientMessageId: command.clientMessageId! } })
       const metadata = object(message.metadata)
-      await prisma.message.update({
+      await db.message.update({
         where: { id: message.id },
         data: {
           status: 'failed',
@@ -230,7 +251,7 @@ async function main(): Promise<void> {
       })
     }
 
-    const replayRows = await prisma.message.findMany({
+    const replayRows = await db.message.findMany({
       where: {
         createdAt: { gte: INCIDENT_FROM, lt: INCIDENT_TO },
         channel: 'max', direction: 'inbound', content: '3', externalId: replayProviderId,
@@ -238,7 +259,7 @@ async function main(): Promise<void> {
     })
     if (replayRows.length !== 1) throw new Error('HISTORY_REPLAY_ROW_MISMATCH')
     const replay = replayRows[0]!
-    await prisma.message.update({
+    await db.message.update({
       where: { id: replay.id },
       data: {
         metadata: {

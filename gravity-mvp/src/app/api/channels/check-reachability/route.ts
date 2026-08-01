@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import {
   getProviderConnectionHealth,
+  resolvePersonalMaxDurableRouteForIdentity,
   resolveReachabilityIdentity,
   updateReachability,
   type ProviderConnectionHealth,
@@ -87,6 +88,52 @@ export async function POST(req: NextRequest) {
       resolveReachabilityIdentity(normalized, channel, requestedIdentityId),
       getProviderConnectionHealth(channel),
     ])
+    if (channel === 'max' && identityResolution.kind === 'matched') {
+      const durableRoute = await resolvePersonalMaxDurableRouteForIdentity(identityResolution.identity.id)
+      const now = Date.now()
+      if (durableRoute.kind === 'active') {
+        await updateReachability(identityResolution.identity.id, 'confirmed')
+        return NextResponse.json(withDecisionMetadata(confirmed(channel, {
+          maxChatId: durableRoute.protocolChatId,
+          source: 'durable-route-registry',
+        }), {
+          cached: false,
+          decisionSource: 'persisted',
+          checkedAtMs: now,
+          expiresAtMs: now + REACHABILITY_DEFINITIVE_TTL_MS,
+          connectionHealth: storedConnectionHealth,
+          identityResolution,
+        }))
+      }
+      if (durableRoute.kind === 'ambiguous') {
+        return NextResponse.json(withDecisionMetadata(checking(channel, 'MAX route requires engineer review', {
+          retryable: false,
+          errorCode: 'durable_route_ambiguous',
+          source: 'durable-route-registry',
+        }), {
+          cached: false,
+          decisionSource: 'error',
+          checkedAtMs: now,
+          expiresAtMs: now + REACHABILITY_OPERATIONAL_TTL_MS,
+          connectionHealth: storedConnectionHealth,
+          identityResolution,
+        }))
+      }
+      if (durableRoute.kind === 'unavailable') {
+        return NextResponse.json(withDecisionMetadata(checking(channel, 'CRM сейчас не может проверить MAX route', {
+          retryable: false,
+          errorCode: 'durable_route_unavailable',
+          source: 'durable-route-registry',
+        }), {
+          cached: false,
+          decisionSource: 'error',
+          checkedAtMs: now,
+          expiresAtMs: now + REACHABILITY_OPERATIONAL_TTL_MS,
+          connectionHealth: storedConnectionHealth,
+          identityResolution,
+        }))
+      }
+    }
     const persisted = freshPersistedDecision(identityResolution, channel, force)
     if (persisted) {
       return NextResponse.json(withDecisionMetadata(persisted.result, {

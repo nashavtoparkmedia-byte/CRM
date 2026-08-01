@@ -19,6 +19,7 @@ import { deriveTelegramBotProfileState } from '@/lib/telegram-bot-profile-state'
 import { resolveCanonicalContactId } from '@/lib/contacts/canonical-contact'
 import { buildYandexDispatcherTarget } from '@/lib/driver-profiles/dispatcher-links'
 import { isSupersededPersonalMaxChat } from '@/lib/personal-max-message-visibility'
+import { resolvePersonalMaxDurableRouteForIdentity } from '@/lib/ReachabilityService'
 
 const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram'] as const
 
@@ -513,8 +514,21 @@ export async function GET(
     )
     const primaryPhone = contact.phones.find(phone => phone.id === contact.primaryPhoneId) || contact.phones.find(phone => phone.isPrimary) || contact.phones[0] || null
     const activeChats = contact.chats.filter(chat => !isSupersededPersonalMaxChat(chat.metadata))
+    const personalMaxRouteKnownByIdentityId = new Map<string, boolean>()
+    await Promise.all(contact.identities
+      .filter(identity => identity.channel === 'max')
+      .map(async identity => {
+        const route = await resolvePersonalMaxDurableRouteForIdentity(identity.id)
+        personalMaxRouteKnownByIdentityId.set(identity.id, route.kind === 'active')
+      }))
+    const identities = contact.identities.map(identity => ({
+      ...identity,
+      personalMaxRouteKnown: identity.channel === 'max'
+        ? personalMaxRouteKnownByIdentityId.get(identity.id) === true
+        : false,
+    }))
     const channels = PROFILE_CHANNELS.map(channel => {
-      const identity = contact.identities.find(item => item.channel === channel)
+      const identity = identities.find(item => item.channel === channel)
       return {
         channel,
         identityId: identity?.id ?? null,
@@ -559,7 +573,7 @@ export async function GET(
       createdAt: contact.createdAt,
       updatedAt: contact.updatedAt,
       phones: contact.phones,
-      identities: contact.identities,
+      identities,
       chats: activeChats,
       channels,
       canonicalSummary,
