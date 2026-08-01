@@ -102,12 +102,12 @@ response_file=
 
 postgres_query() {
   docker exec -i crm-postgres sh -c \
-    'exec psql -X -v ON_ERROR_STOP=1 -At -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+    'exec psql -X -v ON_ERROR_STOP=1 -qAt -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 }
 
 postgres_query_account() {
   docker exec -i -e PMAX_ACCOUNT_ID="$ACCOUNT_ID" crm-postgres sh -c \
-    'exec psql -X -v ON_ERROR_STOP=1 -v account_id="$PMAX_ACCOUNT_ID" -At -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+    'exec psql -X -v ON_ERROR_STOP=1 -qAt -v account_id="$PMAX_ACCOUNT_ID" -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 }
 
 env_value() {
@@ -305,7 +305,7 @@ repair_sql() {
       -v a_web_idempotency_key="$A_WEB_IDEMPOTENCY_KEY" \
       -v b_provider_idempotency_key="$B_PROVIDER_IDEMPOTENCY_KEY" \
       -v apply="$PMAX_REPAIR_APPLY" \
-      -At -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<SQL
+      -qAt -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<SQL
 BEGIN;
 SET LOCAL lock_timeout='5s';
 SET LOCAL statement_timeout='120s';

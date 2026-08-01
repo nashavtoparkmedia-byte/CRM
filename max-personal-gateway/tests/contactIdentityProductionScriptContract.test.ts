@@ -55,6 +55,7 @@ test('data repair is exact scoped, audited and idempotent', () => {
 
   assert.match(source, /INSERT INTO "ContactMerge"/u)
   assert.match(source, /personal_max_rc3_contact_identity_merge/u)
+  assert.match(source, /psql -X -v ON_ERROR_STOP=1 -qAt/u)
   assert.match(source, /to_regclass\('public\."Task"'\)/u)
   assert.match(source, /rc3_optional_task_plan/u)
   assert.match(source, /stable_idempotency_key\(\) \{[\s\S]*sha256sum/u)
