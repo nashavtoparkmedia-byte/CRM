@@ -2205,7 +2205,12 @@ class TransportInterceptor {
     const linkMap = Buffer.concat([
       Buffer.from([0x82]),
       this._mpStr('type'), this._mpStr('REPLY'),
-      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, true),
+      // MAX Web's in-memory provider model represents reply targets as
+      // message.link.id.  The sanitized CRM/browser fixtures may expose
+      // messageId, but the binary op:64 provider frame must use the native
+      // provider-store field or MAX closes the WebSocket without creating a
+      // provider message.
+      this._mpStr('id'), this._maxExtFromIdHex(replyId, true),
     ])
     const messageMap = Buffer.concat([
       Buffer.from([0x85]),

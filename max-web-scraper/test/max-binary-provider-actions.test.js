@@ -10,7 +10,7 @@ const {
 const CHAT_ID = '902454841098'
 const REPLY_TO = 'd3019f95cab2c07916'
 
-test('reply frame uses the captured MAX binary header and exact provider target', () => {
+test('reply frame uses the captured MAX binary header and native provider link id', () => {
   const transport = new TransportInterceptor()
   transport._browserBinaryRequestPrefix = [0xf0, 0x30]
 
@@ -29,6 +29,8 @@ test('reply frame uses the captured MAX binary header and exact provider target'
   assert.deepEqual([...frame.subarray(10, 12)], [0xf0, 0x30])
   assert.equal(frame[12], 0x83, 'payload map must start after the two-byte MAX prefix')
   assert.ok(frame.includes(Buffer.from('Ответил')))
+  assert.ok(frame.includes(Buffer.from('id')), 'native MAX reply link key must be id')
+  assert.equal(frame.includes(Buffer.from('messageId')), false, 'binary provider frame must not use sanitized fixture key messageId')
   assert.ok(frame.includes(Buffer.from(REPLY_TO.slice(2), 'hex')))
 })
 
