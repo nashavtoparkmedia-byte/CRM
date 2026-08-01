@@ -1196,23 +1196,13 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         text,
         replyToMessageId: resolvedReplyToMessageId,
       })
-      let replyResult = null
-      if (typeof transport?.sendBinaryReply === 'function') {
-        await transport.sendBinaryReply(
-          resolvedReplyChatId || wsChatId,
-          text,
-          resolvedReplyToMessageId,
-          cid,
-        )
-      } else {
-        replyResult = await replyBridge.sendReply(
-          resolvedReplyChatId || wsChatId,
-          text,
-          resolvedReplyToMessageId,
-          cid,
-          { uiChatId: directUiRouteId },
-        )
-      }
+      const replyResult = await replyBridge.sendReply(
+        resolvedReplyChatId || wsChatId,
+        text,
+        resolvedReplyToMessageId,
+        cid,
+        { uiChatId: directUiRouteId },
+      )
       const storeConfirmedId = isRealMaxMessageId(replyResult?.providerMessageId)
         ? replyResult.providerMessageId
         : null
@@ -6155,10 +6145,6 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
     sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
     sendReplyViaUi: async ({ protocolChatId, webRouteId, text, replyToProviderMessageId, clientMessageId, attemptId }) => {
       const cid = stableTextCid(clientMessageId || attemptId)
-      if (typeof transport?.sendBinaryReply === 'function') {
-        await transport.sendBinaryReply(protocolChatId, text, replyToProviderMessageId, cid)
-        return true
-      }
       return new MaxWebReplyBridge(page).sendReply(
         protocolChatId,
         text,

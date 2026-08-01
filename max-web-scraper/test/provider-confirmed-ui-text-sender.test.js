@@ -155,6 +155,31 @@ test('reply uses one reply provider action and confirms exact provider id', asyn
   })
 })
 
+test('reply bridge ok without direct id is accepted and resolved by exact provider store', async () => {
+  const calls = []
+  const result = await sendProviderConfirmedUiText({
+    request: request({
+      attemptId: 'attempt-reply-store',
+      clientMessageId: 'client-reply-store',
+      payload: { text: 'reply body', replyToProviderMessageId: 'd301abcdef01234567' },
+    }),
+    snapshotProviderMessageIds: async input => { calls.push(['snapshot', input]); return [] },
+    startProviderAck: input => { calls.push(['ack', input]); return Promise.resolve(null) },
+    sendViaUi: async input => { calls.push(['plain-send', input]); return true },
+    sendReplyViaUi: async input => {
+      calls.push(['reply-send', input])
+      return { ok: true, providerMessageId: null }
+    },
+    resolveProviderMessageId: async input => { calls.push(['store', input]); return 'd301abcdef01234569' },
+    isRealProviderMessageId: exactId,
+  })
+
+  assert.equal(result.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(result.providerMessageId, 'd301abcdef01234569')
+  assert.deepEqual(calls.map(call => call[0]), ['snapshot', 'ack', 'reply-send', 'store'])
+  assert.equal(calls[3][1].replyToProviderMessageId, 'd301abcdef01234567')
+})
+
 test('reply refuses before physical action when reply bridge is unavailable', async () => {
   let plainSends = 0
   const result = await sendProviderConfirmedUiText({

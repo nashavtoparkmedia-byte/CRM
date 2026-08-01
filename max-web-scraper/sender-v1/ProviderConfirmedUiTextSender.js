@@ -84,7 +84,7 @@ async function sendProviderConfirmedUiText(options) {
       directProviderMessageId = isRealProviderMessageId(replyResult?.providerMessageId)
         ? String(replyResult.providerMessageId)
         : null
-      actionAccepted = replyResult === true || directProviderMessageId !== null
+      actionAccepted = replyResult === true || replyResult?.ok === true || directProviderMessageId !== null
     } else {
       actionAccepted = await sendViaUi({ protocolChatId, webRouteId, text })
     }
