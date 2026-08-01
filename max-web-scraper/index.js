@@ -6153,14 +6153,20 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
       uiRouteId: webRouteId,
     }),
     sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
-    sendReplyViaUi: ({ protocolChatId, webRouteId, text, replyToProviderMessageId, clientMessageId, attemptId }) =>
-      new MaxWebReplyBridge(page).sendReply(
+    sendReplyViaUi: async ({ protocolChatId, webRouteId, text, replyToProviderMessageId, clientMessageId, attemptId }) => {
+      const cid = stableTextCid(clientMessageId || attemptId)
+      if (typeof transport?.sendBinaryReply === 'function') {
+        await transport.sendBinaryReply(protocolChatId, text, replyToProviderMessageId, cid)
+        return true
+      }
+      return new MaxWebReplyBridge(page).sendReply(
         protocolChatId,
         text,
         replyToProviderMessageId,
-        stableTextCid(clientMessageId || attemptId),
+        cid,
         { uiChatId: webRouteId },
-      ),
+      )
+    },
     startProviderAck: ({ protocolChatId, text, replyToProviderMessageId }) => waitForUiSendAck(transport, 12_000, {
       chatId: protocolChatId,
       text,

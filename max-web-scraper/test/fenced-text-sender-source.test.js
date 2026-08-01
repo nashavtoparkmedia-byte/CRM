@@ -46,6 +46,8 @@ test('synthetic boundary remains provider-free while physical runtime uses one e
   assert.match(runtime, /app\.post\('\/v1\/personal-max\/send\/text'/)
   assert.match(runtime, /sendProviderConfirmedUiText/)
   assert.match(runtime, /sendTextViaUi\(webRouteId, text, protocolChatId\)/)
+  assert.match(runtime, /typeof transport\?\.sendBinaryReply === 'function'/)
+  assert.match(runtime, /transport\.sendBinaryReply\(protocolChatId, text, replyToProviderMessageId, cid\)/)
   assert.match(runtime, /resolveOutboundProviderMessageId\(\{/)
   assert.match(runtime, /isRealProviderMessageId: isRealMaxMessageId/)
   assert.match(runtime, /reason === 'manual_debug'/)
