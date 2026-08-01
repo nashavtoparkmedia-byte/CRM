@@ -297,6 +297,8 @@ Accepted RC2 result:
 - the six existing queued commands were released in FIFO order;
 - the three `12` messages remained three separate logical operations with separate provider ids;
 - queue, open reconciliation, unresolved unknown attempts, wrong-account, wrong-route and duplicate provider action counters are all zero;
+- the existing MAX ContactIdentity reachability projection is confirmed and route-known; no new Contact, Chat or Channel was created for this repair;
+- channel reachability check returns confirmed rather than “provider account not found”;
 - restart/replay and rollback→roll-forward did not create additional provider actions;
 - production is operational-enabled with DOM fallback disabled and emergency default-off still available.
 

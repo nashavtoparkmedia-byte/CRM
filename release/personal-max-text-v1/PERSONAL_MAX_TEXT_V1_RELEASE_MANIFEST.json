@@ -242,6 +242,9 @@
     "sequence 71 exact provider confirmation repair PASS without blind retry",
     "sequence 72-77 existing queued burst completion PASS in FIFO",
     "provider snapshot PASS 11 -> 12 -> 12 -> 12 -> 1 -> 13 -> 14",
+    "ContactIdentity reachability repair PASS for existing MAX identity, no new Contact/Chat/Channel",
+    "CRM profile route projection PASS reachabilityStatus=confirmed personalMaxRouteKnown=true",
+    "channel reachability check PASS confirmed account, no provider-account-not-found",
     "default-off rollback then operational roll-forward PASS"
   ],
   "soakStatistics": {
@@ -319,6 +322,10 @@
     "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/provider-snapshot-after-burst.summary.json",
     "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-post-replay-db-verification.json",
     "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-contact-profile-route-known.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/contact-identity-reachability-confirmed-repair.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/contact-identity-reachability-confirmed-postrepair.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-contact-profile-route-known-after-reachability-repair.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-channel-reachability-check-after-repair.json",
     "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/rollback-and-rollforward-e2711dc.log",
     "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-operational-readiness-after-replay.raw.txt",
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-operational-health-corrected-8a9e7f79d912-20260801T144942Z.json",
@@ -351,5 +358,5 @@
     "DOM fallback"
   ],
   "createdAt": "2026-08-01T16:10:00Z",
-  "acceptedAt": "2026-08-01T20:12:00Z"
+  "acceptedAt": "2026-08-01T20:26:00Z"
 }
