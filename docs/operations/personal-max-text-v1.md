@@ -2,6 +2,30 @@
 
 This runbook describes the accepted production release of Personal MAX Text v1. It is for operators, not only developers. It contains no secrets and no user message payloads.
 
+Canonical release source path:
+
+`/home/codexbot/releases/personal-max-text-v1`
+
+Future deploy, rollback and roll-forward operations must use this stable checkout. The historical Codex engineering checkout under `/home/codexbot/codex-work/` is retained only as evidence/work history and is not the canonical future deploy source.
+
+If the stable checkout is missing or damaged, recover it before any release action:
+
+```bash
+mkdir -p /home/codexbot/releases
+git clone --branch release/personal-max-text-v1 --single-branch \
+  git@github.com:nashavtoparkmedia-byte/CRM.git \
+  /home/codexbot/releases/personal-max-text-v1
+cd /home/codexbot/releases/personal-max-text-v1
+git rev-parse HEAD
+git rev-parse @{u}
+git ls-remote origin refs/heads/release/personal-max-text-v1
+git status --short
+```
+
+Use the repository-scoped deploy key configured on the VPS; do not paste private key material into the command or incident notes.
+
+Recovery of the source checkout must not deploy, restart containers, run migrations or send provider messages.
+
 ## 1. What Personal MAX Text v1 is
 
 Personal MAX Text v1 is the production text transport between Gravity CRM and one confirmed Personal MAX account. It supports normal CRM text sending through a durable, account-scoped, fenced route and live inbound text capture into CRM.
@@ -134,6 +158,7 @@ Default-off is the immediate safety position. It disables physical provider acti
 Use the default-off compose overlay from the canonical release source:
 
 ```bash
+cd /home/codexbot/releases/personal-max-text-v1
 sudo docker compose --project-name crm \
   --env-file /opt/crm/.env.production \
   --env-file /var/lib/crm/max-personal-text-operational.env \
@@ -161,6 +186,7 @@ Before rollback:
 Roll-forward returns production to operational mode with the accepted images and operational overlay:
 
 ```bash
+cd /home/codexbot/releases/personal-max-text-v1
 sudo docker compose --project-name crm \
   --env-file /opt/crm/.env.production \
   --env-file /var/lib/crm/max-personal-text-operational.env \
@@ -232,13 +258,14 @@ Do not:
 
 ## 14. Return to operational state after repair
 
-1. Keep default-off while repairing.
-2. Add regression coverage for the defect.
-3. Run targeted and relevant full tests.
-4. Secret-scan the diff.
-5. Build immutable images with OCI revision labels.
-6. Verify source-to-image binding.
-7. Create or verify a fresh backup.
-8. Roll forward with `--no-build --pull never`.
-9. Verify gateway ready, scraper health, CRM path, queue=0, reconciliation=0, unresolved unknown=0, restartCount stable and sender operational.
-10. Run a bounded provider check only if the release gate explicitly allows it.
+1. Confirm `/home/codexbot/releases/personal-max-text-v1` exists, is on `release/personal-max-text-v1`, is clean, and local/upstream/remote SHAs match.
+2. Keep default-off while repairing.
+3. Add regression coverage for the defect.
+4. Run targeted and relevant full tests.
+5. Secret-scan the diff.
+6. Build immutable images with OCI revision labels.
+7. Verify source-to-image binding.
+8. Create or verify a fresh backup.
+9. Roll forward with `--no-build --pull never` from `/home/codexbot/releases/personal-max-text-v1`.
+10. Verify gateway ready, scraper health, CRM path, queue=0, reconciliation=0, unresolved unknown=0, restartCount stable and sender operational.
+11. Run a bounded provider check only if the release gate explicitly allows it.

@@ -5,7 +5,30 @@
   "releaseStatus": "production_operational_enabled",
   "canonicalBranch": "release/personal-max-text-v1",
   "canonicalCommit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
-  "canonicalSourcePath": "/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z",
+  "canonicalSourcePath": "/home/codexbot/releases/personal-max-text-v1",
+  "futureDeploySource": {
+    "path": "/home/codexbot/releases/personal-max-text-v1",
+    "branch": "release/personal-max-text-v1",
+    "remote": "origin",
+    "remoteRef": "refs/heads/release/personal-max-text-v1",
+    "temporaryCodexWorktreeIsNotCanonical": true,
+    "temporaryCodexWorktreeRetained": "/home/codexbot/codex-work/crm-personal-max-stage8b2-consolidated-20260728T194422Z",
+    "gitCommonDir": ".git",
+    "objectAlternates": "none",
+    "requiresTemporaryCodexWorktree": false
+  },
+  "canonicalSourceRecovery": {
+    "stableParentDirectory": "/home/codexbot/releases",
+    "stablePath": "/home/codexbot/releases/personal-max-text-v1",
+    "expectedBranch": "release/personal-max-text-v1",
+    "expectedRemoteRef": "origin/release/personal-max-text-v1",
+    "procedure": [
+      "Do not use /home/codexbot/codex-work/* as the future deploy source.",
+      "If the stable path is missing, recreate /home/codexbot/releases safely and clone release/personal-max-text-v1 into /home/codexbot/releases/personal-max-text-v1 using the repository-scoped deploy key configured on the VPS.",
+      "After recovery, verify git rev-parse HEAD, git rev-parse @{u}, git ls-remote origin refs/heads/release/personal-max-text-v1 and git status --short before any release action.",
+      "Do not deploy, restart or send provider messages as part of source recovery."
+    ]
+  },
   "acceptedCommitRange": {
     "first": "2da33a12b5f5b95b708cc8975dd36c6fd0aab903",
     "last": "8a9e7f79d91268ee4baf11ae5c440041875de424",
