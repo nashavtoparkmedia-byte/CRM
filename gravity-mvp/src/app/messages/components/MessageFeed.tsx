@@ -646,13 +646,16 @@ export default function MessageFeed({
                             const senderName = quotedMsg
                                 ? (quotedMsg.direction === 'outbound' ? 'Вы' : (metadataSender || msg.account || contactName || 'Контакт'))
                                 : (metadataSender || (unresolvedQuote ? 'MAX' : 'Ответ на недоступное сообщение'))
+                            const unresolvedSnippet = unresolvedQuote
+                                ? unresolvedQuote.substring(0, 80)
+                                : 'Ответ на недоступное сообщение'
                             const snippet = quotedMsg
                                 ? (quotedMsg.type === 'image' ? '📷 Фото'
                                     : quotedMsg.type === 'video' ? '🎥 Видео'
                                     : quotedMsg.type === 'voice' ? '🎤 Голосовое'
                                     : quotedMsg.type === 'document' ? '📎 Документ'
                                     : (quotedMsg.content || '').substring(0, 80))
-                                : (unresolvedQuote || 'Ответ на недоступное сообщение').substring(0, 80)
+                                : unresolvedSnippet
                             return (
                                 <div className={`mb-2 rounded-[6px] overflow-hidden border-l-[3px] ${
                                     isOutbound ? 'border-[#3a7a50] bg-[#aee89a]/40' : 'border-[#3390EC] bg-[#3390EC]/10'

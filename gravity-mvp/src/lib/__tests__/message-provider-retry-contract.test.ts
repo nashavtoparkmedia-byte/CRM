@@ -11,6 +11,8 @@ const prismaMock = vi.hoisted(() => ({
         findUnique: vi.fn(),
         update: vi.fn(),
     },
+    maxOutboundDispatch: { findUnique: vi.fn() },
+    maxOutboundCommand: { findFirst: vi.fn() },
     whatsAppConnection: { findFirst: vi.fn() },
     $queryRaw: vi.fn(),
 }))
@@ -65,6 +67,8 @@ describe('MessageService provider retry contract', () => {
         prismaMock.message.findFirst.mockResolvedValue(null)
         prismaMock.message.update.mockResolvedValue({ id: 'message-retry-1' })
         prismaMock.chat.update.mockResolvedValue({ id: 'chat-max' })
+        prismaMock.maxOutboundDispatch.findUnique.mockResolvedValue(null)
+        prismaMock.maxOutboundCommand.findFirst.mockResolvedValue(null)
         workflowMock.onOutboundMessage.mockResolvedValue(undefined)
     })
 
@@ -258,5 +262,73 @@ describe('MessageService provider retry contract', () => {
         })
         expect(maxSendMock).not.toHaveBeenCalled()
         expect(prismaMock.message.update).not.toHaveBeenCalled()
+    })
+
+    it('uses durable retryable_failed dispatch state when the message row has a stale queued projection', async () => {
+        prismaMock.message.findUnique.mockResolvedValueOnce(failedMaxMessage({
+            status: 'queued',
+            metadata: {
+                retryable: false,
+                deliveryStatus: 'retryable_failed',
+                maxDelivery: {
+                    status: 'queued',
+                    deliveryConfirmed: false,
+                    dispatchId: 'dispatch-retryable-1',
+                },
+                retryAttempt: 5,
+                maxRetries: 5,
+                lastFailedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+            },
+        }))
+        prismaMock.maxOutboundDispatch.findUnique.mockResolvedValueOnce({
+            dispatchId: 'dispatch-retryable-1',
+            state: 'retryable_failed',
+            providerMessageId: null,
+        })
+        maxSendMock.mockResolvedValue({
+            externalId: 'd301abcdef01234567',
+            deliveryConfirmed: true,
+            deliveryStatus: 'delivered',
+        })
+
+        const result = await MessageService.retrySend('message-retry-1')
+
+        expect(result.success).toBe(true)
+        expect(prismaMock.message.create).not.toHaveBeenCalled()
+        expect(maxSendMock).toHaveBeenCalledTimes(1)
+        expect(prismaMock.message.update).toHaveBeenNthCalledWith(1, {
+            where: { id: 'message-retry-1' },
+            data: {
+                status: 'queued',
+                metadata: expect.objectContaining({
+                    retryAttempt: 6,
+                    maxRetries: 6,
+                    retryable: true,
+                    maxDelivery: expect.objectContaining({
+                        dispatchId: 'dispatch-retryable-1',
+                        status: 'queued',
+                        deliveryConfirmed: false,
+                    }),
+                }),
+            },
+        })
+        expect(prismaMock.message.update).toHaveBeenLastCalledWith({
+            where: { id: 'message-retry-1' },
+            data: {
+                status: 'delivered',
+                externalId: 'd301abcdef01234567',
+                metadata: expect.objectContaining({
+                    retryAttempt: 6,
+                    maxRetries: 6,
+                    retryable: false,
+                    maxDelivery: expect.objectContaining({
+                        operation: 'send',
+                        status: 'provider_confirmed',
+                        deliveryConfirmed: true,
+                        maxMessageId: 'd301abcdef01234567',
+                    }),
+                }),
+            },
+        })
     })
 })

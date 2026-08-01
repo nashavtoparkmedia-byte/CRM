@@ -38,6 +38,38 @@ function crmStatusForMaxDelivery(status: string, confirmed: boolean): MessageSta
     return 'sent'
 }
 
+type PersonalMaxRetryableDispatchProjection = {
+    dispatchId: string
+    state: string
+    providerMessageId?: string | null
+}
+
+async function findPersonalMaxRetryableDispatch(message: any, metadata: any): Promise<PersonalMaxRetryableDispatchProjection | null> {
+    if (message?.channel !== 'max') return null
+
+    const select = { dispatchId: true, state: true, providerMessageId: true }
+    const explicitDispatchId = metadata?.maxDelivery?.dispatchId || metadata?.dispatchId
+    let dispatch: PersonalMaxRetryableDispatchProjection | null = null
+
+    if (typeof explicitDispatchId === 'string' && explicitDispatchId.length > 0) {
+        dispatch = await (prisma.maxOutboundDispatch as any).findUnique({
+            where: { dispatchId: explicitDispatchId },
+            select,
+        })
+    }
+
+    if (!dispatch && typeof message.clientMessageId === 'string' && message.clientMessageId.length > 0) {
+        const command = await (prisma.maxOutboundCommand as any).findFirst({
+            where: { clientMessageId: message.clientMessageId },
+            orderBy: { createdAt: 'desc' },
+            select: { dispatch: { select } },
+        })
+        dispatch = command?.dispatch || null
+    }
+
+    return dispatch?.state === 'retryable_failed' ? dispatch : null
+}
+
 function unknownMaxDelivery(protocolChatId: string, webRouteId: unknown) {
     return {
         operation: 'send',
@@ -967,9 +999,27 @@ export class MessageService {
         })
 
         if (!message) return { success: false, error: 'Message not found' }
-        if (message.status !== 'failed') return { success: false, error: `Status is ${message.status}, not failed` }
 
-        const meta = (message.metadata as any) || {}
+        let meta = (message.metadata as any) || {}
+        const retryableDispatch = await findPersonalMaxRetryableDispatch(message, meta)
+        if (retryableDispatch) {
+            meta = {
+                ...meta,
+                retryable: true,
+                deliveryStatus: 'retryable_failed',
+                maxDelivery: {
+                    ...(meta.maxDelivery || {}),
+                    dispatchId: retryableDispatch.dispatchId,
+                    status: 'retryable_failed',
+                    deliveryConfirmed: false,
+                    maxMessageId: retryableDispatch.providerMessageId || null,
+                    externalId: retryableDispatch.providerMessageId || null,
+                },
+            }
+        }
+        const effectiveStatus = retryableDispatch ? 'failed' : message.status
+        if (effectiveStatus !== 'failed') return { success: false, error: `Status is ${message.status}, not failed` }
+
         const durableStatus = meta?.maxDelivery?.status
         if (message.channel === 'max' && durableStatus !== 'retryable_failed') {
             return { success: false, error: 'Personal MAX reconciliation or exact pre-action proof is required' }
@@ -977,7 +1027,10 @@ export class MessageService {
         if (!meta.retryable) return { success: false, error: 'Not retryable' }
 
         const attempt = (meta.retryAttempt || 0) + 1
-        if (attempt > (meta.maxRetries || 3)) return { success: false, error: 'Max retries exceeded' }
+        const maxRetries = retryableDispatch
+            ? Math.max(meta.maxRetries || 3, attempt)
+            : (meta.maxRetries || 3)
+        if (attempt > maxRetries) return { success: false, error: 'Max retries exceeded' }
 
         // Backoff check: skip if too soon. Delay = min(2^attempt * 30s, 10min)
         const backoffMs = Math.min(Math.pow(2, attempt) * 30000, 10 * 60 * 1000)
@@ -998,13 +1051,14 @@ export class MessageService {
             ? {
                 ...meta,
                 retryAttempt: attempt,
+                maxRetries,
                 maxDelivery: {
                     ...(meta.maxDelivery || {}),
                     status: 'queued',
                     deliveryConfirmed: false,
                 },
             }
-            : { ...meta, retryAttempt: attempt }
+            : { ...meta, retryAttempt: attempt, maxRetries }
         await (prisma.message as any).update({
             where: { id: messageId },
             data: { status: message.channel === 'max' ? 'queued' : 'sent', metadata: pendingMeta },
@@ -1136,7 +1190,7 @@ export class MessageService {
         }
 
         // Update final status
-        const retryMeta: any = { ...meta, retryAttempt: attempt, lastFailedAt: new Date().toISOString() }
+        const retryMeta: any = { ...meta, retryAttempt: attempt, maxRetries, lastFailedAt: new Date().toISOString() }
         if (retryMaxDeliveryMetadata) {
             retryMeta.maxDelivery = retryMaxDeliveryMetadata
             retryMeta.retryable = retryMaxDeliveryMetadata.status === 'retryable_failed'
