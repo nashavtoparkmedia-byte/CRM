@@ -178,6 +178,17 @@ test('daily provider-call limit and UNKNOWN stop are restored from durable state
   const stopped = await harness(unknownDirectory, unknownCalls).boundary.handle(next, authentication(next, 'nonce-unknown-two'))
   assert.equal(stopped.safeCode, 'STOPPED_AFTER_UNKNOWN')
   assert.equal(unknownCalls.send, 1)
+
+  const store = new DurableSenderAttemptStore(unknownDirectory)
+  store.resolveUnknownAttempt(uncertain.attemptId, {
+    resolutionType: 'provider_absence_proven',
+    resolvedAt: now.toISOString(),
+    evidenceReference: 'test-provider-absence-evidence:matches=0',
+  })
+  const afterResolved = distinct('after-resolved-unknown')
+  const resumed = await harness(unknownDirectory, unknownCalls).boundary.handle(afterResolved, authentication(afterResolved, 'nonce-unknown-resolved'))
+  assert.equal(resumed.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(unknownCalls.send, 2)
 })
 
 test('default-off runtime does not construct a physical boundary', () => {

@@ -39,6 +39,18 @@ function readJson(filename) {
   }
 }
 
+function resolvedUnknown(record) {
+  const resolution = record?.resolution
+  return record?.response?.outcome === 'UNKNOWN_AFTER_ATTEMPT'
+    && resolution?.schemaVersion === 1
+    && ['provider_absence_proven', 'operator_dead_letter'].includes(resolution.resolutionType)
+    && typeof resolution.resolvedAt === 'string'
+    && typeof resolution.evidenceReference === 'string'
+    && resolution.evidenceReference.length >= 1
+    && resolution.evidenceReference.length <= 512
+    && !/[\x00-\x1f\x7f]/.test(resolution.evidenceReference)
+}
+
 class DurableSenderReplayStore {
   constructor(directory) {
     this.directory = path.join(directory, 'replay')
@@ -166,6 +178,32 @@ class DurableSenderAttemptStore {
     })
   }
 
+  resolveUnknownAttempt(attemptId, resolution) {
+    if (typeof attemptId !== 'string' || attemptId.length < 1 || attemptId.length > 256) throw new Error('Attempt id is invalid')
+    const filename = this.#attemptFile(attemptId)
+    const record = readJson(filename)
+    if (!record || record.schemaVersion !== 1 || record.attemptId !== attemptId
+      || record.state !== 'final' || record.response?.outcome !== 'UNKNOWN_AFTER_ATTEMPT') {
+      throw new Error('Attempt is not a resolvable unknown outcome')
+    }
+    const resolvedAt = resolution?.resolvedAt || new Date().toISOString()
+    const resolutionType = resolution?.resolutionType
+    const evidenceReference = resolution?.evidenceReference
+    if (!['provider_absence_proven', 'operator_dead_letter'].includes(resolutionType)
+      || typeof resolvedAt !== 'string' || Number.isNaN(Date.parse(resolvedAt))
+      || typeof evidenceReference !== 'string' || evidenceReference.length < 1 || evidenceReference.length > 512
+      || /[\x00-\x1f\x7f]/.test(evidenceReference)) {
+      throw new Error('Unknown outcome resolution is invalid')
+    }
+    const updated = {
+      ...record,
+      resolution: { schemaVersion: 1, resolutionType, resolvedAt, evidenceReference },
+      updatedAt: new Date().toISOString(),
+    }
+    writeAtomic(filename, updated)
+    return updated
+  }
+
   countPhysicalSince(timestamp) {
     return this.summarizeSince(timestamp).physicalCalls
   }
@@ -178,7 +216,7 @@ class DurableSenderAttemptStore {
       const started = record?.physicalActionStartedAt || (record?.response?.physicalProviderCalled === true ? record.updatedAt : null)
       if (started && Date.parse(started) >= timestamp) summary.physicalCalls += 1
       if (!record?.updatedAt || Date.parse(record.updatedAt) < timestamp) continue
-      if (record.response?.outcome === 'UNKNOWN_AFTER_ATTEMPT') summary.unknownOutcomes += 1
+      if (record.response?.outcome === 'UNKNOWN_AFTER_ATTEMPT' && !resolvedUnknown(record)) summary.unknownOutcomes += 1
       if (['ROUTE_CONFLICT', 'ROUTE_MISMATCH'].includes(record.response?.safeCode)) summary.routeConflicts += 1
       if (['WRONG_ACCOUNT', 'ACCOUNT_NOT_ALLOWLISTED'].includes(record.response?.safeCode)) summary.wrongAccounts += 1
       if (['STALE_FENCE', 'LEASE_EXPIRED'].includes(record.response?.safeCode)) summary.staleFences += 1
