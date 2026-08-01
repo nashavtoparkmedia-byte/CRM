@@ -30,8 +30,10 @@ test('fresh backup, restore gates and dry-run precede production contact repair'
   const mutationFlag = source.indexOf('production_mutated=true')
   assert.ok(backup > 0 && backup < restoreList && restoreList < isolatedRestore)
   assert.ok(isolatedRestore < dryRun && dryRun < apply && apply < mutationFlag)
+  assert.match(source, /restore_container=personal-max-rc3-contact-restore-\$\{STAMP,,\}/u)
   assert.match(source, /docker run -d --rm --network none --name "\$restore_container"/u)
   assert.match(source, /pg_restore --no-owner --no-acl -U postgres -d restore_check/u)
+  assert.match(source, /isolated restore container cleanup failed/u)
   assert.match(source, /if \[\[ \$status -ne 0 && \$production_mutated == true \]\]; then[\s\S]*default_off_now/u)
 })
 

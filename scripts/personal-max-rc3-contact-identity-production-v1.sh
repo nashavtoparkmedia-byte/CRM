@@ -912,10 +912,9 @@ docker exec -i crm-postgres pg_restore --list <"$EVIDENCE_DIR/production-before-
 sha256sum "$EVIDENCE_DIR/production-before-rc3-contact-identity.dump" \
   >"$EVIDENCE_DIR/production-before-rc3-contact-identity.dump.sha256"
 
-restore_container=personal-max-rc3-contact-restore-${STAMP}
+restore_container=personal-max-rc3-contact-restore-${STAMP,,}
 docker run -d --rm --network none --name "$restore_container" \
-  -e POSTGRES_PASSWORD=restore-check-not-production \
-  -v "$EVIDENCE_DIR:/backup:ro" postgres:16-alpine >/dev/null
+  -e POSTGRES_PASSWORD=restore-check-not-production postgres:16-alpine >/dev/null
 for _ in {1..60}; do
   if docker exec "$restore_container" pg_isready -U postgres >/dev/null 2>&1; then break; fi
   sleep 1
@@ -927,7 +926,11 @@ docker exec -i "$restore_container" pg_restore --no-owner --no-acl -U postgres -
   >"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
 docker exec "$restore_container" psql -X -v ON_ERROR_STOP=1 -At -U postgres -d restore_check \
   -c 'SELECT count(*) FROM "_prisma_migrations";' >>"$EVIDENCE_DIR/isolated-restore-check.log"
-docker rm -f "$restore_container" >/dev/null
+docker rm -f "$restore_container" >/dev/null 2>&1 || true
+if docker ps -a --format '{{.Names}}' | grep -Fx "$restore_container" >/dev/null; then
+  echo 'ERROR: isolated restore container cleanup failed' >&2
+  exit 69
+fi
 restore_container=
 
 a_protocol_evidence_json=$(route_evidence_json protocol_chat_id "$A_PROTOCOL_CHAT_ID" "$A_CONVERSATION_KEY" manual_approved)
