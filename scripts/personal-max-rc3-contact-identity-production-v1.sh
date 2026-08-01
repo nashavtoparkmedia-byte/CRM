@@ -369,7 +369,16 @@ SELECT
     AND coalesce(m.metadata->'maxDelivery'->>'safeErrorCode','')='ROUTE_NOT_SENDABLE'
     AND NOT EXISTS (
       SELECT 1 FROM "MaxOutboundCommand" c WHERE c."clientMessageId"='$TARGET_CLIENT_MESSAGE_ID'
-    )) AS retry_reclassifies;
+    )) AS retry_reclassifies,
+  (SELECT count(*)
+    FROM "MaxOutboundDispatchAttempt" a
+    JOIN "MaxOutboundDispatch" d ON d."dispatchId"=a."dispatchId"
+      AND d."accountId"=a."accountId"
+      AND d."conversationKey"=a."conversationKey"
+    WHERE a."accountId"=:'account_id'
+      AND d.state='provider_confirmed'
+      AND d."providerMessageId" IS NOT NULL
+      AND a."attemptState" IN ('outcome_unknown','awaiting_confirmation','client_action_accepted','physical_action_started')) AS stale_confirmed_attempts_to_close;
 
 DO \$\$
 BEGIN
@@ -455,7 +464,9 @@ WHERE i."contactId"=p.source_contact;
 UPDATE "ContactPhone" ph
 SET "isPrimary"=false
 FROM rc3_pairs p
-WHERE ph."contactId" IN (p.source_contact,p.target_contact) AND ph."isPrimary"=true;
+WHERE ph."contactId" IN (p.source_contact,p.target_contact)
+  AND ph.id<>p.phone_id
+  AND ph."isPrimary"=true;
 
 UPDATE "ContactPhone" ph
 SET "contactId"=p.target_contact,
@@ -464,7 +475,14 @@ SET "contactId"=p.target_contact,
     source='max',
     "verifiedAt"=coalesce(ph."verifiedAt", now())
 FROM rc3_pairs p
-WHERE ph.id=p.phone_id AND ph."contactId"=p.source_contact;
+WHERE ph.id=p.phone_id AND ph."contactId" IN (p.source_contact,p.target_contact)
+  AND (
+    ph."contactId"<>p.target_contact
+    OR ph."isActive" IS DISTINCT FROM true
+    OR ph."isPrimary" IS DISTINCT FROM true
+    OR ph.source IS DISTINCT FROM 'max'::"ContactPhoneSource"
+    OR ph."verifiedAt" IS NULL
+  );
 
 UPDATE "ContactIdentity" i
 SET "phoneId"=p.phone_id,
@@ -696,6 +714,20 @@ SELECT 'pmax_rc3_retry_reclass_' || '$TARGET_MESSAGE_ID', '$TARGET_MESSAGE_ID', 
 WHERE NOT EXISTS (
   SELECT 1 FROM "MessageEventLog" l WHERE l.id='pmax_rc3_retry_reclass_' || '$TARGET_MESSAGE_ID'
 );
+
+UPDATE "MaxOutboundDispatchAttempt" a
+SET "attemptState"='provider_confirmed',
+    "attemptVersion"=a."attemptVersion"+1,
+    "completedAt"=coalesce(a."completedAt", d."providerConfirmedAt", d."terminalAt", now()),
+    "safeErrorCode"=NULL
+FROM "MaxOutboundDispatch" d
+WHERE d."dispatchId"=a."dispatchId"
+  AND d."accountId"=a."accountId"
+  AND d."conversationKey"=a."conversationKey"
+  AND a."accountId"=:'account_id'
+  AND d.state='provider_confirmed'
+  AND d."providerMessageId" IS NOT NULL
+  AND a."attemptState" IN ('outcome_unknown','awaiting_confirmation','client_action_accepted','physical_action_started');
 \endif
 
 DO \$\$
@@ -1036,7 +1068,8 @@ jq -e '
   and .plan.chats_to_move==0 and .plan.tasks_to_move==0 and .plan.calls_to_move==0
   and .plan.driver_profiles_to_move==0 and .plan.a_route_creates==0
   and .plan.route_bindings_to_activate==0 and .plan.provider_bindings_to_supersede==0
-  and .plan.retry_reclassifies==0 and .post.duplicatePhoneOwnership==0' \
+  and .plan.retry_reclassifies==0 and .plan.stale_confirmed_attempts_to_close==0
+  and .post.duplicatePhoneOwnership==0' \
   "$EVIDENCE_DIR/data-repair-dry-run-after.private.json" >/dev/null
 
 default_off_now

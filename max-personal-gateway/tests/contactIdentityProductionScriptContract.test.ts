@@ -66,6 +66,9 @@ test('data repair is exact scoped, audited and idempotent', () => {
   assert.match(source, /route_bindings_to_activate==0/u)
   assert.match(source, /provider_bindings_to_supersede==0/u)
   assert.match(source, /retry_reclassifies==0/u)
+  assert.match(source, /stale_confirmed_attempts_to_close/u)
+  assert.match(source, /ph\.id<>p\.phone_id/u)
+  assert.match(source, /ph\."contactId" IN \(p\.source_contact,p\.target_contact\)/u)
   assert.doesNotMatch(source, /\.delete(?:Many)?\s*\(/u)
 })
 
@@ -80,6 +83,16 @@ test('controlled retry reuses the same failed bubble and forbids blind resend', 
   assert.match(source, /newCrmBubbleCreated:false/u)
   assert.doesNotMatch(source, /http:\/\/127\.0\.0\.1:3002\/api\/messages"/u)
   assert.doesNotMatch(source, /3005\/v1\/personal-max\/send\/text/u)
+})
+
+test('RC3 reruns keep canonical phones primary and close stale confirmed attempts safely', () => {
+  assert.match(source, /OR ph\."isPrimary" IS DISTINCT FROM true/u)
+  assert.match(source, /OR ph\.source IS DISTINCT FROM 'max'::"ContactPhoneSource"/u)
+  assert.match(source, /UPDATE "MaxOutboundDispatchAttempt" a[\s\S]*SET "attemptState"='provider_confirmed'/u)
+  assert.match(source, /d\.state='provider_confirmed'[\s\S]*d\."providerMessageId" IS NOT NULL/u)
+  assert.match(source, /a\."attemptState" IN \('outcome_unknown','awaiting_confirmation','client_action_accepted','physical_action_started'\)/u)
+  assert.match(source, /"completedAt"=coalesce\(a\."completedAt", d\."providerConfirmedAt", d\."terminalAt", now\(\)\)/u)
+  assert.match(source, /stale_confirmed_attempts_to_close==0/u)
 })
 
 test('production gates prove provider store, UI projection, restart and rollback/roll-forward', () => {
