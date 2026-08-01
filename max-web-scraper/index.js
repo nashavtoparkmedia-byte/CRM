@@ -2373,6 +2373,58 @@ function providerIdFromEmptyOp180Snapshot(payload) {
   return ids.length === 1 ? ids[0] : null
 }
 
+function candidateChatIdsForOp180ProviderStoreRecovery() {
+  const candidates = []
+  const seen = new Set()
+  const add = chatId => {
+    const normalized = normalizeMaxChatId(chatId)
+    if (!normalized || seen.has(normalized)) return
+    seen.add(normalized)
+    candidates.push(normalized)
+  }
+
+  add(singleRecentOp128ChatId(15_000))
+  for (const chatId of transport?.getRecentActiveChatIds?.(15 * 60_000) || []) add(chatId)
+  add(transport?._activeUiChatId)
+
+  return candidates.slice(0, 8)
+}
+
+function safeProviderStoreRecoveryAttempt(attempt) {
+  return {
+    chatId: attempt.chatId,
+    success: attempt.result?.success === true,
+    skipped: attempt.result?.skipped || null,
+    status: attempt.result?.status || null,
+  }
+}
+
+async function recoverProviderStoreLiveTextByIdAcrossCandidateChats(providerMessageId, reason = 'provider_store_live_recovery') {
+  const providerId = String(providerMessageId || '').toLowerCase()
+  if (!isRealMaxMessageId(providerId)) return { skipped: 'provider_store_recovery_invalid_provider_id' }
+
+  const candidates = candidateChatIdsForOp180ProviderStoreRecovery()
+  if (candidates.length === 0) return { skipped: 'provider_store_recovery_chat_missing' }
+
+  const attempts = []
+  for (const chatId of candidates) {
+    const result = await recoverProviderStoreLiveTextById(chatId, providerId, reason)
+    attempts.push({ chatId, result })
+    if (result?.success) {
+      return {
+        ...result,
+        chatId,
+        attempts: attempts.map(safeProviderStoreRecoveryAttempt),
+      }
+    }
+  }
+
+  return {
+    skipped: 'provider_store_recovery_no_candidate_matched',
+    attempts: attempts.map(safeProviderStoreRecoveryAttempt),
+  }
+}
+
 async function recoverProviderStoreLiveTextById(chatId, providerMessageId, reason = 'provider_store_live_recovery') {
   const chatIdStr = normalizeMaxChatId(chatId)
   const providerId = String(providerMessageId || '').toLowerCase()
@@ -5842,23 +5894,25 @@ async function init() {
       try {
         const liveProviderId = providerIdFromEmptyOp180Snapshot(data.payload)
         const liveChatId = liveProviderId ? singleRecentOp128ChatId() : null
-        if (liveProviderId && liveChatId) {
+        if (liveProviderId) {
           const looseMedia = transport?.hasRecentLooseMediaForDomRecovery?.({ maxAgeMs: 15_000 })
-          if (looseMedia) {
+          if (looseMedia && liveChatId) {
             const mediaEmit = transport?.emitPendingLooseMediaMessage?.(liveChatId, liveProviderId, { maxAgeMs: 15_000 })
             console.log(`[op180live] provider id used for loose media chatId:${liveChatId} id:${liveProviderId} result=${JSON.stringify(mediaEmit || {})}`)
           } else {
-            const registration = transport?.registerPendingLiveTextIdForDomRecovery?.(liveChatId, liveProviderId)
-            if (registration?.registered) {
-              console.log(`[op180live] provider id queued chatId:${liveChatId} id:${liveProviderId}`)
+            if (liveChatId) {
+              const registration = transport?.registerPendingLiveTextIdForDomRecovery?.(liveChatId, liveProviderId)
+              if (registration?.registered) {
+                console.log(`[op180live] provider id queued chatId:${liveChatId} id:${liveProviderId}`)
+              }
             }
-            enqueueInboundProjection(liveChatId, () =>
-              recoverProviderStoreLiveTextById(liveChatId, liveProviderId, 'op180_empty_messages_reactions')
+            enqueueInboundProjection(liveChatId || `op180:${liveProviderId}`, () =>
+              recoverProviderStoreLiveTextByIdAcrossCandidateChats(liveProviderId, 'op180_empty_messages_reactions')
             ).then(result => {
               if (result?.success) return
-              console.warn(`[op180live] provider-store recovery skipped chatId=${liveChatId} id=${liveProviderId} result=${JSON.stringify(result || {})}`)
+              console.warn(`[op180live] provider-store recovery skipped chatId=${liveChatId || 'candidate-scan'} id=${liveProviderId} result=${JSON.stringify(result || {})}`)
             }).catch(error => {
-              console.warn(`[op180live] provider-store recovery failed chatId=${liveChatId} id=${liveProviderId}: ${error.message}`)
+              console.warn(`[op180live] provider-store recovery failed chatId=${liveChatId || 'candidate-scan'} id=${liveProviderId}: ${error.message}`)
             })
           }
         }

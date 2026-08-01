@@ -46,6 +46,35 @@ test('read-only history hydration is bounded and cannot perform provider actions
   assert.doesNotMatch(block, /page\.type|keyboard\.press|click\(/)
 })
 
+test('chatless op180 empty reaction snapshots recover by exact provider id across bounded candidate chats', () => {
+  const candidateBlock = blockBetween(
+    'function candidateChatIdsForOp180ProviderStoreRecovery',
+    'function safeProviderStoreRecoveryAttempt',
+  )
+  assert.match(candidateBlock, /singleRecentOp128ChatId\(15_000\)/)
+  assert.match(candidateBlock, /getRecentActiveChatIds\?\.\(15 \* 60_000\)/)
+  assert.match(candidateBlock, /transport\?\._activeUiChatId/)
+  assert.match(candidateBlock, /return candidates\.slice\(0, 8\)/)
+
+  const recoveryBlock = blockBetween(
+    'async function recoverProviderStoreLiveTextByIdAcrossCandidateChats',
+    '\nasync function recoverProviderStoreLiveTextById(chatId',
+  )
+  assert.match(recoveryBlock, /recoverProviderStoreLiveTextById\(chatId, providerId, reason\)/)
+  assert.match(recoveryBlock, /provider_store_recovery_no_candidate_matched/)
+  assert.doesNotMatch(recoveryBlock, /forwardToWebhook/)
+  assert.doesNotMatch(recoveryBlock, /sendProviderConfirmedUiText/)
+
+  const op180Block = blockBetween(
+    'if (data.opcode === 180 && data.payload?.messagesReactions)',
+    'const byMessage = extractReactionCountersFromMap',
+  )
+  assert.match(op180Block, /if \(liveProviderId\)/)
+  assert.match(op180Block, /liveChatId \|\| `op180:\$\{liveProviderId\}`/)
+  assert.match(op180Block, /recoverProviderStoreLiveTextByIdAcrossCandidateChats\(liveProviderId, 'op180_empty_messages_reactions'\)/)
+  assert.doesNotMatch(op180Block, /if \(liveProviderId && liveChatId\)/)
+})
+
 test('direct-native DOM projection requires a real provider identity', () => {
   const block = blockBetween('async function forwardDomCandidate', 'async function forwardLatestDomMessage')
   assert.match(block, /outgoing_provider_identity_required/)

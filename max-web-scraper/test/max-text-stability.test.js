@@ -599,9 +599,13 @@ test('op180 provider id queues bounded provider-store text recovery', () => {
   assert.notEqual(op180Start, -1)
   assert.notEqual(op180End, -1)
   assert.match(source, /async function recoverProviderStoreLiveTextById/)
+  assert.match(source, /async function recoverProviderStoreLiveTextByIdAcrossCandidateChats/)
+  assert.match(source, /function candidateChatIdsForOp180ProviderStoreRecovery/)
+  assert.match(source, /getRecentActiveChatIds\?\.\(15 \* 60_000\)/)
   assert.match(op180Block, /registerPendingLiveTextIdForDomRecovery/)
-  assert.match(op180Block, /recoverProviderStoreLiveTextById\(liveChatId, liveProviderId, 'op180_empty_messages_reactions'\)/)
-  assert.ok(op180Block.indexOf('recoverProviderStoreLiveTextById') > op180Block.indexOf('registerPendingLiveTextIdForDomRecovery'))
+  assert.match(op180Block, /liveChatId \|\| `op180:\$\{liveProviderId\}`/)
+  assert.match(op180Block, /recoverProviderStoreLiveTextByIdAcrossCandidateChats\(liveProviderId, 'op180_empty_messages_reactions'\)/)
+  assert.ok(op180Block.indexOf('recoverProviderStoreLiveTextByIdAcrossCandidateChats') > op180Block.indexOf('registerPendingLiveTextIdForDomRecovery'))
 })
 
 test('loose media provider id emits media message with real provider identity', () => {
