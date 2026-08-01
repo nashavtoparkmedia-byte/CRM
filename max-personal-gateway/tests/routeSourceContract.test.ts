@@ -32,10 +32,16 @@ test('Route Registry has no name/phone matching, Redis, Chromium, sender, listen
   assert.doesNotMatch(files, /gravity|react|next\//i)
 })
 
-test('Stage 2 remains unwired from the existing MAX runtime and feature flag has no listener import', () => {
+test('Route Registry remains browserless and is wired only through the gated gateway shadow pipeline', () => {
   const runtime = repositorySource('max-web-scraper/index.js')
+  const gatewayConfig = source('src/runtime/config.ts')
+  const gatewayPipeline = source('src/runtime/ShadowPipeline.ts')
   assert.doesNotMatch(runtime, /RouteRegistry|MAX_ROUTE_REGISTRY_ENABLED|MaxRouteConversation/)
   assert.doesNotMatch(source('src/route/featureFlag.ts'), /max-web-scraper|listener|TransportInterceptor/)
+  assert.match(gatewayConfig, /routeRegistry: parseExactAccountAllowlist\(environment\.MAX_ROUTE_REGISTRY_ENABLED\)/)
+  assert.match(gatewayConfig, /subset\(features\.routeRegistry, features\.normalizer, 'Route registry projection'\)/)
+  assert.match(gatewayPipeline, /features\.routeRegistry\.has\(accountId\)/)
+  assert.match(gatewayPipeline, /PrismaRouteEvidenceProjectionProcessor/)
 })
 
 test('migration is additive, account-scoped, append-only, and contains no caller-controlled bypass', () => {

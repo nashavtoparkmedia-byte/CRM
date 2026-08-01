@@ -89,4 +89,14 @@ describe('ContactService provider phone ownership', () => {
     expect(source).toContain('where: { channel_externalId: { channel, externalId } }')
     expect(source).not.toContain('findFirst({ where: { fullName')
   })
+
+  it('resolves provider-proven phone ownership by audited merge, never by creating a second owner', () => {
+    const source = readFileSync(path.join(process.cwd(), 'src/lib/ContactService.ts'), 'utf8')
+    expect(source).toContain('PROVIDER_PHONE_AUTO_MERGE_ACTOR')
+    expect(source).toContain('ContactMergeService.previewContactMerge')
+    expect(source).toContain('ContactMergeService.executeContactMerge')
+    expect(source).toContain('AutomaticProviderPhoneMergeRequired')
+    expect(source).toContain("if (ambiguousPhone === 'reject') throw new Error('PHONE_IDENTITY_CONFLICT')")
+    expect(source).toContain("status !== 'contact_merged' && result.status !== 'already_merged'")
+  })
 })

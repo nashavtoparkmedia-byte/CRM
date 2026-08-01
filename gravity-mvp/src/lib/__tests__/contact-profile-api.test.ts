@@ -21,6 +21,12 @@ const prismaMock = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
+const reachabilityMock = vi.hoisted(() => ({
+  resolvePersonalMaxDurableRouteForIdentity: vi.fn(),
+}))
+
+vi.mock('@/lib/ReachabilityService', () => reachabilityMock)
+
 import { GET } from '@/app/api/contacts/[id]/route'
 
 const parks = ['Наш Автопарк', 'YOKO', 'YOKO-2', 'YOKO-3', 'YOKO-4', 'YOKO.Доставка']
@@ -63,6 +69,7 @@ function suggestedProfile(index: number) {
 describe('canonical Contact profile API', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    reachabilityMock.resolvePersonalMaxDurableRouteForIdentity.mockResolvedValue({ kind: 'active' })
     const contact = {
       id: 'contact-1',
       displayName: '+79222155750',
@@ -91,9 +98,9 @@ describe('canonical Contact profile API', () => {
         createdAt: new Date('2026-07-13T12:00:00.000Z'),
       }],
       identities: [{
-        id: 'identity-1',
+        id: 'identity-phone-placeholder',
         channel: 'max',
-        externalId: '902144614300',
+        externalId: '79222155750',
         phoneId: 'phone-1',
         displayName: null,
         source: 'auto',
@@ -103,12 +110,38 @@ describe('canonical Contact profile API', () => {
         reachabilityStatus: 'confirmed',
         reachabilityCheckedAt: new Date('2026-07-13T12:00:00.000Z'),
         metadata: {},
+      }, {
+        id: 'identity-protocol-alias',
+        channel: 'max',
+        externalId: '902144614300',
+        phoneId: null,
+        displayName: null,
+        source: 'auto',
+        confidence: 1,
+        isActive: true,
+        createdAt: new Date('2026-07-13T12:00:00.000Z'),
+        reachabilityStatus: 'confirmed',
+        reachabilityCheckedAt: new Date('2026-07-13T12:00:00.000Z'),
+        metadata: {},
+      }, {
+        id: 'identity-provider-route',
+        channel: 'max',
+        externalId: '901970535612',
+        phoneId: null,
+        displayName: null,
+        source: 'auto',
+        confidence: 1,
+        isActive: true,
+        createdAt: new Date('2026-07-13T12:00:00.000Z'),
+        reachabilityStatus: 'unknown',
+        reachabilityCheckedAt: null,
+        metadata: {},
       }],
       chats: [{
         id: 'chat-1',
         channel: 'max',
         externalChatId: '902144614300',
-        contactIdentityId: 'identity-1',
+        contactIdentityId: 'identity-provider-route',
         lastMessageAt: new Date('2026-07-13T12:00:00.000Z'),
         unreadCount: 0,
         status: 'new',
@@ -118,7 +151,7 @@ describe('canonical Contact profile API', () => {
         id: 'chat-route-alias',
         channel: 'max',
         externalChatId: '2351835259',
-        contactIdentityId: 'identity-1',
+        contactIdentityId: 'identity-provider-route',
         lastMessageAt: new Date('2026-07-13T11:59:00.000Z'),
         unreadCount: 0,
         status: 'new',
@@ -167,9 +200,14 @@ describe('canonical Contact profile API', () => {
     expect(body.canonicalSummary.primaryPhone).toBe('+7 922 215-57-50')
     expect(body.canonicalSummary.channelCount).toBe(1)
     expect(body.chats.map((chat: { id: string }) => chat.id)).toEqual(['chat-1'])
+    expect(body.channels.find((item: { channel: string }) => item.channel === 'max')).toMatchObject({
+      identityId: 'identity-provider-route',
+      externalId: '901970535612',
+    })
+    expect(body.identities.map((identity: { id: string }) => identity.id)).toEqual(['identity-provider-route'])
     expect(body.canonicalSummary.providerIdentities).toEqual([{
       channel: 'max',
-      externalId: '902144614300',
+      externalId: '901970535612',
       displayName: null,
     }])
     expect(body.suggestedProfiles).toHaveLength(6)

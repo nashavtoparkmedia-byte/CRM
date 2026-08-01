@@ -126,4 +126,24 @@ describe('canonical Contact channel identity selection', () => {
       reachabilityStatus: 'confirmed',
     })
   })
+
+  test('collapses an unlinked MAX protocol chat alias into the routed provider identity', () => {
+    const selected = selectCanonicalContactChannelIdentities({
+      phones: [phone],
+      identities: [
+        identity('phone-placeholder', '79126787532', 'phone-1', 'confirmed'),
+        identity('protocol-alias', '902454841098', null, 'confirmed', true),
+        identity('provider-route', '902264026154', null, 'unknown'),
+      ],
+      chats: [chat('provider-route', '902454841098')],
+    })
+
+    expect(selected).toHaveLength(1)
+    expect(selected[0]).toMatchObject({
+      id: 'provider-route',
+      externalId: '902264026154',
+      personalMaxRouteKnown: true,
+      reachabilityStatus: 'confirmed',
+    })
+  })
 })

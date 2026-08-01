@@ -81,6 +81,15 @@ export function selectCanonicalContactChannelIdentities(input: {
     input.chats.map(chat => chat.contactIdentityId).filter((id): id is string => Boolean(id)),
   )
   const phoneDigits = new Set(input.phones.map(phone => normalizedPhoneDigits(phone.phone)).filter(Boolean))
+  const chatExternalIdsByChannel = new Map<string, Set<string>>()
+  for (const chat of input.chats) {
+    const channel = chat.channel.trim().toLowerCase()
+    const value = chat.externalChatId.trim().toLowerCase()
+    if (!channel || !value) continue
+    const values = chatExternalIdsByChannel.get(channel) || new Set<string>()
+    values.add(value)
+    chatExternalIdsByChannel.set(channel, values)
+  }
   const byProviderIdentity = new Map<string, ContactIdentityPayload>()
 
   for (const identity of input.identities) {
@@ -118,17 +127,21 @@ export function selectCanonicalContactChannelIdentities(input: {
       continue
     }
 
-    const phonePlaceholders = identities.filter(identity =>
-      !linkedIdentityIds.has(identity.id) &&
-      Boolean(identity.phoneId) &&
-      phoneDigits.has(normalizedPhoneDigits(identity.externalId)),
-    )
-    const placeholderIds = new Set(phonePlaceholders.map(identity => identity.id))
+    const routeAliases = identities.filter(identity => {
+      if (linkedIdentityIds.has(identity.id)) return false
+      const channel = identity.channel.trim().toLowerCase()
+      const externalId = identity.externalId.trim().toLowerCase()
+      const phoneAlias = Boolean(identity.phoneId)
+        && phoneDigits.has(normalizedPhoneDigits(identity.externalId))
+      const chatAlias = (chatExternalIdsByChannel.get(channel)?.has(externalId) ?? false)
+      return phoneAlias || chatAlias
+    })
+    const placeholderIds = new Set(routeAliases.map(identity => identity.id))
     const visible = identities.filter(identity => !placeholderIds.has(identity.id))
 
-    if (routed.length === 1 && phonePlaceholders.length > 0) {
+    if (routed.length === 1 && routeAliases.length > 0) {
       const routeId = routed[0].id
-      const combinedStatus = phonePlaceholders.reduce(
+      const combinedStatus = routeAliases.reduce(
         (status, identity) => strongerReachability(status, identity.reachabilityStatus),
         routed[0].reachabilityStatus,
       )
@@ -137,7 +150,7 @@ export function selectCanonicalContactChannelIdentities(input: {
           ? {
               ...identity,
               personalMaxRouteKnown: identity.personalMaxRouteKnown === true
-                || phonePlaceholders.some(item => item.personalMaxRouteKnown === true),
+                || routeAliases.some(item => item.personalMaxRouteKnown === true),
               reachabilityStatus: combinedStatus,
             }
           : identity

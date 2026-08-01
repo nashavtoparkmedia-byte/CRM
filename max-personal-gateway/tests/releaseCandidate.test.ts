@@ -15,7 +15,9 @@ test('gateway image and runtime stay browserless with no direct provider client 
   assert.match(dockerfile, /^USER node$/m)
   assert.doesNotMatch(dockerfile, /playwright|puppeteer|chromium/i)
   const runtime = execFileSync('bash', ['-lc', 'find max-personal-gateway/src/runtime -type f -print0 | sort -z | xargs -0 cat'], { cwd: root, encoding: 'utf8' })
-  assert.doesNotMatch(runtime, /(?:from|require\()[^\n]*(?:\/outbound|\/dispatch|\/route|puppeteer|playwright)/i)
+  assert.doesNotMatch(runtime, /(?:from|require\()[^\n]*(?:\/outbound|\/dispatch|puppeteer|playwright)/i)
+  assert.doesNotMatch(runtime, /(?:from|require\()[^\n]*(?:gravity-mvp|next\/|react|ContactService|MessageService)/i)
+  assert.match(runtime, /PrismaRouteEvidenceProjectionProcessor/)
   assert.doesNotMatch(runtime, /sendFrame\(|page\.goto\(|chromium\.launch\(/)
 })
 

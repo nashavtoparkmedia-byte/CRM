@@ -8,6 +8,8 @@ import { MaxInboundNormalizer } from '../inbound/MaxInboundNormalizer.ts'
 import { PrismaShadowInboundNormalizationProcessor } from '../inbound/PrismaShadowInboundNormalizationProcessor.ts'
 import { MAX_INBOUND_NORMALIZER_VERSION } from '../inbound/constants.ts'
 import { PrismaRawEventJournal } from '../journal/PrismaRawEventJournal.ts'
+import { PrismaRouteEvidenceProjectionProcessor } from '../route/PrismaRouteEvidenceProjectionProcessor.ts'
+import { PrismaRouteRegistry } from '../route/PrismaRouteRegistry.ts'
 import type { GatewayConfig } from './config.ts'
 import type { OperationalMetrics } from './metrics.ts'
 
@@ -23,6 +25,7 @@ export class ShadowPipeline {
   readonly #metrics: OperationalMetrics
   readonly #journal: PrismaRawEventJournal
   readonly #normalizer: PrismaShadowInboundNormalizationProcessor
+  readonly #routeProjection: PrismaRouteEvidenceProjectionProcessor
   readonly #confirmation: PrismaConfirmationMatcher
   readonly #engine = new DefaultSemanticComparisonEngine()
   readonly #comparison: PrismaShadowSemanticComparisonHarness
@@ -43,6 +46,11 @@ export class ShadowPipeline {
       client,
       this.#journal,
       new MaxInboundNormalizer(),
+    )
+    this.#routeProjection = new PrismaRouteEvidenceProjectionProcessor(
+      this.#journal,
+      this.#normalizer,
+      new PrismaRouteRegistry(client),
     )
     this.#confirmation = new PrismaConfirmationMatcher(client)
     this.#comparison = new PrismaShadowSemanticComparisonHarness(client, this.#engine)
@@ -80,6 +88,7 @@ export class ShadowPipeline {
   }
 
   async #runAccount(accountId: string): Promise<void> {
+    let accountCritical = false
     if (this.#config.features.normalizer.has(accountId)) {
       const started = Date.now()
       const result = await this.#normalizer.normalizeBatch({
@@ -92,6 +101,16 @@ export class ShadowPipeline {
       this.normalizerLagMs = Date.now() - started
       this.#metrics.observe('normalizationLagMs', this.normalizerLagMs)
       this.#metrics.increment('normalizerQuarantined', result.quarantined)
+    }
+    if (this.#config.features.routeRegistry.has(accountId)) {
+      const result = await this.#routeProjection.projectBatch({
+        accountId,
+        consumerId: 'max-personal-gateway-route-registry-v1',
+        parserVersion: MAX_INBOUND_NORMALIZER_VERSION,
+        workerId: this.#workerId,
+        limit: this.#config.workerBatchSize,
+      })
+      if (result.conflicts > 0) accountCritical = true
     }
     if (this.#config.features.providerConfirmation.has(accountId)) {
       const started = Date.now()
@@ -134,7 +153,8 @@ export class ShadowPipeline {
       this.#metrics.increment('regressions', result.classifications.regression)
       const critical = await this.#comparison.listCriticalDiffs(accountId, runId, this.#config.workerBatchSize)
       this.#metrics.set('criticalRegressions', critical.length)
+      if (critical.length > 0) accountCritical = true
     }
-    this.queueCritical = false
+    this.queueCritical = accountCritical
   }
 }

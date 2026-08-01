@@ -9,6 +9,7 @@ const secret = 'synthetic-stage8b1-hmac-secret-0000000000000000'
 test('readiness enforces every safety gate and metrics stay bounded/payload-free', () => {
   const config = loadGatewayConfig({
     MAX_RAW_JOURNAL_ENABLED: 'account-a', MAX_INBOUND_NORMALIZER_ENABLED: 'account-a',
+    MAX_ROUTE_REGISTRY_ENABLED: 'account-a',
     MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: 'account-a',
     MAX_SHADOW_COMPARISON_ENABLED: 'account-a', MAX_PERSONAL_LIVE_CAPTURE_ENABLED: 'account-a',
     MAX_PERSONAL_GATEWAY_DATABASE_URL: 'postgresql://synthetic.invalid/db',

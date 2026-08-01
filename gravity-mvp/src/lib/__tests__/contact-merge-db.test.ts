@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from 'vitest'
 
 import { ContactMergeService, MergeError, type ContactMergePreview } from '../ContactMergeService'
+import { ContactService } from '../ContactService'
 import { prisma } from '../prisma'
 
 const dbDescribe = process.env.CONTACT_MERGE_DB_TEST === '1' ? describe : describe.skip
@@ -285,5 +286,85 @@ dbDescribe('Contact merge full graph against isolated PostgreSQL', () => {
       'operator-1',
     )
     expect(alreadyMergedPreview.blockers.map(blocker => blocker.code)).toContain('SOURCE_ALREADY_MERGED')
+  })
+
+  test('provider-proven phone on an existing MAX identity performs an audited merge into the routed Contact', async () => {
+    const phoneOwner = await prisma.contact.create({ data: { displayName: 'Phone owner' } })
+    const routedContact = await prisma.contact.create({ data: { displayName: 'Routed MAX contact' } })
+    const phone = await prisma.contactPhone.create({
+      data: {
+        contactId: phoneOwner.id,
+        phone: '+79222155750',
+        isPrimary: true,
+        source: 'manual',
+      },
+    })
+    await prisma.contact.update({
+      where: { id: phoneOwner.id },
+      data: { primaryPhoneId: phone.id },
+    })
+    const identity = await prisma.contactIdentity.create({
+      data: {
+        contactId: routedContact.id,
+        channel: 'max',
+        externalId: 'provider-user-901970535612',
+        source: 'auto',
+        confidence: 1,
+      },
+    })
+    const chat = await prisma.chat.create({
+      data: {
+        contactId: routedContact.id,
+        contactIdentityId: identity.id,
+        channel: 'max',
+        externalChatId: 'protocol-chat-902144614300',
+      },
+    })
+    const message = await prisma.message.create({
+      data: {
+        chatId: chat.id,
+        channel: 'max',
+        direction: 'inbound',
+        content: 'existing history',
+      },
+    })
+
+    const resolved = await ContactService.resolveContact(
+      'max',
+      'provider-user-901970535612',
+      '+7 922 215-57-50',
+      'Routed MAX contact',
+      {
+        phoneEvidence: {
+          source: 'provider_identity',
+          trustedForAutomaticResolution: true,
+        },
+      },
+    )
+
+    expect(resolved).toMatchObject({
+      contact: { id: routedContact.id },
+      identity: { id: identity.id, externalId: 'provider-user-901970535612' },
+      isNew: false,
+      phoneOwnership: 'matched',
+    })
+    expect(await prisma.contact.findUnique({ where: { id: phoneOwner.id }, select: { isArchived: true } }))
+      .toEqual({ isArchived: true })
+    expect(await prisma.contactPhone.findUnique({ where: { id: phone.id } }))
+      .toMatchObject({ contactId: routedContact.id, isPrimary: true, isActive: true })
+    expect(await prisma.contactIdentity.findUnique({ where: { id: identity.id } }))
+      .toMatchObject({ contactId: routedContact.id, phoneId: phone.id })
+    expect(await prisma.chat.findUnique({ where: { id: chat.id } }))
+      .toMatchObject({ contactId: routedContact.id, contactIdentityId: identity.id })
+    expect(await prisma.message.findUnique({ where: { id: message.id } }))
+      .toMatchObject({ chatId: chat.id })
+    expect(await prisma.contactPhone.count({ where: { phone: '+79222155750', isActive: true } })).toBe(1)
+    expect(await prisma.contactMerge.count({
+      where: {
+        mergedId: phoneOwner.id,
+        survivorId: routedContact.id,
+        mergedBy: 'provider_phone_auto_resolution',
+      },
+    })).toBe(1)
   })
 })

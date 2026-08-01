@@ -6,6 +6,7 @@ const KEY_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 export interface FeatureAccounts {
   readonly rawJournal: ReadonlySet<string>
   readonly normalizer: ReadonlySet<string>
+  readonly routeRegistry: ReadonlySet<string>
   readonly providerConfirmation: ReadonlySet<string>
   readonly comparison: ReadonlySet<string>
   readonly liveCapture: ReadonlySet<string>
@@ -88,17 +89,20 @@ export function loadGatewayConfig(environment: NodeJS.ProcessEnv = process.env):
   const features: FeatureAccounts = {
     rawJournal: parseExactAccountAllowlist(environment.MAX_RAW_JOURNAL_ENABLED),
     normalizer: parseExactAccountAllowlist(environment.MAX_INBOUND_NORMALIZER_ENABLED),
+    routeRegistry: parseExactAccountAllowlist(environment.MAX_ROUTE_REGISTRY_ENABLED),
     providerConfirmation: parseExactAccountAllowlist(environment.MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED),
     comparison: parseExactAccountAllowlist(environment.MAX_SHADOW_COMPARISON_ENABLED),
     liveCapture: parseExactAccountAllowlist(environment.MAX_PERSONAL_LIVE_CAPTURE_ENABLED),
   }
   subset(features.liveCapture, features.rawJournal, 'Live capture')
   subset(features.normalizer, features.rawJournal, 'Normalizer')
+  subset(features.routeRegistry, features.normalizer, 'Route registry projection')
   subset(features.providerConfirmation, features.normalizer, 'Provider confirmation matcher')
   subset(features.comparison, features.normalizer, 'Comparison')
   const enabledAccounts = new Set([
     ...features.rawJournal,
     ...features.normalizer,
+    ...features.routeRegistry,
     ...features.providerConfirmation,
     ...features.comparison,
     ...features.liveCapture,

@@ -3,6 +3,7 @@ import { ChatChannel, ContactPhoneSource, Prisma } from '@prisma/client'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import type { PhoneEvidenceSource } from '@/lib/contacts/contact-resolution.types'
 import { resolveStrictPhoneOwnership } from '@/lib/contacts/strict-phone-ownership'
+import { ContactMergeService } from '@/lib/ContactMergeService'
 
 export type ProviderPhoneOwnership =
   | 'not_provided'
@@ -49,6 +50,20 @@ export function classifyProviderPhoneOwners(
 }
 
 const MAX_RETRIES = 2
+const PROVIDER_PHONE_AUTO_MERGE_ACTOR = 'provider_phone_auto_resolution'
+
+class AutomaticProviderPhoneMergeRequired extends Error {
+  constructor(
+    readonly sourceContactId: string,
+    readonly targetContactId: string,
+    readonly normalizedPhone: string,
+    readonly channel: ChatChannel,
+    readonly externalId: string,
+  ) {
+    super('PROVIDER_PHONE_AUTO_MERGE_REQUIRED')
+    this.name = 'AutomaticProviderPhoneMergeRequired'
+  }
+}
 
 function isPrismaErrorWithCode(value: unknown, code: string): boolean {
   return typeof value === 'object'
@@ -137,6 +152,45 @@ function withPhoneEvidenceMetadata(
  *   4. Identity не найдена, phone = null (MAX без номера) → создать Contact + Identity(phoneId=null)
  */
 export class ContactService {
+  private static async executeProviderPhoneAutoMerge(input: AutomaticProviderPhoneMergeRequired): Promise<void> {
+    const preview = await ContactMergeService.previewContactMerge(
+      input.sourceContactId,
+      input.targetContactId,
+      PROVIDER_PHONE_AUTO_MERGE_ACTOR,
+    )
+    if (preview.blockers.length > 0) {
+      const error = new Error('PROVIDER_PHONE_AUTO_MERGE_BLOCKED')
+      Object.assign(error, {
+        code: 'PROVIDER_PHONE_AUTO_MERGE_BLOCKED',
+        sourceContactId: input.sourceContactId,
+        targetContactId: input.targetContactId,
+        normalizedPhone: input.normalizedPhone,
+        blockerCodes: preview.blockers.map(blocker => blocker.code),
+      })
+      throw error
+    }
+
+    const result = await ContactMergeService.executeContactMerge({
+      sourceId: preview.source.id,
+      targetId: preview.target.id,
+      actorId: preview.actor.id,
+      planHash: preview.planHash,
+      sourceVersion: preview.sourceVersion,
+      targetVersion: preview.targetVersion,
+      confirmationToken: preview.confirmationToken,
+    })
+    if (result.status !== 'contact_merged' && result.status !== 'already_merged') {
+      const error = new Error('PROVIDER_PHONE_AUTO_MERGE_FAILED')
+      Object.assign(error, {
+        code: 'PROVIDER_PHONE_AUTO_MERGE_FAILED',
+        sourceContactId: input.sourceContactId,
+        targetContactId: input.targetContactId,
+        normalizedPhone: input.normalizedPhone,
+        status: result.status,
+      })
+      throw error
+    }
+  }
 
   /**
    * Resolve or create Contact + ContactIdentity for an incoming message.
@@ -178,6 +232,10 @@ export class ContactService {
           timeout: 15000,
         })
       } catch (e: unknown) {
+        if (e instanceof AutomaticProviderPhoneMergeRequired) {
+          await this.executeProviderPhoneAutoMerge(e)
+          continue
+        }
         // P2002 = unique constraint violation (race condition)
         if (isPrismaErrorWithCode(e, 'P2002') && attempt < MAX_RETRIES) {
           console.log(`[ContactService] Retry ${attempt + 1}/${MAX_RETRIES} after unique constraint violation`)
@@ -223,7 +281,13 @@ export class ContactService {
           phoneOwnership = 'ambiguous'
         } else if (ownership.kind === 'matched' && ownership.contactId !== existingIdentity.contactId) {
           if (ambiguousPhone === 'reject') throw new Error('PHONE_IDENTITY_CONFLICT')
-          phoneOwnership = 'conflict'
+          throw new AutomaticProviderPhoneMergeRequired(
+            ownership.contactId,
+            existingIdentity.contactId,
+            normalized,
+            channel,
+            externalId,
+          )
         } else {
           let phoneId = ownership.kind === 'matched'
             ? (await db.contactPhone.findUnique({

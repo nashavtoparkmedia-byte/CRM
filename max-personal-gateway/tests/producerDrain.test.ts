@@ -24,6 +24,7 @@ test.after(() => { for (const root of temporary) rmSync(root, { recursive: true,
 function activeConfig() {
   return { ...loadGatewayConfig({
     MAX_RAW_JOURNAL_ENABLED: 'account-a', MAX_INBOUND_NORMALIZER_ENABLED: 'account-a',
+    MAX_ROUTE_REGISTRY_ENABLED: 'account-a',
     MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: 'account-a',
     MAX_SHADOW_COMPARISON_ENABLED: 'account-a', MAX_PERSONAL_LIVE_CAPTURE_ENABLED: 'account-a',
     MAX_PERSONAL_GATEWAY_DATABASE_URL: 'postgresql://synthetic.invalid/db',

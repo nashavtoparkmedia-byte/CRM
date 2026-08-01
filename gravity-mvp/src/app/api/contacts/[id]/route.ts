@@ -13,6 +13,7 @@ import {
   getEmploymentTypeLabel,
   getSuggestionBasis,
   groupDriverProfilesByPark,
+  selectCanonicalContactChannelIdentities,
 } from '@/lib/contact-profile-ui'
 import { formatProfileRefreshWarning, getContactProfileRefreshDecision } from '@/lib/driver-profiles/refresh-policy'
 import { deriveTelegramBotProfileState } from '@/lib/telegram-bot-profile-state'
@@ -527,8 +528,22 @@ export async function GET(
         ? personalMaxRouteKnownByIdentityId.get(identity.id) === true
         : false,
     }))
+    const canonicalIdentities = selectCanonicalContactChannelIdentities({
+      identities,
+      chats: activeChats.map(chat => ({
+        id: chat.id,
+        channel: chat.channel,
+        externalChatId: chat.externalChatId,
+        contactIdentityId: chat.contactIdentityId,
+        lastMessageAt: dateIsoOrNull(chat.lastMessageAt),
+        unreadCount: chat.unreadCount,
+        status: chat.status,
+        name: chat.name,
+      })),
+      phones: contact.phones,
+    })
     const channels = PROFILE_CHANNELS.map(channel => {
-      const identity = identities.find(item => item.channel === channel)
+      const identity = canonicalIdentities.find(item => item.channel === channel)
       return {
         channel,
         identityId: identity?.id ?? null,
@@ -541,11 +556,11 @@ export async function GET(
     const driver = mainDriverProfile
 
     const canonicalSummary = buildCanonicalContactSummary({
-      contact,
+      contact: { ...contact, identities: canonicalIdentities },
       profiles: attachedProfiles,
       currentChannel: activeChats[0]?.channel || null,
       providerChannels: Array.from(new Set([
-        ...contact.identities.map(identity => identity.channel),
+        ...canonicalIdentities.map(identity => identity.channel),
         ...activeChats.map(chat => chat.channel),
       ])),
     })
@@ -573,7 +588,7 @@ export async function GET(
       createdAt: contact.createdAt,
       updatedAt: contact.updatedAt,
       phones: contact.phones,
-      identities,
+      identities: canonicalIdentities,
       chats: activeChats,
       channels,
       canonicalSummary,

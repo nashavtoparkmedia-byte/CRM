@@ -50,6 +50,7 @@ if (config === null) {
       const runtimeConfig = { ...loadGatewayConfig({
         MAX_RAW_JOURNAL_ENABLED: accountId,
         MAX_INBOUND_NORMALIZER_ENABLED: accountId,
+        MAX_ROUTE_REGISTRY_ENABLED: accountId,
         MAX_PROVIDER_CONFIRMATION_MATCHER_ENABLED: accountId,
         MAX_SHADOW_COMPARISON_ENABLED: accountId,
         MAX_PERSONAL_LIVE_CAPTURE_ENABLED: accountId,
