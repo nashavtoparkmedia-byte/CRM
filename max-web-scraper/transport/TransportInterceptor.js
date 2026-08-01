@@ -567,7 +567,8 @@ class TransportInterceptor {
     this._localSeq             = 500        // наши seq начинаются с 500 (браузер использует 0–499)
     this._browserLastBinFrameSeq = 0        // последний fseq из браузерных бинарных фреймов; наши op:71 используют +1
     this._op71Prefix           = null       // 3-байт префикс из браузерного op:71, захватывается динамически
-    this._browserBinaryRequestPrefix = null // 2-byte f0/schema prefix captured from a browser-owned binary request
+    this._browserBinaryRequestPrefix = null // last 2-byte f0/schema prefix captured from a browser-owned binary request
+    this._browserBinaryRequestPrefixesByOpcode = new Map() // opcode -> 2-byte f0/schema prefix captured from browser-owned requests
     this._myUserId             = null       // userId нашего аккаунта (из opcode 19)
     this._wsAuthHandlers       = []
     this._wsConnected          = false     // true когда WS авторизован и готов к отправке
@@ -676,6 +677,7 @@ class TransportInterceptor {
             // map at byte 9 and must never become a template.
             if (cmd === 0x01 && buf.length > 12 && buf[10] === 0xf0) {
               this._browserBinaryRequestPrefix = [buf[10], buf[11]]
+              this._browserBinaryRequestPrefixesByOpcode.set(opcode, [buf[10], buf[11]])
             }
             // Захватываем 3-байт префикс из первого op:71 (браузер шлёт его раньше нашего catch-up)
             if (opcode === 71 && buf.length > 11 && !this._op71Prefix) {
@@ -2169,8 +2171,14 @@ class TransportInterceptor {
     return Buffer.concat([Buffer.from([0xc7, raw.length, 0x01]), raw])
   }
 
-  _buildBrowserBinaryRequestFrame(opcode, payloadMap) {
-    const capturedPrefix = this._browserBinaryRequestPrefix ||
+  _buildBrowserBinaryRequestFrame(opcode, payloadMap, options = {}) {
+    const fallbackPrefix = Array.isArray(options.fallbackPrefix) ? options.fallbackPrefix : null
+    const opcodePrefix = this._browserBinaryRequestPrefixesByOpcode instanceof Map
+      ? this._browserBinaryRequestPrefixesByOpcode.get(opcode)
+      : null
+    const capturedPrefix = opcodePrefix ||
+      fallbackPrefix ||
+      this._browserBinaryRequestPrefix ||
       (Array.isArray(this._op71Prefix) ? this._op71Prefix.slice(-2) : null)
     if (!capturedPrefix || capturedPrefix.length !== 2 || capturedPrefix[0] !== 0xf0) {
       throw new Error(`Binary op:${opcode} requires a browser-captured MAX request prefix`)
@@ -2205,12 +2213,11 @@ class TransportInterceptor {
     const linkMap = Buffer.concat([
       Buffer.from([0x82]),
       this._mpStr('type'), this._mpStr('REPLY'),
-      // MAX Web's in-memory provider model represents reply targets as
-      // message.link.id.  The sanitized CRM/browser fixtures may expose
-      // messageId, but the binary op:64 provider frame must use the native
-      // provider-store field or MAX closes the WebSocket without creating a
-      // provider message.
-      this._mpStr('id'), this._maxExtFromIdHex(replyId, true),
+      // Native web.max.ru sends reply links in op:64 as
+      // { type: 'REPLY', messageId: <provider message id> }.
+      // Provider-store snapshots later materialize the same relationship as
+      // link.message.id, but that is the read model, not the outbound frame.
+      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, true),
     ])
     const messageMap = Buffer.concat([
       Buffer.from([0x85]),
@@ -2221,13 +2228,24 @@ class TransportInterceptor {
       this._mpStr('attaches'), Buffer.from([0x90]),
     ])
     const payloadMap = Buffer.concat([
-      Buffer.from([0x83]),
+      Buffer.from([0x84]),
       this._mpStr('chatId'), this._maxExtFromLower32(chatId),
+      // Native MAX Web includes postId: B.resolvePostId(chatId) in send
+      // commands.  For direct dialogs resolvePostId is undefined and encodes
+      // as nil; keeping the key preserves the browser payload shape while
+      // avoiding a guessed comment-thread post id.
+      this._mpStr('postId'), Buffer.from([0xc0]),
       this._mpStr('message'), messageMap,
       this._mpStr('notify'), Buffer.from([0xc3]),
     ])
 
-    return this._buildBrowserBinaryRequestFrame(OP.SEND_MESSAGE, payloadMap)
+    return this._buildBrowserBinaryRequestFrame(OP.SEND_MESSAGE, payloadMap, {
+      // A globally captured f0/schema prefix can belong to an unrelated
+      // opcode (for example stickers op:26/27).  If the browser has not
+      // emitted a native op:64 in this session, use the opcode-specific
+      // request prefix shape observed for cmd=1 browser frames.
+      fallbackPrefix: [0xf0, OP.SEND_MESSAGE],
+    })
   }
 
   async sendBinaryReply(chatId, text, replyToMessageId, cid) {
