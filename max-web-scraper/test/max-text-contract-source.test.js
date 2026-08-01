@@ -355,6 +355,7 @@ test('MAX reply text uses a MAX provider frame with a real target and is not dow
   assert.match(bridge, /await core\.module\.ro\(\{ chat, from: historyFrom \}\)/)
   assert.match(bridge, /await core\.module\.\$i\(\{ chat, message: pending \}\)/)
   assert.match(bridge, /pending\.id = BigInt\(args\.cid\)/)
+  assert.doesNotMatch(bridge, /!core\.legacySendPrimitives \|\| typeof core\.module\.\$i/)
   assert.match(bridge, /Reply requires real MAX provider message id/)
   assert.match(block, /reply send failed without MAX confirmation; not downgrading to plain UI text/)
   assertBefore(

@@ -772,7 +772,9 @@ class MaxWebReplyBridge {
       try {
         const core = await findCoreModule()
         if (!core) return { ok: false, reason: 'max_web_core_not_found', providerActionStarted }
-        if (!core.legacySendPrimitives || typeof core.module.$i !== 'function' || !core.module.Es || !core.module.ws) {
+        if (typeof core.module.$i !== 'function'
+          || typeof core.module.Es !== 'function'
+          || typeof core.module.ws !== 'function') {
           return { ok: false, reason: 'max_web_reply_sender_not_supported', providerActionStarted }
         }
         const requestedChatKey = BigInt(String(args.chatId))
