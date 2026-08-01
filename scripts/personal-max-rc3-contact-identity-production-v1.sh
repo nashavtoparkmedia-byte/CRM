@@ -213,8 +213,7 @@ actual_default_off_gate() {
     (map(select(.Name=="/crm-max-personal-gateway"))[0].Config.Env|index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=false"))!=null and
     (map(select(.Name=="/crm-max-scraper"))[0].Config.Env|index("MAX_PERSONAL_TEXT_SENDER_ENABLED=false"))!=null and
     (map(select(.Name=="/crm-max-scraper"))[0].Config.Env|index("MAX_PERSONAL_TEXT_SENDER_PHYSICAL_ENABLED=false"))!=null and
-    (map(select(.Name=="/crm-max-scraper"))[0].Config.Env|index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=false"))!=null and
-    (map(select(.Name=="/crm-max-scraper"))[0].Config.Env|index("MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED=true"))!=null' >/dev/null
+    (map(select(.Name=="/crm-max-scraper"))[0].Config.Env|index("MAX_PERSONAL_TEXT_SENDER_EMERGENCY_STOP_CLEAR=false"))!=null' >/dev/null
 }
 
 actual_operational_gate() {

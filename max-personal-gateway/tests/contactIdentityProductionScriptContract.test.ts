@@ -77,5 +77,6 @@ test('production gates prove provider store, UI projection, restart and rollback
   assert.match(source, /attempt_hash_after_rollforward/u)
   assert.match(source, /RC2_GRAVITY_IMAGE=crm\/gravity-mvp:personal-max-rc2-burst-e2711dc02d06/u)
   assert.match(source, /actual_operational_gate/u)
+  assert.match(source, /MAX_PERSONAL_LEGACY_TEXT_SENDER_DISABLED=true/u)
   assert.match(source, /PERSONAL MAX TEXT V1 RC3 CONTACT IDENTITY CONSOLIDATION USER CHECK READY/u)
 })
