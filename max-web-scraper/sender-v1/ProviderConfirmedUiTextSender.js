@@ -16,6 +16,11 @@ function refused(safeCode) {
   })
 }
 
+function safeSenderCode(error, fallback) {
+  const code = error?.safeCode || error?.code
+  return /^[A-Z0-9_]{1,128}$/.test(String(code || '')) ? String(code) : fallback
+}
+
 /**
  * Execute one fenced MAX Web text action and promote it only when MAX exposes
  * an exact provider message id.  This helper never retries the physical action.
@@ -88,8 +93,9 @@ async function sendProviderConfirmedUiText(options) {
     } else {
       actionAccepted = await sendViaUi({ protocolChatId, webRouteId, text })
     }
-  } catch {
-    return unknown('UI_PROVIDER_ACTION_OUTCOME_UNKNOWN')
+  } catch (error) {
+    const safeCode = safeSenderCode(error, 'UI_PROVIDER_ACTION_OUTCOME_UNKNOWN')
+    return error?.beforeProviderAction === true ? refused(safeCode) : unknown(safeCode)
   }
   if (actionAccepted !== true) return unknown('UI_PROVIDER_ACTION_OUTCOME_UNKNOWN')
   if (directProviderMessageId) {

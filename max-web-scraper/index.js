@@ -6183,6 +6183,55 @@ app.post('/v1/personal-max/send/text', async (req, res) => {
   res.status(status).json(result)
 })
 
+// Root-operated, read-only reply core preflight. This endpoint inspects the
+// currently loaded MAX Web module, route binding and reply target visibility,
+// but never invokes the send primitive and is restricted to loopback callers.
+app.post('/v1/personal-max/reply/preflight', async (req, res) => {
+  if (!isLoopbackRequest(req)) return res.status(403).json({ error: 'loopback_required' })
+  if (!isReady || !page || !transport) return res.status(503).json({ error: 'scraper_not_ready' })
+  try {
+    const body = req.body && typeof req.body === 'object' ? req.body : {}
+    const accountId = String(body.accountId || '')
+    const protocolChatId = String(body.protocolChatId || '')
+    const requestedUiRouteId = String(body.uiRouteId || '')
+    const requestedProviderUserId = String(body.providerUserId || '')
+    const replyToProviderMessageId = String(body.replyToProviderMessageId || '')
+    if (!accountId || accountId !== String(process.env.MAX_PERSONAL_ACCOUNT_ID || '')) {
+      return res.status(409).json({ error: 'account_mismatch' })
+    }
+    if (!/^\d{11,15}$/.test(protocolChatId)
+      || !/^\d{1,10}$/.test(requestedUiRouteId)
+      || BigInt.asUintN(32, BigInt(protocolChatId)).toString() !== requestedUiRouteId
+      || !/^\d{9,15}$/.test(requestedProviderUserId)
+      || requestedProviderUserId === String(transport._myUserId || '')
+      || !isRealMaxMessageId(replyToProviderMessageId)) {
+      return res.status(409).json({ error: 'route_or_reply_mismatch' })
+    }
+    const discoveredProviderUserId = dialogPeerProviderUserId(protocolChatId)
+    if (discoveredProviderUserId && discoveredProviderUserId !== requestedProviderUserId) {
+      return res.status(409).json({ error: 'route_or_reply_mismatch' })
+    }
+    const inspection = await new MaxWebReplyBridge(page).inspectReplyCore(
+      protocolChatId,
+      replyToProviderMessageId,
+      { uiChatId: requestedUiRouteId },
+    )
+    res.json({
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      source: 'max_web_reply_core_preflight_read_only',
+      accountId,
+      protocolChatId,
+      uiRouteId: requestedUiRouteId,
+      providerUserId: requestedProviderUserId,
+      replyToProviderMessageId,
+      inspection,
+    })
+  } catch (error) {
+    res.status(422).json({ error: 'reply_preflight_failed', reason: String(error?.message || error) })
+  }
+})
+
 // Резолвинг телефона в MAX chatId
 // GET /resolve-phone?phone=79222155750
 app.get('/resolve-phone', (req, res) => {

@@ -18,6 +18,14 @@ const syntheticSource = ['FencedTextSenderBoundary.js', 'SyntheticTextSenderAdap
   .map(name => readFileSync(path.join(senderRoot, name), 'utf8')).join('\n')
 const schema = JSON.parse(readFileSync(path.join(repositoryRoot, 'contracts/personal-max-text-sender-v1.schema.json'), 'utf8'))
 
+function assertBefore(source, first, second, message) {
+  const firstIndex = source.indexOf(first)
+  const secondIndex = source.indexOf(second)
+  assert.notEqual(firstIndex, -1, `missing first marker: ${first}`)
+  assert.notEqual(secondIndex, -1, `missing second marker: ${second}`)
+  assert.ok(firstIndex < secondIndex, message)
+}
+
 test('contract endpoint, version, exact route, fence, correlation and deadline are explicit', () => {
   assert.match(gatewayTypes, /\/v1\/personal-max\/send\/text/)
   for (const field of ['schemaVersion', 'accountId', 'conversationKey', 'protocolChatId', 'commandId', 'attemptId', 'attemptCorrelationId', 'clientMessageId', 'idempotencyKey', 'ownerInstanceId', 'fencingToken', 'requestedAt', 'deadlineAt']) {
@@ -44,6 +52,8 @@ test('synthetic boundary remains provider-free while physical runtime uses one e
   assert.doesNotMatch(syntheticSource, /fetch\s*\(|axios|https?\.request|sendText|sendMessage|page\./i)
   assert.match(runtime, /createPhysicalTextSenderRuntime/)
   assert.match(runtime, /app\.post\('\/v1\/personal-max\/send\/text'/)
+  assert.match(runtime, /app\.post\('\/v1\/personal-max\/reply\/preflight'/)
+  assert.match(runtime, /max_web_reply_core_preflight_read_only/)
   assert.match(runtime, /sendProviderConfirmedUiText/)
   assert.match(runtime, /sendTextViaUi\(webRouteId, text, protocolChatId\)/)
   assert.match(runtime, /new MaxWebReplyBridge\(page\)\.sendReply\(/)
@@ -56,6 +66,8 @@ test('synthetic boundary remains provider-free while physical runtime uses one e
   assert.match(runtime, /textMatchCount: Number\(exact\.textMatchCount\)/)
   assert.match(runtime, /routeMatchCount: Number\(exact\.routeMatchCount\)/)
   assert.match(runtime, /waitForUiSendAck\(transport, 12_000/)
+  assertBefore(runtime, "app.post('/v1/personal-max/reply/preflight'", 'inspectReplyCore(', 'reply preflight must inspect before responding')
+  assertBefore(runtime, "app.post('/v1/personal-max/reply/preflight'", 'isLoopbackRequest(req)', 'reply preflight must be loopback-gated')
   assert.doesNotMatch(physicalBoundary + physicalRuntime, /playwright|puppeteer|page\.|locator\(|click\(|goto\(|page\.evaluate\(/i)
   assert.match(physicalRuntime, /max-personal-gateway/)
   assert.match(physicalRuntime, /\/var\/lib\//)

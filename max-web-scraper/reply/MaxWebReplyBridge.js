@@ -39,6 +39,26 @@ function providerDecimalFromId(value) {
   return BigInt(`0x${providerId.slice(2)}`).toString()
 }
 
+function replySendSafeCode(reason) {
+  const normalized = String(reason || '').toLowerCase()
+  if (normalized.includes('target_not_loaded') || normalized.includes('provider_message_not_loaded')) return 'REPLY_TARGET_NOT_LOADED'
+  if (normalized.includes('sender_not_supported') || normalized.includes('core_not_found')) return 'MAX_WEB_REPLY_SENDER_UNSUPPORTED'
+  if (normalized.includes('chat_route_ambiguous')) return 'ROUTE_CONFLICT'
+  if (normalized.includes('chat_route_mismatch')) return 'ROUTE_MISMATCH'
+  if (normalized.includes('chat_not_loaded')) return 'ROUTE_NOT_LOADED'
+  if (normalized.includes('real max provider message id')) return 'REPLY_TARGET_UNSENDABLE'
+  return 'MAX_WEB_REPLY_PRECONDITION_FAILED'
+}
+
+function replySendError(result) {
+  const reason = String(result?.reason || 'unknown')
+  const error = new Error(`MAX Web reply send failed: ${reason}`)
+  error.safeCode = replySendSafeCode(reason)
+  error.code = error.safeCode
+  error.beforeProviderAction = result?.providerActionStarted !== true
+  return error
+}
+
 function selectReplyTargetCandidate(candidates, context = {}, options = {}) {
   const expectedText = normalizeReplyText(context.text)
   if (!expectedText) return { providerMessageId: null, reason: 'missing_quoted_text' }
@@ -169,6 +189,134 @@ function selectInboundReplyCandidate(candidates, context = {}, options = {}) {
 class MaxWebReplyBridge {
   constructor(page) {
     this.page = page
+  }
+
+  async inspectReplyCore(chatId, providerMessageId, options = {}) {
+    if (!this.page) throw new Error('MAX Web page is not available')
+    const replyId = providerDecimalFromId(providerMessageId)
+    const rawUiRouteId = String(options.uiChatId || '').trim()
+    const uiRouteId = /^\d{1,10}$/.test(rawUiRouteId)
+      ? rawUiRouteId
+      : uiRouteIdFromProviderChatId(chatId)
+    return this.page.evaluate(async args => {
+      const findCoreModule = async () => {
+        const cached = window.__crmMaxCoreModule
+        if (cached?.store?.chats && cached?.store?.messages) return cached
+
+        const describeModule = (module, url) => {
+          const legacyStore = module?.Wa
+          if (legacyStore?.chats && legacyStore?.messages) {
+            return { module, url, store: legacyStore, storeExportKey: 'Wa', legacySendPrimitives: true }
+          }
+          const storeMatches = Object.entries(module || {}).filter(([, value]) => {
+            try {
+              return value !== null && typeof value === 'object' &&
+                typeof value.chats?.getLazy === 'function' &&
+                typeof value.messages?.get === 'function' &&
+                value.profile != null
+            } catch {
+              return false
+            }
+          })
+          if (storeMatches.length !== 1) return null
+          const [storeExportKey, store] = storeMatches[0]
+          return { module, url, store, storeExportKey, legacySendPrimitives: false }
+        }
+
+        const urls = new Set()
+        for (const script of document.querySelectorAll('script[src]')) urls.add(script.src)
+        for (const entry of performance.getEntriesByType('resource')) {
+          if (entry?.name) urls.add(entry.name)
+        }
+        for (const url of urls) {
+          if (!/\/_app\/immutable\/chunks\/[^/]+\.js(?:\?|$)/.test(url)) continue
+          try {
+            const module = await import(url)
+            const descriptor = describeModule(module, url)
+            if (descriptor) {
+              window.__crmMaxCoreModule = descriptor
+              return window.__crmMaxCoreModule
+            }
+          } catch {}
+        }
+        return null
+      }
+
+      const sourceSnippet = value => {
+        try { return typeof value === 'function' ? Function.prototype.toString.call(value).slice(0, 600) : null } catch { return null }
+      }
+
+      try {
+        const core = await findCoreModule()
+        if (!core) return { ok: false, reason: 'max_web_core_not_found' }
+        const requestedChatKey = BigInt(String(args.chatId))
+        const uiRouteKey = BigInt(String(args.uiRouteId))
+        const replyKey = BigInt(args.replyId)
+        let routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
+          try {
+            return BigInt.asUintN(32, BigInt(candidate?.id)) === uiRouteKey
+          } catch {
+            return false
+          }
+        })
+        if (routeMatches.length > 1) return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+        const chat = routeMatches.length === 1
+          ? routeMatches[0]
+          : await core.store.chats.getLazy(requestedChatKey)
+        if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
+        const chatKey = chat.id
+        let routeOk = false
+        try {
+          const normalizedChatKey = BigInt(chatKey)
+          routeOk = (normalizedChatKey === requestedChatKey || normalizedChatKey === uiRouteKey) &&
+            BigInt.asUintN(32, normalizedChatKey) === uiRouteKey
+        } catch {}
+        let target = Array.from(chat.messages || []).find(message => {
+          try { return BigInt.asUintN(64, BigInt(message?.id)) === replyKey } catch { return false }
+        })
+        if (!target && core.store.messages?.get) {
+          try { target = await core.store.messages.get(chatKey).getLazy(replyKey) } catch {}
+        }
+        const providerStore = core.store.messages?.get ? core.store.messages.get(chatKey) : null
+        return {
+          ok: true,
+          url: core.url || null,
+          storeExportKey: core.storeExportKey || null,
+          legacySendPrimitives: core.legacySendPrimitives === true,
+          support: {
+            dollarI: typeof core.module?.$i,
+            Es: typeof core.module?.Es,
+            ws: typeof core.module?.ws,
+            ro: typeof core.module?.ro,
+          },
+          snippets: {
+            dollarI: sourceSnippet(core.module?.$i),
+            Es: sourceSnippet(core.module?.Es),
+            ws: sourceSnippet(core.module?.ws),
+          },
+          route: {
+            requestedChatId: String(args.chatId),
+            uiRouteId: String(args.uiRouteId),
+            providerChatId: String(chatKey),
+            routeOk,
+            routeMatchCount: 1,
+          },
+          target: target ? {
+            present: true,
+            id: String(BigInt.asUintN(64, BigInt(target.id))),
+            isOutgoing: Boolean(target.isOut),
+            textPreview: String(target.text?.plain || '').slice(0, 120),
+          } : { present: false },
+          providerStoreSize: providerStore?.values ? Array.from(providerStore.values || []).length : null,
+        }
+      } catch (error) {
+        return { ok: false, reason: String(error?.message || error) }
+      }
+    }, {
+      chatId: String(chatId),
+      uiRouteId,
+      replyId,
+    })
   }
 
   async readProviderMessage(chatId, providerMessageId, options = {}) {
@@ -577,6 +725,7 @@ class MaxWebReplyBridge {
       ? rawUiRouteId
       : uiRouteIdFromProviderChatId(chatId)
     const result = await this.page.evaluate(async args => {
+      let providerActionStarted = false
       const findCoreModule = async () => {
         const cached = window.__crmMaxCoreModule
         if (cached?.store?.chats && cached?.store?.messages) return cached
@@ -622,9 +771,9 @@ class MaxWebReplyBridge {
 
       try {
         const core = await findCoreModule()
-        if (!core) return { ok: false, reason: 'max_web_core_not_found' }
+        if (!core) return { ok: false, reason: 'max_web_core_not_found', providerActionStarted }
         if (!core.legacySendPrimitives || typeof core.module.$i !== 'function' || !core.module.Es || !core.module.ws) {
-          return { ok: false, reason: 'max_web_reply_sender_not_supported' }
+          return { ok: false, reason: 'max_web_reply_sender_not_supported', providerActionStarted }
         }
         const requestedChatKey = BigInt(String(args.chatId))
         const uiRouteKey = BigInt(String(args.uiRouteId))
@@ -637,21 +786,21 @@ class MaxWebReplyBridge {
           }
         })
         if (routeMatches.length > 1) {
-          return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+          return { ok: false, reason: 'max_web_chat_route_ambiguous', providerActionStarted }
         }
         const chat = routeMatches.length === 1
           ? routeMatches[0]
           : await core.store.chats.getLazy(requestedChatKey)
-        if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded' }
+        if (!chat) return { ok: false, reason: 'max_web_chat_not_loaded', providerActionStarted }
         const chatKey = chat.id
         try {
           const normalizedChatKey = BigInt(chatKey)
           if ((normalizedChatKey !== requestedChatKey && normalizedChatKey !== uiRouteKey)
             || BigInt.asUintN(32, normalizedChatKey) !== uiRouteKey) {
-            return { ok: false, reason: 'max_web_chat_route_mismatch' }
+            return { ok: false, reason: 'max_web_chat_route_mismatch', providerActionStarted }
           }
         } catch {
-          return { ok: false, reason: 'max_web_chat_route_mismatch' }
+          return { ok: false, reason: 'max_web_chat_route_mismatch', providerActionStarted }
         }
         routeMatches = Array.from(core.store.chats.values || []).filter(candidate => {
           try {
@@ -663,7 +812,7 @@ class MaxWebReplyBridge {
         if (routeMatches.length > 1
           || (routeMatches.length === 1
             && ![requestedChatKey, uiRouteKey].includes(BigInt(routeMatches[0]?.id)))) {
-          return { ok: false, reason: 'max_web_chat_route_ambiguous' }
+          return { ok: false, reason: 'max_web_chat_route_ambiguous', providerActionStarted }
         }
 
         let target = Array.from(chat.messages || []).find(message => {
@@ -672,7 +821,7 @@ class MaxWebReplyBridge {
         if (!target && core.store.messages?.get) {
           try { target = await core.store.messages.get(chatKey).getLazy(replyKey) } catch {}
         }
-        if (!target) return { ok: false, reason: 'max_web_reply_target_not_loaded' }
+        if (!target) return { ok: false, reason: 'max_web_reply_target_not_loaded', providerActionStarted }
 
         const providerStore = core.store.messages.get(chatKey)
         const beforeProviderIds = new Set(
@@ -687,6 +836,7 @@ class MaxWebReplyBridge {
         })
         const pending = new core.module.ws(draft)
         pending.id = BigInt(args.cid)
+        providerActionStarted = true
         await core.module.$i({ chat, message: pending })
 
         const normalizeText = value => String(value || '')
@@ -718,7 +868,7 @@ class MaxWebReplyBridge {
           providerCandidateCount: confirmedCandidates.length,
         }
       } catch (error) {
-        return { ok: false, reason: String(error?.message || error) }
+        return { ok: false, reason: String(error?.message || error), providerActionStarted }
       }
     }, {
       chatId: String(chatId),
@@ -728,7 +878,7 @@ class MaxWebReplyBridge {
       cid: String(cid),
     })
 
-    if (!result?.ok) throw new Error(`MAX Web reply send failed: ${result?.reason || 'unknown'}`)
+    if (!result?.ok) throw replySendError(result)
     const confirmedProviderMessageId = result.providerMessageDecimal
       ? providerIdFromDecimal(result.providerMessageDecimal)
       : null

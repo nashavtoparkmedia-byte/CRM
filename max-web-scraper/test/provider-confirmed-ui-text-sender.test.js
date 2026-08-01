@@ -180,6 +180,53 @@ test('reply bridge ok without direct id is accepted and resolved by exact provid
   assert.equal(calls[3][1].replyToProviderMessageId, 'd301abcdef01234567')
 })
 
+test('reply bridge pre-provider failure is refused and not classified as unknown physical outcome', async () => {
+  const calls = []
+  const error = new Error('MAX Web reply send failed: max_web_reply_target_not_loaded')
+  error.beforeProviderAction = true
+  error.safeCode = 'REPLY_TARGET_NOT_LOADED'
+  const result = await sendProviderConfirmedUiText({
+    request: request({
+      attemptId: 'attempt-reply-precondition',
+      clientMessageId: 'client-reply-precondition',
+      payload: { text: 'reply body', replyToProviderMessageId: 'd301abcdef01234567' },
+    }),
+    snapshotProviderMessageIds: async input => { calls.push(['snapshot', input]); return [] },
+    startProviderAck: input => { calls.push(['ack', input]); return Promise.resolve(null) },
+    sendViaUi: async input => { calls.push(['plain-send', input]); return true },
+    sendReplyViaUi: async input => { calls.push(['reply-send', input]); throw error },
+    resolveProviderMessageId: async input => { calls.push(['store', input]); return null },
+    isRealProviderMessageId: exactId,
+  })
+
+  assert.equal(result.outcome, 'REFUSED_BEFORE_SEND')
+  assert.equal(result.safeCode, 'REPLY_TARGET_NOT_LOADED')
+  assert.equal(result.physicalProviderCalled, false)
+  assert.deepEqual(calls.map(call => call[0]), ['snapshot', 'ack', 'reply-send'])
+})
+
+test('reply bridge post-provider failure remains unknown with a safe bounded code', async () => {
+  const error = new Error('MAX Web reply send failed after provider action')
+  error.safeCode = 'MAX_WEB_REPLY_PRECONDITION_FAILED'
+  const result = await sendProviderConfirmedUiText({
+    request: request({
+      attemptId: 'attempt-reply-post-action',
+      clientMessageId: 'client-reply-post-action',
+      payload: { text: 'reply body', replyToProviderMessageId: 'd301abcdef01234567' },
+    }),
+    snapshotProviderMessageIds: emptySnapshot,
+    startProviderAck: () => Promise.resolve(null),
+    sendViaUi: async () => true,
+    sendReplyViaUi: async () => { throw error },
+    resolveProviderMessageId: async () => null,
+    isRealProviderMessageId: exactId,
+  })
+
+  assert.equal(result.outcome, 'UNKNOWN_AFTER_ATTEMPT')
+  assert.equal(result.safeCode, 'MAX_WEB_REPLY_PRECONDITION_FAILED')
+  assert.equal(result.physicalProviderCalled, true)
+})
+
 test('reply refuses before physical action when reply bridge is unavailable', async () => {
   let plainSends = 0
   const result = await sendProviderConfirmedUiText({
