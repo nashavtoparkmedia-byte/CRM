@@ -932,17 +932,21 @@ sha256sum "$EVIDENCE_DIR/production-before-rc3-contact-identity.dump" \
   >"$EVIDENCE_DIR/production-before-rc3-contact-identity.dump.sha256"
 
 restore_container=personal-max-rc3-contact-restore-${STAMP,,}
+printf 'isolated_restore_container=%s\n' "$restore_container" >"$EVIDENCE_DIR/isolated-restore-check.log"
 docker run -d --rm --network none --name "$restore_container" \
-  -e POSTGRES_PASSWORD=restore-check-not-production postgres:16-alpine >/dev/null
+  -e POSTGRES_PASSWORD=restore-check-not-production postgres:16-alpine \
+  >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
 for _ in {1..60}; do
   if docker exec "$restore_container" pg_isready -U postgres >/dev/null 2>&1; then break; fi
   sleep 1
 done
-docker exec "$restore_container" pg_isready -U postgres >/dev/null
-docker exec "$restore_container" createdb -U postgres restore_check
+docker exec "$restore_container" pg_isready -U postgres \
+  >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
+docker exec "$restore_container" createdb -U postgres restore_check \
+  >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
 docker exec -i "$restore_container" pg_restore --no-owner --no-acl -U postgres -d restore_check \
   </"$EVIDENCE_DIR/production-before-rc3-contact-identity.dump" \
-  >"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
+  >>"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
 docker exec "$restore_container" psql -X -v ON_ERROR_STOP=1 -At -U postgres -d restore_check \
   -c 'SELECT count(*) FROM "_prisma_migrations";' >>"$EVIDENCE_DIR/isolated-restore-check.log"
 docker rm -f "$restore_container" >/dev/null 2>&1 || true
