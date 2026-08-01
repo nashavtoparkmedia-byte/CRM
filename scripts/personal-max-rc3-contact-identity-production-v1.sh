@@ -922,7 +922,7 @@ for _ in {1..60}; do
 done
 docker exec "$restore_container" pg_isready -U postgres >/dev/null
 docker exec "$restore_container" createdb -U postgres restore_check
-docker exec -i "$restore_container" pg_restore -U postgres -d restore_check \
+docker exec -i "$restore_container" pg_restore --no-owner --no-acl -U postgres -d restore_check \
   </"$EVIDENCE_DIR/production-before-rc3-contact-identity.dump" \
   >"$EVIDENCE_DIR/isolated-restore-check.log" 2>&1
 docker exec "$restore_container" psql -X -v ON_ERROR_STOP=1 -At -U postgres -d restore_check \
